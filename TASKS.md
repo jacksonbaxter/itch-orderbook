@@ -18,7 +18,7 @@ Full plan through to the done criteria. Tick items when done, and add anything n
 - [x] Write BENCHMARKS.md, TASKS.md, NOTES.md
 - [x] Session opens the source of every number that becomes a target; remaining `SUBAGENT` entries are context only
 - [x] Gap search for anything else missed the way carteret was (`gap-search.md`)
-- [ ] Phase report
+- [x] Phase report
 
 ## Phase 2: Harness (before any implementation)
 
