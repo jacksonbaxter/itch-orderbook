@@ -59,16 +59,16 @@
       "url": "ftp://ftp.nasdaqtrader.com/files/crosses/CrossStats20191230.txt",
       "filename": "CrossStats20191230.txt",
       "format": "text",
-      "bytes": null,
-      "sha256": null,
+      "bytes": 236134,
+      "sha256": "9608b676c41d870f711a80d8fe325532fd3d19674ef6dd3f13909e43b2b6b992",
       "note": "Nasdaq's per-symbol opening and closing cross file. Never committed."
     },
     "midas_2019q4": {
       "url": "https://web.archive.org/web/20260312180908id_/https://www.sec.gov/files/node/add/data_distribution/individual_security_exchange_2019_q4.zip",
       "filename": "individual_security_exchange_2019_q4.zip",
       "format": "zip",
-      "bytes": null,
-      "sha256": null,
+      "bytes": 126219647,
+      "sha256": "7a3f9c008889c4972a4adda37e7ac84d1553335a471063262f509e817fec6db1",
       "note": "SEC MIDAS 2019 Q4. sec.gov returns 403 to curl, so this capture is the copy used. Never committed."
     }
   }
