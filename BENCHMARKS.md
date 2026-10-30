@@ -12,6 +12,7 @@ What top-tier looks like for an ITCH 5.0 feed handler, L3 book and research stac
 | `SUBAGENT` | A research subagent opened the source and quoted it, and the session did not re-open it. Used only for context, never for a target. |
 | `UNCONFIRMED` | No source could be confirmed. The entry says where we looked. Measured values will be reported, with no target claimed. |
 | `BRIEF` | The bar comes from the project requirements, not an outside source. |
+| `HELD` | Waiting on a user decision. Scripts do not fetch it, and nothing depends on it. |
 
 **Comparing with a target.** Most numbers were measured on other hardware. Each one is the bar, and also context: it proves nothing about this project's hardware. "Comparability" says what differs. itch-book's own README is the warning here: the same code and file ran 3.6× slower on a 2.0 GHz EPYC VM than on a Ryzen 9700X (16.4 / 4.6, derived), and its pooled-versus-flat-hash ratio fell from 1.8× to 1.07×.
 
@@ -223,6 +224,7 @@ A replay running flat out measures service time, not response time to an arrival
 - **Source:** [carteret correctness.md](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/correctness.md), Layer 4 table.
 - **Measured:** ten sessions from 2019 and 2020, one of them BX and two held out, each `identical`. Raw output is committed for the two held-out sessions only. The rest were transcribed.
 - **Comparability:** the brief asks for one day, and this is the published bar. It depends on downloading that many files, and third parties report throttling (DS-9), so any shortfall is stated as a gap. We keep raw output for every session.
+- **Decision:** accepted as a stated extension of the brief. It runs after T-ORACLE-1 passes, on the Mac. A shortfall is written up as a gap and must not hold up other work.
 - **Status:** `VERIFIED`
 
 ### T-INV-1: every execute or cancel references a live order
@@ -232,13 +234,15 @@ A replay running flat out measures service time, not response time to an arrival
 - **Status:** `VERIFIED`
 
 ### T-INV-2: the book is never crossed
-- **Target:** run the check strictly over the whole day. Count and characterise every violation by symbol, time and trading state. No scoping until the user decides.
+- **Target:** run the check strictly over the whole day. Count and characterise every violation by symbol, time and trading state. The strict result is reported as failing if it fails. No scoped version is a pass condition. The user decides scope after the Phase 3 run.
 - **Published expectation:** on 12302019, carteret reports 8,580 crossed and 70 locked observations, on 13 and 6 symbols, with the deepest crossing $14.00 ([correctness.md](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/correctness.md), [design.md](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/design.md), DS-68). Of the crossings, 7,945 are with the symbol not in state `T`, and the other 635 fall within 50 ms of its resumption. 8,372 of the 8,580 are inside 09:30 to 16:00, so clock time does not explain them. The strict invariant is therefore expected to fail, and that is a finding, not a bug. [Ironbook](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/bench/results/full_day_validation.txt) counts only 10 crossed and 0 locked in 136,896,897 checks, but its [check](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/include/ironbook/book/validation.hpp) runs only with the market open and the symbol in state `T`, so the two are different populations, not a contradiction. Our run has to reproduce or contradict both counts.
 - **Status:** `BRIEF` (the published count is `VERIFIED`)
 
 ## Trade-print verification
 
-The user's sentence cannot hold for two whole classes. `P` references no visible order, and `Q` is a bulk print. Non-printable `C` volume is already inside `Q`, so summing it would double-count. The full per-type table is in `trade-verification.md` under "Proposed check definitions", and TASKS.md carries it. No tolerance applies anywhere.
+T-TRADE-1, 2, 3 and 5 are the trade-print checks. T-TRADE-4 is held and is not one of them.
+
+The user's sentence cannot hold for two whole classes. `P` references no visible order, and `Q` is a bulk print. `P` and `Q` are each counted and reported per the per-type table, so the reader can see where the user's sentence was refined and why. Non-printable `C` volume is already inside `Q`, so summing it would double-count. The full per-type table is in `trade-verification.md` under "Proposed check definitions", and TASKS.md carries it. No tolerance applies anywhere.
 
 Per type: `E` must hit a live order, deducting at the order's price. `C` must hit a live order, leaving the order price unchanged, and the print price may differ. `P` must have reference 0 and change nothing in the book. `Q` is compared with Nasdaq's own per-symbol cross file. `B` reverses a stored match.
 
@@ -255,17 +259,17 @@ Per type: `E` must hit a live order, deducting at the order's price. `C` must hi
 - **Status:** `VERIFIED`
 
 ### T-TRADE-3: continuous volume against SEC MIDAS
-- **Target:** per symbol, `E + printable C + P` ≤ MIDAS volume until the time window is pinned, then equality. On 12302019, Nasdaq rows total 620,148,444 shares, of which 105,453,046 are hidden. The file gives volume in thousands to three decimals.
+- **Target:** exact per-symbol equality of `E + printable C + P` with MIDAS volume, once MIDAS's time window is pinned. If the window cannot be pinned, the per-symbol differences are reported as an open gap with the reason. An inequality is never reported as a pass. On 12302019, Nasdaq rows total 620,148,444 shares, of which 105,453,046 are hidden. The file gives volume in thousands to three decimals.
 - **Source:** [SEC MIDAS 2019 Q4, archived](https://web.archive.org/web/20260312180908id_/https://www.sec.gov/files/node/add/data_distribution/individual_security_exchange_2019_q4.zip), TV-21. `sec.gov` returns 403 to curl, so the capture is the copy that was opened.
 - **Comparability:** the [SEC's terms](https://www.sec.gov/privacy) allow redistribution with citation (TV-27). It covers Stock and ETF names only, and its window is unknown.
 - **Status:** `VERIFIED`
 
 ### T-TRADE-4: whole-day venue volume against Cboe
-- **Target:** per tape, shares and trade count equal, and notional equal, on 12302019 and 10302019. **Held for a user decision.** The Cboe figures are deliberately not in this file.
+- **Target:** held. No Cboe data in this project until the user decides. Scripts do not fetch it, no check, result, README or WRITEUP.md depends on it, and no further joins are run. The check it would be, if allowed: per tape, shares and trade count equal, and notional equal, on 12302019 and 10302019. The Cboe figures are deliberately not in this file.
 - **Source:** [market_history_2019.csv](https://cdn.cboe.com/resources/us/equities/market-statistics/historical-market-volume/market_history_2019.csv), TV-13, TV-14.
 - **Why it matters:** published per-symbol ITCH sums tie to this file exactly on 2019-12-30 and 2019-08-30 (TV-14), across all three tapes, once test symbols are removed. The session reran the 2019-12-30 join and got the same result. That is the strongest outside check found, and no prior project appears to have run it.
 - **Terms:** [Cboe's terms](https://www.cboe.com/terms) bar using its materials "to verify or correct other data or information" without consent, subject to fair use (TV-26). A free consolidated per-symbol whole-day figure for Nasdaq does not exist (TV-30).
-- **Status:** `VERIFIED` for the tie on 2019-12-30, by rerunning the join rather than by `check_benchmark_sources.py`, which holds no Cboe figures. All three tapes are equal on shares and trades, in `.orchestrator/research-cache/itch-orderbook/verify/cboe/tape_probe_20191230.log`. Use in this project is blocked on the user.
+- **Status:** `HELD`. Use in this project is blocked on the user. `check_benchmark_sources.py` holds no Cboe figures and fetches nothing from Cboe.
 
 ### T-TRADE-5: continuous executions hit the best price
 - **Target:** every `E` with the market open and the symbol in state `T` executes at the best price level on its side: 5,683,178 of 5,683,178 on 12302019. Hard, with no tolerance. Queue-front share is reported, not gated: published 5,672,613, or 99.8141%.
@@ -383,11 +387,13 @@ The base run uses 25 µs each way plus 5 µs compute. This is an assumption deri
 
 ## Flamegraphs
 
-- **Target:** a flamegraph for each hot path on `debian`, from `perf record -g --user-callchains -e cycles:u`, beside the counter data, with the frame-pointer build's throughput delta published. `BRIEF`.
-- At `perf_event_paranoid=2` no kernel frames appear, so a flamegraph cannot show the io_uring against socket difference at all (IU-58). The counter data and CPU split have to carry that comparison.
+- **Target:** a user-space flamegraph for each hot path on `debian` at `perf_event_paranoid=2`, from `perf record -g --user-callchains -e cycles:u`, beside the counter data, with the frame-pointer build's throughput delta published. `BRIEF`.
+- **Listed gap:** kernel stacks. At `perf_event_paranoid=2` no kernel frames appear, so a flamegraph cannot show the io_uring against socket difference at all (IU-58). The counter data and CPU split have to carry that comparison. No system setting is changed.
 - Zen 1 has no LBR. A flamegraph hides inlining in a tight 50 ns loop, so `perf annotate` and counter ratios go alongside.
 
 ## Browser demo
+
+The demo builds and runs locally from `docs/`. Any data extract is generated by script and gitignored, so nothing derived from the Nasdaq files is committed. Public deployment is the user's call.
 
 ### T-WASM-1: replay speed against native
 - **Target:** the same replay in WASM within 1.55× of native on the same host, in Chrome.

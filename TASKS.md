@@ -31,7 +31,7 @@ Full plan through to the done criteria. Tick items when done, and add anything n
 - [ ] Avoid `<generator>` and `<stacktrace>`, which do not exist in this libc++.
 
 ### Data
-- [ ] `scripts/fetch_data.sh`: chunked Range download into `data/`. Each chunk must be status 206 with the exact `Content-Range`, same ETag and exact body length. `curl --continue-at` is known to corrupt these files (DS-9).
+- [ ] `scripts/fetch_data.py`: chunked Range download into `data/`. Each chunk must be status 206 with the exact `Content-Range`, same ETag and exact body length. `curl --continue-at` is known to corrupt these files (DS-9).
 - [ ] Verify length, ETag, gzip CRC and ISIZE from the trailer, a SHA-256 pinned in the repo, unpacked byte count, message count, and last message `S`/`C`. There is no zero-length terminator in real files (DS-61). Record that Nasdaq publishes no usable checksum, so the first-download hash is trust-on-first-use, and say which files have a third-party hash to compare with.
 - [ ] Start the 12302019 and 10302019 downloads early. Third-party reports of throttling to 0.3 to 0.8 MB/s (DS-9). Keep the `.gz`, because the archive is not stable (DS-8).
 - [ ] Fetch external reference files (CrossStats, MIDAS) by script into `data/`. Never commit them.
@@ -129,8 +129,8 @@ Hard means any mismatch fails. Each check needs an injected bug that trips it. C
 - [ ] `P`: reference 0, side `B`, no book change. Hard. Whole class excluded from "hits a resting order": count and surface.
 - [ ] `Q` per symbol against CrossStats (T-TRADE-2). Hard. Opening shares against Opening, closing against Closing. Halt crosses: sum of `Q` outside CrossStats equals type `H` sum. Test symbols have no row, and are counted apart.
 - [ ] `C_N` against `Q`: per symbol and side `<=`, equal price. Measure first, because no one has confirmed this on real data.
-- [ ] `E + C_Y + P` against MIDAS (T-TRADE-3): `<=` now, equality after the window is measured. Add `P` against `HiddenVol`.
-- [ ] Cboe per-tape check (T-TRADE-4): only after the user's decision on its terms.
+- [ ] `E + C_Y + P` against MIDAS (T-TRADE-3): exact per-symbol equality once the window is pinned. If it cannot be pinned, report the per-symbol differences as an open gap with the reason. An inequality is never a pass. Add `P` against `HiddenVol`.
+- [ ] Cboe per-tape check (T-TRADE-4): held. No Cboe data in this project until the user decides. Scripts do not fetch it, nothing depends on it, and no further joins are run.
 - [ ] `B` reverses a stored match, hard on 10302019, fixtures otherwise.
 - [ ] Match numbers unique across `E`, `C`, `P`, `Q`. Measure first.
 - [ ] Surface class-level counts in the phase report: test symbols, zero-share `Q`, `C_N`, `P`, `B`.
@@ -180,7 +180,7 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [ ] DRAM fills per message with `r0843:u`, by message type, once `bench_chase` validates it (T-PERF-1).
 - [ ] Branch misses per message, reported with no target (T-PERF-2).
 - [ ] Separate frame-pointer build, with its throughput delta published.
-- [ ] `perf record -g --user-callchains -e cycles:u`, then FlameGraph, for each hot path. `perf annotate` beside it.
+- [ ] `perf record -g --user-callchains -e cycles:u`, then FlameGraph, for each hot path. User-space only at `perf_event_paranoid=2`: kernel stacks are a listed gap, and no system setting is changed. `perf annotate` beside it.
 - [ ] Mac: Apple tooling without sudo where it works, labelled macOS. Xcode is absent, so `xctrace` is unavailable now. It does not replace the `perf` data.
 
 ### Browser demo
