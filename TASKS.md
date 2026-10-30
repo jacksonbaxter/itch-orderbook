@@ -16,7 +16,8 @@ Full plan through to the done criteria. Tick items when done, and add anything n
 - [x] SPSC queues and allocators (`components.md`)
 - [x] io_uring, flamegraphs, Zen 1 PMU (`io-uring-flamegraph.md`)
 - [x] Write BENCHMARKS.md, TASKS.md, NOTES.md
-- [ ] Session opens the source of every number that becomes a target; all `SUBAGENT` entries resolved
+- [x] Session opens the source of every number that becomes a target; remaining `SUBAGENT` entries are context only
+- [ ] Gap search for anything else missed the way carteret was (`gap-search.md`)
 - [ ] Phase report
 
 ## Phase 2: Harness (before any implementation)
@@ -40,6 +41,7 @@ Full plan through to the done criteria. Tick items when done, and add anything n
 All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux run needs no code change.
 - [ ] `timer.hpp`: `lfence; rdtsc` and `rdtscp; lfence` on x86-64; `isb; cntvct_el0` on Linux arm64; `mach_absolute_time` on macOS; `emscripten_get_now` on WASM, batches only. Probe measures the quantum and the empty-pair cost at start of each run. Calibrate on every run, and record the quantum measured rather than the nominal rate.
 - [ ] `counters.hpp`: `perf_event_open` group with `exclude_kernel` on Linux. `proc_pid_rusage` and `thread_selfcounts` on macOS, cycles and instructions only. Each event ends as measured, unavailable with reason, or multiplexed with ratio. Never fails the build or the run.
+- [ ] Per-message counts: user-mode `rdpmc` around each message, in a pass that is untimed and separate from timing runs. Also count through `read()` on the event descriptors, and require the two to agree.
 - [ ] `affinity.hpp`: `pthread_setaffinity_np` with read-back on Linux; `thread_policy_set` tried and its code 46 recorded on macOS, plus `QOS_CLASS_USER_INTERACTIVE`. Returns what happened, and tracks migrations.
 - [ ] `memory.hpp`: arena allocation with hugepage hint and pre-fault, reporting the page size obtained. `madvise(MADV_HUGEPAGE)` on Linux, 16 KB pages on macOS.
 - [ ] `sysinfo.hpp`: fills the results header. A field that cannot be read is written as `unavailable: <reason>`.
@@ -49,9 +51,22 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [ ] Google Benchmark plus HdrHistogram, with warm-up and repetitions in fresh processes. Report median, min, max and CV, never best-of alone.
 - [ ] Results header on every file: CPU, kernel, compiler, flags, commit, dataset and hash, timer info, pinning, governor, frequency, turbo, core, counter status, `measure.sh` load lines. Host always named.
 - [ ] Separate throughput and latency passes. Publish instrumentation cost as a ratio.
-- [ ] `bench_probe` target, run at the start of each session.
+- [ ] `bench_probe` target, run at the start of each session. Includes whether user-mode `rdpmc` works at `perf_event_paranoid=2` on `debian`.
+- [ ] `bench_chase`: random pointer chase, buffers from below L2 to far above L3, to validate `r0843:u` on `debian` before any book number uses it (criterion 32). If it does not behave, publish no last-level number and state the gap.
+- [ ] `scripts/machine_check.sh`, run before every reported benchmark, with its output embedded in the results file, plus a negative test that breaks one condition at a time (criterion 29). `debian` has no isolated core, so the check records that and enforces what it can: pin read-back, governor, `cpu5` idle, input resident.
+- [ ] Each experiment's prediction is committed before it runs, and failed runs stay in the log (criterion 31).
 - [ ] Reported Mac numbers go through `.orchestrator/measure.sh`, and `debian` numbers through `~/quant-projects/bin/measure.sh` with `taskset -c 4` and `cpu5` idle. Output goes to a file on `debian`, not through SSH.
 - [ ] README results table generated from results files.
+- [ ] Gate: every figure in the README and the demo page must appear in its results file, with a negative test that breaks one figure at a time (criterion 30).
+
+### Running on `debian`
+- [ ] Sync with `.orchestrator/debian_sync.sh itch-orderbook` from committed `HEAD`. Build in `~/quant-projects/itch-orderbook/build`, keep data in `~/quant-projects/itch-orderbook/data`. Work only inside `~/quant-projects`.
+- [ ] Reported runs: `~/quant-projects/bin/measure.sh taskset -c 4 <benchmark>`, with the benchmark as its direct child. Heavy jobs go through `~/quant-projects/bin/heavy.sh`.
+- [ ] Keep `cpu5` idle. A second thread goes on `cpu6`. Avoid cores 0, 1 and 3.
+- [ ] Write output to a file on `debian`, never through SSH. A run with no complete output file is lost: check `~/quant-projects/.logs/measure.log` and rerun it.
+- [ ] Record core, governor, frequency and turbo state in the header. Calibrate the TSC on every run. Batch or average anything under about 100 ns. `perf` cycles and TSC ticks are different units.
+- [ ] Use the liburing 2.15 already built in `.toolchain`. Do not run its `configure`.
+- [ ] If `perf` starts failing, `perf_event_paranoid` may have reset on a reboot. Report it, do not change it.
 
 ### Tests and oracles
 - [ ] Parser tests assert field values against hand-written bytes for all 23 types. `B`, `W`, `h`, `N`, `O` need byte fixtures, because real days lack them (DS-77).
@@ -96,10 +111,12 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [ ] Sparse handling for stub quotes (DS-73).
 - [ ] Replace, delete and add measured on 8.7% `U` (2019) and 27.7% `U` (2026) mixes.
 - [ ] Prefetch lookahead D in {0, 4, 8, 16, 32, 64} (E8), and dispatch form (E7). Each hint keeps a measured reason in a comment.
+- [ ] Repeat carteret's layout experiments on our book: hash policy, open addressing against chaining, window width against overflow. Attribute last-level misses by message type, order age and structure before claiming a bottleneck.
 - [ ] Hot structs: `static_assert` on size, alignment, trivial copyability.
-- [ ] T-BOOK-1 to T-BOOK-4, T-LAT-1 to T-LAT-3, T-DESIGN-1 on the harness.
+- [ ] T-BOOK-1 to T-BOOK-4, T-LAT-1 to T-LAT-4, T-DESIGN-1 on the harness.
 - [ ] Strict crossed-book run, full day. Count and characterise each violation by symbol, time and trading state. Report. The user decides the scope.
-- [ ] Oracle replay on the Mac under `heavy.sh`, all 268,744,780 messages.
+- [ ] Oracle replay on the Mac under `heavy.sh`, all 268,744,780 messages (T-ORACLE-1).
+- [ ] Repeat the oracle on every session the archive will serve, up to ten, keeping raw output for each (T-ORACLE-2). Check free disk first. State any shortfall as a gap.
 
 ### Trade-print verification
 Hard means any mismatch fails. Each check needs an injected bug that trips it. Check 17 in the evidence table only tests our aggregator, so it must not be cited as an independent result.
@@ -110,7 +127,7 @@ Hard means any mismatch fails. Each check needs an injected bug that trips it. C
 - [ ] `E` at queue front: reported as a rate. Published 99.82% and 99.914%, unexplained remainder.
 - [ ] `C` deducts from the order and leaves its price unchanged. Hard for the deduction, with counts by `Printable`.
 - [ ] `P`: reference 0, side `B`, no book change. Hard. Whole class excluded from "hits a resting order": count and surface.
-- [ ] `Q` per symbol against CrossStats (T-TRADE-2). Hard. Halt crosses: sum of `Q` outside CrossStats equals type `H` sum.
+- [ ] `Q` per symbol against CrossStats (T-TRADE-2). Hard. Opening shares against Opening, closing against Closing. Halt crosses: sum of `Q` outside CrossStats equals type `H` sum. Test symbols have no row, and are counted apart.
 - [ ] `C_N` against `Q`: per symbol and side `<=`, equal price. Measure first, because no one has confirmed this on real data.
 - [ ] `E + C_Y + P` against MIDAS (T-TRADE-3): `<=` now, equality after the window is measured. Add `P` against `HiddenVol`.
 - [ ] Cboe per-tape check (T-TRADE-4): only after the user's decision on its terms.
@@ -124,7 +141,7 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [ ] SPSC comparison: project queue, rigtorp, boost::lockfree, moodycamel, folly, atomic_queue, xenium Vyukov as MPMC control, mutex ring as floor.
 - [ ] SPSC ablation, one change at a time (T-SPSC-2). Protocols: ping-pong RTT, saturated one-way, paced one-way with percentiles, bursty replay.
 - [ ] Correctness: TSan on both hosts, arm64 stress without TSan, negative control with weakened ordering. It is unconfirmed whether stress catches this on M-series (LC-37), so report what happens.
-- [ ] Parser thread → queue → book thread on a real day, against single-threaded replay.
+- [ ] Parser thread → queue → book thread on a real day, against single-threaded replay (T-SPSC-3). If single-threaded wins, that is the finding.
 - [ ] Pool allocator: LIFO free list, 32-bit indices, sized from the counted peak, pre-faulted, 2 MiB pages where offered.
 - [ ] Allocator arms with only the allocator changed: system malloc fresh and aged, mimalloc, `unsynchronized_pool_resource`, `monotonic_buffer_resource`, pool with index, pool with pointer, FIFO free list (T-ARENA-1). Crossed with page sizes on `debian`.
 
@@ -141,7 +158,7 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [ ] Event ordering with `L_md`, `L_oe`, `L_resp`, `L_compute`. A simulated order joins at arrival, not at decision.
 - [ ] Queue model from real L3 order references: `ahead` set from the real queue at arrival, falling only with depletion ahead.
 - [ ] Partial fills from real executions behind S. Share ledger prevents a real order filling S twice.
-- [ ] Fees keyed by date, per fill, in integers. Base tier stated.
+- [ ] Fees keyed by date, per fill, in integers. Base tier stated. Tape comes from Stock Directory Market Category. carteret's mapping is Q, G, S to C; N to A; A, P, Z, V to B. Check it against the spec first.
 - [ ] All 48 scenarios from `backtester.md` as tests (T-BT-2).
 - [ ] Lookahead: prefix invariance, future perturbation, oracle control must be caught.
 - [ ] T-BT-1 on the harness.
@@ -154,12 +171,14 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [ ] Attribution in a module that never reads the ledger. Integers, `==`, no tolerance (T-MM-1).
 - [ ] Property tests 1 to 16 from `market-maker.md`, including the negative test.
 - [ ] Replication of the AS tables (T-MM-2).
-- [ ] Four runs, one switch at a time: Base, Q-off, L-off, Both-off. Same mark path hash in all.
+- [ ] Four runs, one switch at a time: Base, Q-off, L-off, Both-off. Same mark path hash in all. Q-off must name its fill rule. Published bias runs from −21.2% (conservative) to −0.7% (proportional), so report both as separate rows.
 - [ ] Report: S gross, fees, A, I, total, in dollars, per share and in ticks. Markout curve. No return, no Sharpe. Fixed sentence: "One symbol-day. No edge is claimed."
 
 ### Counters and flamegraphs
 - [ ] `perf` on `debian`, `:u` events. Publish which counters are real hardware events on Zen 1, with what each counts.
-- [ ] Confirm `cache-misses` against AMD's documentation and cite it before quoting (T-PERF-1).
+- [x] Confirm `cache-misses` against AMD's documentation: it counts L2 misses. Any write-up must call it that.
+- [ ] DRAM fills per message with `r0843:u`, by message type, once `bench_chase` validates it (T-PERF-1).
+- [ ] Branch misses per message, reported with no target (T-PERF-2).
 - [ ] Separate frame-pointer build, with its throughput delta published.
 - [ ] `perf record -g --user-callchains -e cycles:u`, then FlameGraph, for each hot path. `perf annotate` beside it.
 - [ ] Mac: Apple tooling without sudo where it works, labelled macOS. Xcode is absent, so `xctrace` is unavailable now. It does not replace the `perf` data.
