@@ -104,10 +104,15 @@ CHECKS = [
     (
         "T-TRADE-1",
         f"{KAREEM}/validation/census-2019-12-30.json",
-        ['"adds": 118631456', '"deletes": 114360997', '"full_executions": 4270459', '"final": 0', '"unknown_refs": 0'],
+        ['"adds": 118631456', '"deletes": 114360997', '"full_executions": 4270459', '"final": 0'],
     ),
+    ("T-INV-1", f"{KAREEM}/validation/census-2019-12-30.json", ['"unknown_refs": 0']),
     ("T-INV-2", f"{CARTERET}/docs/correctness.md", ["8,580 | 70"]),
-    ("T-INV-2-design", f"{CARTERET}/docs/design.md", ["within 50 ms"]),
+    (
+        "T-INV-2-design",
+        f"{CARTERET}/docs/design.md",
+        ["within 50 ms", "8,372 of the 8,580 crossings", "13 distinct symbols", "| Symbol not in state `T` | 7,945 | 62 |"],
+    ),
     (
         "T-TRADE-2",
         "ftp://ftp.nasdaqtrader.com/files/crosses/CrossStats20191230.txt",
