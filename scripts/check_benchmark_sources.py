@@ -24,6 +24,14 @@ ITCH_BOOK = "https://raw.githubusercontent.com/groovg/itch-book/b502b002abf65076
 TAHSINJ = "https://raw.githubusercontent.com/tahsinj/nasdaq-feed-handler/e65b8408c1665ecce2f4c01ff5e2bb49aa21c6e5"
 KAREEM = "https://raw.githubusercontent.com/KareemJandali/itchbook/3c646f9da182136125059243b475f7b8baa53773"
 CARTERET = "https://raw.githubusercontent.com/EkanshSingh401/carteret/3df0e8757c979731b07a991de4ec7e81e81c8c08"
+IRONBOOK = "https://raw.githubusercontent.com/Shaan50/nasdaq-itch-matching-engine/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5"
+AAHILAFRAZ = "https://raw.githubusercontent.com/aahilafraz123/itch-orderbook/0980cf50ab71194774e4434c8590e0e2afb61c31"
+QUEUETRUTH = "https://raw.githubusercontent.com/sarptandoven/queuetruth/67a91afc802092acfa1b1d4593829f16eb0bdc31"
+MARKET_CORE_OLD = "https://raw.githubusercontent.com/harshal24-chavan/Market-Core/9c3b24fde7720a796ffe756b23f4ba427c73df4e"
+MARKET_CORE_NEW = "https://raw.githubusercontent.com/harshal24-chavan/Market-Core/dd801adeb45f1740a7a601dbb717c82e472bb128"
+PITCHFORK = "https://raw.githubusercontent.com/pulk17/NASDAQ-ITCH-OrderBook/27c6427cde9395a4c32324fa3ef71bb29c5ee1f6"
+LUKAS = "https://raw.githubusercontent.com/LukasUser/market-data-pipeline/bf410f4aced4ae3bd360c56f5146f78b4048f123"
+CHATHUKA = "https://raw.githubusercontent.com/ChathukaM/nasdaq-ITCH-orderbook/16f87ef35b8eac301ad20c6fd2463242d20228bf"
 PARSERITCH = "https://raw.githubusercontent.com/rwxmai/parseritch/fbee276143b132dfa76ff57f7ed092e607f8153e"
 BANDWIDTH = (
     "https://web.archive.org/web/20250123185610/https://www.nasdaqtrader.com/"
@@ -156,6 +164,72 @@ CHECKS = [
         ["**The strategy loses money in every arm at the base tier.**", "gross **−0.34 to −0.57 half-spreads per fill**"],
     ),
     ("ctx-fuzz", f"{CARTERET}/README.md", ["407,989,301"]),
+    ("T-LAT-5", f"{PITCHFORK}/docs/benchmarks.md", ["| 150.3 | 127.0 | 260.0 | 446.0 | 778.0 | 5210.0 | 238324.0 | (ns)"]),
+    ("T-LAT-5-tape", f"{PITCHFORK}/README.md", ["14.0 GB, 459,781,103 messages", "`rdtsc` around `process_message`, warmup discarded."]),
+    ("T-LAT-5-timer", f"{PITCHFORK}/include/bench.hpp", ["_mm_lfence();", "__rdtscp(&aux);"]),
+    ("T-LAT-5-levels", f"{PITCHFORK}/include/orderbook.hpp", ["struct PriceLevel{ uint32_t price; uint32_t shares; };"]),
+    (
+        "T-PERF-2",
+        f"{MARKET_CORE_OLD}/README.md",
+        ["865,425,492 branch misses", "(423,285,709 messages)", "Intel Core i3-540 @ 3.07 GHz / DDR3-1333"],
+    ),
+    (
+        "ctx-market-core",
+        f"{MARKET_CORE_OLD}/README.md",
+        ["| **Add Order ('A'/'F')** | 186,610,705 | 153.1 | 18 | 138 | 198 | 298 | 410 | 7,599,842 |"],
+    ),
+    (
+        "ctx-market-core-later",
+        f"{MARKET_CORE_NEW}/README.md",
+        ["| **Add Order ('A'/'F')** | 186,610,705 | **141 ns** | 483 ns | 1,048 ns | ~13.3 ms |"],
+    ),
+    (
+        "T-TRADE-5",
+        f"{IRONBOOK}/bench/results/full_day_validation.txt",
+        [
+            "continuous 'E' executions checked : 5683178",
+            "at best price level : 5683178 (100.0000%)",
+            "at head of FIFO queue : 5672613 (99.8141%)",
+        ],
+    ),
+    ("T-TRADE-5-def", f"{IRONBOOK}/include/ironbook/book/validation.hpp", ["return market_open_ && state_[loc] == 'T';"]),
+    (
+        "T-INV-2-second",
+        f"{IRONBOOK}/bench/results/full_day_validation.txt",
+        ["crossed-book checks (continuous) : 136896897, crossed 10 (0.00001%), locked 0"],
+    ),
+    ("T-ORACLE-1-ironbook", f"{IRONBOOK}/bench/results/full_day_diff.txt", ["top-of-book mismatches: 0", "compared, 0 mismatches"]),
+    ("T-ORACLE-1-aahilafraz", f"{AAHILAFRAZ}/results/differential_full_day.txt", ["messages replayed: 268744780", "result: MATCH"]),
+    (
+        "ctx-ironbook",
+        f"{IRONBOOK}/README.md",
+        [
+            "| full day, 268.7M msgs, streamed from `mmap` | single thread | 7.75M msg/s | 129 |",
+            "| | batched + staged prefetch | 10.9M | 92 |",
+            "| | **two-thread pipeline** | **16.3M** | **61** |",
+            "| | batched + staged prefetch | 16.7M | 60 |",
+        ],
+    ),
+    ("ctx-chathuka", f"{CHATHUKA}/README.md", ["| WSL2/Linux | AMD Ryzen 7 7800X3D | 21.55 s | 13.10 million msg/s | 69.3 ns/msg |"]),
+    ("ctx-chathuka-levels", f"{CHATHUKA}/src/book/price_levels.h", ["std::uint32_t order_count = 0;"]),
+    (
+        "T-BT-3",
+        f"{QUEUETRUTH}/docs/RESULTS.md",
+        [
+            "and 5.19M on real day one",
+            "| subset (AAPL, MSFT, SPY, TSLA): messages, sha256 of the ITCH frames | 5,425,849,",
+            "(6,103,262 records, 4 partitions",
+            "**Low Power Mode on**",
+            "every number here is a lower bound for this machine",
+        ],
+    ),
+    (
+        "ctx-queue-zoo",
+        f"{QUEUETRUTH}/README.md",
+        ["it fills 14.17% of the 3,000 orders within 1 s on 2019-12-30 where the exact replay fills 11.03%"],
+    ),
+    ("ctx-queue-zoo-bounds", f"{QUEUETRUTH}/docs/RESULTS.md", ["The bounds span `front_of_queue` +0.95 .. +3.08 pp and `trade_through_only` -6.08 .. -14.75 pp."]),
+    ("ctx-lukas", f"{LUKAS}/README.md", ["| 100 stocks, 10 µs latency | −0.23¢/share; 39 of 100 profitable (16 of 100 at 1 ms) |", "**99.81%**"]),
     ("ctx-quality-chase", f"{CARTERET}/bench/chase.cpp", ["validates the miss counters against a workload"]),
     ("ctx-quality-machine", f"{CARTERET}/tools/machine_check.sh", ["defensible latency measurement"]),
     ("ctx-quality-machine-neg", f"{CARTERET}/tests/machine_check_negative.sh", ["proves the machine check can fail"]),

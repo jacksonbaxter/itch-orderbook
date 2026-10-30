@@ -102,6 +102,8 @@ All `VERIFIED`.
 | [CppTrader](https://github.com/chronoxor/CppTrader/blob/3815893630abe5cd2281c9fd3c6775808820b763/README.md), OSS-2 | 3,232,727 msg/s on i7-4790K | Older hardware. Disk read inside the timed loop. |
 | [itch-book on a VM](https://github.com/groovg/itch-book/blob/b502b002abf650760b79c010b3ae3a8f82896ae8/README.md), OSS-19 | 4.6 M msg/s, 2.0 GHz EPYC 9645 KVM | The closest published clock speed to `debian`'s base clock. |
 | [carteret](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/benchmarks.md) | 7.0 M msg/s (142.36 ns), 6.0 M (167.78 ns) as shipped, derived, on a 5950X core at 3.4 GHz, 12302019 | FIFO queues on our day, but below T-BOOK-1. Its book is about 20× the L3 it runs against, which is `debian`'s position too, and more so. |
+| [Ironbook](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/README.md), GS-8 | 7.75 M msg/s, 10.9 M with batching and staged prefetch, on Apple M5, 12302019, one thread | FIFO queues on our day, but below T-BOOK-1. 16.3 M needs two threads, and its one-thread 16.7 M is the first 40 M messages only. |
+| [ChathukaM](https://github.com/ChathukaM/nasdaq-ITCH-orderbook/blob/16f87ef35b8eac301ad20c6fd2463242d20228bf/README.md) | 13.10 M msg/s, Ryzen 7 7800X3D under WSL2, 07302019 | Above T-BOOK-2, but [its levels hold totals](https://github.com/ChathukaM/nasdaq-ITCH-orderbook/blob/16f87ef35b8eac301ad20c6fd2463242d20228bf/src/book/price_levels.h), so no queue order. Not L3. |
 
 ## Per-message latency
 
@@ -128,7 +130,7 @@ A replay running flat out measures service time, not response time to an arrival
 - **Target:** p50 ≤ 121 ns, p99 ≤ 552 ns, p99.9 ≤ 874 ns.
 - **Source:** [tahsinj/nasdaq-feed-handler README](https://github.com/tahsinj/nasdaq-feed-handler/blob/e65b8408c1665ecce2f4c01ff5e2bb49aa21c6e5/README.md), OSS-26.
 - **Measured:** Intel Core i5-12400 under WSL2, GCC 13.3. Full day 01302020, 423,285,709 messages, memory-mapped. Pinned, single thread. Decode and apply, timer overhead included, across all messages.
-- **Comparability:** the tightest whole-day, all-types distribution found. It is under a hypervisor on a different day, and its levels hold aggregates, not FIFO queues, so T-LAT-4 is the like-for-like row. The fenced timer stops cache misses overlapping, so its p50 is pessimistic. Ours is run on 12302019.
+- **Comparability:** a whole-day, all-types distribution, with the lowest p50 of those found on aggregated levels. It is under a hypervisor on a different day, and its levels hold aggregates, not FIFO queues, so T-LAT-4 is the like-for-like row and T-LAT-5 is tighter in the tail. The fenced timer stops cache misses overlapping, so its p50 is pessimistic. Ours is run on 12302019.
 - **Status:** `VERIFIED`
 
 ### T-LAT-3: rate budgets
@@ -144,10 +146,18 @@ A replay running flat out measures service time, not response time to an arrival
 - **Comparability:** the cleanest comparison found: same day, FIFO queues, all message types, controlled core. This is its best measured row, not the shipped default (167.78 ns; 120, 660 and 1,140 ns), and it is one real configuration, not the best cell of each column. The authors warn that identity hashing depends on how Nasdaq assigns references. `debian` has 4 MB of L3, shared, with SMT and turbo on and no isolated core.
 - **Status:** `VERIFIED`
 
+### T-LAT-5: tightest all-message tail found
+- **Target:** p50 ≤ 127 ns, p99 ≤ 446 ns, p99.9 ≤ 778 ns, with nothing subtracted.
+- **Source:** [PitchFork benchmarks](https://github.com/pulk17/NASDAQ-ITCH-OrderBook/blob/27c6427cde9395a4c32324fa3ef71bb29c5ee1f6/docs/benchmarks.md), GS-14.
+- **Measured:** Intel Core i7-13650HX. Full tape S071321-v50, 2021-07-13, 459,781,103 messages. One thread, in a separate run from the throughput tables. [Timer](https://github.com/pulk17/NASDAQ-ITCH-OrderBook/blob/27c6427cde9395a4c32324fa3ef71bb29c5ee1f6/include/bench.hpp) is `lfence; rdtsc` to `rdtscp; lfence` around `process_message`, warm-up discarded. OS and pinning are not stated.
+- **Comparability:** [aggregated levels](https://github.com/pulk17/NASDAQ-ITCH-OrderBook/blob/27c6427cde9395a4c32324fa3ef71bb29c5ee1f6/include/orderbook.hpp), so no FIFO queues, on a different day and a laptop part. It beats T-LAT-2 at p99 and p99.9 but not at p50, so both stand. A FIFO book does more work per message.
+- **Status:** `VERIFIED`
+
 ### Context, not targets
 
 - Optiver, CppCon 2024 medians per book operation: `std::map` 33 ns, rising to 63 ns on a randomized heap; sorted vector 34 ns; reversed vector 32 ns; branchless search 29 ns; linear search 22 ns ([slides](https://raw.githubusercontent.com/CppCon/CppCon2024/main/Presentations/When_Nanoseconds_Matter.pdf), FT-1 to FT-9). Hardware undisclosed, aggregated levels, no percentiles, charts clipped at 200 ns. `SUBAGENT`: read from chart images.
 - [mohith-reddy-seelam](https://github.com/mohith-reddy-seelam/nasdaq-itch-feed-handler/blob/053a8d9b1e975eafc86ca9ed19648fe952ae6ec5/docs/RESULTS.md) per-type book-only figures (OSS-23) are lower, but exclude dispatch and prefetch, and were taken on a VM. `SUBAGENT`.
+- [Market-Core](https://github.com/harshal24-chavan/Market-Core/blob/9c3b24fde7720a796ffe756b23f4ba427c73df4e/README.md), GS-13, shows tighter per-type tails on an i3-540 (add p99 298 ns, p99.9 410 ns), but its [later README](https://github.com/harshal24-chavan/Market-Core/blob/dd801adeb45f1740a7a601dbb717c82e472bb128/README.md) replaces them with add p99 1,048 ns on the same day and hardware, without explaining why. So those figures are not used.
 - **Firm-published software p99 or p99.9 for a book: `UNCONFIRMED`.** No firm, paper or vendor publishes one. Gross shows clipped histograms only. Looked in: Optiver (2022, 2024), Jane Street talks, HRT blog, Databento, academic searches.
 
 ## Book design comparison
@@ -171,9 +181,12 @@ A replay running flat out measures service time, not response time to an arrival
 - **Status:** `VERIFIED`
 
 ### T-PERF-2: branch misses per message
-- **Target:** `UNCONFIRMED`. No source gives branch misses per message for a book or feed handler. carteret's method names `branch-misses` per message, but its log publishes no figure, only IPC (1.20 as shipped, 1.42 with identity hashing). Looked in: Gross 2022 and 2024, Cook 2017, Jane Street, HRT, Databento, vendors, the OSS repos reviewed, and carteret. Measured values are reported with no target claimed.
+- **Target:** ≤ 2.04 branch misses per message (derived: 865,425,492 / 423,285,709). This is a floor, not a top-tier bar. A top-tier per-message figure is `UNCONFIRMED`, and our measured value is reported either way.
+- **Source:** [Market-Core README, commit 9c3b24f](https://github.com/harshal24-chavan/Market-Core/blob/9c3b24fde7720a796ffe756b23f4ba427c73df4e/README.md), GS-13. Its later commit drops the branch line, so this citation names the commit.
+- **Measured:** Intel Core i3-540 at 3.07 GHz, DDR3-1333. Full day 01302020, 423,285,709 messages, one pinned thread. FIFO queues kept. `perf stat` over the whole process, so start-up and file access are included. The author publishes the run total. The per-message value is our division.
+- **Comparability:** a 2010 Westmere part on a different day, so a modern predictor should beat this easily. carteret's method names `branch-misses` per message, but its log publishes no figure, only IPC (1.20 as shipped, 1.42 with identity hashing). Looked in: Gross 2022 and 2024, Cook 2017, Jane Street, HRT, Databento, vendors, the OSS repos reviewed, carteret and the gap search.
 - **Context:** [Cook's](https://raw.githubusercontent.com/CppCon/CppCon2017/master/Presentations/When%20a%20Microsecond%20Is%20an%20Eternity/When%20a%20Microsecond%20Is%20an%20Eternity%20-%20Carl%20Cook%20-%20CppCon%202017.pdf) `array_map` find benchmark, slide 35, shows 0.22% branch misses and 0.067% of cache references missing (FT-21, `VERIFIED`). It is a hash-table micro-benchmark on 32 CPUs at 2892.9 MHz, model not stated, with synthetic keys. [Gross's slides](https://raw.githubusercontent.com/CppCon/CppCon2024/main/Presentations/When_Nanoseconds_Matter.pdf), p. 50, show run totals of 48.24 M against 27.83 M branch misses with no message count, so no per-message figure can be derived (FT-7, `SUBAGENT`, chart image).
-- **Status:** `UNCONFIRMED`
+- **Status:** `VERIFIED` for the run total. `UNCONFIRMED` for a top-tier bar.
 
 ### Counters on `debian`
 - **`cache-misses` counts L2 misses, not last-level misses.** [Linux 6.12 `core.c`](https://github.com/torvalds/linux/blob/v6.12/arch/x86/events/amd/core.c) line 258 maps it to `0x0964` in `amd_zen1_perfmon_event_map`, which is event PMCx064 with bits 3 and 0 set. [AMD's PPR 55570-B1](https://web.archive.org/web/2021id_/https://developer.amd.com/wp-content/resources/55570-B1_PUB.zip), for Family 17h Model 18h, defines PMCx064 as "L2 Cache Request Outcomes (not including L2 Prefetch)", bit 3 as "Data Cache Req Miss in L2 (all types)" and bit 0 as "Instruction Cache Req Miss in L2". The V1605B's exact model has no PPR we could find, and AMD's revision guide for Models 10h to 1Fh could not be found. Any write-up must call this number L2 misses.
@@ -201,7 +214,7 @@ A replay running flat out measures service time, not response time to an arrival
 
 ### T-ORACLE-1: reference book agrees after every message
 - **Target:** 0 divergences across all 268,744,780 messages of the reference day, with coverage after every message. An injected bug must be caught. Run on the Mac.
-- **Source:** `BRIEF` for the requirement. The published bar is [carteret](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/correctness.md): after every message it compares the touched level (share count, order count, full FIFO sequence of references) and the best bid and offer on both sides, and it hashes the whole book every N messages and at end of session. On this day that is 264,496,253 messages compared, identical, which leaves out the 4,248,527 messages of types its differential does not dispatch.
+- **Source:** `BRIEF` for the requirement. The published bar is [carteret](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/correctness.md): after every message it compares the touched level (share count, order count, full FIFO sequence of references) and the best bid and offer on both sides, and it hashes the whole book every N messages and at end of session. On this day that is 264,496,253 messages compared, identical, which leaves out the 4,248,527 messages of types its differential does not dispatch. [Ironbook](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/bench/results/full_day_diff.txt) and [aahilafraz123](https://github.com/aahilafraz123/itch-orderbook/blob/0980cf50ab71194774e4434c8590e0e2afb61c31/results/differential_full_day.txt) also report full-day agreement on this day, with weaker per-message coverage: top of book, plus whole-book checks at intervals.
 - **Where we must go further:** the brief requires a proof that unchanged state cannot have diverged, and carteret relies on the periodic hash. carteret also states that a misunderstanding of the feed shared by both books would pass every layer it has, because it had no independent reconstruction. T-TRADE-1 to T-TRADE-3 compare against Nasdaq and SEC data, and are what can close that gap.
 - **Status:** `BRIEF`, with the published figures `VERIFIED`
 
@@ -220,7 +233,7 @@ A replay running flat out measures service time, not response time to an arrival
 
 ### T-INV-2: the book is never crossed
 - **Target:** run the check strictly over the whole day. Count and characterise every violation by symbol, time and trading state. No scoping until the user decides.
-- **Published expectation:** on 12302019, carteret reports 8,580 crossed and 70 locked observations, on 13 and 6 symbols, with the deepest crossing $14.00 ([correctness.md](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/correctness.md), [design.md](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/design.md), DS-68). Of the crossings, 7,945 are with the symbol not in state `T`, and the other 635 fall within 50 ms of its resumption. 8,372 of the 8,580 are inside 09:30 to 16:00, so clock time does not explain them. The strict invariant is therefore expected to fail, and that is a finding, not a bug. Our run has to reproduce or contradict this split.
+- **Published expectation:** on 12302019, carteret reports 8,580 crossed and 70 locked observations, on 13 and 6 symbols, with the deepest crossing $14.00 ([correctness.md](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/correctness.md), [design.md](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/design.md), DS-68). Of the crossings, 7,945 are with the symbol not in state `T`, and the other 635 fall within 50 ms of its resumption. 8,372 of the 8,580 are inside 09:30 to 16:00, so clock time does not explain them. The strict invariant is therefore expected to fail, and that is a finding, not a bug. [Ironbook](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/bench/results/full_day_validation.txt) counts only 10 crossed and 0 locked in 136,896,897 checks, but its [check](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/include/ironbook/book/validation.hpp) runs only with the market open and the symbol in state `T`, so the two are different populations, not a contradiction. Our run has to reproduce or contradict both counts.
 - **Status:** `BRIEF` (the published count is `VERIFIED`)
 
 ## Trade-print verification
@@ -254,13 +267,20 @@ Per type: `E` must hit a live order, deducting at the order's price. `C` must hi
 - **Terms:** [Cboe's terms](https://www.cboe.com/terms) bar using its materials "to verify or correct other data or information" without consent, subject to fair use (TV-26). A free consolidated per-symbol whole-day figure for Nasdaq does not exist (TV-30).
 - **Status:** `VERIFIED` for the tie on 2019-12-30, by rerunning the join rather than by `check_benchmark_sources.py`, which holds no Cboe figures. All three tapes are equal on shares and trades, in `.orchestrator/research-cache/itch-orderbook/verify/cboe/tape_probe_20191230.log`. Use in this project is blocked on the user.
 
+### T-TRADE-5: continuous executions hit the best price
+- **Target:** every `E` with the market open and the symbol in state `T` executes at the best price level on its side: 5,683,178 of 5,683,178 on 12302019. Hard, with no tolerance. Queue-front share is reported, not gated: published 5,672,613, or 99.8141%.
+- **Source:** [Ironbook validation output](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/bench/results/full_day_validation.txt), with the definition in [`validation.hpp`](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/include/ironbook/book/validation.hpp), GS-8.
+- **Measured:** Apple M5, full day 12302019, against its own book.
+- **Comparability:** one reimplementation, so a claim until our harness reproduces it. [A second codebase](https://github.com/LukasUser/market-data-pipeline/blob/bf410f4aced4ae3bd360c56f5146f78b4048f123/README.md) reports the same 99.81% at queue front. This is the part of the user's sentence on `E` that can be held strictly.
+- **Status:** `VERIFIED`
+
 ## Backtester
 
 ### T-BT-1: replay rate with queue simulation on
 - **Target:** ≥ 2.0 M events/s on one thread: full replay plus strategy, with our queue model on, on a real day.
 - **Source:** [Jaspinder2003/LobSim](https://github.com/Jaspinder2003/LobSim/blob/1cc2b12d27e161459da725bc394c3ebae09b8912/README.md), BT-20: "full replay + strategy 507.6 ns/op 2.0 M/s".
 - **Measured:** Intel Core i9-13900H, release build, no `-march=native`. A **synthetic** L3 feed, with a market-making strategy. The README says the repo simulates queue position, but does not say whether the queue model is active in this row, or how many threads ran.
-- **Comparability:** a small unreviewed repo on a synthetic feed, and the highest honest rate found in this class. No project publishes an ITCH-based L3 backtester rate with exact FIFO and partial fills, so the true top-tier number is `UNCONFIRMED`. Looked in: hftbacktest (no figure), NautilusTrader (0.92 M iterations/s on 2,048 iterations, derived, BT-14), LEAN (data-point rates), backtrader (candles), vectorbt (declines to publish).
+- **Comparability:** a small unreviewed repo on a synthetic feed, and the highest honest rate found with a strategy running. No project publishes an ITCH-based L3 backtester rate with a strategy, exact FIFO and partial fills, so the true top-tier number is `UNCONFIRMED`. T-BT-3 is the real-data bar without a strategy. Looked in: hftbacktest (no figure), NautilusTrader (0.92 M iterations/s on 2,048 iterations, derived, BT-14), LEAN (data-point rates), backtrader (candles), vectorbt (declines to publish).
 - **Status:** `VERIFIED`
 
 ### T-BT-2: validity gates
@@ -268,7 +288,14 @@ Per type: `E` must hit a live order, deducting at the order's price. `C` must hi
 - **Source:** `BRIEF`. No published test method for proving a tick backtest has no lookahead was found (BT-57).
 - **Status:** `BRIEF`
 
-**Exact against modelled queue position, context, `VERIFIED`.** [carteret](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/README.md) placed 93,525 synthetic one-lot orders at the inside on 2019-12-30, on 50 symbols with a 60-second life, with identical placements for every model. Exact FIFO position filled 57.21%. The conservative model came in 21.2% below that, reaching 63.8% below at the back of the queue, and the proportional model 0.7% below, which its authors show is two opposite errors cancelling. So "queue model off" is not one thing, and a with-and-without run must name the model it uses. This compares fill rates, not strategy PnL, and it publishes no replay rate.
+### T-BT-3: real-day replay with shadow orders in real queues
+- **Target:** ≥ 4.61 M ITCH messages/s with 100,000 shadow orders tracked in real FIFO queues, on AAPL, MSFT, SPY and TSLA of 12302019, with no strategy. Mac host (derived: 5.19 M records/s × 5,425,849 / 6,103,262).
+- **Source:** [queuetruth RESULTS.md](https://github.com/sarptandoven/queuetruth/blob/67a91afc802092acfa1b1d4593829f16eb0bdc31/docs/RESULTS.md), section 7, GS-10.
+- **Measured:** Apple M1 Pro, 16 GB, macOS 15.6.1, Low Power Mode on, Rust release build. 2019-12-30, 6,103,262 records from 5,425,849 ITCH messages. Median of 3 repetitions. It reads Parquet with a background decode thread, so it is not strictly one thread.
+- **Comparability:** real data, unlike T-BT-1, but four symbols need far less memory than a full-book replay, and there is no strategy. Its author calls these numbers a lower bound for that machine.
+- **Status:** `VERIFIED`
+
+**Exact against modelled queue position, context, `VERIFIED`.** [carteret](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/README.md) placed 93,525 synthetic one-lot orders at the inside on 2019-12-30, on 50 symbols with a 60-second life, with identical placements for every model. Exact FIFO position filled 57.21%. The conservative model came in 21.2% below that, reaching 63.8% below at the back of the queue, and the proportional model 0.7% below, which its authors show is two opposite errors cancelling. So "queue model off" is not one thing, and a with-and-without run must name the model it uses. This compares fill rates, not strategy PnL, and it publishes no replay rate. [queuetruth](https://github.com/sarptandoven/queuetruth/blob/67a91afc802092acfa1b1d4593829f16eb0bdc31/README.md) scores 16 L2 models against exact FIFO on the same day, for AAPL, MSFT, SPY and TSLA: NautilusTrader's default touch model fills 14.17% within 1 s where exact fills 11.03%, and its bounds run from +3.08 pp (`front_of_queue`) to −14.75 pp (`trade_through_only`).
 
 ### Fees for the report day (2019-12-30), base tier
 
@@ -304,7 +331,7 @@ The base run uses 25 µs each way plus 5 µs compute. This is an assumption deri
 - **Comparability:** synthetic Monte Carlo. This tests our implementation of the model and says nothing about real data.
 - **Status:** `VERIFIED`
 
-**No headline return, no Sharpe.** Published realised spreads and queue values are context only. The closest published run is [carteret's](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/README.md) exploratory maker on real ITCH with exact queue position: gross −0.34 to −0.57 half-spreads per fill on 2019-10-30 and 2020-01-30, losing money in every arm at the base fee tier. It is a queue-imbalance strategy, not Avellaneda-Stoikov, so it sets no target, but a loss here would be the expected result. Moallemi and Yuan's value gap between front and back of the queue ranges from 0.05 to 0.17 ticks (derived, simulation columns, nine large-tick names, [paper](https://moallemi.com/ciamac/papers/queue-value-2016.pdf) pp. 23-24, MK-58). That is per order, at zero latency, on older data, and it is not a strategy PnL. One day is one sample, so no edge is claimed.
+**No headline return, no Sharpe.** Published realised spreads and queue values are context only. The closest published run is [carteret's](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/README.md) exploratory maker on real ITCH with exact queue position: gross −0.34 to −0.57 half-spreads per fill on 2019-10-30 and 2020-01-30, losing money in every arm at the base fee tier. It is a queue-imbalance strategy, not Avellaneda-Stoikov, so it sets no target, but a loss here would be the expected result. [LukasUser's](https://github.com/LukasUser/market-data-pipeline/blob/bf410f4aced4ae3bd360c56f5146f78b4048f123/README.md) passive replay on our report day says the same: −0.23¢ per share across 100 stocks at 10 µs, with 39 of 100 profitable, and 16 of 100 at 1 ms. No result files are committed, and hardware is not stated. Moallemi and Yuan's value gap between front and back of the queue ranges from 0.05 to 0.17 ticks (derived, simulation columns, nine large-tick names, [paper](https://moallemi.com/ciamac/papers/queue-value-2016.pdf) pp. 23-24, MK-58). That is per order, at zero latency, on older data, and it is not a strategy PnL. One day is one sample, so no edge is claimed.
 
 ## SPSC ring buffer
 
@@ -379,7 +406,7 @@ The base run uses 25 µs each way plus 5 µs compute. This is an assumption deri
 
 | Target | Where we looked |
 |---|---|
-| Per-message branch misses (T-PERF-2) | Firm talks, HRT, Jane Street, Databento, vendors, OSS repos, carteret |
+| Top-tier branch misses per message (T-PERF-2) | Firm talks, HRT, Jane Street, Databento, vendors, OSS repos, carteret, gap search |
 | Numeric SIMD target for ITCH (T-SIMD-1) | GitHub repo and code search, web, academic search |
 | Firm-published software p99 or p99.9 for a book | Optiver, Jane Street, HRT, Databento, academic search |
 | Allocator-only effect on a book (T-ARENA-1) | Evidence files, cached repos, web search |
@@ -387,6 +414,8 @@ The base run uses 25 µs each way plus 5 µs compute. This is an assumption deri
 | True L3 ITCH backtester rate (T-BT-1 context) | hftbacktest, NautilusTrader, LEAN, backtrader, vectorbt |
 | 2026 TotalView peak rates | Nasdaq's live report is gone; newest public copy is December 2024 |
 | Nasdaq order-entry latency distribution | Nasdaq co-location pages, OUCH docs, academic papers |
+
+"Could not be confirmed" means not found in the places listed. One repo that changed several targets was missed in the first pass, and in the later gap search all `gh search code` queries and three of five repo queries returned nothing, so most finds came from web search. Twelve more READMEs were then scanned by keyword rather than read, and two repos returned no README. A further miss is possible.
 
 ## Code-quality bar
 
