@@ -31,10 +31,10 @@ Full plan through to the done criteria. Tick items when done, and add anything n
 - [ ] Avoid `<generator>` and `<stacktrace>`, which do not exist in this libc++.
 
 ### Data
-- [ ] `scripts/fetch_data.py`: chunked Range download into `data/`. Each chunk must be status 206 with the exact `Content-Range`, same ETag and exact body length. `curl --continue-at` is known to corrupt these files (DS-9).
+- [x] `scripts/fetch_data.py`: chunked Range download into `data/`. Each chunk must be status 206 with the exact `Content-Range`, same ETag and exact body length. `curl --continue-at` is known to corrupt these files (DS-9).
 - [ ] Verify length, ETag, gzip CRC and ISIZE from the trailer, a SHA-256 pinned in the repo, unpacked byte count, message count, and last message `S`/`C`. There is no zero-length terminator in real files (DS-61). Record that Nasdaq publishes no usable checksum, so the first-download hash is trust-on-first-use, and say which files have a third-party hash to compare with.
-- [ ] Start the 12302019 and 10302019 downloads early. Third-party reports of throttling to 0.3 to 0.8 MB/s (DS-9). Keep the `.gz`, because the archive is not stable (DS-8).
-- [ ] Fetch external reference files (CrossStats, MIDAS) by script into `data/`. Never commit them.
+- [x] Start the 12302019 and 10302019 downloads early. Third-party reports of throttling to 0.3 to 0.8 MB/s (DS-9). Keep the `.gz`, because the archive is not stable (DS-8).
+- [x] Fetch external reference files (CrossStats, MIDAS) by script into `data/`. Never commit them.
 - [ ] Same scripts on `debian` under `~/quant-projects/itch-orderbook/data`.
 
 ### Platform layer (`bench/platform/`, no `#ifdef` in book or parser)
