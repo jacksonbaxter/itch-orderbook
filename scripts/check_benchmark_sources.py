@@ -326,7 +326,6 @@ CHECKS = [
     ),
     ("ctx-jane-street", "https://www.janestreet.com/tech-talks/building-an-exchange/", ["about 30% of their time"]),
     ("ctx-liburing-844", "https://github.com/axboe/liburing/issues/844", ["475 000", "430 000"]),
-    ("ctx-terms-cboe", "https://www.cboe.com/terms", ["to verify or correct other data or information"]),
     ("ctx-menkveld", "https://papers.tinbergen.nl/11076.pdf", ["positioning"]),
     (
         "ctx-chrome-clamp",
