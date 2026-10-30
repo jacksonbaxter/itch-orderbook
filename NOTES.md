@@ -28,16 +28,32 @@ Opening the sources myself found real faults in the first draft:
 
 The largest fault wasn't a wrong number. `EkanshSingh401/carteret` was never reviewed. Only the data track read it, for crossed-book counts, and that track wasn't asked about performance or correctness. I found it by reading the passage behind a check I was adding, and that passage mentioned 264 million messages compared.
 
-It had made three claims false: that 50 M messages was the strongest published differential, that no reviewed repo diffs a full day, and that no source gives per-message cache misses. It's the closest published comparison to this project: same reference day, FIFO queues, isolated core, fixed clock, exact `rdpmc` counts, ten sessions differentially tested.
+It had made three claims false: that 50 M messages was the strongest published differential, that no reviewed repo diffs a full day, and that no source gives per-message cache misses. A fourth claim, that branch misses have no usable source, fell to the gap search. It's the closest published comparison to this project: same reference day, FIFO queues, isolated core, fixed clock, exact `rdpmc` counts, ten sessions differentially tested.
 
 - **The oracle design is already published.** Touched level and BBO after every message, with a periodic whole-book hash. Ours has to add the proof about unchanged state.
 - **Its stated gap is one we can close.** A misunderstanding shared by both books passes every layer it has. Our trade-print checks reach outside the two books.
 - **`r0843:u` was in our own Zen 1 evidence** and never reached BENCHMARKS.md, which said only that L3 counters were denied. Core-side DRAM fills need no L3 access. It still has to pass a pointer chase on `debian`.
-- **Branch misses per message stay unconfirmed.** Its method names them, but no figure is published.
+- **It publishes no branch-miss figure.** Its method names them, but only IPC appears in the log.
 - **Targets take one real row.** T-LAT-4 and T-PERF-1 use its best measured configuration. Taking the best cell of each column would describe a configuration that never ran.
 - **Its own failures are useful.** Five of ten predictions failed, SPSC was 31% slower than direct, and a first layout run measured the baseline four times because the switches never reached the compiler. Print the configuration from inside the binary.
 
 "Looked in all OSS repos reviewed" only ever meant the repos someone was told to review. An absence claim needs its search stated, which is why the gap search ran.
+
+### What the gap search changed
+
+One more narrow subagent looked for anything else missed. Evidence is `gap-search.md`. I opened every source below myself before using it.
+
+- **Nothing beats T-BOOK-1.** The closest are Ironbook's 16.3 M on two threads and 16.7 M on the first 40 M messages.
+- **T-LAT-2 was not the tightest.** I had called it that an hour earlier. PitchFork's 446 and 778 ns are tighter, with the same fenced timer as carteret, so it became T-LAT-5. Its levels are aggregated, like T-LAT-2's.
+- **T-PERF-2 has a floor.** Market-Core publishes real-day branch misses with a message count, which gives 2.04 per message. It's whole-process, on a 2010 part, so it's a floor rather than a bar.
+- **Market-Core's latency table wasn't used.** Add p99 is 298 ns at one commit and 1,048 ns at a later one, on the same day and hardware, with no explanation. An unexplained retraction by the author rules it out, even though it would be the lowest tail on the page.
+- **queuetruth's table rates are synthetic.** Its section 7 table is on generated records. The real-day figures are in the prose and the table below it. It also counts records, not messages, so T-BT-3 converts to messages.
+- **ChathukaM looked like it raised T-BOOK-2 and didn't.** It reports 13.10 M, above 12.5 M, in a repo the search listed but never opened. Its levels hold only totals, so it isn't L3.
+- **Ironbook's 10 crossings don't contradict carteret's 8,580.** Its check runs only with the market open and the symbol in state `T`.
+- **aahilafraz's README overstates its check.** It claims FIFO coverage after every message, but mid-day checks pass `queues=false`.
+- **Prefetch evidence is mixed.** Ironbook gains 41% on a full day from batching with staged prefetch (derived: 10.9 / 7.75). carteret's rule stopped it running a prefetch sweep at all. So this stays an experiment for us, not an assumption.
+
+The search's own warning stands: all code-search queries returned nothing, so absence claims are weak. The keyword sweep of the 14 unopened repos found one real number, and two repos returned no README.
 
 ### Decisions
 
