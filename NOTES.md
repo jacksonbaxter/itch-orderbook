@@ -14,7 +14,7 @@ Evidence is in `build-research/evidence/` (gitignored). Third-party clones and p
 
 Opening the sources myself found real faults in the first draft:
 
-- The NBER link for Aquilina, Budish and O'Neill was written from memory and pointed at the wrong paper. It's w29011.
+- The NBER link for Aquilina, Budish and O'Neill was written from memory, not from a page anyone opened. The paper opened is w29011.
 - Cook's host was called a "2017 Xeon". The slide says 32 CPUs at 2892.9 MHz, with no model.
 - The Brouer range was wrong (391 to 600 ns/packet, across two posts).
 - The Moallemi range covered only six of nine names (0.05 to 0.17 ticks).
