@@ -1,0 +1,1099 @@
+{
+  "area": "bench",
+  "faults": [
+    {
+      "id": "bench-residency-check-removed",
+      "breaks": "The timed passes no longer confirm the input is resident",
+      "check": "test_bench_replay BenchReplay.AnInputNotResidentIsRefusedBeforeAnyTiming",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "    if (!residency.complete()) {\n      refuse(\"input not resident: \" + report_.residency);\n      return false;\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.AnInputNotResidentIsRefusedBeforeAnyTiming",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-residency-any-page-will-do",
+      "breaks": "One resident page counts as a resident input",
+      "check": "test_bench_platform BenchMemory.OneMissingPageIsNotComplete",
+      "mutations": [
+        {
+          "file": "bench/platform/memory.hpp",
+          "old": "error.empty() && pages != 0 && resident_pages == pages",
+          "new": "error.empty() && resident_pages != 0"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchMemory\\.OneMissingPageIsNotComplete",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-pin-claimed-on-failure",
+      "breaks": "A failed set call is judged a pin",
+      "check": "test_bench_platform BenchAffinity.AFailedCallIsNeverClaimed",
+      "mutations": [
+        {
+          "file": "bench/platform/affinity.hpp",
+          "old": "requested_core >= 0 && set_result == 0 && readback.size() == 1 &&",
+          "new": "requested_core >= 0 && readback.size() == 1 &&"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchAffinity\\.AFailedCallIsNeverClaimed",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-pin-wide-mask-claimed",
+      "breaks": "A mask wider than the core is judged a pin",
+      "check": "test_bench_platform BenchAffinity.AWiderOrWrongMaskIsNeverClaimed",
+      "mutations": [
+        {
+          "file": "bench/platform/affinity.hpp",
+          "old": "readback.size() == 1 &&\n                   readback.front() == requested_core;",
+          "new": "!readback.empty();"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchAffinity\\.AWiderOrWrongMaskIsNeverClaimed",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-pin-field-always-claims",
+      "breaks": "The header says pinned whatever happened",
+      "check": "test_bench_platform BenchAffinity.ALivePinIsRecordedWhateverItDid",
+      "mutations": [
+        {
+          "file": "bench/platform/affinity.hpp",
+          "old": "  if (outcome.pinned) {\n    return std::format(\"pinned to core",
+          "new": "  if (outcome.requested_core != -2) {\n    return std::format(\"pinned to core"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchAffinity\\.ALivePinIsRecordedWhateverItDid",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-header-field-dropped",
+      "breaks": "The governor no longer reaches the header",
+      "check": "test_bench_platform BenchSysinfo.TheHeaderHasEveryFieldInOrder",
+      "mutations": [
+        {
+          "file": "bench/platform/sysinfo.hpp",
+          "old": "      {\"governor\", read_governor(source, in.core_number)},\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchSysinfo\\.TheHeaderHasEveryFieldInOrder",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-unavailable-faked-mac",
+      "breaks": "macOS claims a governor it cannot read",
+      "check": "test_bench_platform BenchSysinfo.MacOSCannotReadGovernorFrequencyOrTurbo",
+      "mutations": [
+        {
+          "file": "bench/platform/sysinfo.hpp",
+          "old": "return unavailable(std::format(\"{} has no cpufreq governor\", source.os));",
+          "new": "return \"performance\";"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchSysinfo\\.MacOSCannotReadGovernorFrequencyOrTurbo",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-unavailable-faked-linux",
+      "breaks": "An unreadable sysfs file becomes a made-up value",
+      "check": "test_bench_platform BenchSysinfo.AnUnreadableFieldIsUnavailableNeverAGuess",
+      "mutations": [
+        {
+          "file": "bench/platform/sysinfo.hpp",
+          "old": "return unavailable(std::format(\"{} not readable\", path));",
+          "new": "return \"performance\";"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchSysinfo\\.AnUnreadableFieldIsUnavailableNeverAGuess",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-host-label-free-text",
+      "breaks": "The host label is built from text, not the fixed set",
+      "check": "test_bench_platform BenchSysinfo.HostLabelIsOneOfThreeFixedStrings",
+      "mutations": [
+        {
+          "file": "bench/platform/sysinfo.hpp",
+          "old": "  return kHostUnknown;\n",
+          "new": "  return cpu;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchSysinfo\\.HostLabelIsOneOfThreeFixedStrings",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-percentile-below-quantum",
+      "breaks": "A percentile below the floor keeps its value",
+      "check": "test_bench_replay BenchReplay.APercentileBelowTheFloorCarriesNoValue",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "net < timer.floor_ticks()",
+          "new": "net < 0.0"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.APercentileBelowTheFloorCarriesNoValue",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-warmup-included",
+      "breaks": "The warm-up pass is added to the throughput pass",
+      "check": "test_bench_replay BenchReplay.TheWarmUpReachesNoResult",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "    report_.throughput = pass;\n",
+          "new": "    pass.ticks += report_.warmup_ticks;\n    pass.messages += report_.warmup_messages;\n    report_.throughput = pass;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.TheWarmUpReachesNoResult",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-warmup-skipped",
+      "breaks": "Timing starts with no warm-up pass",
+      "check": "test_bench_replay BenchReplay.NothingIsTimedBeforeTheWarmUp",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "    if (!report_.warmed) {\n      refuse(\"no warm-up pass ran before timing\");\n      return false;\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.NothingIsTimedBeforeTheWarmUp",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-recording-inside-span",
+      "breaks": "The sample is recorded before the span closes",
+      "check": "test_bench_replay BenchReplay.RecordingHappensOutsideEveryTimedSpan",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "    const std::uint64_t after = clock.stop();\n    sink.push(after - before);\n",
+          "new": "    sink.push(0);\n    const std::uint64_t after = clock.stop();\n    static_cast<void>(after - before);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.RecordingHappensOutsideEveryTimedSpan",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-rdpmc-read-disagree",
+      "breaks": "rdpmc and read() differ by 10% and the check agrees",
+      "check": "test_bench_platform BenchCounters.RdpmcAndReadDisagreeingIsCaught",
+      "mutations": [
+        {
+          "file": "bench/platform/counters.hpp",
+          "old": "if (gap > kAgreementSlack && relative > kAgreementFraction) {",
+          "new": "if (gap > kAgreementSlack && relative > 0.5) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchCounters\\.RdpmcAndReadDisagreeingIsCaught",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-multiplexed-as-measured",
+      "breaks": "A counter that ran part of the time is called measured",
+      "check": "test_bench_platform BenchCounters.APartialRunIsMultiplexedNeverMeasured",
+      "mutations": [
+        {
+          "file": "bench/platform/counters.hpp",
+          "old": "time_running < time_enabled ? CounterState::multiplexed : CounterState::measured;",
+          "new": "time_running == 0 ? CounterState::multiplexed : CounterState::measured;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchCounters\\.APartialRunIsMultiplexedNeverMeasured",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-file-field-dropped",
+      "breaks": "A results file has lost its governor field",
+      "check": "check_results.py header-field-missing",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_mac.md",
+          "op": "replace_text",
+          "old": "- governor: unavailable: macOS has no cpufreq governor\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_debian.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL header-field-missing good_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-file-unavailable-faked",
+      "breaks": "A results file gives a Mac a governor",
+      "check": "check_results.py unavailable-faked",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_mac.md",
+          "op": "replace_text",
+          "old": "- governor: unavailable: macOS has no cpufreq governor",
+          "new": "- governor: performance"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_debian.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL unavailable-faked good_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-file-pin-claimed",
+      "breaks": "A results file claims a pin on macOS",
+      "check": "check_results.py pin-claimed",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_mac.md",
+          "op": "replace_text",
+          "old": "- pinning: not pinned: thread_policy_set",
+          "new": "- pinning: pinned to core 4: thread_policy_set"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_debian.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL pin-claimed good_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-file-pin-failed",
+      "breaks": "A debian results file with a failed pin",
+      "check": "check_results.py pin-failed",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_debian.md",
+          "op": "replace_text",
+          "old": "- pinning: pinned to core 4: ",
+          "new": "- pinning: not pinned: "
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_debian.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL pin-failed good_debian\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-file-percentile-below-floor",
+      "breaks": "A results file prints p50 at one tick",
+      "check": "check_results.py percentile-below-floor",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_mac.md",
+          "op": "replace_text",
+          "old": "| p50 | unresolved | | | | resolved in 0 of 3 repetitions |",
+          "new": "| p50 | 41.7 | 41.7 | 41.7 | 0.00% | resolved |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_debian.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL percentile-below-floor good_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-file-warmup-included",
+      "breaks": "A results file timed two passes as one",
+      "check": "check_results.py warmup-included",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_mac.md",
+          "op": "replace_text",
+          "old": "- timed_messages: 3,330",
+          "new": "- timed_messages: 6,660"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_debian.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL warmup-included good_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-file-not-resident",
+      "breaks": "A results file with a page not resident",
+      "check": "check_results.py input-not-resident",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_mac.md",
+          "op": "replace_text",
+          "old": "- residency: 7 of 7 pages resident",
+          "new": "- residency: 6 of 7 pages resident"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_debian.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL input-not-resident good_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-file-multiplexed-as-measured",
+      "breaks": "A results file calls a multiplexed counter measured",
+      "check": "check_results.py multiplexed-as-measured",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_debian.md",
+          "op": "replace_text",
+          "old": "| branch-misses | multiplexed | 0.8123 |",
+          "new": "| branch-misses | measured | 0.8123 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_debian.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL multiplexed-as-measured good_debian\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-file-machine-check-failed",
+      "breaks": "A results file embeds a failed machine_check",
+      "check": "check_results.py machine-check-failed",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_debian.md",
+          "op": "replace_text",
+          "old": "machine_check: pass governor: core 4 runs performance",
+          "new": "machine_check: FAIL governor: core 4 runs schedutil"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_debian.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL machine-check-failed good_debian\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-file-hostname",
+      "breaks": "A results file keeps measure.sh's hostname",
+      "check": "check_results.py load-line-hostname",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_mac.md",
+          "op": "replace_text",
+          "old": "host=macOS (M4 Max) at=",
+          "new": "host=some-machine at="
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_debian.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL load-line-hostname good_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-file-host-mislabelled",
+      "breaks": "Mac numbers labelled debian",
+      "check": "check_results.py host-label",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_mac.md",
+          "op": "replace_text",
+          "old": "- host: macOS (M4 Max)",
+          "new": "- host: debian"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_debian.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL host-label good_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-machine-pin",
+      "breaks": "The process may run on every core",
+      "check": "machine_check.sh pin-readback",
+      "inputs": [
+        {
+          "file": "tests/fixtures/machine_check/linux/proc/self/status",
+          "op": "replace_text",
+          "old": "Cpus_allowed_list:\t4",
+          "new": "Cpus_allowed_list:\t0-7"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/machine_check.sh",
+        "--input",
+        "{tree}/tests/fixtures/machine_check/input.bin",
+        "--probe",
+        "{tree}/tests/fixtures/machine_check/fake_probe.sh",
+        "--core",
+        "4",
+        "--sibling",
+        "5",
+        "--os",
+        "linux",
+        "--root",
+        "{tree}/tests/fixtures/machine_check/linux",
+        "--idle-window",
+        "0"
+      ],
+      "expect": {
+        "signature": "machine_check: FAIL pin-readback:",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-machine-governor",
+      "breaks": "The governor is schedutil",
+      "check": "machine_check.sh governor",
+      "inputs": [
+        {
+          "file": "tests/fixtures/machine_check/linux/sys/devices/system/cpu/cpu4/cpufreq/scaling_governor",
+          "op": "replace_text",
+          "old": "performance",
+          "new": "schedutil"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/machine_check.sh",
+        "--input",
+        "{tree}/tests/fixtures/machine_check/input.bin",
+        "--probe",
+        "{tree}/tests/fixtures/machine_check/fake_probe.sh",
+        "--core",
+        "4",
+        "--sibling",
+        "5",
+        "--os",
+        "linux",
+        "--root",
+        "{tree}/tests/fixtures/machine_check/linux",
+        "--idle-window",
+        "0"
+      ],
+      "expect": {
+        "signature": "machine_check: FAIL governor:",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-machine-sibling",
+      "breaks": "cpu5 is busy",
+      "check": "machine_check.sh sibling-idle",
+      "inputs": [
+        {
+          "file": "tests/fixtures/machine_check/linux/proc/stat.after",
+          "op": "replace_text",
+          "old": "cpu5 100 0 101 899",
+          "new": "cpu5 200 0 200 800"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/machine_check.sh",
+        "--input",
+        "{tree}/tests/fixtures/machine_check/input.bin",
+        "--probe",
+        "{tree}/tests/fixtures/machine_check/fake_probe.sh",
+        "--core",
+        "4",
+        "--sibling",
+        "5",
+        "--os",
+        "linux",
+        "--root",
+        "{tree}/tests/fixtures/machine_check/linux",
+        "--idle-window",
+        "0"
+      ],
+      "expect": {
+        "signature": "machine_check: FAIL sibling-idle:",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-machine-resident",
+      "breaks": "One page of the input is not resident",
+      "check": "machine_check.sh input-resident",
+      "inputs": [
+        {
+          "file": "tests/fixtures/machine_check/probe_output.txt",
+          "op": "replace_text",
+          "old": "4 of 4 pages",
+          "new": "3 of 4 pages"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/machine_check.sh",
+        "--input",
+        "{tree}/tests/fixtures/machine_check/input.bin",
+        "--probe",
+        "{tree}/tests/fixtures/machine_check/fake_probe.sh",
+        "--core",
+        "4",
+        "--sibling",
+        "5",
+        "--os",
+        "linux",
+        "--root",
+        "{tree}/tests/fixtures/machine_check/linux",
+        "--idle-window",
+        "0"
+      ],
+      "expect": {
+        "signature": "machine_check: FAIL input-resident:",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-machine-timer",
+      "breaks": "The probe measures no quantum",
+      "check": "machine_check.sh timer-calibration",
+      "inputs": [
+        {
+          "file": "tests/fixtures/machine_check/probe_output.txt",
+          "op": "replace_text",
+          "old": "timer_quantum_ns: 10.000",
+          "new": "timer_quantum_ns: 0"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/machine_check.sh",
+        "--input",
+        "{tree}/tests/fixtures/machine_check/input.bin",
+        "--probe",
+        "{tree}/tests/fixtures/machine_check/fake_probe.sh",
+        "--core",
+        "4",
+        "--sibling",
+        "5",
+        "--os",
+        "linux",
+        "--root",
+        "{tree}/tests/fixtures/machine_check/linux",
+        "--idle-window",
+        "0"
+      ],
+      "expect": {
+        "signature": "machine_check: FAIL timer-calibration:",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-numbers-changed-figure",
+      "breaks": "A README figure no longer matches its results file",
+      "check": "gate_numbers.py on the fixture",
+      "inputs": [
+        {
+          "file": "tests/fixtures/gate_numbers/README.md",
+          "op": "replace_text",
+          "old": "20,677,835",
+          "new": "20,677,836"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}/tests/fixtures/gate_numbers"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 20,677,836 is not in results/bench_one\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-numbers-changed-demo-figure",
+      "breaks": "A demo page figure no longer matches any results file",
+      "check": "gate_numbers.py on the fixture",
+      "inputs": [
+        {
+          "file": "tests/fixtures/gate_numbers/docs/index.html",
+          "op": "replace_text",
+          "old": "1,500",
+          "new": "1,600"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}/tests/fixtures/gate_numbers"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL docs/index\\.html:\\d+: 1,600 is in no results file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-prediction-missing",
+      "breaks": "A result names a prediction that is not on record",
+      "check": "check_predictions.py prediction-missing",
+      "inputs": [
+        {
+          "file": "tests/fixtures/predictions/results/predictions.md",
+          "op": "replace_text",
+          "old": "## P-0001: a fixture prediction",
+          "new": "## P-0002: a fixture prediction"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_predictions.py",
+        "--root",
+        "{tree}/tests/fixtures/predictions",
+        "--no-git"
+      ],
+      "expect": {
+        "signature": "check_predictions: FAIL prediction-missing results/bench_fixture\\.md: P-0001",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-prediction-order-unchecked",
+      "breaks": "A prediction committed after its result is let through",
+      "check": "test_check_predictions.py on real git history",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "    if commit == result_commit or git(root, \"merge-base\", \"--is-ancestor\", commit,\n                                      result_commit) is None:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_prediction_after_result",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-failed-run-dropped",
+      "breaks": "A published run has no row in the run log",
+      "check": "check_predictions.py run-missing-from-log",
+      "inputs": [
+        {
+          "file": "tests/fixtures/predictions/results/run_log.md",
+          "op": "replace_text",
+          "old": "| P-0001-20261031T100005Z | P-0001 | abc (clean) | Darwin | published |\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_predictions.py",
+        "--root",
+        "{tree}/tests/fixtures/predictions",
+        "--no-git"
+      ],
+      "expect": {
+        "signature": "check_predictions: FAIL run-missing-from-log",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-load-line-missing",
+      "breaks": "The stderr has no end line, so one could only be invented",
+      "check": "stamp_load.py refuses",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/measure.stderr",
+          "op": "replace_text",
+          "old": "measure.sh: end load1=1.30 exit=0 at=2026-10-31T10:00:10Z\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/stamp_load.py",
+        "--results",
+        "{tree}/tests/fixtures/bench_results/pending_mac.md",
+        "--stderr",
+        "{tree}/tests/fixtures/bench_results/measure.stderr",
+        "--out",
+        "{tree}/tests/fixtures/bench_results/stamped.md"
+      ],
+      "expect": {
+        "signature": "stamp_load: refused: wanted one measure.sh end line, found 0",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-load-line-other-run",
+      "breaks": "Load lines from a different run are stamped in",
+      "check": "stamp_load.py through check_results.py",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/measure.stderr",
+          "op": "replace_text",
+          "old": "exit=0 at=2026-10-31T10:00:10Z",
+          "new": "exit=0 at=2026-10-30T10:00:10Z"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/stamp_load.py",
+        "--results",
+        "{tree}/tests/fixtures/bench_results/pending_mac.md",
+        "--stderr",
+        "{tree}/tests/fixtures/bench_results/measure.stderr",
+        "--out",
+        "{tree}/tests/fixtures/bench_results/stamped.md"
+      ],
+      "expect": {
+        "signature": "stamp_load: FAIL load-line-invalid",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-load-hostname-kept",
+      "breaks": "stamp_load.py copies measure.sh's hostname through",
+      "check": "stamp_load.py through check_results.py",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "start = HOST.sub(f\"host={host}\", one_line(START, stderr_text, \"start\"))",
+          "new": "start = one_line(START, stderr_text, \"start\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/stamp_load.py",
+        "--results",
+        "{tree}/tests/fixtures/bench_results/pending_mac.md",
+        "--stderr",
+        "{tree}/tests/fixtures/bench_results/measure.stderr",
+        "--out",
+        "{tree}/tests/fixtures/bench_results/stamped.md"
+      ],
+      "expect": {
+        "signature": "stamp_load: FAIL load-line-hostname",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-best-of",
+      "breaks": "The driver reports the best repetition as its median",
+      "check": "test_bench_results.py spread",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "return (statistics.median(values), min(values), max(values),",
+          "new": "return (max(values), min(values), max(values),"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_spread_is_median_min_max_and_cv",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-skips-machine-check",
+      "breaks": "The driver no longer refuses on machine_check",
+      "check": "test_bench_results.py driver refusal",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if result.returncode != 0:\n        raise Refused(\"machine_check\", result.stdout.strip().splitlines()[-1]\n                      if result.stdout.strip() else f\"exited {result.returncode}\")\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_machine_check_failure_refuses_and_stays_in_the_log",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-ignores-refusal",
+      "breaks": "The driver publishes a repetition that refused",
+      "check": "test_bench_results.py driver refusal",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if code != 0 or record[\"refusals\"]:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_bench_that_refuses_refuses_the_run",
+        "exit": 1
+      }
+    }
+  ]
+}

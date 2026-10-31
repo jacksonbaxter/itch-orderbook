@@ -1,0 +1,4 @@
+timer_quantum_ns: 10.000
+timer_calibrated_mhz: 1997.000
+resident_fraction: 1.000000
+residency: 4 of 4 pages resident

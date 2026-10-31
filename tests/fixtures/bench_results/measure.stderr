@@ -1,0 +1,6 @@
+bench_driver: wrote results/bench_fixture.md, load lines pending. Now run scripts/stamp_load.py.
+        3.21 real         2.20 user         0.40 sys
+           234567890  maximum resident set size
+           123456789  peak memory footprint
+measure.sh: start load1=1.20 host=some-machine at=2026-10-31T10:00:00Z
+measure.sh: end load1=1.30 exit=0 at=2026-10-31T10:00:10Z

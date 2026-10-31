@@ -364,7 +364,7 @@ class CounterGroup {
   [[nodiscard]] bool read_fast(std::span<std::uint64_t> out) const noexcept {
     bool usable = !open_.empty();
     for (std::size_t i = 0; i < open_.size(); ++i) {
-      usable = read_mmap_counter(open_[i].page, out[i]) && usable;
+      usable = open_[i].page != nullptr && read_mmap_counter(open_[i].page, out[i]) && usable;
     }
     return usable;
   }

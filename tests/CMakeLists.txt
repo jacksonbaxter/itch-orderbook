@@ -27,6 +27,15 @@ itch_add_test(test_bench_replay test_bench_replay.cpp)
 target_include_directories(test_bench_platform PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 target_include_directories(test_bench_replay PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 
+if(ITCH_BUILD_BENCH)
+  add_test(NAME test_bench_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_cli.py"
+            "$<TARGET_FILE:bench_replay>" "$<TARGET_FILE:bench_probe>"
+            "${CMAKE_CURRENT_BINARY_DIR}/bench_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
+  set_tests_properties(test_bench_cli PROPERTIES LABELS unit)
+endif()
+
 if(ITCH_BUILD_TOOLS)
   add_test(NAME test_census_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_census_cli.py"

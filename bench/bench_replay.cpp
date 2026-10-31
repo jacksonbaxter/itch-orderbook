@@ -9,6 +9,7 @@
 // usage. A refused run is a record of a refusal, never a number.
 #include <benchmark/benchmark.h>
 #include <hdr/hdr_histogram.h>
+#include <sys/mman.h>
 
 #include <array>
 #include <charconv>
@@ -246,6 +247,11 @@ int main(int argc, char** argv) {
     std::println(stderr, "bench_replay: cannot map {}", options.input);
     return 2;
   }
+
+  // MappedFile asks for sequential access, and a kernel may then drop pages behind the
+  // reader. Here every pass needs them to stay.
+  ::posix_madvise(const_cast<std::byte*>(file->bytes().data()),  // NOLINT
+                  file->bytes().size(), POSIX_MADV_NORMAL);
 
   const SysSource source = live_source();
   const std::string_view host = host_label(source.os, read_cpu_model(source));

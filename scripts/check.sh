@@ -82,6 +82,23 @@ stage_trades() {
     ctest --preset release \
       -R '^(test_reference_files|test_trade_checks|test_trades_cli|corpus_fuzz_crossstats|corpus_fuzz_midas)$'
 }
+# The benchmark harness: each check on its fixtures, the gates on the committed results,
+# and the tests of the harness itself. Needs nothing from data/.
+stage_bench() {
+  local results
+  python_test scripts/test_machine_check.py &&
+    python_test scripts/test_gate_numbers.py &&
+    python_test scripts/test_check_predictions.py &&
+    python_test scripts/test_bench_results.py &&
+    python_test scripts/gate_numbers.py &&
+    python_test scripts/check_predictions.py || return 1
+  results=$(find results -name 'bench_*.md')
+  if [ -n "$results" ]; then
+    # shellcheck disable=SC2086
+    python_test scripts/check_results.py $results || return 1
+  fi
+  build_preset release && ctest --preset release -R '^test_bench'
+}
 stage_tsan() { preset_with_tests tsan; }
 # From clean: ninja does not track .clang-tidy, so an incremental run could be a stale pass.
 stage_tidy() {
@@ -110,6 +127,7 @@ register corpus quick
 register release quick
 register oracle quick
 register trades quick
+register bench quick
 register asan_ubsan quick
 register tidy
 register tsan

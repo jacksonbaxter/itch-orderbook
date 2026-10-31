@@ -1,0 +1,3 @@
+Name:	grep
+Cpus_allowed:	10
+Cpus_allowed_list:	4
