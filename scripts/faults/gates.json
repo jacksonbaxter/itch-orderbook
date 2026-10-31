@@ -1,0 +1,181 @@
+{
+  "area": "gates",
+  "faults": [
+    {
+      "id": "gates-wire-pointer-cast",
+      "breaks": "read_be casts a pointer over wire bytes",
+      "check": "gates.py wire-pointer-cast",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "  T raw{};\n  std::memcpy(&raw, src, sizeof(T));\n",
+          "new": "  T raw = *reinterpret_cast<const T*>(src);\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL wire-pointer-cast include/itch/wire\\.hpp:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-bare-branch-hint",
+      "breaks": "A branch hint with no measured reason",
+      "check": "gates.py bare-branch-hint",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "if (remaining == 0) {",
+          "new": "if (remaining == 0) [[unlikely]] {"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL bare-branch-hint include/itch/reader\\.hpp:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-home-path",
+      "breaks": "An absolute path naming a user",
+      "check": "gates.py home-path",
+      "mutations": [
+        {
+          "file": "scripts/gen_fuzz_corpus.py",
+          "old": "REPO_ROOT = Path(__file__).resolve().parent.parent",
+          "new": "REPO_ROOT = Path(\"/U\u0073ers/someone/itch\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL home-path scripts/gen_fuzz_corpus\\.py:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-private-address",
+      "breaks": "A tailnet address in a comment",
+      "check": "gates.py private-address",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "// Walks a BinaryFILE ITCH 5.0 file",
+          "new": "// Copied from 100.\u0036\u0034.0.1. Walks a BinaryFILE ITCH 5.0 file"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL private-address tools/itch_census\\.cpp:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-held-vendor",
+      "breaks": "The held vendor named in a script",
+      "check": "gates.py held-vendor",
+      "mutations": [
+        {
+          "file": "scripts/gen_fuzz_corpus.py",
+          "old": "Nothing here reads a\nNasdaq file.",
+          "new": "Nothing here reads a\nc\u0062oe file."
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL held-vendor scripts/gen_fuzz_corpus\\.py:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-no-conditional-compilation",
+      "breaks": "A test-only hook in the reader",
+      "check": "gates.py no-conditional-compilation",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "#pragma once\n\n#include <array>",
+          "new": "#pragma once\n\n#ifdef ITCH_FAULT\n#endif\n#include <array>"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL no-conditional-compilation include/itch/reader\\.hpp:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-no-abort-on-wire",
+      "breaks": "An assert in the reader",
+      "check": "gates.py no-abort-on-wire",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "if (remaining == 0) {",
+          "new": "assert(remaining != 0);\n    if (remaining == 0) {"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL no-abort-on-wire include/itch/reader\\.hpp:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-toolchain-path",
+      "breaks": "A hardcoded toolchain path in the build",
+      "check": "gates.py toolchain-path",
+      "mutations": [
+        {
+          "file": "cmake/ItchTidy.cmake",
+          "old": "# clang-tidy runs at one pinned major version",
+          "new": "# Uses x/.tool\u0063hain/env.sh. clang-tidy runs at one pinned major version"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL toolchain-path cmake/ItchTidy\\.cmake:\\d+",
+        "exit": 1
+      }
+    }
+  ]
+}
