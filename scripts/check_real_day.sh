@@ -2,9 +2,10 @@
 # The checks that need a real trading day in data/. scripts/check.sh runs everything
 # that does not.
 #
-#     scripts/check_real_day.sh [DAY...]
+#     scripts/check_real_day.sh [--only census|oracle|trades]... [DAY...]
 #
 # With no DAY it checks every day whose counts are pinned in scripts/data_manifest.json.
+# --only runs the named checks and leaves out the rest, repeatable. Default: all three.
 # A pinned day with no file is a failure, because a skipped day would look like a pass.
 # Set ITCH_HEAVY_WRAPPER to a command to run each check under it, on a shared machine.
 # Raw logs go to ITCH_REAL_DAY_LOGS, default build/real-day-logs. The curated results go
@@ -125,12 +126,22 @@ trades() {
 }
 
 check_day() {
-  local failed=0
-  census "$1" || failed=1
-  oracle "$1" || failed=1
-  trades "$1" || failed=1
+  local failed=0 check
+  for check in "${checks[@]}"; do
+    "$check" "$1" || failed=1
+  done
   return "$failed"
 }
+
+checks=()
+while [ "${1:-}" = --only ]; do
+  case ${2:-} in
+    census | oracle | trades) checks+=("$2") ;;
+    *) echo "real day: --only takes census, oracle or trades" >&2; exit 2 ;;
+  esac
+  shift 2
+done
+[ ${#checks[@]} -gt 0 ] || checks=(census oracle trades)
 
 if ! cmake --build --preset release --parallel 6 --target itch_census itch_oracle itch_alloc itch_trades; then
   echo "real day: could not build the tools. Run: cmake --preset release" >&2
