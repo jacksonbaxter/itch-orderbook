@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Black-box test of itch_oracle on the committed fixtures.
 
-Usage: test_oracle_cli.py <itch_oracle> <scratch dir> <fixtures dir>
+Usage: test_oracle_cli.py <itch_oracle> <scratch dir> <fixtures dir> <itch_alloc>
 
 Each expected line was worked out by hand from scripts/gen_oracle_fixtures.py, not
 copied from the tool's output. A failure prints `oracle cli: FAIL <case>: <reason>`.
@@ -16,7 +16,7 @@ TYPES = "SRHYLVWKJhAFECXDUPQBINO"
 
 
 def main():
-    tool, scratch, fixtures = sys.argv[1:4]
+    tool, scratch, fixtures, alloc_tool = sys.argv[1:5]
     scratch = Path(scratch)
     scratch.mkdir(parents=True, exist_ok=True)
     fixtures = Path(fixtures)
@@ -148,6 +148,20 @@ def main():
             failures.append(f"usage {name}: exit {done.returncode}")
     if run(scratch / "no-such-file").returncode != 2:
         failures.append("missing file: not exit 2")
+
+    # T-ALLOC-1 on a fixture: the fast pass is clean and the control pass is seen.
+    done = subprocess.run([alloc_tool, str(session), *SMALL], capture_output=True, text=True,
+                          check=False)
+    if done.returncode != 0 or "fast_allocations 0" not in done.stdout.splitlines():
+        failures.append(f"alloc: exit {done.returncode}: {done.stdout}")
+    if "control_allocations 0" in done.stdout.splitlines():
+        failures.append("alloc: the control book made no allocation")
+    if "verdict T-ALLOC-1 PASS" not in done.stdout:
+        failures.append("alloc: no pass verdict")
+    done = subprocess.run([alloc_tool, str(fixtures / "dead_reference.itch"), *SMALL],
+                          capture_output=True, text=True, check=False)
+    if done.returncode != 1:
+        failures.append(f"alloc: a refused message exited {done.returncode}, wanted 1")
 
     for failure in failures:
         print(f"oracle cli: FAIL {failure}")
