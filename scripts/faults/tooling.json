@@ -1,0 +1,289 @@
+{
+  "area": "tooling",
+  "faults": [
+    {
+      "id": "tooling-asan-overread",
+      "breaks": "read_be48 reads 2 bytes past the field",
+      "check": "AddressSanitizer on the unit tests",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "  std::array<std::byte, sizeof(std::uint64_t)> wide{};\n  std::memcpy(wide.data() + 2, src, 6);\n  return read_be<std::uint64_t>(wide.data());\n",
+          "new": "  return read_be<std::uint64_t>(src) >> 16U;\n"
+        }
+      ],
+      "build": {
+        "preset": "asan-ubsan",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "asan-ubsan",
+        "-R",
+        "^test_messages$"
+      ],
+      "expect": {
+        "signature": "AddressSanitizer: heap-buffer-overflow"
+      }
+    },
+    {
+      "id": "tooling-ubsan-misaligned",
+      "breaks": "read_be casts a pointer over wire bytes and loads through it",
+      "check": "UBSan alignment check, no recovery",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "  T raw{};\n  std::memcpy(&raw, src, sizeof(T));\n",
+          "new": "  T raw = *reinterpret_cast<const T*>(src);\n"
+        }
+      ],
+      "build": {
+        "preset": "asan-ubsan",
+        "targets": [
+          "test_wire"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "asan-ubsan",
+        "-R",
+        "^test_wire$"
+      ],
+      "expect": {
+        "signature": "runtime error: load of misaligned address"
+      }
+    },
+    {
+      "id": "tooling-tsan-race",
+      "breaks": "Two threads write one counter with no synchronisation",
+      "check": "ThreadSanitizer, no recovery",
+      "mutations": [
+        {
+          "file": "tests/test_wire.cpp",
+          "old": "#include <cstdint>\n\n#include \"itch/wire.hpp\"",
+          "new": "#include <cstdint>\n#include <thread>\n\n#include \"itch/wire.hpp\""
+        },
+        {
+          "file": "tests/test_wire.cpp",
+          "old": "TEST(Wire, ReadChar) {",
+          "new": "TEST(Wire, PlantedRace) {\n  std::uint64_t shared = 0;\n  const auto bump = [&shared] {\n    for (int i = 0; i < 100000; ++i) {\n      shared = shared + 1;\n    }\n  };\n  std::thread first{bump};\n  std::thread second{bump};\n  first.join();\n  second.join();\n  EXPECT_NE(shared, 0U);\n}\n\nTEST(Wire, ReadChar) {"
+        }
+      ],
+      "build": {
+        "preset": "tsan",
+        "targets": [
+          "test_wire"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "tsan",
+        "-R",
+        "^test_wire$"
+      ],
+      "expect": {
+        "signature": "ThreadSanitizer: data race"
+      }
+    },
+    {
+      "id": "tooling-tidy-reinterpret-cast",
+      "breaks": "read_be casts a pointer over wire bytes",
+      "check": "clang-tidy through the tidy preset, warnings as errors",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "  T raw{};\n  std::memcpy(&raw, src, sizeof(T));\n",
+          "new": "  T raw = *reinterpret_cast<const T*>(src);\n"
+        }
+      ],
+      "build": {
+        "preset": "tidy",
+        "targets": []
+      },
+      "command": [
+        "cmake",
+        "--build",
+        "--preset",
+        "tidy",
+        "--parallel",
+        "6",
+        "--target",
+        "itch_parser"
+      ],
+      "expect": {
+        "signature": "\\[cppcoreguidelines-pro-type-reinterpret-cast"
+      }
+    },
+    {
+      "id": "tooling-tidy-version-pin",
+      "breaks": "The tidy preset is pinned to a clang-tidy major that is not the one found",
+      "check": "the version check in cmake/ItchTidy.cmake",
+      "mutations": [
+        {
+          "file": "cmake/ItchTidy.cmake",
+          "old": "set(ITCH_CLANG_TIDY_MAJOR 23)",
+          "new": "set(ITCH_CLANG_TIDY_MAJOR 22)"
+        }
+      ],
+      "command": [
+        "cmake",
+        "--preset",
+        "tidy",
+        "-DITCH_BUILD_TESTS=OFF"
+      ],
+      "expect": {
+        "signature": "clang-tidy major version mismatch"
+      }
+    },
+    {
+      "id": "tooling-werror-conversion",
+      "breaks": "A 64-bit size narrows to 32 bits",
+      "check": "-Wconversion under -Werror",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "const std::size_t remaining = bytes_.size() - offset_;",
+          "new": "const std::uint32_t remaining = bytes_.size() - offset_;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": []
+      },
+      "command": [
+        "cmake",
+        "--build",
+        "--preset",
+        "release",
+        "--parallel",
+        "6",
+        "--target",
+        "itch_parser"
+      ],
+      "expect": {
+        "signature": "\\[-Werror,-Wshorten-64-to-32\\]"
+      }
+    },
+    {
+      "id": "tooling-werror-sign-conversion",
+      "breaks": "A signed value converts to an unsigned one",
+      "check": "-Wsign-conversion under -Werror",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "const std::size_t length = read_be<std::uint16_t>(bytes_.data() + offset_);",
+          "new": "const int wire_length = read_be<std::uint16_t>(bytes_.data() + offset_);\n    const std::size_t length = wire_length;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": []
+      },
+      "command": [
+        "cmake",
+        "--build",
+        "--preset",
+        "release",
+        "--parallel",
+        "6",
+        "--target",
+        "itch_parser"
+      ],
+      "expect": {
+        "signature": "\\[-Werror,-Wsign-conversion\\]"
+      }
+    },
+    {
+      "id": "tooling-werror-shadow",
+      "breaks": "A local hides a parameter",
+      "check": "-Wshadow under -Werror",
+      "mutations": [
+        {
+          "file": "src/parser.cpp",
+          "old": "std::string_view to_string(DecodeError error) noexcept {\n",
+          "new": "std::string_view to_string(DecodeError error) noexcept {\n  {\n    const int error = 0;\n    static_cast<void>(error);\n  }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": []
+      },
+      "command": [
+        "cmake",
+        "--build",
+        "--preset",
+        "release",
+        "--parallel",
+        "6",
+        "--target",
+        "itch_parser"
+      ],
+      "expect": {
+        "signature": "\\[-Werror,-Wshadow"
+      }
+    },
+    {
+      "id": "tooling-werror-old-style-cast",
+      "breaks": "A C-style cast",
+      "check": "-Wold-style-cast under -Werror",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "return static_cast<char>(*src);",
+          "new": "return (char)(*src);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": []
+      },
+      "command": [
+        "cmake",
+        "--build",
+        "--preset",
+        "release",
+        "--parallel",
+        "6",
+        "--target",
+        "itch_parser"
+      ],
+      "expect": {
+        "signature": "\\[-Werror,-Wold-style-cast\\]"
+      }
+    },
+    {
+      "id": "tooling-werror-unused",
+      "breaks": "A variable nobody reads",
+      "check": "-Wall under -Werror",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "const std::size_t remaining = bytes_.size() - offset_;",
+          "new": "const std::size_t remaining = bytes_.size() - offset_;\n    const int unused = 1;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": []
+      },
+      "command": [
+        "cmake",
+        "--build",
+        "--preset",
+        "release",
+        "--parallel",
+        "6",
+        "--target",
+        "itch_parser"
+      ],
+      "expect": {
+        "signature": "\\[-Werror,-Wunused-variable\\]"
+      }
+    }
+  ]
+}

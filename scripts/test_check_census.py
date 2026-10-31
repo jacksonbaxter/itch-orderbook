@@ -21,6 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_census as cc  # noqa: E402
 
+SCRATCH = cc.REPO_ROOT / "build"
+SCRATCH.mkdir(exist_ok=True)
+
 GOOD_OUTPUT = """\
 bytes 100
 consumed 100
@@ -47,7 +50,7 @@ GOOD_DAY = {
 
 class CheckCensus(unittest.TestCase):
     def setUp(self):
-        self.dir = tempfile.TemporaryDirectory(dir=Path(cc.REPO_ROOT, "build"))
+        self.dir = tempfile.TemporaryDirectory(dir=SCRATCH)
         self.addCleanup(self.dir.cleanup)
         self.root = Path(self.dir.name)
         self.day = copy.deepcopy(GOOD_DAY)

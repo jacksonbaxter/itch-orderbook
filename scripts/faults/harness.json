@@ -1,0 +1,244 @@
+{
+  "area": "harness",
+  "faults": [
+    {
+      "id": "harness-corpus-replay-reader",
+      "breaks": "read_alpha drops the last byte of an alpha field",
+      "check": "corpus_fuzz_reader, round-trip oracle over committed seeds",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "std::memcpy(field.data(), src, N);",
+          "new": "std::memcpy(field.data(), src, N - 1);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_reader"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_reader$"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: std::ranges::equal\\(again, frame\\.payload\\)"
+      }
+    },
+    {
+      "id": "harness-corpus-replay-decode",
+      "breaks": "read_alpha drops the last byte of an alpha field",
+      "check": "corpus_fuzz_decode, round-trip oracle over committed seeds",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "std::memcpy(field.data(), src, N);",
+          "new": "std::memcpy(field.data(), src, N - 1);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_decode"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_decode$"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: (again == buffer|std::ranges::equal)"
+      }
+    },
+    {
+      "id": "harness-corpus-missing",
+      "breaks": "The committed seeds are gone, so a replay would pass having run nothing",
+      "check": "standalone_runner refuses an empty corpus",
+      "inputs": [
+        {
+          "file": "fuzz/corpus/fuzz_reader",
+          "op": "remove_files"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_reader"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_reader$"
+      ],
+      "expect": {
+        "signature": "no corpus inputs found"
+      }
+    },
+    {
+      "id": "harness-corpus-seed-tampered",
+      "breaks": "One committed seed no longer matches the fixtures",
+      "check": "gen_fuzz_corpus.py --check",
+      "inputs": [
+        {
+          "file": "fuzz/corpus/fuzz_reader/frame-53-S",
+          "op": "flip_byte",
+          "offset": 10
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gen_fuzz_corpus.py",
+        "--check"
+      ],
+      "expect": {
+        "signature": "fuzz_reader/frame-53-S: bytes differ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "harness-fixture-edited",
+      "breaks": "A hand-written fixture changes without the corpus",
+      "check": "gen_fuzz_corpus.py --check",
+      "mutations": [
+        {
+          "file": "tests/support/fixtures.hpp",
+          "old": "0x00, 0x00, 0x01, 0x2C,                          // Shares 300",
+          "new": "0x00, 0x00, 0x01, 0x2D,                          // Shares 301"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gen_fuzz_corpus.py",
+        "--check"
+      ],
+      "expect": {
+        "signature": "fuzz_reader/frame-41-A: bytes differ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "harness-guard-page-absent",
+      "breaks": "The guard pages become readable, so an over-read would not fault",
+      "check": "test_guard_page (GuardPage.ControlAReadOfTheGuardPageFaults)",
+      "mutations": [
+        {
+          "file": "tests/support/guard_page.hpp",
+          "old": "::mmap(nullptr, usable_ + (2 * page_), PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0)",
+          "new": "::mmap(nullptr, usable_ + (2 * page_), PROT_READ, MAP_PRIVATE | MAP_ANON, -1, 0)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_guard_page"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_guard_page"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] GuardPage\\.ControlAReadOfTheGuardPageFaults"
+      }
+    },
+    {
+      "id": "harness-fuzz-reader-planted-crash",
+      "breaks": "A crash reachable from wire bytes, on one frame length no seed has",
+      "check": "fuzz_reader under libFuzzer finds it by mutation",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "    if (expected == 0) {\n",
+          "new": "    if (length == 77) {\n      __builtin_abort();\n    }\n    if (expected == 0) {\n"
+        }
+      ],
+      "build": {
+        "preset": "fuzz",
+        "targets": [
+          "fuzz_reader"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{build}/fuzz/fuzz_reader",
+        "-seed=1",
+        "-max_total_time=30",
+        "-artifact_prefix={build}/fuzz/artifacts/",
+        "{build}/fuzz/corpus/fuzz_reader",
+        "{tree}/fuzz/corpus/fuzz_reader"
+      ],
+      "expect": {
+        "signature": "ERROR: libFuzzer: deadly signal"
+      }
+    },
+    {
+      "id": "harness-fuzz-reader-oracle",
+      "breaks": "An unknown type of one length no seed has is called bad_length",
+      "check": "fuzz_reader, second walk of the same bytes",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "    if (expected == 0) {\n",
+          "new": "    if (expected == 0 && length != 5) {\n"
+        }
+      ],
+      "build": {
+        "preset": "fuzz",
+        "targets": [
+          "fuzz_reader"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{build}/fuzz/fuzz_reader",
+        "-seed=1",
+        "-max_total_time=30",
+        "-artifact_prefix={build}/fuzz/artifacts/",
+        "{build}/fuzz/corpus/fuzz_reader",
+        "{tree}/fuzz/corpus/fuzz_reader"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: frame\\.status == FrameStatus::unknown_type"
+      }
+    },
+    {
+      "id": "harness-fuzz-decode-oracle",
+      "breaks": "Order Replace decodes one shares value, in no seed, as zero",
+      "check": "fuzz_decode, round trip of each type",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": ".shares = read_be<std::uint32_t>(m + 27),",
+          "new": ".shares = read_be<std::uint32_t>(m + 27) == 0xC0FFEE11U ? 0U : read_be<std::uint32_t>(m + 27),"
+        }
+      ],
+      "build": {
+        "preset": "fuzz",
+        "targets": [
+          "fuzz_decode"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{build}/fuzz/fuzz_decode",
+        "-seed=1",
+        "-max_total_time=30",
+        "-artifact_prefix={build}/fuzz/artifacts/",
+        "{build}/fuzz/corpus/fuzz_decode",
+        "{tree}/fuzz/corpus/fuzz_decode"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: (again == buffer|std::ranges::equal)"
+      }
+    }
+  ]
+}

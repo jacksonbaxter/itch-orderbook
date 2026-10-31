@@ -1,0 +1,365 @@
+{
+  "area": "parser",
+  "faults": [
+    {
+      "id": "parser-field-offset",
+      "breaks": "Add Order price is read one byte early",
+      "check": "test_messages (Messages.AddOrder)",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": ".stock = read_alpha<8>(m + 24),\n        .price = read_be<std::uint32_t>(m + 32),\n    };",
+          "new": ".stock = read_alpha<8>(m + 24),\n        .price = read_be<std::uint32_t>(m + 31),\n    };"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_messages"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Messages\\.AddOrder"
+      }
+    },
+    {
+      "id": "parser-read-be48-eight-bytes",
+      "breaks": "read_be48 loads 8 bytes and shifts, reading 2 bytes past the field. Every value stays right",
+      "check": "test_guard_page (GuardPage.ReadBe48ReadsExactlySixBytes)",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "  std::array<std::byte, sizeof(std::uint64_t)> wide{};\n  std::memcpy(wide.data() + 2, src, 6);\n  return read_be<std::uint64_t>(wide.data());\n",
+          "new": "  return read_be<std::uint64_t>(src) >> 16U;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_guard_page"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_guard_page"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] GuardPage\\.ReadBe48ReadsExactlySixBytes"
+      }
+    },
+    {
+      "id": "parser-length-table-entry",
+      "breaks": "The length table gives Order Executed 30 bytes, not 31",
+      "check": "test_messages (Messages.LengthOfEveryType)",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": "{.type = 'E', .length = 31, .name = \"Order Executed\"},",
+          "new": "{.type = 'E', .length = 30, .name = \"Order Executed\"},"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_messages"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Messages\\.LengthOfEveryType"
+      }
+    },
+    {
+      "id": "parser-truncated-frame-check-removed",
+      "breaks": "The reader walks a frame whose length runs past the input",
+      "check": "test_reader (Reader.OversizedLengthBeyondTheInputIsATypedFailure)",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "    if (length > remaining - kLengthPrefix) {\n      counters_.truncated_payload = 1;\n      return {.status = FrameStatus::truncated_payload, .offset = offset_, .payload = {}};\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_reader"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_reader"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Reader\\.OversizedLengthBeyondTheInputIsATypedFailure"
+      }
+    },
+    {
+      "id": "parser-unknown-type-not-skipped",
+      "breaks": "An unknown type is not skipped by its length, so the walk falls into its payload",
+      "check": "test_reader (Reader.UnknownTypeIsSkippedByLengthAndCounted)",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "    offset_ += kLengthPrefix + length;\n",
+          "new": "    offset_ += frame.status == FrameStatus::unknown_type ? kLengthPrefix : kLengthPrefix + length;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_reader"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_reader"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Reader\\.UnknownTypeIsSkippedByLengthAndCounted"
+      }
+    },
+    {
+      "id": "parser-byte-order",
+      "breaks": "read_be returns native order on a little-endian host",
+      "check": "test_wire (Wire.ReadBe16)",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "if constexpr (std::endian::native == std::endian::little) {",
+          "new": "if constexpr (std::endian::native == std::endian::big) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_wire"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_wire"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Wire\\.ReadBe16"
+      }
+    },
+    {
+      "id": "parser-read-be48-wrong-placement",
+      "breaks": "read_be48 places its 6 bytes one position too high",
+      "check": "test_wire (Wire.ReadBe48)",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "std::memcpy(wide.data() + 2, src, 6);",
+          "new": "std::memcpy(wide.data() + 1, src, 6);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_wire"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_wire"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Wire\\.ReadBe48"
+      }
+    },
+    {
+      "id": "parser-zero-length-unhandled",
+      "breaks": "A zero-length frame is classified as a message frame",
+      "check": "test_reader (Reader.ZeroLengthFrameIsCountedAndWalkedPast)",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "    if (length == 0) {\n      ++counters_.zero_length;\n      return FrameStatus::zero_length;\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_reader"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_reader"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Reader\\.ZeroLengthFrameIsCountedAndWalkedPast"
+      }
+    },
+    {
+      "id": "parser-bad-length-accepted",
+      "breaks": "A known type at the wrong length is passed on as a message",
+      "check": "test_reader (Reader.BadLengthForAKnownTypeIsCountedAndDoesNotDesynchronise)",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "    if (expected != length) {\n      ++counters_.bad_length;\n      return FrameStatus::bad_length;\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_reader"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_reader"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Reader\\.BadLengthForAKnownTypeIsCountedAndDoesNotDesynchronise"
+      }
+    },
+    {
+      "id": "parser-decode-length-check-removed",
+      "breaks": "decode reads fields without checking the payload length",
+      "check": "test_messages (Decode.RejectsEveryLengthButTheExactOne)",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": "  if (payload.size() != length) {\n    return std::unexpected(DecodeError::bad_length);\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_messages"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Decode\\.RejectsEveryLengthButTheExactOne"
+      }
+    },
+    {
+      "id": "parser-mwcb-price-width",
+      "breaks": "MWCB Level 2 is read as Price(4), not the spec's Price(8)",
+      "check": "test_messages (Messages.MwcbDeclineLevelUsesPrice8)",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": ".level_2 = read_be<std::uint64_t>(m + 19),",
+          "new": ".level_2 = read_be<std::uint32_t>(m + 19),"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_messages"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Messages\\.MwcbDeclineLevelUsesPrice8"
+      }
+    },
+    {
+      "id": "parser-ipo-release-time-offset",
+      "breaks": "K release time is read at offset 20, not 19",
+      "check": "test_messages (Messages.IpoQuotingPeriodUpdateCarriesSeconds)",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": ".release_time_seconds = read_be<std::uint32_t>(m + 19),",
+          "new": ".release_time_seconds = read_be<std::uint32_t>(m + 20),"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_messages"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Messages\\.IpoQuotingPeriodUpdateCarriesSeconds"
+      }
+    },
+    {
+      "id": "parser-cross-shares-width",
+      "breaks": "Cross Trade shares are read as 4 bytes, not 8",
+      "check": "test_messages (Messages.CrossTrade)",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": ".shares = read_be<std::uint64_t>(m + 11),\n        .stock = read_alpha<8>(m + 19),",
+          "new": ".shares = read_be<std::uint32_t>(m + 11),\n        .stock = read_alpha<8>(m + 19),"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_messages"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Messages\\.CrossTrade"
+      }
+    },
+    {
+      "id": "parser-dispatch-wrong-decoder",
+      "breaks": "decode sends Order Cancel to the Order Delete decoder",
+      "check": "test_messages (Messages.OrderCancel)",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": "case OrderCancel::kType: return OrderCancel::from_wire(m);",
+          "new": "case OrderCancel::kType: return OrderDelete::from_wire(m);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_messages"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Messages\\.OrderCancel"
+      }
+    },
+    {
+      "id": "parser-terminal-state-recounted",
+      "breaks": "Asking again after a truncated prefix counts it twice",
+      "check": "test_reader (Reader.TerminalStatesStayAndCountOnce)",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "counters_.truncated_prefix = 1;",
+          "new": "++counters_.truncated_prefix;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_reader"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_reader"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Reader\\.TerminalStatesStayAndCountOnce"
+      }
+    }
+  ]
+}

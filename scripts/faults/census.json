@@ -1,0 +1,334 @@
+{
+  "area": "census",
+  "faults": [
+    {
+      "id": "census-expected-count",
+      "breaks": "The manifest's expected count differs by one",
+      "check": "check_census.py exact comparison",
+      "inputs": [
+        {
+          "file": "scripts/faults/fixtures/census_manifest.json",
+          "op": "json_set",
+          "path": [
+            "days",
+            "all-types",
+            "per_type_counts",
+            "A"
+          ],
+          "value": 2
+        },
+        {
+          "file": "scripts/faults/fixtures/census_manifest.json",
+          "op": "json_set",
+          "path": [
+            "days",
+            "all-types",
+            "messages"
+          ],
+          "value": 25
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "{python}",
+        "{tree}/scripts/check_census.py",
+        "--day",
+        "all-types",
+        "--manifest",
+        "{tree}/scripts/faults/fixtures/census_manifest.json",
+        "--file",
+        "{tree}/fuzz/corpus/fuzz_reader/stream-all-types",
+        "--census",
+        "{build}/tools/itch_census"
+      ],
+      "expect": {
+        "signature": "census: MISMATCH type A: manifest 2, census 1",
+        "exit": 1
+      }
+    },
+    {
+      "id": "census-expected-last-message",
+      "breaks": "The manifest's last-message timestamp differs by one",
+      "check": "check_census.py exact comparison",
+      "inputs": [
+        {
+          "file": "scripts/faults/fixtures/census_manifest.json",
+          "op": "json_set",
+          "path": [
+            "days",
+            "all-types",
+            "last_message",
+            "timestamp_ns"
+          ],
+          "value": 72297776244616
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "{python}",
+        "{tree}/scripts/check_census.py",
+        "--day",
+        "all-types",
+        "--manifest",
+        "{tree}/scripts/faults/fixtures/census_manifest.json",
+        "--file",
+        "{tree}/fuzz/corpus/fuzz_reader/stream-all-types",
+        "--census",
+        "{build}/tools/itch_census"
+      ],
+      "expect": {
+        "signature": "census: MISMATCH last_message\\.timestamp_ns: manifest 72297776244616, census 72297776244617",
+        "exit": 1
+      }
+    },
+    {
+      "id": "census-input-cut-mid-frame",
+      "breaks": "The day loses its final byte",
+      "check": "check_census.py, typed end state",
+      "inputs": [
+        {
+          "file": "fuzz/corpus/fuzz_reader/stream-all-types",
+          "op": "truncate",
+          "size": -1
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "{python}",
+        "{tree}/scripts/check_census.py",
+        "--day",
+        "all-types",
+        "--manifest",
+        "{tree}/scripts/faults/fixtures/census_manifest.json",
+        "--file",
+        "{tree}/fuzz/corpus/fuzz_reader/stream-all-types",
+        "--census",
+        "{build}/tools/itch_census"
+      ],
+      "expect": {
+        "signature": "census: MISMATCH end: manifest end_of_input, census truncated_payload",
+        "exit": 1
+      }
+    },
+    {
+      "id": "census-input-clean-prefix",
+      "breaks": "The day loses its whole final frame, leaving a well-formed prefix",
+      "check": "check_census.py, last message",
+      "inputs": [
+        {
+          "file": "fuzz/corpus/fuzz_reader/stream-all-types",
+          "op": "truncate",
+          "size": -14
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "{python}",
+        "{tree}/scripts/check_census.py",
+        "--day",
+        "all-types",
+        "--manifest",
+        "{tree}/scripts/faults/fixtures/census_manifest.json",
+        "--file",
+        "{tree}/fuzz/corpus/fuzz_reader/stream-all-types",
+        "--census",
+        "{build}/tools/itch_census"
+      ],
+      "expect": {
+        "signature": "census: MISMATCH last_message\\.type: manifest S, census None",
+        "exit": 1
+      }
+    },
+    {
+      "id": "census-input-type-byte",
+      "breaks": "One message's type byte changes",
+      "check": "check_census.py, per-type counts",
+      "inputs": [
+        {
+          "file": "fuzz/corpus/fuzz_reader/stream-all-types",
+          "op": "flip_byte",
+          "offset": 2
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "{python}",
+        "{tree}/scripts/check_census.py",
+        "--day",
+        "all-types",
+        "--manifest",
+        "{tree}/scripts/faults/fixtures/census_manifest.json",
+        "--file",
+        "{tree}/fuzz/corpus/fuzz_reader/stream-all-types",
+        "--census",
+        "{build}/tools/itch_census"
+      ],
+      "expect": {
+        "signature": "census: MISMATCH bad_length: manifest 0, census 1",
+        "exit": 1
+      }
+    },
+    {
+      "id": "census-input-event-code",
+      "breaks": "The closing System Event is not C",
+      "check": "check_census.py, last message",
+      "inputs": [
+        {
+          "file": "fuzz/corpus/fuzz_reader/stream-all-types",
+          "op": "flip_byte",
+          "offset": 753
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "{python}",
+        "{tree}/scripts/check_census.py",
+        "--day",
+        "all-types",
+        "--manifest",
+        "{tree}/scripts/faults/fixtures/census_manifest.json",
+        "--file",
+        "{tree}/fuzz/corpus/fuzz_reader/stream-all-types",
+        "--census",
+        "{build}/tools/itch_census"
+      ],
+      "expect": {
+        "signature": "census: MISMATCH last_message\\.event_code: manifest C, census B",
+        "exit": 1
+      }
+    },
+    {
+      "id": "census-tool-last-frame-tracking",
+      "breaks": "A frame after the closing S/C no longer clears it",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "    last_event.reset();\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "bad_length_is_not_the_last_message: exit 0, wanted 1"
+      }
+    },
+    {
+      "id": "census-tool-last-message-unchecked",
+      "breaks": "The tool stops requiring S/C at the end",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "if (!last_event || last_event->event_code != 'C') {",
+          "new": "if (!last_event) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "ends_on_system_o: exit 0, wanted 1"
+      }
+    },
+    {
+      "id": "census-tool-total",
+      "breaks": "The total leaves out skipped frames",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "std::println(\"messages {}\", counters.frames);",
+          "new": "std::println(\"messages {}\", counters.messages);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "bad_length_counted: no line 'messages 3'"
+      }
+    },
+    {
+      "id": "census-check-compares-nothing",
+      "breaks": "compare() in check_census.py reports no differences",
+      "check": "scripts/test_check_census.py",
+      "mutations": [
+        {
+          "file": "scripts/check_census.py",
+          "old": "return [pair for pair in pairs if pair[1] != pair[2]]",
+          "new": "return []"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/test_check_census.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_count_moved_between_types_fails_though_the_total_holds"
+      }
+    }
+  ]
+}
