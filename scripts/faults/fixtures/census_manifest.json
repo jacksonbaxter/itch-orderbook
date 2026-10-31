@@ -1,0 +1,22 @@
+{
+  "days": {
+    "all-types": {
+      "name": "stream-all-types",
+      "unpacked_bytes": 754,
+      "messages": 24,
+      "per_type_counts": {
+        "A": 1, "B": 1, "C": 1, "D": 1, "E": 1, "F": 1, "H": 1, "I": 1,
+        "J": 1, "K": 1, "L": 1, "N": 1, "O": 1, "P": 1, "Q": 1, "R": 1,
+        "S": 2, "U": 1, "V": 1, "W": 1, "X": 1, "Y": 1, "h": 1
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 11052,
+        "timestamp_ns": 72297776244617,
+        "offset": 740
+      }
+    }
+  }
+}
