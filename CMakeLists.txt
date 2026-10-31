@@ -14,7 +14,9 @@ option(ITCH_BUILD_FUZZ "Build the fuzz targets" ON)
 option(ITCH_BUILD_BENCH "Build the benchmarks" ON)
 option(ITCH_FUZZ "Link the fuzz targets with libFuzzer instead of the corpus replay runner" OFF)
 option(ITCH_TIDY "Run clang-tidy on our targets while compiling" OFF)
+option(ITCH_COMPARISON_QUEUES "Fetch the third-party queues T-SPSC-1 compares against" OFF)
 set(ITCH_SANITIZE "" CACHE STRING "Sanitizers, comma separated, for example address,undefined")
+set(ITCH_LIBURING_ROOT "" CACHE PATH "Prefix of a liburing build, Linux only. Empty leaves it off")
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(ItchOptions)
@@ -22,6 +24,11 @@ include(ItchTidy)
 include(ItchDependencies)
 
 enable_testing()
+
+itch_require_liburing()
+if(ITCH_COMPARISON_QUEUES)
+  itch_require_comparison_queues()
+endif()
 
 add_subdirectory(src)
 if(ITCH_BUILD_TOOLS)
