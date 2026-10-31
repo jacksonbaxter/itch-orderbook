@@ -271,6 +271,8 @@ struct WindowVolume {
   std::uint64_t p_prints = 0;
   std::uint64_t odd_lot_prints = 0;
   std::uint64_t odd_lot_shares = 0;
+  std::uint64_t below_100_prints = 0;  // Reported beside MIDAS. The check uses the round lot.
+  std::uint64_t below_100_shares = 0;
 
   [[nodiscard]] std::uint64_t total() const noexcept { return e_shares + c_y_shares + p_shares; }
 };
@@ -620,6 +622,10 @@ class TradeRun {
     if (shares < round_lot) {
       ++window.odd_lot_prints;
       window.odd_lot_shares += shares;
+    }
+    if (shares < 100) {
+      ++window.below_100_prints;
+      window.below_100_shares += shares;
     }
   }
 
@@ -1131,6 +1137,10 @@ class TradeRun {
       fail(Check::t3_odd_lot_shares, locate,
            std::format("feed {}, MIDAS {}", pinned.odd_lot_shares, row.odd_lot_shares));
     }
+    if (listings_[locate].round_lot != 100) {
+      other_lots_.push_back(
+          {.locate = locate, .odd_lots = row.odd_lots, .odd_lot_shares = row.odd_lot_shares});
+    }
     for (std::size_t w = 0; w < kWindows.size(); ++w) {
       const WindowVolume& window = volumes_[locate].windows[w];
       WindowFit& fit = fits_[w];
@@ -1280,6 +1290,15 @@ class TradeRun {
     std::println(out, "t3_other_round_lots {}",
                  std::ranges::count_if(
                      listings_, [](const Listing& l) { return l.listed && l.round_lot != 100; }));
+    for (const OtherLot& other : other_lots_) {
+      const WindowVolume& pinned = volumes_[other.locate].windows[kMidasWindow];
+      std::println(out,
+                   "t3_round_lot symbol={} lot={} midas={}/{} feed_below_lot={}/{} "
+                   "feed_below_100={}/{}",
+                   name_of(listings_[other.locate].stock), listings_[other.locate].round_lot,
+                   other.odd_lots, other.odd_lot_shares, pinned.odd_lot_prints,
+                   pinned.odd_lot_shares, pinned.below_100_prints, pinned.below_100_shares);
+    }
     std::println(out, "t3_rows {}", midas_rows_);
     std::println(out, "t3_rows_in_file {}", midas_rows_in_file_);
     std::println(out, "t3_second_rows {}", midas_second_rows_);
@@ -1322,6 +1341,13 @@ class TradeRun {
   };
 
   // How one window fares against MIDAS, in symbols that agree.
+  // A compared symbol whose directory round lot is not 100, and what MIDAS says of it.
+  struct OtherLot {
+    std::uint16_t locate = 0;
+    std::uint64_t odd_lots = 0;
+    std::uint64_t odd_lot_shares = 0;
+  };
+
   struct WindowFit {
     std::uint64_t equal_shares = 0;
     std::uint64_t equal_hidden = 0;
@@ -1394,6 +1420,7 @@ class TradeRun {
   std::uint64_t midas_rows_in_file_ = 0;
   std::uint64_t midas_second_rows_ = 0;
   std::uint64_t midas_symbols_compared_ = 0;
+  std::vector<OtherLot> other_lots_;
   std::uint64_t midas_trade_shares_ = 0;
   std::uint64_t midas_hidden_shares_ = 0;
   std::uint64_t midas_trades_ = 0;

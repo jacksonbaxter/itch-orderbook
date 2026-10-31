@@ -79,6 +79,7 @@ CLEAN_LINES = (
     "t3_window 0935_1600",
     # BRVO alone.
     "t3_other_round_lots 1",
+    "t3_round_lot symbol=BRVO lot=10 midas=0/0 feed_below_lot=0/0 feed_below_100=1/99",
     "t3_rows 4",
     "t3_rows_in_file 7",
     "t3_second_rows 0",

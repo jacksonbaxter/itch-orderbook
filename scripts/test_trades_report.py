@@ -108,6 +108,7 @@ t2_file_closing 660
 t2_outside_file 150
 t3_window 0935_1600
 t3_other_round_lots 1
+t3_round_lot symbol=BRVO lot=10 midas=0/0 feed_below_lot=0/0 feed_below_100=1/99
 t3_rows 4
 t3_rows_in_file 7
 t3_second_rows 0
@@ -239,6 +240,7 @@ class TradesReport(unittest.TestCase):
         self.assertIn("| `Q`, zero shares | 5 | 0 |", written)
         self.assertIn("| `0935_1600` | 4 | 4 | 4 | 4 | 4 | 4 | 0 | 2,489 |", written)
         self.assertIn("| Start | 09:34:59.999999999 | 09:35:00.000000000 |", written)
+        self.assertIn("| BRVO | 10 | 0 / 0 | 0 / 0 | 1 / 99 | directory |", written)
         self.assertIn("Match 1060: `E` on ZTST, 100 shares.", written)
 
     def test_a_failing_run_writes_why_into_the_results(self):

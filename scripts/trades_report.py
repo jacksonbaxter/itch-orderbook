@@ -104,7 +104,7 @@ KEY_VALUE = re.compile(r"(\w+)=(\S*)")
 def parse_log(text):
     log = {"values": {}, "types": {}, "classes": {}, "checks": {}, "verdicts": {}, "fits": {},
            "outside": [], "c_price": {}, "far_legs": {}, "cross_legs": {}, "time": {}, "run": {},
-           "violations": [], "edges": {}, "breaks": [], "errors": []}
+           "violations": [], "edges": {}, "breaks": [], "errors": [], "round_lots": []}
     for line in text.splitlines():
         stripped = line.strip()
         word, _, rest = stripped.partition(" ")
@@ -135,6 +135,8 @@ def parse_log(text):
                                                  int(pairs["longest_lag_ns"]))
         elif word in ("t3_edge_start", "t3_edge_end"):
             log["edges"].update({k: int(v) for k, v in pairs.items()})
+        elif word == "t3_round_lot":
+            log["round_lots"].append(pairs)
         elif word == "violation":
             log["violations"].append(rest)
         elif word == "broken_trade":
@@ -256,6 +258,17 @@ def clock(ns):
     seconds = ns // 1_000_000_000
     return (f"{seconds // 3600:02}:{seconds // 60 % 60:02}:{seconds % 60:02}"
             f".{ns % 1_000_000_000:09}")
+
+
+def slash(pair):
+    prints, shares = pair.split("/")
+    return f"{count(int(prints))} / {count(int(shares))}"
+
+
+def lot_rule_that_fits(row):
+    fits = [name for name, key in (("directory", "feed_below_lot"), ("100", "feed_below_100"))
+            if row[key] == row["midas"]]
+    return " and ".join(fits) or "neither"
 
 
 def our_figure(log, key):
@@ -488,11 +501,22 @@ def render(log, entry, day, no_cross_file, failures):
               "the lead was the SEC's method page for its Market Activity Report, which says "
               "its sample runs from 9:35 and does not say that of `TradeVol`. Each cell counts "
               f"symbols of {count(number(log, 't3_symbols_compared'))} that agree exactly.", "",
-              "An odd lot is a print below the symbol's round lot, from its directory message, "
-              "and not below 100. On the first run a fixed 100 failed two symbols of 5,771 on "
-              "12302019, which have smaller round lots. "
-              f"{count(number(log, 't3_other_round_lots'))} listed symbols have a round lot "
-              "other than 100 this day.", ""]
+              "An odd lot is a print below the symbol's round lot, which this check reads from "
+              "its directory message. Neither rule the feed offers fits MIDAS on every symbol: "
+              "a fixed 100 fails BH and SEB, and the directory fails MKL and NVR, which it lists "
+              "at 10. The SEC's method page for its Market Activity Report says that until "
+              "Nov 3, 2025 a round lot is 100 shares for all but three tickers, BRK.A and SEB "
+              "at one and BH at 10. So MIDAS holds its own list, and the check stays failing "
+              "until the user decides which rule it compares. "
+              f"{count(number(log, 't3_other_round_lots'))} listed symbols have a directory "
+              "round lot other than 100 this day. Those with a MIDAS row are below, as prints "
+              "/ shares. Every other compared symbol is 100 on both rules.", ""]
+    lines += format_table(
+        ("Symbol", "Directory lot", "MIDAS odd lots", "Feed below directory lot",
+         "Feed below 100", "Equal to MIDAS"),
+        [(row["symbol"], row["lot"], slash(row["midas"]), slash(row["feed_below_lot"]),
+          slash(row["feed_below_100"]), lot_rule_that_fits(row)) for row in log["round_lots"]])
+    lines += [""]
     lines += format_table(
         ("Window", "Shares", "Hidden shares", "Trades", "Hidden trades", "Odd lots",
          "Odd-lot shares", "Feed below MIDAS", "Feed shares"),
