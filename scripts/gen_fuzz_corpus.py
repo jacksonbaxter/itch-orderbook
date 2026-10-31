@@ -143,6 +143,7 @@ def cross_stats_seeds(_fixtures):
         "good-only-total": CROSS_HEADER + CROSS_TOTAL,
         "empty": "",
         "bad-header": "Date,Symbol\r\n",
+        "header-only-no-newline": CROSS_HEADER.split("\r\n")[0],
         "bad-rule": CROSS_HEADER.replace("-------------,\r\n", "x,\r\n"),
         "no-total": CROSS_HEADER + CROSS_ROWS,
         "short-row": CROSS_HEADER + "12/30/2019,AAA\r\n" + CROSS_TOTAL,

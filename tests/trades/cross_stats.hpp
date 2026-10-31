@@ -170,7 +170,7 @@ constexpr std::array<std::string_view, kFields - 1> kColumns{
   }
   const auto rule = lines.next();
   if (!rule) {
-    return fail(CrossStatsFailure::bad_rule, 2);
+    return fail(CrossStatsFailure::bad_rule, lines.number());
   }
   const auto dashes = detail::split(*rule);
   if (!dashes || !std::ranges::all_of(std::span{*dashes}.first(6), detail::is_rule)) {

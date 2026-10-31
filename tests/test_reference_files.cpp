@@ -97,6 +97,14 @@ TEST(CrossStats, EachBadFileFailsAsItself) {
   EXPECT_EQ(cross_failure("Date,Symbol,ListingMarket,OpeningCross,ClosingCross,IntradayCross,\n"
                           "-,-,-,x,-,-,\n"),
             CrossStatsFailure::bad_rule);
+  // A file of one line with no newline: the failure names the line it has, found by the
+  // fuzzer, which holds every error to a line that exists.
+  const std::string_view only_header =
+      "Date,Symbol,ListingMarket,OpeningCross,ClosingCross,IntradayCross,";
+  const auto header_alone = itch::trades::parse_cross_stats(std::as_bytes(std::span{only_header}));
+  ASSERT_FALSE(header_alone.has_value());
+  EXPECT_EQ(header_alone.error().failure, CrossStatsFailure::bad_rule);
+  EXPECT_EQ(header_alone.error().line, 1U);
   EXPECT_EQ(cross_failure(cross_file("")), CrossStatsFailure::no_total);
   EXPECT_EQ(cross_failure(cross_file("12/30/2019,AAA,Q,1,2,0,\n")), CrossStatsFailure::no_total);
   EXPECT_EQ(cross_failure(cross_file("12/30/2019,AAA,Q,1,2,0\n")),
