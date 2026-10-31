@@ -22,6 +22,10 @@ itch_add_test(test_book test_book.cpp)
 itch_add_test(test_alloc test_alloc.cpp oracle/alloc_counter.cpp)
 itch_add_test(test_reference_files test_reference_files.cpp)
 itch_add_test(test_trade_checks test_trade_checks.cpp)
+itch_add_test(test_bench_platform test_bench_platform.cpp)
+itch_add_test(test_bench_replay test_bench_replay.cpp)
+target_include_directories(test_bench_platform PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+target_include_directories(test_bench_replay PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 
 if(ITCH_BUILD_TOOLS)
   add_test(NAME test_census_cli

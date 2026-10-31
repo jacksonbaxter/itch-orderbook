@@ -33,7 +33,7 @@ Checks: >
 # use-trailing-return-type, identifier-length, trailing-comma: style with no safety
 #   gain. avoid-pragma-once: every compiler in the plan supports it.
 WarningsAsErrors: '*'
-HeaderFilterRegex: '.*/(include/itch|src|tools|tests|fuzz)/.*'
+HeaderFilterRegex: '.*/(include/itch|src|tools|tests|fuzz|bench)/.*'
 ExcludeHeaderFilterRegex: '.*/_deps/.*'
 FormatStyle: none
 CheckOptions:

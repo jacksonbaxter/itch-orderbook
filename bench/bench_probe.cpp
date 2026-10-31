@@ -1,0 +1,128 @@
+// What this machine can measure, run at the start of each session. Exits 0 even when a
+// counter or the pin is unavailable, because that is the answer, not a failure.
+//
+//     bench_probe [--core N]
+//     bench_probe --check FILE [--core N]    only the lines scripts/machine_check.sh reads
+#include <charconv>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <format>
+#include <print>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "mapped_file.hpp"
+#include "platform/affinity.hpp"
+#include "platform/counters.hpp"
+#include "platform/memory.hpp"
+#include "platform/sysinfo.hpp"
+#include "platform/timer.hpp"
+
+namespace {
+
+using namespace itch::bench;
+
+struct Options {
+  int core = -1;
+  std::string check_file;
+};
+
+bool parse(std::span<char*> args, Options& options) {
+  for (std::size_t i = 0; i < args.size(); ++i) {
+    const std::string_view arg{args[i]};
+    if (i + 1 == args.size()) {
+      return false;
+    }
+    const std::string_view value{args[++i]};
+    if (arg == "--core") {
+      const auto [end, error] =
+          std::from_chars(value.data(), value.data() + value.size(), options.core);
+      if (error != std::errc{} || end != value.data() + value.size()) {
+        return false;
+      }
+    } else if (arg == "--check") {
+      options.check_file = value;
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
+int run_check(const Options& options) {
+  const TimerInfo timer = measure_timer();
+  std::println("timer_quantum_ns: {:.3f}", timer.quantum_ns());
+  std::println("timer_calibrated_mhz: {:.3f}", timer.calibrated_hz / 1e6);
+  const auto file = itch::tools::MappedFile::open(options.check_file.c_str());
+  if (!file) {
+    std::println("resident_fraction: 0.000000");
+    std::println("residency: unavailable: the input could not be mapped");
+    return 1;
+  }
+  const Residency residency = resident(file->bytes());
+  std::println("resident_fraction: {:.6f}", residency.fraction());
+  std::println("residency: {}", residency.describe());
+  return timer.quantum_ticks == 0 ? 1 : 0;
+}
+
+void spin_for_counters() {
+  volatile std::uint64_t sink = 0;
+  for (std::uint64_t i = 0; i < 2'000'000; ++i) {
+    sink = sink + i;
+  }
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  Options options;
+  if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
+    std::println(stderr, "usage: bench_probe [--core N] [--check FILE]");
+    return 2;
+  }
+  if (!options.check_file.empty()) {
+    return run_check(options);
+  }
+
+  const SysSource source = live_source();
+  const std::string cpu = read_cpu_model(source);
+  const PinOutcome pin = pin_current_thread(options.core);
+  const TimerInfo timer = measure_timer();
+  std::println("host: {}", host_label(source.os, cpu));
+  std::println("cpu: {}", cpu);
+  std::println("kernel: {}", read_kernel());
+  std::println("timer: {}", describe_rate(timer));
+  std::println("timer_quantum: {} ticks, {:.3f} ns", timer.quantum_ticks, timer.quantum_ns());
+  std::println("timer_empty_pair: {:.3f} ticks, {:.3f} ns, {:.1f}% of pairs saw no tick",
+               timer.pair_ticks, timer.pair_ns(), 100.0 * timer.zero_fraction);
+  std::println("timer_floor: {:.3f} ns ({} quanta)", timer.floor_ns(), kResolvableQuanta);
+  std::println("per_message_timing: {}", kTimerPerMessage ? "yes" : "no, batches only");
+  std::println("pin: {}", pinning_field(pin));
+
+  MigrationTracker migrations;
+  migrations.sample();
+  CounterGroup group{host_label(source.os, cpu)};
+  group.start();
+  spin_for_counters();
+  group.stop();
+  migrations.sample();
+  std::println("current_core: {}", migrations.last_core());
+  std::println("counters: {}", describe_counters(group.statuses()));
+  std::println("rdpmc: {}", probe_rdpmc(group));
+  std::println("perf_event_paranoid: {}",
+               trim(read_whole_file("/proc/sys/kernel/perf_event_paranoid")
+                        .value_or(unavailable("no such file on this host"))));
+
+  const std::optional<Arena> arena = Arena::make(std::size_t{64} * 1024 * 1024);
+  std::println("arena: {}",
+               arena ? describe_arena(arena->report()) : unavailable("the mapping failed"));
+  std::println("governor: {}", read_governor(source, options.core));
+  std::println("frequency: {}", read_frequency(source, options.core));
+  std::println("turbo: {}", read_turbo(source));
+  std::println("smt: {}", read_smt(source));
+  std::println("isolation: {}", read_isolation(source));
+  return 0;
+}

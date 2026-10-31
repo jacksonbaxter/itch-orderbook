@@ -42,7 +42,8 @@
       "displayName": "ThreadSanitizer",
       "inherits": "sanitized",
       "cacheVariables": {
-        "ITCH_SANITIZE": "thread"
+        "ITCH_SANITIZE": "thread",
+        "ITCH_BUILD_BENCH": "OFF"
       }
     },
     {
@@ -53,7 +54,8 @@
         "ITCH_SANITIZE": "address,undefined",
         "ITCH_FUZZ": "ON",
         "ITCH_BUILD_TESTS": "OFF",
-        "ITCH_BUILD_TOOLS": "OFF"
+        "ITCH_BUILD_TOOLS": "OFF",
+        "ITCH_BUILD_BENCH": "OFF"
       }
     },
     {
@@ -74,7 +76,8 @@
         "CMAKE_BUILD_TYPE": "Release",
         "ITCH_BUILD_TESTS": "OFF",
         "ITCH_BUILD_TOOLS": "OFF",
-        "ITCH_BUILD_FUZZ": "OFF"
+        "ITCH_BUILD_FUZZ": "OFF",
+        "ITCH_BUILD_BENCH": "OFF"
       }
     }
   ],

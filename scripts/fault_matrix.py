@@ -69,7 +69,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MAX_JOBS = 6
 DEFAULT_TIMEOUT = 300
 DEFAULT_TREE = ("CMakeLists.txt", "CMakePresets.json", ".clang-tidy", "cmake", "include", "src",
-                "tests", "tools", "fuzz", "scripts")
+                "tests", "tools", "fuzz", "bench", "scripts")
 GTEST_LIBRARY = "lib/libgtest.a"
 
 DETECTED = "detected"

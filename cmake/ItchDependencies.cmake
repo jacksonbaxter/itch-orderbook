@@ -52,8 +52,22 @@ endfunction()
 
 # Google Benchmark as benchmark::benchmark and HdrHistogram_c as
 # hdr_histogram::hdr_histogram_static. For the benchmarks: call this from the
-# subdirectory that uses them.
+# subdirectory that uses them. With ITCH_PREBUILT_DEPS a scratch tree imports the two
+# libraries instead of configuring them, and nothing links them unless it asks.
 function(itch_require_bench_deps)
+  if(ITCH_PREBUILT_DEPS)
+    add_library(benchmark::benchmark STATIC IMPORTED GLOBAL)
+    set_target_properties(benchmark::benchmark PROPERTIES
+      IMPORTED_LOCATION "${ITCH_PREBUILT_DEPS}/_deps/benchmark-build/src/libbenchmark.a"
+      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${ITCH_PREBUILT_DEPS}/_deps/benchmark-src/include"
+      INTERFACE_INCLUDE_DIRECTORIES "${ITCH_PREBUILT_DEPS}/_deps/benchmark-src/include")
+    add_library(hdr_histogram::hdr_histogram_static STATIC IMPORTED GLOBAL)
+    set_target_properties(hdr_histogram::hdr_histogram_static PROPERTIES
+      IMPORTED_LOCATION "${ITCH_PREBUILT_DEPS}/_deps/hdr_histogram-build/src/libhdr_histogram_static.a"
+      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${ITCH_PREBUILT_DEPS}/_deps/hdr_histogram-src/include"
+      INTERFACE_INCLUDE_DIRECTORIES "${ITCH_PREBUILT_DEPS}/_deps/hdr_histogram-src/include")
+    return()
+  endif()
   enable_language(C)
   set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
   set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)

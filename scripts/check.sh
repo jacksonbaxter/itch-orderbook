@@ -46,7 +46,7 @@ stage_toolchain() {
 
 stage_format() {
   local files
-  files=$(find include src tests tools fuzz -type f \( -name '*.cpp' -o -name '*.hpp' \)) || return 1
+  files=$(find include src tests tools fuzz bench -type f \( -name '*.cpp' -o -name '*.hpp' \)) || return 1
   [ -n "$files" ] || { echo "no C++ files found"; return 1; }
   # shellcheck disable=SC2086
   clang-format --dry-run -Werror $files
