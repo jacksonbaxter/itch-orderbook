@@ -235,6 +235,9 @@ class Matrix(unittest.TestCase):
         self.assertEqual(json.loads(fm.json_set(b'{"a": {"b": 1}}', {"path": ["a", "b"], "value": 2})),
                          {"a": {"b": 2}})
 
+    def test_duplicate_bytes_repeats_a_span_in_place(self):
+        self.assertEqual(fm.duplicate_bytes(b"abcd", {"offset": 1, "length": 2}), b"abcbcd")
+
     def test_replace_text_needs_exactly_one_occurrence(self):
         self.assertEqual(fm.replace_text(b"a,b,c", {"old": "b", "new": "x"}), b"a,x,c")
         with self.assertRaises(fm.DefinitionError):

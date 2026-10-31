@@ -40,8 +40,8 @@ mutations and inputs may be used together, and at least one is required. build i
 optional. expect.exit is optional and defaults to any non-zero exit. Commands run in
 the tree copy, with {tree}, {build} and {python} substituted. Input ops are flip_byte
 (offset, mask), truncate (size, negative counts from the end), delete_bytes (offset,
-length), json_set (path, value), replace_text (old, new, which must occur exactly once)
-and remove_files.
+length), duplicate_bytes (offset, length), json_set (path, value), replace_text (old,
+new, which must occur exactly once) and remove_files.
 
     fault_matrix.py --list
     fault_matrix.py [--only ID] [--area NAME] [--log-dir DIR] [--out FILE] [--keep]
@@ -210,6 +210,11 @@ def json_set(data, spec):
     return json.dumps(document, indent=2).encode("utf-8") + b"\n"
 
 
+def duplicate_bytes(data, spec):
+    offset, length = spec["offset"], spec["length"]
+    return data[:offset + length] + data[offset:offset + length] + data[offset + length:]
+
+
 def replace_text(data, spec):
     old = spec["old"].encode("utf-8")
     require(data.count(old) == 1, f"replace_text: {spec['old']!r} is not there exactly once")
@@ -220,6 +225,7 @@ INPUT_OPS = {
     "flip_byte": flip_byte,
     "truncate": truncate,
     "delete_bytes": delete_bytes,
+    "duplicate_bytes": duplicate_bytes,
     "json_set": json_set,
     "replace_text": replace_text,
 }
