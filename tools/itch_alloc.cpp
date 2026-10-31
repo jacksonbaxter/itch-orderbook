@@ -80,7 +80,7 @@ struct Pass {
 };
 
 template <class Apply>
-[[nodiscard]] Pass replay(std::span<const std::byte> bytes, std::uint64_t warmup, Apply&& apply) {
+[[nodiscard]] Pass replay(std::span<const std::byte> bytes, std::uint64_t warmup, Apply apply) {
   Pass pass;
   itch::FrameReader reader{bytes};
   if (warmup == 0) {

@@ -66,7 +66,7 @@ struct LiveOrder {
   if (byte == 254) {
     return 0;
   }
-  return 10000U + (byte % 16U) * 100U;
+  return 10000U + ((byte % 16U) * 100U);
 }
 
 class Harness {
@@ -137,8 +137,8 @@ class Harness {
     const itch::oracle::RefTop reference_ask = oracle_.reference().best(locate, 'S');
     FUZZ_CHECK(reference_bid.present == (bid >= 0));
     FUZZ_CHECK(reference_ask.present == (ask >= 0));
-    FUZZ_CHECK(bid < 0 || reference_bid.price == static_cast<std::uint64_t>(bid));
-    FUZZ_CHECK(ask < 0 || reference_ask.price == static_cast<std::uint64_t>(ask));
+    FUZZ_CHECK(bid < 0 || std::cmp_equal(reference_bid.price, bid));
+    FUZZ_CHECK(ask < 0 || std::cmp_equal(reference_ask.price, ask));
     if (bid >= 0 && ask >= 0) {
       expected_crossed_ += bid > ask ? 1U : 0U;
       expected_locked_ += bid == ask ? 1U : 0U;
@@ -245,7 +245,7 @@ class Harness {
         const auto messages = itch::fixtures::all_messages();
         const wire::Bytes& message = messages[op.shares % messages.size()];
         const char type = static_cast<char>(message[0]);
-        if (std::string_view{"AFECXDU"}.find(type) == std::string_view::npos) {
+        if (!std::string_view{"AFECXDU"}.contains(type)) {
           send(message, itch::read_header(message.data()).stock_locate, true);
         }
         break;

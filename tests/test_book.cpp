@@ -10,6 +10,7 @@
 #include <limits>
 #include <span>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -60,7 +61,8 @@ class FastAdapter {
     }
     std::uint64_t shares = 0;
     for (std::uint32_t at = level->front; at != itch::kNoIndex; at = book_.order_at(at).newer) {
-      fifo.push_back({book_.order_at(at).reference, book_.order_at(at).shares});
+      fifo.push_back(
+          {.reference = book_.order_at(at).reference, .shares = book_.order_at(at).shares});
       shares += book_.order_at(at).shares;
     }
     EXPECT_EQ(level->order_count, fifo.size());
@@ -94,7 +96,7 @@ class ReferenceAdapter {
         book_.level(LevelId{.locate = locate, .side = side, .price = price});
     if (level != nullptr) {
       for (const ReferenceBook::Resting& order : *level) {
-        fifo.push_back({order.reference, order.shares});
+        fifo.push_back({.reference = order.reference, .shares = order.shares});
       }
     }
     return fifo;
@@ -269,7 +271,7 @@ TYPED_TEST(BookScenario, MessagesThatDoNotChangeTheBook) {
 TYPED_TEST(BookScenario, EveryFixtureMessageThatIsNotAnOrderChangesNothing) {
   for (const auto& message : itch::fixtures::all_messages()) {
     const char type = static_cast<char>(message[0]);
-    if (std::string{"AFECXDU"}.find(type) == std::string::npos) {
+    if (!std::string_view{"AFECXDU"}.contains(type)) {
       EXPECT_EQ(this->book_.apply(message), "no_book_effect") << type;
     }
   }

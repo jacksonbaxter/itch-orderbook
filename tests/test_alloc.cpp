@@ -7,6 +7,7 @@
 // fast book.
 #include <gtest/gtest.h>
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <new>
@@ -43,12 +44,14 @@ std::vector<std::byte> build_stream() {
       put(message);
     }
   }
+  // The same stream every run.
+  // NOLINTNEXTLINE(cert-msc32-c,cert-msc51-cpp,bugprone-random-generator-seed)
   std::mt19937 random{20191230};
   constexpr std::uint32_t kPool = 512;
   std::vector<std::uint64_t> live;
   std::uint64_t next_reference = 1;
   for (int step = 0; step < 200000; ++step) {
-    const auto price = 1000 + (random() % 64) * 100;
+    const auto price = 1000 + ((random() % 64) * 100);
     if (live.size() < kPool / 2) {
       put((step % 3 == 0 ? wire::add_attributed : wire::add)(
           1, next_reference, step % 2 == 0 ? 'B' : 'S', 300, price, 1));
@@ -76,7 +79,7 @@ std::vector<std::byte> build_stream() {
 }
 
 template <class Apply>
-std::uint64_t replay(std::span<const std::byte> stream, Apply&& apply) {
+std::uint64_t replay(std::span<const std::byte> stream, Apply apply) {
   std::uint64_t messages = 0;
   itch::FrameReader reader{stream};
   for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status); frame = reader.next()) {
@@ -152,7 +155,7 @@ TEST(Allocation, EveryFormOfNewReachesItsOwnCounter) {
 TEST(Allocation, AnAlignedRequestIsAligned) {
   constexpr std::align_val_t kAlign{4096};
   void* memory = ::operator new(16, kAlign);
-  EXPECT_EQ(reinterpret_cast<std::uintptr_t>(memory) % 4096, 0U);
+  EXPECT_EQ(std::bit_cast<std::uintptr_t>(memory) % 4096, 0U);
   ::operator delete(memory, kAlign);
 }
 

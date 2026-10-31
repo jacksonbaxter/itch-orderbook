@@ -63,8 +63,8 @@ struct NoWriteObserver {
 };
 
 struct BookCapacity {
-  std::uint32_t orders = 1U << 22;
-  std::uint32_t levels = 1U << 21;
+  std::uint32_t orders = 1U << 22U;
+  std::uint32_t levels = 1U << 21U;
 };
 
 inline constexpr std::uint32_t kNoIndex = 0xFFFFFFFFU;

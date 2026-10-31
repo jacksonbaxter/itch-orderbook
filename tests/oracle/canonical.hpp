@@ -16,6 +16,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <ranges>
 #include <span>
 #include <vector>
 
@@ -32,7 +33,7 @@ class WordHash {
     word *= 0xFF51AFD7ED558CCDULL;
     word = std::rotl(word, 31);
     word *= 0xC4CEB9FE1A85EC53ULL;
-    state_ = std::rotl(state_ ^ word, 27) * 5ULL + 0x52DCE729ULL;
+    state_ = (std::rotl(state_ ^ word, 27) * 5ULL) + 0x52DCE729ULL;
     ++words_;
   }
   [[nodiscard]] std::uint64_t value() const noexcept { return state_ ^ words_; }
@@ -136,8 +137,8 @@ void emit_reference_side(const ReferenceBook& book, const ReferenceBook::SideKey
   sink(top.orders);
   sink(levels.size());
   if (side == 'B') {
-    for (auto level = levels.rbegin(); level != levels.rend(); ++level) {
-      emit_reference_level(level->first, level->second, sink);
+    for (const auto& [price, fifo] : std::views::reverse(levels)) {
+      emit_reference_level(price, fifo, sink);
     }
   } else {
     for (const auto& [price, fifo] : levels) {

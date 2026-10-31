@@ -222,6 +222,35 @@ class Invariants {
     const std::uint32_t depth = crossed ? bid - ask : 0;
     const std::uint64_t since_resume =
         resumed_ns_[locate] == 0 ? 0 : timestamp_ns - resumed_ns_[locate];
+    tally_population(locate, state, in_window, in_clock, since_resume, crossed);
+    bump(by_cause_[{type, cause_of(state, in_window)}], crossed);
+    if (in_clock) {
+      bump(by_cause_[{type, "clock"}], crossed);
+    }
+    deepest_ = depth > deepest_ ? depth : deepest_;
+
+    SymbolStats& stats = symbols_[locate];
+    if (stats.count.crossed + stats.count.locked == 0) {
+      stats.first_ns = timestamp_ns;
+    }
+    stats.last_ns = timestamp_ns;
+    stats.deepest = depth > stats.deepest ? depth : stats.deepest;
+    bump(stats.count, crossed);
+    bump(stats.by_state[state], crossed);
+
+    if (log_ != nullptr) {
+      std::println(log_,
+                   "{} message={} type={} symbol={} locate={} time={} ts={} state={} "
+                   "market_open={} in_window={} since_resume_ns={} bid={} ask={} depth={}",
+                   crossed ? "crossed" : "locked", message, type, symbol_name(locate), locate,
+                   clock_time(timestamp_ns), timestamp_ns, state, market_open_ ? 1 : 0,
+                   in_window ? 1 : 0, since_resume, bid, ask, depth);
+    }
+  }
+
+  // The populations one observation falls in.
+  void tally_population(std::uint16_t locate, char state, bool in_window, bool in_clock,
+                        std::uint64_t since_resume, bool crossed) {
     bump(all_, crossed);
     if (state != 'T') {
       bump(not_in_t_, crossed);
@@ -250,31 +279,8 @@ class Invariants {
       bump(clock_hours_, crossed);
     }
     bump(by_state_[state], crossed);
-    bump(by_cause_[{type, cause_of(state, in_window)}], crossed);
-    if (in_clock) {
-      bump(by_cause_[{type, "clock"}], crossed);
-    }
     if (state == 'T' && since_resume > longest_since_resume_) {
       longest_since_resume_ = since_resume;
-    }
-    deepest_ = depth > deepest_ ? depth : deepest_;
-
-    SymbolStats& stats = symbols_[locate];
-    if (stats.count.crossed + stats.count.locked == 0) {
-      stats.first_ns = timestamp_ns;
-    }
-    stats.last_ns = timestamp_ns;
-    stats.deepest = depth > stats.deepest ? depth : stats.deepest;
-    bump(stats.count, crossed);
-    bump(stats.by_state[state], crossed);
-
-    if (log_ != nullptr) {
-      std::println(log_,
-                   "{} message={} type={} symbol={} locate={} time={} ts={} state={} "
-                   "market_open={} in_window={} since_resume_ns={} bid={} ask={} depth={}",
-                   crossed ? "crossed" : "locked", message, type, symbol_name(locate), locate,
-                   clock_time(timestamp_ns), timestamp_ns, state, market_open_ ? 1 : 0,
-                   in_window ? 1 : 0, since_resume, bid, ask, depth);
     }
   }
 

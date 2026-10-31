@@ -1,0 +1,5 @@
+# alloc_counter.cpp defines the global operator new and delete, and the check compares
+# those definitions' parameter names with the reserved names in the standard library's
+# own declarations, which NOLINT cannot reach.
+InheritParentConfig: true
+Checks: -readability-inconsistent-declaration-parameter-name

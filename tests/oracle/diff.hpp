@@ -136,7 +136,7 @@ struct OracleConfig {
   std::uint64_t hash_every = 1'000'000;  // 0 keeps only the final hash.
   bool exhaustive = false;
   // For the fuzzer: which locates the exhaustive walk covers. Empty means all of them.
-  std::span<const std::uint16_t> exhaustive_locates{};
+  std::span<const std::uint16_t> exhaustive_locates;
 };
 
 class OracleRun {

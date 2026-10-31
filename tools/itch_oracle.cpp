@@ -160,8 +160,8 @@ int run(const Options& options) {
   }
   std::FILE* observations = nullptr;
   if (options.observations != nullptr) {
-    observations =
-        std::fopen(options.observations, "w");  // NOLINT(cppcoreguidelines-owning-memory)
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    observations = std::fopen(options.observations, "w");
     if (observations == nullptr) {
       std::println(stderr, "itch_oracle: cannot write {}", options.observations);
       return 2;
