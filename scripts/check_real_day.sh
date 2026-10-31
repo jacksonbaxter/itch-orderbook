@@ -10,7 +10,7 @@
 # Raw logs go to ITCH_REAL_DAY_LOGS, default build/real-day-logs. The curated results go
 # to results/oracle_<day>.md.
 #
-# The oracle takes a whole day and about 7 GB beyond the mapped file. T-INV-2 is strict
+# The oracle takes ten minutes a day and about 0.7 GB beyond the mapped file. T-INV-2 is strict
 # and expected to fail on real data: that result is reported as a failure and keeps this
 # script's exit status non-zero, and it does not stop the other checks. Exit status 3 from
 # oracle_report.py separates that from a broken book, which is status 1.
