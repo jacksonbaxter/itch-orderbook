@@ -35,7 +35,11 @@ constexpr std::string_view kHeader =
 
 std::string cross_file(std::string_view rows) { return std::string{kHeader} + std::string{rows}; }
 
-Stock stock(std::string_view text) { return *to_stock(text); }
+Stock stock(std::string_view text) {
+  const auto parsed = to_stock(text);
+  EXPECT_TRUE(parsed.has_value()) << text;
+  return parsed.value_or(Stock{});
+}
 
 CrossStatsFailure cross_failure(const std::string& text) {
   const auto parsed = parse_cross_stats(bytes_of(text));
