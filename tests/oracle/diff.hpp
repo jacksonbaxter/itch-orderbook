@@ -129,6 +129,8 @@ struct DiffCounters {
   std::uint64_t final_hash_checks = 0;
   std::uint64_t production_hash_checks = 0;
   std::uint64_t exhaustive_checks = 0;
+
+  friend bool operator==(const DiffCounters&, const DiffCounters&) = default;
 };
 
 struct OracleConfig {
@@ -146,6 +148,24 @@ class OracleRun {
         fast_{config.capacity},
         production_{config.capacity},
         reference_{std::make_unique<ReferenceBook>()} {}
+
+  // Back to the state of `fresh`, a run that has seen nothing, for a caller that starts
+  // a stream too often to build the books each time. Assigning a book copies all of it,
+  // its free lists and the bytes of its unused slots too. The reference book's orders
+  // point into its own lists, so it is built anew and never assigned. A member added to
+  // this class has to be added here.
+  void restart(const OracleRun& fresh) {
+    config_ = fresh.config_;
+    fast_ = fresh.fast_;
+    production_ = fresh.production_;
+    reference_ = std::make_unique<ReferenceBook>();
+    invariants_ = fresh.invariants_;
+    counters_ = fresh.counters_;
+    divergences_ = fresh.divergences_;
+    message_ = fresh.message_;
+    type_ = fresh.type_;
+    last_hash_ = fresh.last_hash_;
+  }
 
   // Takes one whole message. False once the books have diverged.
   bool on_message(std::span<const std::byte> payload) {
@@ -194,6 +214,7 @@ class OracleRun {
   [[nodiscard]] const Invariants& invariants() const noexcept { return invariants_; }
   [[nodiscard]] Invariants& invariants() noexcept { return invariants_; }
   [[nodiscard]] const OracleFastBook& fast() const noexcept { return fast_; }
+  [[nodiscard]] const FastBook<>& production() const noexcept { return production_; }
   [[nodiscard]] const ReferenceBook& reference() const noexcept { return *reference_; }
 
  private:

@@ -100,11 +100,27 @@ void emit_fast(const FastBookType& book, std::span<const std::uint16_t> locates,
   }
 }
 
+// The first side from `key` on that holds a level, or the end of the table. A whole-book
+// walk has 131,072 sides to look at and a fuzz input has a handful in use, so each input
+// spent 38% of its time here, in checks on a loop that only reads inside this span. The
+// walk of each side found stays instrumented.
+template <class Top>
+[[nodiscard, clang::no_sanitize("address", "undefined", "coverage")]] std::size_t next_side(
+    std::span<const Top> sides, std::size_t key) noexcept {
+  const Top* const tops = sides.data();
+  const std::size_t count = sides.size();
+  while (key < count && tops[key].level == kNoIndex) {
+    ++key;
+  }
+  return key;
+}
+
 template <class FastBookType, class Sink>
 void emit_fast(const FastBookType& book, Sink& sink) {
-  for (std::uint32_t locate = 0; locate < 65536U; ++locate) {
-    emit_fast_side(book, static_cast<std::uint16_t>(locate), Side::bid, sink);
-    emit_fast_side(book, static_cast<std::uint16_t>(locate), Side::ask, sink);
+  const auto sides = book.sides();
+  for (std::size_t key = next_side(sides, 0); key < sides.size(); key = next_side(sides, key + 1)) {
+    emit_fast_side(book, static_cast<std::uint16_t>(key >> 1U),
+                   (key & 1U) == 0 ? Side::bid : Side::ask, sink);
   }
 }
 

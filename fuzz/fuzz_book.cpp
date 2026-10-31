@@ -69,15 +69,18 @@ struct LiveOrder {
   return 10000U + ((byte % 16U) * 100U);
 }
 
-class Harness {
- public:
-  Harness()
-      : oracle_{{.capacity = {.orders = kCapacity, .levels = kCapacity},
+[[nodiscard]] OracleRun fresh_run() {
+  OracleRun run{{.capacity = {.orders = kCapacity, .levels = kCapacity},
                  .hash_every = 0,
                  .exhaustive = true,
-                 .exhaustive_locates = kLocates}} {
-    oracle_.invariants().set_inv1_detail_limit(0);
-  }
+                 .exhaustive_locates = kLocates}};
+  run.invariants().set_inv1_detail_limit(0);
+  return run;
+}
+
+class Harness {
+ public:
+  explicit Harness(OracleRun& oracle) noexcept : oracle_{&oracle} {}
 
   void run(const Op& op) {
     switch (op.code % 16U) {
@@ -101,11 +104,11 @@ class Harness {
   }
 
   void finish() {
-    oracle_.finish();
+    oracle_->finish();
     report();
-    FUZZ_CHECK(oracle_.divergences().empty());
-    FUZZ_CHECK(oracle_.fast().live_orders() == live_.size());
-    FUZZ_CHECK(oracle_.reference().live_orders() == live_.size());
+    FUZZ_CHECK(oracle_->divergences().empty());
+    FUZZ_CHECK(oracle_->fast().live_orders() == live_.size());
+    FUZZ_CHECK(oracle_->reference().live_orders() == live_.size());
   }
 
  private:
@@ -118,7 +121,7 @@ class Harness {
   }
 
   void report() const {
-    for (const itch::oracle::Divergence& d : oracle_.divergences()) {
+    for (const itch::oracle::Divergence& d : oracle_->divergences()) {
       std::println(stderr, "DIVERGENCE kind={} message={} type={} {}", to_string(d.kind), d.message,
                    d.type, d.detail);
     }
@@ -127,14 +130,14 @@ class Harness {
   // Sends one message and checks everything that has a right answer for it.
   void send(const wire::Bytes& message, std::uint16_t locate, bool valid) {
     expected_violations_ += valid ? 0U : 1U;
-    const bool same = oracle_.on_message(message);
+    const bool same = oracle_->on_message(message);
     report();
     FUZZ_CHECK(same);
-    FUZZ_CHECK(oracle_.invariants().inv1_violations() == expected_violations_);
+    FUZZ_CHECK(oracle_->invariants().inv1_violations() == expected_violations_);
 
     const auto [bid, ask] = model_best(locate);
-    const itch::oracle::RefTop reference_bid = oracle_.reference().best(locate, 'B');
-    const itch::oracle::RefTop reference_ask = oracle_.reference().best(locate, 'S');
+    const itch::oracle::RefTop reference_bid = oracle_->reference().best(locate, 'B');
+    const itch::oracle::RefTop reference_ask = oracle_->reference().best(locate, 'S');
     FUZZ_CHECK(reference_bid.present == (bid >= 0));
     FUZZ_CHECK(reference_ask.present == (ask >= 0));
     FUZZ_CHECK(bid < 0 || std::cmp_equal(reference_bid.price, bid));
@@ -143,8 +146,8 @@ class Harness {
       expected_crossed_ += bid > ask ? 1U : 0U;
       expected_locked_ += bid == ask ? 1U : 0U;
     }
-    FUZZ_CHECK(oracle_.invariants().crossed() == expected_crossed_);
-    FUZZ_CHECK(oracle_.invariants().locked() == expected_locked_);
+    FUZZ_CHECK(oracle_->invariants().crossed() == expected_crossed_);
+    FUZZ_CHECK(oracle_->invariants().locked() == expected_locked_);
   }
 
   [[nodiscard]] std::pair<std::int64_t, std::int64_t> model_best(std::uint16_t locate) const {
@@ -316,7 +319,7 @@ class Harness {
     send(wire::add(locate, kDeadBit | op.pick, 'Z', 1, 1), locate, false);
   }
 
-  OracleRun oracle_;
+  OracleRun* oracle_;
   std::vector<LiveOrder> live_;
   std::uint64_t issued_ = 0;
   std::uint64_t expected_violations_ = 0;
@@ -327,8 +330,15 @@ class Harness {
 }  // namespace
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
+  // Building the books took 40% of an input and freeing them 20%. So one run lasts the
+  // whole process, and restart() puts it back as it was. The model is built anew each
+  // time. tests/test_book.cpp holds restart() to a run that was never used.
+  static const OracleRun fresh = fresh_run();
+  static OracleRun oracle = fresh_run();
+  oracle.restart(fresh);
+
   const std::span input{data, size};
-  Harness harness;
+  Harness harness{oracle};
   for (std::size_t at = 0; at + kRecord <= input.size(); at += kRecord) {
     harness.run({.code = input[at],
                  .pick = input[at + 1],

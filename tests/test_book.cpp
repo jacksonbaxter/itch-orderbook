@@ -5,9 +5,12 @@
 // test as well.
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <numeric>
 #include <span>
 #include <string>
 #include <string_view>
@@ -18,6 +21,7 @@
 #include "itch/book.hpp"
 #include "itch/messages.hpp"
 #include "itch/reader.hpp"
+#include "oracle/canonical.hpp"
 #include "oracle/diff.hpp"
 #include "oracle/reference_book.hpp"
 #include "oracle/wire_builder.hpp"
@@ -418,6 +422,156 @@ TEST(FastBook, RestingOrderReportsWhereAnOrderIsAndWhatItHolds) {
   EXPECT_TRUE(resting(book, 3).at_front);
   EXPECT_FALSE(resting(book, 4).at_front);
   EXPECT_EQ(resting(book, 4).shares, 250U);
+}
+
+constexpr itch::BookCapacity kRestartCapacity{.orders = 64, .levels = 64};
+
+// Every slot of both pools and every side's record, in use or not, and the counters. The
+// hash index has no accessor. What it holds shows in the lookups the tests make of it.
+template <class Book>
+void expect_same_book(const Book& actual, const Book& expected) {
+  EXPECT_EQ(actual.live_orders(), expected.live_orders());
+  EXPECT_EQ(actual.live_levels(), expected.live_levels());
+  EXPECT_EQ(actual.peak_live_orders(), expected.peak_live_orders());
+  EXPECT_EQ(actual.peak_live_levels(), expected.peak_live_levels());
+  for (std::uint32_t at = 0; at < kRestartCapacity.orders; ++at) {
+    const itch::BookOrder& a = actual.order_at(at);
+    const itch::BookOrder& e = expected.order_at(at);
+    EXPECT_EQ(a.reference, e.reference) << at;
+    EXPECT_EQ(a.shares, e.shares) << at;
+    EXPECT_EQ(a.level, e.level) << at;
+    EXPECT_EQ(a.older, e.older) << at;
+    EXPECT_EQ(a.newer, e.newer) << at;
+  }
+  for (std::uint32_t at = 0; at < kRestartCapacity.levels; ++at) {
+    const itch::BookLevel& a = actual.level_at(at);
+    const itch::BookLevel& e = expected.level_at(at);
+    EXPECT_EQ(a.aggregate_shares, e.aggregate_shares) << at;
+    EXPECT_EQ(a.price, e.price) << at;
+    EXPECT_EQ(a.order_count, e.order_count) << at;
+    EXPECT_EQ(a.front, e.front) << at;
+    EXPECT_EQ(a.back, e.back) << at;
+    EXPECT_EQ(a.better, e.better) << at;
+    EXPECT_EQ(a.worse, e.worse) << at;
+    EXPECT_EQ(a.locate, e.locate) << at;
+    EXPECT_EQ(a.side, e.side) << at;
+  }
+  const auto sides = actual.sides();
+  const auto expected_sides = expected.sides();
+  ASSERT_EQ(sides.size(), expected_sides.size());
+  for (std::size_t key = 0; key < sides.size(); ++key) {
+    EXPECT_EQ(sides[key].level, expected_sides[key].level) << key;
+    EXPECT_EQ(sides[key].price, expected_sides[key].price) << key;
+    EXPECT_EQ(sides[key].shares, expected_sides[key].shares) << key;
+    EXPECT_EQ(sides[key].orders, expected_sides[key].orders) << key;
+  }
+}
+
+std::string report_of(const itch::oracle::OracleRun& run) {
+  testing::internal::CaptureStdout();
+  run.invariants().print_report();
+  return testing::internal::GetCapturedStdout();
+}
+
+void expect_same_run(const itch::oracle::OracleRun& actual,
+                     const itch::oracle::OracleRun& expected) {
+  EXPECT_TRUE(actual.divergences().empty());
+  EXPECT_TRUE(expected.divergences().empty());
+  EXPECT_TRUE(actual.counters() == expected.counters());
+  EXPECT_EQ(actual.last_hash(), expected.last_hash());
+  EXPECT_EQ(actual.reference().live_orders(), expected.reference().live_orders());
+  EXPECT_EQ(actual.reference().sides().size(), expected.reference().sides().size());
+  EXPECT_EQ(report_of(actual), report_of(expected));
+  EXPECT_EQ(actual.invariants().market_open(), expected.invariants().market_open());
+  for (std::uint32_t locate = 0; locate < 65536U; ++locate) {
+    const auto id = static_cast<std::uint16_t>(locate);
+    EXPECT_EQ(actual.invariants().trading_state(id), expected.invariants().trading_state(id));
+  }
+  expect_same_book(actual.fast(), expected.fast());
+  expect_same_book(actual.production(), expected.production());
+}
+
+// Touches each table: three locates, both ends of the range among them, a crossed book,
+// freed orders and levels, an emptied side, a refused message and a reopening window.
+std::vector<wire::Bytes> restart_traffic(std::uint16_t locate) {
+  return {wire::system_event('Q'),
+          wire::trading_action(locate, 'H'),
+          wire::trading_action(locate, 'T'),
+          wire::add(locate, 1, 'B', 100, 5000),
+          wire::add(locate, 2, 'S', 100, 4900),
+          wire::add(65535, 3, 'B', 50, 6000),
+          wire::add(0, 4, 'S', 70, 6100),
+          wire::add(locate, 5, 'B', 10, 4800),
+          wire::execute(locate, 1, 40),
+          wire::cancel(locate, 2, 10),
+          wire::erase(0, 4),
+          wire::replace(locate, 5, 6, 20, 4700),
+          wire::erase(locate, 99),
+          wire::erase(65535, 3),
+          wire::add(locate, 7, 'S', 30, 5000)};
+}
+
+TEST(Canonical, TheWholeBookWalkSeesWhatAWalkOfEveryLocateSees) {
+  itch::FastBook<> book{kRestartCapacity};
+  std::uint64_t reference = 0;
+  for (const std::uint16_t locate : std::array<std::uint16_t, 5>{0, 1, 2, 65534, 65535}) {
+    ASSERT_EQ(book.apply(wire::add(locate, ++reference, 'B', 100, 5000)),
+              itch::ApplyStatus::applied);
+    ASSERT_EQ(book.apply(wire::add(locate, ++reference, 'S', 100, 5100)),
+              itch::ApplyStatus::applied);
+  }
+  std::vector<std::uint16_t> every(65536);
+  std::ranges::iota(every, std::uint16_t{0});
+
+  itch::oracle::WordList whole;
+  itch::oracle::WordList named;
+  itch::oracle::emit_fast(book, whole);
+  itch::oracle::emit_fast(book, std::span<const std::uint16_t>{every}, named);
+  EXPECT_EQ(whole.words(), named.words());
+  // Six words to a side, three to its level and two to its order.
+  EXPECT_EQ(whole.words().size(), std::size_t{10} * 11);
+}
+
+TEST(OracleRun, RestartLeavesNothingOfTheLastStream) {
+  const itch::oracle::OracleConfig config{
+      .capacity = kRestartCapacity, .hash_every = 5, .exhaustive = true, .exhaustive_locates = {}};
+  const itch::oracle::OracleRun fresh{config};
+  itch::oracle::OracleRun control{config};
+  itch::oracle::OracleRun used{config};
+
+  // The directory goes to the used run alone, so that its symbol has to be gone: the
+  // report names a crossed symbol.
+  const wire::Bytes directory = itch::fixtures::all_messages()[1];
+  const std::uint16_t locate = itch::read_header(directory.data()).stock_locate;
+  const std::vector<wire::Bytes> traffic = restart_traffic(locate);
+  ASSERT_TRUE(used.on_message(directory));
+  for (const wire::Bytes& message : traffic) {
+    ASSERT_TRUE(used.on_message(message));
+  }
+  used.finish();
+  ASSERT_GT(used.fast().live_orders(), 0U);
+  ASSERT_GT(used.reference().live_orders(), 0U);
+  ASSERT_GT(used.invariants().inv1_violations(), 0U);
+  ASSERT_GT(used.invariants().crossed(), 0U);
+  ASSERT_NE(used.last_hash(), 0U);
+  ASSERT_NE(report_of(used), report_of(control));
+
+  used.restart(fresh);
+  expect_same_run(used, control);
+  EXPECT_EQ(report_of(used), report_of(fresh));
+  for (std::uint64_t reference = 1; reference <= 7; ++reference) {
+    EXPECT_FALSE(used.fast().resting_order(reference).has_value()) << reference;
+  }
+
+  // The same traffic from here takes the same slots, so the free lists were restored
+  // too, and the report shows no symbol that only the first stream named.
+  for (const wire::Bytes& message : traffic) {
+    ASSERT_TRUE(used.on_message(message));
+    ASSERT_TRUE(control.on_message(message));
+  }
+  used.finish();
+  control.finish();
+  expect_same_run(used, control);
 }
 
 }  // namespace

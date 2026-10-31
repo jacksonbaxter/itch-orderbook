@@ -184,6 +184,8 @@ class FastBook {
   [[nodiscard]] std::uint32_t best_level(std::uint16_t locate, Side side) const noexcept {
     return tops_[top_key(locate, side)].level;
   }
+  // Every side's record, 2 * locate + side, for a walk that has to see the whole table.
+  [[nodiscard]] auto sides() const noexcept { return std::span{tops_}; }
   [[nodiscard]] const BookLevel& level_at(std::uint32_t index) const noexcept {
     return levels_[index];
   }

@@ -1732,7 +1732,7 @@
         "^corpus_fuzz_book$"
       ],
       "expect": {
-        "signature": "FUZZ_CHECK failed: (reference_|oracle_\\.fast\\(\\)\\.live_orders)"
+        "signature": "FUZZ_CHECK failed: (reference_|oracle_->fast\\(\\)\\.live_orders)"
       }
     },
     {
@@ -1775,7 +1775,7 @@
         "^corpus_fuzz_book$"
       ],
       "expect": {
-        "signature": "FUZZ_CHECK failed: oracle_\\.invariants\\(\\)\\.inv1_violations\\(\\) == expected_violations_"
+        "signature": "FUZZ_CHECK failed: oracle_->invariants\\(\\)\\.inv1_violations\\(\\) == expected_violations_"
       }
     },
     {
@@ -1858,6 +1858,209 @@
       ],
       "expect": {
         "signature": "FAIL: test_a_missing_touched_check_fails"
+      }
+    },
+    {
+      "id": "oracle-restart-keeps-fast-book",
+      "breaks": "restart() leaves the fast book as the last stream left it",
+      "check": "test_book OracleRun.RestartLeavesNothingOfTheLastStream",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    fast_ = fresh.fast_;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=OracleRun.RestartLeavesNothingOfTheLastStream"
+      ],
+      "expect": {
+        "signature": "FAILED  \\] OracleRun.RestartLeavesNothingOfTheLastStream"
+      }
+    },
+    {
+      "id": "oracle-restart-keeps-production-book",
+      "breaks": "restart() leaves the default instantiation as the last stream left it",
+      "check": "test_book OracleRun.RestartLeavesNothingOfTheLastStream",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    production_ = fresh.production_;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=OracleRun.RestartLeavesNothingOfTheLastStream"
+      ],
+      "expect": {
+        "signature": "FAILED  \\] OracleRun.RestartLeavesNothingOfTheLastStream"
+      }
+    },
+    {
+      "id": "oracle-restart-keeps-reference-book",
+      "breaks": "restart() leaves the reference book as the last stream left it",
+      "check": "test_book OracleRun.RestartLeavesNothingOfTheLastStream",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    reference_ = std::make_unique<ReferenceBook>();\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=OracleRun.RestartLeavesNothingOfTheLastStream"
+      ],
+      "expect": {
+        "signature": "FAILED  \\] OracleRun.RestartLeavesNothingOfTheLastStream"
+      }
+    },
+    {
+      "id": "oracle-restart-keeps-invariants",
+      "breaks": "restart() leaves the invariants' tallies and trading states in place",
+      "check": "test_book OracleRun.RestartLeavesNothingOfTheLastStream",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    invariants_ = fresh.invariants_;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=OracleRun.RestartLeavesNothingOfTheLastStream"
+      ],
+      "expect": {
+        "signature": "FAILED  \\] OracleRun.RestartLeavesNothingOfTheLastStream"
+      }
+    },
+    {
+      "id": "oracle-restart-keeps-counters",
+      "breaks": "restart() leaves the diff's counters running",
+      "check": "test_book OracleRun.RestartLeavesNothingOfTheLastStream",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    counters_ = fresh.counters_;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=OracleRun.RestartLeavesNothingOfTheLastStream"
+      ],
+      "expect": {
+        "signature": "FAILED  \\] OracleRun.RestartLeavesNothingOfTheLastStream"
+      }
+    },
+    {
+      "id": "oracle-restart-keeps-hash",
+      "breaks": "restart() leaves the last stream's hash",
+      "check": "test_book OracleRun.RestartLeavesNothingOfTheLastStream",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    last_hash_ = fresh.last_hash_;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=OracleRun.RestartLeavesNothingOfTheLastStream"
+      ],
+      "expect": {
+        "signature": "FAILED  \\] OracleRun.RestartLeavesNothingOfTheLastStream"
+      }
+    },
+    {
+      "id": "oracle-fuzz-reuse-without-restart",
+      "breaks": "fuzz_book carries each input's books into the next",
+      "check": "corpus_fuzz_book, whose model starts empty for each seed",
+      "mutations": [
+        {
+          "file": "fuzz/fuzz_book.cpp",
+          "old": "  oracle.restart(fresh);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_book"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_book$"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed"
+      }
+    },
+    {
+      "id": "oracle-whole-walk-skips-sides",
+      "breaks": "The whole-book walk steps over the side after each one it finds",
+      "check": "test_book Canonical.TheWholeBookWalkSeesWhatAWalkOfEveryLocateSees",
+      "mutations": [
+        {
+          "file": "tests/oracle/canonical.hpp",
+          "old": "key = next_side(sides, key + 1)",
+          "new": "key = next_side(sides, key + 2)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=Canonical.TheWholeBookWalkSeesWhatAWalkOfEveryLocateSees"
+      ],
+      "expect": {
+        "signature": "FAILED  \\] Canonical.TheWholeBookWalkSeesWhatAWalkOfEveryLocateSees"
       }
     }
   ]
