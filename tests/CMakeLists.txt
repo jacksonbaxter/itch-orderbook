@@ -21,6 +21,7 @@ itch_add_test(test_guard_page test_guard_page.cpp)
 itch_add_test(test_book test_book.cpp)
 itch_add_test(test_alloc test_alloc.cpp oracle/alloc_counter.cpp)
 itch_add_test(test_reference_files test_reference_files.cpp)
+itch_add_test(test_trade_checks test_trade_checks.cpp)
 
 if(ITCH_BUILD_TOOLS)
   add_test(NAME test_census_cli
@@ -31,5 +32,9 @@ if(ITCH_BUILD_TOOLS)
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_oracle_cli.py"
             "$<TARGET_FILE:itch_oracle>" "${CMAKE_CURRENT_BINARY_DIR}/oracle_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle" "$<TARGET_FILE:itch_alloc>")
-  set_tests_properties(test_census_cli test_oracle_cli PROPERTIES LABELS unit)
+  add_test(NAME test_trades_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_trades_cli.py"
+            "$<TARGET_FILE:itch_trades>" "${CMAKE_CURRENT_BINARY_DIR}/trades_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades")
+  set_tests_properties(test_census_cli test_oracle_cli test_trades_cli PROPERTIES LABELS unit)
 endif()

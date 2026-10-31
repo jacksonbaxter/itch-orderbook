@@ -383,4 +383,35 @@ TEST(FastBook, TheObserverSeesEveryLevelAMessageWrites) {
   EXPECT_TRUE(writes(wire::execute(1, 99, 10)).empty());
 }
 
+TEST(FastBook, RestingOrderReportsWhereAnOrderIsAndWhatItHolds) {
+  itch::FastBook<> book{{.orders = 16, .levels = 16}};
+  EXPECT_FALSE(book.resting_order(1).has_value());
+  ASSERT_EQ(book.apply(wire::add(7, 1, 'S', 100, 5000)), itch::ApplyStatus::applied);
+  ASSERT_EQ(book.apply(wire::add(7, 2, 'S', 200, 5000)), itch::ApplyStatus::applied);
+
+  const auto first = book.resting_order(1);
+  ASSERT_TRUE(first.has_value());
+  EXPECT_EQ(first->reference, 1U);
+  EXPECT_EQ(first->locate, 7U);
+  EXPECT_EQ(first->side, itch::Side::ask);
+  EXPECT_EQ(first->price, 5000U);
+  EXPECT_EQ(first->shares, 100U);
+  EXPECT_TRUE(first->at_front);
+  EXPECT_FALSE(book.resting_order(2)->at_front);
+
+  ASSERT_EQ(book.apply(wire::execute(7, 1, 40)), itch::ApplyStatus::applied);
+  EXPECT_EQ(book.resting_order(1)->shares, 60U);
+  ASSERT_EQ(book.apply(wire::execute(7, 1, 60)), itch::ApplyStatus::applied);
+  EXPECT_FALSE(book.resting_order(1).has_value());
+  EXPECT_TRUE(book.resting_order(2)->at_front);
+
+  // A replace at the same price goes to the back, under a new reference.
+  ASSERT_EQ(book.apply(wire::add(7, 3, 'S', 300, 5000)), itch::ApplyStatus::applied);
+  ASSERT_EQ(book.apply(wire::replace(7, 2, 4, 250, 5000)), itch::ApplyStatus::applied);
+  EXPECT_FALSE(book.resting_order(2).has_value());
+  EXPECT_TRUE(book.resting_order(3)->at_front);
+  EXPECT_FALSE(book.resting_order(4)->at_front);
+  EXPECT_EQ(book.resting_order(4)->shares, 250U);
+}
+
 }  // namespace

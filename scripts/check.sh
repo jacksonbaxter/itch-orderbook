@@ -62,7 +62,9 @@ stage_script_tests() {
 }
 
 stage_corpus() {
-  python_test scripts/gen_fuzz_corpus.py --check && python_test scripts/gen_oracle_fixtures.py --check
+  python_test scripts/gen_fuzz_corpus.py --check &&
+    python_test scripts/gen_oracle_fixtures.py --check &&
+    python_test scripts/gen_trade_fixtures.py --check
 }
 stage_release() { preset_with_tests release; }
 stage_asan_ubsan() { preset_with_tests asan-ubsan; }
@@ -71,6 +73,13 @@ stage_asan_ubsan() { preset_with_tests asan-ubsan; }
 stage_oracle() {
   build_preset release &&
     ctest --preset release -R '^(test_book|test_alloc|test_oracle_cli|corpus_fuzz_book)$'
+}
+# The trade-print checks on their fixtures: both reference parsers and their corpora, the
+# faulty-book tests, and every check through the tool. Needs nothing from data/.
+stage_trades() {
+  build_preset release &&
+    ctest --preset release \
+      -R '^(test_reference_files|test_trade_checks|test_trades_cli|corpus_fuzz_crossstats|corpus_fuzz_midas)$'
 }
 stage_tsan() { preset_with_tests tsan; }
 # From clean: ninja does not track .clang-tidy, so an incremental run could be a stale pass.
@@ -99,6 +108,7 @@ register script_tests quick
 register corpus quick
 register release quick
 register oracle quick
+register trades quick
 register asan_ubsan quick
 register tidy
 register tsan

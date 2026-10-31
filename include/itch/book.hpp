@@ -18,6 +18,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -101,6 +102,16 @@ struct TopOfBook {
   friend bool operator==(const TopOfBook&, const TopOfBook&) = default;
 };
 
+// One live order, as the book holds it.
+struct RestingOrder {
+  std::uint64_t reference;
+  std::uint16_t locate;
+  Side side;
+  Price4 price;
+  std::uint32_t shares;
+  bool at_front;  // First in its level's FIFO.
+};
+
 template <class WriteObserver = NoWriteObserver>
 class FastBook {
  public:
@@ -178,6 +189,22 @@ class FastBook {
   }
   [[nodiscard]] const BookOrder& order_at(std::uint32_t index) const noexcept {
     return orders_[index];
+  }
+
+  // The live order with this reference, wherever it rests, or nothing.
+  [[nodiscard]] std::optional<RestingOrder> resting_order(std::uint64_t reference) const noexcept {
+    const std::uint32_t at = find_order(reference);
+    if (at == kNoIndex) {
+      return std::nullopt;
+    }
+    const BookOrder& order = orders_[at];
+    const BookLevel& level = levels_[order.level];
+    return RestingOrder{.reference = reference,
+                        .locate = level.locate,
+                        .side = level.side,
+                        .price = level.price,
+                        .shares = order.shares,
+                        .at_front = order.older == kNoIndex};
   }
 
   [[nodiscard]] std::uint64_t live_orders() const noexcept { return live_orders_; }

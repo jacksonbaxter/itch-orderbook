@@ -74,6 +74,9 @@ struct MidasError {
   friend bool operator==(const MidasError&, const MidasError&) = default;
 };
 
+// How the file names the venue ITCH is the feed of.
+inline constexpr std::string_view kMidasExchange = "Nasdaq";
+
 struct MidasQuery {
   std::uint32_t date = 0;  // YYYYMMDD.
   std::string_view exchange;

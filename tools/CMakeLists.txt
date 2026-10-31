@@ -11,3 +11,8 @@ add_executable(itch_alloc itch_alloc.cpp "${PROJECT_SOURCE_DIR}/tests/oracle/all
 target_include_directories(itch_alloc PRIVATE "${PROJECT_SOURCE_DIR}/tests")
 target_link_libraries(itch_alloc PRIVATE itch_parser)
 itch_apply_options(itch_alloc)
+
+add_executable(itch_trades itch_trades.cpp)
+target_include_directories(itch_trades PRIVATE "${PROJECT_SOURCE_DIR}/tests")
+target_link_libraries(itch_trades PRIVATE itch_parser)
+itch_apply_options(itch_trades)
