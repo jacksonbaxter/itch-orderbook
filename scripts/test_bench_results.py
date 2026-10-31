@@ -225,9 +225,11 @@ class Driver(unittest.TestCase):
         linux = record()
         linux["peak_rss_bytes"] = 2 * 1024 ** 3
         linux["header"] = {"kernel": "Linux 6.12"}
-        lines = bench_driver.peak_lines([record(), linux])
+        mac = record()
+        mac["header"] = {"kernel": "Darwin 27.2.0"}
+        lines = bench_driver.peak_lines([mac])
         self.assertEqual(lines[0], "- peak_rss: unavailable: /usr/bin/time did not wrap the run")
-        lines = bench_driver.peak_lines([linux, record()])
+        lines = bench_driver.peak_lines([linux, mac])
         self.assertTrue(lines[0].startswith("- peak_rss: 2.00 GiB, getrusage"))
         self.assertTrue(lines[1].startswith("- peak_footprint: unavailable: "))
 

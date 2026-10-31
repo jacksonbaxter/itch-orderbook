@@ -87,7 +87,7 @@ bool parse(std::span<char*> args, Options& options) {
     } else if (arg == "--sizes") {
       good = parse_sizes(value, options.sizes);
     } else if (arg == "--raw-event") {
-      good = parse_number(value, options.raw_event, 16);
+      good = parse_number(value.substr(value.starts_with("0x") ? 2 : 0), options.raw_event, 16);
     } else {
       good = false;
     }

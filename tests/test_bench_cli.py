@@ -109,6 +109,15 @@ class Cli(unittest.TestCase):
         self.assertEqual([row["bytes"] for row in record["rows"]], [65536, 131072])
         self.assertEqual(record["refusals"], [])
 
+    def test_a_chase_records_the_event_it_was_given(self):
+        out = SCRATCH / "chase.json"
+        result = subprocess.run([str(BENCH.parent / "bench_chase"), "--out", str(out), "--loads",
+                                 "2000", "--sizes", "64K", "--raw-event", "0x0143",
+                                 *core_arguments()],
+                                capture_output=True, text=True, timeout=60, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(out.read_text(encoding="utf-8"))["raw_event"], "0x0143")
+
     def test_a_chase_refuses_a_bad_size(self):
         result = subprocess.run([str(BENCH.parent / "bench_chase"), "--out",
                                  str(SCRATCH / "chase.json"), "--sizes", "64"],
