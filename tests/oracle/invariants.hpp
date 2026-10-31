@@ -34,6 +34,7 @@ namespace itch::oracle {
 
 inline constexpr std::uint64_t kRegularOpenNs = 34'200'000'000'000ULL;   // 09:30:00
 inline constexpr std::uint64_t kRegularCloseNs = 57'600'000'000'000ULL;  // 16:00:00
+inline constexpr std::uint64_t kResumptionWindowNs = 50'000'000ULL;      // Published figure, 50 ms.
 inline constexpr std::size_t kInv1DetailLimit = 20;
 
 enum class Scope : std::uint8_t { all = 0, open_and_trading = 1 };
@@ -162,6 +163,12 @@ class Invariants {
                  open_and_t_.locked);
     std::println("t_inv2_clock_0930_1600 crossed={} locked={}", clock_hours_.crossed,
                  clock_hours_.locked);
+    std::println("t_inv2_in_t_within_50ms_of_resumption crossed={} locked={}", within_50ms_.crossed,
+                 within_50ms_.locked);
+    std::println("t_inv2_in_t_later_than_50ms crossed={} locked={}", beyond_50ms_.crossed,
+                 beyond_50ms_.locked);
+    std::println("t_inv2_in_t_never_resumed crossed={} locked={}", never_resumed_.crossed,
+                 never_resumed_.locked);
     std::println("t_inv2_reopening_windows {}", windows_opened_);
     std::println("t_inv2_longest_since_resume_ns {}", longest_since_resume_);
     std::println("operational_halt_messages {}", operational_halts_);
@@ -218,6 +225,13 @@ class Invariants {
     }
     if (state == kNoAction) {
       bump(no_action_, crossed);
+    }
+    if (state == 'T') {
+      if (resumed_ns_[locate] == 0) {
+        bump(never_resumed_, crossed);
+      } else {
+        bump(since_resume <= kResumptionWindowNs ? within_50ms_ : beyond_50ms_, crossed);
+      }
     }
     if (market_open_) {
       bump(market_hours_, crossed);
@@ -317,6 +331,9 @@ class Invariants {
   Pair no_action_;
   Pair in_window_;
   Pair outside_window_;
+  Pair within_50ms_;
+  Pair beyond_50ms_;
+  Pair never_resumed_;
   Pair market_hours_;
   Pair open_and_t_;
   Pair clock_hours_;

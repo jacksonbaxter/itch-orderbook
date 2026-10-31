@@ -60,7 +60,9 @@ stage_script_tests() {
     python_test scripts/test_fault_matrix.py
 }
 
-stage_corpus() { python_test scripts/gen_fuzz_corpus.py --check; }
+stage_corpus() {
+  python_test scripts/gen_fuzz_corpus.py --check && python_test scripts/gen_oracle_fixtures.py --check
+}
 stage_release() { preset_with_tests release; }
 stage_asan_ubsan() { preset_with_tests asan-ubsan; }
 stage_tsan() { preset_with_tests tsan; }

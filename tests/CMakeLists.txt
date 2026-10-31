@@ -25,5 +25,9 @@ if(ITCH_BUILD_TOOLS)
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_census_cli.py"
             "$<TARGET_FILE:itch_census>" "${CMAKE_CURRENT_BINARY_DIR}/census_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/support/fixtures.hpp")
-  set_tests_properties(test_census_cli PROPERTIES LABELS unit)
+  add_test(NAME test_oracle_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_oracle_cli.py"
+            "$<TARGET_FILE:itch_oracle>" "${CMAKE_CURRENT_BINARY_DIR}/oracle_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle")
+  set_tests_properties(test_census_cli test_oracle_cli PROPERTIES LABELS unit)
 endif()
