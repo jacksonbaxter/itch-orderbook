@@ -24,11 +24,11 @@ Full plan through to the done criteria. Tick items when done, and add anything n
 
 ### Repo and build
 - [x] CMake with presets for every configuration: release, asan-ubsan, tsan, fuzz, tidy, wasm.
-- [ ] CI calls presets only.
+- [x] CI calls presets only.
 - [x] C++23. Warnings: `-Wall -Wextra -Werror -Wconversion -Wsign-conversion -Wshadow -Wold-style-cast`.
 - [x] Take the compiler from the environment. No hardcoded toolchain path in repo scripts.
 - [x] Pinned FetchContent, by hash, for GoogleTest, Google Benchmark and HdrHistogram_c. Each commit resolves to its release tag and each archive matches its hash. Nothing calls the benchmark dependencies yet.
-- [ ] Pinned FetchContent, by hash, for the comparison queues. liburing on Linux only: use the 2.15 build in `.toolchain` on `debian`. macOS builds compile with it off, with no code change.
+- [x] Pinned FetchContent, by hash, for the comparison queues. liburing on Linux only: use the 2.15 build in `.toolchain` on `debian`. macOS builds compile with it off, with no code change.
 - [x] `.clang-tidy` with warnings as errors, at a pinned version.
 - [x] Avoid `<generator>` and `<stacktrace>`, which do not exist in this libc++.
 
@@ -59,7 +59,7 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [x] `scripts/machine_check.sh`, run before every reported benchmark, with its output embedded in the results file, plus a negative test that breaks one condition at a time (criterion 29). `debian` has no isolated core, so the check records that and enforces what it can: pin read-back, governor, `cpu5` idle, input resident.
 - [x] Each experiment's prediction is committed before it runs, and failed runs stay in the log (criterion 31).
 - [x] Reported Mac numbers go through `.orchestrator/measure.sh`, and `debian` numbers through `~/quant-projects/bin/measure.sh` with `taskset -c 4` and `cpu5` idle. Output goes to a file on `debian`, not through SSH.
-- [ ] README results table generated from results files.
+- [x] README results table generated from results files.
 - [x] Gate: every figure in the README and the demo page must appear in its results file, with a negative test that breaks one figure at a time (criterion 30).
 
 ### Running on `debian`
@@ -85,8 +85,8 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 ### Checks
 - [x] ASan and UBSan with no recovery and alignment checks on. TSan for all concurrent code. A sanitizer bug exits 134 on macOS.
 - [x] clang-tidy, and `-Wall -Wextra -Werror`.
-- [ ] `.github/workflows/ci.yml`: `ubuntu-24.04` (x86-64, GCC and Clang), `ubuntu-24.04-arm` (arm64), `macos-15` (arm64), an Emscripten job. Actions pinned to full SHAs. CI produces no benchmark numbers.
-- [ ] Validate CI locally with actionlint from repo tooling. Record that it has never executed on GitHub.
+- [x] `.github/workflows/ci.yml`: `ubuntu-24.04` (x86-64, GCC and Clang), `ubuntu-24.04-arm` (arm64), `macos-15` (arm64), an Emscripten job. Actions pinned to full SHAs. CI produces no benchmark numbers.
+- [x] Validate CI locally with actionlint from repo tooling. Record that it has never executed on GitHub.
 - [x] `scripts/check.sh` runs every check.
 - [x] Grep gate: no pointer cast to a multi-byte type over wire bytes, no bare branch hints.
 - [x] `scripts/fault_matrix.py`: each check shown failing on an injected fault, with one JSON file per area under `scripts/faults/`, a clean control and a self-test. Results in `results/fault_matrix.md`.

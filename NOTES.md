@@ -331,3 +331,25 @@ The driver is `measure.sh`'s child here and the benchmark is the driver's, which
 **Flamegraph, P-0005: held.** `perf record -g --user-callchains -e cycles:u` on a separate frame-pointer build, commit `92e3f74c5766`, 83,232 samples at 199 Hz, folded to 97 stacks. Stacks run from `main` to `FastBook::apply`, which is 93% of the cycles. No kernel frame appears, and none can: `cycles:k` is refused at `perf_event_paranoid=2`, exit 255, so time inside the kernel shows only as a gap. [results/flamegraph_stub_debian_12302019.svg](results/flamegraph_stub_debian_12302019.svg) has no home paths or addresses, at 32 KB. It says nothing about the real book. The frame-pointer throughput delta is not published: one run is not a measurement of it.
 
 **Faults.** Fourteen new ones in `scripts/faults/bench.json`, and two for the residency order. The chase verdict, its table, the event encoding, the `rdpmc` agreement and the kernel mapping all run on the Mac from invented records in `tests/fixtures/chase`. What the PMU does can only be shown on `debian`, which is what P-0003 is for.
+
+### CI, the comparison queues and the README
+
+**CI has never executed on GitHub.** There is no remote, so `.github/workflows/ci.yml` has not run on any runner. `scripts/lint_workflows.py` reads it with actionlint at a pinned hash, with shellcheck off, so the shell in its steps is not checked. `gates.py pinned-actions` holds every `uses:` to a 40-hex SHA with its tag.
+
+What was run by hand instead, at commit `b12d05e`, on presets or the same commands in a separate build dir:
+
+| Job | How far | On |
+|---|---|---|
+| x86-64 Linux, GCC | release build and ctest, 19 of 19 | g++ 14.2 on `debian` |
+| x86-64 Linux, Clang | release build and ctest, 19 of 19, with libstdc++ 14 as CI does and again with libc++ | Clang 23.1.4 on `debian` |
+| arm64 macOS, Clang | `scripts/check.sh` stages | Clang 23.1.4 on the Mac |
+| Emscripten | `scripts/check.sh --only wasm` | Emscripten 6.0.13 on the Mac |
+| arm64 Linux, GCC | Not run. `-funsigned-char` on `debian`, 19 of 19, shows that one difference and no other | no arm64 Linux host |
+
+That leaves these untested: the Ubuntu and macOS runner images, the `apt` and `brew` steps, the Linux archive through `scripts/fetch_tool.py` (its hash is the file on `debian`, and the macOS archive was fetched and unpacked for real), `emsdk install`, and any test that behaves differently on a VM with no PMU. CI's LLVM is the same release the repo was tested on, because nothing has shown the code builds on the Clang a runner ships. That costs about a 2 GB download per Clang job.
+
+**GCC found three real bugs, and Clang on libc++ had hidden all three.** libstdc++ 14 has no `{:?}` format, so the trade checks print a wire byte through `wire_char`. GCC turns an unknown `[[clang::no_sanitize]]` into an error, so GCC now ignores the `clang::` namespace. And libstdc++ 14 declares `std::ranges::iota` in `<algorithm>`, not `<numeric>`.
+
+**The comparison queues** are `ITCH_COMPARISON_QUEUES`, off by default, and no default configure unpacks them. Their build scripts never run, because `SOURCE_SUBDIR` names a directory they lack. One generated file under the build tree instantiates all three and is compiled, never linked or run. Boost's URL names the tag and not the commit: the tree with its submodules exists only as a release asset. `rigtorp` is pinned to the tag v1.1, and BENCHMARKS.md cites its later `HEAD`, so a Phase 3 result has to say which it ran. liburing comes from `ITCH_LIBURING_ROOT`, and CMake refuses any version but 2.15.
+
+**README tables.** `scripts/results_table.py` writes them between two markers and fails on any difference, on a results file it has no reader for, and on a verdict no row took up. `results/fault_matrix.md` is still the run at `162b602`: the faults added here ran by area and are not in that file.

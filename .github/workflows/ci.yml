@@ -3,6 +3,16 @@
 # it, not a run. NOTES.md says how far each job was run by hand, on which host, and what
 # that does not show.
 #
+# Run by hand, at commit b12d05e, with the same presets on the same compilers:
+#   x86-64 Linux, GCC     g++ 14.2 on debian, release build and ctest in a separate build dir.
+#   x86-64 Linux, Clang   Clang 23.1.4 on debian, the same, with libstdc++ 14 as here, and
+#                         once more with its libc++.
+#   arm64 macOS, Clang    Clang 23.1.4 on an M4 Max Mac, through scripts/check.sh.
+#   Emscripten            Emscripten 6.0.13 on that Mac, through scripts/check.sh.
+#   arm64 Linux, GCC      Not run. No arm64 Linux host was used. The nearest was g++ 14.2 on
+#                         debian with -funsigned-char, which is x86-64 and shows only that
+#                         unsigned char builds and passes.
+#
 # CI calls presets only, and produces no benchmark numbers. It needs nothing from data/.
 
 name: CI
