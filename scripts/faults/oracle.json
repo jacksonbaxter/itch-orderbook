@@ -695,7 +695,7 @@
     {
       "id": "oracle-off-bbo",
       "breaks": "BBO compare off, and the cached top goes stale",
-      "check": "the whole-book hash, which carries the top of book",
+      "check": "the whole-book hash at every message, which carries the top of book",
       "mutations": [
         {
           "file": "tests/oracle/diff.hpp",
@@ -718,7 +718,7 @@
         "{build}/tools/itch_oracle",
         "{tree}/tests/fixtures/oracle/session.itch",
         "--hash-every",
-        "100",
+        "1",
         "--max-orders",
         "4096",
         "--max-levels",
@@ -1689,7 +1689,7 @@
         "^corpus_fuzz_book$"
       ],
       "expect": {
-        "signature": "DIVERGENCE kind=aggregate"
+        "signature": "DIVERGENCE kind=level-presence message=\\d+ type=E "
       }
     },
     {
@@ -1749,6 +1749,16 @@
           "file": "include/itch/book.hpp",
           "old": "    const std::uint32_t order = find_order(reference);\n    if (order == kNoIndex) {\n      return ApplyStatus::unknown_order;\n    }\n    const std::uint32_t level = orders_[order].level;",
           "new": "    const std::uint32_t order = find_order(reference);\n    if (order == kNoIndex) {\n      return ApplyStatus::no_book_effect;\n    }\n    const std::uint32_t level = orders_[order].level;"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    const std::uint32_t order = find_order(reference);\n    if (order == kNoIndex) {\n      return ApplyStatus::unknown_order;\n    }\n    if (levels_[orders_[order].level].locate != locate) {",
+          "new": "    const std::uint32_t order = find_order(reference);\n    if (order == kNoIndex) {\n      return ApplyStatus::no_book_effect;\n    }\n    if (levels_[orders_[order].level].locate != locate) {"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    const std::uint32_t order = find_order(u.original_order_reference);\n    if (order == kNoIndex) {\n      return ApplyStatus::unknown_order;\n    }",
+          "new": "    const std::uint32_t order = find_order(u.original_order_reference);\n    if (order == kNoIndex) {\n      return ApplyStatus::no_book_effect;\n    }"
         }
       ],
       "build": {
