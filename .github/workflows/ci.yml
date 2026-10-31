@@ -1,0 +1,101 @@
+# This workflow has never executed on GitHub. The repo has no remote, so no job here has
+# run on a runner. scripts/check.sh runs actionlint over this file, and that is a read of
+# it, not a run. NOTES.md says how far each job was run by hand, on which host, and what
+# that does not show.
+#
+# CI calls presets only, and produces no benchmark numbers. It needs nothing from data/.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86-64 Linux, GCC
+            os: ubuntu-24.04
+            cc: gcc-14
+            cxx: g++-14
+            llvm: false
+          - name: x86-64 Linux, Clang
+            os: ubuntu-24.04
+            cc: clang
+            cxx: clang++
+            llvm: true
+          - name: arm64 Linux, GCC
+            os: ubuntu-24.04-arm
+            cc: gcc-14
+            cxx: g++-14
+            llvm: false
+          - name: arm64 macOS, Clang
+            os: macos-15
+            cc: clang
+            cxx: clang++
+            llvm: true
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install GCC and Ninja
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14 ninja-build zstd
+      - name: Install Ninja and point at the SDK
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja
+          echo "SDKROOT=$(xcrun --show-sdk-path)" >> "$GITHUB_ENV"
+      - name: Fetch the pinned LLVM
+        if: matrix.llvm
+        run: python3 -B scripts/fetch_tool.py llvm >> "$GITHUB_PATH"
+      - name: Configure
+        run: cmake --preset release
+      - name: Build
+        run: cmake --build --preset release
+      - name: Test
+        run: ctest --preset release
+
+  wasm:
+    name: Emscripten
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: emscripten-core/emsdk
+          ref: 35659964bc2762fffec0d257997fb61475f765b7 # 6.0.13
+          path: build/_tools/emsdk
+          persist-credentials: false
+      - name: Install Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+      - name: Install Emscripten
+        working-directory: build/_tools/emsdk
+        run: |
+          ./emsdk install 6.0.13
+          ./emsdk activate 6.0.13
+      - name: Configure, build and test
+        run: |
+          source build/_tools/emsdk/emsdk_env.sh
+          cmake --preset wasm
+          cmake --build --preset wasm
+          ctest --preset wasm

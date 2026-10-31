@@ -29,6 +29,7 @@ TAILNET_ADDRESS = "100." + "64.0.1"
 LAN_ADDRESS = "192." + "168.1.20"
 VENDOR = "CB" + "OE"
 TOOLCHAIN = ".tool" + "chain/"
+PINNED = "actions/checkout@" + "0123456789abcdef" * 2 + "01234567"
 
 CLEAN_FILES = {
     "include/itch/wire.hpp": "#pragma once\nint clean_header();\n",
@@ -37,6 +38,7 @@ CLEAN_FILES = {
     "tests/test.cpp": "int clean_test() { return 0; }\n",
     "scripts/tool.py": "print('clean')\n",
     "NOTES.md": "Notes.\n",
+    ".github/workflows/ci.yml": f"jobs:\n  a:\n    steps:\n      - uses: {PINNED} # v1.2.3\n",
 }
 
 
@@ -87,6 +89,27 @@ class Gates(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             code = gates.main([])
         self.assertEqual(code, 0, out.getvalue())
+
+    def test_pinned_actions(self):
+        name = ".github/workflows/ci.yml"
+        for planted in ("actions/checkout@v7 # v7", "actions/checkout@v7.0.1", f"{PINNED}",
+                        "actions/checkout@0123456 # v7", f"{PINNED[:-1]} # v7",
+                        f"{PINNED[:-1]}G # v7", "docker://alpine:3.20 # 3.20"):
+            with self.subTest(planted=planted):
+                self.assert_only_gate_fails("pinned-actions", name,
+                                            f"steps:\n  - uses: {planted}\n")
+                self.reset()
+        self.assert_only_gate_fails("pinned-actions", name,
+                                    "steps:\n  - name: x\n    uses: 'a/b@v1'\n")
+        self.reset()
+        self.assert_passes(name, f"steps:\n  - name: x\n    uses: {PINNED} # v7.0.1\n"
+                                 "    with:\n      uses-nothing: true\n")
+
+    def test_no_workflow_fails_pinned_actions(self):
+        (self.root / ".github" / "workflows" / "ci.yml").unlink()
+        code, output = self.run_gates()
+        self.assertEqual(code, 1, output)
+        self.assertIn("FAIL pinned-actions: scanned no files", output)
 
     def test_wire_pointer_cast(self):
         planted = [

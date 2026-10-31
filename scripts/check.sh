@@ -59,8 +59,13 @@ stage_script_tests() {
     python_test scripts/test_check_census.py &&
     python_test scripts/test_oracle_report.py &&
     python_test scripts/test_trades_report.py &&
-    python_test scripts/test_fault_matrix.py
+    python_test scripts/test_fault_matrix.py &&
+    python_test scripts/test_fetch_tool.py
 }
+
+# Reads .github/workflows with the pinned actionlint, fetched into the build tree. No
+# workflow has ever run on GitHub, and this does not run one.
+stage_actionlint() { python_test scripts/lint_workflows.py; }
 
 stage_corpus() {
   python_test scripts/gen_fuzz_corpus.py --check &&
@@ -126,6 +131,7 @@ register() { # name [quick]
 register toolchain quick
 register format quick
 register gates quick
+register actionlint quick
 register script_tests quick
 register corpus quick
 register release quick

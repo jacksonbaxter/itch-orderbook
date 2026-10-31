@@ -52,6 +52,8 @@ BRANCH_HINT = re.compile(
     r"\[\[\s*(?:likely|unlikely)\s*\]\]|__builtin_expect\w*|__builtin_prefetch|_mm_prefetch"
     r"|\b(?:LIKELY|UNLIKELY)\s*\(|\bprefetch[rw]?\s*\(")
 MEASURED = re.compile(r"//.*\bmeasured:\s*\S")
+WORKFLOW_USES = re.compile(r"""^[\s-]*["']?uses["']?\s*:\s*(.*)$""")
+PINNED_ACTION = re.compile(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}\s+#\s*\S+")
 HOME_PATH = re.compile(r"/(?:Users|home)/[A-Za-z0-9._-]+/|[A-Za-z]:\\Users\\[A-Za-z0-9._-]+")
 PRIVATE_ADDRESS = re.compile(
     r"\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\b"
@@ -180,6 +182,20 @@ def toolchain_path(root, files):
         root, build_files)
 
 
+def workflow_files(root):
+    return sorted((root / ".github" / "workflows").glob("*.yml"))
+
+
+def unpinned_action(root, files):
+    violations = []
+    for path in files:
+        for number, line in enumerate((read_text(path) or "").splitlines(), start=1):
+            match = WORKFLOW_USES.match(line)
+            if match is not None and PINNED_ACTION.fullmatch(match[1].strip()) is None:
+                violations.append((path, number, f"not a 40-hex SHA with its tag: {match[1]}"))
+    return violations
+
+
 @dataclass(frozen=True)
 class Gate:
     name: str
@@ -206,6 +222,8 @@ def gates():
              aborting_call, lambda root: cxx_files(root, PRODUCTION_CODE + REFERENCE_PARSERS)),
         Gate("toolchain-path", "no hardcoded toolchain path in build files or scripts",
              toolchain_path, lambda root: list(walk(root))),
+        Gate("pinned-actions", "every action is pinned to a 40-hex SHA, with its tag in a comment",
+             unpinned_action, workflow_files),
     )
 
 

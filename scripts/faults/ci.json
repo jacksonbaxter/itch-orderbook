@@ -1,0 +1,53 @@
+{
+  "area": "ci",
+  "faults": [
+    {
+      "id": "ci-workflow-broken-key",
+      "breaks": "A job in the workflow names a key GitHub does not have",
+      "check": "scripts/lint_workflows.py, the pinned actionlint",
+      "mutations": [
+        {
+          "file": ".github/workflows/ci.yml",
+          "old": "    runs-on: ${{ matrix.os }}\n",
+          "new": "    runs_on: ${{ matrix.os }}\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/lint_workflows.py",
+        "--root",
+        "{tree}",
+        "--tools-dir",
+        "{tree}/../../_tools"
+      ],
+      "expect": {
+        "signature": "unexpected key \"runs_on\" for \"job\" section",
+        "exit": 1
+      }
+    },
+    {
+      "id": "ci-action-tag-pinned",
+      "breaks": "An action is pinned to a tag, which its owner can move",
+      "check": "gates.py pinned-actions",
+      "mutations": [
+        {
+          "file": ".github/workflows/ci.yml",
+          "old": "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          repository: emscripten-core/emsdk\n",
+          "new": "      - uses: actions/checkout@v7 # v7\n        with:\n          repository: emscripten-core/emsdk\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}",
+        "--only",
+        "pinned-actions"
+      ],
+      "expect": {
+        "signature": "gates: FAIL pinned-actions \\.github/workflows/ci\\.yml:\\d+",
+        "exit": 1
+      }
+    }
+  ]
+}
