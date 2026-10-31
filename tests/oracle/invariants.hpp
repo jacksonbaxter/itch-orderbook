@@ -75,6 +75,9 @@ class Invariants {
         window_open_(65536, 0),
         tallies_(256) {}
 
+  // How many T-INV-1 violations are printed in full. All of them are counted.
+  void set_inv1_detail_limit(std::size_t limit) noexcept { inv1_detail_limit_ = limit; }
+
   // Writes one line per crossed or locked observation. Null keeps only the summary.
   void set_observation_log(std::FILE* log) noexcept { log_ = log; }
 
@@ -101,7 +104,7 @@ class Invariants {
     }
     ++inv1_violations_;
     ++inv1_by_status_[to_string(outcome.status)];
-    if (inv1_details_ < kInv1DetailLimit) {
+    if (inv1_details_ < inv1_detail_limit_) {
       ++inv1_details_;
       std::println("t_inv1_violation message={} type={} locate={} reference={} status={}", message,
                    type, outcome.locate, outcome.reference, to_string(outcome.status));
@@ -324,6 +327,7 @@ class Invariants {
 
   std::uint64_t inv1_violations_ = 0;
   std::size_t inv1_details_ = 0;
+  std::size_t inv1_detail_limit_ = kInv1DetailLimit;
   std::map<std::string_view, std::uint64_t> inv1_by_status_;
 
   Pair all_;

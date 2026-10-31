@@ -36,3 +36,4 @@ endfunction()
 
 itch_add_fuzzer(fuzz_reader)
 itch_add_fuzzer(fuzz_decode)
+itch_add_fuzzer(fuzz_book)

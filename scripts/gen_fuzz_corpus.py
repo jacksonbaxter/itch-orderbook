@@ -16,6 +16,7 @@ and replayed like any other seed.
 from __future__ import annotations
 
 import argparse
+import random
 import re
 import struct
 import sys
@@ -97,9 +98,37 @@ def decode_seeds(fixtures):
     return seeds
 
 
+def book_record(code, pick=0, shares=10, price=3, locate=1):
+    return bytes((code, pick, shares, price, locate))
+
+
+def book_seeds(fixtures):
+    """Records for fuzz_book: operation, pick, shares, price, locate."""
+    add_bid = book_record(0, pick=1)
+    add_ask = book_record(0, pick=0, price=9)
+    names = ["add", "add-attributed", "execute", "execute-2", "execute-with-price", "cancel",
+             "delete", "replace", "replace-same-price", "other-message", "dead-reference",
+             "over-deduction", "wrong-locate", "duplicate-add", "replace-onto-live", "bad-side"]
+    seeds = {f"op-{code:02d}-{name}": add_bid + add_ask + book_record(code)
+             for code, name in enumerate(names)}
+    # Twelve records is few enough to stay short of the bugs only the fuzzer should find.
+    rng = random.Random(20191230)
+    seeds["mixed-short"] = b"".join(
+        book_record(rng.randrange(16), rng.randrange(4), rng.randrange(256), rng.randrange(4),
+                    rng.randrange(4))
+        for _ in range(12))
+    seeds["crossing"] = (book_record(0, pick=1, price=9) + book_record(0, pick=0, price=3)
+                         + book_record(6) + book_record(6))
+    seeds["extreme-prices"] = book_record(0, pick=1, price=255) + book_record(0, pick=0, price=254)
+    seeds["empty"] = b""
+    seeds["partial-record"] = b"\x00\x01"
+    return seeds
+
+
 TARGETS = {
     "fuzz_reader": reader_seeds,
     "fuzz_decode": decode_seeds,
+    "fuzz_book": book_seeds,
 }
 
 
