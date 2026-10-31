@@ -178,6 +178,10 @@ class Invariants {
     for (const auto& [state, pair] : by_state_) {
       std::println("t_inv2_by_state {} crossed={} locked={}", state, pair.crossed, pair.locked);
     }
+    for (const auto& [key, pair] : by_cause_) {
+      std::println("t_inv2_cause type={:c} cause={} crossed={} locked={}", key.first, key.second,
+                   pair.crossed, pair.locked);
+    }
     for (const auto& [locate, stats] : symbols_) {
       print_symbol(locate, stats);
     }
@@ -246,6 +250,10 @@ class Invariants {
       bump(clock_hours_, crossed);
     }
     bump(by_state_[state], crossed);
+    bump(by_cause_[{type, cause_of(state, in_window)}], crossed);
+    if (in_clock) {
+      bump(by_cause_[{type, "clock"}], crossed);
+    }
     if (state == 'T' && since_resume > longest_since_resume_) {
       longest_since_resume_ = since_resume;
     }
@@ -268,6 +276,13 @@ class Invariants {
                    clock_time(timestamp_ns), timestamp_ns, state, market_open_ ? 1 : 0,
                    in_window ? 1 : 0, since_resume, bid, ask, depth);
     }
+  }
+
+  [[nodiscard]] static std::string_view cause_of(char state, bool in_window) noexcept {
+    if (state != 'T') {
+      return "not_t";
+    }
+    return in_window ? "window" : "continuous";
   }
 
   [[nodiscard]] std::string symbol_name(std::uint16_t locate) const {
@@ -342,6 +357,7 @@ class Invariants {
   Pair open_and_t_;
   Pair clock_hours_;
   std::map<char, Pair> by_state_;
+  std::map<std::pair<char, std::string_view>, Pair> by_cause_;
   std::map<std::uint16_t, SymbolStats> symbols_;
   std::uint32_t deepest_ = 0;
   std::uint64_t windows_opened_ = 0;

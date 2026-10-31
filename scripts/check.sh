@@ -57,6 +57,7 @@ stage_gates() { python_test scripts/gates.py && python_test scripts/test_gates.p
 stage_script_tests() {
   python_test scripts/test_fetch_data.py &&
     python_test scripts/test_check_census.py &&
+    python_test scripts/test_oracle_report.py &&
     python_test scripts/test_fault_matrix.py
 }
 
@@ -65,6 +66,12 @@ stage_corpus() {
 }
 stage_release() { preset_with_tests release; }
 stage_asan_ubsan() { preset_with_tests asan-ubsan; }
+# The oracle on its fixtures, named apart from the rest of the suite: the book scenarios,
+# the diff and invariants through the tool, the allocation test and the book corpus.
+stage_oracle() {
+  build_preset release &&
+    ctest --preset release -R '^(test_book|test_alloc|test_oracle_cli|corpus_fuzz_book)$'
+}
 stage_tsan() { preset_with_tests tsan; }
 # From clean: ninja does not track .clang-tidy, so an incremental run could be a stale pass.
 stage_tidy() {
@@ -91,6 +98,7 @@ register gates quick
 register script_tests quick
 register corpus quick
 register release quick
+register oracle quick
 register asan_ubsan quick
 register tidy
 register tsan
