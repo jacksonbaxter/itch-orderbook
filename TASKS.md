@@ -23,18 +23,21 @@ Full plan through to the done criteria. Tick items when done, and add anything n
 ## Phase 2: Harness (before any implementation)
 
 ### Repo and build
-- [ ] CMake with presets for every configuration: release, asan-ubsan, tsan, fuzz, tidy, wasm. CI calls presets only.
-- [ ] C++23. Warnings: `-Wall -Wextra -Werror -Wconversion -Wsign-conversion -Wshadow -Wold-style-cast`.
-- [ ] Take the compiler from the environment. No hardcoded toolchain path in repo scripts.
-- [ ] Pinned FetchContent, by hash, for Google Benchmark, HdrHistogram_c, and the comparison queues. liburing on Linux only: use the 2.15 build in `.toolchain` on `debian`. macOS builds compile with it off, with no code change.
-- [ ] `.clang-tidy` with warnings as errors, at a pinned version.
-- [ ] Avoid `<generator>` and `<stacktrace>`, which do not exist in this libc++.
+- [x] CMake with presets for every configuration: release, asan-ubsan, tsan, fuzz, tidy, wasm.
+- [ ] CI calls presets only.
+- [x] C++23. Warnings: `-Wall -Wextra -Werror -Wconversion -Wsign-conversion -Wshadow -Wold-style-cast`.
+- [x] Take the compiler from the environment. No hardcoded toolchain path in repo scripts.
+- [x] Pinned FetchContent, by hash, for GoogleTest, Google Benchmark and HdrHistogram_c. Each commit resolves to its release tag and each archive matches its hash. Nothing calls the benchmark dependencies yet.
+- [ ] Pinned FetchContent, by hash, for the comparison queues. liburing on Linux only: use the 2.15 build in `.toolchain` on `debian`. macOS builds compile with it off, with no code change.
+- [x] `.clang-tidy` with warnings as errors, at a pinned version.
+- [x] Avoid `<generator>` and `<stacktrace>`, which do not exist in this libc++.
 
 ### Data
 - [x] `scripts/fetch_data.py`: chunked Range download into `data/`. Each chunk must be status 206 with the exact `Content-Range`, same ETag and exact body length. `curl --continue-at` is known to corrupt these files (DS-9).
 - [x] Verify length, ETag, gzip CRC and ISIZE from the trailer, a SHA-256 pinned in the repo, unpacked byte count, message count, and last message `S`/`C`. There is no zero-length terminator in real files (DS-61). Record that Nasdaq publishes no usable checksum, so the first-download hash is trust-on-first-use, and say which files have a third-party hash to compare with.
 - [x] Start the 12302019 and 10302019 downloads early. Third-party reports of throttling to 0.3 to 0.8 MB/s (DS-9). Keep the `.gz`, because the archive is not stable (DS-8).
 - [x] Fetch external reference files (CrossStats, MIDAS) by script into `data/`. Never commit them.
+- [x] `scripts/check_census.py`: requires `itch_census` to agree exactly with the manifest on the per-type counts, total and last message, shown failing on a mutated count. `scripts/check_real_day.sh` runs it on each pinned day.
 - [ ] Same scripts on `debian` under `~/quant-projects/itch-orderbook/data`.
 
 ### Platform layer (`bench/platform/`, no `#ifdef` in book or parser)
@@ -69,29 +72,31 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [ ] If `perf` starts failing, `perf_event_paranoid` may have reset on a reboot. Report it, do not change it.
 
 ### Tests and oracles
-- [ ] Parser tests assert field values against hand-written bytes for all 23 types. `B`, `W`, `h`, `N`, `O` need byte fixtures, because real days lack them (DS-77).
-- [ ] Reader safety tests: truncate a valid stream at every byte offset; final message against a `PROT_NONE` guard page; locate 65535; reference 2^64−1.
-- [ ] libFuzzer target on every parser and decoder, with committed seed corpus replayed by ctest. Book fuzzer has an oracle: invariants plus the reference book after each message. A planted book bug must be caught.
+- [x] Parser tests assert field values against hand-written bytes for all 23 types. `B`, `W`, `h`, `N`, `O` need byte fixtures, because real days lack them (DS-77).
+- [x] Reader safety tests: truncate a valid stream at every byte offset; final message against a `PROT_NONE` guard page; locate 65535; reference 2^64−1.
+- [x] libFuzzer target on every parser and decoder, with committed seed corpus replayed by ctest.
+- [ ] Book fuzzer has an oracle: invariants plus the reference book after each message. A planted book bug must be caught.
 - [ ] Reference book: deliberately simple and independently written. Diff design: per-message coverage of the state that can have changed, plus a proof that unchanged state cannot have diverged. No sampling.
 - [ ] Oracle control: inject a bug into the fast book and show the diff catches it.
 - [ ] Invariants, strict: book never crossed; every execute or cancel references a live order.
 - [ ] Allocation test: fails on any allocation in the hot path, counting aligned, nothrow and array `new`, with a control book that allocates.
-- [ ] Negative controls: a planted race and a planted logic bug, and the run fails if the detector stays green.
+- [x] Negative controls: a planted race and a planted logic bug, and the run fails if the detector stays green.
 
 ### Checks
-- [ ] ASan and UBSan with no recovery and alignment checks on. TSan for all concurrent code. A sanitizer bug exits 134 on macOS.
-- [ ] clang-tidy, and `-Wall -Wextra -Werror`.
+- [x] ASan and UBSan with no recovery and alignment checks on. TSan for all concurrent code. A sanitizer bug exits 134 on macOS.
+- [x] clang-tidy, and `-Wall -Wextra -Werror`.
 - [ ] `.github/workflows/ci.yml`: `ubuntu-24.04` (x86-64, GCC and Clang), `ubuntu-24.04-arm` (arm64), `macos-15` (arm64), an Emscripten job. Actions pinned to full SHAs. CI produces no benchmark numbers.
 - [ ] Validate CI locally with actionlint from repo tooling. Record that it has never executed on GitHub.
-- [ ] `scripts/check.sh` runs every check.
-- [ ] Grep gate: no pointer cast to a multi-byte type over wire bytes, no bare branch hints.
+- [x] `scripts/check.sh` runs every check.
+- [x] Grep gate: no pointer cast to a multi-byte type over wire bytes, no bare branch hints.
+- [x] `scripts/fault_matrix.py`: each check shown failing on an injected fault, with one JSON file per area under `scripts/faults/`, a clean control and a self-test. Results in `results/fault_matrix.md`.
 - [ ] Phase 2 report
 
 ## Phase 3: Implementation
 
 ### Parser
-- [ ] `read_be<T>`: `memcpy` plus `std::byteswap`. `read_be48` reads exactly 6 bytes. No `start_lifetime_as`, no `std::simd`.
-- [ ] Frame length checked before decode, typed failures, unknown types skipped by length, wire-controlled indexes bounded. No assert, throw or abort reachable from wire content.
+- [x] `read_be<T>`: `memcpy` plus `std::byteswap`. `read_be48` reads exactly 6 bytes. No `start_lifetime_as`, no `std::simd`.
+- [x] Frame length checked before decode, typed failures, unknown types skipped by length, wire-controlled indexes bounded. No assert, throw or abort reachable from wire content.
 - [ ] Handle what the spec omits: Market Category `M` (DS-64), test symbols (DS-65), round lots other than 100 (DS-66), zero-share and zero-price `Q` (DS-69), `X` after system event `E` (DS-71).
 
 ### SIMD (both architectures, same CMake, no code change)
