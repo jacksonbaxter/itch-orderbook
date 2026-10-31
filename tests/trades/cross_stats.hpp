@@ -134,7 +134,7 @@ constexpr std::array<std::string_view, kFields - 1> kColumns{
       day.value < 1 || day.value > 31) {
     return std::nullopt;
   }
-  return static_cast<std::uint32_t>(year.value * 10000 + month.value * 100 + day.value);
+  return static_cast<std::uint32_t>((year.value * 10000) + (month.value * 100) + day.value);
 }
 
 // One of the three share columns, or the failure it raises.

@@ -18,6 +18,7 @@
 // reference file failed to parse, with its typed error printed. Otherwise 64 plus one
 // bit for each failed result: 1 T-TRADE-1, 2 T-TRADE-2, 4 T-TRADE-3, 8 T-TRADE-5,
 // 16 the per-type checks on E, C, P, Q and B.
+#include <array>
 #include <charconv>
 #include <chrono>
 #include <cstddef>
@@ -181,18 +182,18 @@ void write_symbols(const Run& run, const char* path) {
 
 [[nodiscard]] int verdicts(const Run& run) {
   struct Line {
-    Group group;
-    int bit;
-    bool ran;
     std::string_view not_run;
+    int bit;
+    Group group;
+    bool ran;
   };
-  const Line lines[] = {
-      {.group = Group::t1, .bit = 1, .ran = true, .not_run = ""},
-      {.group = Group::t2, .bit = 2, .ran = run.cross_compared(), .not_run = "NOT_AVAILABLE"},
-      {.group = Group::t3, .bit = 4, .ran = run.midas_compared(), .not_run = "NOT_RUN"},
-      {.group = Group::t5, .bit = 8, .ran = true, .not_run = ""},
-      {.group = Group::prints, .bit = 16, .ran = true, .not_run = ""},
-  };
+  const std::array<Line, 5> lines{{
+      {.not_run = "", .bit = 1, .group = Group::t1, .ran = true},
+      {.not_run = "NOT_AVAILABLE", .bit = 2, .group = Group::t2, .ran = run.cross_compared()},
+      {.not_run = "NOT_RUN", .bit = 4, .group = Group::t3, .ran = run.midas_compared()},
+      {.not_run = "", .bit = 8, .group = Group::t5, .ran = true},
+      {.not_run = "", .bit = 16, .group = Group::prints, .ran = true},
+  }};
   int mask = 0;
   for (const Line& line : lines) {
     const std::uint64_t count = run.violations(line.group);
@@ -202,7 +203,7 @@ void write_symbols(const Run& run, const char* path) {
     }
     std::println("verdict {} {} violations={}", to_string(line.group), count == 0 ? "PASS" : "FAIL",
                  count);
-    mask |= count == 0 ? 0 : line.bit;
+    mask += count == 0 ? 0 : line.bit;  // Each line has its own bit, once.
   }
   return mask == 0 ? 0 : kExitFailureBase + mask;
 }

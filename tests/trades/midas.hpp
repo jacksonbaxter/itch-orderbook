@@ -113,7 +113,7 @@ struct ParsedVolume {
 [[nodiscard]] constexpr ParsedVolume parse_thousands(std::string_view text) noexcept {
   constexpr std::size_t kShareDigits = 3;
   constexpr std::size_t kNoiseDigits = 6;  // A millionth of a share.
-  constexpr std::uint64_t kMaxWhole = std::numeric_limits<std::uint64_t>::max() / 1000 - 1;
+  constexpr std::uint64_t kMaxWhole = (std::numeric_limits<std::uint64_t>::max() / 1000) - 1;
 
   const std::size_t dot = text.find('.');
   const std::string_view whole_text = text.substr(0, dot);

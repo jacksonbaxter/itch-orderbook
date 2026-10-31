@@ -72,7 +72,7 @@ void check_double_text(std::span<const std::uint8_t> input) {
   FUZZ_CHECK(!single.error.has_value());
   FUZZ_CHECK(single.shares == first);
 
-  const double sum = static_cast<double>(first) / 1000.0 + static_cast<double>(second) / 1000.0;
+  const double sum = (static_cast<double>(first) / 1000.0) + (static_cast<double>(second) / 1000.0);
   const auto summed = parse_thousands(shortest(sum));
   FUZZ_CHECK(!summed.error.has_value());
   FUZZ_CHECK(summed.shares == first + second);

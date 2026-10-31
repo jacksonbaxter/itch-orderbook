@@ -60,7 +60,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
   for (const auto& row : table.rows) {
     const std::string_view symbol = symbol_view(row.symbol);
     FUZZ_CHECK(!symbol.empty());
-    FUZZ_CHECK(symbol.find(',') == std::string_view::npos);
+    FUZZ_CHECK(!symbol.contains(','));
     FUZZ_CHECK(row.listing >= 'A' && row.listing <= 'Z');
     FUZZ_CHECK(table.find(row.symbol) != nullptr);
     FUZZ_CHECK(*table.find(row.symbol) == row);

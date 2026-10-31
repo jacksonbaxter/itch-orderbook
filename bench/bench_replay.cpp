@@ -61,7 +61,7 @@ class ReplayInput {
 
  private:
   std::span<const std::byte> bytes_;
-  mutable std::atomic<std::byte> last_seen_{};  // So that the reads are not dropped.
+  mutable std::atomic<std::byte> last_seen_;  // So that the reads are not dropped.
 };
 
 // A histogram of ticks. Wide enough for a span of four seconds at any clock in use.

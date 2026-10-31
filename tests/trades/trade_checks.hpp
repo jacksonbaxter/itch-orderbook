@@ -241,8 +241,8 @@ inline constexpr std::uint64_t kMinuteNs = 60'000'000'000ULL;
 inline constexpr std::array<TimeWindow, 4> kWindows{{
     {.name = "whole_day", .start_ns = 0, .end_ns = 24 * kHourNs},
     {.name = "0400_2000", .start_ns = 4 * kHourNs, .end_ns = 20 * kHourNs},
-    {.name = "0930_1600", .start_ns = 9 * kHourNs + 30 * kMinuteNs, .end_ns = 16 * kHourNs},
-    {.name = "0935_1600", .start_ns = 9 * kHourNs + 35 * kMinuteNs, .end_ns = 16 * kHourNs},
+    {.name = "0930_1600", .start_ns = (9 * kHourNs) + (30 * kMinuteNs), .end_ns = 16 * kHourNs},
+    {.name = "0935_1600", .start_ns = (9 * kHourNs) + (35 * kMinuteNs), .end_ns = 16 * kHourNs},
 }};
 
 // The window T-TRADE-3 is judged on.
@@ -435,7 +435,7 @@ class TradeRun {
       midas_hidden_trades_ += row.hidden_trades;
       const auto found = locate_of_.find(symbol);
       if (found == locate_of_.end()) {
-        fail(Check::t3_row_not_in_directory, 0, std::string{symbol_view(symbol)});
+        fail(Check::t3_row_not_in_directory, 0, symbol_view(symbol));
         continue;
       }
       covered[found->second] = 1;
@@ -691,7 +691,7 @@ class TradeRun {
   void on_add(const Add& m, std::span<const std::byte> payload) {
     const std::uint16_t locate = m.header.stock_locate;
     if (symbol_differs(locate, m.stock)) {
-      fail(Check::add_symbol_mismatch, locate, std::string{symbol_view(m.stock)});
+      fail(Check::add_symbol_mismatch, locate, symbol_view(m.stock));
     }
     const ApplyStatus status = book_.apply(payload);
     if (status != ApplyStatus::applied) {

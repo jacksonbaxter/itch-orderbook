@@ -103,7 +103,7 @@ struct ParsedNumber {
     if (value > (kMax - digit) / 10) {
       return {.value = 0, .error = NumberError::too_large};
     }
-    value = value * 10 + digit;
+    value = (value * 10) + digit;
   }
   return {.value = value, .error = std::nullopt};
 }
@@ -126,7 +126,7 @@ struct ParsedNumber {
 }
 
 [[nodiscard]] constexpr std::string_view symbol_view(const Stock& stock) noexcept {
-  std::string_view view{stock.data(), stock.size()};
+  const std::string_view view{stock.data(), stock.size()};
   return view.substr(0, view.find(' '));
 }
 
