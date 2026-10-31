@@ -18,6 +18,7 @@ itch_add_test(test_wire test_wire.cpp)
 itch_add_test(test_messages test_messages.cpp)
 itch_add_test(test_reader test_reader.cpp)
 itch_add_test(test_guard_page test_guard_page.cpp)
+itch_add_test(test_book test_book.cpp)
 
 if(ITCH_BUILD_TOOLS)
   add_test(NAME test_census_cli
