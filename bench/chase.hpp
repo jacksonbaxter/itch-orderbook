@@ -7,6 +7,7 @@
 // counter has to be held against before its count is believed.
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <cstddef>

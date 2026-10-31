@@ -54,8 +54,8 @@ TOOLS = {
     }),
     "llvm": Tool("23.1.4", 1, "bin", {
         ("Darwin", "arm64"): (
-            LLVM_URL + "macOS-ARM64.tar.zst",
-            "0f8b0db925ab54a63028d788e85b14abaa25492e9608819728c17f6786948da4"),
+            LLVM_URL + "macOS-ARM64.tar.xz",
+            "5d3179db39adeca5b17a34d82708fe976bc60e055b05fe557878fb3fb64d39ef"),
         ("Linux", "x86_64"): (
             LLVM_URL + "Linux-X64.tar.zst",
             "efdd1dbd089b99bfcfcde7b8eb1236163f2e88df5a981cca4f783ec9cb5e0378"),
