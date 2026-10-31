@@ -34,12 +34,12 @@ static_assert(sizeof(ChaseLine) == kChaseLineBytes);
 // through every line, where a Fisher-Yates shuffle leaves several shorter ones.
 inline void link_single_cycle(std::span<ChaseLine> lines, std::uint64_t seed) {
   std::vector<std::uint32_t> successor(lines.size());
-  std::iota(successor.begin(), successor.end(), 0U);
+  std::ranges::iota(successor, 0U);
   // The same cycle every run, for a given size.
   // NOLINTNEXTLINE(cert-msc32-c,cert-msc51-cpp,bugprone-random-generator-seed)
   std::mt19937_64 random{seed};
   for (std::size_t i = lines.size() - 1; i > 0; --i) {
-    const std::size_t other = static_cast<std::size_t>(random() % i);
+    const auto other = static_cast<std::size_t>(random() % i);
     std::swap(successor[i], successor[other]);
   }
   for (std::size_t i = 0; i < lines.size(); ++i) {
@@ -75,9 +75,10 @@ inline void link_single_cycle(std::span<ChaseLine> lines, std::uint64_t seed) {
     default: return std::nullopt;
   }
   std::size_t count = 0;
-  const char* const end = text.data() + text.size() - 1;
-  const auto [stopped, error] = std::from_chars(text.data(), end, count);
-  if (error != std::errc{} || stopped != end) {
+  const std::string_view digits = text.substr(0, text.size() - 1);
+  const auto [stopped, error] =
+      std::from_chars(digits.data(), digits.data() + digits.size(), count);
+  if (error != std::errc{} || stopped != digits.data() + digits.size()) {
     return std::nullopt;
   }
   return count * unit;

@@ -280,19 +280,23 @@ inline constexpr std::uint64_t kRawDramFills = amd_raw_event(0x43, 0x08);
 inline constexpr std::uint64_t kRawL2Misses = amd_raw_event(0x64, 0x09);
 
 inline constexpr std::string_view kCacheMissesName = "cache-misses (L2 misses on Zen 1)";
-inline constexpr std::string_view kDramFillsName = "r0843 (demand DRAM fills, proven by bench_chase)";
+inline constexpr std::string_view kDramFillsName =
+    "r0843 (demand DRAM fills, proven by bench_chase)";
 
 // cache-misses counts L2 misses on Zen 1, so it is named for what it counts. The raw
 // event is a last-level stand-in, for debian only: results/chase_debian.md is what lets a
 // book number use it, and it means nothing on another CPU.
 [[nodiscard]] inline std::vector<PerfEventSpec> events_for_host(std::string_view host_label) {
   std::vector<PerfEventSpec> events{
-      {"cycles", EventKind::hardware, kHwCycles},
-      {"instructions", EventKind::hardware, kHwInstructions},
-      {"branch-misses", EventKind::hardware, kHwBranchMisses},
-      {std::string{kCacheMissesName}, EventKind::hardware, kHwCacheMisses}};
+      {.name = "cycles", .kind = EventKind::hardware, .config = kHwCycles},
+      {.name = "instructions", .kind = EventKind::hardware, .config = kHwInstructions},
+      {.name = "branch-misses", .kind = EventKind::hardware, .config = kHwBranchMisses},
+      {.name = std::string{kCacheMissesName},
+       .kind = EventKind::hardware,
+       .config = kHwCacheMisses}};
   if (host_label == "debian") {
-    events.push_back({std::string{kDramFillsName}, EventKind::raw, kRawDramFills});
+    events.push_back(
+        {.name = std::string{kDramFillsName}, .kind = EventKind::raw, .config = kRawDramFills});
   }
   return events;
 }
@@ -304,11 +308,13 @@ inline constexpr std::string_view kChaseFillsName = "dram_fills";
 inline constexpr std::string_view kChaseL2Name = "l2_misses_raw";
 
 [[nodiscard]] inline std::vector<PerfEventSpec> events_for_chase(std::uint64_t dram_fills) {
-  return {{"cycles", EventKind::hardware, kHwCycles},
-          {"instructions", EventKind::hardware, kHwInstructions},
-          {std::string{kCacheMissesName}, EventKind::hardware, kHwCacheMisses},
-          {std::string{kChaseFillsName}, EventKind::raw, dram_fills},
-          {std::string{kChaseL2Name}, EventKind::raw, kRawL2Misses}};
+  return {{.name = "cycles", .kind = EventKind::hardware, .config = kHwCycles},
+          {.name = "instructions", .kind = EventKind::hardware, .config = kHwInstructions},
+          {.name = std::string{kCacheMissesName},
+           .kind = EventKind::hardware,
+           .config = kHwCacheMisses},
+          {.name = std::string{kChaseFillsName}, .kind = EventKind::raw, .config = dram_fills},
+          {.name = std::string{kChaseL2Name}, .kind = EventKind::raw, .config = kRawL2Misses}};
 }
 
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
