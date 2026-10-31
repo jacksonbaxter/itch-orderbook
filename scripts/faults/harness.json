@@ -151,6 +151,52 @@
       }
     },
     {
+      "id": "harness-wasm-smoke",
+      "breaks": "read_be returns native order under wasm32",
+      "check": "itch_wasm_smoke in node, through the wasm preset",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "if constexpr (std::endian::native == std::endian::little) {",
+          "new": "if constexpr (std::endian::native == std::endian::big) {"
+        }
+      ],
+      "build": {
+        "preset": "wasm",
+        "targets": [
+          "itch_wasm_smoke"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "wasm"
+      ],
+      "expect": {
+        "signature": "wasm smoke: 0 of 24 messages round-tripped"
+      }
+    },
+    {
+      "id": "harness-fetch-range-status",
+      "breaks": "The download accepts a chunk that is not status 206, as a resumed Range must be",
+      "check": "scripts/test_fetch_data.py",
+      "mutations": [
+        {
+          "file": "scripts/fetch_data.py",
+          "old": "    if status != 206:\n        raise ChunkRejected(f\"status {status}, expected 206\")\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/test_fetch_data.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_status_200_is_rejected"
+      }
+    },
+    {
       "id": "harness-fuzz-reader-planted-crash",
       "breaks": "A crash reachable from wire bytes, on one frame length no seed has",
       "check": "fuzz_reader under libFuzzer finds it by mutation",
