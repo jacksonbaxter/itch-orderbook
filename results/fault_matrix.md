@@ -6,12 +6,12 @@ Each row breaks one thing on purpose in a scratch copy of the tree. A row passes
 if the named check fails with the expected signature. Before any mutant runs, every
 command must pass on a clean copy without printing its signature.
 
-- Commit: dd94640
+- Commit: 4980a47
 - Compiler: clang version 23.1.4
 - Host: Darwin arm64
 - Selection: all areas
-- Controls: 24 commands, 0 failed
-- Result: 57 of 57 detected
+- Controls: 26 commands, 0 failed
+- Result: 59 of 59 detected
 
 | Fault | Area | What it breaks | Check that must catch it | Injected in | Result | Exit | Signature seen |
 |---|---|---|---|---|---|---|---|
@@ -29,7 +29,7 @@ command must pass on a clean copy without printing its signature.
 | `check-format-stage` | check | A file is not clang-formatted | check.sh format stage | `src/parser.cpp` | detected | 1 | `error: code should be clang-formatted` |
 | `check-corpus-stage` | check | A committed seed changes | check.sh corpus stage | `fuzz/corpus/fuzz_decode/msg-44-D (flip_byte)` | detected | 1 | `fuzz_decode/msg-44-D: bytes differ` |
 | `check-release-stage` | check | A unit test fails inside check.sh | check.sh release stage passes ctest's failure on | `include/itch/wire.hpp` | detected | 1 | `release FAIL` |
-| `check-later-stages-still-run` | check | An early stage fails, and a later stage could be skipped | check.sh runs every selected stage after a failure | `include/itch/reader.hpp` | detected | 1 | `gates FAIL 0 s build/check-logs/gates.log corpus ok` |
+| `check-later-stages-still-run` | check | An early stage fails, and a later stage could be skipped | check.sh runs every selected stage after a failure | `include/itch/reader.hpp` | detected | 1 | `gates FAIL 1 s build/check-logs/gates.log corpus ok` |
 | `gates-wire-pointer-cast` | gates | read_be casts a pointer over wire bytes | gates.py wire-pointer-cast | `include/itch/wire.hpp` | detected | 1 | `gates: FAIL wire-pointer-cast include/itch/wire.hpp:21` |
 | `gates-bare-branch-hint` | gates | A branch hint with no measured reason | gates.py bare-branch-hint | `include/itch/reader.hpp` | detected | 1 | `gates: FAIL bare-branch-hint include/itch/reader.hpp:71` |
 | `gates-home-path` | gates | An absolute path naming a user | gates.py home-path | `scripts/gen_fuzz_corpus.py` | detected | 1 | `gates: FAIL home-path scripts/gen_fuzz_corpus.py:24` |
@@ -44,6 +44,8 @@ command must pass on a clean copy without printing its signature.
 | `harness-corpus-seed-tampered` | harness | One committed seed no longer matches the fixtures | gen_fuzz_corpus.py --check | `fuzz/corpus/fuzz_reader/frame-53-S (flip_byte)` | detected | 1 | `fuzz_reader/frame-53-S: bytes differ` |
 | `harness-fixture-edited` | harness | A hand-written fixture changes without the corpus | gen_fuzz_corpus.py --check | `tests/support/fixtures.hpp` | detected | 1 | `fuzz_reader/frame-41-A: bytes differ` |
 | `harness-guard-page-absent` | harness | The guard pages become readable, so an over-read would not fault | test_guard_page (GuardPage.ControlAReadOfTheGuardPageFaults) | `tests/support/guard_page.hpp` | detected | 1 | `[ FAILED ] GuardPage.ControlAReadOfTheGuardPageFaults` |
+| `harness-wasm-smoke` | harness | read_be returns native order under wasm32 | itch_wasm_smoke in node, through the wasm preset | `include/itch/wire.hpp` | detected | 8 | `wasm smoke: 0 of 24 messages round-tripped` |
+| `harness-fetch-range-status` | harness | The download accepts a chunk that is not status 206, as a resumed Range must be | scripts/test_fetch_data.py | `scripts/fetch_data.py` | detected | 1 | `FAIL: test_status_200_is_rejected` |
 | `harness-fuzz-reader-planted-crash` | harness | A crash reachable from wire bytes, on one frame length no seed has | fuzz_reader under libFuzzer finds it by mutation | `include/itch/reader.hpp` | detected | 77 | `ERROR: libFuzzer: deadly signal` |
 | `harness-fuzz-reader-oracle` | harness | An unknown type of one length no seed has is called bad_length | fuzz_reader, second walk of the same bytes | `include/itch/reader.hpp` | detected | 77 | `FUZZ_CHECK failed: frame.status == FrameStatus::unknown_type` |
 | `harness-fuzz-decode-oracle` | harness | Order Replace decodes one shares value, in no seed, as zero | fuzz_decode, round trip of each type | `include/itch/messages.hpp` | detected | 77 | `FUZZ_CHECK failed: again == buffer` |
