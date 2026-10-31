@@ -8,25 +8,55 @@
         "unpacked_bytes": 8251407909,
         "messages": 268744780
       },
-      "compressed_bytes": null,
-      "etag": null,
-      "last_modified": null,
-      "gz_sha256": null,
-      "gzip_crc32": null,
-      "gzip_isize": null,
-      "gzip_members": null,
-      "unpacked_bytes": null,
-      "unpacked_sha256": null,
-      "messages": null,
-      "per_type_counts": null,
-      "last_message": null,
+      "compressed_bytes": 3524013057,
+      "etag": "\"64b3281599bfd51:0\"",
+      "last_modified": "Tue, 31 Dec 2019 05:13:48 GMT",
+      "gz_sha256": "ef03df46a27e6bda4dead017f84c2e3979df7211f02c7868b51d53fceb99c689",
+      "gzip_crc32": "ed704540",
+      "gzip_isize": 3956440613,
+      "gzip_members": 1,
+      "unpacked_bytes": 8251407909,
+      "unpacked_sha256": "5d81c2e14a0f748b29c674b6a342796932702034b4dd341e39e9a9ec5bac610f",
+      "messages": 268744780,
+      "per_type_counts": {
+        "A": 117145568,
+        "C": 99917,
+        "D": 114360997,
+        "E": 5722824,
+        "F": 1485888,
+        "H": 8966,
+        "I": 4024315,
+        "J": 34,
+        "K": 3,
+        "L": 215161,
+        "P": 1218602,
+        "Q": 17836,
+        "R": 8906,
+        "S": 6,
+        "U": 21639067,
+        "V": 1,
+        "X": 2787676,
+        "Y": 9013
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 72300000040070,
+        "offset": 8251407895
+      },
       "third_party": {
         "source": "EkanshSingh401/carteret docs/data.md",
         "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
         "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
         "gz_sha256": "ef03df46a27e6bda4dead017f84c2e3979df7211f02c7868b51d53fceb99c689",
         "unpacked_sha256": "5d81c2e14a0f748b29c674b6a342796932702034b4dd341e39e9a9ec5bac610f",
-        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees."
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. For this day both the .gz and the unpacked SHA-256 agree with this third party's published hashes.",
+        "agrees": [
+          "gz_sha256",
+          "unpacked_sha256"
+        ]
       }
     },
     "10302019": {
