@@ -159,6 +159,12 @@ enum class Check : std::uint8_t {
   t3_odd_lot_shares,
 };
 
+// A wire byte in a violation's text, quoted if it prints. libstdc++ 14 has no {:?}.
+[[nodiscard]] inline std::string wire_char(char value) {
+  const auto byte = static_cast<unsigned char>(value);
+  return byte >= 0x20U && byte < 0x7FU ? std::format("'{}'", value) : std::format("0x{:02x}", byte);
+}
+
 inline constexpr std::size_t kCheckCount = static_cast<std::size_t>(Check::t3_odd_lot_shares) + 1;
 
 struct CheckInfo {
@@ -804,7 +810,7 @@ class TradeRun {
       return;
     }
     if (m.printable != 'Y' && m.printable != 'N') {
-      fail(Check::c_bad_printable, locate, std::format("printable {:?}", m.printable));
+      fail(Check::c_bad_printable, locate, std::format("printable {}", wire_char(m.printable)));
     }
     const std::size_t printable = m.printable == 'Y' ? 0 : 1;
     PriceSplit& split = c_prices_[printable];
@@ -891,7 +897,7 @@ class TradeRun {
       fail(Check::p_reference_nonzero, locate, std::format("reference {}", m.order_reference));
     }
     if (m.side != 'B') {
-      fail(Check::p_side_not_b, locate, std::format("side {:?}", m.side));
+      fail(Check::p_side_not_b, locate, std::format("side {}", wire_char(m.side)));
     }
     if (symbol_differs(locate, m.stock)) {
       fail(Check::p_symbol_mismatch, locate, name_of(m.stock));
@@ -914,7 +920,8 @@ class TradeRun {
       case 'H': print_class = PrintClass::q_h; break;
       case 'I': print_class = PrintClass::q_i; break;
       default:
-        fail(Check::q_unknown_cross_type, locate, std::format("cross type {:?}", m.cross_type));
+        fail(Check::q_unknown_cross_type, locate,
+             std::format("cross type {}", wire_char(m.cross_type)));
         return;
     }
     account_print(print_class, locate, m.shares, m.header.timestamp_ns, m.match_number,

@@ -51,7 +51,9 @@ endif()
 add_library(itch_warnings INTERFACE)
 target_compile_options(itch_warnings INTERFACE
   -Wall -Wextra -Werror
-  -Wconversion -Wsign-conversion -Wshadow -Wold-style-cast)
+  -Wconversion -Wsign-conversion -Wshadow -Wold-style-cast
+  # The fuzz builds need [[clang::no_sanitize]], and a build with GCC has no use for it.
+  $<$<CXX_COMPILER_ID:GNU>:-Wno-attributes=clang::>)
 
 # Warnings and tidy for one of our targets. Call it on every target we add.
 function(itch_apply_options target)
