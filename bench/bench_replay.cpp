@@ -191,7 +191,8 @@ class CountSink {
       out.push_back({.name = names[event],
                      .mean = static_cast<double>(sums_[event]) / static_cast<double>(messages),
                      .p50 = static_cast<std::uint64_t>(histograms_[event].at(50.0)),
-                     .p99 = static_cast<std::uint64_t>(histograms_[event].at(99.0))});
+                     .p99 = static_cast<std::uint64_t>(histograms_[event].at(99.0)),
+                     .sum = sums_[event]});
     }
     return out;
   }
@@ -213,6 +214,8 @@ CounterRecord counter_pass(std::span<const std::byte> input, const Options& opti
       cross_check(group, [&] { missed = counts_pass(input, *book, group, sink); });
   group.stop();
   record.statuses = group.statuses();
+  record.agreement_names = group.event_names();
+  record.agreement_events = agreement.events;
   record.agreement = group.event_count() == 0 ? unavailable("no user-mode rdpmc on this host")
                                               : describe_agreement(agreement);
   record.per_message_published = agreement.state == AgreementState::agreed && missed == 0;

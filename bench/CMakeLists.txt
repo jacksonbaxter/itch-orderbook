@@ -19,3 +19,7 @@ add_executable(bench_replay bench_replay.cpp)
 target_link_libraries(bench_replay PRIVATE
   itch_bench_support benchmark::benchmark hdr_histogram::hdr_histogram_static)
 itch_apply_options(bench_replay)
+
+add_executable(bench_chase bench_chase.cpp)
+target_link_libraries(bench_chase PRIVATE itch_bench_support)
+itch_apply_options(bench_chase)

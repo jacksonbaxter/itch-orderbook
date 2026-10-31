@@ -4,6 +4,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -14,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "chase.hpp"
 #include "platform/affinity.hpp"
 #include "platform/counters.hpp"
 #include "platform/memory.hpp"
@@ -160,6 +162,42 @@ TEST(BenchCounters, NoEventsAtAllIsUnavailableAndTheWorkStillRuns) {
   EXPECT_EQ(agreement.state, AgreementState::unavailable);
 }
 
+TEST(BenchCounters, TheWorstGapIsCountedInEvents) {
+  MockSource source{.descriptor_step = 1000, .rdpmc_step = 1500};
+  const Agreement agreement = cross_check(source, [] {});
+  EXPECT_EQ(agreement.worst_gap, 500U);
+  ASSERT_EQ(agreement.events.size(), 2U);
+  EXPECT_EQ(agreement.events[0].by_read, 1000U);
+  EXPECT_EQ(agreement.events[0].by_rdpmc, 1500U);
+  const std::array<std::string, 2> names{"a", "b"};
+  EXPECT_EQ(describe_events(agreement, names),
+            "a read() 1000 rdpmc 1500; b read() 1000 rdpmc 1500");
+}
+
+TEST(BenchCounters, TheRawEventsAreTheOnesThePprDefines) {
+  EXPECT_EQ(kRawDramFills, 0x0843U);  // PMCx043 bit 3, LS_MABRESP_LCL_DRAM.
+  EXPECT_EQ(kRawL2Misses, 0x0964U);   // PMCx064 bits 3 and 0, LsRdBlkC and IcFillMiss.
+  bool found = false;
+  for (const PerfEventSpec& event : events_for_host("debian")) {
+    found = found || (event.kind == EventKind::raw && event.config == 0x0843U);
+  }
+  EXPECT_TRUE(found);
+  for (const PerfEventSpec& event : events_for_host("unknown")) {
+    EXPECT_EQ(event.kind, EventKind::hardware) << event.name;
+  }
+}
+
+TEST(BenchCounters, TheChaseCountsBothL2MissFormsAndTheChosenFillEvent) {
+  const std::vector<PerfEventSpec> events = events_for_chase(0x0143);
+  ASSERT_EQ(events.size(), 5U);
+  EXPECT_EQ(events[2].name, kCacheMissesName);
+  EXPECT_EQ(events[2].config, kHwCacheMisses);
+  EXPECT_EQ(events[3].name, kChaseFillsName);
+  EXPECT_EQ(events[3].config, 0x0143U);
+  EXPECT_EQ(events[4].name, kChaseL2Name);
+  EXPECT_EQ(events[4].config, 0x0964U);
+}
+
 TEST(BenchCounters, TheLiveGroupNeverFailsTheRun) {
   CounterGroup group{"unknown"};
   group.start();
@@ -171,6 +209,48 @@ TEST(BenchCounters, TheLiveGroupNeverFailsTheRun) {
     }
   }
   EXPECT_FALSE(probe_rdpmc(group).empty());
+}
+
+TEST(BenchChase, TheOrderIsOneCycleOverEveryLine) {
+  for (const std::size_t lines : {2UZ, 3UZ, 1024UZ, 65536UZ}) {
+    std::vector<ChaseLine> buffer(lines);
+    link_single_cycle(buffer, 20191230);
+    EXPECT_EQ(cycle_length(buffer), lines);
+  }
+}
+
+TEST(BenchChase, TheOrderIsNotTheAddressOrder) {
+  std::vector<ChaseLine> buffer(4096);
+  link_single_cycle(buffer, 20191230);
+  std::size_t next_door = 0;
+  for (std::size_t i = 0; i + 1 < buffer.size(); ++i) {
+    next_door += buffer[i].next == &buffer[i + 1] ? 1U : 0U;
+  }
+  EXPECT_LT(next_door, 8U);
+}
+
+TEST(BenchChase, EveryLoadFollowsTheCycle) {
+  std::vector<ChaseLine> buffer(64);
+  link_single_cycle(buffer, 7);
+  EXPECT_EQ(chase(buffer.data(), buffer.size()), buffer.data());
+  EXPECT_NE(chase(buffer.data(), buffer.size() - 1), buffer.data());
+}
+
+TEST(BenchChase, SizesParseOrFailWhole) {
+  EXPECT_EQ(parse_chase_size("64K"), 64UZ * 1024);
+  EXPECT_EQ(parse_chase_size("3M"), 3UZ * 1024 * 1024);
+  EXPECT_FALSE(parse_chase_size("64").has_value());
+  EXPECT_FALSE(parse_chase_size("K").has_value());
+  EXPECT_FALSE(parse_chase_size("64KB").has_value());
+  EXPECT_FALSE(parse_chase_size("").has_value());
+}
+
+TEST(BenchChase, TheDefaultSizesStraddleBothCaches) {
+  const std::vector<std::size_t> sizes = default_chase_sizes();
+  EXPECT_LT(sizes.front(), 512UZ * 1024 / 2);
+  EXPECT_GT(sizes.back(), 4UZ * 1024 * 1024 * 16);
+  EXPECT_TRUE(std::ranges::any_of(
+      sizes, [](std::size_t size) { return size > 512UZ * 1024 && size < 4UZ * 1024 * 1024; }));
 }
 
 TEST(BenchAffinity, ReadBackOfExactlyTheCoreIsAPin) {

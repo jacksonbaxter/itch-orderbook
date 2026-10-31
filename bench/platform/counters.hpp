@@ -150,10 +150,22 @@ concept CounterSource = requires(Source& source, std::vector<std::uint64_t>& out
 
 enum class AgreementState : std::uint8_t { agreed, disagreed, unavailable };
 
+// One event's count over the checked span, by each path.
+struct EventAgreement {
+  std::uint64_t by_read = 0;
+  std::uint64_t by_rdpmc = 0;
+
+  [[nodiscard]] std::uint64_t gap() const noexcept {
+    return by_read > by_rdpmc ? by_read - by_rdpmc : by_rdpmc - by_read;
+  }
+};
+
 struct Agreement {
   AgreementState state = AgreementState::unavailable;
   double worst_relative = 0.0;
+  std::uint64_t worst_gap = 0;  // In events. A percentage of a small count says little.
   std::string detail;
+  std::vector<EventAgreement> events;
 };
 
 // Within this many events, or this fraction, whichever is larger. The two reads cannot
@@ -165,15 +177,21 @@ inline constexpr std::uint64_t kAgreementSlack = 10'000;
                                               std::span<const std::uint64_t> descriptor_after,
                                               std::span<const std::uint64_t> rdpmc_before,
                                               std::span<const std::uint64_t> rdpmc_after) {
-  Agreement result{.state = AgreementState::agreed, .worst_relative = 0.0, .detail = {}};
+  Agreement result{.state = AgreementState::agreed,
+                   .worst_relative = 0.0,
+                   .worst_gap = 0,
+                   .detail = {},
+                   .events = {}};
   for (std::size_t i = 0; i < descriptor_before.size(); ++i) {
     const std::uint64_t by_descriptor = descriptor_after[i] - descriptor_before[i];
     const std::uint64_t by_rdpmc = rdpmc_after[i] - rdpmc_before[i];
-    const std::uint64_t gap =
-        by_descriptor > by_rdpmc ? by_descriptor - by_rdpmc : by_rdpmc - by_descriptor;
+    const EventAgreement event{.by_read = by_descriptor, .by_rdpmc = by_rdpmc};
+    result.events.push_back(event);
+    const std::uint64_t gap = event.gap();
     const auto base = static_cast<double>(by_descriptor == 0 ? 1 : by_descriptor);
     const double relative = static_cast<double>(gap) / base;
     result.worst_relative = std::max(relative, result.worst_relative);
+    result.worst_gap = std::max(gap, result.worst_gap);
     if (gap > kAgreementSlack && relative > kAgreementFraction) {
       result.state = AgreementState::disagreed;
       result.detail += std::format("event {}: read() {} rdpmc {}; ", i, by_descriptor, by_rdpmc);
@@ -193,19 +211,22 @@ template <CounterSource Source, class Work>
   const bool opened =
       events != 0 && source.read_descriptors(descriptor_before) && source.read_rdpmc(rdpmc_before);
   std::forward<Work>(work)();
+  const auto unusable = [](std::string detail) {
+    return Agreement{.state = AgreementState::unavailable,
+                     .worst_relative = 0.0,
+                     .worst_gap = 0,
+                     .detail = std::move(detail),
+                     .events = {}};
+  };
   if (events == 0) {
-    return {.state = AgreementState::unavailable, .worst_relative = 0.0, .detail = "no events"};
+    return unusable("no events");
   }
   if (!opened) {
-    return {.state = AgreementState::unavailable,
-            .worst_relative = 0.0,
-            .detail = "rdpmc gave no value at the start"};
+    return unusable("rdpmc gave no value at the start");
   }
   const bool closed = source.read_rdpmc(rdpmc_after) && source.read_descriptors(descriptor_after);
   if (!closed) {
-    return {.state = AgreementState::unavailable,
-            .worst_relative = 0.0,
-            .detail = "rdpmc gave no value at the end"};
+    return unusable("rdpmc gave no value at the end");
   }
   return compare_counts(descriptor_before, descriptor_after, rdpmc_before, rdpmc_after);
 }
@@ -213,44 +234,97 @@ template <CounterSource Source, class Work>
 [[nodiscard]] inline std::string describe_agreement(const Agreement& agreement) {
   switch (agreement.state) {
     case AgreementState::agreed:
-      return std::format("agreed, worst gap {:.4f}%", 100.0 * agreement.worst_relative);
+      return std::format("agreed, worst gap {} events, {:.4f}%", agreement.worst_gap,
+                         100.0 * agreement.worst_relative);
     case AgreementState::disagreed: return std::format("disagreed: {}", agreement.detail);
     case AgreementState::unavailable: break;
   }
   return std::format("unavailable: {}", agreement.detail);
 }
 
-#if defined(__linux__) && !defined(__EMSCRIPTEN__)
+// Each event's count by both paths, for the record.
+[[nodiscard]] inline std::string describe_events(const Agreement& agreement,
+                                                 std::span<const std::string> names) {
+  std::string text;
+  for (std::size_t i = 0; i < agreement.events.size() && i < names.size(); ++i) {
+    text += std::format("{}{} read() {} rdpmc {}", text.empty() ? "" : "; ", names[i],
+                        agreement.events[i].by_read, agreement.events[i].by_rdpmc);
+  }
+  return text;
+}
+
+// Which events a group opens. Plain numbers, so that the encodings are checked on every
+// host: the kinds are PERF_TYPE_HARDWARE and PERF_TYPE_RAW, and the hardware configs the
+// PERF_COUNT_HW_ values, which the Linux branch below asserts.
+enum class EventKind : std::uint8_t { hardware, raw };
 
 struct PerfEventSpec {
-  std::string_view name;
-  std::uint32_t type;
-  std::uint64_t config;
+  std::string name;
+  EventKind kind = EventKind::hardware;
+  std::uint64_t config = 0;
 };
+
+inline constexpr std::uint64_t kHwCycles = 0;
+inline constexpr std::uint64_t kHwInstructions = 1;
+inline constexpr std::uint64_t kHwCacheMisses = 3;
+inline constexpr std::uint64_t kHwBranchMisses = 5;
+
+// On AMD a raw event is the low 8 bits of the event select, then an 8-bit unit mask.
+// PMCx043 unit mask bit 3 (0x08): demand data cache fills from local DRAM.
+// PMCx064 unit mask bits 3 and 0 (0x09): data and instruction cache requests missing L2.
+[[nodiscard]] constexpr std::uint64_t amd_raw_event(std::uint8_t event,
+                                                    std::uint8_t mask) noexcept {
+  return (std::uint64_t{mask} << 8U) | event;
+}
+inline constexpr std::uint64_t kRawDramFills = amd_raw_event(0x43, 0x08);
+inline constexpr std::uint64_t kRawL2Misses = amd_raw_event(0x64, 0x09);
+
+inline constexpr std::string_view kCacheMissesName = "cache-misses (L2 misses on Zen 1)";
+inline constexpr std::string_view kDramFillsName = "r0843 (DRAM fills, unproven until bench_chase)";
 
 // cache-misses counts L2 misses on Zen 1, so it is named for what it counts. The raw
 // event is a last-level stand-in that bench_chase has to prove before any book number
 // uses it, and it means nothing on another CPU.
-inline constexpr std::array kCommonEvents{
-    PerfEventSpec{.name = "cycles", .type = PERF_TYPE_HARDWARE, .config = PERF_COUNT_HW_CPU_CYCLES},
-    PerfEventSpec{
-        .name = "instructions", .type = PERF_TYPE_HARDWARE, .config = PERF_COUNT_HW_INSTRUCTIONS},
-    PerfEventSpec{
-        .name = "branch-misses", .type = PERF_TYPE_HARDWARE, .config = PERF_COUNT_HW_BRANCH_MISSES},
-    PerfEventSpec{.name = "cache-misses (L2 misses on Zen 1)",
-                  .type = PERF_TYPE_HARDWARE,
-                  .config = PERF_COUNT_HW_CACHE_MISSES},
-};
-inline constexpr PerfEventSpec kZen1DramFills{
-    .name = "r0843 (DRAM fills, unproven until bench_chase)",
-    .type = PERF_TYPE_RAW,
-    .config = 0x0843};
+[[nodiscard]] inline std::vector<PerfEventSpec> events_for_host(std::string_view host_label) {
+  std::vector<PerfEventSpec> events{
+      {"cycles", EventKind::hardware, kHwCycles},
+      {"instructions", EventKind::hardware, kHwInstructions},
+      {"branch-misses", EventKind::hardware, kHwBranchMisses},
+      {std::string{kCacheMissesName}, EventKind::hardware, kHwCacheMisses}};
+  if (host_label == "debian") {
+    events.push_back({std::string{kDramFillsName}, EventKind::raw, kRawDramFills});
+  }
+  return events;
+}
+
+// What bench_chase counts. The raw form of cache-misses sits beside it, so that a run
+// shows the kernel's mapping by counting rather than by reading a table. `dram_fills` is
+// a choice so that a deliberately wrong event can be shown failing.
+inline constexpr std::string_view kChaseFillsName = "dram_fills";
+inline constexpr std::string_view kChaseL2Name = "l2_misses_raw";
+
+[[nodiscard]] inline std::vector<PerfEventSpec> events_for_chase(std::uint64_t dram_fills) {
+  return {{"cycles", EventKind::hardware, kHwCycles},
+          {"instructions", EventKind::hardware, kHwInstructions},
+          {std::string{kCacheMissesName}, EventKind::hardware, kHwCacheMisses},
+          {std::string{kChaseFillsName}, EventKind::raw, dram_fills},
+          {std::string{kChaseL2Name}, EventKind::raw, kRawL2Misses}};
+}
+
+#if defined(__linux__) && !defined(__EMSCRIPTEN__)
+
+static_assert(kHwCycles == std::uint64_t{PERF_COUNT_HW_CPU_CYCLES});
+static_assert(kHwInstructions == std::uint64_t{PERF_COUNT_HW_INSTRUCTIONS});
+static_assert(kHwCacheMisses == std::uint64_t{PERF_COUNT_HW_CACHE_MISSES});
+static_assert(kHwBranchMisses == std::uint64_t{PERF_COUNT_HW_BRANCH_MISSES});
 
 #if defined(__x86_64__)
+// Fenced both ways, because rdpmc is not serialising: without this a load before it may
+// still be in flight, and its count lands on the wrong message.
 [[nodiscard]] inline std::uint64_t read_pmc(std::uint32_t counter) noexcept {
   std::uint32_t low = 0;
   std::uint32_t high = 0;
-  __asm__ volatile("rdpmc" : "=a"(low), "=d"(high) : "c"(counter));
+  __asm__ volatile("lfence\n\trdpmc\n\tlfence" : "=a"(low), "=d"(high) : "c"(counter) : "memory");
   return (std::uint64_t{high} << 32U) | low;
 }
 inline constexpr bool kHasRdpmc = true;
@@ -285,12 +359,10 @@ inline constexpr bool kHasRdpmc = false;
 
 class CounterGroup {
  public:
-  explicit CounterGroup(std::string_view host_label) {
-    for (const PerfEventSpec& spec : kCommonEvents) {
+  explicit CounterGroup(std::string_view host_label) : CounterGroup{events_for_host(host_label)} {}
+  explicit CounterGroup(const std::vector<PerfEventSpec>& events) {
+    for (const PerfEventSpec& spec : events) {
       open_event(spec);
-    }
-    if (host_label == "debian") {
-      open_event(kZen1DramFills);
     }
   }
   CounterGroup(const CounterGroup&) = delete;
@@ -328,11 +400,10 @@ class CounterGroup {
     std::vector<CounterStatus> out = failed_;
     for (std::size_t i = 0; i < open_.size(); ++i) {
       if (!started_ || !stopped_) {
-        out.push_back(unavailable_counter(std::string{open_[i].name}, "the group gave no read()"));
+        out.push_back(unavailable_counter(open_[i].name, "the group gave no read()"));
         continue;
       }
-      out.push_back(classify_counter(std::string{open_[i].name},
-                                     stopped_->values[i] - started_->values[i],
+      out.push_back(classify_counter(open_[i].name, stopped_->values[i] - started_->values[i],
                                      stopped_->time_enabled - started_->time_enabled,
                                      stopped_->time_running - started_->time_running));
     }
@@ -372,25 +443,30 @@ class CounterGroup {
   [[nodiscard]] std::vector<std::string> event_names() const {
     std::vector<std::string> names;
     for (const Open& event : open_) {
-      names.emplace_back(event.name);
+      names.push_back(event.name);
     }
     return names;
   }
 
  private:
   static constexpr std::size_t kMapBytes = 4096;
+  static constexpr std::size_t kMaxEvents = 6;  // Zen 1's core counters.
 
   struct Open {
-    std::string_view name;
+    std::string name;
     int fd;
     std::uint64_t id;
     perf_event_mmap_page* page;
   };
 
   void open_event(const PerfEventSpec& spec) {
+    if (open_.size() == kMaxEvents) {
+      failed_.push_back(unavailable_counter(spec.name, "more events than the group can read"));
+      return;
+    }
     perf_event_attr attr{};
     attr.size = sizeof(attr);
-    attr.type = spec.type;
+    attr.type = spec.kind == EventKind::raw ? PERF_TYPE_RAW : PERF_TYPE_HARDWARE;
     attr.config = spec.config;
     attr.disabled = open_.empty() ? 1U : 0U;
     attr.exclude_kernel = 1;
@@ -402,8 +478,8 @@ class CounterGroup {
     const long fd = ::syscall(SYS_perf_event_open, &attr, 0, -1, group, 0UL);
     if (fd < 0) {
       const int error = errno;
-      failed_.push_back(unavailable_counter(
-          std::string{spec.name}, std::format("perf_event_open: {}", std::strerror(error))));
+      failed_.push_back(
+          unavailable_counter(spec.name, std::format("perf_event_open: {}", std::strerror(error))));
       return;
     }
     const int descriptor = static_cast<int>(fd);
@@ -413,7 +489,7 @@ class CounterGroup {
       const int error = errno;
       ::close(descriptor);
       failed_.push_back(unavailable_counter(
-          std::string{spec.name}, std::format("PERF_EVENT_IOC_ID: {}", std::strerror(error))));
+          spec.name, std::format("PERF_EVENT_IOC_ID: {}", std::strerror(error))));
       return;
     }
     void* map = ::mmap(nullptr, kMapBytes, PROT_READ, MAP_SHARED, descriptor, 0);
@@ -431,7 +507,7 @@ class CounterGroup {
   }
 
   [[nodiscard]] std::optional<GroupRead> read_group() const {
-    constexpr std::size_t kMaxWords = 3 + 2 * (kCommonEvents.size() + 1);
+    constexpr std::size_t kMaxWords = 3 + (2 * kMaxEvents);
     std::array<std::uint64_t, kMaxWords> words{};
     const ::ssize_t got = ::read(open_.front().fd, words.data(), sizeof(words));
     if (got <= 0) {
@@ -453,6 +529,7 @@ class CounterGroup {
 class CounterGroup {
  public:
   explicit CounterGroup(std::string_view /*host_label*/) {}
+  explicit CounterGroup(const std::vector<PerfEventSpec>& /*events*/) {}
 
   void start() noexcept {
     thread_before_ = read_thread();
@@ -546,6 +623,7 @@ class CounterGroup {
 class CounterGroup {
  public:
   explicit CounterGroup(std::string_view /*host_label*/) {}
+  explicit CounterGroup(const std::vector<PerfEventSpec>& /*events*/) {}
   void start() const noexcept {}
   void stop() const noexcept {}
   [[nodiscard]] std::vector<CounterStatus> statuses() const { return {}; }  // NOLINT
@@ -582,7 +660,8 @@ class CounterGroup {
   });
   group.stop();
   if (agreement.state == AgreementState::agreed) {
-    return std::format("works: {}", describe_agreement(agreement));
+    return std::format("works: {}; {}", describe_agreement(agreement),
+                       describe_events(agreement, group.event_names()));
   }
   return std::format("unavailable: {}", describe_agreement(agreement));
 #else

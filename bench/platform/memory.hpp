@@ -108,6 +108,20 @@ using MincoreFlag = unsigned char;
   return value;
 }
 
+// The kB of transparent hugepages backing the mapping that starts at `start`, or nothing
+// where the kernel has no such account.
+[[nodiscard]] inline std::optional<std::size_t> hugepage_kb_of(const void* start) {
+#if defined(__linux__) && !defined(__EMSCRIPTEN__)
+  std::ifstream smaps{"/proc/self/smaps"};
+  std::stringstream text;
+  text << smaps.rdbuf();
+  return hugepage_kb_from_smaps(text.str(), reinterpret_cast<std::uintptr_t>(start));  // NOLINT
+#else
+  static_cast<void>(start);
+  return std::nullopt;
+#endif
+}
+
 struct ArenaReport {
   std::size_t bytes = 0;
   std::size_t page_size_obtained = 0;
@@ -184,11 +198,7 @@ inline std::optional<Arena> Arena::make(std::size_t bytes) {
   }
   std::size_t obtained = page;  // NOLINT(misc-const-correctness): the Linux branch moves it.
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
-  std::ifstream smaps{"/proc/self/smaps"};
-  std::stringstream text;
-  text << smaps.rdbuf();
-  const auto start = reinterpret_cast<std::uintptr_t>(data);  // NOLINT
-  const std::optional<std::size_t> huge_kb = hugepage_kb_from_smaps(text.str(), start);
+  const std::optional<std::size_t> huge_kb = hugepage_kb_of(data);
   if (huge_kb && *huge_kb != 0) {
     obtained = kHuge;
     hint += std::format(", {} kB in transparent hugepages", *huge_kb);

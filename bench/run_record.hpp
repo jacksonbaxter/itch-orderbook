@@ -47,11 +47,14 @@ struct PerMessageCount {
   double mean = 0.0;
   std::uint64_t p50 = 0;
   std::uint64_t p99 = 0;
+  std::uint64_t sum = 0;  // Over apply() alone, so under the pass's own count.
 };
 
 struct CounterRecord {
   std::vector<CounterStatus> statuses;
   std::string agreement;
+  std::vector<std::string> agreement_names;
+  std::vector<EventAgreement> agreement_events;  // The whole pass, by read() and by rdpmc.
   bool per_message_published = false;
   std::vector<PerMessageCount> per_message;
 };
@@ -116,15 +119,22 @@ namespace detail {
                     i == 0 ? "" : ", ", json_string(s.name), json_string(to_string(s.state)),
                     s.value, s.running_ratio, json_string(s.reason));
   }
-  out += std::format(R"(], "agreement": {}, "per_message_published": {}, "per_message": [)",
-                     json_string(record.counters.agreement),
+  out += std::format(R"(], "agreement": {}, "agreement_events": [)",
+                     json_string(record.counters.agreement));
+  const std::vector<EventAgreement>& paths = record.counters.agreement_events;
+  for (std::size_t i = 0; i < paths.size() && i < record.counters.agreement_names.size(); ++i) {
+    out += std::format(R"({}{{"name": {}, "read": {}, "rdpmc": {}}})", i == 0 ? "" : ", ",
+                       json_string(record.counters.agreement_names[i]), paths[i].by_read,
+                       paths[i].by_rdpmc);
+  }
+  out += std::format(R"(], "per_message_published": {}, "per_message": [)",
                      record.counters.per_message_published ? "true" : "false");
   if (record.counters.per_message_published) {
     const std::vector<PerMessageCount>& counts = record.counters.per_message;
     for (std::size_t i = 0; i < counts.size(); ++i) {
-      out += std::format(R"({}{{"name": {}, "mean": {:.6f}, "p50": {}, "p99": {}}})",
+      out += std::format(R"({}{{"name": {}, "mean": {:.6f}, "p50": {}, "p99": {}, "sum": {}}})",
                          i == 0 ? "" : ", ", json_string(counts[i].name), counts[i].mean,
-                         counts[i].p50, counts[i].p99);
+                         counts[i].p50, counts[i].p99, counts[i].sum);
     }
   }
   out += "]},\n";
