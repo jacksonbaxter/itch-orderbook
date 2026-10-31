@@ -1,0 +1,71 @@
+{
+  "area": "check",
+  "tree": ["CMakeLists.txt", "CMakePresets.json", ".clang-format", ".clang-tidy", "cmake", "include", "src", "tests", "tools", "fuzz", "scripts"],
+  "faults": [
+    {
+      "id": "check-gate-stage",
+      "breaks": "A gate fails inside check.sh",
+      "check": "check.sh fails the run when a stage fails",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "if (remaining == 0) {",
+          "new": "if (remaining == 0) [[unlikely]] {"
+        }
+      ],
+      "command": ["bash", "{tree}/scripts/check.sh", "--only", "gates"],
+      "expect": {"signature": "check: FAILED, 1 of 1 stages", "exit": 1}
+    },
+    {
+      "id": "check-format-stage",
+      "breaks": "A file is not clang-formatted",
+      "check": "check.sh format stage",
+      "mutations": [
+        {
+          "file": "src/parser.cpp",
+          "old": "namespace itch {\n",
+          "new": "namespace   itch {\n"
+        }
+      ],
+      "command": ["bash", "{tree}/scripts/check.sh", "--only", "format"],
+      "expect": {"signature": "error: code should be clang-formatted", "exit": 1}
+    },
+    {
+      "id": "check-corpus-stage",
+      "breaks": "A committed seed changes",
+      "check": "check.sh corpus stage",
+      "inputs": [{"file": "fuzz/corpus/fuzz_decode/msg-44-D", "op": "flip_byte", "offset": 3}],
+      "command": ["bash", "{tree}/scripts/check.sh", "--only", "corpus"],
+      "expect": {"signature": "fuzz_decode/msg-44-D: bytes differ", "exit": 1}
+    },
+    {
+      "id": "check-release-stage",
+      "breaks": "A unit test fails inside check.sh",
+      "check": "check.sh release stage passes ctest's failure on",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "if constexpr (std::endian::native == std::endian::little) {",
+          "new": "if constexpr (std::endian::native == std::endian::big) {"
+        }
+      ],
+      "build": {"preset": "release", "targets": []},
+      "command": ["bash", "{tree}/scripts/check.sh", "--only", "release"],
+      "expect": {"signature": "release +FAIL", "exit": 1}
+    },
+    {
+      "id": "check-later-stages-still-run",
+      "breaks": "An early stage fails, and a later stage could be skipped",
+      "check": "check.sh runs every selected stage after a failure",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "if (remaining == 0) {",
+          "new": "if (remaining == 0) [[unlikely]] {"
+        }
+      ],
+      "command": ["bash", "{tree}/scripts/check.sh", "--only", "gates", "--only", "corpus"],
+      "expect": {"signature": "gates +FAIL[\\s\\S]*corpus +ok", "exit": 1}
+    }
+  ]
+}
