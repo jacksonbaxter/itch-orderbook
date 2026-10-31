@@ -4,7 +4,7 @@
     check_predictions.py [--root DIR] [--require ID] [--no-git]
 
 results/predictions.md holds one `## P-NNNN: title` block per experiment. Every
-results/bench_*.md names one in its header. With git history to read, the block must be
+results/bench_*.md and results/chase_*.md names one in its header. With git history to read, the block must be
 committed, its commit must come before the result's, and its text must be what that
 commit wrote: a prediction is never edited. results/run_log.md gets a row for every run,
 failed ones included, and only ever grows.
@@ -28,6 +28,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PREDICTIONS = "results/predictions.md"
 RUN_LOG = "results/run_log.md"
+RESULT_PATTERNS = ("bench_*.md", "chase_*.md")
 BLOCK = re.compile(r"^## (P-\d{4}): .*?(?=^## |\Z)", re.MULTILINE | re.DOTALL)
 FIELD = re.compile(r"^- (prediction|run_id): (.*)$", re.MULTILINE)
 
@@ -110,8 +111,9 @@ def find_violations(root, use_git):
     known = blocks(predictions.read_text(encoding="utf-8")) if predictions.is_file() else {}
     log_text = (root / RUN_LOG).read_text(encoding="utf-8") if (root / RUN_LOG).is_file() else ""
     violations = []
-    for path in sorted((root / "results").glob("bench_*.md")):
-        violations.extend(check_result(root, path, known, log_text, use_git))
+    for pattern in RESULT_PATTERNS:
+        for path in sorted((root / "results").glob(pattern)):
+            violations.extend(check_result(root, path, known, log_text, use_git))
     if use_git:
         violations.extend(check_log_history(root))
     return violations

@@ -98,6 +98,23 @@ class Cli(unittest.TestCase):
                                 timeout=60, check=False)
         self.assertEqual(result.returncode, 2)
 
+    def test_a_chase_writes_a_whole_record(self):
+        out = SCRATCH / "chase.json"
+        result = subprocess.run([str(BENCH.parent / "bench_chase"), "--out", str(out), "--loads",
+                                 "2000", "--sizes", "64K,128K", *core_arguments()],
+                                capture_output=True, text=True, timeout=60, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(record["raw_event"], "0x0843")
+        self.assertEqual([row["bytes"] for row in record["rows"]], [65536, 131072])
+        self.assertEqual(record["refusals"], [])
+
+    def test_a_chase_refuses_a_bad_size(self):
+        result = subprocess.run([str(BENCH.parent / "bench_chase"), "--out",
+                                 str(SCRATCH / "chase.json"), "--sizes", "64"],
+                                capture_output=True, text=True, timeout=60, check=False)
+        self.assertEqual(result.returncode, 2)
+
     @unittest.skipUnless(platform.system() == "Darwin", "machine_check needs a measuring machine")
     def test_the_driver_writes_a_file_that_stamps_and_passes(self):
         predictions = SCRATCH / "records"

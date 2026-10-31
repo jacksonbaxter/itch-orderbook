@@ -1,0 +1,476 @@
+{
+ "header": {
+  "host": "debian",
+  "cpu": "AMD Ryzen Embedded V1605B with Radeon Vega Gfx",
+  "kernel": "Linux 6.12.0-fixture",
+  "compiler": "Clang fixture",
+  "flags": "-O3 -DNDEBUG -std=c++23",
+  "commit": "0123456789ab (exported by debian_sync.sh)",
+  "dataset": "none: a synthetic pointer chase",
+  "dataset_sha256": "none",
+  "timer": "fixture",
+  "quantum": "20 ticks, 10.010 ns",
+  "pair": "49.000 ticks, 24.500 ns, not subtracted from any figure",
+  "floor": "40.041 ns",
+  "pinning": "pinned to core 4: pthread_setaffinity_np returned 0, read back [4]",
+  "migrations": "0 seen in 11 samples, core 4 to core 4",
+  "core": "4",
+  "governor": "performance",
+  "frequency": "3500000 kHz",
+  "turbo": "on",
+  "smt": "on",
+  "isolation": "none",
+  "counters": "fixture=measured",
+  "rdpmc": "agreed, worst gap 1000 events, 0.0040%",
+  "page_size": "4096 bytes per page, MADV_NOHUGEPAGE accepted, 0 kB in transparent hugepages",
+  "residency": "not applicable: no input file"
+ },
+ "raw_event": "0x0843",
+ "loads": 1000000,
+ "rows": [
+  {
+   "bytes": 65536,
+   "lines": 1024,
+   "pages": "4096 bytes per page, MADV_NOHUGEPAGE accepted, 0 kB in transparent hugepages",
+   "ns_per_load": 4.03,
+   "agreement": "agreed, worst gap 10 events, 0.0040%",
+   "events": [
+    {
+     "name": "cycles",
+     "read": 14000020,
+     "rdpmc": 14000010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "instructions",
+     "read": 1250020,
+     "rdpmc": 1250010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "cache-misses (L2 misses on Zen 1)",
+     "read": 20,
+     "rdpmc": 10,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "dram_fills",
+     "read": 20,
+     "rdpmc": 10,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "l2_misses_raw",
+     "read": 20,
+     "rdpmc": 10,
+     "state": "measured",
+     "ratio": 1.0
+    }
+   ]
+  },
+  {
+   "bytes": 131072,
+   "lines": 2048,
+   "pages": "4096 bytes per page, MADV_NOHUGEPAGE accepted, 0 kB in transparent hugepages",
+   "ns_per_load": 3.4299999999999997,
+   "agreement": "agreed, worst gap 10 events, 0.0040%",
+   "events": [
+    {
+     "name": "cycles",
+     "read": 11900020,
+     "rdpmc": 11900010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "instructions",
+     "read": 1250020,
+     "rdpmc": 1250010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "cache-misses (L2 misses on Zen 1)",
+     "read": 120,
+     "rdpmc": 110,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "dram_fills",
+     "read": 20,
+     "rdpmc": 10,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "l2_misses_raw",
+     "read": 120,
+     "rdpmc": 110,
+     "state": "measured",
+     "ratio": 1.0
+    }
+   ]
+  },
+  {
+   "bytes": 262144,
+   "lines": 4096,
+   "pages": "4096 bytes per page, MADV_NOHUGEPAGE accepted, 0 kB in transparent hugepages",
+   "ns_per_load": 3.4299999999999997,
+   "agreement": "agreed, worst gap 10 events, 0.0040%",
+   "events": [
+    {
+     "name": "cycles",
+     "read": 11900020,
+     "rdpmc": 11900010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "instructions",
+     "read": 1250020,
+     "rdpmc": 1250010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "cache-misses (L2 misses on Zen 1)",
+     "read": 1020,
+     "rdpmc": 1010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "dram_fills",
+     "read": 20,
+     "rdpmc": 10,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "l2_misses_raw",
+     "read": 1020,
+     "rdpmc": 1010,
+     "state": "measured",
+     "ratio": 1.0
+    }
+   ]
+  },
+  {
+   "bytes": 1048576,
+   "lines": 16384,
+   "pages": "4096 bytes per page, MADV_NOHUGEPAGE accepted, 0 kB in transparent hugepages",
+   "ns_per_load": 10.03,
+   "agreement": "agreed, worst gap 10 events, 0.0040%",
+   "events": [
+    {
+     "name": "cycles",
+     "read": 35000020,
+     "rdpmc": 35000010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "instructions",
+     "read": 1250020,
+     "rdpmc": 1250010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "cache-misses (L2 misses on Zen 1)",
+     "read": 760779,
+     "rdpmc": 760769,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "dram_fills",
+     "read": 20,
+     "rdpmc": 10,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "l2_misses_raw",
+     "read": 760779,
+     "rdpmc": 760769,
+     "state": "measured",
+     "ratio": 1.0
+    }
+   ]
+  },
+  {
+   "bytes": 2097152,
+   "lines": 32768,
+   "pages": "4096 bytes per page, MADV_NOHUGEPAGE accepted, 0 kB in transparent hugepages",
+   "ns_per_load": 11.03,
+   "agreement": "agreed, worst gap 10 events, 0.0040%",
+   "events": [
+    {
+     "name": "cycles",
+     "read": 38500020,
+     "rdpmc": 38500010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "instructions",
+     "read": 1250020,
+     "rdpmc": 1250010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "cache-misses (L2 misses on Zen 1)",
+     "read": 880899,
+     "rdpmc": 880889,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "dram_fills",
+     "read": 320,
+     "rdpmc": 310,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "l2_misses_raw",
+     "read": 880899,
+     "rdpmc": 880889,
+     "state": "measured",
+     "ratio": 1.0
+    }
+   ]
+  },
+  {
+   "bytes": 3145728,
+   "lines": 49152,
+   "pages": "4096 bytes per page, MADV_NOHUGEPAGE accepted, 0 kB in transparent hugepages",
+   "ns_per_load": 14.03,
+   "agreement": "agreed, worst gap 10 events, 0.0040%",
+   "events": [
+    {
+     "name": "cycles",
+     "read": 49000020,
+     "rdpmc": 49000010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "instructions",
+     "read": 1250020,
+     "rdpmc": 1250010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "cache-misses (L2 misses on Zen 1)",
+     "read": 920940,
+     "rdpmc": 920930,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "dram_fills",
+     "read": 20040,
+     "rdpmc": 20030,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "l2_misses_raw",
+     "read": 920940,
+     "rdpmc": 920930,
+     "state": "measured",
+     "ratio": 1.0
+    }
+   ]
+  },
+  {
+   "bytes": 8388608,
+   "lines": 131072,
+   "pages": "4096 bytes per page, MADV_NOHUGEPAGE accepted, 0 kB in transparent hugepages",
+   "ns_per_load": 91.03,
+   "agreement": "agreed, worst gap 10 events, 0.0040%",
+   "events": [
+    {
+     "name": "cycles",
+     "read": 318500020,
+     "rdpmc": 318500010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "instructions",
+     "read": 1250020,
+     "rdpmc": 1250010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "cache-misses (L2 misses on Zen 1)",
+     "read": 970989,
+     "rdpmc": 970979,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "dram_fills",
+     "read": 740760,
+     "rdpmc": 740750,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "l2_misses_raw",
+     "read": 970989,
+     "rdpmc": 970979,
+     "state": "measured",
+     "ratio": 1.0
+    }
+   ]
+  },
+  {
+   "bytes": 16777216,
+   "lines": 262144,
+   "pages": "4096 bytes per page, MADV_NOHUGEPAGE accepted, 0 kB in transparent hugepages",
+   "ns_per_load": 109.03,
+   "agreement": "agreed, worst gap 10 events, 0.0040%",
+   "events": [
+    {
+     "name": "cycles",
+     "read": 381500020,
+     "rdpmc": 381500010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "instructions",
+     "read": 1250020,
+     "rdpmc": 1250010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "cache-misses (L2 misses on Zen 1)",
+     "read": 991009,
+     "rdpmc": 990999,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "dram_fills",
+     "read": 870889,
+     "rdpmc": 870879,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "l2_misses_raw",
+     "read": 991009,
+     "rdpmc": 990999,
+     "state": "measured",
+     "ratio": 1.0
+    }
+   ]
+  },
+  {
+   "bytes": 67108864,
+   "lines": 1048576,
+   "pages": "4096 bytes per page, MADV_NOHUGEPAGE accepted, 0 kB in transparent hugepages",
+   "ns_per_load": 123.03,
+   "agreement": "agreed, worst gap 10 events, 0.0040%",
+   "events": [
+    {
+     "name": "cycles",
+     "read": 430500020,
+     "rdpmc": 430500010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "instructions",
+     "read": 1250020,
+     "rdpmc": 1250010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "cache-misses (L2 misses on Zen 1)",
+     "read": 1151169,
+     "rdpmc": 1151159,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "dram_fills",
+     "read": 970989,
+     "rdpmc": 970979,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "l2_misses_raw",
+     "read": 1151169,
+     "rdpmc": 1151159,
+     "state": "measured",
+     "ratio": 1.0
+    }
+   ]
+  },
+  {
+   "bytes": 268435456,
+   "lines": 4194304,
+   "pages": "4096 bytes per page, MADV_NOHUGEPAGE accepted, 0 kB in transparent hugepages",
+   "ns_per_load": 127.03,
+   "agreement": "agreed, worst gap 10 events, 0.0040%",
+   "events": [
+    {
+     "name": "cycles",
+     "read": 444500020,
+     "rdpmc": 444500010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "instructions",
+     "read": 1250020,
+     "rdpmc": 1250010,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "cache-misses (L2 misses on Zen 1)",
+     "read": 1601620,
+     "rdpmc": 1601610,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "dram_fills",
+     "read": 991009,
+     "rdpmc": 990999,
+     "state": "measured",
+     "ratio": 1.0
+    },
+    {
+     "name": "l2_misses_raw",
+     "read": 1601620,
+     "rdpmc": 1601610,
+     "state": "measured",
+     "ratio": 1.0
+    }
+   ]
+  }
+ ],
+ "pinned": true,
+ "migrations": 0,
+ "peak_rss_bytes": 290000000,
+ "refusals": []
+}

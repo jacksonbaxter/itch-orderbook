@@ -1,0 +1,3 @@
+measure.sh: start load1=0.20 host=some-machine at=2026-10-31T10:06:00Z cpus=4 governor=performance freq_khz=cpu4:3500000 perf_event_paranoid=2
+measure.sh: end load1=0.30 exit=0 at=2026-10-31T10:06:12Z cpus=4 governor=performance freq_khz=cpu4:3500000 perf_event_paranoid=2
+measure.sh: restored governor=schedutil

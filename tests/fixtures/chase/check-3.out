@@ -1,0 +1,3 @@
+machine_check: record host: debian
+machine_check: pass pin-readback: allowed on exactly core 4
+machine_check: passed
