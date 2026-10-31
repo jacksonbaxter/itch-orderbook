@@ -286,6 +286,7 @@ struct Listing {
   Stock stock{' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
   bool listed = false;
   bool test = false;
+  std::uint32_t round_lot = 100;
 };
 
 // One print, kept so that a B can find it and match numbers can be compared.
@@ -587,7 +588,7 @@ class TradeRun {
         print_class == PrintClass::p) {
       for (std::size_t w = 0; w < kWindows.size(); ++w) {
         if (in_window(kWindows[w], timestamp_ns)) {
-          add_to_window(volume.windows[w], print_class, shares);
+          add_to_window(volume.windows[w], print_class, shares, listings_[locate].round_lot);
         }
       }
     }
@@ -605,7 +606,8 @@ class TradeRun {
     return ns >= window.start_ns && ns < window.end_ns;
   }
 
-  static void add_to_window(WindowVolume& window, PrintClass print_class, std::uint64_t shares) {
+  static void add_to_window(WindowVolume& window, PrintClass print_class, std::uint64_t shares,
+                            std::uint32_t round_lot) {
     switch (print_class) {
       case PrintClass::e: window.e_shares += shares; break;
       case PrintClass::c_y: window.c_y_shares += shares; break;
@@ -615,7 +617,7 @@ class TradeRun {
         break;
     }
     ++window.prints;
-    if (shares < 100) {
+    if (shares < round_lot) {
       ++window.odd_lot_prints;
       window.odd_lot_shares += shares;
     }
@@ -671,6 +673,7 @@ class TradeRun {
     listing.stock = m.stock;
     listing.listed = true;
     listing.test = m.authenticity == 'T';
+    listing.round_lot = m.round_lot_size;
   }
 
   void on_trading_action(const StockTradingAction& m, std::span<const std::byte> payload) {
@@ -1274,6 +1277,9 @@ class TradeRun {
       return;
     }
     std::println(out, "t3_window {}", kWindows[kMidasWindow].name);
+    std::println(out, "t3_other_round_lots {}",
+                 std::ranges::count_if(
+                     listings_, [](const Listing& l) { return l.listed && l.round_lot != 100; }));
     std::println(out, "t3_rows {}", midas_rows_);
     std::println(out, "t3_rows_in_file {}", midas_rows_in_file_);
     std::println(out, "t3_second_rows {}", midas_second_rows_);

@@ -234,7 +234,8 @@ def hard_failures(log, entry, midas_rows, no_cross_file):
     require(fit is not None, f"no fit for the window {PINNED_WINDOW}")
     if fit is not None:
         symbols = number(log, "t3_symbols_compared")
-        for key in ("equal_shares", "equal_hidden", "equal_prints", "equal_hidden_prints"):
+        for key in ("equal_shares", "equal_hidden", "equal_prints", "equal_hidden_prints",
+                    "equal_odd_lots", "equal_odd_shares"):
             require(fit[key] == symbols, f"{key} {fit[key]} of {symbols} symbols")
     require(number(log, "t3_symbols_compared") + number(log, "t3_second_rows")
             == number(log, "t3_rows"), "MIDAS rows are not all compared")
@@ -357,7 +358,8 @@ def render(log, entry, day, no_cross_file):
         f"- Dataset: `{entry['name']}`, SHA-256 of the unpacked file `{entry['unpacked_sha256']}`",
         f"- Command: `{run.get('run_command', 'unavailable')}`",
         f"- Elapsed: {values.get('elapsed_seconds', '?')} s in the replay, "
-        f"{time.get('real', 0.0):.1f} s real, {time.get('user', 0.0):.1f} s user",
+        f"{time.get('real', 0.0):.1f} s real including any wait for the machine, "
+        f"{time.get('user', 0.0):.1f} s user",
         f"- Maximum RSS: {time.get('max_rss', 0) / gib:.2f} GiB, which counts resident pages of "
         "the mapped file",
         f"- Peak memory footprint: {time.get('peak_footprint', 0) / gib:.2f} GiB",
@@ -479,7 +481,12 @@ def render(log, entry, day, no_cross_file):
               "09:35:00 to 16:00:00 in the feed's own timestamps. It is pinned by measurement: "
               "the lead was the SEC's method page for its Market Activity Report, which says "
               "its sample runs from 9:35 and does not say that of `TradeVol`. Each cell counts "
-              f"symbols of {count(number(log, 't3_symbols_compared'))} that agree exactly.", ""]
+              f"symbols of {count(number(log, 't3_symbols_compared'))} that agree exactly.", "",
+              "An odd lot is a print below the symbol's round lot, from its directory message, "
+              "and not below 100. On the first run a fixed 100 failed two symbols of 5,771 on "
+              "12302019, which have smaller round lots. "
+              f"{count(number(log, 't3_other_round_lots'))} listed symbols have a round lot "
+              "other than 100 this day.", ""]
     lines += format_table(
         ("Window", "Shares", "Hidden shares", "Trades", "Hidden trades", "Odd lots",
          "Odd-lot shares", "Feed below MIDAS", "Feed shares"),

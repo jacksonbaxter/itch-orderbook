@@ -58,8 +58,8 @@ class TradeStream(Stream):
             self.now = self.pinned - 1_000
         super().message(type_code, locate, body)
 
-    def listing(self, locate, symbol, authenticity="P"):
-        body = (symbol.ljust(8).encode() + b"QN" + struct.pack(">I", 100) + b"NCZ "
+    def listing(self, locate, symbol, authenticity="P", round_lot=100):
+        body = (symbol.ljust(8).encode() + b"QN" + struct.pack(">I", round_lot) + b"NCZ "
                 + authenticity.encode() + b"N 1N")
         self.message("R", locate, body + struct.pack(">I", 0) + b"N")
 
@@ -178,6 +178,7 @@ def halt_and_cross(s):
     s.trading(HLTD, "HLTD", "T")
     s.at(clock(10, 40))
     s.delete(HLTD, 30)
+    s.hidden(HLTD, 1000, 200_000, 1045)  # Past a thousand, so MIDAS has a whole part.
 
 
 def symbols_outside_midas(s):
@@ -228,7 +229,8 @@ def day():
     s.at(clock(3))
     s.system("O")
     for locate, symbol in SYMBOLS.items():
-        s.listing(locate, symbol, "T" if locate == ZTST else "P")
+        # BRVO trades in lots of 10, so its P of 99 is not an odd lot.
+        s.listing(locate, symbol, "T" if locate == ZTST else "P", 10 if locate == BRVO else 100)
     for locate, symbol in SYMBOLS.items():
         s.trading(locate, symbol, "T")
     s.at(clock(4))
@@ -264,9 +266,9 @@ MIDAS_ROWS = (
     "20200106,Stock,ALFA,Arca,1.0,1.0,,1.0,5.0,7.0,7.0,7.0,7.0,7.0,7.0,-7.0,7.0,7.0,,7.0\n"
     "20200106,Stock,ALFA,Nasdaq,1.0,1.0,1.0,1.0,5.0,8.0,5.0,4.0,3.0,8.0,4.7,"
     "0.7900000000000001,0.46,0.19,0.33,0.79\n"
-    "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,1.0,1.0,2.0,1.0,0.499,0.4,0.099,"
+    "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,0.0,1.0,2.0,1.0,0.499,0.4,0.0,"
     "0.09899999999999999,0.499\n"
-    "20200106,Stock,HLTD,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,2.0,0.0,0.0,2.0,0.5,0.2,0.2,0.0,0.0,0.2\n"
+    "20200106,Stock,HLTD,Nasdaq,1.0,1.0,1.0,1.0,5.0,3.0,2.0,0.0,1.0,3.0,0.5,1.2,0.2,0.0,1.0,1.2\n"
     "20200106,Stock,NONE,Nasdaq,,,,,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0\n"
     "20200107,Stock,ZZZZ,Nasdaq,1.0,1.0,1.0,1.0,5.0,9.0,9.0,9.0,9.0,9.0,9.0,9.0,9.0,9.0,9.0,9.0\n"
 )

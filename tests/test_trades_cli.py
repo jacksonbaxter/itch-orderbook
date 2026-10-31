@@ -19,15 +19,15 @@ SMALL = ("--max-orders", "4096", "--max-levels", "4096")
 DATE = ("--date", "20200106")
 PINNED_ROWS = ("--midas-rows", "4")
 
-CLEAN_TYPES = {"A": 15, "B": 1, "C": 12, "D": 7, "E": 12, "F": 1, "H": 8, "P": 4, "Q": 13, "R": 6,
+CLEAN_TYPES = {"A": 15, "B": 1, "C": 12, "D": 7, "E": 12, "F": 1, "H": 8, "P": 5, "Q": 13, "R": 6,
                "S": 6, "U": 1, "X": 2}
 
 CLEAN_LINES = (
-    "messages_checked 88",
+    "messages_checked 89",
     "class E count=12 shares=1570 zero_share=0 test_count=1 test_shares=100",
     "class C_Y count=3 shares=160 zero_share=0 test_count=0 test_shares=0",
     "class C_N count=9 shares=1210 zero_share=0 test_count=0 test_shares=0",
-    "class P count=4 shares=429 zero_share=0 test_count=0 test_shares=0",
+    "class P count=5 shares=1429 zero_share=0 test_count=0 test_shares=0",
     "class Q_O count=6 shares=660 zero_share=2 test_count=1 test_shares=40",
     "class Q_C count=6 shares=660 zero_share=3 test_count=1 test_shares=0",
     "class Q_H count=1 shares=150 zero_share=0 test_count=0 test_shares=0",
@@ -56,7 +56,7 @@ CLEAN_LINES = (
     "t5_outside market_open=1 state=H count=1",
     "c_price printable=Y equal=2 different=1 equal_shares=110 different_shares=50",
     "c_price printable=N equal=1 different=8 equal_shares=150 different_shares=1060",
-    "match_records 41",
+    "match_records 42",
     "match_shared_numbers 0",
     "cn_far_leg print=E count=1 shares=100",
     "cn_far_leg print=C_Y count=1 shares=60",
@@ -70,22 +70,24 @@ CLEAN_LINES = (
     "b_matched 1",
     "b_shares 100",
     # E 1,570 + C_Y 160 + P 429, less the 100 broken.
-    "b_net_printed_shares 2059",
+    "b_net_printed_shares 3059",
     "t2_file_rows 5",
     "t2_rows_compared 5",
     "t2_file_opening 620",
     "t2_file_closing 660",
     "t2_outside_file 150",
     "t3_window 0935_1600",
+    # BRVO alone.
+    "t3_other_round_lots 1",
     "t3_rows 4",
     "t3_rows_in_file 7",
     "t3_second_rows 0",
     "t3_symbols_compared 4",
-    # ALFA 790 + BRVO 499 + HLTD 200 + NONE 0, of which 330 + 99 hidden.
-    "t3_midas_trade_shares 1489",
-    "t3_midas_hidden_shares 429",
-    "t3_midas_trades 12",
-    "t3_midas_hidden_trades 4",
+    # ALFA 790 + BRVO 499 + HLTD 1,200 + NONE 0, of which 330 + 99 + 1,000 hidden.
+    "t3_midas_trade_shares 2489",
+    "t3_midas_hidden_shares 1429",
+    "t3_midas_trades 13",
+    "t3_midas_hidden_trades 5",
     "t3_outside_symbols 1",
     "t3_outside_shares 200",
     "t3_outside_test_symbols 1",
@@ -212,7 +214,7 @@ def main():
     # The report reads what the tool really prints, so the two cannot drift apart.
     (scratch / "report.log").write_text(done.stdout, encoding="ascii")
     (scratch / "report_manifest.json").write_text(json.dumps({
-        "days": {"01062020": {"name": "day.itch", "unpacked_sha256": "fixture", "messages": 88,
+        "days": {"01062020": {"name": "day.itch", "unpacked_sha256": "fixture", "messages": 89,
                               "per_type_counts": CLEAN_TYPES}},
         "references": {"midas_2019q4": {"nasdaq_rows": {"20200106": 4}}},
     }), encoding="ascii")

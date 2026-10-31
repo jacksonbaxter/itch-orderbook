@@ -26,8 +26,8 @@ SCRATCH.mkdir(exist_ok=True)
 GOOD_DAY = {
     "name": "day.bin",
     "unpacked_sha256": "ab",
-    "messages": 88,
-    "per_type_counts": {"A": 15, "B": 1, "C": 12, "D": 7, "E": 12, "F": 1, "H": 8, "P": 4,
+    "messages": 89,
+    "per_type_counts": {"A": 15, "B": 1, "C": 12, "D": 7, "E": 12, "F": 1, "H": 8, "P": 5,
                         "Q": 13, "R": 6, "S": 6, "U": 1, "X": 2},
 }
 
@@ -40,10 +40,10 @@ run_command itch_trades data/day.bin
 trades_date 20200106
 trades_max_orders 4096
 trades_max_levels 4096
-bytes 2995
+bytes 3041
 broken_trade match=1060 class=E symbol=ZTST shares=100 printed_at=40200000002000
 elapsed_seconds 0.0
-frames 88
+frames 89
 type A 15
 type B 1
 type C 12
@@ -51,17 +51,17 @@ type D 7
 type E 12
 type F 1
 type H 8
-type P 4
+type P 5
 type Q 13
 type R 6
 type S 6
 type U 1
 type X 2
-messages_checked 88
+messages_checked 89
 class E count=12 shares=1570 zero_share=0 test_count=1 test_shares=100
 class C_Y count=3 shares=160 zero_share=0 test_count=0 test_shares=0
 class C_N count=9 shares=1210 zero_share=0 test_count=0 test_shares=0
-class P count=4 shares=429 zero_share=0 test_count=0 test_shares=0
+class P count=5 shares=1429 zero_share=0 test_count=0 test_shares=0
 class Q_O count=6 shares=660 zero_share=2 test_count=1 test_shares=40
 class Q_C count=6 shares=660 zero_share=3 test_count=1 test_shares=0
 class Q_H count=1 shares=150 zero_share=0 test_count=0 test_shares=0
@@ -87,7 +87,7 @@ t5_outside market_open=0 state=T count=2
 t5_outside market_open=1 state=H count=1
 c_price printable=Y equal=2 different=1 equal_shares=110 different_shares=50
 c_price printable=N equal=1 different=8 equal_shares=150 different_shares=1060
-match_records 41
+match_records 42
 match_shared_numbers 0
 cn_far_leg print=E count=1 shares=100
 cn_far_leg print=C_Y count=1 shares=60
@@ -100,30 +100,31 @@ cn_cross_sides_exact 1
 b_messages 1
 b_matched 1
 b_shares 100
-b_net_printed_shares 2059
+b_net_printed_shares 3059
 t2_file_rows 5
 t2_rows_compared 5
 t2_file_opening 620
 t2_file_closing 660
 t2_outside_file 150
 t3_window 0935_1600
+t3_other_round_lots 1
 t3_rows 4
 t3_rows_in_file 7
 t3_second_rows 0
 t3_symbols_compared 4
-t3_midas_trade_shares 1489
-t3_midas_hidden_shares 429
-t3_midas_trades 12
-t3_midas_hidden_trades 4
+t3_midas_trade_shares 2489
+t3_midas_hidden_shares 1429
+t3_midas_trades 13
+t3_midas_hidden_trades 5
 t3_outside_symbols 1
 t3_outside_shares 200
 t3_outside_test_symbols 1
 t3_edge_start last_before=34499999999999 first_inside=34500000000000
 t3_edge_end last_inside=57599999999999 first_after=57600000000000
-t3_fit window=whole_day equal_shares=3 equal_hidden=4 equal_prints=3 equal_hidden_prints=4 equal_odd_lots=3 equal_odd_shares=3 feed_below=0 feed_shares=1859 feed_hidden=429 feed_prints=17
-t3_fit window=0400_2000 equal_shares=3 equal_hidden=4 equal_prints=3 equal_hidden_prints=4 equal_odd_lots=3 equal_odd_shares=3 feed_below=0 feed_shares=1859 feed_hidden=429 feed_prints=17
-t3_fit window=0930_1600 equal_shares=3 equal_hidden=4 equal_prints=3 equal_hidden_prints=4 equal_odd_lots=3 equal_odd_shares=3 feed_below=0 feed_shares=1609 feed_hidden=429 feed_prints=14
-t3_fit window=0935_1600 equal_shares=4 equal_hidden=4 equal_prints=4 equal_hidden_prints=4 equal_odd_lots=4 equal_odd_shares=4 feed_below=0 feed_shares=1489 feed_hidden=429 feed_prints=12
+t3_fit window=whole_day equal_shares=3 equal_hidden=4 equal_prints=3 equal_hidden_prints=4 equal_odd_lots=3 equal_odd_shares=3 feed_below=0 feed_shares=2859 feed_hidden=1429 feed_prints=18
+t3_fit window=0400_2000 equal_shares=3 equal_hidden=4 equal_prints=3 equal_hidden_prints=4 equal_odd_lots=3 equal_odd_shares=3 feed_below=0 feed_shares=2859 feed_hidden=1429 feed_prints=18
+t3_fit window=0930_1600 equal_shares=3 equal_hidden=4 equal_prints=3 equal_hidden_prints=4 equal_odd_lots=3 equal_odd_shares=3 feed_below=0 feed_shares=2609 feed_hidden=1429 feed_prints=15
+t3_fit window=0935_1600 equal_shares=4 equal_hidden=4 equal_prints=4 equal_hidden_prints=4 equal_odd_lots=4 equal_odd_shares=4 feed_below=0 feed_shares=2489 feed_hidden=1429 feed_prints=13
 check add_refused group=T-TRADE-1 violations=0
 check add_symbol_mismatch group=T-TRADE-1 violations=0
 check order_refused group=T-TRADE-1 violations=0
@@ -232,21 +233,21 @@ class TradesReport(unittest.TestCase):
         self.assertIn("- Maximum RSS: 1.00 GiB", written)
         self.assertIn("- Peak memory footprint: 2.00 GiB", written)
         self.assertIn("| T-TRADE-3 | **PASS** | 0 |", written)
-        self.assertIn("| `P` | 4 | 429 |", written)
+        self.assertIn("| `P` | 5 | 1,429 |", written)
         self.assertIn("| `C`, not printable, far leg of a print | 3 | 260 |", written)
         self.assertIn("| `C`, not printable, cross leg | 6 | 950 |", written)
         self.assertIn("| `Q`, zero shares | 5 | 0 |", written)
-        self.assertIn("| `0935_1600` | 4 | 4 | 4 | 4 | 4 | 4 | 0 | 1,489 |", written)
+        self.assertIn("| `0935_1600` | 4 | 4 | 4 | 4 | 4 | 4 | 0 | 2,489 |", written)
         self.assertIn("| Start | 09:34:59.999999999 | 09:35:00.000000000 |", written)
         self.assertIn("Match 1060: `E` on ZTST, 100 shares.", written)
 
     def test_a_shorter_replay_than_the_census_fails(self):
-        self.day["messages"] = 89
-        self.assert_fails("frames 88, manifest 89")
+        self.day["messages"] = 90
+        self.assert_fails("frames 89, manifest 90")
 
     def test_a_tool_that_checked_part_of_the_day_fails(self):
-        self.replace("messages_checked 88", "messages_checked 87")
-        self.assert_fails("87 messages checked, manifest 88")
+        self.replace("messages_checked 89", "messages_checked 88")
+        self.assert_fails("88 messages checked, manifest 89")
 
     def test_per_type_counts_are_compared(self):
         self.day["per_type_counts"]["A"] = 16
@@ -255,7 +256,7 @@ class TradesReport(unittest.TestCase):
     def test_each_print_class_is_tied_to_the_census(self):
         for old, text in (("class E count=12", "E count differs"),
                           ("class C_N count=9", "C_Y + C_N differs"),
-                          ("class P count=4", "P count differs"),
+                          ("class P count=5", "P count differs"),
                           ("class Q_H count=1", "Q count differs")):
             self.log = GOOD_LOG
             self.replace(old, old[:-1] + "99")
@@ -343,6 +344,12 @@ class TradesReport(unittest.TestCase):
         self.replace("window=0935_1600 equal_shares=4 equal_hidden=4",
                      "window=0935_1600 equal_shares=4 equal_hidden=3")
         self.assert_fails("equal_hidden 3 of 4 symbols")
+        self.log = GOOD_LOG
+        self.replace("equal_hidden_prints=4 equal_odd_lots=4 equal_odd_shares=4 feed_below=0 "
+                     "feed_shares=2489",
+                     "equal_hidden_prints=4 equal_odd_lots=3 equal_odd_shares=4 feed_below=0 "
+                     "feed_shares=2489")
+        self.assert_fails("equal_odd_lots 3 of 4 symbols")
 
     def test_every_row_has_to_be_compared(self):
         self.replace("t3_symbols_compared 4", "t3_symbols_compared 3")
