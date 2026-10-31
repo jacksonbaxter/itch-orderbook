@@ -44,7 +44,7 @@ Full plan through to the done criteria. Tick items when done, and add anything n
 All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux run needs no code change.
 - [x] `timer.hpp`: `lfence; rdtsc` and `rdtscp; lfence` on x86-64; `isb; cntvct_el0` on Linux arm64; `mach_absolute_time` on macOS; `emscripten_get_now` on WASM, batches only. Probe measures the quantum and the empty-pair cost at start of each run. Calibrate on every run, and record the quantum measured rather than the nominal rate.
 - [x] `counters.hpp`: `perf_event_open` group with `exclude_kernel` on Linux. `proc_pid_rusage` and `thread_selfcounts` on macOS, cycles and instructions only. Each event ends as measured, unavailable with reason, or multiplexed with ratio. Never fails the build or the run.
-- [ ] Per-message counts: user-mode `rdpmc` around each message, in a pass that is untimed and separate from timing runs. Also count through `read()` on the event descriptors, and require the two to agree.
+- [x] Per-message counts: user-mode `rdpmc` around each message, in a pass that is untimed and separate from timing runs. Also count through `read()` on the event descriptors, and require the two to agree.
 - [x] `affinity.hpp`: `pthread_setaffinity_np` with read-back on Linux; `thread_policy_set` tried and its code 46 recorded on macOS, plus `QOS_CLASS_USER_INTERACTIVE`. Returns what happened, and tracks migrations.
 - [x] `memory.hpp`: arena allocation with hugepage hint and pre-fault, reporting the page size obtained. `madvise(MADV_HUGEPAGE)` on Linux, 16 KB pages on macOS.
 - [x] `sysinfo.hpp`: fills the results header. A field that cannot be read is written as `unavailable: <reason>`.
@@ -54,20 +54,20 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [x] Google Benchmark plus HdrHistogram, with warm-up and repetitions in fresh processes. Report median, min, max and CV, never best-of alone.
 - [x] Results header on every file: CPU, kernel, compiler, flags, commit, dataset and hash, timer info, pinning, governor, frequency, turbo, core, counter status, `measure.sh` load lines. Host always named.
 - [x] Separate throughput and latency passes. Publish instrumentation cost as a ratio.
-- [ ] `bench_probe` target, run at the start of each session. Includes whether user-mode `rdpmc` works at `perf_event_paranoid=2` on `debian`.
-- [ ] `bench_chase`: random pointer chase, buffers from below L2 to far above L3, to validate `r0843:u` on `debian` before any book number uses it (criterion 32). If it does not behave, publish no last-level number and state the gap.
+- [x] `bench_probe` target, run at the start of each session. Includes whether user-mode `rdpmc` works at `perf_event_paranoid=2` on `debian`.
+- [x] `bench_chase`: random pointer chase, buffers from below L2 to far above L3, to validate `r0843:u` on `debian` before any book number uses it (criterion 32). If it does not behave, publish no last-level number and state the gap.
 - [x] `scripts/machine_check.sh`, run before every reported benchmark, with its output embedded in the results file, plus a negative test that breaks one condition at a time (criterion 29). `debian` has no isolated core, so the check records that and enforces what it can: pin read-back, governor, `cpu5` idle, input resident.
 - [x] Each experiment's prediction is committed before it runs, and failed runs stay in the log (criterion 31).
-- [ ] Reported Mac numbers go through `.orchestrator/measure.sh`, and `debian` numbers through `~/quant-projects/bin/measure.sh` with `taskset -c 4` and `cpu5` idle. Output goes to a file on `debian`, not through SSH.
+- [x] Reported Mac numbers go through `.orchestrator/measure.sh`, and `debian` numbers through `~/quant-projects/bin/measure.sh` with `taskset -c 4` and `cpu5` idle. Output goes to a file on `debian`, not through SSH.
 - [ ] README results table generated from results files.
 - [x] Gate: every figure in the README and the demo page must appear in its results file, with a negative test that breaks one figure at a time (criterion 30).
 
 ### Running on `debian`
-- [ ] Sync with `.orchestrator/debian_sync.sh itch-orderbook` from committed `HEAD`. Build in `~/quant-projects/itch-orderbook/build`, keep data in `~/quant-projects/itch-orderbook/data`. Work only inside `~/quant-projects`.
-- [ ] Reported runs: `~/quant-projects/bin/measure.sh taskset -c 4 <benchmark>`, with the benchmark as its direct child. Heavy jobs go through `~/quant-projects/bin/heavy.sh`.
-- [ ] Keep `cpu5` idle. A second thread goes on `cpu6`. Avoid cores 0, 1 and 3.
-- [ ] Write output to a file on `debian`, never through SSH. A run with no complete output file is lost: check `~/quant-projects/.logs/measure.log` and rerun it.
-- [ ] Record core, governor, frequency and turbo state in the header. Calibrate the TSC on every run. Batch or average anything under about 100 ns. `perf` cycles and TSC ticks are different units.
+- [x] Sync with `.orchestrator/debian_sync.sh itch-orderbook` from committed `HEAD`. Build in `~/quant-projects/itch-orderbook/build`, keep data in `~/quant-projects/itch-orderbook/data`. Work only inside `~/quant-projects`.
+- [x] Reported runs: `~/quant-projects/bin/measure.sh taskset -c 4 <benchmark>`, with the benchmark as its direct child. Heavy jobs go through `~/quant-projects/bin/heavy.sh`.
+- [x] Keep `cpu5` idle. A second thread goes on `cpu6`. Avoid cores 0, 1 and 3.
+- [x] Write output to a file on `debian`, never through SSH. A run with no complete output file is lost: check `~/quant-projects/.logs/measure.log` and rerun it.
+- [x] Record core, governor, frequency and turbo state in the header. Calibrate the TSC on every run. Batch or average anything under about 100 ns. `perf` cycles and TSC ticks are different units.
 - [ ] Use the liburing 2.15 already built in `.toolchain`. Do not run its `configure`.
 - [ ] If `perf` starts failing, `perf_event_paranoid` may have reset on a reboot. Report it, do not change it.
 

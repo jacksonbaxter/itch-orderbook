@@ -1,0 +1,742 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1000" height="326" onload="init(evt)" viewBox="0 0 1000 326" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1000.0" height="326.0" fill="url(#background)"  />
+<text id="title" x="500.00" y="24" >bench_replay stub book, cycles:u, debian</text>
+<text id="details" x="10.00" y="309" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="890.00" y="24" >Search</text>
+<text id="ignorecase" x="974.00" y="24" >ic</text>
+<text id="matched" x="890.00" y="309" > </text>
+<g id="frames">
+<g >
+<title>benchmark::internal::(anonymous namespace)::ThreadRunnerDefault::RunThreads (834,600,057,632 samples, 56.37%)</title><rect x="20.1" y="149" width="552.4" height="15.0" fill="rgb(246,192,46)" rx="2" ry="2" />
+<text  x="23.12" y="159.5" >benchmark::internal::(anonymous namespace)::ThreadRunnerDefault::RunThreads</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::replace_order (98,449,947,498 samples, 6.65%)</title><rect x="647.1" y="197" width="65.1" height="15.0" fill="rgb(220,70,16)" rx="2" ry="2" />
+<text  x="650.06" y="207.5" >itch::F..</text>
+</g>
+<g >
+<title>benchmark::internal::BenchmarkRunner::DoNIterations (834,600,057,632 samples, 56.37%)</title><rect x="20.1" y="165" width="552.4" height="15.0" fill="rgb(238,153,36)" rx="2" ry="2" />
+<text  x="23.12" y="175.5" >benchmark::internal::BenchmarkRunner::DoNIterations</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (24,123,924,910 samples, 1.63%)</title><rect x="149.6" y="69" width="16.0" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="152.64" y="79.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (480,249,112 samples, 0.03%)</title><rect x="571.7" y="53" width="0.3" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="574.66" y="63.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::rest_order (84,278,979,467 samples, 5.69%)</title><rect x="656.4" y="181" width="55.8" height="15.0" fill="rgb(217,59,14)" rx="2" ry="2" />
+<text  x="659.39" y="191.5" >itch:..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (2,887,910,849 samples, 0.20%)</title><rect x="736.8" y="181" width="1.9" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="739.78" y="191.5" ></text>
+</g>
+<g >
+<title>hdr_record_value (5,345,033,912 samples, 0.36%)</title><rect x="572.7" y="213" width="3.6" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="575.72" y="223.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (10,123,393,712 samples, 0.68%)</title><rect x="640.4" y="181" width="6.7" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="643.36" y="191.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (23,747,238,470 samples, 1.60%)</title><rect x="824.7" y="181" width="15.8" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="827.74" y="191.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (1,476,132,635 samples, 0.10%)</title><rect x="655.4" y="165" width="1.0" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="658.42" y="175.5" ></text>
+</g>
+<g >
+<title>__vdso_clock_gettime (292,845,206 samples, 0.02%)</title><rect x="572.5" y="197" width="0.2" height="15.0" fill="rgb(254,226,54)" rx="2" ry="2" />
+<text  x="575.52" y="207.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (14,049,355,493 samples, 0.95%)</title><rect x="831.2" y="165" width="9.3" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="834.15" y="175.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::rest_order (66,238,877,884 samples, 4.47%)</title><rect x="524.5" y="69" width="43.8" height="15.0" fill="rgb(217,59,14)" rx="2" ry="2" />
+<text  x="527.50" y="79.5" >itch..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (3,528,108,130 samples, 0.24%)</title><rect x="178.1" y="53" width="2.3" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="181.09" y="63.5" ></text>
+</g>
+<g >
+<title>itch::bench::ReplaySession&lt;(anonymous namespace)::ReplayInput, itch::bench::PlatformClock, itch::FastBook&lt;itch::NoWriteObserver&gt; &gt;::input_resident (159,907,484 samples, 0.01%)</title><rect x="572.4" y="101" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="575.36" y="111.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (1,282,539,758 samples, 0.09%)</title><rect x="268.6" y="37" width="0.8" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="271.55" y="47.5" ></text>
+</g>
+<g >
+<title>main (1,480,560,107,924 samples, 99.99%)</title><rect x="10.0" y="229" width="979.9" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="13.00" y="239.5" >main</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (496,852,774 samples, 0.03%)</title><rect x="989.1" y="165" width="0.4" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="992.14" y="175.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (409,889,702 samples, 0.03%)</title><rect x="740.6" y="181" width="0.3" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="743.63" y="191.5" ></text>
+</g>
+<g >
+<title>[libc.so.6] (1,480,560,107,924 samples, 99.99%)</title><rect x="10.0" y="245" width="979.9" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" >[libc.so.6]</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (3,212,600,823 samples, 0.22%)</title><rect x="434.2" y="53" width="2.2" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="437.25" y="63.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (1,184,310,871 samples, 0.08%)</title><rect x="940.6" y="149" width="0.8" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="943.60" y="159.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::rest_order (67,464,244,866 samples, 4.56%)</title><rect x="941.4" y="181" width="44.7" height="15.0" fill="rgb(217,59,14)" rx="2" ry="2" />
+<text  x="944.45" y="191.5" >itch..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (410,873,876 samples, 0.03%)</title><rect x="572.0" y="69" width="0.3" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="574.98" y="79.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (926,225,842 samples, 0.06%)</title><rect x="315.0" y="69" width="0.6" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="317.99" y="79.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::rest_order (132,376,418,498 samples, 8.94%)</title><rect x="853.8" y="165" width="87.6" height="15.0" fill="rgb(217,59,14)" rx="2" ry="2" />
+<text  x="856.77" y="175.5" >itch::Fast..</text>
+</g>
+<g >
+<title>itch::bench::PassTotals itch::bench::throughput_pass&lt;itch::bench::PlatformClock, itch::FastBook&lt;itch::NoWriteObserver&gt; &gt; (387,417,279,305 samples, 26.17%)</title><rect x="315.9" y="101" width="256.5" height="15.0" fill="rgb(235,142,34)" rx="2" ry="2" />
+<text  x="318.94" y="111.5" >itch::bench::PassTotals itch::benc..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::apply (245,490,276,832 samples, 16.58%)</title><rect x="576.3" y="213" width="162.4" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="579.26" y="223.5" >itch::FastBook&lt;itch:..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (303,741,258 samples, 0.02%)</title><rect x="315.6" y="69" width="0.2" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="318.60" y="79.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::apply (513,039,893 samples, 0.03%)</title><rect x="20.1" y="101" width="0.4" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="23.12" y="111.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::apply (377,357,587,857 samples, 25.49%)</title><rect x="318.7" y="85" width="249.8" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="321.71" y="95.5" >itch::FastBook&lt;itch::NoWriteObser..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (14,847,837,423 samples, 1.00%)</title><rect x="155.8" y="53" width="9.8" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="158.78" y="63.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (517,084,329 samples, 0.03%)</title><rect x="315.3" y="53" width="0.3" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="318.26" y="63.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (1,497,006,220 samples, 0.10%)</title><rect x="523.5" y="37" width="1.0" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="526.48" y="47.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (5,207,585,939 samples, 0.35%)</title><rect x="308.6" y="53" width="3.4" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="311.59" y="63.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (2,311,687,674 samples, 0.16%)</title><rect x="654.9" y="181" width="1.5" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="657.86" y="191.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (2,206,142,520 samples, 0.15%)</title><rect x="852.3" y="149" width="1.5" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="855.31" y="159.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (5,193,870,114 samples, 0.35%)</title><rect x="564.9" y="53" width="3.4" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="567.91" y="63.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::replace_order (153,394,823,873 samples, 10.36%)</title><rect x="423.0" y="69" width="101.5" height="15.0" fill="rgb(220,70,16)" rx="2" ry="2" />
+<text  x="425.98" y="79.5" >itch::FastBo..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::deduct (5,710,337,542 samples, 0.39%)</title><rect x="568.5" y="85" width="3.8" height="15.0" fill="rgb(211,31,7)" rx="2" ry="2" />
+<text  x="571.47" y="95.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::replace_order (152,588,447,383 samples, 10.31%)</title><rect x="840.5" y="181" width="100.9" height="15.0" fill="rgb(220,70,16)" rx="2" ry="2" />
+<text  x="843.45" y="191.5" >itch::FastBo..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (623,807,182 samples, 0.04%)</title><rect x="740.5" y="197" width="0.4" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="743.48" y="207.5" ></text>
+</g>
+<g >
+<title>itch::bench::PassTotals itch::bench::latency_pass&lt;itch::bench::PlatformClock, itch::FastBook&lt;itch::NoWriteObserver&gt;, itch::bench::SampleBuffer&gt; (446,439,169,754 samples, 30.15%)</title><rect x="20.5" y="101" width="295.4" height="15.0" fill="rgb(215,49,11)" rx="2" ry="2" />
+<text  x="23.46" y="111.5" >itch::bench::PassTotals itch::bench::la..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::apply (366,374,679,004 samples, 24.74%)</title><rect x="743.8" y="197" width="242.5" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="746.76" y="207.5" >itch::FastBook&lt;itch::NoWriteObse..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (196,749,063 samples, 0.01%)</title><rect x="568.3" y="69" width="0.2" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="571.34" y="79.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (5,685,287,941 samples, 0.38%)</title><rect x="982.3" y="165" width="3.8" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="985.34" y="175.5" ></text>
+</g>
+<g >
+<title>bench_replay (1,480,656,948,748 samples, 100.00%)</title><rect x="10.0" y="261" width="980.0" height="15.0" fill="rgb(224,87,20)" rx="2" ry="2" />
+<text  x="13.00" y="271.5" >bench_replay</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (3,409,944,903 samples, 0.23%)</title><rect x="851.5" y="165" width="2.3" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="854.52" y="175.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (781,448,636 samples, 0.05%)</title><rect x="988.9" y="181" width="0.6" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="991.95" y="191.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::deduct (3,394,299,376 samples, 0.23%)</title><rect x="738.7" y="213" width="2.3" height="15.0" fill="rgb(211,31,7)" rx="2" ry="2" />
+<text  x="741.74" y="223.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::rest_order (134,436,239,746 samples, 9.08%)</title><rect x="180.4" y="53" width="89.0" height="15.0" fill="rgb(217,59,14)" rx="2" ry="2" />
+<text  x="183.42" y="63.5" >itch::Fast..</text>
+</g>
+<g >
+<title>itch::bench::PassTotals itch::bench::throughput_pass&lt;itch::bench::PlatformClock, itch::FastBook&lt;itch::NoWriteObserver&gt; &gt; (376,040,545,445 samples, 25.40%)</title><rect x="741.0" y="213" width="248.9" height="15.0" fill="rgb(235,142,34)" rx="2" ry="2" />
+<text  x="744.02" y="223.5" >itch::bench::PassTotals itch::ben..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (14,400,329,950 samples, 0.97%)</title><rect x="413.4" y="53" width="9.6" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="416.44" y="63.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::rest_order (39,994,599,709 samples, 2.70%)</title><rect x="712.2" y="197" width="26.5" height="15.0" fill="rgb(217,59,14)" rx="2" ry="2" />
+<text  x="715.22" y="207.5" >i..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (24,429,662,889 samples, 1.65%)</title><rect x="406.8" y="69" width="16.2" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="409.81" y="79.5" ></text>
+</g>
+<g >
+<title>benchmark::RunSpecifiedBenchmarks (834,600,953,987 samples, 56.37%)</title><rect x="20.1" y="197" width="552.4" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="23.12" y="207.5" >benchmark::RunSpecifiedBenchmarks</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::deduct (5,313,577,195 samples, 0.36%)</title><rect x="986.3" y="197" width="3.5" height="15.0" fill="rgb(211,31,7)" rx="2" ry="2" />
+<text  x="989.25" y="207.5" ></text>
+</g>
+<g >
+<title>benchmark::internal::(anonymous namespace)::RunInThread (834,600,057,632 samples, 56.37%)</title><rect x="20.1" y="133" width="552.4" height="15.0" fill="rgb(208,15,3)" rx="2" ry="2" />
+<text  x="23.12" y="143.5" >benchmark::internal::(anonymous namespace)::RunInThread</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::replace_order (156,926,234,738 samples, 10.60%)</title><rect x="165.6" y="69" width="103.9" height="15.0" fill="rgb(220,70,16)" rx="2" ry="2" />
+<text  x="168.61" y="79.5" >itch::FastBo..</text>
+</g>
+<g >
+<title>all (1,480,656,948,748 samples, 100%)</title><rect x="10.0" y="277" width="980.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="13.00" y="287.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (457,990,264 samples, 0.03%)</title><rect x="989.5" y="181" width="0.3" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="992.47" y="191.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::deduct (5,478,136,215 samples, 0.37%)</title><rect x="312.2" y="85" width="3.6" height="15.0" fill="rgb(211,31,7)" rx="2" ry="2" />
+<text  x="315.17" y="95.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (2,495,439,846 samples, 0.17%)</title><rect x="178.8" y="37" width="1.6" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="181.77" y="47.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::apply (390,270,959,340 samples, 26.36%)</title><rect x="53.9" y="85" width="258.3" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="56.87" y="95.5" >itch::FastBook&lt;itch::NoWriteObserv..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::rest_order (133,100,215,008 samples, 8.99%)</title><rect x="436.4" y="53" width="88.1" height="15.0" fill="rgb(217,59,14)" rx="2" ry="2" />
+<text  x="439.37" y="63.5" >itch::Fast..</text>
+</g>
+<g >
+<title>clock_gettime (310,522,196 samples, 0.02%)</title><rect x="572.5" y="213" width="0.2" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="575.51" y="223.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (16,267,161,565 samples, 1.10%)</title><rect x="636.3" y="197" width="10.8" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="639.30" y="207.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (230,706,827 samples, 0.02%)</title><rect x="986.1" y="181" width="0.2" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="989.10" y="191.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (213,545,660 samples, 0.01%)</title><rect x="312.0" y="69" width="0.2" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="315.03" y="79.5" ></text>
+</g>
+<g >
+<title>benchmark::RunSpecifiedBenchmarks (834,600,953,987 samples, 56.37%)</title><rect x="20.1" y="213" width="552.4" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="23.12" y="223.5" >benchmark::RunSpecifiedBenchmarks</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (2,179,292,869 samples, 0.15%)</title><rect x="434.9" y="37" width="1.5" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="437.93" y="47.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::remove_order (909,195,096 samples, 0.06%)</title><rect x="571.4" y="69" width="0.6" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="574.38" y="79.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::rest_order (64,302,398,693 samples, 4.34%)</title><rect x="269.5" y="69" width="42.5" height="15.0" fill="rgb(217,59,14)" rx="2" ry="2" />
+<text  x="272.47" y="79.5" >itch..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver&gt;::write_level (760,214,589 samples, 0.05%)</title><rect x="711.7" y="165" width="0.5" height="15.0" fill="rgb(239,158,38)" rx="2" ry="2" />
+<text  x="714.67" y="175.5" ></text>
+</g>
+<g >
+<title>benchmark::internal::BenchmarkRunner::DoOneRepetition (834,600,057,632 samples, 56.37%)</title><rect x="20.1" y="181" width="552.4" height="15.0" fill="rgb(212,33,8)" rx="2" ry="2" />
+<text  x="23.12" y="191.5" >benchmark::internal::BenchmarkRunner::DoOneRepetition</text>
+</g>
+<g >
+<title>benchmark::internal::BenchmarkInstance::Run (834,600,057,632 samples, 56.37%)</title><rect x="20.1" y="117" width="552.4" height="15.0" fill="rgb(228,110,26)" rx="2" ry="2" />
+<text  x="23.12" y="127.5" >benchmark::internal::BenchmarkInstance::Run</text>
+</g>
+</g>
+</svg>
