@@ -268,8 +268,8 @@
       "mutations": [
         {
           "file": "bench/replay.hpp",
-          "old": "    report_.throughput = pass;\n",
-          "new": "    pass.ticks += report_.warmup_ticks;\n    pass.messages += report_.warmup_messages;\n    report_.throughput = pass;\n"
+          "old": "    const PassTotals pass = throughput_pass(input_->bytes(), *book, *clock_);\n    report_.throughput = pass;\n",
+          "new": "    PassTotals pass = throughput_pass(input_->bytes(), *book, *clock_);\n    pass.ticks += report_.warmup_ticks;\n    pass.messages += report_.warmup_messages;\n    report_.throughput = pass;\n"
         }
       ],
       "build": {
