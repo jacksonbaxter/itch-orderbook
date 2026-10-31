@@ -15,6 +15,8 @@
 #include "replay.hpp"
 #include "run_record.hpp"
 
+// ASSERT_TRUE guards each dereference here, which the check cannot see.
+// NOLINTBEGIN(bugprone-unchecked-optional-access)
 namespace {
 
 using namespace itch::bench;
@@ -50,7 +52,7 @@ struct FakeClock {
 };
 
 struct FakeBook {
-  Trace* trace;
+  Trace* trace{};
   ApplyStatus status = ApplyStatus::no_book_effect;
   [[nodiscard]] ApplyStatus apply(std::span<const std::byte> /*payload*/) const {
     trace->events += 'a';
@@ -106,7 +108,7 @@ TEST(BenchReplay, TheWarmUpReachesNoResult) {
 
 TEST(BenchReplay, EachPassGetsAFreshBook) {
   Rig rig;
-  FakeSink sink{&rig.trace, {}};
+  FakeSink sink{.trace = &rig.trace, .pushed = {}};
   rig.session.warm_up();
   ASSERT_TRUE(rig.session.timed_throughput());
   ASSERT_TRUE(rig.session.timed_latency(sink));
@@ -136,7 +138,7 @@ TEST(BenchReplay, AnInputNotResidentIsRefusedBeforeAnyTiming) {
 
 TEST(BenchReplay, TheLatencyPassChecksResidencyAsWell) {
   Rig rig;
-  FakeSink sink{&rig.trace, {}};
+  FakeSink sink{.trace = &rig.trace, .pushed = {}};
   rig.session.warm_up();
   ASSERT_TRUE(rig.session.timed_throughput());
   rig.input.residency_.resident_pages = 0;
@@ -172,8 +174,8 @@ TEST(BenchReplay, ARejectedMessageRefusesTheRun) {
 TEST(BenchReplay, RecordingHappensOutsideEveryTimedSpan) {
   Trace trace;
   FakeClock clock{&trace};
-  FakeBook book{&trace};
-  FakeSink sink{&trace, {}};
+  FakeBook book{.trace = &trace};
+  FakeSink sink{.trace = &trace, .pushed = {}};
   const std::vector<std::byte> input = system_events(2);
   const PassTotals totals = latency_pass(input, book, clock, sink);
   EXPECT_EQ(trace.events, "ssatrsatrt");
@@ -184,8 +186,8 @@ TEST(BenchReplay, RecordingHappensOutsideEveryTimedSpan) {
 TEST(BenchReplay, TheFrameWalkIsOutsideTheSpanAndUnknownFramesAreSkipped) {
   Trace trace;
   FakeClock clock{&trace};
-  FakeBook book{&trace};
-  FakeSink sink{&trace, {}};
+  FakeBook book{.trace = &trace};
+  FakeSink sink{.trace = &trace, .pushed = {}};
   std::vector<std::byte> input = system_events(1);
   input.push_back(std::byte{0});
   input.push_back(std::byte{1});
@@ -269,12 +271,12 @@ struct FakeGroup {
 
 struct CountRecorder {
   std::vector<std::uint64_t> counts;
-  void push(std::size_t event, std::uint64_t count) { counts.push_back(event * 1000 + count); }
+  void push(std::size_t event, std::uint64_t count) { counts.push_back((event * 1000) + count); }
 };
 
 TEST(BenchReplay, CountsPassHandsOnEachEventsDifference) {
   Trace trace;
-  FakeBook book{&trace};
+  FakeBook book{.trace = &trace};
   FakeGroup group;
   CountRecorder sink;
   const std::vector<std::byte> input = system_events(2);
@@ -284,7 +286,7 @@ TEST(BenchReplay, CountsPassHandsOnEachEventsDifference) {
 
 TEST(BenchReplay, CountsPassCountsWhatItCouldNotRead) {
   Trace trace;
-  FakeBook book{&trace};
+  FakeBook book{.trace = &trace};
   FakeGroup group{.works = false};
   CountRecorder sink;
   const std::vector<std::byte> input = system_events(2);
@@ -293,3 +295,4 @@ TEST(BenchReplay, CountsPassCountsWhatItCouldNotRead) {
 }
 
 }  // namespace
+// NOLINTEND(bugprone-unchecked-optional-access)

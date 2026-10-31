@@ -9,6 +9,7 @@
 // the Linux logic is tested on every host. Only the system calls sit below it.
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <concepts>
 #include <cstddef>
@@ -30,7 +31,7 @@
 
 #include <cerrno>
 #include <cstring>
-#elif defined(__APPLE__)
+#elifdef __APPLE__
 #include <libproc.h>
 #include <sys/resource.h>
 #include <unistd.h>
@@ -117,14 +118,14 @@ struct GroupRead {
                                                                std::span<const std::uint64_t> ids) {
   constexpr std::size_t kHeaderWords = 3;
   if (words.size() < kHeaderWords || words[0] != ids.size() ||
-      words.size() < kHeaderWords + 2 * ids.size()) {
+      words.size() < kHeaderWords + (2 * ids.size())) {
     return std::nullopt;
   }
   GroupRead read{.time_enabled = words[1], .time_running = words[2], .values = {}};
   read.values.assign(ids.size(), 0);
   for (std::size_t i = 0; i < ids.size(); ++i) {
-    const std::uint64_t value = words[kHeaderWords + 2 * i];
-    const std::uint64_t id = words[kHeaderWords + 2 * i + 1];
+    const std::uint64_t value = words[kHeaderWords + (2 * i)];
+    const std::uint64_t id = words[kHeaderWords + (2 * i) + 1];
     bool found = false;
     for (std::size_t slot = 0; slot < ids.size(); ++slot) {
       if (ids[slot] == id) {
@@ -170,11 +171,9 @@ inline constexpr std::uint64_t kAgreementSlack = 10'000;
     const std::uint64_t by_rdpmc = rdpmc_after[i] - rdpmc_before[i];
     const std::uint64_t gap =
         by_descriptor > by_rdpmc ? by_descriptor - by_rdpmc : by_rdpmc - by_descriptor;
-    const double base = static_cast<double>(by_descriptor == 0 ? 1 : by_descriptor);
+    const auto base = static_cast<double>(by_descriptor == 0 ? 1 : by_descriptor);
     const double relative = static_cast<double>(gap) / base;
-    if (relative > result.worst_relative) {
-      result.worst_relative = relative;
-    }
+    result.worst_relative = std::max(relative, result.worst_relative);
     if (gap > kAgreementSlack && relative > kAgreementFraction) {
       result.state = AgreementState::disagreed;
       result.detail += std::format("event {}: read() {} rdpmc {}; ", i, by_descriptor, by_rdpmc);
@@ -191,11 +190,12 @@ template <CounterSource Source, class Work>
   std::vector<std::uint64_t> descriptor_after(events);
   std::vector<std::uint64_t> rdpmc_before(events);
   std::vector<std::uint64_t> rdpmc_after(events);
+  const bool opened =
+      events != 0 && source.read_descriptors(descriptor_before) && source.read_rdpmc(rdpmc_before);
+  std::forward<Work>(work)();
   if (events == 0) {
     return {.state = AgreementState::unavailable, .worst_relative = 0.0, .detail = "no events"};
   }
-  const bool opened = source.read_descriptors(descriptor_before) && source.read_rdpmc(rdpmc_before);
-  std::forward<Work>(work)();
   if (!opened) {
     return {.state = AgreementState::unavailable,
             .worst_relative = 0.0,
@@ -448,7 +448,7 @@ class CounterGroup {
   std::optional<GroupRead> stopped_;
 };
 
-#elif defined(__APPLE__)
+#elifdef __APPLE__
 
 class CounterGroup {
  public:
@@ -499,15 +499,17 @@ class CounterGroup {
   }
 
   // No user-mode counter read on macOS, so a cross-check reports unavailable.
-  [[nodiscard]] static std::size_t event_count() noexcept { return 0; }
-  [[nodiscard]] static bool read_descriptors(std::vector<std::uint64_t>& /*out*/) noexcept {
+  // NOLINTBEGIN(readability-convert-member-functions-to-static): the same calls as Linux.
+  [[nodiscard]] std::size_t event_count() const noexcept { return 0; }
+  [[nodiscard]] bool read_descriptors(std::vector<std::uint64_t>& /*out*/) const noexcept {
     return false;
   }
-  [[nodiscard]] static bool read_rdpmc(std::vector<std::uint64_t>& /*out*/) noexcept {
+  [[nodiscard]] bool read_rdpmc(std::vector<std::uint64_t>& /*out*/) const noexcept {
     return false;
   }
-  [[nodiscard]] static bool read_fast(std::span<std::uint64_t> /*out*/) noexcept { return false; }
-  [[nodiscard]] static std::vector<std::string> event_names() { return {}; }
+  [[nodiscard]] bool read_fast(std::span<std::uint64_t> /*out*/) const noexcept { return false; }
+  [[nodiscard]] std::vector<std::string> event_names() const { return {}; }
+  // NOLINTEND(readability-convert-member-functions-to-static)
 
  private:
   struct Pair {
@@ -546,21 +548,26 @@ class CounterGroup {
   explicit CounterGroup(std::string_view /*host_label*/) {}
   void start() const noexcept {}
   void stop() const noexcept {}
-  [[nodiscard]] static std::vector<CounterStatus> statuses() { return {}; }
-  [[nodiscard]] static std::size_t event_count() noexcept { return 0; }
-  [[nodiscard]] static bool read_descriptors(std::vector<std::uint64_t>& /*out*/) noexcept {
+  [[nodiscard]] std::vector<CounterStatus> statuses() const { return {}; }  // NOLINT
+  // NOLINTBEGIN(readability-convert-member-functions-to-static): the same calls as Linux.
+  [[nodiscard]] std::size_t event_count() const noexcept { return 0; }
+  [[nodiscard]] bool read_descriptors(std::vector<std::uint64_t>& /*out*/) const noexcept {
     return false;
   }
-  [[nodiscard]] static bool read_rdpmc(std::vector<std::uint64_t>& /*out*/) noexcept {
+  [[nodiscard]] bool read_rdpmc(std::vector<std::uint64_t>& /*out*/) const noexcept {
     return false;
   }
-  [[nodiscard]] static bool read_fast(std::span<std::uint64_t> /*out*/) noexcept { return false; }
-  [[nodiscard]] static std::vector<std::string> event_names() { return {}; }
+  [[nodiscard]] bool read_fast(std::span<std::uint64_t> /*out*/) const noexcept { return false; }
+  [[nodiscard]] std::vector<std::string> event_names() const { return {}; }
+  // NOLINTEND(readability-convert-member-functions-to-static)
 };
 
 #endif
 
 // Whether user-mode rdpmc works here, tried on a short loop against read().
+// The Linux branch below drives the group and formats its answer, which tidy cannot see
+// from macOS.
+// NOLINTNEXTLINE(misc-const-correctness,modernize-use-string-view)
 [[nodiscard]] inline std::string probe_rdpmc(CounterGroup& group) {
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
   if (group.event_count() == 0) {

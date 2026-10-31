@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <format>
 #include <print>
 #include <span>
@@ -75,9 +76,7 @@ void spin_for_counters() {
   }
 }
 
-}  // namespace
-
-int main(int argc, char** argv) {
+int run(int argc, char** argv) {
   Options options;
   if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
     std::println(stderr, "usage: bench_probe [--core N] [--check FILE]");
@@ -125,4 +124,15 @@ int main(int argc, char** argv) {
   std::println("smt: {}", read_smt(source));
   std::println("isolation: {}", read_isolation(source));
   return 0;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  try {
+    return run(argc, argv);
+  } catch (const std::exception& error) {
+    static_cast<void>(std::fputs(error.what(), stderr));
+    return 2;
+  }
 }

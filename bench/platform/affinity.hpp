@@ -17,7 +17,7 @@
 #include <sched.h>
 
 #include <cstring>
-#elif defined(__APPLE__)
+#elifdef __APPLE__
 #include <mach/mach.h>
 #include <mach/thread_policy.h>
 #include <pthread.h>
@@ -85,7 +85,7 @@ struct PinOutcome {
 // A failed pin is fatal for publishing here. On macOS it is a recorded fact.
 inline constexpr bool kPinningRequired = true;
 
-#elif defined(__APPLE__)
+#elifdef __APPLE__
 
 // macOS has no way to pin. thread_policy_set is tried so that the code it returns is on
 // record, 46 (KERN_NOT_SUPPORTED) on Apple silicon, and a high QoS class asks for the

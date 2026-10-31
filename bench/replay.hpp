@@ -85,8 +85,10 @@ template <class Clock, class Book, class Sink>
 // only after the pass, so its recording cost is in no span and no cache line of the run.
 class SampleBuffer {
  public:
-  SampleBuffer(std::span<std::byte> memory) noexcept  // NOLINT(google-explicit-constructor)
-      : samples_{static_cast<std::uint32_t*>(static_cast<void*>(memory.data()))},
+  explicit SampleBuffer(
+      std::span<std::byte> memory) noexcept  // NOLINT(google-explicit-constructor)
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      : samples_{reinterpret_cast<std::uint32_t*>(memory.data())},
         capacity_{memory.size() / sizeof(std::uint32_t)} {}
 
   void push(std::uint64_t ticks) noexcept {
@@ -149,13 +151,13 @@ class ReplaySession {
   using MakeBook = std::function<std::unique_ptr<Book>()>;
 
   ReplaySession(Input& input, Clock& clock, MakeBook make_book)
-      : input_{input}, clock_{clock}, make_book_{std::move(make_book)} {}
+      : input_{&input}, clock_{&clock}, make_book_{std::move(make_book)} {}
 
   void refuse(std::string why) { report_.refusals.push_back(std::move(why)); }
 
   void warm_up() {
     const std::unique_ptr<Book> book = make_book_();
-    const PassTotals pass = throughput_pass(input_.bytes(), *book, clock_);
+    const PassTotals pass = throughput_pass(input_->bytes(), *book, *clock_);
     report_.warmed = true;
     report_.warmup_messages = pass.messages;
     report_.warmup_ticks = pass.ticks;
@@ -166,7 +168,7 @@ class ReplaySession {
       return false;
     }
     const std::unique_ptr<Book> book = make_book_();
-    PassTotals pass = throughput_pass(input_.bytes(), *book, clock_);
+    const PassTotals pass = throughput_pass(input_->bytes(), *book, *clock_);
     report_.throughput = pass;
     return note_rejections(pass);
   }
@@ -177,7 +179,7 @@ class ReplaySession {
       return false;
     }
     const std::unique_ptr<Book> book = make_book_();
-    const PassTotals pass = latency_pass(input_.bytes(), *book, clock_, sink);
+    const PassTotals pass = latency_pass(input_->bytes(), *book, *clock_, sink);
     report_.latency = pass;
     return note_rejections(pass);
   }
@@ -190,7 +192,7 @@ class ReplaySession {
       refuse("no warm-up pass ran before timing");
       return false;
     }
-    const Residency residency = input_.residency();
+    const Residency residency = input_->residency();
     report_.residency = residency.describe();
     if (!residency.complete()) {
       refuse("input not resident: " + report_.residency);
@@ -209,8 +211,8 @@ class ReplaySession {
     return true;
   }
 
-  Input& input_;
-  Clock& clock_;
+  Input* input_;
+  Clock* clock_;
   MakeBook make_book_;
   SessionReport report_;
 };

@@ -52,7 +52,7 @@ struct Residency {
 
 // mincore's vector is char on macOS and unsigned char on Linux. On both, bit 0 means in
 // core, and a file page counts whether or not this process has touched it.
-#if defined(__APPLE__)
+#ifdef __APPLE__
 using MincoreFlag = char;
 #else
 using MincoreFlag = unsigned char;
@@ -89,7 +89,7 @@ using MincoreFlag = unsigned char;
 [[nodiscard]] inline std::optional<std::size_t> hugepage_kb_from_smaps(std::string_view smaps,
                                                                        std::uintptr_t start) {
   const std::string head = std::format("{:x}-", start);
-  std::size_t at = smaps.starts_with(head) ? 0 : smaps.find("\n" + head);
+  const std::size_t at = smaps.starts_with(head) ? 0 : smaps.find("\n" + head);
   if (at == std::string_view::npos) {
     return std::nullopt;
   }
@@ -102,7 +102,7 @@ using MincoreFlag = unsigned char;
   std::size_t value = 0;
   for (std::size_t i = field + kField.size(); i < rest.size() && rest[i] != 'k'; ++i) {
     if (rest[i] >= '0' && rest[i] <= '9') {
-      value = value * 10 + static_cast<std::size_t>(rest[i] - '0');
+      value = (value * 10) + static_cast<std::size_t>(rest[i] - '0');
     }
   }
   return value;
@@ -182,7 +182,7 @@ inline std::optional<Arena> Arena::make(std::size_t bytes) {
   for (std::size_t offset = 0; offset < wanted; offset += page) {
     data[offset] = std::byte{0};
   }
-  std::size_t obtained = page;
+  std::size_t obtained = page;  // NOLINT(misc-const-correctness): the Linux branch moves it.
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
   std::ifstream smaps{"/proc/self/smaps"};
   std::stringstream text;
@@ -207,7 +207,7 @@ inline std::optional<Arena> Arena::make(std::size_t bytes) {
   if (::getrusage(RUSAGE_SELF, &usage) != 0) {
     return 0;
   }
-#if defined(__APPLE__)
+#ifdef __APPLE__
   return static_cast<std::uint64_t>(usage.ru_maxrss);
 #else
   return static_cast<std::uint64_t>(usage.ru_maxrss) * 1024U;

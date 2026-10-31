@@ -20,6 +20,8 @@
 #include "platform/sysinfo.hpp"
 #include "platform/timer.hpp"
 
+// ASSERT_TRUE guards each dereference here, which the check cannot see.
+// NOLINTBEGIN(bugprone-unchecked-optional-access)
 namespace {
 
 using namespace itch::bench;
@@ -144,6 +146,14 @@ TEST(BenchCounters, ADisagreementInsideTheSlackIsNotOne) {
 
 TEST(BenchCounters, NoRdpmcValueIsUnavailableAndTheWorkStillRuns) {
   MockSource source{.rdpmc_works = false};
+  bool ran = false;
+  const Agreement agreement = cross_check(source, [&] { ran = true; });
+  EXPECT_TRUE(ran);
+  EXPECT_EQ(agreement.state, AgreementState::unavailable);
+}
+
+TEST(BenchCounters, NoEventsAtAllIsUnavailableAndTheWorkStillRuns) {
+  MockSource source{.events = 0};
   bool ran = false;
   const Agreement agreement = cross_check(source, [&] { ran = true; });
   EXPECT_TRUE(ran);
@@ -396,3 +406,4 @@ TEST(BenchSysinfo, TheHeaderNeverCarriesTheHostname) {
 }
 
 }  // namespace
+// NOLINTEND(bugprone-unchecked-optional-access)

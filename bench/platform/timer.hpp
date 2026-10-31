@@ -19,9 +19,9 @@
 #include <string>
 #include <string_view>
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 #include <mach/mach_time.h>
-#elif defined(__EMSCRIPTEN__)
+#elifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
 #elif defined(__linux__) && (defined(__x86_64__) || defined(__aarch64__))
 #include <time.h>  // NOLINT(modernize-deprecated-headers): clock_gettime, not in <ctime>.
@@ -34,7 +34,7 @@ namespace itch::bench {
 // A percentile under this many quanta above the pair cost is not a measurement.
 inline constexpr double kResolvableQuanta = 4.0;
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 
 inline constexpr std::string_view kTimerSource = "mach_absolute_time";
 inline constexpr bool kTimerPerMessage = true;
@@ -50,7 +50,7 @@ inline constexpr bool kTimerPerMessage = true;
   return 1e9 * static_cast<double>(base.denom) / static_cast<double>(base.numer);
 }
 
-#elif defined(__EMSCRIPTEN__)
+#elifdef __EMSCRIPTEN__
 
 // WebAssembly has no cycle counter, and the browser clamps this clock. Batches only.
 inline constexpr std::string_view kTimerSource = "emscripten_get_now (batches only)";
@@ -143,7 +143,7 @@ template <class Start, class Stop>
       divisor = std::gcd(divisor, step);
     }
   }
-  const double count = static_cast<double>(samples == 0 ? 1 : samples);
+  const auto count = static_cast<double>(samples == 0 ? 1 : samples);
   return {.quantum_ticks = divisor,
           .pair_ticks = static_cast<double>(total) / count,
           .zero_fraction = static_cast<double>(zero) / count,

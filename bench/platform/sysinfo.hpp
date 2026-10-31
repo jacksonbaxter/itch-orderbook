@@ -22,7 +22,7 @@
 #include <utility>
 #include <vector>
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 #include <sys/sysctl.h>
 #include <sys/types.h>
 #endif
@@ -64,7 +64,7 @@ struct SysSource {
 };
 
 [[nodiscard]] inline std::optional<std::string> read_whole_file(const std::string& path) {
-  std::ifstream in{path};
+  const std::ifstream in{path};
   if (!in) {
     return std::nullopt;
   }
@@ -74,7 +74,7 @@ struct SysSource {
 }
 
 [[nodiscard]] inline std::optional<std::string> read_sysctl(const std::string& name) {
-#if defined(__APPLE__)
+#ifdef __APPLE__
   std::size_t size = 0;
   if (::sysctlbyname(name.c_str(), nullptr, &size, nullptr, 0) != 0 || size == 0) {
     return std::nullopt;
@@ -95,7 +95,7 @@ struct SysSource {
 }
 
 [[nodiscard]] inline std::optional<std::int64_t> read_sysctl_number(const std::string& name) {
-#if defined(__APPLE__)
+#ifdef __APPLE__
   std::int64_t wide = 0;
   std::size_t size = sizeof(wide);
   if (::sysctlbyname(name.c_str(), &wide, &size, nullptr, 0) != 0) {
@@ -117,9 +117,9 @@ struct SysSource {
 }
 
 [[nodiscard]] inline SysSource live_source() {
-#if defined(__APPLE__)
+#ifdef __APPLE__
   constexpr std::string_view kOs = kOsMac;
-#elif defined(__linux__)
+#elifdef __linux__
   constexpr std::string_view kOs = kOsLinux;
 #else
   constexpr std::string_view kOs = "unknown";
@@ -194,7 +194,7 @@ namespace detail {
   if (!text) {
     return unavailable(std::format("{} not readable", path));
   }
-  std::string value = trim(*text);
+  const std::string value = trim(*text);
   return value.empty() ? unavailable(std::format("{} is empty", path)) : value;
 }
 
@@ -223,7 +223,7 @@ namespace detail {
   if (source.os != kOsLinux) {
     return unavailable(std::format("{} exposes no boost control", source.os));
   }
-  const std::string boost = detail::read_field(source, "/sys/devices/system/cpu/cpufreq/boost");
+  std::string boost = detail::read_field(source, "/sys/devices/system/cpu/cpufreq/boost");
   if (boost == "1") {
     return "on";
   }

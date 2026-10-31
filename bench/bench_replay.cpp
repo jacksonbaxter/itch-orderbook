@@ -15,6 +15,8 @@
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <exception>
 #include <format>
 #include <fstream>
 #include <memory>
@@ -126,13 +128,13 @@ bool parse(std::span<char*> args, Options& options) {
 }
 
 void run_throughput(benchmark::State& state, Session* session, const TimerInfo* timer) {
-  for (auto iteration : state) {
+  for (const auto iteration : state) {
     static_cast<void>(iteration);
     if (!session->timed_throughput()) {
       state.SkipWithError("the run was refused");
       return;
     }
-    const PassTotals& pass = *session->report().throughput;
+    const PassTotals pass = session->report().throughput.value_or(PassTotals{});
     const double seconds = timer->ticks_to_ns(static_cast<double>(pass.ticks)) / 1e9;
     state.SetIterationTime(seconds);
     state.counters["msg_per_s"] = static_cast<double>(pass.messages) / seconds;
@@ -141,13 +143,13 @@ void run_throughput(benchmark::State& state, Session* session, const TimerInfo* 
 
 void run_latency(benchmark::State& state, Session* session, const TimerInfo* timer,
                  SampleBuffer* samples) {
-  for (auto iteration : state) {
+  for (const auto iteration : state) {
     static_cast<void>(iteration);
     if (!session->timed_latency(*samples)) {
       state.SkipWithError("the run was refused");
       return;
     }
-    const PassTotals& pass = *session->report().latency;
+    const PassTotals pass = session->report().latency.value_or(PassTotals{});
     state.SetIterationTime(timer->ticks_to_ns(static_cast<double>(pass.ticks)) / 1e9);
   }
 }
@@ -230,9 +232,7 @@ std::string core_field(const PinOutcome& pin, const MigrationTracker& migrations
   return std::format("unpinned, last ran on core {}", migrations.last_core());
 }
 
-}  // namespace
-
-int main(int argc, char** argv) {
+int run(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   Options options;
   if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
@@ -338,4 +338,15 @@ int main(int argc, char** argv) {
     std::println(stderr, "bench_replay: refused: {}", refusal);
   }
   return session.report().publishable() ? 0 : 3;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  try {
+    return run(argc, argv);
+  } catch (const std::exception& error) {
+    static_cast<void>(std::fputs(error.what(), stderr));
+    return 2;
+  }
 }

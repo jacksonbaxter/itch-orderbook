@@ -98,7 +98,7 @@ namespace detail {
   out += std::format("  \"latency_pass\": {},\n", detail::pass_json(session.latency, timer));
   out += std::format("  \"instrumentation_ratio\": {},\n",
                      json_number(session.instrumentation_ratio()));
-  out += "  \"latency\": {\"percentiles\": [";
+  out += R"(  "latency": {"percentiles": [)";
   for (std::size_t i = 0; i < record.latency.percentiles.size(); ++i) {
     const Percentile& p = record.latency.percentiles[i];
     out += std::format(R"({}{{"percentile": {}, "value_ns": {}}})", i == 0 ? "" : ", ",
