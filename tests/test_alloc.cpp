@@ -51,7 +51,7 @@ std::vector<std::byte> build_stream() {
   std::vector<std::uint64_t> live;
   std::uint64_t next_reference = 1;
   for (int step = 0; step < 200000; ++step) {
-    const auto price = 1000 + ((random() % 64) * 100);
+    const auto price = static_cast<std::uint32_t>(1000 + ((random() % 64) * 100));
     if (live.size() < kPool / 2) {
       put((step % 3 == 0 ? wire::add_attributed : wire::add)(
           1, next_reference, step % 2 == 0 ? 'B' : 'S', 300, price, 1));
