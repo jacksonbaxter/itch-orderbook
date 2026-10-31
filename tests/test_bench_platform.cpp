@@ -401,6 +401,13 @@ TEST(BenchSysinfo, TheHeaderNeverCarriesTheHostname) {
   const std::string hostname{name.data()};
   ASSERT_FALSE(hostname.empty());
   for (const HeaderField& field : build_header(live_source(), complete_inputs())) {
+    // The host field is one of three fixed strings, and debian's hostname is also its label.
+    if (field.first == "host") {
+      EXPECT_TRUE(field.second == kHostMac || field.second == kHostDebian ||
+                  field.second == kHostUnknown)
+          << field.second;
+      continue;
+    }
     EXPECT_FALSE(field.second.contains(hostname)) << field.first;
   }
 }
