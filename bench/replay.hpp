@@ -8,9 +8,9 @@
 // is resident, and a refusal is on the record rather than a quiet skip.
 //
 // Residency is asked last, after everything the pass allocates, because allocating can
-// push file pages out: on debian the sample arena evicted 155 pages of a day between the
-// warm-up and the first pass. It is asked again when the pass ends, so that a page lost
-// during a timed span is a refusal too.
+// push file pages out: on debian 155 pages of a day went between the warm-up and the first
+// pass, with the sample arena allocated in between. It is asked again when the pass ends,
+// so that a page lost during a timed span is a refusal too.
 #pragma once
 
 #include <cstddef>
