@@ -163,3 +163,40 @@ From probes run in the measurement track (`probes-measurement/` in the research 
 - **The maximum RSS of the census is the mapping, not an allocation.** 8.25 GB on 12302019 is the file's resident pages. Measured on the binary itself, its peak memory footprint is 9.6 MB.
 - **The fuzz runs so far are 90 s each.** They show the targets work. They are not the 30-minute runs the Done criteria ask for.
 - **The held-vendor gate covers code, scripts, configuration and results.** Markdown is left out on purpose, because `BENCHMARKS.md` and this file record the hold and cite the terms. `scripts/test_fetch_data.py` is exempt, since it checks that the data scripts do not name the vendor.
+
+### The oracle's proof
+
+The brief asks for coverage after every message of the state that can have changed, and a proof that the rest cannot have diverged. `tests/oracle/diff.hpp` is the code. This is the argument.
+
+**The claim.** Call a level `x = (locate, side, price)`, and `S(x)` what it holds: the FIFO of `(reference, shares)`, the aggregate shares and the order count. After every message, `S_fast(x) = S_ref(x)` for every `x`.
+
+**The proof, by induction on messages.**
+
+- Base: before the first message both books are empty.
+- Step: assume the claim holds after message `n-1`. The reference applies message `n` and returns `T(n)`, the levels it can have changed, worked out from its own state. It is at most two levels.
+  - For `x` in `T(n)`, the diff compares `S(x)` directly, in full, so the claim holds there by check, not by argument.
+  - For `x` outside `T(n)`, the reference changed nothing by construction of `T(n)`, so `S_ref(x)` is unchanged. The fast book only changes a level inside `write_level()`, which reports each write to the policy object before making it. The oracle build records those writes, and the diff requires each one to be in `T(n)`. So `x` was not written, `S_fast(x)` is unchanged, and the two are equal by the assumption.
+
+**What the proof rests on, and what covers each assumption.**
+
+| Assumption | Covered by | Limit |
+|---|---|---|
+| The fast book writes a level only through `write_level()` | The hash and the exhaustive compare, which walk both whole books and never read the choke point's records | A bypassed write is seen at the next hash, up to 1,000,000 messages late, not at once. One undone before that hash escapes on a real day. The exhaustive compare on the fixtures and in the fuzzer has no such gap |
+| `T(n)` holds everything the reference changed | The same whole-book walks, since a change outside `T(n)` appears as a difference. If the fast book made the same change, the write-set check fires | A wrong `T(n)` that both books agree with is the next row |
+| The two books mean the same thing by a message | Nothing here. The reference decodes its own bytes at its own offsets, which rules out a shared misread offset, not a shared misunderstanding | This is carteret's stated gap. T-TRADE-1 to T-TRADE-3 reach outside both books and are what can close it. The fuzzer's model is a third opinion on prices and liveness, on random flow only |
+| The hash is sound | It mixes every word of a canonical sequence, and the word counts must match as well | 64 bits and not cryptographic. A chance collision is about 2^-64 per comparison, and it is not meant to resist an adversary |
+| The oracle build behaves like the build that ships | A default `FastBook<>` takes every message too, and its hash must equal the oracle build's at each hash point | At hash points only |
+
+**What each piece of the diff covers.**
+
+| Piece | When | Covers | Does not cover |
+|---|---|---|---|
+| Status | Every message | Both books apply or refuse alike, for the same reason | Whether either is right |
+| Touched level | Every message, each level in `T(n)` | Existence, order count, stored aggregate against a sum from the FIFO, and the FIFO itself | Any other level |
+| Best bid and offer | Every message, both sides of its locate | Price, shares and orders in the cached top of book, including a best level reached by a stale link | Depth below the best, and other locates |
+| Write set | Every message | Each choke-point write lies in `T(n)`, whether or not it changed anything | Writes that bypass the choke point, and whether the write was correct |
+| Periodic hash | Every 1,000,000 messages | All of both books, in canonical order, with stored totals and the cached top | Which message did it, and anything undone before it runs |
+| End-of-day hash | Once | The same, after the last message | Little on a real day: the book ends empty, so it says only that both are empty |
+| Exhaustive compare | Every message, fixtures and fuzzer only | All of both books, with the first differing word | Too slow for a whole day |
+
+Price-order links (`better`, `worse`) and the reference index are structure, not level contents, so they are outside `S(x)` and the write set. A broken link shows at the best bid and offer if it reaches the best level, in `find_level()` when the touched compare goes looking, and in the canonical walk, which follows the links. A broken index shows as a status divergence the next time that reference is named.
