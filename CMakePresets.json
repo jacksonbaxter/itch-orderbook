@@ -1,0 +1,163 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    {
+      "name": "release",
+      "displayName": "Optimised build, all checks",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "sanitized",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS_DEBUG": "-g -O1"
+      }
+    },
+    {
+      "name": "asan-ubsan",
+      "displayName": "ASan and UBSan, no recovery, alignment checks on",
+      "inherits": "sanitized",
+      "cacheVariables": {
+        "ITCH_SANITIZE": "address,undefined"
+      }
+    },
+    {
+      "name": "tsan",
+      "displayName": "ThreadSanitizer",
+      "inherits": "sanitized",
+      "cacheVariables": {
+        "ITCH_SANITIZE": "thread"
+      }
+    },
+    {
+      "name": "fuzz",
+      "displayName": "libFuzzer with ASan and UBSan, asserts on",
+      "inherits": "sanitized",
+      "cacheVariables": {
+        "ITCH_SANITIZE": "address,undefined",
+        "ITCH_FUZZ": "ON",
+        "ITCH_BUILD_TESTS": "OFF",
+        "ITCH_BUILD_TOOLS": "OFF"
+      }
+    },
+    {
+      "name": "tidy",
+      "displayName": "clang-tidy, warnings as errors",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ITCH_TIDY": "ON"
+      }
+    },
+    {
+      "name": "wasm",
+      "displayName": "Parser library with em++",
+      "inherits": "base",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ITCH_BUILD_TESTS": "OFF",
+        "ITCH_BUILD_TOOLS": "OFF",
+        "ITCH_BUILD_FUZZ": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "jobs": 6
+    },
+    {
+      "name": "asan-ubsan",
+      "configurePreset": "asan-ubsan",
+      "jobs": 6
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan",
+      "jobs": 6
+    },
+    {
+      "name": "fuzz",
+      "configurePreset": "fuzz",
+      "jobs": 6
+    },
+    {
+      "name": "tidy",
+      "configurePreset": "tidy",
+      "jobs": 6
+    },
+    {
+      "name": "wasm",
+      "configurePreset": "wasm",
+      "jobs": 6
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 6
+      }
+    },
+    {
+      "name": "release",
+      "inherits": "base",
+      "configurePreset": "release"
+    },
+    {
+      "name": "asan-ubsan",
+      "inherits": "base",
+      "configurePreset": "asan-ubsan",
+      "environment": {
+        "ASAN_OPTIONS": "halt_on_error=1:abort_on_error=1:strict_string_checks=1:detect_stack_use_after_return=1",
+        "UBSAN_OPTIONS": "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
+      }
+    },
+    {
+      "name": "tsan",
+      "inherits": "base",
+      "configurePreset": "tsan",
+      "environment": {
+        "TSAN_OPTIONS": "halt_on_error=1:abort_on_error=1"
+      }
+    },
+    {
+      "name": "fuzz-smoke",
+      "inherits": "base",
+      "configurePreset": "fuzz",
+      "filter": {
+        "include": {
+          "label": "fuzz-smoke"
+        }
+      }
+    },
+    {
+      "name": "wasm",
+      "inherits": "base",
+      "configurePreset": "wasm"
+    }
+  ]
+}

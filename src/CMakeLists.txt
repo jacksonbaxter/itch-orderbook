@@ -1,0 +1,11 @@
+add_library(itch_parser STATIC parser.cpp)
+target_include_directories(itch_parser PUBLIC "${PROJECT_SOURCE_DIR}/include")
+itch_apply_options(itch_parser)
+
+if(EMSCRIPTEN)
+  add_executable(itch_wasm_smoke wasm_smoke.cpp)
+  target_include_directories(itch_wasm_smoke PRIVATE "${PROJECT_SOURCE_DIR}/tests")
+  target_link_libraries(itch_wasm_smoke PRIVATE itch_parser)
+  itch_apply_options(itch_wasm_smoke)
+  add_test(NAME itch_wasm_smoke COMMAND itch_wasm_smoke)
+endif()

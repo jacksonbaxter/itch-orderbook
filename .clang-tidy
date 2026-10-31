@@ -1,0 +1,40 @@
+# Run through the tidy preset, which checks the clang-tidy major version. Warnings
+# are errors. Each disabled check is here for the reason in its comment.
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
+  -misc-include-cleaner,
+  -modernize-use-trailing-return-type,
+  -portability-avoid-pragma-once,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -readability-trailing-comma
+# bugprone-easily-swappable-parameters: every decoded field is an integer.
+# *-magic-numbers: offsets and lengths are the specification's own numbers.
+# pro-bounds-pointer-arithmetic, avoid-unchecked-container-access: the decoders walk
+#   a validated pointer, and a bounds check on each field would be a second length
+#   check for what the reader has established.
+# pro-bounds-constant-array-index: a wire byte indexes a table of 256 entries.
+# misc-include-cleaner: maps libc++ internals badly, and the warnings cover real gaps.
+# use-trailing-return-type, identifier-length, trailing-comma: style with no safety
+#   gain. avoid-pragma-once: every compiler in the plan supports it.
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/(include/itch|src|tools|tests|fuzz)/.*'
+ExcludeHeaderFilterRegex: '.*/_deps/.*'
+FormatStyle: none
+CheckOptions:
+  misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic: true
