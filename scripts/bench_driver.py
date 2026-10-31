@@ -239,6 +239,34 @@ def per_message_rows(records):
     return rows
 
 
+def agreement_rows(records):
+    """rdpmc against read() over the whole pass, event by event, with the widest gap seen."""
+    rows = []
+    for position, entry in enumerate(records[0]["counters"].get("agreement_events", [])):
+        entries = [record["counters"]["agreement_events"][position] for record in records]
+        gaps = [abs(item["read"] - item["rdpmc"]) for item in entries]
+        widest = max(gaps)
+        base = entries[gaps.index(widest)]["read"]
+        share = 100 * widest / base if base else 0.0
+        summed = [next((item["sum"] for item in record["counters"]["per_message"]
+                        if item["name"] == entry["name"]), None) for record in records]
+        apply_sum = "" if None in summed else f"{statistics.median(summed):,.0f}"
+        rows.append(f"| {entry['name']} | {statistics.median(e['read'] for e in entries):,.0f} "
+                    f"| {statistics.median(e['rdpmc'] for e in entries):,.0f} "
+                    f"| {widest:,} | {share:.4f}% | {apply_sum} |")
+    return rows
+
+
+def peak_lines(records):
+    """Linux has no /usr/bin/time here, and a wrapper would break measure.sh's signal path."""
+    if not records[0]["header"]["kernel"].startswith("Linux"):
+        return ["- peak_rss: unavailable: /usr/bin/time did not wrap the run",
+                "- peak_footprint: unavailable: /usr/bin/time did not wrap the run"]
+    peak = max(record["peak_rss_bytes"] for record in records) / 1024 ** 3
+    return [f"- peak_rss: {peak:.2f} GiB, getrusage of the benchmark, largest repetition",
+            "- peak_footprint: unavailable: a macOS figure, with no Linux equivalent"]
+
+
 def repetition_rows(records):
     rows = []
     for index, record in enumerate(records, start=1):
@@ -256,8 +284,7 @@ def header_lines(records, args, run_id, started, finished):
     warmup = records[0]["warmup"]["messages"]
     lines += [f"- measure_load_start: {check_results.PENDING}",
               f"- measure_load_end: {check_results.PENDING}",
-              "- peak_rss: unavailable: /usr/bin/time did not wrap the run",
-              "- peak_footprint: unavailable: /usr/bin/time did not wrap the run",
+              *peak_lines(records),
               f"- prediction: {args.prediction}",
               f"- run_id: {run_id}",
               f"- repetitions: {len(records)}",
@@ -303,6 +330,14 @@ def render(records, args, run_id, started, finished, machine_output, command):
         lines += ["", "Per-message means, through `rdpmc`:", "",
                   "| Event | Median | Min | Max | CV |", "|---|---|---|---|---|"]
         lines += per_message
+    agreement = agreement_rows(records)
+    if agreement:
+        lines += ["", "`rdpmc` against `read()` over the whole pass, median counts with the "
+                  "widest gap of any repetition, and the per-message deltas summed, which leave "
+                  "out the frame walk:", "",
+                  "| Event | read() | rdpmc | Widest gap | Gap | Sum over apply() |",
+                  "|---|---|---|---|---|---|"]
+        lines += agreement
     lines += ["", "## Repetitions", "",
               "| Repetition | Messages/s | Instrumentation ratio | Quantum ns | Empty pair ns "
               "| Migrations | Peak RSS GiB |", "|---|---|---|---|---|---|---|"]

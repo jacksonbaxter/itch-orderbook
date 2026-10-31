@@ -137,6 +137,18 @@ class Results(unittest.TestCase):
 
 
 class Stamp(unittest.TestCase):
+    def test_debian_lines_keep_their_detail_and_lose_the_hostname(self):
+        stderr = ("measure.sh: start load1=1.42 host=some-machine at=2000-01-01T00:00:00Z cpus=4 "
+                  "governor=performance freq_khz=cpu4:2000000 perf_event_paranoid=2\n"
+                  "measure.sh: end load1=1.42 exit=0 at=2999-01-01T00:00:00Z cpus=4 "
+                  "governor=performance freq_khz=cpu4:2727044 perf_event_paranoid=2\n"
+                  "measure.sh: restored governor=schedutil\n")
+        text = stamp_load.stamp(PENDING, stderr)
+        self.assertNotIn("some-machine", text)
+        self.assertIn("host=macOS (M4 Max) at=2000-01-01T00:00:00Z cpus=4 governor=performance",
+                      text)
+        self.assertIn("perf_event_paranoid=2", text)
+
     def test_copies_the_lines_and_drops_the_hostname(self):
         stamped = stamp_load.stamp(PENDING, STDERR)
         self.assertNotIn("some-machine", stamped)
@@ -196,6 +208,29 @@ def record(rate=100.0, ratio=1.5):
 
 
 class Driver(unittest.TestCase):
+    def test_rdpmc_against_read_is_shown_as_numbers(self):
+        records = [record(), record()]
+        for position, gap in enumerate((3, 40)):
+            records[position]["counters"]["agreement_events"] = [
+                {"name": "cycles", "read": 4000, "rdpmc": 4000 - gap}]
+            records[position]["counters"]["per_message"] = [
+                {"name": "cycles", "mean": 1.0, "p50": 1, "p99": 2, "sum": 3000}]
+        self.assertEqual(bench_driver.agreement_rows(records),
+                         ["| cycles | 4,000 | 3,978 | 40 | 1.0000% | 3,000 |"])
+
+    def test_no_agreement_figures_means_no_rows(self):
+        self.assertEqual(bench_driver.agreement_rows([record()]), [])
+
+    def test_a_linux_run_gives_peak_memory_from_the_harness(self):
+        linux = record()
+        linux["peak_rss_bytes"] = 2 * 1024 ** 3
+        linux["header"] = {"kernel": "Linux 6.12"}
+        lines = bench_driver.peak_lines([record(), linux])
+        self.assertEqual(lines[0], "- peak_rss: unavailable: /usr/bin/time did not wrap the run")
+        lines = bench_driver.peak_lines([linux, record()])
+        self.assertTrue(lines[0].startswith("- peak_rss: 2.00 GiB, getrusage"))
+        self.assertTrue(lines[1].startswith("- peak_footprint: unavailable: "))
+
     def test_a_good_record_is_accepted(self):
         bench_driver.validate_run(record())
 

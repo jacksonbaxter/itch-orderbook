@@ -280,11 +280,11 @@ inline constexpr std::uint64_t kRawDramFills = amd_raw_event(0x43, 0x08);
 inline constexpr std::uint64_t kRawL2Misses = amd_raw_event(0x64, 0x09);
 
 inline constexpr std::string_view kCacheMissesName = "cache-misses (L2 misses on Zen 1)";
-inline constexpr std::string_view kDramFillsName = "r0843 (DRAM fills, unproven until bench_chase)";
+inline constexpr std::string_view kDramFillsName = "r0843 (demand DRAM fills, proven by bench_chase)";
 
 // cache-misses counts L2 misses on Zen 1, so it is named for what it counts. The raw
-// event is a last-level stand-in that bench_chase has to prove before any book number
-// uses it, and it means nothing on another CPU.
+// event is a last-level stand-in, for debian only: results/chase_debian.md is what lets a
+// book number use it, and it means nothing on another CPU.
 [[nodiscard]] inline std::vector<PerfEventSpec> events_for_host(std::string_view host_label) {
   std::vector<PerfEventSpec> events{
       {"cycles", EventKind::hardware, kHwCycles},
