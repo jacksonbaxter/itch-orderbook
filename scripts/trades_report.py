@@ -338,7 +338,7 @@ def per_type_rows(log):
     ]
 
 
-def render(log, entry, day, no_cross_file):
+def render(log, entry, day, no_cross_file, failures):
     run = log["run"]
     values = log["values"]
     time = log["time"]
@@ -376,6 +376,12 @@ def render(log, entry, day, no_cross_file):
         lines += ["", f"T-TRADE-2 is not available on {day}: no CrossStats file for that day is "
                   "in hand, so the crosses of this day were compared with nothing. The "
                   "per-message checks on `Q` still ran."]
+    if failures:
+        lines += ["", "## What failed", ""] + [f"- {failure}" for failure in failures]
+    if log["violations"]:
+        lines += ["", "The violations the tool printed in full. It prints the first of each "
+                  "check, so the counts above can be larger.", ""]
+        lines += [f"- `{violation}`" for violation in log["violations"]]
     lines += ["", "## Per message type", "",
               "The user's sentence is: every execution hits a resting order at the printed "
               "price and size, and executed volume per symbol matches. This is where it holds "
@@ -565,7 +571,7 @@ def main(argv=None):
         midas_rows = references.get("midas_2019q4", {}).get("nasdaq_rows", {}).get(date)
         log = parse_log(args.log.read_text(encoding="utf-8", errors="replace"))
         failures = hard_failures(log, entry, midas_rows, args.no_cross_file)
-        text = render(log, entry, args.day, args.no_cross_file)
+        text = render(log, entry, args.day, args.no_cross_file, failures)
     except (OSError, ValueError, KeyError, ReportError) as error:
         print(f"trades report: {error!r}", file=sys.stderr)
         return 2

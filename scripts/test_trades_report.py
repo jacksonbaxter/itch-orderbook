@@ -241,6 +241,16 @@ class TradesReport(unittest.TestCase):
         self.assertIn("| Start | 09:34:59.999999999 | 09:35:00.000000000 |", written)
         self.assertIn("Match 1060: `E` on ZTST, 100 shares.", written)
 
+    def test_a_failing_run_writes_why_into_the_results(self):
+        self.replace("window=0935_1600 equal_shares=4", "window=0935_1600 equal_shares=3")
+        self.replace("check add_refused group=T-TRADE-1 violations=0\n",
+                     "violation t3_trade_shares message=9 locate=1 symbol=ALFA feed 2, MIDAS 1\n"
+                     "check add_refused group=T-TRADE-1 violations=0\n")
+        self.assert_fails("equal_shares 3 of 4 symbols")
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("- equal_shares 3 of 4 symbols", written)
+        self.assertIn("- `t3_trade_shares message=9 locate=1 symbol=ALFA feed 2, MIDAS 1`", written)
+
     def test_a_shorter_replay_than_the_census_fails(self):
         self.day["messages"] = 90
         self.assert_fails("frames 89, manifest 90")
