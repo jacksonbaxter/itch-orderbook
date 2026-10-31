@@ -1,0 +1,3 @@
+add_executable(itch_census itch_census.cpp)
+target_link_libraries(itch_census PRIVATE itch_parser)
+itch_apply_options(itch_census)
