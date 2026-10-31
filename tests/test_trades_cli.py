@@ -9,6 +9,7 @@ fixture and names the check that must fire. A failure prints
 `trades cli: FAIL <case>: <reason>`.
 """
 
+import json
 import struct
 import subprocess
 import sys
@@ -17,6 +18,9 @@ from pathlib import Path
 SMALL = ("--max-orders", "4096", "--max-levels", "4096")
 DATE = ("--date", "20200106")
 PINNED_ROWS = ("--midas-rows", "4")
+
+CLEAN_TYPES = {"A": 15, "B": 1, "C": 12, "D": 7, "E": 12, "F": 1, "H": 8, "P": 4, "Q": 13, "R": 6,
+               "S": 6, "U": 1, "X": 2}
 
 CLEAN_LINES = (
     "messages_checked 88",
@@ -85,6 +89,9 @@ CLEAN_LINES = (
     "t3_outside_symbols 1",
     "t3_outside_shares 200",
     "t3_outside_test_symbols 1",
+    # One nanosecond apart at each bound, by construction of the fixture.
+    "t3_edge_start last_before=34499999999999 first_inside=34500000000000",
+    "t3_edge_end last_inside=57599999999999 first_after=57600000000000",
     "verdict T-TRADE-1 PASS violations=0",
     "verdict T-TRADE-2 PASS violations=0",
     "verdict T-TRADE-3 PASS violations=0",
@@ -201,6 +208,21 @@ def main():
     for name in ("broken_trade match=1060 class=E symbol=ZTST shares=100",):
         if not any(line.startswith(name) for line in lines):
             failures.append(f"clean: no line starting {name!r}")
+
+    # The report reads what the tool really prints, so the two cannot drift apart.
+    (scratch / "report.log").write_text(done.stdout, encoding="ascii")
+    (scratch / "report_manifest.json").write_text(json.dumps({
+        "days": {"01062020": {"name": "day.itch", "unpacked_sha256": "fixture", "messages": 88,
+                              "per_type_counts": CLEAN_TYPES}},
+        "references": {"midas_2019q4": {"nasdaq_rows": {"20200106": 4}}},
+    }), encoding="ascii")
+    report = subprocess.run(
+        [sys.executable, "-B", str(Path(__file__).resolve().parent.parent / "scripts/trades_report.py"),
+         "--day", "01062020", "--log", str(scratch / "report.log"),
+         "--manifest", str(scratch / "report_manifest.json"), "--out", str(scratch / "report.md")],
+        capture_output=True, text=True, check=False)
+    if report.returncode != 0:
+        failures.append(f"report: exit {report.returncode}: {report.stdout}{report.stderr}")
 
     # What the tool says when it was not given a reference.
     bare = subprocess.run([tool, str(fixtures / "day.itch"), *SMALL], capture_output=True,

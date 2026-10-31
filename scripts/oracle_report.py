@@ -3,7 +3,7 @@
 
     oracle_report.py --day 12302019 --log RAW [--alloc-log RAW] [--out results/x.md]
                      [--manifest scripts/data_manifest.json]
-    oracle_report.py --print-flags build/release/compile_commands.json
+    oracle_report.py --print-flags build/release/compile_commands.json [SOURCE]
 
 The tool's own verdicts are not enough here. A tool that diffed half the day could still
 pass, so this compares its counters with the census pinned in the manifest. The third-
@@ -349,10 +349,10 @@ def render(log, entry, day, alloc):
     return "\n".join(lines) + "\n"
 
 
-def tool_flags(compile_commands):
-    """The flags itch_oracle was built with, with no paths in them."""
+def tool_flags(compile_commands, source="tools/itch_oracle.cpp"):
+    """The flags a tool was built with, with no paths in them."""
     entries = json.loads(Path(compile_commands).read_text(encoding="utf-8"))
-    entry = next(e for e in entries if e["file"].endswith("tools/itch_oracle.cpp"))
+    entry = next(e for e in entries if e["file"].endswith(source))
     words = entry["command"].split()[1:]
     kept = []
     skip = False
@@ -369,8 +369,8 @@ def tool_flags(compile_commands):
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
-    if len(argv) == 2 and argv[0] == "--print-flags":
-        print(tool_flags(argv[1]))
+    if len(argv) >= 2 and argv[0] == "--print-flags":
+        print(tool_flags(*argv[1:]))
         return 0
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--day", required=True)

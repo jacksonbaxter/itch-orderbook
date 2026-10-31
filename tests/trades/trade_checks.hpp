@@ -37,6 +37,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <format>
+#include <limits>
 #include <map>
 #include <optional>
 #include <print>
@@ -438,6 +439,7 @@ class TradeRun {
       compare_midas_row(row, found->second);
     }
     tally_outside_midas(covered);
+    find_window_edges(covered);
   }
 
   void print_report(std::FILE* out = stdout) const {
@@ -1157,6 +1159,29 @@ class TradeRun {
     }
   }
 
+  // How tightly the prints pin the window: the prints either side of each bound, on
+  // symbols MIDAS covers. Equality can say no more about a bound than this.
+  void find_window_edges(const std::vector<std::uint8_t>& covered) {
+    const TimeWindow& window = kWindows[kMidasWindow];
+    for (const MatchRecord& record : matches_) {
+      const bool counted = record.print_class == PrintClass::e ||
+                           record.print_class == PrintClass::c_y ||
+                           record.print_class == PrintClass::p;
+      if (!counted || covered[record.locate] == 0) {
+        continue;
+      }
+      const std::uint64_t at = record.timestamp_ns;
+      if (at < window.start_ns) {
+        edges_.last_before = std::max(edges_.last_before, at);
+      } else if (at < window.end_ns) {
+        edges_.first_inside = std::min(edges_.first_inside, at);
+        edges_.last_inside = std::max(edges_.last_inside, at);
+      } else {
+        edges_.first_after = std::min(edges_.first_after, at);
+      }
+    }
+  }
+
   void print_classes(std::FILE* out) const {
     for (std::size_t c = 0; c < kClassNames.size(); ++c) {
       const ClassTally& tally = classes_[c];
@@ -1260,6 +1285,10 @@ class TradeRun {
     std::println(out, "t3_outside_symbols {}", outside_midas_symbols_);
     std::println(out, "t3_outside_shares {}", outside_midas_shares_);
     std::println(out, "t3_outside_test_symbols {}", outside_midas_test_symbols_);
+    std::println(out, "t3_edge_start last_before={} first_inside={}", edges_.last_before,
+                 edges_.first_inside);
+    std::println(out, "t3_edge_end last_inside={} first_after={}", edges_.last_inside,
+                 edges_.first_after);
     for (std::size_t w = 0; w < kWindows.size(); ++w) {
       const WindowFit& fit = fits_[w];
       std::println(out,
@@ -1278,6 +1307,13 @@ class TradeRun {
                    to_string(kChecks[i].group), counts_[i]);
     }
   }
+
+  struct WindowEdges {
+    std::uint64_t last_before = 0;
+    std::uint64_t first_inside = std::numeric_limits<std::uint64_t>::max();
+    std::uint64_t last_inside = 0;
+    std::uint64_t first_after = std::numeric_limits<std::uint64_t>::max();
+  };
 
   // How one window fares against MIDAS, in symbols that agree.
   struct WindowFit {
@@ -1306,6 +1342,7 @@ class TradeRun {
   std::array<ClassTally, kClassNames.size()> classes_{};
   std::array<PriceSplit, 2> c_prices_{};
   std::array<WindowFit, kWindows.size()> fits_{};
+  WindowEdges edges_;
   std::map<std::pair<bool, char>, std::uint64_t> outside_population_;
   std::array<FarLegs, kClassNames.size()> far_legs_{};
   std::array<FarLegs, kClassNames.size()> cross_legs_{};

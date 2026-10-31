@@ -58,6 +58,7 @@ stage_script_tests() {
   python_test scripts/test_fetch_data.py &&
     python_test scripts/test_check_census.py &&
     python_test scripts/test_oracle_report.py &&
+    python_test scripts/test_trades_report.py &&
     python_test scripts/test_fault_matrix.py
 }
 

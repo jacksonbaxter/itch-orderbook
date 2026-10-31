@@ -126,7 +126,11 @@
       "format": "zip",
       "bytes": 126219647,
       "sha256": "7a3f9c008889c4972a4adda37e7ac84d1553335a471063262f509e817fec6db1",
-      "note": "SEC MIDAS 2019 Q4. sec.gov returns 403 to curl, so this capture is the copy used. Never committed."
+      "note": "SEC MIDAS 2019 Q4. sec.gov returns 403 to curl, so this capture is the copy used. Never committed.",
+      "nasdaq_rows": {
+        "20191230": 5772,
+        "20191030": 5767
+      }
     }
   }
 }

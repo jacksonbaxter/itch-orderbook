@@ -235,6 +235,13 @@ class Matrix(unittest.TestCase):
         self.assertEqual(json.loads(fm.json_set(b'{"a": {"b": 1}}', {"path": ["a", "b"], "value": 2})),
                          {"a": {"b": 2}})
 
+    def test_replace_text_needs_exactly_one_occurrence(self):
+        self.assertEqual(fm.replace_text(b"a,b,c", {"old": "b", "new": "x"}), b"a,x,c")
+        with self.assertRaises(fm.DefinitionError):
+            fm.replace_text(b"a,a", {"old": "a", "new": "x"})
+        with self.assertRaises(fm.DefinitionError):
+            fm.replace_text(b"a", {"old": "b", "new": "x"})
+
     def test_input_fault_is_applied_to_the_copy(self):
         (self.root / "check.py").write_text(
             CHECK + 'if Path(__file__).with_name("input.bin").read_bytes()[0] != 0:\n'

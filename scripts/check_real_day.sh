@@ -8,12 +8,17 @@
 # A pinned day with no file is a failure, because a skipped day would look like a pass.
 # Set ITCH_HEAVY_WRAPPER to a command to run each check under it, on a shared machine.
 # Raw logs go to ITCH_REAL_DAY_LOGS, default build/real-day-logs. The curated results go
-# to results/oracle_<day>.md.
+# to results/oracle_<day>.md and results/trades_<day>.md.
 #
 # The oracle takes ten minutes a day and about 0.7 GB beyond the mapped file. T-INV-2 is strict
 # and expected to fail on real data: that result is reported as a failure and keeps this
 # script's exit status non-zero, and it does not stop the other checks. Exit status 3 from
 # oracle_report.py separates that from a broken book, which is status 1.
+#
+# The trade-print checks take a few minutes a day and a few hundred MB beyond the mapped file.
+# They read the SEC MIDAS zip and data/CrossStats<YYYYMMDD>.txt. A day with no cross file is
+# reported as T-TRADE-2 not available, and says so in its results. A missing MIDAS zip is a
+# failure.
 #
 # To add a real-day check: add a function taking the day, and call it from check_day.
 
@@ -57,7 +62,7 @@ run_header() {
     tree=dirty
   echo "run_commit $(git rev-parse --short HEAD) ($tree)"
   echo "run_compiler $("${CXX:-c++}" --version | head -n 1 | sed 's/ (.*//')"
-  echo "run_flags $(python3 -B scripts/oracle_report.py --print-flags build/release/compile_commands.json)"
+  echo "run_flags $(python3 -B scripts/oracle_report.py --print-flags build/release/compile_commands.json "${2:-tools/itch_oracle.cpp}")"
   echo "run_host $(uname -s) $(uname -m) $(sysctl -n machdep.cpu.brand_string 2>/dev/null)"
   echo "run_command $1"
 }
@@ -80,14 +85,54 @@ oracle() {
     --out "results/oracle_$day.md"
 }
 
+# The Nasdaq rows of a day in MIDAS, as pinned in the manifest.
+midas_rows() {
+  python3 -B -c '
+import json, sys
+midas = json.load(open("scripts/data_manifest.json"))["references"]["midas_2019q4"]
+print(midas["nasdaq_rows"][sys.argv[1]])
+' "$1"
+}
+
+trades() {
+  local day=$1 date=${1:4:4}${1:0:4} log=$log_dir/trades_$day.log status
+  local file=data/$day.NASDAQ_ITCH50 cross=data/CrossStats${date}.txt
+  local symbols=$log_dir/trades_symbols_$day.txt member rows
+  local months=(jan feb mar apr may jun jul aug sep oct nov dec)
+  local month=${months[$((10#${day:0:2} - 1))]}
+  member=$month${day:6:2}.csv
+  if ! python3 -B -I scripts/extract_midas.py --member "$member"; then
+    echo "real day: $day has no MIDAS member $member" >&2
+    return 1
+  fi
+  rows=$(midas_rows "$date") || return 1
+  local args=("$file" --date "$date" --midas "build/reference/$member" --midas-rows "$rows"
+    --symbols "$symbols")
+  local report_args=()
+  if [ -f "$cross" ]; then
+    args+=(--crossstats "$cross")
+  else
+    echo "real day: $day has no cross file, so T-TRADE-2 is not available"
+    report_args=(--no-cross-file)
+  fi
+  run_header "itch_trades ${args[*]/#$symbols/<raw log>}" tools/itch_trades.cpp >"$log"
+  # shellcheck disable=SC2086
+  $(timer) $wrapper build/release/tools/itch_trades "${args[@]}" >>"$log" 2>&1
+  status=$?
+  echo "real day: $day itch_trades exited $status"
+  python3 -B scripts/trades_report.py --day "$day" --log "$log" ${report_args[@]+"${report_args[@]}"} \
+    --out "results/trades_$day.md"
+}
+
 check_day() {
   local failed=0
   census "$1" || failed=1
   oracle "$1" || failed=1
+  trades "$1" || failed=1
   return "$failed"
 }
 
-if ! cmake --build --preset release --parallel 6 --target itch_census itch_oracle itch_alloc; then
+if ! cmake --build --preset release --parallel 6 --target itch_census itch_oracle itch_alloc itch_trades; then
   echo "real day: could not build the tools. Run: cmake --preset release" >&2
   exit 2
 fi
