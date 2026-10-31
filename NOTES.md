@@ -270,3 +270,36 @@ The reason is on the SEC's method page: until Nov 3, 2025 a round lot is 100 sha
 - `fuzz_crossstats` ran 15,319,361 executions and `fuzz_midas` 4,562,304, 90 s each, clean. These are not the 30-minute runs the Done criteria ask for.
 
 **A hidden fixture gap.** `trades-src-unit-whole-part` went undetected because every `TradeVol` and `HiddenVol` the fixture compared was under a thousand shares, so the whole part of the MIDAS value was always 0 and the mutant really was invisible there. The mutant was not equivalent. A hidden print of 1,000 on HLTD gave it something to break. Two other faults, `trades-exit-always-zero` and `trades-src-odd-lot-fixed-at-100`, never built, because their mutants left a name unused and `-Werror` refused them, which the matrix calls build-error and not detected.
+
+### Benchmark harness
+
+`bench/platform/`, `bench/replay.hpp`, `bench_replay`, `bench_probe`, the driver, `machine_check.sh`, the numbers gate, the predictions check and 42 bench faults. All of it was built and run on the Mac. The Linux paths have only had a syntax check here, against musl headers and a hand-written `linux/perf_event.h`, because this machine has neither glibc nor kernel headers. That check found nothing in our code, but it is not a compile. The first real one is on `debian`.
+
+**What the decisions were.**
+
+- The quantum is the greatest common divisor of the observed steps, not the smallest step. On `debian` every read is a multiple of 20 ticks and a pair costs about 38, so the smallest step seen would be 40.
+- A percentile is resolved only if it clears 4 quanta after the empty pair is taken off. That is 167 ns here and about 40 ns on `debian`. An unresolved one has no value in the record at all, so there is nothing to copy into a table by mistake. The mean is kept: averaging is what gets under the tick.
+- Latency samples go to a pre-faulted arena, and HdrHistogram sees them after the pass. The sink is a template parameter, so a fake clock can prove the order of events.
+- Counters run in a fourth, untimed pass, so no timing run has them on.
+- measure.sh's start line carries the hostname. `stamp_load.py` swaps that one word for the fixed host label, since the header may never hold a hostname, and refuses lines that do not bracket the run.
+- `/usr/bin/time -l` reports peak RSS across the whole process tree but peak footprint only for its direct child, which here is the Python driver. The file says so. The 0.02 GiB is the driver's.
+
+**The harness proof on 12302019.** [results/bench_replay_stub_mac_12302019.md](results/bench_replay_stub_mac_12302019.md), P-0001. Stub book, macOS, not pinned.
+
+| Prediction | What happened |
+|---|---|
+| Input resident before every pass, 3 repetitions complete, no pin claimed | Held. |
+| Quantum 41.67 ns, floor 166.67 ns, p50 and p90 unresolved | Held. p90 resolved in 2 of 3 repetitions, so the table leaves it unresolved. |
+| Between 3 and 15 million messages/s | Held, at 3.50 to 10.26 million. |
+| CV under 5% | **Wrong.** 67.35%. |
+| Latency pass 1.0 to 1.6 times the throughput pass | **Wrong in one repetition.** 1.03, 0.55 and 1.04. |
+| Peak RSS near 9.6 GiB | **Wrong by 0.7 GiB,** 8.90 GiB. The file is 8.25 GB decimal, which is 7.68 GiB. |
+
+The prediction stays as written. The CV is the finding: these three repetitions do not measure one thing. Two throughput passes took about 76 s and one 26 s. The second repetition then ran its latency pass in 41.6 s, which is why a ratio below 1 appeared, and that ratio means nothing. The counter pass of repetition 1 took 289 billion cycles for the 86.8 billion instructions that took 113.7 billion cycles in the other two. So the slow code was the same code at about 2.5 times the cycles. The empty pair also doubled in the slow repetitions, 6 ns against 3 ns. That fits an unpinned thread landing on an efficiency core, despite `QOS_CLASS_USER_INTERACTIVE`, but nothing here shows which class of core ran which pass, so it stays a guess. No Mac rate from this file should be quoted. It shows the harness works on a whole day, and that macOS gives it no way to hold still.
+
+**Two bugs the harness work found in itself.**
+
+- `cross_check()` returned early with no events, so on macOS the counter pass never ran and the fixture showed 12,025 cycles for a pass of 3,330 messages. The count looked plausible. A test now requires the work to run with no events.
+- `clang-tidy --fix` only sees the macOS branch. It made `probe_rdpmc` const and turned `obtained` const, both of which break Linux, and rewrote instance calls as static ones. All three would have been found only on `debian`. Rerun the Linux syntax check after any tidy fix to `bench/`.
+
+**`scripts/check.sh --only tidy` fails, and not on this work.** 45 findings in `tests/test_book.cpp`, `tests/test_reference_files.cpp`, `tests/trades/` and `tools/itch_trades.cpp`, none in `bench/`. None of those files changed here. Left alone, as outside this job.
