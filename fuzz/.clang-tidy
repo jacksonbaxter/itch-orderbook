@@ -1,0 +1,15 @@
+# GoogleTest's macros define globals, classes and gotos that the production rules
+# forbid, and fuzz and test support may do what production code may not.
+InheritParentConfig: true
+Checks: >
+  -cppcoreguidelines-avoid-goto,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-special-member-functions,
+  -cppcoreguidelines-macro-usage,
+  -cert-err58-cpp,
+  -bugprone-throwing-static-initialization,
+  -misc-use-anonymous-namespace,
+  -readability-function-cognitive-complexity,
+  -readability-function-size,
+  -hicpp-special-member-functions
