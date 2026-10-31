@@ -75,11 +75,11 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [x] Parser tests assert field values against hand-written bytes for all 23 types. `B`, `W`, `h`, `N`, `O` need byte fixtures, because real days lack them (DS-77).
 - [x] Reader safety tests: truncate a valid stream at every byte offset; final message against a `PROT_NONE` guard page; locate 65535; reference 2^64−1.
 - [x] libFuzzer target on every parser and decoder, with committed seed corpus replayed by ctest.
-- [ ] Book fuzzer has an oracle: invariants plus the reference book after each message. A planted book bug must be caught.
-- [ ] Reference book: deliberately simple and independently written. Diff design: per-message coverage of the state that can have changed, plus a proof that unchanged state cannot have diverged. No sampling.
-- [ ] Oracle control: inject a bug into the fast book and show the diff catches it.
-- [ ] Invariants, strict: book never crossed; every execute or cancel references a live order.
-- [ ] Allocation test: fails on any allocation in the hot path, counting aligned, nothrow and array `new`, with a control book that allocates.
+- [x] Book fuzzer has an oracle: invariants plus the reference book after each message. A planted book bug must be caught.
+- [x] Reference book: deliberately simple and independently written. Diff design: per-message coverage of the state that can have changed, plus a proof that unchanged state cannot have diverged. No sampling.
+- [x] Oracle control: inject a bug into the fast book and show the diff catches it.
+- [x] Invariants, strict: book never crossed; every execute or cancel references a live order.
+- [x] Allocation test: fails on any allocation in the hot path, counting aligned, nothrow and array `new`, with a control book that allocates.
 - [x] Negative controls: a planted race and a planted logic bug, and the run fails if the detector stays green.
 
 ### Checks
@@ -119,14 +119,15 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [ ] Repeat carteret's layout experiments on our book: hash policy, open addressing against chaining, window width against overflow. Attribute last-level misses by message type, order age and structure before claiming a bottleneck.
 - [ ] Hot structs: `static_assert` on size, alignment, trivial copyability.
 - [ ] T-BOOK-1 to T-BOOK-4, T-LAT-1 to T-LAT-5, T-DESIGN-1 on the harness.
-- [ ] Strict crossed-book run, full day. Count and characterise each violation by symbol, time and trading state. Report both published counts' populations: all observations, and market open with state `T`. The user decides the scope.
-- [ ] Oracle replay on the Mac under `heavy.sh`, all 268,744,780 messages (T-ORACLE-1).
+- [x] Strict crossed-book run, full day. Count and characterise each violation by symbol, time and trading state. Report both published counts' populations: all observations, and market open with state `T`. The user decides the scope. Done on the Phase 2 stub: `results/oracle_12302019.md`, strict result FAIL.
+- [x] Oracle replay on the Mac under `heavy.sh`, all 268,744,780 messages (T-ORACLE-1). Done on the Phase 2 stub: `results/oracle_12302019.md`.
+- [ ] Repeat T-ORACLE-1, T-INV-1, T-INV-2 and T-ALLOC-1 on 12302019 with the real book, once it replaces the stub.
 - [ ] Repeat the oracle on every session the archive will serve, up to ten, keeping raw output for each (T-ORACLE-2). Check free disk first. State any shortfall as a gap.
 
 ### Trade-print verification
 Hard means any mismatch fails. Each check needs an injected bug that trips it. Check 17 in the evidence table only tests our aggregator, so it must not be cited as an independent result.
-- [ ] `E`, `C` reference a live order, on this locate, `shares <= remaining`. Hard.
-- [ ] `X`, `D`, `U` same liveness, and `U`'s new reference unused. Hard.
+- [x] `E`, `C` reference a live order, on this locate, `shares <= remaining`. Hard. T-INV-1.
+- [x] `X`, `D`, `U` same liveness, and `U`'s new reference unused. Hard. T-INV-1.
 - [ ] Per-order `Add` shares equal the sum of deductions; book empty at `S/C` (T-TRADE-1). Hard.
 - [ ] `E` at best price on its side, with market open and state `T` (T-TRADE-5). Hard. Count the rest.
 - [ ] `E` at queue front: reported as a rate. Published 99.8141%, 99.82% and 99.914%, unexplained remainder.
