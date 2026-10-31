@@ -125,10 +125,78 @@ def book_seeds(fixtures):
     return seeds
 
 
+CROSS_HEADER = ("Date      ,Symbol,ListingMarket,OpeningCross,ClosingCross,IntradayCross,\r\n"
+                "----------,------,-------------,------------,------------,-------------,\r\n")
+CROSS_ROWS = ("12/30/2019,AAA   ,Q            ,          13,           0,            0,\r\n"
+              "12/30/2019,BB.A  ,N            ,        4207,       11772,            5,\r\n")
+CROSS_TOTAL = "12/30/2019,TOTAL ,NULL         ,        4220,       11772,            5,\r\n"
+
+
+def cross_stats_seeds(_fixtures):
+    """Invented CrossStats text: a good file, and one seed for each way a file can fail."""
+    good = CROSS_HEADER + CROSS_ROWS + CROSS_TOTAL
+    seeds = {
+        "good": good,
+        "good-lf": good.replace("\r\n", "\n"),
+        "good-no-final-newline": good[:-2],
+        "good-wrong-total": CROSS_HEADER + CROSS_ROWS + CROSS_TOTAL.replace("4220", "4221"),
+        "good-only-total": CROSS_HEADER + CROSS_TOTAL,
+        "empty": "",
+        "bad-header": "Date,Symbol\r\n",
+        "bad-rule": CROSS_HEADER.replace("-------------,\r\n", "x,\r\n"),
+        "no-total": CROSS_HEADER + CROSS_ROWS,
+        "short-row": CROSS_HEADER + "12/30/2019,AAA\r\n" + CROSS_TOTAL,
+        "bad-date": CROSS_HEADER + "13/32/2019,AAA,Q,1,2,0,\r\n" + CROSS_TOTAL,
+        "mixed-dates": CROSS_HEADER + CROSS_ROWS + CROSS_TOTAL.replace("12/30", "12/31"),
+        "bad-symbol": CROSS_HEADER + "12/30/2019,TOOLONGSYM,Q,1,2,0,\r\n" + CROSS_TOTAL,
+        "bad-number": CROSS_HEADER + "12/30/2019,AAA,Q,-1,2,0,\r\n" + CROSS_TOTAL,
+        "huge-number": CROSS_HEADER + "12/30/2019,AAA,Q,18446744073709551616,2,0,\r\n"
+                       + CROSS_TOTAL,
+        "duplicate-symbol": CROSS_HEADER + CROSS_ROWS + CROSS_ROWS + CROSS_TOTAL,
+        "rows-after-total": CROSS_HEADER + CROSS_TOTAL + CROSS_ROWS,
+    }
+    return {name: text.encode("ascii") for name, text in seeds.items()}
+
+
+MIDAS_HEADER = ("Date,Security,Ticker,Exchange,McapRank,Cancels,Trades,LitTrades,OddLots,Hidden,"
+                "OrderVol('000),TradeVol('000),LitVol('000),OddLotVol('000),HiddenVol('000)\n")
+MIDAS_ROW = "20191230,Stock,AAA,Nasdaq,10.0,5.0,12.0,9.0,4.0,3.0,20.5,1.143,0.893,0.14300000000000002,0.25\n"
+MIDAS_ETF = "20191230,ETF,BB.A,Nasdaq,,5.0,1.0,1.0,1.0,0.0,1.0,19.977999999999998,0.001,0.001,0.0\n"
+MIDAS_OTHER = "20191230,Stock,AAA,Arca,10.0,5.0,-1.0,9.0,4.0,3.0,,-0.1,,0.1,\n"
+
+
+def midas_seeds(_fixtures):
+    """Invented MIDAS text: a good file, and one seed for each way a file can fail."""
+    good = MIDAS_HEADER + MIDAS_ROW + MIDAS_ETF + MIDAS_OTHER
+    seeds = {
+        "good": good,
+        "good-no-final-newline": good[:-1],
+        "good-crlf": good.replace("\n", "\r\n"),
+        "good-two-rows-for-a-symbol": MIDAS_HEADER + MIDAS_ROW + MIDAS_ROW,
+        "good-other-day-only-beside": MIDAS_HEADER + MIDAS_ROW.replace("20191230", "20191231")
+                                      + MIDAS_ROW,
+        "empty": "",
+        "header-only": MIDAS_HEADER,
+        "missing-column": "Date,Ticker\n" + MIDAS_ROW,
+        "duplicate-column": "Date," + MIDAS_HEADER + MIDAS_ROW,
+        "short-row": MIDAS_HEADER + "20191230,Stock\n",
+        "bad-date": MIDAS_HEADER + MIDAS_ROW.replace("20191230", "2019123x"),
+        "bad-security": MIDAS_HEADER + MIDAS_ROW.replace("Stock", "Bond"),
+        "bad-ticker": MIDAS_HEADER + MIDAS_ROW.replace("AAA", "TOOLONGSYM"),
+        "bad-count": MIDAS_HEADER + MIDAS_ROW.replace("12.0", "12.5"),
+        "bad-volume": MIDAS_HEADER + MIDAS_ROW.replace("1.143", "-1.143"),
+        "part-share": MIDAS_HEADER + MIDAS_ROW.replace("1.143", "1.1435"),
+        "huge-volume": MIDAS_HEADER + MIDAS_ROW.replace("1.143", "99999999999999999999.0"),
+    }
+    return {name: text.encode("ascii") for name, text in seeds.items()}
+
+
 TARGETS = {
     "fuzz_reader": reader_seeds,
     "fuzz_decode": decode_seeds,
     "fuzz_book": book_seeds,
+    "fuzz_crossstats": cross_stats_seeds,
+    "fuzz_midas": midas_seeds,
 }
 
 

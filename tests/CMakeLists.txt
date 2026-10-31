@@ -20,6 +20,7 @@ itch_add_test(test_reader test_reader.cpp)
 itch_add_test(test_guard_page test_guard_page.cpp)
 itch_add_test(test_book test_book.cpp)
 itch_add_test(test_alloc test_alloc.cpp oracle/alloc_counter.cpp)
+itch_add_test(test_reference_files test_reference_files.cpp)
 
 if(ITCH_BUILD_TOOLS)
   add_test(NAME test_census_cli

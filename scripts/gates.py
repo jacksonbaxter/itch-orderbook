@@ -27,6 +27,9 @@ SKIPPED_DIRS = {".git", ".venv", ".claude", "__pycache__", "data"}
 CXX_SUFFIXES = {".hpp", ".cpp", ".h", ".cc"}
 WIRE_CODE = ("include", "src", "tools")
 PRODUCTION_CODE = ("include", "src")
+# Fed untrusted reference files, so they are held to the parser's rule on aborting.
+REFERENCE_PARSERS = ("tests/trades/reference_text.hpp", "tests/trades/cross_stats.hpp",
+                     "tests/trades/midas.hpp")
 ALL_CODE = ("include", "src", "tools", "tests", "fuzz", "bench")
 # Prose may discuss what the project holds back and cite where it came from. Code,
 # scripts, configuration and results may not touch it.
@@ -200,7 +203,7 @@ def gates():
         Gate("no-conditional-compilation", "no hooks or test-only #if in parser code",
              preprocessor_condition, lambda root: cxx_files(root, PRODUCTION_CODE)),
         Gate("no-abort-on-wire", "no assert, throw or abort in parser code",
-             aborting_call, lambda root: cxx_files(root, PRODUCTION_CODE)),
+             aborting_call, lambda root: cxx_files(root, PRODUCTION_CODE + REFERENCE_PARSERS)),
         Gate("toolchain-path", "no hardcoded toolchain path in build files or scripts",
              toolchain_path, lambda root: list(walk(root))),
     )

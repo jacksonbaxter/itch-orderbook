@@ -1,0 +1,4 @@
+Date      ,Symbol,ListingMarket,OpeningCross,ClosingCross,IntradayCross,
+----------,------,-------------,------------,------------,-------------,
+13/32/2019,AAA,Q,1,2,0,
+12/30/2019,TOTAL ,NULL         ,        4220,       11772,            5,
