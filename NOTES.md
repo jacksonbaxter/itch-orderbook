@@ -214,3 +214,59 @@ Price-order links (`better`, `worse`) and the reference index are structure, not
 - **The allocation counter sees `operator new`, not `malloc`.** A direct `malloc` on the hot path would pass T-ALLOC-1.
 - **`fuzz_book` runs at about 120 executions a second.** Each one drives up to hundreds of messages through both books with a whole-book compare after each, so that is slow by design: 14,195 runs in 121 s, 562 new units, peak 356 MB, clean. The exhaustive per-message compare covers the model's locates, and the whole-book hash covers the rest at the end of each input. The planted fault passes the corpus replay and falls to libFuzzer within 34 executions on seed 1.
 - **A day takes about ten minutes and 0.7 GB.** 669 s and a peak footprint of 0.66 GiB beside a sibling project's build, 599 s on a quieter run. Maximum RSS moved from 8.34 GiB to 6.14 GiB between those two runs with the same binary logic, because it counts file pages still resident, so it says more about the machine than the oracle. Quote the footprint.
+
+### Trade prints against outside references
+
+Both days ran `itch_trades` on the Phase 2 stub: 12302019 and 10302019. `results/trades_12302019.md` and `results/trades_10302019.md` have the numbers. **T-TRADE-3 fails on both days, on two symbols.** Everything else that could run passes.
+
+| Result | 12302019 | 10302019 |
+|---|---|---|
+| T-TRADE-1 | PASS | PASS |
+| T-TRADE-2 | PASS | Not available: no CrossStats file for that day is pinned |
+| T-TRADE-3 | FAIL, 4 violations on MKL and NVR | FAIL, 4 violations on MKL and NVR |
+| T-TRADE-5 | PASS | PASS |
+| PRINTS | PASS | PASS |
+
+**What was compared with what, and why the two sides could disagree.**
+
+- Inside the book: each order's deductions against the remainder the book holds, and each `E` against the best price. The book can lose a deduction or keep a stale top. T-TRADE-5 is not independent of the book. It tests the book's order, not the book's prices.
+- `Q` against CrossStats: the file is Nasdaq's, parsed apart from the feed, so a misread share count, type or symbol shows as a difference.
+- `E + C_Y + P` against MIDAS: the SEC built it from the same direct feed with its own code. A wrong window, a wrong class, a misread size or a misattributed symbol shows as a difference.
+
+**The MIDAS window is 09:35:00 to 16:00:00 in feed timestamps, half open.** The lead was the SEC's method page for its Market Activity Report, which says its sample runs from 9:35 but does not say that of `TradeVol`. It was then pinned by measurement on 12302019, and 10302019 agrees without any refit: shares, hidden shares, trades and hidden trades are equal on 5,771 of 5,771 symbols and on 5,767 of 5,767. The next-best window, 09:30 to 16:00, gets 2,609 and 3,322 symbols on shares. The nearest prints leave a gap of 23.8 ms at the start and 0.7 ms at the end on 12302019, and 3.3 ms and 0.6 ms on 10302019, so equality says no more than that about the bounds.
+
+**The odd-lot columns are not exact, and the failure is left as a failure.** A fixed 100 failed BH and SEB on the first run. Reading the round lot from the directory message, the fix we expected to clear it, moved the failure instead of ending it: BH and SEB now agree, and MKL and NVR fail. Those two are listed at 10, and MIDAS agrees with a lot of 100 on them, to the share, on both days.
+
+| Symbol | Day | Directory lot | MIDAS odd lots / shares | Feed below directory lot | Feed below 100 |
+|---|---|---|---|---|---|
+| MKL | 12302019 | 10 | 402 / 3,115 | 264 / 645 | 402 / 3,115 |
+| NVR | 12302019 | 10 | 389 / 1,441 | 335 / 842 | 389 / 1,441 |
+| MKL | 10302019 | 10 | 1,443 / 8,014 | 1,131 / 2,716 | 1,443 / 8,014 |
+| NVR | 10302019 | 10 | 694 / 2,734 | 582 / 1,562 | 694 / 2,734 |
+
+The reason is on the SEC's method page: until Nov 3, 2025 a round lot is 100 shares for all but three tickers, BRK.A and SEB at one and BH at 10. So MIDAS holds its own list and does not read the directory, and that list would make all four cells above equal. BRK.A has no Nasdaq row on either day. Nothing was fitted to this. Changing the rule is the user's decision, because it would be chosen after seeing the failure, so the check still compares the directory's lot and fails. Both reports print the two rules side by side from the raw log.
+
+**Two bugs came out of this.**
+
+- **The odd-lot check used a fixed 100.** See above. The directory holds a round lot per symbol, and 11 listed symbols differ from 100 on each day.
+- **CrossStats `bad_rule` named line 2 of a one-line file.** `fuzz_crossstats` found it through its assertion that every error names a line that exists. The fix reports the line the reader is on. The seed `header-only-no-newline` and a unit test keep it.
+
+**`C_N` is not only the visible part of a cross.** Every `C_N` is one of two things, told apart by match number. On 12302019, 4,324 are far legs that share a match number with a print, and 4,185 are cross legs. On 10302019, 4,065 and 2,845. The legs of a side never exceed their `Q`, always at its price, and they fill the whole cross on only 116 of 1,622 sides and 137 of 1,509, so they do not reconstruct `Q`. The longest lag behind a cross is 1.2 ms, on a halt cross.
+
+**The one `B` of the two days is on a test symbol.** 10302019 has one: match 3259000, an `E` of 2 shares on ZVZZT. It finds its print, on its locate, once. 12302019 has none. ZVZZT has no MIDAS row, so these days cannot show whether MIDAS nets a break out.
+
+**Match numbers are unique across print classes.** 7,059,179 and 8,989,570 records, and none shared between two print classes on either day. The only numbers shared are a far leg's with its print.
+
+**`P` has no order to check.** It names no visible order, so its size is only checked against HiddenVol, on the symbols MIDAS covers.
+
+**What the checks do not prove.**
+
+- MIDAS is independent of this code, not of the feed. A fault in the feed itself agrees with itself.
+- Listed symbols with no MIDAS row, 3,101 on 12302019 with 194,964,219 shares inside the window, and 3,085 on 10302019 with 229,244,579. Nothing outside the feed checks them. T-TRADE-1 and T-TRADE-5 still do, from inside.
+- T-TRADE-2 ran on one day. The crosses of 10302019 were compared with nothing.
+- The window bounds are known only as far as the gaps above.
+- Equal volumes do not prove equal order of prints or equal prices. MIDAS has no price in these columns.
+- This was the stub. It repeats on the real book.
+- `fuzz_crossstats` ran 15,319,361 executions and `fuzz_midas` 4,562,304, 90 s each, clean. These are not the 30-minute runs the Done criteria ask for.
+
+**A hidden fixture gap.** `trades-src-unit-whole-part` went undetected because every `TradeVol` and `HiddenVol` the fixture compared was under a thousand shares, so the whole part of the MIDAS value was always 0 and the mutant really was invisible there. The mutant was not equivalent. A hidden print of 1,000 on HLTD gave it something to break. Two other faults, `trades-exit-always-zero` and `trades-src-odd-lot-fixed-at-100`, never built, because their mutants left a name unused and `-Werror` refused them, which the matrix calls build-error and not detected.

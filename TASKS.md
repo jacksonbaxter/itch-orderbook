@@ -128,17 +128,17 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 Hard means any mismatch fails. Each check needs an injected bug that trips it. Check 17 in the evidence table only tests our aggregator, so it must not be cited as an independent result.
 - [x] `E`, `C` reference a live order, on this locate, `shares <= remaining`. Hard. T-INV-1.
 - [x] `X`, `D`, `U` same liveness, and `U`'s new reference unused. Hard. T-INV-1.
-- [ ] Per-order `Add` shares equal the sum of deductions; book empty at `S/C` (T-TRADE-1). Hard.
-- [ ] `E` at best price on its side, with market open and state `T` (T-TRADE-5). Hard. Count the rest.
-- [ ] `E` at queue front: reported as a rate. Published 99.8141%, 99.82% and 99.914%, unexplained remainder.
-- [ ] `C` deducts from the order and leaves its price unchanged. Hard for the deduction, with counts by `Printable`.
-- [ ] `P`: reference 0, side `B`, no book change. Hard. Whole class excluded from "hits a resting order": count and surface.
-- [ ] `Q` per symbol against CrossStats (T-TRADE-2). Hard. Opening shares against Opening, closing against Closing. Halt crosses: sum of `Q` outside CrossStats equals type `H` sum. Test symbols have no row, and are counted apart.
-- [ ] `C_N` against `Q`: per symbol and side `<=`, equal price. Measure first, because no one has confirmed this on real data.
-- [ ] `E + C_Y + P` against MIDAS (T-TRADE-3): exact per-symbol equality once the window is pinned. If it cannot be pinned, report the per-symbol differences as an open gap with the reason. An inequality is never a pass. Add `P` against `HiddenVol`.
+- [x] Per-order `Add` shares equal the sum of deductions; book empty at `S/C` (T-TRADE-1). Hard. Done on the Phase 2 stub, both days.
+- [x] `E` at best price on its side, with market open and state `T` (T-TRADE-5). Hard. Count the rest. Done on the Phase 2 stub, both days.
+- [x] `E` at queue front: reported as a rate. Published 99.8141%, 99.82% and 99.914%, unexplained remainder.
+- [x] `C` deducts from the order and leaves its price unchanged. Hard for the deduction, with counts by `Printable`.
+- [x] `P`: reference 0, side `B`, no book change. Hard. Whole class excluded from "hits a resting order": count and surface.
+- [x] `Q` per symbol against CrossStats (T-TRADE-2). Hard. Opening shares against Opening, closing against Closing. Halt crosses: sum of `Q` outside CrossStats equals type `H` sum. Test symbols have no row, and are counted apart. Done on 12302019. Not available on 10302019: no CrossStats file for it is pinned.
+- [x] `C_N` against `Q`: per symbol and side `<=`, equal price. Measure first, because no one has confirmed this on real data.
+- [ ] `E + C_Y + P` against MIDAS (T-TRADE-3): exact per-symbol equality once the window is pinned. If it cannot be pinned, report the per-symbol differences as an open gap with the reason. An inequality is never a pass. Add `P` against `HiddenVol`. Open: shares, trades, hidden shares and hidden trades are exact on every symbol on both days at 09:35 to 16:00, and P against HiddenVol with them, but the odd-lot columns fail on MKL and NVR on both days. See `results/trades_12302019.md`, `results/trades_10302019.md` and NOTES.md. The user decides which round lot the check compares.
 - [ ] Cboe per-tape check (T-TRADE-4): held. No Cboe data in this project until the user decides. Scripts do not fetch it, nothing depends on it, and no further joins are run.
-- [ ] `B` reverses a stored match, hard on 10302019, fixtures otherwise.
-- [ ] Match numbers unique across `E`, `C`, `P`, `Q`. Measure first.
+- [x] `B` reverses a stored match, hard on 10302019, fixtures otherwise.
+- [x] Match numbers unique across `E`, `C`, `P`, `Q`. Measure first. Measured on both days: unique across the print classes. A far-leg `C_N` shares its number with one print, by design, and is checked against it.
 - [ ] Surface class-level counts in the phase report: test symbols, zero-share `Q`, `C_N`, `P`, `B`.
 
 ### Low-latency components
