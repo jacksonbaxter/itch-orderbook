@@ -116,9 +116,9 @@ struct ParsedVolume {
   constexpr std::uint64_t kMaxWhole = (std::numeric_limits<std::uint64_t>::max() / 1000) - 1;
 
   const std::size_t dot = text.find('.');
-  const std::string_view whole_text = text.substr(0, dot);
+  const std::string_view whole_text = slice(text, 0, dot);
   const std::string_view fraction =
-      dot == std::string_view::npos ? std::string_view{} : text.substr(dot + 1);
+      dot == std::string_view::npos ? std::string_view{} : slice(text, dot + 1);
   const ParsedNumber whole = parse_digits(whole_text);
   if (whole.error) {
     return {.shares = 0,
@@ -137,11 +137,11 @@ struct ParsedVolume {
 
   std::uint64_t shares = whole.value * 1000;
   std::uint64_t place = 100;
-  for (const char c : fraction.substr(0, kShareDigits)) {
+  for (const char c : slice(fraction, 0, kShareDigits)) {
     shares += static_cast<std::uint64_t>(c - '0') * place;
     place /= 10;
   }
-  const std::string_view noise = fraction.substr(std::min(fraction.size(), kShareDigits));
+  const std::string_view noise = slice(fraction, kShareDigits);
   const auto noise_is = [&](char digit) {
     return noise.size() >= kNoiseDigits && noise.find_first_not_of(digit) >= kNoiseDigits;
   };
@@ -158,12 +158,12 @@ struct ParsedVolume {
 [[nodiscard]] constexpr ParsedNumber parse_count(std::string_view text) noexcept {
   const std::size_t dot = text.find('.');
   if (dot != std::string_view::npos) {
-    const std::string_view fraction = text.substr(dot + 1);
+    const std::string_view fraction = slice(text, dot + 1);
     if (fraction.empty() || fraction.find_first_not_of('0') != std::string_view::npos) {
       return {.value = 0, .error = NumberError::malformed};
     }
   }
-  return parse_digits(text.substr(0, dot));
+  return parse_digits(slice(text, 0, dot));
 }
 
 namespace midas_detail {

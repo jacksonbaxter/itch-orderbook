@@ -2,6 +2,7 @@
 // untrusted text. Nothing here can throw, assert or read outside the bytes it is given.
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -19,6 +20,14 @@ namespace itch::trades {
   return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
 }
 
+// At most count bytes of text from at, which substr() gives too, but substr() can throw.
+// An at past the end gives the empty text.
+[[nodiscard]] constexpr std::string_view slice(
+    std::string_view text, std::size_t at, std::size_t count = std::string_view::npos) noexcept {
+  const std::size_t from = std::min(at, text.size());
+  return {text.data() + from, std::min(count, text.size() - from)};
+}
+
 // Hands out one line at a time, without its end. A final line with no newline counts. A
 // file that ends in a newline has no empty line after it.
 class LineCursor {
@@ -30,7 +39,7 @@ class LineCursor {
       return std::nullopt;
     }
     const std::size_t end = rest_.find('\n');
-    std::string_view line = rest_.substr(0, end);
+    std::string_view line = slice(rest_, 0, end);
     rest_.remove_prefix(end == std::string_view::npos ? rest_.size() : end + 1);
     if (line.ends_with('\r')) {
       line.remove_suffix(1);
@@ -61,7 +70,7 @@ class FieldCursor {
       done_ = true;
       return rest_;
     }
-    const std::string_view field = rest_.substr(0, end);
+    const std::string_view field = slice(rest_, 0, end);
     rest_.remove_prefix(end + 1);
     return field;
   }
@@ -127,7 +136,7 @@ struct ParsedNumber {
 
 [[nodiscard]] constexpr std::string_view symbol_view(const Stock& stock) noexcept {
   const std::string_view view{stock.data(), stock.size()};
-  return view.substr(0, view.find(' '));
+  return slice(view, 0, view.find(' '));
 }
 
 }  // namespace itch::trades

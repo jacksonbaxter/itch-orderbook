@@ -127,9 +127,9 @@ constexpr std::array<std::string_view, kFields - 1> kColumns{
   if (text.size() != 10 || text[2] != '/' || text[5] != '/') {
     return std::nullopt;
   }
-  const ParsedNumber month = parse_digits(text.substr(0, 2));
-  const ParsedNumber day = parse_digits(text.substr(3, 2));
-  const ParsedNumber year = parse_digits(text.substr(6, 4));
+  const ParsedNumber month = parse_digits(slice(text, 0, 2));
+  const ParsedNumber day = parse_digits(slice(text, 3, 2));
+  const ParsedNumber year = parse_digits(slice(text, 6, 4));
   if (month.error || day.error || year.error || month.value < 1 || month.value > 12 ||
       day.value < 1 || day.value > 31) {
     return std::nullopt;
@@ -149,6 +149,56 @@ constexpr std::array<std::string_view, kFields - 1> kColumns{
                                                  : CrossStatsFailure::number_too_large;
 }
 
+// The header line and the rule under it, or what is wrong with them.
+[[nodiscard]] constexpr std::optional<CrossStatsError> read_preamble(LineCursor& lines) noexcept {
+  const auto header = lines.next();
+  if (!header) {
+    return CrossStatsError{.failure = CrossStatsFailure::empty_file, .line = 0};
+  }
+  const auto columns = split(*header);
+  if (!columns || !std::ranges::equal(kColumns, std::span{*columns}.first(6), {}, {}, trim)) {
+    return CrossStatsError{.failure = CrossStatsFailure::bad_header, .line = lines.number()};
+  }
+  const auto rule = lines.next();
+  if (!rule) {
+    return CrossStatsError{.failure = CrossStatsFailure::bad_rule, .line = lines.number()};
+  }
+  const auto dashes = split(*rule);
+  if (!dashes || !std::ranges::all_of(std::span{*dashes}.first(6), is_rule)) {
+    return CrossStatsError{.failure = CrossStatsFailure::bad_rule, .line = lines.number()};
+  }
+  return std::nullopt;
+}
+
+// A row's date, which every row of a file shares.
+[[nodiscard]] constexpr std::optional<CrossStatsFailure> read_date(std::string_view field,
+                                                                   std::uint32_t& date) noexcept {
+  const auto parsed = parse_date(trim(field));
+  if (!parsed) {
+    return CrossStatsFailure::bad_date;
+  }
+  if (date != 0 && *parsed != date) {
+    return CrossStatsFailure::mixed_dates;
+  }
+  date = *parsed;
+  return std::nullopt;
+}
+
+// The symbol and listing market of a row that is not the total.
+[[nodiscard]] constexpr std::optional<CrossStatsFailure> read_identity(
+    std::string_view symbol_text, std::string_view listing_text, CrossStatsRow& row) noexcept {
+  const auto symbol = to_stock(symbol_text);
+  if (!symbol) {
+    return CrossStatsFailure::bad_symbol;
+  }
+  row.symbol = *symbol;
+  if (listing_text.size() != 1 || listing_text[0] < 'A' || listing_text[0] > 'Z') {
+    return CrossStatsFailure::bad_listing;
+  }
+  row.listing = listing_text[0];
+  return std::nullopt;
+}
+
 }  // namespace cross_stats_detail
 
 [[nodiscard]] inline std::expected<CrossStatsTable, CrossStatsError> parse_cross_stats(
@@ -159,22 +209,8 @@ constexpr std::array<std::string_view, kFields - 1> kColumns{
   };
 
   LineCursor lines{as_text(bytes)};
-  const auto header = lines.next();
-  if (!header) {
-    return fail(CrossStatsFailure::empty_file, 0);
-  }
-  const auto columns = detail::split(*header);
-  if (!columns ||
-      !std::ranges::equal(detail::kColumns, std::span{*columns}.first(6), {}, {}, trim)) {
-    return fail(CrossStatsFailure::bad_header, lines.number());
-  }
-  const auto rule = lines.next();
-  if (!rule) {
-    return fail(CrossStatsFailure::bad_rule, lines.number());
-  }
-  const auto dashes = detail::split(*rule);
-  if (!dashes || !std::ranges::all_of(std::span{*dashes}.first(6), detail::is_rule)) {
-    return fail(CrossStatsFailure::bad_rule, lines.number());
+  if (const auto error = detail::read_preamble(lines)) {
+    return std::unexpected(*error);
   }
 
   CrossStatsTable table;
@@ -187,29 +223,17 @@ constexpr std::array<std::string_view, kFields - 1> kColumns{
     if (!fields) {
       return fail(CrossStatsFailure::bad_field_count, lines.number());
     }
-    const auto date = detail::parse_date(trim((*fields)[0]));
-    if (!date) {
-      return fail(CrossStatsFailure::bad_date, lines.number());
+    if (const auto failure = detail::read_date((*fields)[0], table.date)) {
+      return fail(*failure, lines.number());
     }
-    if (table.date != 0 && *date != table.date) {
-      return fail(CrossStatsFailure::mixed_dates, lines.number());
-    }
-    table.date = *date;
 
     const std::string_view symbol_text = trim((*fields)[1]);
     const std::string_view listing_text = trim((*fields)[2]);
     saw_total = symbol_text == "TOTAL" && listing_text == "NULL";
     CrossStatsRow row;
-    if (!saw_total) {
-      const auto symbol = to_stock(symbol_text);
-      if (!symbol) {
-        return fail(CrossStatsFailure::bad_symbol, lines.number());
-      }
-      row.symbol = *symbol;
-      if (listing_text.size() != 1 || listing_text[0] < 'A' || listing_text[0] > 'Z') {
-        return fail(CrossStatsFailure::bad_listing, lines.number());
-      }
-      row.listing = listing_text[0];
+    if (const auto failure =
+            saw_total ? std::nullopt : detail::read_identity(symbol_text, listing_text, row)) {
+      return fail(*failure, lines.number());
     }
     for (const auto& [field, out] :
          {std::pair{(*fields)[3], &row.opening}, std::pair{(*fields)[4], &row.closing},
