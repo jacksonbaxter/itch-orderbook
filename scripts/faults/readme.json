@@ -1,0 +1,74 @@
+{
+  "area": "readme",
+  "tree": ["README.md", "results", "scripts"],
+  "faults": [
+    {
+      "id": "readme-table-typed-by-hand",
+      "breaks": "A row of the results table is typed over by hand",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "| 0 allocations after warm-up, fast book |",
+          "new": "| no allocations at all |"
+        }
+      ],
+      "command": ["{python}", "{tree}/scripts/results_table.py", "--root", "{tree}", "--check"],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-figure-altered",
+      "breaks": "One figure in the results table is altered",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "strict: 18,958 crossed",
+          "new": "strict: 18,959 crossed"
+        }
+      ],
+      "command": ["{python}", "{tree}/scripts/results_table.py", "--root", "{tree}", "--check"],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-figure-not-in-results",
+      "breaks": "One figure on a README line is not in the file that line cites",
+      "check": "gate_numbers.py on README.md",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "strict: 18,958 crossed",
+          "new": "strict: 18,959 crossed"
+        }
+      ],
+      "command": ["{python}", "{tree}/scripts/gate_numbers.py", "--root", "{tree}", "--page", "README.md"],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 18,959 is not in results/oracle_12302019\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-failing-verdict-to-pass",
+      "breaks": "A failing verdict in the table is rewritten to PASS",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "| **FAIL** | strict: 18,958 crossed",
+          "new": "| PASS | strict: 18,958 crossed"
+        }
+      ],
+      "command": ["{python}", "{tree}/scripts/results_table.py", "--root", "{tree}", "--check"],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    }
+  ]
+}

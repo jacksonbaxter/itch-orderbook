@@ -63,6 +63,13 @@ stage_script_tests() {
     python_test scripts/test_fetch_tool.py
 }
 
+# The README's tables against a fresh run over results/, and its figures against those files.
+stage_readme() {
+  python_test scripts/results_table.py --check &&
+    python_test scripts/test_results_table.py &&
+    python_test scripts/gate_numbers.py --page README.md
+}
+
 # Reads .github/workflows with the pinned actionlint, fetched into the build tree. No
 # workflow has ever run on GitHub, and this does not run one.
 stage_actionlint() { python_test scripts/lint_workflows.py; }
@@ -132,6 +139,7 @@ register toolchain quick
 register format quick
 register gates quick
 register actionlint quick
+register readme quick
 register script_tests quick
 register corpus quick
 register release quick
