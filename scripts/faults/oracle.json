@@ -1,0 +1,1854 @@
+{
+  "area": "oracle",
+  "faults": [
+    {
+      "id": "oracle-execute-wrong-amount",
+      "breaks": "E deducts half the executed shares",
+      "check": "the touched-level compare, aggregate",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "return deduct(e.header.stock_locate, e.order_reference, e.executed_shares);",
+          "new": "return deduct(e.header.stock_locate, e.order_reference, e.executed_shares / 2);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=aggregate message=\\d+ type=E "
+      }
+    },
+    {
+      "id": "oracle-cancel-wrong-amount",
+      "breaks": "A partial cancel deducts half the shares",
+      "check": "the touched-level compare, aggregate",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "return deduct(x.header.stock_locate, x.order_reference, x.cancelled_shares);",
+          "new": "return deduct(x.header.stock_locate, x.order_reference, x.cancelled_shares / 2);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=aggregate message=\\d+ type=X "
+      }
+    },
+    {
+      "id": "oracle-delete-no-unlink",
+      "breaks": "D leaves the order on its level",
+      "check": "the touched-level compare",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      return ApplyStatus::locate_mismatch;\n    }\n    remove_order(order);\n    return ApplyStatus::applied;\n  }\n\n  // The new order keeps",
+          "new": "      return ApplyStatus::locate_mismatch;\n    }\n    return ApplyStatus::applied;\n  }\n\n  // The new order keeps"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=(level-presence|order-count) message=\\d+ type=D "
+      }
+    },
+    {
+      "id": "oracle-replace-keeps-priority",
+      "breaks": "U at the same price keeps the order's place in the FIFO",
+      "check": "the touched-level compare, FIFO",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    const LevelId moved{.locate = level.locate, .side = level.side, .price = u.price};\n",
+          "new": "    if (u.price == level.price) {\n      const std::uint32_t at = orders_[order].level;\n      erase_index(u.original_order_reference);\n      levels_[at].aggregate_shares += u.shares;\n      levels_[at].aggregate_shares -= orders_[order].shares;\n      orders_[order].reference = u.new_order_reference;\n      orders_[order].shares = u.shares;\n      insert_index(u.new_order_reference, order);\n      refresh_top(id_of(at));\n      return ApplyStatus::applied;\n    }\n    const LevelId moved{.locate = level.locate, .side = level.side, .price = u.price};\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=fifo message=\\d+ type=U "
+      }
+    },
+    {
+      "id": "oracle-fifo-swapped",
+      "breaks": "Orders join the front of the FIFO",
+      "check": "the touched-level compare, FIFO",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "                                     .older = level.back,\n                                     .newer = kNoIndex};\n    if (level.back == kNoIndex) {\n      level.front = write.order;\n    } else {\n      orders_[level.back].newer = write.order;\n    }\n    level.back = write.order;\n",
+          "new": "                                     .older = kNoIndex,\n                                     .newer = level.front};\n    if (level.front == kNoIndex) {\n      level.back = write.order;\n    } else {\n      orders_[level.front].older = write.order;\n    }\n    level.front = write.order;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=fifo message=\\d+ type=[AF] "
+      }
+    },
+    {
+      "id": "oracle-bbo-stale",
+      "breaks": "The cached top of book is not refreshed when a level closes",
+      "check": "the BBO compare",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    refresh_top(id);\n  }\n\n  void open_level",
+          "new": "    if (write.op != LevelOp::close) {\n      refresh_top(id);\n    }\n  }\n\n  void open_level"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=bbo message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-aggregate-wrong",
+      "breaks": "A level's stored aggregate overstates each add",
+      "check": "the touched-level compare, aggregate",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    level.aggregate_shares += write.shares;\n",
+          "new": "    level.aggregate_shares += write.shares + 1;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=aggregate message=\\d+ type=[AF] "
+      }
+    },
+    {
+      "id": "oracle-order-count-wrong",
+      "breaks": "A level's stored order count overstates each add",
+      "check": "the touched-level compare, order count",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    ++level.order_count;\n",
+          "new": "    level.order_count += 2;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=order-count message=\\d+ type=[AF] "
+      }
+    },
+    {
+      "id": "oracle-level-left-behind",
+      "breaks": "A level stays in the book after its last order goes",
+      "check": "the touched-level compare, level presence",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    if (levels_[level].front == kNoIndex) {\n      write_level(id, {.op = LevelOp::close, .level = level});\n      give_back_level(level);\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=level-presence message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-status-wrong",
+      "breaks": "The fast book calls a Trade applied, with no change of state",
+      "check": "the status compare, which nothing else can catch",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      default: return ApplyStatus::no_book_effect;\n",
+          "new": "      case Trade::kType: return ApplyStatus::applied;\n      default: return ApplyStatus::no_book_effect;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=status message=\\d+ type=P "
+      }
+    },
+    {
+      "id": "oracle-write-untouched-level",
+      "breaks": "Each add takes a share from the next level down, through the choke point",
+      "check": "the write-set check, in the same message",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    insert_index(reference, order);\n    return ApplyStatus::applied;\n",
+          "new": "    insert_index(reference, order);\n    const std::uint32_t neighbour = levels_[level].worse;\n    if (neighbour != kNoIndex && orders_[levels_[neighbour].front].shares > 1) {\n      write_level(id_of(neighbour), {.op = LevelOp::reduce,\n                                     .level = neighbour,\n                                     .order = levels_[neighbour].front,\n                                     .shares = 1});\n    }\n    return ApplyStatus::applied;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=write-set message=\\d+ type=[AFU] "
+      }
+    },
+    {
+      "id": "oracle-write-bypasses-choke-point",
+      "breaks": "Each P adds a share to a resting order, with no choke-point record",
+      "check": "the periodic hash, with the write-set check silent",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      case OrderReplace::kType: return replace_order(OrderReplace::from_wire(m));\n",
+          "new": "      case OrderReplace::kType: return replace_order(OrderReplace::from_wire(m));\n      case Trade::kType: ++orders_[0].shares; return ApplyStatus::no_book_effect;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "write_set_violations 0\\n[\\s\\S]*DIVERGENCE kind=periodic-hash message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-reference-book-bug",
+      "breaks": "The reference book, not the fast one, gets U shares wrong",
+      "check": "the diff, which is two-sided",
+      "mutations": [
+        {
+          "file": "tests/oracle/reference_book.hpp",
+          "old": "rest(old.locate, old.side, price, new_reference, shares);",
+          "new": "rest(old.locate, old.side, price, new_reference, shares + 1);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=aggregate message=\\d+ type=U "
+      }
+    },
+    {
+      "id": "oracle-touched-set-misses-old-level",
+      "breaks": "T(m) of a U leaves out the level the order left",
+      "check": "the write-set check, against the reference's T(m)",
+      "mutations": [
+        {
+          "file": "tests/oracle/reference_book.hpp",
+          "old": "    outcome.touched.add(id_of(old));\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=write-set message=\\d+ type=U "
+      }
+    },
+    {
+      "id": "oracle-default-instantiation-differs",
+      "breaks": "The default-observer build behaves differently from the oracle build",
+      "check": "the hash of the default instantiation",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    level.aggregate_shares += write.shares;\n",
+          "new": "    level.aggregate_shares += write.shares;\n    if constexpr (std::is_same_v<WriteObserver, NoWriteObserver>) {\n      ++level.aggregate_shares;\n    }\n"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "#include <string_view>\n#include <vector>\n",
+          "new": "#include <string_view>\n#include <type_traits>\n#include <vector>\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=production-hash message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-off-status",
+      "breaks": "Status compare off, and E is refused for some sizes",
+      "check": "the touched-level compare catches what the status compare would",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_status(fast_status, outcome);\n",
+          "new": "    static_cast<void>(fast_status);\n"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "const OrderExecuted e = OrderExecuted::from_wire(m);\n",
+          "new": "const OrderExecuted e = OrderExecuted::from_wire(m);\n        if (e.executed_shares > 100) {\n          return ApplyStatus::unknown_order;\n        }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "status_checks 0\\n[\\s\\S]*DIVERGENCE kind=aggregate message=\\d+ type=E "
+      }
+    },
+    {
+      "id": "oracle-off-fifo",
+      "breaks": "FIFO compare off, and orders join at the front",
+      "check": "the whole-book hash",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_fifo(id, *actual, *expected);\n",
+          "new": ""
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "                                     .older = level.back,\n                                     .newer = kNoIndex};\n    if (level.back == kNoIndex) {\n      level.front = write.order;\n    } else {\n      orders_[level.back].newer = write.order;\n    }\n    level.back = write.order;\n",
+          "new": "                                     .older = kNoIndex,\n                                     .newer = level.front};\n    if (level.front == kNoIndex) {\n      level.back = write.order;\n    } else {\n      orders_[level.front].older = write.order;\n    }\n    level.front = write.order;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "touched_checks [1-9]\\d*\\n[\\s\\S]*DIVERGENCE kind=periodic-hash message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-off-aggregate",
+      "breaks": "Aggregate compare off, and the aggregate is wrong",
+      "check": "the BBO compare, on shares at the best price",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "if (actual->aggregate_shares != shares) {",
+          "new": "if (false) {"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    level.aggregate_shares += write.shares;\n",
+          "new": "    level.aggregate_shares += write.shares + 1;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=bbo message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-off-order-count",
+      "breaks": "Order-count compare off, and the count is wrong",
+      "check": "the BBO compare, on orders at the best price",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "if (actual->order_count != orders) {",
+          "new": "if (false) {"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    ++level.order_count;\n",
+          "new": "    level.order_count += 2;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=bbo message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-off-level-presence",
+      "breaks": "Level-presence compare off, and a level stays behind",
+      "check": "the whole-book hash",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    if (expected == nullptr || actual == nullptr) {\n      diverge(DivergenceKind::level_presence,",
+          "new": "    if (expected == nullptr || actual == nullptr) {\n      return;\n      diverge(DivergenceKind::level_presence,"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    if (levels_[level].front == kNoIndex) {\n      write_level(id, {.op = LevelOp::close, .level = level});\n      give_back_level(level);\n    }\n",
+          "new": ""
+        },
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_top(outcome.locate, 'B', bid);\n    compare_top(outcome.locate, 'S', ask);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=periodic-hash message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-off-touched",
+      "breaks": "The whole touched-level compare off, and D does not unlink",
+      "check": "the BBO compare or the hash",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    for (std::size_t i = 0; i < outcome.touched.count; ++i) {\n      compare_level(outcome.touched.levels[i]);\n    }\n",
+          "new": ""
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      return ApplyStatus::locate_mismatch;\n    }\n    remove_order(order);\n    return ApplyStatus::applied;\n  }\n\n  // The new order keeps",
+          "new": "      return ApplyStatus::locate_mismatch;\n    }\n    return ApplyStatus::applied;\n  }\n\n  // The new order keeps"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "touched_checks 0\\n[\\s\\S]*DIVERGENCE kind=(bbo|periodic-hash) "
+      }
+    },
+    {
+      "id": "oracle-off-bbo",
+      "breaks": "BBO compare off, and the cached top goes stale",
+      "check": "the whole-book hash, which carries the top of book",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_top(outcome.locate, 'B', bid);\n    compare_top(outcome.locate, 'S', ask);\n",
+          "new": ""
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    refresh_top(id);\n  }\n\n  void open_level",
+          "new": "    if (write.op != LevelOp::close) {\n      refresh_top(id);\n    }\n  }\n\n  void open_level"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "bbo_checks 0\\n[\\s\\S]*DIVERGENCE kind=periodic-hash message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-off-write-set",
+      "breaks": "Write-set check off, and an add writes an untouched level",
+      "check": "the whole-book hash",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_write_set(outcome.touched);\n",
+          "new": ""
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    insert_index(reference, order);\n    return ApplyStatus::applied;\n",
+          "new": "    insert_index(reference, order);\n    const std::uint32_t neighbour = levels_[level].worse;\n    if (neighbour != kNoIndex && orders_[levels_[neighbour].front].shares > 1) {\n      write_level(id_of(neighbour), {.op = LevelOp::reduce,\n                                     .level = neighbour,\n                                     .order = levels_[neighbour].front,\n                                     .shares = 1});\n    }\n    return ApplyStatus::applied;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "write_set_checks 0\\n[\\s\\S]*DIVERGENCE kind=periodic-hash message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-off-periodic-hash",
+      "breaks": "Periodic hash off, and a write bypasses the choke point",
+      "check": "the end-of-day hash",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "if (config_.hash_every != 0 && counters_.messages_diffed % config_.hash_every == 0) {",
+          "new": "if (false) {"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      case OrderReplace::kType: return replace_order(OrderReplace::from_wire(m));\n",
+          "new": "      case OrderReplace::kType: return replace_order(OrderReplace::from_wire(m));\n      case Trade::kType: ++orders_[0].shares; return ApplyStatus::no_book_effect;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "periodic_hash_checks 0\\n[\\s\\S]*DIVERGENCE kind=final-hash message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-off-both-hashes",
+      "breaks": "Both hashes off, and a write bypasses the choke point",
+      "check": "the exhaustive control",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "if (config_.hash_every != 0 && counters_.messages_diffed % config_.hash_every == 0) {",
+          "new": "if (false) {"
+        },
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    if (divergences_.empty()) {\n      compare_hash(DivergenceKind::final_hash, counters_.final_hash_checks);\n    }\n",
+          "new": ""
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      case OrderReplace::kType: return replace_order(OrderReplace::from_wire(m));\n",
+          "new": "      case OrderReplace::kType: return replace_order(OrderReplace::from_wire(m));\n      case Trade::kType: ++orders_[0].shares; return ApplyStatus::no_book_effect;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--exhaustive"
+      ],
+      "expect": {
+        "signature": "periodic_hash_checks 0\\nfinal_hash_checks 0\\n[\\s\\S]*DIVERGENCE kind=exhaustive message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-off-exhaustive",
+      "breaks": "Exhaustive control off, and a write bypasses the choke point",
+      "check": "the periodic hash",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    if (config_.exhaustive) {\n      compare_exhaustive();\n    }\n",
+          "new": ""
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      case OrderReplace::kType: return replace_order(OrderReplace::from_wire(m));\n",
+          "new": "      case OrderReplace::kType: return replace_order(OrderReplace::from_wire(m));\n      case Trade::kType: ++orders_[0].shares; return ApplyStatus::no_book_effect;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--exhaustive"
+      ],
+      "expect": {
+        "signature": "exhaustive_checks 0\\n[\\s\\S]*DIVERGENCE kind=periodic-hash message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-silent-touched-compare",
+      "breaks": "The touched-level compare no longer runs",
+      "check": "test_oracle_cli, on exact counters",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    for (std::size_t i = 0; i < outcome.touched.count; ++i) {\n      compare_level(outcome.touched.levels[i]);\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL lifecycle: no line 'touched_checks 17'"
+      }
+    },
+    {
+      "id": "oracle-silent-bbo-compare",
+      "breaks": "The BBO compare no longer runs",
+      "check": "test_oracle_cli, on exact counters",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_top(outcome.locate, 'B', bid);\n    compare_top(outcome.locate, 'S', ask);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL lifecycle: no line 'bbo_checks 102'"
+      }
+    },
+    {
+      "id": "oracle-silent-write-set",
+      "breaks": "The write-set check no longer runs",
+      "check": "test_oracle_cli, on exact counters",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_write_set(outcome.touched);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL lifecycle: no line 'write_set_checks 51'"
+      }
+    },
+    {
+      "id": "oracle-silent-final-hash",
+      "breaks": "The end-of-day hash no longer runs",
+      "check": "test_oracle_cli, on exact counters",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    if (divergences_.empty()) {\n      compare_hash(DivergenceKind::final_hash, counters_.final_hash_checks);\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL lifecycle: no line 'final_hash_checks 1'"
+      }
+    },
+    {
+      "id": "oracle-silent-exhaustive",
+      "breaks": "The exhaustive control no longer runs",
+      "check": "test_oracle_cli, on exact counters",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    if (config_.exhaustive) {\n      compare_exhaustive();\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL lifecycle: no line 'exhaustive_checks 51'"
+      }
+    },
+    {
+      "id": "oracle-sampled-diff",
+      "breaks": "Every other message skips the diff",
+      "check": "the tool, comparing messages diffed with frames",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    const Header header = read_header(payload.data());\n",
+          "new": "    static std::uint64_t seen = 0;\n    if (++seen % 2 == 0) {\n      return true;\n    }\n    const Header header = read_header(payload.data());\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "oracle_incomplete diffed \\d+ of \\d+ frames\\n[\\s\\S]*verdict T-ORACLE-1 FAIL",
+        "exit": 1
+      }
+    },
+    {
+      "id": "oracle-observer-records-nothing",
+      "breaks": "The write recorder drops every write, so the write-set check could never fire",
+      "check": "test_book, which states the writes of each message",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    if (count_ < kKept) {\n      writes_[count_] = {.locate = locate, .side = side == Side::bid ? 'B' : 'S', .price = price};\n    }\n    ++count_;\n",
+          "new": "    static_cast<void>(locate);\n    static_cast<void>(side);\n    static_cast<void>(price);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=FastBook.TheObserverSeesEveryLevelAMessageWrites"
+      ],
+      "expect": {
+        "signature": "Failure[\\s\\S]*writes\\(wire::add"
+      }
+    },
+    {
+      "id": "oracle-inv1-detection-removed",
+      "breaks": "T-INV-1 stops counting refused messages",
+      "check": "test_oracle_cli on dead_reference.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    ++inv1_violations_;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL dead reference: exit 0, wanted 1"
+      }
+    },
+    {
+      "id": "oracle-inv1-mutated-input",
+      "breaks": "One E names an order that does not exist, in an otherwise good file",
+      "check": "T-INV-1, on a mutated input file",
+      "inputs": [
+        {
+          "file": "tests/fixtures/oracle/lifecycle.itch",
+          "op": "flip_byte",
+          "offset": 422,
+          "mask": 64
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/lifecycle.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "t_inv1_violation message=\\d+ type=E [^\\n]*unknown_order\\n[\\s\\S]*verdict T-INV-1 FAIL",
+        "exit": 1
+      }
+    },
+    {
+      "id": "oracle-inv2-detection-removed",
+      "breaks": "T-INV-2 stops seeing crossed books",
+      "check": "test_oracle_cli on crossed.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "if (!bid.present || !ask.present || bid.price < ask.price) {",
+          "new": "if (!bid.present || !ask.present || bid.price < ask.price || message != 0) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL crossed: exit 0, wanted 3"
+      }
+    },
+    {
+      "id": "oracle-inv2-crossed-input",
+      "breaks": "The first bid in an otherwise clean file is priced above the ask",
+      "check": "T-INV-2, on a mutated input file",
+      "inputs": [
+        {
+          "file": "tests/fixtures/oracle/lifecycle.itch",
+          "op": "flip_byte",
+          "offset": 280,
+          "mask": 16
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/lifecycle.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "verdict T-INV-2 FAIL crossed=[1-9]",
+        "exit": 3
+      }
+    },
+    {
+      "id": "oracle-inv2-locked-as-crossed",
+      "breaks": "A locked book is counted as crossed",
+      "check": "test_oracle_cli on crossed.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "const bool crossed = bid.price > ask.price;",
+          "new": "const bool crossed = bid.price >= ask.price;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL crossed: no line 't_inv2_crossed 7'"
+      }
+    },
+    {
+      "id": "oracle-characterise-trading-state",
+      "breaks": "H is ignored, so every symbol looks to be trading",
+      "check": "test_oracle_cli, characterisation by state",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    state_[locate] = m.trading_state;\n",
+          "new": "    state_[locate] = 'T';\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL crossed: no line 't_inv2_not_in_t crossed=3 locked=1'"
+      }
+    },
+    {
+      "id": "oracle-characterise-market-hours",
+      "breaks": "S Q does not open the market",
+      "check": "test_oracle_cli, characterisation by market hours",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    if (m.event_code == 'Q') {\n      market_open_ = true;\n",
+          "new": "    if (m.event_code == 'Q') {\n      market_open_ = false;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL crossed: no line 't_inv2_market_open crossed=6 locked=2'"
+      }
+    },
+    {
+      "id": "oracle-characterise-symbol",
+      "breaks": "R is ignored, so observations name no symbol",
+      "check": "test_oracle_cli, characterisation by symbol",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "void on_directory(const StockDirectory& m) { symbol_[m.header.stock_locate] = m.stock; }",
+          "new": "void on_directory(const StockDirectory& m) { static_cast<void>(m); }"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL crossed: observation 0 has no 'symbol=HLT'"
+      }
+    },
+    {
+      "id": "oracle-characterise-time",
+      "breaks": "Observations report the wrong clock time",
+      "check": "test_oracle_cli, characterisation by time",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "(seconds / 60) % 60, seconds % 60,",
+          "new": "(seconds / 60) % 59, seconds % 60,"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL crossed: observation 1 has no 'time=10:00:00'"
+      }
+    },
+    {
+      "id": "oracle-characterise-window",
+      "breaks": "A resumption opens no reopening window",
+      "check": "test_oracle_cli, characterisation of the window",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "      window_open_[locate] = 1;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL crossed: no line 't_inv2_in_reopening_window crossed=2 locked=1'"
+      }
+    },
+    {
+      "id": "oracle-characterise-resumption-time",
+      "breaks": "The time of a resumption is lost",
+      "check": "test_oracle_cli, the 50 ms bucket",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "      resumed_ns_[locate] = m.header.timestamp_ns;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL crossed: no line 't_inv2_in_t_within_50ms_of_resumption crossed=3 locked=1'"
+      }
+    },
+    {
+      "id": "oracle-alloc-hot-path-new",
+      "breaks": "rest_order calls operator new, new form",
+      "check": "test_alloc",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "#include <bit>\n",
+          "new": "#include <bit>\n#include <new>\n"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    const std::uint32_t order = take_order();\n",
+          "new": "    ::operator delete(::operator new(8));\n    const std::uint32_t order = take_order();\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "allocation in the hot path"
+      }
+    },
+    {
+      "id": "oracle-alloc-hot-path-array",
+      "breaks": "rest_order calls operator new, array form",
+      "check": "test_alloc",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "#include <bit>\n",
+          "new": "#include <bit>\n#include <new>\n"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    const std::uint32_t order = take_order();\n",
+          "new": "    ::operator delete[](::operator new[](8));\n    const std::uint32_t order = take_order();\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "allocation in the hot path"
+      }
+    },
+    {
+      "id": "oracle-alloc-hot-path-nothrow",
+      "breaks": "rest_order calls operator new, nothrow form",
+      "check": "test_alloc",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "#include <bit>\n",
+          "new": "#include <bit>\n#include <new>\n"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    const std::uint32_t order = take_order();\n",
+          "new": "    ::operator delete(::operator new(8, std::nothrow));\n    const std::uint32_t order = take_order();\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "allocation in the hot path"
+      }
+    },
+    {
+      "id": "oracle-alloc-hot-path-aligned",
+      "breaks": "rest_order calls operator new, aligned form",
+      "check": "test_alloc",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "#include <bit>\n",
+          "new": "#include <bit>\n#include <new>\n"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    const std::uint32_t order = take_order();\n",
+          "new": "    ::operator delete(::operator new(8, std::align_val_t{64}), std::align_val_t{64});\n    const std::uint32_t order = take_order();\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "allocation in the hot path"
+      }
+    },
+    {
+      "id": "oracle-alloc-hot-path-tool",
+      "breaks": "rest_order calls operator new",
+      "check": "itch_alloc, the real-day tool, on a fixture",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "#include <bit>\n",
+          "new": "#include <bit>\n#include <new>\n"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    const std::uint32_t order = take_order();\n",
+          "new": "    ::operator delete(::operator new(8));\n    const std::uint32_t order = take_order();\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_alloc",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "verdict T-ALLOC-1 FAIL fast=[1-9]",
+        "exit": 1
+      }
+    },
+    {
+      "id": "oracle-alloc-counter-broken",
+      "breaks": "The counter never counts",
+      "check": "the control book in test_alloc",
+      "mutations": [
+        {
+          "file": "tests/oracle/alloc_counter.cpp",
+          "old": ".fetch_add(1, std::memory_order_relaxed)",
+          "new": ".fetch_add(0, std::memory_order_relaxed)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "control book made almost no allocation"
+      }
+    },
+    {
+      "id": "oracle-alloc-counter-broken-tool",
+      "breaks": "The counter never counts",
+      "check": "the control pass in itch_alloc",
+      "mutations": [
+        {
+          "file": "tests/oracle/alloc_counter.cpp",
+          "old": ".fetch_add(1, std::memory_order_relaxed)",
+          "new": ".fetch_add(0, std::memory_order_relaxed)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_alloc",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "itch_alloc: FAIL the control book made no allocation",
+        "exit": 1
+      }
+    },
+    {
+      "id": "oracle-alloc-form-uncounted",
+      "breaks": "Aligned new is not counted, so a hot-path alignas allocation would pass",
+      "check": "test_alloc, each form against its own counter",
+      "mutations": [
+        {
+          "file": "tests/oracle/alloc_counter.cpp",
+          "old": "  oracle::count(AllocForm::aligned);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "aligned[\\s\\S]*Failure|Failure[\\s\\S]*aligned"
+      }
+    },
+    {
+      "id": "oracle-fuzz-planted-bug",
+      "breaks": "A level overstates its aggregate only once it holds six orders, which no seed reaches",
+      "check": "fuzz_book under libFuzzer finds it by mutation",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    ++level.order_count;\n",
+          "new": "    ++level.order_count;\n    if (level.order_count == 6) {\n      ++level.aggregate_shares;\n    }\n"
+        }
+      ],
+      "build": {
+        "preset": "fuzz",
+        "targets": [
+          "fuzz_book"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{build}/fuzz/fuzz_book",
+        "-seed=1",
+        "-max_total_time=120",
+        "-artifact_prefix={build}/fuzz/artifacts/",
+        "{build}/fuzz/corpus/fuzz_book",
+        "{tree}/fuzz/corpus/fuzz_book"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=aggregate[\\s\\S]*FUZZ_CHECK failed: same"
+      },
+      "timeout": 280
+    },
+    {
+      "id": "oracle-fuzz-corpus-replay",
+      "breaks": "E deducts half the executed shares",
+      "check": "corpus_fuzz_book, the full diff over committed seeds",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "return deduct(e.header.stock_locate, e.order_reference, e.executed_shares);",
+          "new": "return deduct(e.header.stock_locate, e.order_reference, e.executed_shares / 2);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_book"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_book$"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=aggregate"
+      }
+    },
+    {
+      "id": "oracle-fuzz-shared-bug",
+      "breaks": "Both books leave an order alive at zero shares after a full cancel, so the diff stays equal",
+      "check": "the model in fuzz_book, which neither book feeds",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    if (shares == orders_[order].shares) {\n      remove_order(order);\n    } else {",
+          "new": "    if (shares == orders_[order].shares && read_char(current_) != 'X') {\n      remove_order(order);\n    } else {"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    const std::byte* m = payload.data();\n    switch (read_char(m)) {\n",
+          "new": "    const std::byte* m = payload.data();\n    current_ = m;\n    switch (read_char(m)) {\n"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "  std::vector<BookOrder> orders_;\n",
+          "new": "  const std::byte* current_ = nullptr;\n  std::vector<BookOrder> orders_;\n"
+        },
+        {
+          "file": "tests/oracle/reference_book.hpp",
+          "old": "    if (found->second.position->shares == 0) {\n      unlink(found);\n    }\n",
+          "new": "    if (found->second.position->shares == 0 && static_cast<char>(field(m, 0, 1)) != 'X') {\n      unlink(found);\n    }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_book"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_book$"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: (reference_|oracle_\\.fast\\(\\)\\.live_orders)"
+      }
+    },
+    {
+      "id": "oracle-fuzz-dead-reference-accepted",
+      "breaks": "The reference book treats a dead reference as applied, and the fast book agrees",
+      "check": "fuzz_book, T-INV-1 must fire exactly on the invalid operations",
+      "mutations": [
+        {
+          "file": "tests/oracle/reference_book.hpp",
+          "old": "    if (found == orders_.end()) {\n      outcome.status = RefStatus::unknown_order;\n      return found;\n    }",
+          "new": "    if (found == orders_.end()) {\n      outcome.status = RefStatus::no_book_effect;\n      return found;\n    }"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    const std::uint32_t order = find_order(reference);\n    if (order == kNoIndex) {\n      return ApplyStatus::unknown_order;\n    }\n    const std::uint32_t level = orders_[order].level;",
+          "new": "    const std::uint32_t order = find_order(reference);\n    if (order == kNoIndex) {\n      return ApplyStatus::no_book_effect;\n    }\n    const std::uint32_t level = orders_[order].level;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_book"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_book$"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: oracle_\\.invariants\\(\\)\\.inv1_violations\\(\\) == expected_violations_"
+      }
+    },
+    {
+      "id": "oracle-fixture-tampered",
+      "breaks": "A committed fixture no longer matches its generator",
+      "check": "gen_oracle_fixtures.py --check",
+      "inputs": [
+        {
+          "file": "tests/fixtures/oracle/session.itch",
+          "op": "flip_byte",
+          "offset": 200
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gen_oracle_fixtures.py",
+        "--check"
+      ],
+      "expect": {
+        "signature": "session\\.itch: bytes differ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "oracle-report-trusts-the-tool",
+      "breaks": "The report stops comparing messages diffed with the manifest",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    for key in (\"frames\", \"messages_diffed\", \"status_checks\", \"write_set_checks\"):\n        require(number(log, key) == messages, f\"{key} {number(log, key)}, manifest {messages}\")\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_shorter_replay_than_the_census_fails"
+      }
+    },
+    {
+      "id": "oracle-report-scopes-t-inv-2",
+      "breaks": "The report turns a failed T-INV-2 into a pass",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    return 0 if inv2 == \"PASS\" else 3\n",
+          "new": "    return 0\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_crossed_day_is_reported_failing_with_its_own_code"
+      }
+    },
+    {
+      "id": "oracle-report-ignores-touched-count",
+      "breaks": "The report stops checking the count of touched levels",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    require(single + replaces <= touched <= single + 2 * replaces,\n            f\"{touched} touched levels, outside {single + replaces} to {single + 2 * replaces}\")\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_missing_touched_check_fails"
+      }
+    }
+  ]
+}
