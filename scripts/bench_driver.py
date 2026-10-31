@@ -375,8 +375,7 @@ def append_log(path, run_id, prediction, commit, outcome):
         log.write(f"| {run_id} | {prediction} | {commit} | {platform.system()} | {outcome_text} |\n")
 
 
-def run(args, run_id, started):
-    commit = git_commit(REPO_ROOT, args.allow_dirty)
+def run(args, run_id, started, commit):
     digest = hash_and_fault_in(args.input)
     code = subprocess.run([sys.executable, "-B", str(REPO_ROOT / "scripts" / "check_predictions.py"),
                            "--root", str(args.predictions_root), "--require", args.prediction],
@@ -397,7 +396,6 @@ def run(args, run_id, started):
         raise Refused("results", "; ".join(f"{code}: {detail}" for code, detail in violations))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(text, encoding="utf-8")
-    return commit
 
 
 def parse_args(argv):
@@ -436,7 +434,8 @@ def main(argv=None):
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
     commit = "unknown"
     try:
-        commit = run(args, run_id, started)
+        commit = git_commit(REPO_ROOT, args.allow_dirty)
+        run(args, run_id, started, commit)
     except Refused as refusal:
         print(f"bench_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
         append_log(args.run_log, run_id, args.prediction, commit,

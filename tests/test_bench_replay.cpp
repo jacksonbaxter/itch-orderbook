@@ -74,9 +74,21 @@ struct FakeInput {
   std::vector<std::byte> bytes_;
   Residency residency_{.pages = 4, .resident_pages = 4, .error = {}};
   int checks = 0;
+  int touches = 0;
+  int lost_from_check = 0;  // From this check on, a page is gone. 0 means never.
+  bool touching_restores = false;
   [[nodiscard]] std::span<const std::byte> bytes() const { return bytes_; }
+  void fault_in() {
+    ++touches;
+    if (touching_restores) {
+      residency_.resident_pages = residency_.pages;
+    }
+  }
   [[nodiscard]] Residency residency() {
     ++checks;
+    if (lost_from_check != 0 && checks >= lost_from_check) {
+      residency_.resident_pages = residency_.pages - 1;
+    }
     return residency_;
   }
 };
@@ -87,8 +99,12 @@ struct Rig {
   FakeInput input{.bytes_ = system_events(3)};
   ApplyStatus status = ApplyStatus::no_book_effect;
   int books = 0;
+  bool book_evicts = false;
   ReplaySession<FakeInput, FakeClock, FakeBook> session{input, clock, [this] {
                                                           ++books;
+                                                          if (book_evicts) {
+                                                            input.residency_.resident_pages = 3;
+                                                          }
                                                           auto book = std::make_unique<FakeBook>();
                                                           book->trace = &trace;
                                                           book->status = status;
@@ -144,7 +160,38 @@ TEST(BenchReplay, TheLatencyPassChecksResidencyAsWell) {
   rig.input.residency_.resident_pages = 0;
   EXPECT_FALSE(rig.session.timed_latency(sink));
   EXPECT_TRUE(sink.pushed.empty());
-  EXPECT_EQ(rig.input.checks, 2);
+  EXPECT_EQ(rig.input.checks, 3);
+}
+
+TEST(BenchReplay, PagesAPassesAllocationPushedOutAreBroughtBackBeforeTiming) {
+  Rig rig;
+  rig.input.residency_.resident_pages = 3;
+  rig.input.touching_restores = true;
+  rig.session.warm_up();
+  EXPECT_TRUE(rig.session.timed_throughput());
+  EXPECT_EQ(rig.input.touches, 1);
+  EXPECT_TRUE(rig.session.report().publishable());
+}
+
+TEST(BenchReplay, ResidencyIsAskedAfterThePassHasItsBook) {
+  Rig rig;
+  rig.book_evicts = true;
+  rig.session.warm_up();
+  rig.input.residency_.resident_pages = 4;
+  const std::string after_warmup = rig.trace.events;
+  EXPECT_FALSE(rig.session.timed_throughput());
+  EXPECT_EQ(rig.trace.events, after_warmup);
+  EXPECT_FALSE(rig.session.report().throughput.has_value());
+}
+
+TEST(BenchReplay, APageLostDuringAPassIsARefusal) {
+  Rig rig;
+  rig.input.lost_from_check = 2;
+  rig.session.warm_up();
+  EXPECT_FALSE(rig.session.timed_throughput());
+  const SessionReport& report = rig.session.report();
+  ASSERT_EQ(report.refusals.size(), 1U);
+  EXPECT_EQ(report.refusals[0], "input left memory during the pass: 3 of 4 pages resident");
 }
 
 TEST(BenchReplay, AResidencyErrorIsNotAPass) {

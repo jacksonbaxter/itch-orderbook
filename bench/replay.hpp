@@ -6,6 +6,11 @@
 // numbers go nowhere near the results: it exists to fault the input in, warm the code and
 // count the messages. Nothing is timed unless the warm-up ran and every page of the input
 // is resident, and a refusal is on the record rather than a quiet skip.
+//
+// Residency is asked last, after everything the pass allocates, because allocating can
+// push file pages out: on debian the sample arena evicted 155 pages of a day between the
+// warm-up and the first pass. It is asked again when the pass ends, so that a page lost
+// during a timed span is a refusal too.
 #pragma once
 
 #include <cstddef>
@@ -144,7 +149,8 @@ struct SessionReport {
   }
 };
 
-// Input gives bytes() and residency(). Book comes fresh from make_book for each pass.
+// Input gives bytes(), fault_in() and residency(). Book comes fresh from make_book for each
+// pass.
 template <class Input, class Clock, class Book>
 class ReplaySession {
  public:
@@ -164,41 +170,65 @@ class ReplaySession {
   }
 
   [[nodiscard]] bool timed_throughput() {
-    if (!ready_to_time()) {
+    if (!may_time()) {
       return false;
     }
     const std::unique_ptr<Book> book = make_book_();
+    if (!input_resident()) {
+      return false;
+    }
     const PassTotals pass = throughput_pass(input_->bytes(), *book, *clock_);
     report_.throughput = pass;
-    return note_rejections(pass);
+    const bool stayed = input_stayed();
+    return note_rejections(pass) && stayed;
   }
 
   template <class Sink>
   [[nodiscard]] bool timed_latency(Sink& sink) {
-    if (!ready_to_time()) {
+    if (!may_time()) {
       return false;
     }
     const std::unique_ptr<Book> book = make_book_();
+    if (!input_resident()) {
+      return false;
+    }
     const PassTotals pass = latency_pass(input_->bytes(), *book, *clock_, sink);
     report_.latency = pass;
-    return note_rejections(pass);
+    const bool stayed = input_stayed();
+    return note_rejections(pass) && stayed;
   }
 
   [[nodiscard]] const SessionReport& report() const noexcept { return report_; }
 
  private:
-  [[nodiscard]] bool ready_to_time() {
+  [[nodiscard]] bool may_time() {
     if (!report_.warmed) {
       refuse("no warm-up pass ran before timing");
       return false;
     }
+    return report_.publishable();
+  }
+
+  [[nodiscard]] bool input_resident() {
+    input_->fault_in();
     const Residency residency = input_->residency();
     report_.residency = residency.describe();
     if (!residency.complete()) {
       refuse("input not resident: " + report_.residency);
       return false;
     }
-    return report_.publishable();
+    return true;
+  }
+
+  // Touches nothing, so that a page lost during the pass still shows.
+  [[nodiscard]] bool input_stayed() {
+    const Residency residency = input_->residency();
+    report_.residency = residency.describe();
+    if (!residency.complete()) {
+      refuse("input left memory during the pass: " + report_.residency);
+      return false;
+    }
+    return true;
   }
 
   // A rejected message means the book diverged or ran out of room, and a timing of that

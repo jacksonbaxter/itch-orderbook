@@ -12,6 +12,7 @@
 #include <sys/mman.h>
 
 #include <array>
+#include <atomic>
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -49,8 +50,18 @@ class ReplayInput {
   [[nodiscard]] std::span<const std::byte> bytes() const noexcept { return bytes_; }
   [[nodiscard]] Residency residency() const { return resident(bytes_); }
 
+  // A read of every page, to bring back any that an allocation pushed out.
+  void fault_in() const noexcept {
+    std::byte seen{0};
+    for (std::size_t at = 0; at < bytes_.size(); at += base_page_size()) {
+      seen |= bytes_[at];
+    }
+    last_seen_ = seen;
+  }
+
  private:
   std::span<const std::byte> bytes_;
+  mutable std::atomic<std::byte> last_seen_{};  // So that the reads are not dropped.
 };
 
 // A histogram of ticks. Wide enough for a span of four seconds at any clock in use.

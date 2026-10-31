@@ -48,3 +48,13 @@ included.
 - Experiment: `perf record -g --user-callchains -e cycles:u` on `bench_replay` on `12302019.NASDAQ_ITCH50`, one process, on a build with frame pointers, through `measure.sh` and `taskset -c 4`, folded with the FlameGraph scripts.
 - What it is for: showing that a profile can be taken at `perf_event_paranoid=2`. The book is the Phase 2 stub, so what the graph shows says nothing about the real book.
 - Prediction: `perf record` succeeds, the folded stacks run from `main` down to `FastBook` `apply`, and no kernel frame appears.
+
+## P-0006: stub-book harness proof on debian, 12302019, after the residency fix
+
+- Experiment: as P-0004, on a harness that asks about residency after the pass's allocations, brings back any page they pushed out, and asks again when the pass ends. P-0004 was refused at its first timed pass, with 155 of 2,014,504 pages gone, so none of its other predictions was tested. They are repeated here and it stands as written.
+- Prediction, harness: every page of the input is resident at the start and at the end of each timed pass, all 3 repetitions complete, the pin reads back as core 4, and no migration is seen.
+- Prediction, timer: the quantum is 10.01 ns and the floor 40.04 ns, the calibrated rate is near 1998 MHz, and p50 is resolved, because `apply()` on this CPU costs well over the floor.
+- Prediction, throughput: between 2 and 10 million messages/s, CV under 5%.
+- Prediction, instrumentation: the latency pass takes between 1.05 and 1.60 times the throughput pass.
+- Prediction, counters: every event is measured at running ratio 1.0000, `rdpmc` and `read()` agree within the harness's limit of 1% or 10,000 events over the pass, and per-message counts are published.
+- Prediction, memory: peak RSS near 8.9 GiB: 7.68 GiB of mapped file, 1.00 GiB of samples and the book. It fits in 15 GB.

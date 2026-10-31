@@ -1523,6 +1523,58 @@
         "signature": "FAIL: test_rdpmc_against_read_is_shown_as_numbers",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-residency-lost-in-pass",
+      "breaks": "A page lost during a timed pass goes unnoticed",
+      "check": "test_bench_replay BenchReplay.APageLostDuringAPassIsARefusal",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "      refuse(\"input left memory during the pass: \" + report_.residency);\n      return false;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.APageLostDuringAPassIsARefusal",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-residency-before-book",
+      "breaks": "Residency is asked before the pass's book is built, which can push pages out",
+      "check": "test_bench_replay BenchReplay.ResidencyIsAskedAfterThePassHasItsBook",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "    const std::unique_ptr<Book> book = make_book_();\n    if (!input_resident()) {\n      return false;\n    }\n    const PassTotals pass = throughput_pass(",
+          "new": "    if (!input_resident()) {\n      return false;\n    }\n    const std::unique_ptr<Book> book = make_book_();\n    const PassTotals pass = throughput_pass("
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.ResidencyIsAskedAfterThePassHasItsBook",
+        "exit": 1
+      }
     }
   ]
 }
