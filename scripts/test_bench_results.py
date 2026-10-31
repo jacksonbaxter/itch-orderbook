@@ -143,8 +143,8 @@ class Stamp(unittest.TestCase):
         self.assertIn("- measure_load_start: measure.sh: start load1=1.20 host=macOS (M4 Max) at=",
                       stamped)
         self.assertIn("- measure_load_end: measure.sh: end load1=1.30 exit=0 at=", stamped)
-        self.assertIn("- peak_rss: 0.22 GiB", stamped)
-        self.assertIn("- peak_footprint: 0.11 GiB", stamped)
+        self.assertIn("- peak_rss: 0.22 GiB, the largest process in the run", stamped)
+        self.assertIn("- peak_footprint: 0.11 GiB, of the driver alone", stamped)
         self.assertEqual(check_results.check_text(stamped), [])
 
     def test_refuses_a_missing_line(self):

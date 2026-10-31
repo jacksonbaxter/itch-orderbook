@@ -61,11 +61,13 @@ def stamp(results_text, stderr_text):
         if old not in results_text:
             raise ValueError(f"{name} is not pending in the results file")
         results_text = results_text.replace(old, f"- {name}: {line}")
-    for name, pattern in (("peak_rss", MAX_RSS), ("peak_footprint", FOOTPRINT)):
+    for name, pattern, note in (("peak_rss", MAX_RSS, ", the largest process in the run"),
+                                ("peak_footprint", FOOTPRINT,
+                                 ", of the driver alone: time sees its direct child")):
         match = pattern.search(stderr_text)
         if match:
             old = f"- {name}: unavailable: /usr/bin/time did not wrap the run"
-            results_text = results_text.replace(old, f"- {name}: {gib(match.group(1))}")
+            results_text = results_text.replace(old, f"- {name}: {gib(match.group(1))}{note}")
     return results_text
 
 
