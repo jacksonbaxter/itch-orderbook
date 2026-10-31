@@ -58,18 +58,18 @@ Median of 3 fresh processes, per load, on 4 KB pages. `r0843:u` is demand fills 
 
 What the criteria are judged on. Gaps are per load: `rdpmc` against `read()` on the two events, and `r0964:u` against `cache-misses`.
 
-| Buffer | r0843:u min | r0843:u max | cache-misses min | cache-misses max | Smallest margin | Widest rdpmc gap | Widest r0964 gap | Lowest running ratio |
-|---|---|---|---|---|---|---|---|---|
-| 64 KB | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.000004 | 0.000000 | 1.0000 |
-| 128 KB | 0.0000 | 0.0000 | 0.0000 | 0.0001 | 0.0000 | 0.000005 | 0.000000 | 1.0000 |
-| 256 KB | 0.0000 | 0.0000 | 0.0005 | 0.0019 | 0.0005 | 0.000004 | 0.000000 | 1.0000 |
-| 1 MB | 0.0000 | 0.0000 | 0.7559 | 0.7646 | 0.7559 | 0.000006 | 0.000000 | 1.0000 |
-| 2 MB | 0.0001 | 0.0004 | 0.8782 | 0.8793 | 0.8778 | 0.000007 | 0.000000 | 1.0000 |
-| 3 MB | 0.0115 | 0.0255 | 0.9174 | 0.9180 | 0.8925 | 0.000006 | 0.000000 | 1.0000 |
-| 8 MB | 0.7350 | 0.7416 | 0.9747 | 0.9767 | 0.2351 | 0.000008 | 0.000000 | 1.0000 |
-| 16 MB | 0.8716 | 0.8733 | 0.9928 | 0.9933 | 0.1195 | 0.000008 | 0.000000 | 1.0000 |
-| 64 MB | 0.9692 | 0.9697 | 1.1430 | 1.1689 | 0.1733 | 0.000007 | 0.000000 | 1.0000 |
-| 256 MB | 0.9932 | 0.9933 | 1.6130 | 1.6232 | 0.6197 | 0.000007 | 0.000000 | 1.0000 |
+| Buffer | r0843:u min | r0843:u max | cache-misses min | cache-misses max | Smallest margin | Widest rdpmc gap | Widest r0964 gap | Lowest running ratio | Hugepage kB |
+|---|---|---|---|---|---|---|---|---|---|
+| 64 KB | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.000004 | 0.000000 | 1.0000 | 0 |
+| 128 KB | 0.0000 | 0.0000 | 0.0000 | 0.0001 | 0.0000 | 0.000005 | 0.000000 | 1.0000 | 0 |
+| 256 KB | 0.0000 | 0.0000 | 0.0005 | 0.0019 | 0.0005 | 0.000004 | 0.000000 | 1.0000 | 0 |
+| 1 MB | 0.0000 | 0.0000 | 0.7559 | 0.7646 | 0.7559 | 0.000006 | 0.000000 | 1.0000 | 0 |
+| 2 MB | 0.0001 | 0.0004 | 0.8782 | 0.8793 | 0.8778 | 0.000007 | 0.000000 | 1.0000 | 0 |
+| 3 MB | 0.0115 | 0.0255 | 0.9174 | 0.9180 | 0.8925 | 0.000006 | 0.000000 | 1.0000 | 0 |
+| 8 MB | 0.7350 | 0.7416 | 0.9747 | 0.9767 | 0.2351 | 0.000008 | 0.000000 | 1.0000 | 0 |
+| 16 MB | 0.8716 | 0.8733 | 0.9928 | 0.9933 | 0.1195 | 0.000008 | 0.000000 | 1.0000 | 0 |
+| 64 MB | 0.9692 | 0.9697 | 1.1430 | 1.1689 | 0.1733 | 0.000007 | 0.000000 | 1.0000 | 0 |
+| 256 MB | 0.9932 | 0.9933 | 1.6130 | 1.6232 | 0.6197 | 0.000007 | 0.000000 | 1.0000 | 0 |
 
 ## Verdict
 
@@ -87,6 +87,7 @@ Every criterion of P-0002 held in every run. `r0843:u` follows the buffer size a
 | between L2 and L3: cache-misses at least 0.50 above fills | pass | smallest 0.7559 |
 | rdpmc and read() within 0.001 per load, both events | pass | widest 0.000008 |
 | every event ran for the whole span | pass | lowest 1.0000 |
+| every buffer on 4 KB pages | pass | hugepage kB by size: 0 0 0 0 0 0 0 0 0 0 |
 | kernel maps cache-misses to event=0x64,umask=0x09 | pass | sysfs says event=0x64,umask=0x09 |
 | r0964:u within 0.001 per load of cache-misses | pass | widest 0.000000 |
 

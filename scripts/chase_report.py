@@ -57,6 +57,7 @@ SYSFS_LINE = re.compile(r"^cache-misses: (\S+)$", re.MULTILINE)
 VERDICT = re.compile(r"^\*\*Verdict: (PASS|FAIL)\*\*", re.MULTILINE)
 CRITERION = re.compile(r"^\| (.+?) \| (pass|FAIL) \| .* \|$", re.MULTILINE)
 COMMIT_FIELD = re.compile(r"^[0-9a-f]{12} ")
+HUGE_KB = re.compile(r"(\d+) kB in transparent hugepages")
 
 DOCUMENT_TEXT = """\
 AMD, *Processor Programming Reference (PPR) for AMD Family 17h Model 18h, Revision B1
@@ -117,6 +118,12 @@ def per_load(record, row, name, path):
     return event(row, name)[path] / record["loads"]
 
 
+def hugepage_kb(row):
+    """kB of the buffer in hugepages, or -1 where the kernel gave no account."""
+    match = HUGE_KB.search(row["pages"])
+    return int(match.group(1)) if match else -1
+
+
 def summarise(records):
     """One entry per size: the median of each figure, and the worst of the runs."""
     sizes = [row["bytes"] for row in records[0]["rows"]]
@@ -145,7 +152,9 @@ def summarise(records):
             "gap_max": max(gaps),
             "raw_gap_max": max(abs(left - right) for left, right in zip(figures["raw_misses"],
                                                                         figures["misses"])),
-            "ratio_min": min(ratios)})
+            "ratio_min": min(ratios),
+            "huge_kb": max(hugepage_kb(row) for row in rows) if min(
+                hugepage_kb(row) for row in rows) >= 0 else -1})
     return summary
 
 
@@ -182,6 +191,9 @@ def judge(summary, raw_event, sysfs):
                     f"widest {gap:.6f}"))
     ratio = min(entry["ratio_min"] for entry in summary)
     results.append(("every event ran for the whole span", ratio == 1.0, f"lowest {ratio:.4f}"))
+    huge = [entry["huge_kb"] for entry in summary]
+    results.append(("every buffer on 4 KB pages", all(kb == 0 for kb in huge),
+                    f"hugepage kB by size: {' '.join(str(kb) for kb in huge)}"))
     results.append((f"kernel maps cache-misses to {EXPECTED_SYSFS}", sysfs == EXPECTED_SYSFS,
                     f"sysfs says {sysfs}"))
     gap = max(entry["raw_gap_max"] for entry in summary)
@@ -262,14 +274,14 @@ def render(records, stderrs, machine_checks, sysfs_text, prediction):
             "What the criteria are judged on. Gaps are per load: `rdpmc` against `read()` on "
             "the two events, and `r0964:u` against `cache-misses`.", "",
             "| Buffer | r0843:u min | r0843:u max | cache-misses min | cache-misses max "
-            "| Smallest margin | Widest rdpmc gap | Widest r0964 gap | Lowest running ratio |",
-            "|---|---|---|---|---|---|---|---|---|"]
+            "| Smallest margin | Widest rdpmc gap | Widest r0964 gap | Lowest running ratio "
+            "| Hugepage kB |", "|---|---|---|---|---|---|---|---|---|---|"]
     for entry in summary:
         out.append(f"| {size_label(entry['size'])} | {entry['fills_min']:.4f} "
                    f"| {entry['fills_max']:.4f} | {entry['misses_min']:.4f} "
                    f"| {entry['misses_max']:.4f} | {entry['margin_min']:.4f} "
                    f"| {entry['gap_max']:.6f} | {entry['raw_gap_max']:.6f} "
-                   f"| {entry['ratio_min']:.4f} |")
+                   f"| {entry['ratio_min']:.4f} | {entry['huge_kb']} |")
     out += ["", "## Verdict", "", f"**Verdict: {'PASS' if passed else 'FAIL'}**", ""]
     if passed:
         out += [f"Every criterion of {prediction} held in every run. `r0843:u` follows the "
@@ -317,7 +329,7 @@ def published_summary(text):
             cells = [float(cell) for cell in match.group(2).split("|")]
             figures[label_size(match.group(1))].update(
                 zip(("fills_min", "fills_max", "misses_min", "misses_max", "margin_min",
-                     "gap_max", "raw_gap_max", "ratio_min"), cells))
+                     "gap_max", "raw_gap_max", "ratio_min", "huge_kb"), cells))
     return list(figures.values())
 
 
@@ -350,7 +362,7 @@ def check_published(text):
     if "machine_check: passed" not in (check_results.section(text, "machine_check output") or ""):
         found.append(("machine-check-failed", "the embedded output does not pass"))
     summary = published_summary(text)
-    if not summary or any(len(entry) < 15 for entry in summary):
+    if not summary or any(len(entry) < 16 for entry in summary):
         return [*found, ("table-missing", "the per-size tables are not whole")]
     sysfs = re.search(r"`(event=\S+)`", text)
     results = judge(summary, fields.get("raw_event", "none"),
@@ -411,6 +423,10 @@ def run_report(args):
     if args.run_log:
         append_log(args.run_log, run_id, args.prediction,
                    check_results.parse_header(text)["commit"], passed)
+    for line in check_results.section(text, "Verdict").splitlines():
+        match = CRITERION.match(line)
+        if match and match.group(2) == "FAIL":
+            print(f"chase_report: FAIL criterion: {match.group(1)}")
     print(f"chase_report: wrote {args.out.name}, verdict {'PASS' if passed else 'FAIL'}")
     return 0 if passed else 1
 

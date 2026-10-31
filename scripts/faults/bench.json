@@ -1094,6 +1094,435 @@
         "signature": "FAIL: test_a_bench_that_refuses_refuses_the_run",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-chase-verdict-faked",
+      "breaks": "The report writes PASS whatever the criteria say",
+      "check": "test_chase_report.py",
+      "mutations": [
+        {
+          "file": "scripts/chase_report.py",
+          "old": "    passed = all(result[1] for result in results)\n    lines = [load_lines",
+          "new": "    passed = True\n    lines = [load_lines"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_chase_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_failed_verdict_says_no_number_may_be_published",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-file-verdict-faked",
+      "breaks": "A published file keeps PASS over a row that fails",
+      "check": "chase_report.py --check verdict-faked",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/published.md",
+          "op": "replace_text",
+          "old": "| 64 MB | 0.9690 | 0.9710 |",
+          "new": "| 64 MB | 0.5000 | 0.9710 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--check",
+        "{tree}/tests/fixtures/chase/published.md"
+      ],
+      "expect": {
+        "signature": "chase_report: FAIL verdict-faked",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-file-table-wrong",
+      "breaks": "A per-size figure in a published file is not what the run gave",
+      "check": "chase_report.py --check against the records",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/published.md",
+          "op": "replace_text",
+          "old": "| 1 MB | between L2 and L3 | 10.02 |",
+          "new": "| 1 MB | between L2 and L3 | 10.03 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--check",
+        "{tree}/tests/fixtures/chase/published.md",
+        "--record",
+        "{tree}/tests/fixtures/chase/run-1.json",
+        "{tree}/tests/fixtures/chase/run-2.json",
+        "{tree}/tests/fixtures/chase/run-3.json",
+        "--load",
+        "{tree}/tests/fixtures/chase/run-1.err",
+        "{tree}/tests/fixtures/chase/run-2.err",
+        "{tree}/tests/fixtures/chase/run-3.err",
+        "--machine-check",
+        "{tree}/tests/fixtures/chase/check-1.out",
+        "{tree}/tests/fixtures/chase/check-2.out",
+        "{tree}/tests/fixtures/chase/check-3.out",
+        "--sysfs",
+        "{tree}/tests/fixtures/chase/sysfs_events.txt",
+        "--prediction",
+        "P-0002"
+      ],
+      "expect": {
+        "signature": "chase_report: FAIL table-differs",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-event-encoding",
+      "breaks": "The fill event is not PMCx043 unit mask 0x08 in the code",
+      "check": "test_bench_platform BenchCounters.TheRawEventsAreTheOnesThePprDefines",
+      "mutations": [
+        {
+          "file": "bench/platform/counters.hpp",
+          "old": "kRawDramFills = amd_raw_event(0x43, 0x08)",
+          "new": "kRawDramFills = amd_raw_event(0x43, 0x09)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchCounters\\.TheRawEventsAreTheOnesThePprDefines",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-record-wrong-event",
+      "breaks": "A record of a run with the wrong raw event",
+      "check": "chase_report.py encoding criterion",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/run-1.json",
+          "op": "json_set",
+          "path": [
+            "raw_event"
+          ],
+          "value": "0x0943"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--record",
+        "{tree}/tests/fixtures/chase/run-1.json",
+        "{tree}/tests/fixtures/chase/run-2.json",
+        "{tree}/tests/fixtures/chase/run-3.json",
+        "--load",
+        "{tree}/tests/fixtures/chase/run-1.err",
+        "{tree}/tests/fixtures/chase/run-2.err",
+        "{tree}/tests/fixtures/chase/run-3.err",
+        "--machine-check",
+        "{tree}/tests/fixtures/chase/check-1.out",
+        "{tree}/tests/fixtures/chase/check-2.out",
+        "{tree}/tests/fixtures/chase/check-3.out",
+        "--sysfs",
+        "{tree}/tests/fixtures/chase/sysfs_events.txt",
+        "--prediction",
+        "P-0002",
+        "--out",
+        "{tree}/tests/fixtures/chase/generated.md"
+      ],
+      "expect": {
+        "signature": "chase_report: FAIL criterion: fill event is PMCx043 unit mask 0x08",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-rdpmc-read-disagree",
+      "breaks": "rdpmc and read() differ on one row of one run",
+      "check": "chase_report.py rdpmc criterion",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/run-2.json",
+          "op": "json_set",
+          "path": [
+            "rows",
+            6,
+            "events",
+            3,
+            "rdpmc"
+          ],
+          "value": 742000
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--record",
+        "{tree}/tests/fixtures/chase/run-1.json",
+        "{tree}/tests/fixtures/chase/run-2.json",
+        "{tree}/tests/fixtures/chase/run-3.json",
+        "--load",
+        "{tree}/tests/fixtures/chase/run-1.err",
+        "{tree}/tests/fixtures/chase/run-2.err",
+        "{tree}/tests/fixtures/chase/run-3.err",
+        "--machine-check",
+        "{tree}/tests/fixtures/chase/check-1.out",
+        "{tree}/tests/fixtures/chase/check-2.out",
+        "{tree}/tests/fixtures/chase/check-3.out",
+        "--sysfs",
+        "{tree}/tests/fixtures/chase/sysfs_events.txt",
+        "--prediction",
+        "P-0002",
+        "--out",
+        "{tree}/tests/fixtures/chase/generated.md"
+      ],
+      "expect": {
+        "signature": "chase_report: FAIL criterion: rdpmc and read\\(\\) within",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-bad-row-in-one-run",
+      "breaks": "One run of three fails above L3 with a good median",
+      "check": "chase_report.py judges every run",
+      "mutations": [
+        {
+          "file": "scripts/chase_report.py",
+          "old": "\"fills_min\": min(figures[\"fills\"]), \"fills_max\": max(figures[\"fills\"]),",
+          "new": "\"fills_min\": statistics.median(figures[\"fills\"]), \"fills_max\": max(figures[\"fills\"]),"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_chase_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_one_bad_run_fails_even_when_the_median_is_good",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-kernel-mapping",
+      "breaks": "The kernel maps cache-misses to something else",
+      "check": "chase_report.py mapping criterion",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/sysfs_events.txt",
+          "op": "replace_text",
+          "old": "cache-misses: event=0x64,umask=0x09",
+          "new": "cache-misses: event=0x64,umask=0x08"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--record",
+        "{tree}/tests/fixtures/chase/run-1.json",
+        "{tree}/tests/fixtures/chase/run-2.json",
+        "{tree}/tests/fixtures/chase/run-3.json",
+        "--load",
+        "{tree}/tests/fixtures/chase/run-1.err",
+        "{tree}/tests/fixtures/chase/run-2.err",
+        "{tree}/tests/fixtures/chase/run-3.err",
+        "--machine-check",
+        "{tree}/tests/fixtures/chase/check-1.out",
+        "{tree}/tests/fixtures/chase/check-2.out",
+        "{tree}/tests/fixtures/chase/check-3.out",
+        "--sysfs",
+        "{tree}/tests/fixtures/chase/sysfs_events.txt",
+        "--prediction",
+        "P-0002",
+        "--out",
+        "{tree}/tests/fixtures/chase/generated.md"
+      ],
+      "expect": {
+        "signature": "chase_report: FAIL criterion: kernel maps cache-misses",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-hugepages",
+      "breaks": "A buffer got transparent hugepages",
+      "check": "chase_report.py page criterion",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/run-3.json",
+          "op": "json_set",
+          "path": [
+            "rows",
+            9,
+            "pages"
+          ],
+          "value": "4096 bytes per page, 2048 kB in transparent hugepages"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--record",
+        "{tree}/tests/fixtures/chase/run-1.json",
+        "{tree}/tests/fixtures/chase/run-2.json",
+        "{tree}/tests/fixtures/chase/run-3.json",
+        "--load",
+        "{tree}/tests/fixtures/chase/run-1.err",
+        "{tree}/tests/fixtures/chase/run-2.err",
+        "{tree}/tests/fixtures/chase/run-3.err",
+        "--machine-check",
+        "{tree}/tests/fixtures/chase/check-1.out",
+        "{tree}/tests/fixtures/chase/check-2.out",
+        "{tree}/tests/fixtures/chase/check-3.out",
+        "--sysfs",
+        "{tree}/tests/fixtures/chase/sysfs_events.txt",
+        "--prediction",
+        "P-0002",
+        "--out",
+        "{tree}/tests/fixtures/chase/generated.md"
+      ],
+      "expect": {
+        "signature": "chase_report: FAIL criterion: every buffer on 4 KB pages",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-hostname-kept",
+      "breaks": "The report copies measure.sh's hostname through",
+      "check": "test_chase_report.py",
+      "mutations": [
+        {
+          "file": "scripts/chase_report.py",
+          "old": "return tuple(stamp_load.HOST.sub(\"host=debian\", line) for line in (start, end))",
+          "new": "return (start, end)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_chase_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_machine_hostname_never_reaches_the_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-not-one-cycle",
+      "breaks": "The shuffle leaves several short cycles",
+      "check": "test_bench_platform BenchChase.TheOrderIsOneCycleOverEveryLine",
+      "mutations": [
+        {
+          "file": "bench/chase.hpp",
+          "old": "static_cast<std::size_t>(random() % i)",
+          "new": "static_cast<std::size_t>(random() % (i + 1))"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchChase\\.TheOrderIsOneCycleOverEveryLine",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-address-order",
+      "breaks": "The chase walks memory in address order, which a prefetcher can follow",
+      "check": "test_bench_platform BenchChase.TheOrderIsNotTheAddressOrder",
+      "mutations": [
+        {
+          "file": "bench/chase.hpp",
+          "old": "    std::swap(successor[i], successor[other]);\n",
+          "new": "    static_cast<void>(other);\n"
+        },
+        {
+          "file": "bench/chase.hpp",
+          "old": "    lines[i].next = &lines[successor[i]];\n",
+          "new": "    lines[i].next = &lines[(successor[i] + 1) % lines.size()];\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchChase\\.TheOrderIsNotTheAddressOrder",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-rdpmc-gap-not-counted",
+      "breaks": "The worst gap in events is lost",
+      "check": "test_bench_platform BenchCounters.TheWorstGapIsCountedInEvents",
+      "mutations": [
+        {
+          "file": "bench/platform/counters.hpp",
+          "old": "    result.worst_gap = std::max(gap, result.worst_gap);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchCounters\\.TheWorstGapIsCountedInEvents",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-agreement-numbers-dropped",
+      "breaks": "The results file shows the wrong widest gap",
+      "check": "test_bench_results.py",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "        widest = max(gaps)\n",
+          "new": "        widest = min(gaps)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_rdpmc_against_read_is_shown_as_numbers",
+        "exit": 1
+      }
     }
   ]
 }

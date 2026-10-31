@@ -126,6 +126,16 @@ class Verdict(unittest.TestCase):
         self.assertEqual(failed_criteria(with_events(change)),
                          {"every event ran for the whole span"})
 
+    def test_a_buffer_on_hugepages(self):
+        records = copy.deepcopy(RECORDS)
+        records[1]["rows"][-1]["pages"] = "4096 bytes per page, 2048 kB in transparent hugepages"
+        self.assertEqual(failed_criteria(records), {"every buffer on 4 KB pages"})
+
+    def test_no_account_of_hugepages_is_no_pass(self):
+        records = copy.deepcopy(RECORDS)
+        records[1]["rows"][-1]["pages"] = "unavailable: no account of hugepages"
+        self.assertEqual(failed_criteria(records), {"every buffer on 4 KB pages"})
+
     def test_the_kernel_mapping_something_else(self):
         sysfs = replace(SYSFS, "umask=0x09", "umask=0x08")
         self.assertEqual(failed_criteria(sysfs=sysfs),
