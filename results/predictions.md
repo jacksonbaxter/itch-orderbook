@@ -25,3 +25,26 @@ included.
 - Prediction, the read paths: in every row, for `r0843:u` and `cache-misses`, `rdpmc` and `read()` differ by at most 0.001 per load, and each event's running ratio is 1.0000.
 - Prediction, the kernel's mapping: sysfs gives `cache-misses` as `event=0x64,umask=0x09`, and raw `r0964:u`, counted in the same group, stays within 0.001 per load of `cache-misses` in every row.
 - All of this holds in each of the 3 runs, not in their median alone. If any of it fails, no last-level number is published, the gap is stated, and the failed run stays in `results/run_log.md`.
+
+## P-0003: the chase with a deliberately wrong event
+
+- Experiment: `bench_chase --raw-event 0x0143`, one process, the same sizes and loads as P-0002, on `debian`, through `measure.sh` and `taskset -c 4`, judged by the same `scripts/chase_report.py`.
+- What it is for: showing on real hardware that the verdict can fail. `0x0143` is PMCx043 bit 0, fills from local L2, so it counts the opposite end of the hierarchy. The file stays in the research cache and nothing from it is published.
+- Prediction: the verdict is FAIL. The encoding criterion fails, the under-L2 criterion fails with close to one fill per load at 64 KB and 128 KB, and the above-L3 criterion fails with close to none at 64 MB and 256 MB.
+
+## P-0004: stub-book harness proof on debian, 12302019
+
+- Experiment: `bench_replay` on `12302019.NASDAQ_ITCH50`, fresh process per repetition, 3 repetitions, on `debian`, through `measure.sh`, `taskset -c 4` and `scripts/bench_driver.py`.
+- What it is for: showing that the harness works on a whole day on Linux, pinned, with hardware counters. The book is the Phase 2 stub, so this says nothing about the book Phase 3 builds.
+- Prediction, harness: every page of the input is resident before each timed pass, all 3 repetitions complete, the pin reads back as core 4, and no migration is seen.
+- Prediction, timer: the quantum is 10.01 ns and the floor 40.04 ns, the calibrated rate is near 1998 MHz, and p50 is resolved, because `apply()` on this CPU costs well over the floor.
+- Prediction, throughput: between 2 and 10 million messages/s, CV under 5%.
+- Prediction, instrumentation: the latency pass takes between 1.05 and 1.60 times the throughput pass.
+- Prediction, counters: every event is measured at running ratio 1.0000, `rdpmc` and `read()` agree within the harness's limit of 1% or 10,000 events over the pass, and per-message counts are published.
+- Prediction, memory: peak RSS near 8.9 GiB: 7.68 GiB of mapped file, 1.00 GiB of samples and the book. It fits in 15 GB.
+
+## P-0005: flamegraph proof on debian
+
+- Experiment: `perf record -g --user-callchains -e cycles:u` on `bench_replay` on `12302019.NASDAQ_ITCH50`, one process, on a build with frame pointers, through `measure.sh` and `taskset -c 4`, folded with the FlameGraph scripts.
+- What it is for: showing that a profile can be taken at `perf_event_paranoid=2`. The book is the Phase 2 stub, so what the graph shows says nothing about the real book.
+- Prediction: `perf record` succeeds, the folded stacks run from `main` down to `FastBook` `apply`, and no kernel frame appears.
