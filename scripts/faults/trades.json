@@ -5608,8 +5608,8 @@
       "mutations": [
         {
           "file": "tests/trades/trade_checks.hpp",
-          "old": "    if (shares < round_lot) {\n      ++window.odd_lot_prints;",
-          "new": "    if (shares < 100) {\n      ++window.odd_lot_prints;"
+          "old": "add_to_window(volume.windows[w], print_class, shares, listings_[locate].round_lot);",
+          "new": "add_to_window(volume.windows[w], print_class, shares, 100);"
         }
       ],
       "build": {
@@ -5804,7 +5804,7 @@
         {
           "file": "tools/itch_trades.cpp",
           "old": "  return mask == 0 ? 0 : kExitFailureBase + mask;",
-          "new": "  return mask == 0 ? 0 : 0;"
+          "new": "  return mask == 0 ? 0 : (kExitFailureBase + mask) * 0;"
         }
       ],
       "build": {
