@@ -64,7 +64,10 @@ stage_corpus() { python_test scripts/gen_fuzz_corpus.py --check; }
 stage_release() { preset_with_tests release; }
 stage_asan_ubsan() { preset_with_tests asan-ubsan; }
 stage_tsan() { preset_with_tests tsan; }
-stage_tidy() { build_preset tidy; }
+# From clean: ninja does not track .clang-tidy, so an incremental run could be a stale pass.
+stage_tidy() {
+  cmake --preset tidy && cmake --build --preset tidy --parallel "$jobs" --clean-first
+}
 stage_fuzz_smoke() { build_preset fuzz && ctest --preset fuzz-smoke; }
 stage_wasm() { preset_with_tests wasm; }
 stage_fault_matrix() {
