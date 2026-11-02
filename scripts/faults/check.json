@@ -1,6 +1,6 @@
 {
   "area": "check",
-  "tree": ["CMakeLists.txt", "CMakePresets.json", ".clang-format", ".clang-tidy", "cmake", "include", "src", "tests", "tools", "fuzz", "scripts"],
+  "tree": ["CMakeLists.txt", "CMakePresets.json", ".clang-format", ".clang-tidy", ".github", "cmake", "include", "src", "tests", "tools", "fuzz", "bench", "scripts"],
   "faults": [
     {
       "id": "check-gate-stage",
@@ -14,7 +14,7 @@
         }
       ],
       "command": ["bash", "{tree}/scripts/check.sh", "--only", "gates"],
-      "expect": {"signature": "check: FAILED, 1 of 1 stages", "exit": 1}
+      "expect": {"signature": "gates: FAIL bare-branch-hint include/itch/reader.hpp[\\s\\S]*check: FAILED, 1 of 1 stages", "exit": 1}
     },
     {
       "id": "check-format-stage",

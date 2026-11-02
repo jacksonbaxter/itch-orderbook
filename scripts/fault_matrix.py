@@ -15,8 +15,8 @@ only if that check fails with the expected signature. The verdicts are:
                      at the compiler build in their command, with empty build targets.
     not-run          a control failed, so no mutant was run.
 
-Before any mutant runs, each distinct command runs on a clean copy and must pass
-without printing the signature. A failed control fails the whole run.
+Before any mutant runs, each distinct command runs on a clean copy of its fault's own
+tree and must pass without printing the signature. A failed control fails the whole run.
 
 Adding an area means adding scripts/faults/<area>.json:
 
@@ -359,7 +359,7 @@ def group_controls(faults):
     controls = {}
     for fault in faults:
         preset = fault.build["preset"] if fault.build else None
-        key = (json.dumps(fault.command), preset)
+        key = (json.dumps(fault.command), preset, fault.tree)
         if key not in controls:
             controls[key] = Control(command=fault.command, build=fault.build, timeout=fault.timeout,
                                     tree=fault.tree)
@@ -367,15 +367,9 @@ def group_controls(faults):
     return list(controls.values())
 
 
-def run_controls(root, build_root, faults, log_dir):
-    """Runs each distinct command on a clean tree. Returns the failures as text."""
-    controls = group_controls(faults)
-    tree = build_root / "_control"
-    trees = sorted({name for control in controls for name in control.tree})
-    copy_tree(root, tree, trees)
-    log = log_dir / "_control.log"
-    log.write_text("", encoding="utf-8")
-
+def run_tree_controls(root, tree, controls, log):
+    """Builds one clean tree and runs the controls that use it. Returns the failures as text."""
+    copy_tree(root, tree, controls[0].tree)
     wanted = {}
     for control in controls:
         if control.build:
@@ -389,7 +383,7 @@ def run_controls(root, build_root, faults, log_dir):
         if error:
             failures.append(f"preset {preset}: {error}")
     if failures:
-        return len(controls), failures
+        return failures
 
     for control in controls:
         command = substitute(control.command, tree, control.build)
@@ -400,6 +394,21 @@ def run_controls(root, build_root, faults, log_dir):
         for fault in control.faults:
             if re.search(fault.signature, output, re.MULTILINE):
                 failures.append(f"{fault.id}: signature appears on the clean tree")
+    return failures
+
+
+def run_controls(root, build_root, faults, log_dir):
+    """Runs each distinct command on a clean copy of its own tree, the one its mutants get.
+    A union of the trees would let a fault pass on a tree that fails before it is broken.
+    Returns the number of controls and the failures as text."""
+    controls = group_controls(faults)
+    log = log_dir / "_control.log"
+    log.write_text("", encoding="utf-8")
+    failures = []
+    for index, tree in enumerate(sorted({control.tree for control in controls})):
+        failures += run_tree_controls(root, build_root / "_control" / str(index),
+                                      [control for control in controls if control.tree == tree],
+                                      log)
     print(f"control: {len(controls)} commands, {len(failures)} failures", flush=True)
     return len(controls), failures
 

@@ -162,6 +162,16 @@ class Matrix(unittest.TestCase):
         self.assertIn("control FAILED", self.output)
         self.assertIn("exited 1 on the clean tree", self.output)
 
+    def test_a_control_runs_on_the_faults_own_tree_and_not_a_wider_one(self):
+        self.define(good_fault(), area="wide")
+        narrow = [name for name in TREE if name != "payload.txt"]
+        self.define(good_fault(id="narrow", expect={"signature": "CHECK FAILED"},
+                               mutations=[{"file": "notes.txt", "old": "twin twin", "new": "t"}]),
+                    area="narrow", tree=narrow)
+        self.assertEqual(self.matrix(), 1)
+        self.assertIn("exited 1 on the clean tree", self.output)
+        self.assert_verdict(fm.NOT_RUN, "narrow")
+
     def test_a_signature_seen_on_the_clean_tree_fails_the_control(self):
         self.define(good_fault(expect={"signature": "payload:"}))
         self.assertEqual(self.matrix(), 1)
