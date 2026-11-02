@@ -38,7 +38,7 @@ Full plan through to the done criteria. Tick items when done, and add anything n
 - [x] Start the 12302019 and 10302019 downloads early. Third-party reports of throttling to 0.3 to 0.8 MB/s (DS-9). Keep the `.gz`, because the archive is not stable (DS-8).
 - [x] Fetch external reference files (CrossStats, MIDAS) by script into `data/`. Never commit them.
 - [x] `scripts/check_census.py`: requires `itch_census` to agree exactly with the manifest on the per-type counts, total and last message, shown failing on a mutated count. `scripts/check_real_day.sh` runs it on each pinned day.
-- [ ] Same scripts on `debian` under `~/quant-projects/itch-orderbook/data`. Open: the debian results header shows the 12302019 file and its hash are there, but no log shows `fetch_data.py` or `check_real_day.sh` run on `debian`.
+- [x] Same scripts on `debian` under `~/quant-projects/itch-orderbook/data`. `fetch_data.py` fetched 12302019 there and `--verify-only` passed against the pin. 10302019 was not fetched there because no Phase 2 job needs it, and `check_real_day.sh` stays on the Mac because the per-message oracle replay does.
 
 ### Platform layer (`bench/platform/`, no `#ifdef` in book or parser)
 All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux run needs no code change.
@@ -68,7 +68,7 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [x] Keep `cpu5` idle. A second thread goes on `cpu6`. Avoid cores 0, 1 and 3.
 - [x] Write output to a file on `debian`, never through SSH. A run with no complete output file is lost: check `~/quant-projects/.logs/measure.log` and rerun it.
 - [x] Record core, governor, frequency and turbo state in the header. Calibrate the TSC on every run. Batch or average anything under about 100 ns. `perf` cycles and TSC ticks are different units.
-- [ ] Use the liburing 2.15 already built in `.toolchain`. Do not run its `configure`. Open: the `-DITCH_LIBURING_ROOT` configure exists, but the `debian` configures on record say `liburing: off`, and no Phase 2 code calls it.
+- [ ] Use the liburing 2.15 already built in `.toolchain`. Do not run its `configure`. Open: `-DITCH_LIBURING_ROOT` configures against the 2.15 build on `debian`, and no Phase 2 code calls it. The first use is the io_uring work in Phase 3.
 - [ ] If `perf` starts failing, `perf_event_paranoid` may have reset on a reboot. Report it, do not change it. Open: a standing rule with nothing to finish. It has not fired: the last `debian` run recorded `perf_event_paranoid=2`.
 
 ### Tests and oracles
@@ -90,7 +90,7 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [x] `scripts/check.sh` runs every check.
 - [x] Grep gate: no pointer cast to a multi-byte type over wire bytes, no bare branch hints.
 - [x] `scripts/fault_matrix.py`: each check shown failing on an injected fault, with one JSON file per area under `scripts/faults/`, a clean control and a self-test. Results in `results/fault_matrix.md`.
-- [ ] Phase 2 report
+- [x] Phase 2 report
 
 ## Phase 3: Implementation
 
