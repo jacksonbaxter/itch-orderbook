@@ -83,9 +83,17 @@ t_inv2_in_t_within_50ms_of_resumption crossed=0 locked=0
 t_inv2_in_t_later_than_50ms crossed=0 locked=0
 t_inv2_in_t_never_resumed crossed=0 locked=0
 t_inv2_reopening_windows 0
+t_inv3_new crossed=0 locked=0
+t_inv3_leftover crossed=0 locked=0
+t_inv3_leftovers_opened 0
+t_inv3_ended_by_book 0
+t_inv3_ended_by_cross 0
+t_inv3_longest_leftover_ns 0
+t_inv3_still_in_force 0
 verdict T-ORACLE-1 PASS
 verdict T-INV-1 PASS violations=0
 verdict T-INV-2 PASS crossed=0 locked=0
+verdict T-INV-3 PASS violations=0
         9.00 real         8.00 user         1.00 sys
           1073741824  maximum resident set size
           2147483648  peak memory footprint
@@ -202,6 +210,58 @@ class OracleReport(unittest.TestCase):
         self.assertIn("T-INV-2 FAIL", output)
         written = (self.root / "out.md").read_text(encoding="utf-8")
         self.assertIn("Verdict, strict: **FAIL**", written)
+
+    def test_a_leftover_only_day_keeps_the_t_inv_2_code_and_passes_t_inv_3(self):
+        self.log = self.log.replace("verdict T-INV-2 PASS crossed=0 locked=0",
+                                    "verdict T-INV-2 FAIL crossed=5 locked=1")
+        self.log = self.log.replace("t_inv3_leftover crossed=0 locked=0",
+                                    "t_inv3_leftover crossed=5 locked=1")
+        self.log = self.log.replace("t_inv2_market_open_and_t crossed=0 locked=0",
+                                    "t_inv2_market_open_and_t crossed=5 locked=1")
+        code, output = self.run_report()
+        self.assertEqual(code, 3, output)
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("## T-INV-3: no new cross in normal trading", written)
+        self.assertIn("Verdict: **PASS**, 0 violations.", written)
+        self.assertIn("| With a leftover in force, allowed | 5 | 1 |", written)
+
+    def test_a_new_cross_is_a_hard_failure_shown_in_full(self):
+        self.log = self.log.replace("verdict T-INV-2 PASS crossed=0 locked=0",
+                                    "verdict T-INV-2 FAIL crossed=1 locked=0")
+        self.log = self.log.replace("verdict T-INV-3 PASS violations=0",
+                                    "verdict T-INV-3 FAIL violations=1")
+        self.log = self.log.replace("t_inv3_new crossed=0 locked=0",
+                                    "t_inv3_violation kind=crossed symbol=ABC locate=7 "
+                                    "time=10:00:00.000000000 message=9 type=A depth=300\n"
+                                    "t_inv3_new crossed=1 locked=0")
+        self.log = self.log.replace("t_inv2_market_open_and_t crossed=0 locked=0",
+                                    "t_inv2_market_open_and_t crossed=1 locked=0")
+        self.assert_fails("T-INV-3 verdict is not PASS")
+        code, output = self.run_report()
+        self.assertEqual(code, 1, output)
+        self.assertIn("T-INV-3 new crosses: 1 crossed and 0 locked", output)
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("Verdict: **FAIL**, 1 violations.", written)
+        self.assertIn("| crossed | ABC | 10:00:00.000000000 | 9 | `A` | 300 |", written)
+
+    def test_a_count_of_new_crosses_with_none_printed_fails(self):
+        self.log = self.log.replace("t_inv3_new crossed=0 locked=0",
+                                    "t_inv3_new crossed=2 locked=0")
+        self.assert_fails("0 T-INV-3 violations printed, 2 counted")
+
+    def test_t_inv_3_has_to_account_for_its_whole_population(self):
+        self.log = self.log.replace("t_inv2_market_open_and_t crossed=0 locked=0",
+                                    "t_inv2_market_open_and_t crossed=1 locked=0")
+        self.assert_fails("T-INV-3 accounts for 0 crossed and 0 locked")
+
+    def test_more_leftovers_than_resumptions_fails(self):
+        self.log = self.log.replace("t_inv3_leftovers_opened 0", "t_inv3_leftovers_opened 1")
+        self.assert_fails("more leftovers than resumptions")
+
+    def test_a_log_with_no_t_inv_3_cannot_be_used(self):
+        self.log = self.log.replace("t_inv3_new crossed=0 locked=0\n", "")
+        code, _ = self.run_report()
+        self.assertEqual(code, 2)
 
     def test_populations_are_summed_by_type_and_scope(self):
         log = report.parse_log(self.log + "t_inv2_tally type=U scope=open_t checks=5 two_sided=4 "

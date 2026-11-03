@@ -9,9 +9,9 @@ The tool's own verdicts are not enough here. A tool that diffed half the day cou
 pass, so this compares its counters with the census pinned in the manifest. The third-
 party figures in COMPARISON are claims to set ours beside, never expected values.
 
-Exit codes: 0 every hard check passed and T-INV-2 passed. 1 a hard check failed. 2 the
-inputs could not be used. 3 only T-INV-2 failed: it is strict, so it is reported as
-failing, and the code keeps it apart from a broken book.
+Exit codes: 0 every hard check passed and T-INV-2 passed. 1 a hard check failed, and
+T-INV-3 is one. 2 the inputs could not be used. 3 only T-INV-2 failed: it is strict, so it
+is reported as failing, and the code keeps it apart from a broken book.
 """
 
 from __future__ import annotations
@@ -56,6 +56,9 @@ CAUSE = re.compile(r"t_inv2_cause type=(.) cause=(\w+) crossed=(\d+) locked=(\d+
 SYMBOL = re.compile(
     r"t_inv2_symbol (\S+) locate=(\d+) crossed=(\d+) locked=(\d+) first=(\S+) last=(\S+) "
     r"deepest=(\d+) states=(\S*)")
+VIOLATION = re.compile(
+    r"t_inv3_violation kind=(\w+) symbol=(\S+) locate=(\d+) time=(\S+) message=(\d+) type=(.) "
+    r"depth=(\d+)")
 
 
 class ReportError(Exception):
@@ -65,7 +68,8 @@ class ReportError(Exception):
 def parse_log(text):
     """Pulls the tool's key-value lines and the time -l figures out of a raw log."""
     log = {"values": {}, "types": {}, "tallies": {}, "causes": {}, "symbols": [], "states": {},
-           "pairs": {}, "verdicts": {}, "divergences": [], "time": {}, "run": {}}
+           "pairs": {}, "verdicts": {}, "divergences": [], "time": {}, "run": {},
+           "new_crosses": []}
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith("run_"):
@@ -89,6 +93,11 @@ def parse_log(text):
             if match is None:
                 raise ReportError(f"bad symbol line: {stripped}")
             log["symbols"].append(match.groups())
+        elif stripped.startswith("t_inv3_violation "):
+            match = VIOLATION.fullmatch(stripped)
+            if match is None:
+                raise ReportError(f"bad violation line: {stripped}")
+            log["new_crosses"].append(match.groups())
         elif stripped.startswith("t_inv2_by_state "):
             match = PAIR.search(stripped)
             log["states"][stripped.split()[1]] = (int(match[1]), int(match[2]))
@@ -107,7 +116,7 @@ def parse_log(text):
         else:
             match = PAIR.search(stripped)
             key, _, value = stripped.partition(" ")
-            if match is not None and key.startswith("t_inv2_"):
+            if match is not None and key.startswith(("t_inv2_", "t_inv3_")):
                 log["pairs"][key] = (int(match[1]), int(match[2]))
             elif value and " " not in value:
                 log["values"][key] = value
@@ -121,7 +130,7 @@ def number(log, key):
 
 
 def hard_failures(log, entry):
-    """Every reason the run does not meet T-ORACLE-1 or T-INV-1 on this day."""
+    """Every reason the run does not meet T-ORACLE-1, T-INV-1 or T-INV-3 on this day."""
     failures = []
     messages = entry["messages"]
     counts = entry["per_type_counts"]
@@ -151,7 +160,25 @@ def hard_failures(log, entry):
     require(number(log, "t_inv1_violations") == 0, "T-INV-1 violations")
     require(log["verdicts"].get("T-ORACLE-1") == "PASS", "T-ORACLE-1 verdict is not PASS")
     require(log["verdicts"].get("T-INV-1") == "PASS", "T-INV-1 verdict is not PASS")
+    require(log["verdicts"].get("T-INV-3") == "PASS", "T-INV-3 verdict is not PASS")
+    new, leftover = pair_of(log, "t_inv3_new"), pair_of(log, "t_inv3_leftover")
+    require(new == (0, 0), f"T-INV-3 new crosses: {new[0]} crossed and {new[1]} locked")
+    require(len(log["new_crosses"]) == new[0] + new[1],
+            f"{len(log['new_crosses'])} T-INV-3 violations printed, {new[0] + new[1]} counted")
+    # The population is T-INV-2's own row, so a tally that lost an observation shows here.
+    population = pair_of(log, "t_inv2_market_open_and_t")
+    require((new[0] + leftover[0], new[1] + leftover[1]) == population,
+            f"T-INV-3 accounts for {new[0] + leftover[0]} crossed and {new[1] + leftover[1]} "
+            f"locked, the population holds {population[0]} and {population[1]}")
+    require(number(log, "t_inv3_leftovers_opened") <= number(log, "t_inv2_reopening_windows"),
+            "more leftovers than resumptions")
     return failures
+
+
+def pair_of(log, key):
+    if key not in log["pairs"]:
+        raise ReportError(f"the log has no {key}")
+    return log["pairs"][key]
 
 
 def sum_tallies(log, types, scope):
@@ -210,6 +237,52 @@ def format_table(header, rows):
 
 def count(value):
     return f"{value:,}"
+
+
+def inv3_section(log):
+    """T-INV-3, apart from T-INV-2, whose strict result this does not touch."""
+    new, leftover = pair_of(log, "t_inv3_new"), pair_of(log, "t_inv3_leftover")
+    lines = [
+        "",
+        "## T-INV-3: no new cross in normal trading",
+        "",
+        f"Verdict: **{log['verdicts'].get('T-INV-3', 'missing')}**, "
+        f"{count(new[0] + new[1])} violations. This check is separate from T-INV-2 and does "
+        "not change it.",
+        "",
+        "The rule, as the user approved it after seeing real data: during normal trading, a "
+        "book may only be crossed if the cross is left over from a halt and hasn't cleared "
+        "yet. Any new cross is a failure. The population is market open with the symbol in "
+        "state `T`, and locked counts apart from crossed. A leftover exists only if that "
+        "symbol's book is crossed or locked at the moment of a resumption. It ends on the "
+        "first observation that is neither, or on a cross message. No time limit enters the "
+        "rule.",
+        "",
+    ]
+    lines += format_table(("In the population", "Crossed", "Locked"), [
+        ("With a leftover in force, allowed", count(leftover[0]), count(leftover[1])),
+        ("With none, a violation", count(new[0]), count(new[1])),
+    ])
+    lines += [""]
+    lines += format_table(("Resumptions and leftovers", "Count"), [
+        ("Resumptions, `H` into `T`", count(number(log, "t_inv2_reopening_windows"))),
+        ("Of which found the book crossed or locked, so a leftover opened",
+         count(number(log, "t_inv3_leftovers_opened"))),
+        ("Leftovers ended by an observation neither crossed nor locked",
+         count(number(log, "t_inv3_ended_by_book"))),
+        ("Leftovers ended by a cross message", count(number(log, "t_inv3_ended_by_cross"))),
+        ("Leftovers still in force at the end of the day",
+         count(number(log, "t_inv3_still_in_force"))),
+        ("Longest leftover, ns, reported and not limited",
+         count(number(log, "t_inv3_longest_leftover_ns"))),
+    ])
+    if log["new_crosses"]:
+        lines += ["", "### Every violation", ""]
+        lines += format_table(
+            ("Kind", "Symbol", "Time", "Message", "Type", "Depth, price units"),
+            [(kind, symbol, time, count(int(message)), f"`{kind_of}`", count(int(depth)))
+             for kind, symbol, _, time, message, kind_of, depth in log["new_crosses"]])
+    return lines
 
 
 def render(log, entry, day, alloc):
@@ -332,6 +405,7 @@ def render(log, entry, day, alloc):
         ("Figure", "Source", "Published", "Ours", "Difference"),
         [(label, source, count(claim), count(ours), f"{ours - claim:+,}")
          for label, source, claim, ours in comparison_rows(log)])
+    lines += inv3_section(log)
     if alloc:
         lines += [
             "",
@@ -406,7 +480,7 @@ def main(argv=None):
     if failures:
         return 1
     inv2 = log["verdicts"].get("T-INV-2")
-    print(f"oracle report: {args.day} T-ORACLE-1 PASS, T-INV-1 PASS, "
+    print(f"oracle report: {args.day} T-ORACLE-1 PASS, T-INV-1 PASS, T-INV-3 PASS, "
           f"{number(log, 'messages_diffed')} messages diffed, T-INV-2 {inv2}")
     return 0 if inv2 == "PASS" else 3
 

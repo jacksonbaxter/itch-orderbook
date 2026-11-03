@@ -1,4 +1,4 @@
-// T-INV-1 and T-INV-2, read from the reference book and the feed.
+// T-INV-1, T-INV-2 and T-INV-3, read from the reference book and the feed.
 //
 // T-INV-1: every execute, cancel, delete and replace names a live order. Any message
 // the reference had to refuse is a violation, with no tolerance.
@@ -9,16 +9,27 @@
 // trading state, and the tallies by message type let a reader rebuild the populations
 // that others publish: all observations, and market open with the symbol in state T.
 //
+// T-INV-3: during normal trading, a book may only be crossed if the cross is left over
+// from a halt and has not cleared yet. Any new cross is a failure. The user approved
+// this rule after seeing real data, as a second check, and T-INV-2 is unchanged by it.
+// The population is market open with the symbol in state T, and locked counts apart from
+// crossed. A leftover exists only if that locate's book is crossed or locked at the
+// moment of a resumption. It ends on the first observation that is neither, or on a
+// cross message. Any crossed or locked observation in the population with no leftover in
+// force is a violation. No time limit enters this rule.
+//
 // Trading state comes from H, market hours from S, and symbols from R. A symbol with no
 // H yet has state '-'. Spec 1.2.2 says to treat such a symbol as halted, so it counts as
 // not in T, and it is shown apart so that reliance on the default stays visible.
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <format>
+#include <limits>
 #include <map>
 #include <print>
 #include <span>
@@ -73,10 +84,15 @@ class Invariants {
         symbol_(65536),
         resumed_ns_(65536, 0),
         window_open_(65536, 0),
+        touching_(65536, 0),
+        leftover_(65536, 0),
         tallies_(256) {}
 
   // How many T-INV-1 violations are printed in full. All of them are counted.
   void set_inv1_detail_limit(std::size_t limit) noexcept { inv1_detail_limit_ = limit; }
+
+  // How many T-INV-3 violations are printed in full. All of them are counted.
+  void set_inv3_detail_limit(std::size_t limit) noexcept { inv3_detail_limit_ = limit; }
 
   // Writes one line per crossed or locked observation. Null keeps only the summary.
   void set_observation_log(std::FILE* log) noexcept { log_ = log; }
@@ -89,9 +105,7 @@ class Invariants {
         on_trading_action(StockTradingAction::from_wire(payload.data()));
         break;
       case SystemEvent::kType: on_system_event(SystemEvent::from_wire(payload.data())); break;
-      case CrossTrade::kType:
-        on_cross(CrossTrade::from_wire(payload.data()).header.stock_locate);
-        break;
+      case CrossTrade::kType: on_cross(CrossTrade::from_wire(payload.data()).header); break;
       case OperationalHalt::kType: ++operational_halts_; break;
       default: break;
     }
@@ -111,7 +125,7 @@ class Invariants {
     }
   }
 
-  // T-INV-2, after the books have taken the message.
+  // T-INV-2 and T-INV-3, after the books have taken the message.
   void observe(std::uint64_t message, char type, std::uint16_t locate, std::uint64_t timestamp_ns,
                const RefTop& bid, const RefTop& ask) {
     const char state = state_[locate];
@@ -124,8 +138,11 @@ class Invariants {
       all.two_sided += bid.present && ask.present ? 1U : 0U;
       open.two_sided += continuous && bid.present && ask.present ? 1U : 0U;
       window_open_[locate] = 0;
+      touching_[locate] = 0;
+      end_leftover(locate, timestamp_ns, inv3_ended_by_book_);
       return;
     }
+    touching_[locate] = 1;
     ++all.two_sided;
     open.two_sided += continuous ? 1U : 0U;
     const bool crossed = bid.price > ask.price;
@@ -134,11 +151,17 @@ class Invariants {
       (crossed ? open.crossed : open.locked) += 1;
     }
     record(message, type, locate, timestamp_ns, bid.price, ask.price, crossed);
+    if (continuous) {
+      check_leftover(message, type, locate, timestamp_ns, bid.price - ask.price, crossed);
+    }
   }
 
   [[nodiscard]] std::uint64_t inv1_violations() const noexcept { return inv1_violations_; }
   [[nodiscard]] std::uint64_t crossed() const noexcept { return all_.crossed; }
   [[nodiscard]] std::uint64_t locked() const noexcept { return all_.locked; }
+  [[nodiscard]] std::uint64_t inv3_violations() const noexcept {
+    return inv3_new_.crossed + inv3_new_.locked;
+  }
   [[nodiscard]] char trading_state(std::uint16_t locate) const noexcept { return state_[locate]; }
   [[nodiscard]] bool market_open() const noexcept { return market_open_; }
 
@@ -175,6 +198,7 @@ class Invariants {
     std::println("t_inv2_reopening_windows {}", windows_opened_);
     std::println("t_inv2_longest_since_resume_ns {}", longest_since_resume_);
     std::println("operational_halt_messages {}", operational_halts_);
+    print_leftovers();
     for (const auto& [state, pair] : by_state_) {
       std::println("t_inv2_by_state {} crossed={} locked={}", state, pair.crossed, pair.locked);
     }
@@ -198,6 +222,10 @@ class Invariants {
       resumed_ns_[locate] = m.header.timestamp_ns;
       window_open_[locate] = 1;
       ++windows_opened_;
+      if (touching_[locate] != 0) {
+        leftover_[locate] = 1;
+        ++inv3_opened_;
+      }
     }
     state_[locate] = m.trading_state;
   }
@@ -210,7 +238,36 @@ class Invariants {
     }
   }
 
-  void on_cross(std::uint16_t locate) { window_open_[locate] = 0; }
+  void on_cross(const Header& header) {
+    window_open_[header.stock_locate] = 0;
+    end_leftover(header.stock_locate, header.timestamp_ns, inv3_ended_by_cross_);
+  }
+
+  void end_leftover(std::uint16_t locate, std::uint64_t timestamp_ns, std::uint64_t& ended) {
+    if (leftover_[locate] != 0) {
+      leftover_[locate] = 0;
+      ++ended;
+      const std::uint64_t lasted = timestamp_ns - resumed_ns_[locate];
+      inv3_longest_ns_ = lasted > inv3_longest_ns_ ? lasted : inv3_longest_ns_;
+    }
+  }
+
+  // T-INV-3, on a crossed or locked observation in the population.
+  void check_leftover(std::uint64_t message, char type, std::uint16_t locate,
+                      std::uint64_t timestamp_ns, std::uint32_t depth, bool crossed) {
+    if (leftover_[locate] != 0) {
+      bump(inv3_allowed_, crossed);
+      return;
+    }
+    bump(inv3_new_, crossed);
+    if (inv3_details_ < inv3_detail_limit_) {
+      ++inv3_details_;
+      std::println(
+          "t_inv3_violation kind={} symbol={} locate={} time={} message={} type={} depth={}",
+          crossed ? "crossed" : "locked", symbol_name(locate), locate, clock_time(timestamp_ns),
+          message, type, depth);
+    }
+  }
 
   static void bump(Pair& pair, bool crossed) { (crossed ? pair.crossed : pair.locked) += 1; }
 
@@ -284,6 +341,17 @@ class Invariants {
     }
   }
 
+  void print_leftovers() const {
+    std::println("t_inv3_new crossed={} locked={}", inv3_new_.crossed, inv3_new_.locked);
+    std::println("t_inv3_leftover crossed={} locked={}", inv3_allowed_.crossed,
+                 inv3_allowed_.locked);
+    std::println("t_inv3_leftovers_opened {}", inv3_opened_);
+    std::println("t_inv3_ended_by_book {}", inv3_ended_by_book_);
+    std::println("t_inv3_ended_by_cross {}", inv3_ended_by_cross_);
+    std::println("t_inv3_longest_leftover_ns {}", inv3_longest_ns_);
+    std::println("t_inv3_still_in_force {}", std::ranges::count(leftover_, std::uint8_t{1}));
+  }
+
   [[nodiscard]] static std::string_view cause_of(char state, bool in_window) noexcept {
     if (state != 'T') {
       return "not_t";
@@ -342,6 +410,8 @@ class Invariants {
   std::vector<Stock> symbol_;
   std::vector<std::uint64_t> resumed_ns_;
   std::vector<std::uint8_t> window_open_;
+  std::vector<std::uint8_t> touching_;  // The locate's book, as of its last observation.
+  std::vector<std::uint8_t> leftover_;
   std::vector<std::array<Tally, 2>> tallies_;
   bool market_open_ = false;
   std::FILE* log_ = nullptr;
@@ -350,6 +420,15 @@ class Invariants {
   std::size_t inv1_details_ = 0;
   std::size_t inv1_detail_limit_ = kInv1DetailLimit;
   std::map<std::string_view, std::uint64_t> inv1_by_status_;
+
+  Pair inv3_new_;
+  Pair inv3_allowed_;
+  std::uint64_t inv3_opened_ = 0;
+  std::uint64_t inv3_ended_by_book_ = 0;
+  std::uint64_t inv3_ended_by_cross_ = 0;
+  std::uint64_t inv3_longest_ns_ = 0;
+  std::size_t inv3_details_ = 0;
+  std::size_t inv3_detail_limit_ = std::numeric_limits<std::size_t>::max();
 
   Pair all_;
   Pair not_in_t_;

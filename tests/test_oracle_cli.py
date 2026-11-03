@@ -74,7 +74,7 @@ def main():
     # Each observation below is marked in the generator.
     crossed = fixtures / "crossed.itch"
     log = scratch / "observations.txt"
-    case("crossed", crossed, SMALL + ("--exhaustive", "--observations", str(log)), 3,
+    case("crossed", crossed, SMALL + ("--exhaustive", "--observations", str(log)), 1,
          "t_inv2_crossed 7", "t_inv2_locked 2", "t_inv2_deepest_crossing 10000",
          "t_inv2_crossed_symbols 3", "t_inv2_locked_symbols 1",
          "t_inv2_not_in_t crossed=3 locked=1", "t_inv2_no_action_yet crossed=1 locked=0",
@@ -97,7 +97,10 @@ def main():
          "t_inv2_tally type=A scope=open_t checks=3 two_sided=2 crossed=2 locked=0",
          "t_inv2_tally type=A scope=all checks=10 two_sided=6 crossed=5 locked=1",
          "verdict T-ORACLE-1 PASS", "verdict T-INV-1 PASS violations=0",
-         "verdict T-INV-2 FAIL crossed=7 locked=2")
+         "verdict T-INV-2 FAIL crossed=7 locked=2",
+         # TRD's cross, and HLT's after a cross message ended its leftover.
+         "t_inv3_new crossed=2 locked=0", "t_inv3_leftover crossed=2 locked=1",
+         "verdict T-INV-3 FAIL violations=2")
     observed = log.read_text(encoding="utf-8").splitlines()
     if len(observed) != 9:
         failures.append(f"crossed: {len(observed)} observations logged, wanted 9")
@@ -114,6 +117,51 @@ def main():
         for part in parts:
             if part not in observed[index]:
                 failures.append(f"crossed: observation {index} has no {part!r}: {observed[index]}")
+
+    # T-INV-2 fails and T-INV-3 passes, which is the one way to exit 3. Crossed 5: PRE
+    # before the open, LFT in its halt, at the resumption and five hours on, and CLR in its
+    # halt. Locked 4: LCK in its halt, at the resumption and after it, and PSD in its pause.
+    # Two of each are in the population, and all four have a leftover in force. 4
+    # resumptions, of which 2 find the book crossed or locked, since CLR and PSD cleared
+    # first. LFT's leftover runs from 09:30:00.000005 to 14:30:00.000002, and nothing ends
+    # it but the book: that span is 18,000 s less 3,000 ns.
+    allowed = case("leftover", fixtures / "leftover.itch", SMALL + ("--exhaustive",), 3,
+                   "t_inv2_crossed 5", "t_inv2_locked 4", "t_inv2_reopening_windows 4",
+                   "t_inv3_new crossed=0 locked=0", "t_inv3_leftover crossed=2 locked=2",
+                   "t_inv3_leftovers_opened 2", "t_inv3_ended_by_book 2",
+                   "t_inv3_ended_by_cross 0", "t_inv3_longest_leftover_ns 17999999997000",
+                   "t_inv3_still_in_force 0",
+                   "verdict T-ORACLE-1 PASS", "verdict T-INV-1 PASS violations=0",
+                   "verdict T-INV-2 FAIL crossed=5 locked=4",
+                   "verdict T-INV-3 PASS violations=0")
+    for symbol in ("LFT", "LCK", "CLR", "PSD", "PRE"):
+        if any(line.startswith("t_inv3_violation") and f"symbol={symbol} " in line
+               for line in allowed):
+            failures.append(f"leftover: violation on {symbol}")
+
+    # Each new cross in normal trading, located by hand from the generator: 7 in all, 2 of
+    # them on BYCROSS, and 4 allowed observations at the resumptions before them.
+    bad = case("new cross", fixtures / "new_cross.itch", SMALL + ("--exhaustive",), 1,
+               "t_inv3_new crossed=4 locked=3", "t_inv3_leftover crossed=2 locked=2",
+               "t_inv3_leftovers_opened 4", "t_inv3_ended_by_book 2", "t_inv3_ended_by_cross 2",
+               "verdict T-ORACLE-1 PASS", "verdict T-INV-1 PASS violations=0",
+               "verdict T-INV-3 FAIL violations=7")
+    wanted_new = [("ENDED", "crossed", "type=A", "depth=100"),
+                  ("FRESH", "crossed", "type=A", "depth=200"),
+                  ("BYCROSS", "crossed", "type=Q", "depth=400"),
+                  ("BYCROSS", "crossed", "type=A", "depth=400"),
+                  ("ENDLK", "locked", "type=A", "depth=0"),
+                  ("FRSHLK", "locked", "type=A", "depth=0"),
+                  ("BYCRSLK", "locked", "type=Q", "depth=0")]
+    reported = [line for line in bad if line.startswith("t_inv3_violation")]
+    for symbol, kind, *parts in wanted_new:
+        hits = [line for line in reported if f"symbol={symbol} " in line and f"kind={kind} " in line
+                and all(part in line for part in parts) and " time=09:30:" in line
+                and " message=" in line]
+        if not hits:
+            failures.append(f"new cross: no violation on {symbol} {parts}")
+    if len(reported) != len(wanted_new):
+        failures.append(f"new cross: {len(reported)} violations reported, wanted {len(wanted_new)}")
 
     # Both books refuse each of these, so they stay equal and only T-INV-1 fails.
     case("dead reference", fixtures / "dead_reference.itch", SMALL + ("--exhaustive",), 1,

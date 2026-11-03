@@ -75,6 +75,7 @@ struct LiveOrder {
                  .exhaustive = true,
                  .exhaustive_locates = kLocates}};
   run.invariants().set_inv1_detail_limit(0);
+  run.invariants().set_inv3_detail_limit(0);
   return run;
 }
 

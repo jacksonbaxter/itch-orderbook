@@ -13,6 +13,9 @@ reference book's own decode.
     session.itch         a seeded random session on several symbols, never crossed, that
                          leaves deep orders resting untouched from start to finish
     crossed.itch         crossed and locked observations in each state tests expect
+    leftover.itch        crosses T-INV-3 allows: leftovers of a halt, and outside its
+                         population. T-INV-2 fails and T-INV-3 passes
+    new_cross.itch       each way a new cross arises in normal trading, on its own symbol
     dead_reference.itch  messages naming dead orders, and other refused messages
 """
 
@@ -276,6 +279,129 @@ def crossed():
     return bytes(s.data)
 
 
+def halted_then_touching(s, locate, symbol, first_ref, bid, ask):
+    """Halts a symbol and crosses or locks its book while it is halted."""
+    s.trading(locate, symbol, "H")
+    s.add(locate, first_ref, "B", 100, bid, symbol)
+    s.add(locate, first_ref + 1, "S", 100, ask, symbol)
+
+
+def leftover():
+    """Everything here is allowed by T-INV-3. test_oracle_cli.py states the tallies by hand."""
+    crossed_left, locked_left, cleared, paused, early = 1, 2, 3, 4, 5
+    s = Stream()
+    symbols = [(crossed_left, "LFT"), (locked_left, "LCK"), (cleared, "CLR"), (paused, "PSD"),
+               (early, "PRE")]
+    s.system("O")
+    for locate, symbol in symbols:
+        s.directory(locate, symbol)
+    for locate, symbol in symbols:
+        s.trading(locate, symbol, "T")
+    s.system("S")
+
+    # Crossed in state T before the open: outside the population, so not a new cross.
+    s.add(early, 50, "B", 100, 1_000_100, "PRE")
+    s.add(early, 51, "S", 100, 1_000_000, "PRE")  # crossed, T, market closed
+    s.delete(early, 51)
+    s.delete(early, 50)
+
+    s.at(OPEN_NS)
+    s.system("Q")
+
+    # A cross left over from a halt, allowed for as long as it lasts, however long that is.
+    halted_then_touching(s, crossed_left, "LFT", 1, 1_010_000, 1_000_000)  # crossed, H
+    s.trading(crossed_left, "LFT", "T")          # crossed, T, a leftover opens: allowed
+    s.at(OPEN_NS + 300 * MINUTE_NS)
+    s.add(crossed_left, 3, "S", 100, 1_020_000, "LFT")  # crossed, T, five hours on: allowed
+    s.delete(crossed_left, 2)                    # uncrossed, the leftover ends
+    s.delete(crossed_left, 3)
+    s.delete(crossed_left, 1)
+
+    # The same for a locked book.
+    halted_then_touching(s, locked_left, "LCK", 10, 2_000_000, 2_000_000)  # locked, H
+    s.trading(locked_left, "LCK", "T")           # locked, T, a leftover opens: allowed
+    s.add(locked_left, 12, "B", 100, 1_990_000, "LCK")  # locked, T: allowed
+    s.delete(locked_left, 11)                    # the leftover ends
+    s.delete(locked_left, 10)
+    s.delete(locked_left, 12)
+
+    # Crossed in a halt and cleared before the resumption: no leftover to speak of.
+    halted_then_touching(s, cleared, "CLR", 20, 3_000_100, 3_000_000)  # crossed, H
+    s.delete(cleared, 21)
+    s.delete(cleared, 20)
+    s.trading(cleared, "CLR", "T")
+
+    # Locked in a pause, and cleared before the resumption.
+    s.trading(paused, "PSD", "P")
+    s.add(paused, 30, "B", 100, 4_000_000, "PSD")
+    s.add(paused, 31, "S", 100, 4_000_000, "PSD")  # locked, P
+    s.delete(paused, 31)
+    s.delete(paused, 30)
+    s.trading(paused, "PSD", "T")
+    session_close(s)
+    return bytes(s.data)
+
+
+def new_cross():
+    """One symbol per violation, marked below. test_oracle_cli.py states them by hand."""
+    ended, fresh, by_cross, ended_lock, fresh_lock, by_cross_lock = 1, 2, 3, 4, 5, 6
+    s = Stream()
+    session_open(s, [(ended, "ENDED"), (fresh, "FRESH"), (by_cross, "BYCROSS"),
+                     (ended_lock, "ENDLK"), (fresh_lock, "FRSHLK"), (by_cross_lock, "BYCRSLK")])
+
+    # A leftover ends, then a new cross: the second cross is not excused by the first.
+    halted_then_touching(s, ended, "ENDED", 1, 1_000_200, 1_000_000)  # crossed, H
+    s.trading(ended, "ENDED", "T")               # allowed
+    s.delete(ended, 2)                           # the leftover ends
+    s.add(ended, 3, "S", 100, 1_000_100, "ENDED")  # violation, crossed, depth 100
+    s.delete(ended, 3)
+    s.delete(ended, 1)
+
+    # Two sided and uncrossed at the resumption, and crossed one message later.
+    s.add(fresh, 10, "B", 100, 2_000_000, "FRESH")
+    s.add(fresh, 11, "S", 100, 2_000_100, "FRESH")
+    s.trading(fresh, "FRESH", "H")
+    s.trading(fresh, "FRESH", "T")               # uncrossed, so no leftover opens
+    s.add(fresh, 12, "B", 100, 2_000_300, "FRESH")  # violation, crossed, depth 200
+    s.delete(fresh, 12)
+    s.delete(fresh, 11)
+    s.delete(fresh, 10)
+
+    # A cross message ends a leftover though the book stays crossed.
+    halted_then_touching(s, by_cross, "BYCROSS", 20, 3_000_400, 3_000_000)  # crossed, H
+    s.trading(by_cross, "BYCROSS", "T")          # allowed
+    s.cross(by_cross, 100, 3_000_200, "BYCROSS")  # violation, crossed, depth 400
+    s.add(by_cross, 22, "B", 100, 2_900_000, "BYCROSS")  # violation, crossed, depth 400
+    s.delete(by_cross, 21)
+    s.delete(by_cross, 20)
+    s.delete(by_cross, 22)
+
+    # The same three for a locked book.
+    halted_then_touching(s, ended_lock, "ENDLK", 30, 4_000_000, 4_000_000)  # locked, H
+    s.trading(ended_lock, "ENDLK", "T")          # allowed
+    s.delete(ended_lock, 31)                     # the leftover ends
+    s.add(ended_lock, 32, "S", 100, 4_000_000, "ENDLK")  # violation, locked
+    s.delete(ended_lock, 32)
+    s.delete(ended_lock, 30)
+
+    s.add(fresh_lock, 40, "B", 100, 5_000_000, "FRSHLK")
+    s.add(fresh_lock, 41, "S", 100, 5_000_100, "FRSHLK")
+    s.trading(fresh_lock, "FRSHLK", "H")
+    s.trading(fresh_lock, "FRSHLK", "T")         # uncrossed, so no leftover opens
+    s.add(fresh_lock, 42, "B", 100, 5_000_100, "FRSHLK")  # violation, locked
+    s.delete(fresh_lock, 42)
+    s.delete(fresh_lock, 41)
+    s.delete(fresh_lock, 40)
+
+    halted_then_touching(s, by_cross_lock, "BYCRSLK", 50, 6_000_000, 6_000_000)  # locked, H
+    s.trading(by_cross_lock, "BYCRSLK", "T")     # allowed
+    s.cross(by_cross_lock, 100, 6_000_000, "BYCRSLK")  # violation, locked
+    s.delete(by_cross_lock, 51)
+    s.delete(by_cross_lock, 50)
+    session_close(s)
+    return bytes(s.data)
+
+
 def dead_reference():
     s = Stream()
     session_open(s, [(1, "AAA"), (2, "BBB")])
@@ -303,6 +429,8 @@ BUILDERS = {
     "lifecycle.itch": lifecycle,
     "session.itch": session,
     "crossed.itch": crossed,
+    "leftover.itch": leftover,
+    "new_cross.itch": new_cross,
     "dead_reference.itch": dead_reference,
 }
 

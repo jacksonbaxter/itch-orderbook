@@ -1,5 +1,5 @@
 // Replays a BinaryFILE ITCH 5.0 stream through the fast book and the reference book,
-// diffs them after every message, and checks T-INV-1 and T-INV-2.
+// diffs them after every message, and checks T-INV-1, T-INV-2 and T-INV-3.
 //
 //     itch_oracle FILE [--hash-every N] [--exhaustive] [--max-orders N] [--max-levels N]
 //                 [--observations FILE]
@@ -8,9 +8,10 @@
 // --exhaustive    compares the whole of both books after every message, as a control.
 // --observations  writes one line per crossed or locked observation.
 //
-// Exit codes: 0 everything passed. 1 the diff, T-INV-1 or the stream itself failed.
-// 2 bad usage or an unreadable file. 3 only T-INV-2 failed: that result is strict and
-// is reported as failing, and a separate code keeps it apart from a broken book.
+// Exit codes: 0 everything passed. 1 the diff, T-INV-1, T-INV-3 or the stream itself
+// failed. 2 bad usage or an unreadable file. 3 only T-INV-2 failed: that result is strict
+// and is reported as failing, and a separate code keeps it apart from a broken book. A
+// new cross in normal trading breaks T-INV-3, so it is a hard failure, never code 3.
 #include <charconv>
 #include <chrono>
 #include <cstddef>
@@ -211,12 +212,15 @@ int run(const Options& options) {
   const bool oracle_pass = oracle.divergences().empty() && all_diffed && stream_ok;
   const bool inv1_pass = oracle.invariants().inv1_violations() == 0;
   const bool inv2_pass = oracle.invariants().crossed() == 0;
+  const bool inv3_pass = oracle.invariants().inv3_violations() == 0;
   std::println("verdict T-ORACLE-1 {}", oracle_pass ? "PASS" : "FAIL");
   std::println("verdict T-INV-1 {} violations={}", inv1_pass ? "PASS" : "FAIL",
                oracle.invariants().inv1_violations());
   std::println("verdict T-INV-2 {} crossed={} locked={}", inv2_pass ? "PASS" : "FAIL",
                oracle.invariants().crossed(), oracle.invariants().locked());
-  if (!oracle_pass || !inv1_pass) {
+  std::println("verdict T-INV-3 {} violations={}", inv3_pass ? "PASS" : "FAIL",
+               oracle.invariants().inv3_violations());
+  if (!oracle_pass || !inv1_pass || !inv3_pass) {
     return 1;
   }
   return inv2_pass ? 0 : 3;
