@@ -542,7 +542,7 @@ TEST(BenchReplay, ADesignNameMustBeOneOfTheSix) {
 TEST(BenchReplay, MemoryHighWaterKeepsThePeakOverTheBaseline) {
   std::vector<std::uint64_t> readings{100, 150, 400, 300};
   std::size_t next = 0;
-  MemoryHighWater memory{[&]() -> std::optional<std::uint64_t> { return readings[next++]; }};
+  MemoryHighWater memory{[&] -> std::optional<std::uint64_t> { return readings[next++]; }};
   memory.sample();
   memory.sample();
   memory.sample();
@@ -555,7 +555,7 @@ TEST(BenchReplay, MemoryHighWaterKeepsThePeakOverTheBaseline) {
 
 TEST(BenchReplay, AMemoryReadThatFailsLeavesTheFigureIncomplete) {
   bool works = true;
-  MemoryHighWater memory{[&]() -> std::optional<std::uint64_t> {
+  MemoryHighWater memory{[&] -> std::optional<std::uint64_t> {
     return works ? std::optional<std::uint64_t>{10} : std::nullopt;
   }};
   works = false;

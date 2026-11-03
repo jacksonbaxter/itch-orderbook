@@ -133,59 +133,75 @@ bool parse_number(std::string_view text, Number& out) {
   return error == std::errc{} && end == text.data() + text.size();
 }
 
+template <class Value, std::size_t N>
+bool parse_choice(std::string_view text,
+                  const std::array<std::pair<std::string_view, Value>, N>& choices, Value& out) {
+  for (const auto& [name, value] : choices) {
+    if (text == name) {
+      out = value;
+      return true;
+    }
+  }
+  return false;
+}
+
+constexpr std::array<std::pair<std::string_view, InputMode>, 2> kInputModes{
+    {{"ram", InputMode::ram}, {"mapped", InputMode::mapped}}};
+constexpr std::array<std::pair<std::string_view, bool>, 2> kOnOff{{{"on", true}, {"off", false}}};
+constexpr std::array<std::pair<std::string_view, Passes>, 3> kPassChoices{
+    {{"all", Passes::all}, {"timed", Passes::timed}, {"untimed", Passes::untimed}}};
+
+// One option and its value. False for an unknown option or a value it does not take.
+bool parse_option(std::string_view arg, std::string_view value, Options& options) {
+  if (arg == "--input") {
+    options.input = value;
+    return true;
+  }
+  if (arg == "--out") {
+    options.out = value;
+    return true;
+  }
+  if (arg == "--commit") {
+    options.commit = value;
+    return true;
+  }
+  if (arg == "--dataset") {
+    options.dataset = value;
+    return true;
+  }
+  if (arg == "--dataset-sha256") {
+    options.dataset_sha256 = value;
+    return true;
+  }
+  if (arg == "--core") {
+    return parse_number(value, options.core);
+  }
+  if (arg == "--orders") {
+    return parse_number(value, options.capacity.orders);
+  }
+  if (arg == "--levels") {
+    return parse_number(value, options.capacity.levels);
+  }
+  if (arg == "--design") {
+    const std::optional<Design> design = parse_design(value);
+    options.design = design.value_or(options.design);
+    return design.has_value();
+  }
+  if (arg == "--input-mode") {
+    return parse_choice(value, kInputModes, options.input_mode);
+  }
+  if (arg == "--track-top") {
+    return parse_choice(value, kOnOff, options.track_top);
+  }
+  if (arg == "--passes") {
+    return parse_choice(value, kPassChoices, options.passes);
+  }
+  return false;
+}
+
 bool parse(std::span<char*> args, Options& options) {
   for (std::size_t i = 0; i + 1 < args.size(); i += 2) {
-    const std::string_view arg{args[i]};
-    const std::string_view value{args[i + 1]};
-    if (arg == "--input") {
-      options.input = value;
-    } else if (arg == "--out") {
-      options.out = value;
-    } else if (arg == "--commit") {
-      options.commit = value;
-    } else if (arg == "--dataset") {
-      options.dataset = value;
-    } else if (arg == "--dataset-sha256") {
-      options.dataset_sha256 = value;
-    } else if (arg == "--core") {
-      if (!parse_number(value, options.core)) {
-        return false;
-      }
-    } else if (arg == "--orders") {
-      if (!parse_number(value, options.capacity.orders)) {
-        return false;
-      }
-    } else if (arg == "--levels") {
-      if (!parse_number(value, options.capacity.levels)) {
-        return false;
-      }
-    } else if (arg == "--design") {
-      const std::optional<Design> design = parse_design(value);
-      if (!design) {
-        return false;
-      }
-      options.design = *design;
-    } else if (arg == "--input-mode") {
-      if (value != "ram" && value != "mapped") {
-        return false;
-      }
-      options.input_mode = value == "ram" ? InputMode::ram : InputMode::mapped;
-    } else if (arg == "--track-top") {
-      if (value != "on" && value != "off") {
-        return false;
-      }
-      options.track_top = value == "on";
-    } else if (arg == "--passes") {
-      if (value == "all") {
-        options.passes = Passes::all;
-      } else if (value == "timed") {
-        options.passes = Passes::timed;
-      } else if (value == "untimed") {
-        options.passes = Passes::untimed;
-      } else {
-        return false;
-      }
-    } else {
+    if (!parse_option(args[i], args[i + 1], options)) {
       return false;
     }
   }
@@ -247,7 +263,7 @@ class OwnedInput {
       done += static_cast<std::size_t>(got);
     }
     std::string description = "ram: read into anonymous memory before the warm-up, prefaulted, ";
-#if defined(__linux__)
+#ifdef __linux__
     // The copy is what the passes read, so the file's own pages need not stay cached.
     static_cast<void>(::posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED));
     description += "the file's page cache dropped after the copy, ";
@@ -333,6 +349,7 @@ constexpr std::array kPercentiles{50.0, 90.0, 99.0, 99.9, 99.99};
 
 std::vector<Percentile> percentiles_of(const Histogram& histogram, const TimerInfo& timer) {
   std::vector<Percentile> out;
+  out.reserve(kPercentiles.size());
   for (const double percentile : kPercentiles) {
     out.push_back(classify_percentile(percentile, histogram.at(percentile), timer));
   }

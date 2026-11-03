@@ -122,6 +122,39 @@ namespace detail {
   return out + "]";
 }
 
+[[nodiscard]] inline std::string mix_json(const MessageMix& mix) {
+  std::string out =
+      std::format(R"({{"messages": {}, "book_messages": {})", mix.messages, mix.book_messages);
+  for (std::size_t op = 0; op < kOpClasses; ++op) {
+    out += std::format(", {}: {}", json_string(kOpNames[op]), mix.by_op[op]);
+  }
+  return out + "}";
+}
+
+[[nodiscard]] inline std::string latency_json(const LatencyRecord& latency) {
+  std::string out = std::format(R"({{"percentiles": {})", percentiles_json(latency.percentiles));
+  out += std::format(R"(, "mean_ns": {:.6f}, "max_ns": {}, "samples": {}, "operations": [)",
+                     latency.mean_ns, json_number(latency.max_ns), latency.samples);
+  for (std::size_t i = 0; i < latency.operations.size(); ++i) {
+    const OpLatency& op = latency.operations[i];
+    out += std::format(R"({}{{"op": {}, "samples": {}, "mean_ns": {:.6f}, "percentiles": {}}})",
+                       i == 0 ? "" : ", ", json_string(op.op), op.samples, op.mean_ns,
+                       percentiles_json(op.percentiles));
+  }
+  return out + "]}";
+}
+
+[[nodiscard]] inline std::string memory_json(const MemoryRecord& memory) {
+  return std::format(
+      R"({{"source": {}, "complete": {}, "first_book": {}, "baseline_bytes": {}, )"
+      R"("built_bytes": {}, "peak_bytes": {}, "book_bytes": {}, "samples": {}, )"
+      R"("ager_held_bytes": {}}})",
+      json_string(memory.source), memory.complete ? "true" : "false",
+      memory.first_book ? "true" : "false", memory.baseline_bytes, memory.built_bytes,
+      memory.peak_bytes, memory.book_bytes, memory.samples,
+      memory.ager_held_bytes ? std::format("{}", *memory.ager_held_bytes) : std::string{"null"});
+}
+
 }  // namespace detail
 
 [[nodiscard]] inline std::string to_json(const RunRecord& record, const TimerInfo& timer) {
@@ -132,41 +165,15 @@ namespace detail {
   }
   out += "\n  },\n";
   const SessionReport& session = record.session;
-  out += std::format("  \"warmup\": {{\"messages\": {}, \"book\": {}}},\n", session.warmup_messages,
+  out += std::format(R"(  "warmup": {{"messages": {}, "book": {}}},)", session.warmup_messages,
                      json_string(session.warmup_book));
-  const MessageMix& mix = session.mix;
-  out += std::format("  \"mix\": {{\"messages\": {}, \"book_messages\": {}", mix.messages,
-                     mix.book_messages);
-  for (std::size_t op = 0; op < kOpClasses; ++op) {
-    out += std::format(", {}: {}", json_string(kOpNames[op]), mix.by_op[op]);
-  }
-  out += "},\n";
+  out += std::format("\n  \"mix\": {},\n", detail::mix_json(session.mix));
   out += std::format("  \"throughput\": {},\n", detail::pass_json(session.throughput, timer));
   out += std::format("  \"latency_pass\": {},\n", detail::pass_json(session.latency, timer));
   out += std::format("  \"instrumentation_ratio\": {},\n",
                      json_number(session.instrumentation_ratio()));
-  out += std::format(R"(  "latency": {{"percentiles": {})",
-                     detail::percentiles_json(record.latency.percentiles));
-  out += std::format(R"(, "mean_ns": {:.6f}, "max_ns": {}, "samples": {}, "operations": [)",
-                     record.latency.mean_ns, json_number(record.latency.max_ns),
-                     record.latency.samples);
-  for (std::size_t i = 0; i < record.latency.operations.size(); ++i) {
-    const OpLatency& op = record.latency.operations[i];
-    out += std::format(R"({}{{"op": {}, "samples": {}, "mean_ns": {:.6f}, "percentiles": {}}})",
-                       i == 0 ? "" : ", ", json_string(op.op), op.samples, op.mean_ns,
-                       detail::percentiles_json(op.percentiles));
-  }
-  out += "]},";
-  const MemoryRecord& memory = record.memory;
-  out += std::format(
-      "\n  \"memory\": {{\"source\": {}, \"complete\": {}, \"first_book\": {}, "
-      "\"baseline_bytes\": {}, "
-      "\"built_bytes\": {}, \"peak_bytes\": {}, \"book_bytes\": {}, \"samples\": {}, "
-      "\"ager_held_bytes\": {}}},",
-      json_string(memory.source), memory.complete ? "true" : "false",
-      memory.first_book ? "true" : "false", memory.baseline_bytes, memory.built_bytes,
-      memory.peak_bytes, memory.book_bytes, memory.samples,
-      memory.ager_held_bytes ? std::format("{}", *memory.ager_held_bytes) : std::string{"null"});
+  out += std::format("  \"latency\": {},", detail::latency_json(record.latency));
+  out += std::format("\n  \"memory\": {},", detail::memory_json(record.memory));
   out += "\n  \"counters\": {\"status\": [";
   const std::vector<CounterStatus>& statuses = record.counters.statuses;
   for (std::size_t i = 0; i < statuses.size(); ++i) {
