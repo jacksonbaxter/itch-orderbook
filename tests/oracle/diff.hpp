@@ -47,7 +47,8 @@ namespace itch::oracle {
 
 // The oracle's write policy: records what the choke point wrote in the current message.
 // Writes are few, and more than kKept is itself a failure. Moves are kept in full, since
-// each one is compared: a flat array can shift a whole side for one message.
+// each one is compared: a flat array can shift a whole side for one message. Their room
+// is sized up front for the most a message can move, so more is a failure as well.
 class WriteRecorder {
  public:
   static constexpr std::size_t kKept = 16;
@@ -58,18 +59,31 @@ class WriteRecorder {
     }
     ++count_;
   }
-  void on_level_move(std::uint16_t locate, Side side, Price4 price) {
-    moves_.push_back({.locate = locate, .side = side == Side::bid ? 'B' : 'S', .price = price});
+  void on_level_move(std::uint16_t locate, Side side, Price4 price) noexcept {
+    if (move_count_ < moves_.size()) {
+      moves_[move_count_] = {
+          .locate = locate, .side = side == Side::bid ? 'B' : 'S', .price = price};
+    }
+    ++move_count_;
+  }
+  // A message moves at most three entries for each level on one side, on the flat arm: a
+  // replace's removal shifts the side, and its add moves the side to a bigger block and
+  // shifts it again. The linked arm relinks at most four neighbours.
+  void reserve_moves(std::uint32_t levels) {
+    moves_.assign((std::size_t{levels} * 3U) + 4U, LevelId{});
   }
   void clear() noexcept {
     count_ = 0;
-    moves_.clear();
+    move_count_ = 0;
   }
   [[nodiscard]] std::size_t count() const noexcept { return count_; }
   [[nodiscard]] std::span<const LevelId> kept() const noexcept {
     return std::span{writes_}.first(count_ < kKept ? count_ : kKept);
   }
-  [[nodiscard]] std::span<const LevelId> moves() const noexcept { return moves_; }
+  [[nodiscard]] std::size_t move_count() const noexcept { return move_count_; }
+  [[nodiscard]] std::span<const LevelId> moves() const noexcept {
+    return std::span{moves_}.first(move_count_ < moves_.size() ? move_count_ : moves_.size());
+  }
 
   friend bool operator==(const WriteRecorder&, const WriteRecorder&) = default;
 
@@ -77,6 +91,7 @@ class WriteRecorder {
   std::array<LevelId, kKept> writes_{};
   std::size_t count_ = 0;
   std::vector<LevelId> moves_;
+  std::size_t move_count_ = 0;
 };
 
 using OracleFastBook = FastBook<WriteRecorder>;
@@ -166,13 +181,15 @@ class BasicOracleRun {
  public:
   using Fast = FastBook<WriteRecorder, OrderIndex, Levels>;
   using Production = FastBook<NoWriteObserver, OrderIndex, Levels>;
-  using Level = typename Fast::Level;
+  using Level = Fast::Level;
 
   explicit BasicOracleRun(const OracleConfig& config)
       : config_{config},
         fast_{config.capacity},
         production_{config.capacity},
-        reference_{std::make_unique<ReferenceBook>()} {}
+        reference_{std::make_unique<ReferenceBook>()} {
+    fast_.observer().reserve_moves(config.capacity.levels);
+  }
 
   // Back to the state of `fresh`, a run that has seen nothing, for a caller that starts
   // a stream too often to build the books each time. Assigning a book copies all of it,
@@ -362,7 +379,12 @@ class BasicOracleRun {
   void compare_moves(const TouchedSet& touched) {
     std::vector<LevelId>& moved = moved_;
     const std::span<const LevelId> reported = fast_.observer().moves();
-    counters_.move_reports += reported.size();
+    counters_.move_reports += fast_.observer().move_count();
+    if (fast_.observer().move_count() > reported.size()) {
+      diverge(DivergenceKind::write_set,
+              std::format("{} moves for one message, only {} are possible",
+                          fast_.observer().move_count(), reported.size()));
+    }
     moved.assign(reported.begin(), reported.end());
     const auto order = [](const LevelId& a, const LevelId& b) {
       return std::tie(a.locate, a.side, a.price) < std::tie(b.locate, b.side, b.price);

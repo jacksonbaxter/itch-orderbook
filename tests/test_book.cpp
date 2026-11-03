@@ -577,7 +577,7 @@ TEST(SpecOmissions, AStreamOfThemWalksDecodesAndApplies) {
 }
 
 TEST(FastBook, ThePoolsRefuseRatherThanGrow) {
-  for_each_arm([]<class Index, class Levels>() {
+  for_each_arm([]<class Index, class Levels> {
     Arm<Index, Levels> book{
         {.orders = 2, .levels = 2, .index_pages = 1, .index_bits = 16, .level_slots = 64}};
     EXPECT_EQ(book.apply(wire::add(1, 1, 'B', 1, 10)), itch::ApplyStatus::applied);
@@ -723,6 +723,7 @@ Seen seen(Book& book, const wire::Bytes& message) {
   book.observer().clear();
   static_cast<void>(book.apply(message));
   const auto& observer = book.observer();
+  EXPECT_EQ(observer.move_count(), observer.moves().size()) << "the recorder ran out of room";
   return {.writes = {observer.kept().begin(), observer.kept().end()},
           .moves = {observer.moves().begin(), observer.moves().end()}};
 }
@@ -730,9 +731,17 @@ Seen seen(Book& book, const wire::Bytes& message) {
 template <class Index, class Levels>
 using Recorded = itch::FastBook<itch::oracle::WriteRecorder, Index, Levels>;
 
+// A recording book with room for every move, as the oracle makes it.
+template <class Index, class Levels>
+struct RecordedBook {
+  RecordedBook() { book.observer().reserve_moves(kSmall.levels); }
+  Recorded<Index, Levels> book{kSmall};
+};
+
 TEST(FastBook, TheObserverSeesEveryLevelAMessageWrites) {
-  for_each_arm([]<class Index, class Levels>() {
-    Recorded<Index, Levels> book{kSmall};
+  for_each_arm([]<class Index, class Levels> {
+    RecordedBook<Index, Levels> recorded;
+    auto& book = recorded.book;
     const auto writes = [&book](const wire::Bytes& message) { return seen(book, message).writes; };
     const LevelId at_5000{.locate = 1, .side = 'B', .price = 5000};
     const LevelId at_4900{.locate = 1, .side = 'B', .price = 4900};
@@ -748,7 +757,8 @@ TEST(FastBook, TheObserverSeesEveryLevelAMessageWrites) {
 // A linked level's neighbours are rewritten when it comes or goes, and each is reported
 // as moved. Nothing else is.
 TEST(FastBook, TheObserverSeesTheLinkedNeighboursAMessageMoves) {
-  Recorded<itch::HashIndex, itch::LinkedLevels> book{kSmall};
+  RecordedBook<itch::HashIndex, itch::LinkedLevels> recorded;
+  auto& book = recorded.book;
   const auto moves = [&book](const wire::Bytes& message) { return seen(book, message).moves; };
   const auto bid = [](std::uint32_t price) {
     return LevelId{.locate = 1, .side = 'B', .price = price};
@@ -766,7 +776,8 @@ TEST(FastBook, TheObserverSeesTheLinkedNeighboursAMessageMoves) {
 // A flat side's entries shift when a level comes or goes, and every one shifted is
 // reported as moved, as is every one a full block moves to a bigger one.
 TEST(FastBook, TheObserverSeesTheFlatEntriesAMessageMoves) {
-  Recorded<itch::HashIndex, itch::FlatLevels> book{kSmall};
+  RecordedBook<itch::HashIndex, itch::FlatLevels> recorded;
+  auto& book = recorded.book;
   const auto moves = [&book](const wire::Bytes& message) { return seen(book, message).moves; };
   const auto ask = [](std::uint32_t price) {
     return LevelId{.locate = 1, .side = 'S', .price = price};
@@ -799,7 +810,7 @@ itch::RestingOrder resting(const Book& book, std::uint64_t reference) {
 }
 
 TEST(FastBook, RestingOrderReportsWhereAnOrderIsAndWhatItHolds) {
-  for_each_arm([]<class Index, class Levels>() {
+  for_each_arm([]<class Index, class Levels> {
     Arm<Index, Levels> book{kSmall};
     EXPECT_FALSE(book.resting_order(1).has_value());
     ASSERT_EQ(book.apply(wire::add(7, 1, 'S', 100, 5000)), itch::ApplyStatus::applied);
@@ -890,7 +901,7 @@ std::vector<wire::Bytes> restart_traffic(std::uint16_t locate) {
 }
 
 TEST(Canonical, TheWholeBookWalkSeesWhatAWalkOfEveryLocateSees) {
-  for_each_arm([]<class Index, class Levels>() {
+  for_each_arm([]<class Index, class Levels> {
     Arm<Index, Levels> book{kRestartCapacity};
     std::uint64_t reference = 0;
     for (const std::uint16_t locate : std::array<std::uint16_t, 5>{0, 1, 2, 65534, 65535}) {
@@ -913,7 +924,7 @@ TEST(Canonical, TheWholeBookWalkSeesWhatAWalkOfEveryLocateSees) {
 }
 
 TEST(OracleRun, RestartLeavesNothingOfTheLastStream) {
-  for_each_arm([]<class Index, class Levels>() {
+  for_each_arm([]<class Index, class Levels> {
     using Run = itch::oracle::BasicOracleRun<Index, Levels>;
     const itch::oracle::OracleConfig config{.capacity = kRestartCapacity,
                                             .hash_every = 5,

@@ -776,8 +776,8 @@
         },
         {
           "file": "tests/oracle/diff.hpp",
-          "old": "    counters_.move_reports += reported.size();\n",
-          "new": "    counters_.move_reports += reported.size();\n    return;\n"
+          "old": "    moved.assign(reported.begin(), reported.end());\n",
+          "new": "    return;\n    moved.assign(reported.begin(), reported.end());\n"
         },
         {
           "file": "include/itch/book.hpp",
@@ -2628,14 +2628,49 @@
       }
     },
     {
+      "id": "oracle-move-room-too-small",
+      "breaks": "The recorder has room for a thousandth of the moves a message can make",
+      "check": "the move-room check, which no correct run can reach",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    moves_.assign((std::size_t{levels} * 3U) + 4U, LevelId{});\n",
+          "new": "    moves_.assign(std::size_t{levels} / 1024U, LevelId{});\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--levels",
+        "flat",
+        "--max-slots",
+        "8192"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=write-set message=\\d+ type=. \\d+ moves for one message, only 4 are possible"
+      }
+    },
+    {
       "id": "oracle-off-moved",
       "breaks": "Moved-level compare off, and a flat array moves an entry onto the wrong record",
       "check": "the whole-book hash",
       "mutations": [
         {
           "file": "tests/oracle/diff.hpp",
-          "old": "    counters_.move_reports += reported.size();\n",
-          "new": "    counters_.move_reports += reported.size();\n    return;\n"
+          "old": "    moved.assign(reported.begin(), reported.end());\n",
+          "new": "    return;\n    moved.assign(reported.begin(), reported.end());\n"
         },
         {
           "file": "include/itch/book_levels.hpp",

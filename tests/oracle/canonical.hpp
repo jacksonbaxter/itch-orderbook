@@ -62,7 +62,7 @@ inline constexpr std::uint64_t kWalkLimit = 1ULL << 32U;
 // linked list from its head, or the flat array from its end.
 template <class FastBookType, class Sink>
 void emit_fast_side(const FastBookType& book, std::uint16_t locate, Side side, Sink& sink) {
-  using Level = typename FastBookType::Level;
+  using Level = FastBookType::Level;
   std::uint64_t level_count = 0;
   book.walk_side(locate, side, [&level_count](const Level& /*level*/) {
     ++level_count;

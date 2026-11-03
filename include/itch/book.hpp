@@ -42,7 +42,7 @@ template <class WriteObserver = NoWriteObserver, class OrderIndex = HashIndex,
           class Levels = LinkedLevels>
 class FastBook {
  public:
-  using Level = typename Levels::Level;
+  using Level = Levels::Level;
   using Index = OrderIndex;
   using LevelArm = Levels;
 
@@ -140,7 +140,7 @@ class FastBook {
   friend bool operator==(const FastBook&, const FastBook&) = default;
 
  private:
-  using Place = typename Levels::Place;
+  using Place = Levels::Place;
 
   enum class LevelOp : std::uint8_t { open, append, reduce, unlink, close };
 

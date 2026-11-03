@@ -80,21 +80,10 @@ struct Options {
       options.observations = args[i];
       continue;
     }
-    if (arg == "--index") {
-      const auto index = itch::tools::parse_index_arm(args[i]);
-      if (!index) {
-        return std::nullopt;
-      }
-      options.arm.index = *index;
-      continue;
-    }
-    if (arg == "--levels") {
-      const auto levels = itch::tools::parse_levels_arm(args[i]);
-      if (!levels) {
-        return std::nullopt;
-      }
-      options.arm.levels = *levels;
-      continue;
+    switch (itch::tools::parse_arm_option(arg, args[i], options.arm, options.config.capacity)) {
+      case itch::tools::ArmOption::taken: continue;
+      case itch::tools::ArmOption::bad_value: return std::nullopt;
+      case itch::tools::ArmOption::not_an_arm_option: break;
     }
     const auto number = parse_number(args[i]);
     if (!number) {
@@ -106,12 +95,6 @@ struct Options {
       options.config.capacity.orders = static_cast<std::uint32_t>(*number);
     } else if (arg == "--max-levels") {
       options.config.capacity.levels = static_cast<std::uint32_t>(*number);
-    } else if (arg == "--max-pages") {
-      options.config.capacity.index_pages = static_cast<std::uint32_t>(*number);
-    } else if (arg == "--index-bits") {
-      options.config.capacity.index_bits = static_cast<std::uint32_t>(*number);
-    } else if (arg == "--max-slots") {
-      options.config.capacity.level_slots = static_cast<std::uint32_t>(*number);
     } else {
       return std::nullopt;
     }
@@ -298,7 +281,7 @@ int main(int argc, const char* const* argv) {
                      stderr));
       return 2;
     }
-    return itch::tools::with_book_arm(options->arm, [&options]<class Index, class Levels>() {
+    return itch::tools::with_book_arm(options->arm, [&options]<class Index, class Levels> {
       return run<Index, Levels>(*options);
     });
   } catch (const std::exception& error) {
