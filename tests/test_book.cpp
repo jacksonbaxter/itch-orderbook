@@ -51,12 +51,15 @@ struct Top {
 
 constexpr Top kEmpty{.present = false, .price = 0, .shares = 0, .orders = 0};
 
-// Small enough to fill on purpose.
-constexpr itch::BookCapacity kSmall{.orders = 256, .levels = 64};
+// Small enough to fill on purpose, and with few pages, so that the paged index falls
+// back as soon as references spread.
+constexpr itch::BookCapacity kSmall{
+    .orders = 256, .levels = 64, .index_pages = 4, .index_bits = 16};
 
 template <class Index, class Levels>
 using Arm = itch::FastBook<itch::NoWriteObserver, Index, Levels>;
 using HashLinked = Arm<itch::HashIndex, itch::LinkedLevels>;
+using PagedLinked = Arm<itch::PagedIndex<>, itch::LinkedLevels>;
 
 // Runs a check once on each arm of the fast book, named in any failure.
 template <class Check>
@@ -66,6 +69,7 @@ void for_each_arm(const Check& check) {
     check.template operator()<Index, Levels>();
   };
   run.template operator()<itch::HashIndex, itch::LinkedLevels>("hash, linked");
+  run.template operator()<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked");
 }
 
 template <class Book>
@@ -172,7 +176,8 @@ class BookScenario : public ::testing::Test {
 };
 
 // The default arm stays first, so that a failure on it is BookScenario/0.
-using Books = ::testing::Types<FastAdapter<itch::FastBook<>>, ReferenceAdapter>;
+using Books =
+    ::testing::Types<FastAdapter<itch::FastBook<>>, FastAdapter<PagedLinked>, ReferenceAdapter>;
 static_assert(std::is_same_v<itch::FastBook<>, HashLinked>);
 TYPED_TEST_SUITE(BookScenario, Books);
 
@@ -568,7 +573,7 @@ TEST(SpecOmissions, AStreamOfThemWalksDecodesAndApplies) {
 
 TEST(FastBook, ThePoolsRefuseRatherThanGrow) {
   for_each_arm([]<class Index, class Levels>() {
-    Arm<Index, Levels> book{{.orders = 2, .levels = 2}};
+    Arm<Index, Levels> book{{.orders = 2, .levels = 2, .index_pages = 1, .index_bits = 16}};
     EXPECT_EQ(book.apply(wire::add(1, 1, 'B', 1, 10)), itch::ApplyStatus::applied);
     EXPECT_EQ(book.apply(wire::add(1, 2, 'B', 1, 20)), itch::ApplyStatus::applied);
     EXPECT_EQ(book.apply(wire::add(1, 3, 'B', 1, 30)), itch::ApplyStatus::capacity_exhausted);
@@ -603,6 +608,73 @@ TEST(FastBook, TheHashIndexKeepsEveryOrderThroughDeletes) {
     ASSERT_EQ(book.apply(wire::erase(1, reference(i))), itch::ApplyStatus::applied);
   }
   EXPECT_EQ(book.live_orders(), 0U);
+}
+
+// DS-72: a reference fits 32 bits on the days seen, and nothing promises it. Past the
+// directory's reach, or with every page taken, a reference goes to the fallback hash and
+// is counted there, and every path still finds it.
+TEST(FastBook, ThePagedIndexFallsBackRatherThanDropAReference) {
+  PagedLinked book{{.orders = 64, .levels = 16, .index_pages = 2, .index_bits = 16}};
+  const auto& index = book.index();
+  constexpr std::uint64_t kPage = std::uint64_t{1} << 8U;
+  const std::vector<std::uint64_t> references{
+      1,                        // Page 0.
+      kPage + 1,                // Page 1, the last free one.
+      (2 * kPage) + 1,          // A third page: none left.
+      std::uint64_t{1} << 16U,  // The first reference past the reach.
+      std::uint64_t{1} << 32U,  // Past what a default directory reaches.
+      std::numeric_limits<std::uint64_t>::max(),
+  };
+  std::uint32_t shares = 10;
+  for (const std::uint64_t reference : references) {
+    ASSERT_EQ(book.apply(wire::add(1, reference, 'B', shares++, 5000)), itch::ApplyStatus::applied)
+        << reference;
+  }
+  EXPECT_EQ(index.live_pages(), 2U);
+  EXPECT_EQ(index.fallback_live(), 4U);
+  EXPECT_EQ(index.fallback_inserts(), 4U);
+  for (const std::uint64_t reference : references) {
+    EXPECT_EQ(book.apply(wire::add(1, reference, 'S', 1, 6000)),
+              itch::ApplyStatus::duplicate_reference)
+        << reference;
+  }
+
+  // Every path reaches a fallen-back order: execute, cancel, replace and delete.
+  EXPECT_EQ(book.apply(wire::execute(1, (2 * kPage) + 1, 2)), itch::ApplyStatus::applied);
+  EXPECT_EQ(book.apply(wire::cancel(1, std::uint64_t{1} << 32U, 3)), itch::ApplyStatus::applied);
+  EXPECT_EQ(
+      book.apply(wire::replace(1, std::numeric_limits<std::uint64_t>::max(), 2 * kPage, 7, 5000)),
+      itch::ApplyStatus::applied);
+  const auto* level = book.find_level(1, itch::Side::bid, 5000);
+  ASSERT_NE(level, nullptr);
+  std::vector<Resting> fifo;
+  for (std::uint32_t at = level->front; at != itch::kNoIndex; at = book.order_at(at).newer) {
+    fifo.push_back({.reference = book.order_at(at).reference, .shares = book.order_at(at).shares});
+  }
+  EXPECT_EQ(fifo, (Fifo{{1, 10},
+                        {kPage + 1, 11},
+                        {(2 * kPage) + 1, 10},
+                        {std::uint64_t{1} << 16U, 13},
+                        {std::uint64_t{1} << 32U, 11},
+                        {2 * kPage, 7}}));
+  EXPECT_EQ(index.fallback_live(), 4U);  // The new reference still finds no page.
+
+  // A page goes back once its last reference goes, and the next reference gets it.
+  EXPECT_EQ(book.apply(wire::erase(1, kPage + 1)), itch::ApplyStatus::applied);
+  EXPECT_EQ(index.live_pages(), 1U);
+  EXPECT_EQ(book.apply(wire::add(1, (3 * kPage) + 5, 'B', 1, 5000)), itch::ApplyStatus::applied);
+  EXPECT_EQ(index.live_pages(), 2U);
+  EXPECT_EQ(index.fallback_inserts(), 5U);
+
+  for (const std::uint64_t reference : {std::uint64_t{1}, (2 * kPage) + 1, std::uint64_t{1} << 16U,
+                                        std::uint64_t{1} << 32U, 2 * kPage, (3 * kPage) + 5}) {
+    EXPECT_EQ(book.apply(wire::erase(1, reference)), itch::ApplyStatus::applied) << reference;
+    EXPECT_EQ(book.apply(wire::erase(1, reference)), itch::ApplyStatus::unknown_order) << reference;
+  }
+  EXPECT_EQ(book.live_orders(), 0U);
+  EXPECT_EQ(index.fallback_live(), 0U);
+  EXPECT_EQ(index.live_pages(), 0U);
+  EXPECT_EQ(index.peak_live_pages(), 2U);
 }
 
 TEST(FastBook, TheDefaultObserverCostsNoStorage) {
@@ -701,7 +773,8 @@ TEST(FastBook, RestingOrderReportsWhereAnOrderIsAndWhatItHolds) {
   });
 }
 
-constexpr itch::BookCapacity kRestartCapacity{.orders = 64, .levels = 64};
+constexpr itch::BookCapacity kRestartCapacity{
+    .orders = 64, .levels = 64, .index_pages = 4, .index_bits = 16};
 
 // Every slot of every table, in use or not, and the counters. A book compares equal
 // only if each byte it holds does, its free lists and its index among them.

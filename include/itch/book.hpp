@@ -3,7 +3,7 @@
 //
 //     FastBook<WriteObserver, OrderIndex, Levels>
 //
-// OrderIndex finds an order's slot from its reference: HashIndex, in
+// OrderIndex finds an order's slot from its reference: HashIndex or PagedIndex, in
 // book_index.hpp. Levels keeps each side's levels in price order: LinkedLevels, in
 // book_levels.hpp. The defaults, a hash and linked levels, are the
 // simplest pair and the one the oracle has run a whole day on. They are a provisional

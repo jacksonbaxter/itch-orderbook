@@ -2,7 +2,8 @@
 //
 // Each arm of the fast book takes a stream through the frame reader, every order path
 // included, in a window that starts straight after construction: it has no warm-up to
-// hide behind.
+// hide behind. The stream makes each arm take its rarer paths too: pages taken, given
+// back and run out, and references past the paged index's reach.
 // The reference book takes the same stream and must allocate, and each form of new is
 // shown reaching its own counter, so a broken counter fails here instead of passing the
 // fast book.
@@ -100,7 +101,9 @@ std::uint64_t replay(std::span<const std::byte> stream, Apply apply) {
   return messages;
 }
 
-constexpr itch::BookCapacity kCapacity{.orders = 2048, .levels = 2048};
+// Few pages and a short reach, so that the paged index runs out and falls back.
+constexpr itch::BookCapacity kCapacity{
+    .orders = 2048, .levels = 2048, .index_pages = 4, .index_bits = 20};
 
 template <class Index, class Levels>
 void expect_no_allocation(std::string_view name) {
@@ -123,10 +126,15 @@ void expect_no_allocation(std::string_view name) {
   EXPECT_EQ(counts.total(), 0U) << "allocation in the hot path";
   EXPECT_EQ(refused, 0U) << "the stream did not exercise the book";
   EXPECT_GT(messages, 200000U);
+  if constexpr (std::is_same_v<Index, itch::PagedIndex<>>) {
+    EXPECT_GT(book.index().fallback_inserts(), 0U) << "the paged index never fell back";
+    EXPECT_EQ(book.index().peak_live_pages(), 4U) << "the paged index never ran out of pages";
+  }
 }
 
 TEST(Allocation, TheFastBookAllocatesNothingAfterConstruction) {
   expect_no_allocation<itch::HashIndex, itch::LinkedLevels>("hash, linked");
+  expect_no_allocation<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked");
 }
 
 TEST(Allocation, TheControlBookIsSeenAllocating) {

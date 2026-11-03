@@ -60,6 +60,13 @@ struct NoWriteObserver {
 struct BookCapacity {
   std::uint32_t orders = 1U << 22U;
   std::uint32_t levels = 1U << 21U;
+  // PagedIndex: pages of direct slots. 12302019 pins at most 340,939 pages of 256
+  // references at once, so this holds it with room. Past it, references fall back to a
+  // hash table.
+  std::uint32_t index_pages = 1U << 19U;
+  // PagedIndex: references below 2^index_bits index directly, through a directory of
+  // one entry per page. 12302019 tops out at 308,631,072. At most 40.
+  std::uint32_t index_bits = 32;
 };
 
 inline constexpr std::uint32_t kNoIndex = 0xFFFFFFFFU;
