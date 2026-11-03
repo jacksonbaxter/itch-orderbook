@@ -11,3 +11,4 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0006-20261031T091906Z | P-0006 | 92e3f74c5766 (exported by debian_sync.sh) | Linux | published |
 | P-0008-20261103T082340Z | P-0008 | 3e5b67a8cefe (clean) | Darwin | refused at repetition 1, hash-linked: exited 2 with no record |
 | P-0008-20261103T082514Z | P-0008 | 9934df5c3b7a (clean) | Darwin | published |
+| P-0009-20261103T090210Z | P-0009 | f3fe97a93cea (clean) | Darwin | published |
