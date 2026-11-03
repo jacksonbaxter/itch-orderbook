@@ -478,8 +478,8 @@ std::string core_field(const PinOutcome& pin, const MigrationTracker& migrations
 // small blocks. It is named rather than taken as the default, so that every map run warms up
 // on the same arm whichever arm ships.
 PassTotals warm_with_fast_book(std::span<const std::byte> bytes) {
-  const auto book =
-      std::make_unique<itch::FastBook<itch::NoWriteObserver, itch::HashIndex, itch::LinkedLevels>>();
+  const auto book = std::make_unique<
+      itch::FastBook<itch::NoWriteObserver, itch::HashIndex, itch::LinkedLevels>>();
   PlatformClock clock;
   return throughput_pass(bytes, *book, clock);
 }
