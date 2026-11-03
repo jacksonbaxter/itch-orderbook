@@ -44,8 +44,8 @@ enum class Side : std::uint8_t { bid = 0, ask = 1 };
 //
 // on_level_write names a level whose contents a write changes: its orders, its shares or
 // its count, or the level itself coming or going. on_level_move names a level whose
-// contents stay as they are while the structure that finds it by price is rewritten,
-// such as a neighbour's link.
+// contents stay as they are while the structure that finds it by price is rewritten: a
+// neighbour's link, or its entry in a flat array that shifts or moves to a bigger block.
 struct NoWriteObserver {
   static constexpr void on_level_write(std::uint16_t /*locate*/, Side /*side*/,
                                        Price4 /*price*/) noexcept {}
@@ -67,6 +67,8 @@ struct BookCapacity {
   // PagedIndex: references below 2^index_bits index directly, through a directory of
   // one entry per page. 12302019 tops out at 308,631,072. At most 40.
   std::uint32_t index_bits = 32;
+  // FlatLevels: array entries shared by every side's block. 12302019 reaches 1,642,464.
+  std::uint32_t level_slots = 1U << 22U;
 };
 
 inline constexpr std::uint32_t kNoIndex = 0xFFFFFFFFU;

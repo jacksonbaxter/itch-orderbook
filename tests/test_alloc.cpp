@@ -3,7 +3,8 @@
 // Each arm of the fast book takes a stream through the frame reader, every order path
 // included, in a window that starts straight after construction: it has no warm-up to
 // hide behind. The stream makes each arm take its rarer paths too: pages taken, given
-// back and run out, and references past the paged index's reach.
+// back and run out, references past the paged index's reach, and flat arrays moving to
+// bigger blocks.
 // The reference book takes the same stream and must allocate, and each form of new is
 // shown reaching its own counter, so a broken counter fails here instead of passing the
 // fast book.
@@ -101,9 +102,10 @@ std::uint64_t replay(std::span<const std::byte> stream, Apply apply) {
   return messages;
 }
 
-// Few pages and a short reach, so that the paged index runs out and falls back.
+// Few pages and a short reach, so that the paged index runs out and falls back, and
+// first blocks of 8, so that the flat arrays move as they fill.
 constexpr itch::BookCapacity kCapacity{
-    .orders = 2048, .levels = 2048, .index_pages = 4, .index_bits = 20};
+    .orders = 2048, .levels = 2048, .index_pages = 4, .index_bits = 20, .level_slots = 4096};
 
 template <class Index, class Levels>
 void expect_no_allocation(std::string_view name) {
@@ -130,11 +132,16 @@ void expect_no_allocation(std::string_view name) {
     EXPECT_GT(book.index().fallback_inserts(), 0U) << "the paged index never fell back";
     EXPECT_EQ(book.index().peak_live_pages(), 4U) << "the paged index never ran out of pages";
   }
+  if constexpr (std::is_same_v<Levels, itch::FlatLevels>) {
+    EXPECT_GT(book.levels().relocations(), 0U) << "no flat array moved to a bigger block";
+  }
 }
 
 TEST(Allocation, TheFastBookAllocatesNothingAfterConstruction) {
   expect_no_allocation<itch::HashIndex, itch::LinkedLevels>("hash, linked");
+  expect_no_allocation<itch::HashIndex, itch::FlatLevels>("hash, flat");
   expect_no_allocation<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked");
+  expect_no_allocation<itch::PagedIndex<>, itch::FlatLevels>("paged, flat");
 }
 
 TEST(Allocation, TheControlBookIsSeenAllocating) {

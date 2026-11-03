@@ -54,12 +54,14 @@ constexpr Top kEmpty{.present = false, .price = 0, .shares = 0, .orders = 0};
 // Small enough to fill on purpose, and with few pages, so that the paged index falls
 // back as soon as references spread.
 constexpr itch::BookCapacity kSmall{
-    .orders = 256, .levels = 64, .index_pages = 4, .index_bits = 16};
+    .orders = 256, .levels = 64, .index_pages = 4, .index_bits = 16, .level_slots = 1024};
 
 template <class Index, class Levels>
 using Arm = itch::FastBook<itch::NoWriteObserver, Index, Levels>;
 using HashLinked = Arm<itch::HashIndex, itch::LinkedLevels>;
+using HashFlat = Arm<itch::HashIndex, itch::FlatLevels>;
 using PagedLinked = Arm<itch::PagedIndex<>, itch::LinkedLevels>;
+using PagedFlat = Arm<itch::PagedIndex<>, itch::FlatLevels>;
 
 // Runs a check once on each arm of the fast book, named in any failure.
 template <class Check>
@@ -69,7 +71,9 @@ void for_each_arm(const Check& check) {
     check.template operator()<Index, Levels>();
   };
   run.template operator()<itch::HashIndex, itch::LinkedLevels>("hash, linked");
+  run.template operator()<itch::HashIndex, itch::FlatLevels>("hash, flat");
   run.template operator()<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked");
+  run.template operator()<itch::PagedIndex<>, itch::FlatLevels>("paged, flat");
 }
 
 template <class Book>
@@ -176,8 +180,8 @@ class BookScenario : public ::testing::Test {
 };
 
 // The default arm stays first, so that a failure on it is BookScenario/0.
-using Books =
-    ::testing::Types<FastAdapter<itch::FastBook<>>, FastAdapter<PagedLinked>, ReferenceAdapter>;
+using Books = ::testing::Types<FastAdapter<itch::FastBook<>>, FastAdapter<HashFlat>,
+                               FastAdapter<PagedLinked>, FastAdapter<PagedFlat>, ReferenceAdapter>;
 static_assert(std::is_same_v<itch::FastBook<>, HashLinked>);
 TYPED_TEST_SUITE(BookScenario, Books);
 
@@ -491,8 +495,9 @@ TYPED_TEST(BookScenario, AFarStubQuoteIsTheFarthestLevel) {
   EXPECT_EQ(this->book_.level(kLocate, 'S', kStubAsk), Fifo{});
 }
 
-// Levels added in no particular order come out in price order, and stay in order as
-// levels go from the middle and come back.
+// Levels added in no particular order come out in price order, on a side deep enough to
+// move a flat array to a bigger block twice, and stay in order as levels go from the
+// middle and come back.
 TYPED_TEST(BookScenario, ManyLevelsStayInPriceOrder) {
   constexpr std::uint32_t kLevels = 30;
   std::vector<std::uint32_t> bids;
@@ -573,7 +578,8 @@ TEST(SpecOmissions, AStreamOfThemWalksDecodesAndApplies) {
 
 TEST(FastBook, ThePoolsRefuseRatherThanGrow) {
   for_each_arm([]<class Index, class Levels>() {
-    Arm<Index, Levels> book{{.orders = 2, .levels = 2, .index_pages = 1, .index_bits = 16}};
+    Arm<Index, Levels> book{
+        {.orders = 2, .levels = 2, .index_pages = 1, .index_bits = 16, .level_slots = 64}};
     EXPECT_EQ(book.apply(wire::add(1, 1, 'B', 1, 10)), itch::ApplyStatus::applied);
     EXPECT_EQ(book.apply(wire::add(1, 2, 'B', 1, 20)), itch::ApplyStatus::applied);
     EXPECT_EQ(book.apply(wire::add(1, 3, 'B', 1, 30)), itch::ApplyStatus::capacity_exhausted);
@@ -677,6 +683,30 @@ TEST(FastBook, ThePagedIndexFallsBackRatherThanDropAReference) {
   EXPECT_EQ(index.peak_live_pages(), 2U);
 }
 
+// A side's flat array moves to a block twice its size when full. When the arena has no
+// such block, the add is refused and nothing changes, and a replace that might need one
+// is refused before its old order goes.
+TEST(FastBook, AFlatSideThatCannotGrowRefusesAndChangesNothing) {
+  // One side takes a block of 8, then 16, and gives the 8 back: 24 entries handed out.
+  // A second side reuses that 8, and its 16 does not fit in the 15 left.
+  HashFlat book{{.orders = 64, .levels = 64, .level_slots = 39}};
+  for (std::uint32_t i = 0; i < 9; ++i) {
+    ASSERT_EQ(book.apply(wire::add(1, 1 + i, 'B', 1, 1000 + i)), itch::ApplyStatus::applied) << i;
+  }
+  EXPECT_EQ(book.levels().relocations(), 1U);
+  EXPECT_EQ(book.levels().slots_used(), 24U);
+  for (std::uint32_t i = 0; i < 8; ++i) {
+    ASSERT_EQ(book.apply(wire::add(2, 101 + i, 'S', 1, 2000 + i)), itch::ApplyStatus::applied) << i;
+  }
+  const HashFlat before = book;
+  EXPECT_EQ(book.apply(wire::add(2, 200, 'S', 1, 3000)), itch::ApplyStatus::capacity_exhausted);
+  EXPECT_EQ(book.apply(wire::replace(2, 101, 201, 1, 3000)), itch::ApplyStatus::capacity_exhausted);
+  EXPECT_TRUE(book == before);
+  // An existing level needs no room.
+  EXPECT_EQ(book.apply(wire::add(2, 202, 'S', 1, 2003)), itch::ApplyStatus::applied);
+  EXPECT_EQ(book.best(2, itch::Side::ask), (itch::TopOfBook{true, 2000, 1, 1}));
+}
+
 TEST(FastBook, TheDefaultObserverCostsNoStorage) {
   static_assert(std::is_empty_v<itch::NoWriteObserver>);
   EXPECT_LT(sizeof(itch::FastBook<>), sizeof(itch::FastBook<itch::oracle::WriteRecorder>));
@@ -733,6 +763,33 @@ TEST(FastBook, TheObserverSeesTheLinkedNeighboursAMessageMoves) {
   EXPECT_EQ(moves(wire::add(1, 5, 'B', 100, 5100)), (std::vector{bid(5000)}));
 }
 
+// A flat side's entries shift when a level comes or goes, and every one shifted is
+// reported as moved, as is every one a full block moves to a bigger one.
+TEST(FastBook, TheObserverSeesTheFlatEntriesAMessageMoves) {
+  Recorded<itch::HashIndex, itch::FlatLevels> book{kSmall};
+  const auto moves = [&book](const wire::Bytes& message) { return seen(book, message).moves; };
+  const auto ask = [](std::uint32_t price) {
+    return LevelId{.locate = 1, .side = 'S', .price = price};
+  };
+  EXPECT_TRUE(moves(wire::add(1, 1, 'S', 100, 5000)).empty());
+  // The best stays at the end, so a worse ask goes in front of it and shifts it.
+  EXPECT_EQ(moves(wire::add(1, 2, 'S', 100, 5100)), (std::vector{ask(5000)}));
+  EXPECT_EQ(moves(wire::add(1, 3, 'S', 100, 5050)), (std::vector{ask(5000)}));
+  // A new best goes at the end and shifts nothing.
+  EXPECT_TRUE(moves(wire::add(1, 4, 'S', 100, 4900)).empty());
+  EXPECT_EQ(moves(wire::erase(1, 2)), (std::vector{ask(5050), ask(5000), ask(4900)}));
+  EXPECT_TRUE(moves(wire::erase(1, 4)).empty());
+  for (std::uint32_t i = 0; i < 6; ++i) {
+    static_cast<void>(moves(wire::add(1, 10 + i, 'S', 100, 4000 - i)));
+  }
+  // Eight levels fill the first block, so a ninth moves all of them to the next.
+  std::vector<LevelId> all;
+  for (const std::uint32_t price : {5050U, 5000U, 4000U, 3999U, 3998U, 3997U, 3996U, 3995U}) {
+    all.push_back(ask(price));
+  }
+  EXPECT_EQ(moves(wire::add(1, 20, 'S', 100, 3000)), all);
+}
+
 // The live order with this reference. A missing one fails here, and comes back all zero.
 template <class Book>
 itch::RestingOrder resting(const Book& book, std::uint64_t reference) {
@@ -774,7 +831,7 @@ TEST(FastBook, RestingOrderReportsWhereAnOrderIsAndWhatItHolds) {
 }
 
 constexpr itch::BookCapacity kRestartCapacity{
-    .orders = 64, .levels = 64, .index_pages = 4, .index_bits = 16};
+    .orders = 64, .levels = 64, .index_pages = 4, .index_bits = 16, .level_slots = 1024};
 
 // Every slot of every table, in use or not, and the counters. A book compares equal
 // only if each byte it holds does, its free lists and its index among them.

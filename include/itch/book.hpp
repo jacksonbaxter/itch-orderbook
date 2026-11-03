@@ -4,8 +4,8 @@
 //     FastBook<WriteObserver, OrderIndex, Levels>
 //
 // OrderIndex finds an order's slot from its reference: HashIndex or PagedIndex, in
-// book_index.hpp. Levels keeps each side's levels in price order: LinkedLevels, in
-// book_levels.hpp. The defaults, a hash and linked levels, are the
+// book_index.hpp. Levels keeps each side's levels in price order: LinkedLevels or
+// FlatLevels, in book_levels.hpp. The defaults, a hash and linked levels, are the
 // simplest pair and the one the oracle has run a whole day on. They are a provisional
 // choice: the measurements of each arm decide the default that ships.
 //
@@ -24,12 +24,10 @@
 // can make apply() fail any other way.
 #pragma once
 
-#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
-#include <string_view>
 #include <vector>
 
 #include "itch/book_index.hpp"
