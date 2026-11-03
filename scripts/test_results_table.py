@@ -22,7 +22,7 @@ ORACLE = "results/oracle_12302019.md"
 TRADES = "results/trades_10302019.md"
 BOOK_FIXTURES = REPO_ROOT / "tests" / "fixtures" / "bench_results"
 BOOK_FIXTURE = "good_book_mac.md"
-BOOK = "bench_book_hash-linked_ram_mac_12302019.md"
+BOOK = "bench_book_hash-linked_ram_fixture_12302019.md"  # Beside the real files, not over one.
 
 
 class ResultsTable(unittest.TestCase):
@@ -189,7 +189,8 @@ class ResultsTable(unittest.TestCase):
         self.add_book()
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
-        rows = [line for line in output.splitlines() if line.startswith("| `hash-linked` |")]
+        rows = [line for line in output.splitlines()
+                if line.startswith("| `hash-linked` |") and f"(results/{BOOK})" in line]
         self.assertEqual(len(rows), 1, output)
         self.assertIn("| ram | not tracked | 12302019 | macOS (M4 Max) | not pinned |", rows[0])
         self.assertIn(f"[results/{BOOK}](results/{BOOK})", rows[0])
