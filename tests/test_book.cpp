@@ -20,6 +20,8 @@
 #include <vector>
 
 #include "itch/book.hpp"
+#include "itch/heap_ager.hpp"
+#include "itch/map_book.hpp"
 #include "itch/messages.hpp"
 #include "itch/reader.hpp"
 #include "oracle/canonical.hpp"
@@ -173,6 +175,61 @@ class ReferenceAdapter {
   ReferenceBook book_;
 };
 
+// The T-DESIGN-1 baseline, on a fresh heap or on one aged as heap_ager.hpp says, small.
+template <bool Aged>
+class MapAdapter {
+ public:
+  std::string apply(const wire::Bytes& message) {
+    if (Aged) {
+      ager_.before_message(message);
+    }
+    return std::string{to_string(book_.apply(message))};
+  }
+
+  [[nodiscard]] Fifo level(std::uint16_t locate, char side, std::uint32_t price) const {
+    Fifo fifo;
+    const auto& levels = book_.sides()[itch::side_key(locate, to_side(side))];
+    const auto found = levels.find(price);
+    if (found == levels.end()) {
+      return fifo;
+    }
+    std::uint64_t shares = 0;
+    for (const itch::MapBook::Resting& order : found->second.fifo) {
+      fifo.push_back({.reference = order.reference, .shares = order.shares});
+      shares += order.shares;
+    }
+    EXPECT_FALSE(fifo.empty()) << "an empty level was kept";
+    EXPECT_EQ(found->second.aggregate_shares, shares);
+    return fifo;
+  }
+
+  [[nodiscard]] Top best(std::uint16_t locate, char side) const {
+    const itch::TopOfBook top = book_.best(locate, to_side(side));
+    if (!top.present) {
+      return kEmpty;
+    }
+    return {.present = true, .price = top.price, .shares = top.shares, .orders = top.orders};
+  }
+
+  [[nodiscard]] std::uint64_t live_orders() const { return book_.live_orders(); }
+
+  [[nodiscard]] std::vector<std::uint32_t> prices(std::uint16_t locate, char side) const {
+    std::vector<std::uint32_t> prices;
+    book_.walk_side(locate, to_side(side), [&prices](itch::Price4 price, const auto& /*level*/) {
+      prices.push_back(price);
+      return true;
+    });
+    return prices;
+  }
+
+ private:
+  static itch::Side to_side(char side) { return side == 'B' ? itch::Side::bid : itch::Side::ask; }
+
+  itch::HeapAger ager_{
+      {.seed = 7, .warm_blocks = Aged ? 4096U : 0U, .ring_blocks = Aged ? 64U : 0U}};
+  itch::MapBook book_;
+};
+
 template <class Adapter>
 class BookScenario : public ::testing::Test {
  protected:
@@ -180,8 +237,9 @@ class BookScenario : public ::testing::Test {
 };
 
 // The default arm stays first, so that a failure on it is BookScenario/0.
-using Books = ::testing::Types<FastAdapter<itch::FastBook<>>, FastAdapter<HashFlat>,
-                               FastAdapter<PagedLinked>, FastAdapter<PagedFlat>, ReferenceAdapter>;
+using Books =
+    ::testing::Types<FastAdapter<itch::FastBook<>>, FastAdapter<HashFlat>, FastAdapter<PagedLinked>,
+                     FastAdapter<PagedFlat>, ReferenceAdapter, MapAdapter<false>, MapAdapter<true>>;
 static_assert(std::is_same_v<itch::FastBook<>, HashLinked>);
 TYPED_TEST_SUITE(BookScenario, Books);
 

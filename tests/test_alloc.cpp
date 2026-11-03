@@ -7,7 +7,8 @@
 // bigger blocks.
 // The reference book takes the same stream and must allocate, and each form of new is
 // shown reaching its own counter, so a broken counter fails here instead of passing the
-// fast book.
+// fast book. The map book, the T-DESIGN-1 baseline, allocates by design, and the heap ager
+// that its aged run uses is shown making the calls it says it makes, from its seed alone.
 #include <gtest/gtest.h>
 
 #include <bit>
@@ -22,6 +23,8 @@
 #include <vector>
 
 #include "itch/book.hpp"
+#include "itch/heap_ager.hpp"
+#include "itch/map_book.hpp"
 #include "itch/reader.hpp"
 #include "oracle/alloc_counter.hpp"
 #include "oracle/reference_book.hpp"
@@ -154,6 +157,70 @@ TEST(Allocation, TheControlBookIsSeenAllocating) {
   const AllocCounts counts = read_alloc_counts();
   std::println("control book: {} messages, {} allocations", messages, counts.total());
   EXPECT_GT(counts.total(), messages / 4) << "control book made almost no allocation";
+}
+
+TEST(Allocation, TheMapBookAllocatesOnTheHotPath) {
+  const std::vector<std::byte> stream = build_stream();
+  itch::MapBook book;
+  reset_alloc_counts();
+  std::uint64_t refused = 0;
+  const std::uint64_t messages =
+      replay(stream, [&book, &refused](std::span<const std::byte> payload) {
+        const itch::ApplyStatus status = book.apply(payload);
+        refused +=
+            status == itch::ApplyStatus::applied || status == itch::ApplyStatus::no_book_effect
+                ? 0U
+                : 1U;
+      });
+  const AllocCounts counts = read_alloc_counts();
+  std::println("map book: {} messages, {} allocations", messages, counts.total());
+  EXPECT_EQ(refused, 0U);
+  EXPECT_GT(counts.total(), messages / 4) << "the map book made almost no allocation";
+}
+
+TEST(HeapAgeing, WarmUpLeavesHalfItsBlocksAsBallast) {
+  const itch::HeapAger ager{{.seed = 1, .warm_blocks = 1000, .ring_blocks = 10}};
+  EXPECT_EQ(ager.allocations(), 1000U);
+  EXPECT_EQ(ager.releases(), 500U);
+  EXPECT_GE(ager.held_bytes(), 500U * itch::HeapAger::kSizeStep);
+  EXPECT_LE(ager.held_bytes(), 500U * itch::HeapAger::kSizeStep * itch::HeapAger::kSizeSteps);
+}
+
+TEST(HeapAgeing, EachMessageThatAddsAnOrderMovesOneBlockThroughNew) {
+  const auto messages = itch::fixtures::all_messages();
+  itch::HeapAger ager{{.seed = 1, .warm_blocks = 0, .ring_blocks = 4}};
+  reset_alloc_counts();
+  for (const auto& message : messages) {
+    ager.before_message(message);
+  }
+  // all_messages() holds one of each of the 23 types: A, F and U add an order.
+  EXPECT_EQ(read_alloc_counts().total(), 3U);
+  EXPECT_EQ(ager.allocations(), 3U);
+  for (int i = 0; i < 100; ++i) {
+    ager.step();
+  }
+  EXPECT_EQ(read_alloc_counts().total(), 103U);
+  // A ring of four never holds more than four blocks.
+  EXPECT_GE(ager.releases(), 99U);
+  EXPECT_LE(ager.allocations() - ager.releases(), 4U);
+}
+
+TEST(HeapAgeing, TheSeedAloneFixesEveryDraw) {
+  constexpr itch::HeapAgeing kAgeing{.seed = 5, .warm_blocks = 256, .ring_blocks = 16};
+  itch::HeapAger first{kAgeing};
+  itch::HeapAger second{kAgeing};
+  itch::HeapAger other{{.seed = 6, .warm_blocks = 256, .ring_blocks = 16}};
+  EXPECT_EQ(first.peek(), second.peek());
+  EXPECT_NE(first.peek(), other.peek());
+  for (int i = 0; i < 100; ++i) {
+    first.step();
+    second.step();
+    other.step();
+  }
+  EXPECT_EQ(first.peek(), second.peek());
+  EXPECT_EQ(first.held_bytes(), second.held_bytes());
+  EXPECT_EQ(first.releases(), second.releases());
+  EXPECT_NE(first.peek(), other.peek());
 }
 
 // A plain call to the allocation function, which no compiler may remove as it may a

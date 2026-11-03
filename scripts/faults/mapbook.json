@@ -1,0 +1,375 @@
+{
+  "area": "mapbook",
+  "faults": [
+    {
+      "id": "mapbook-execute-skips-level-total",
+      "breaks": "A partial execute or cancel leaves the map book's level total as it was",
+      "check": "itch_map_compare, top of book after every message",
+      "mutations": [
+        {
+          "file": "include/itch/map_book.hpp",
+          "old": "      order.level->second.aggregate_shares -= shares;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_map_compare"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_map_compare",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "MAP_DIVERGENCE kind=top message=\\d+ type=[ECX] "
+      }
+    },
+    {
+      "id": "mapbook-empty-level-kept",
+      "breaks": "The map book keeps a level after its last order goes",
+      "check": "itch_map_compare, top of book after every message",
+      "mutations": [
+        {
+          "file": "include/itch/map_book.hpp",
+          "old": "      sides_[side_key(order.locate, order.side)].erase(order.level);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_map_compare"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_map_compare",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "MAP_DIVERGENCE kind=top message=\\d+ type=[EXCDU] "
+      }
+    },
+    {
+      "id": "mapbook-fifo-reversed",
+      "breaks": "The map book puts each new order at the front of its level",
+      "check": "itch_map_compare, the periodic whole-book hash: no top of book can see an order's place",
+      "mutations": [
+        {
+          "file": "include/itch/map_book.hpp",
+          "old": "    level->second.fifo.push_back({.reference = reference, .shares = shares});\n",
+          "new": "    level->second.fifo.push_front({.reference = reference, .shares = shares});\n"
+        },
+        {
+          "file": "include/itch/map_book.hpp",
+          "old": "                                     .at = std::prev(level->second.fifo.end())});\n",
+          "new": "                                     .at = level->second.fifo.begin()});\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_map_compare"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_map_compare",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--hash-every",
+        "100"
+      ],
+      "expect": {
+        "signature": "MAP_DIVERGENCE kind=hash message=\\d+ "
+      }
+    },
+    {
+      "id": "mapbook-fifo-reversed-final-hash",
+      "breaks": "The map book puts each new order at the front of its level, with no periodic hash",
+      "check": "itch_map_compare, the end-of-run hash",
+      "mutations": [
+        {
+          "file": "include/itch/map_book.hpp",
+          "old": "    level->second.fifo.push_back({.reference = reference, .shares = shares});\n",
+          "new": "    level->second.fifo.push_front({.reference = reference, .shares = shares});\n"
+        },
+        {
+          "file": "include/itch/map_book.hpp",
+          "old": "                                     .at = std::prev(level->second.fifo.end())});\n",
+          "new": "                                     .at = level->second.fifo.begin()});\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_map_compare"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_map_compare",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--hash-every",
+        "0"
+      ],
+      "expect": {
+        "signature": "MAP_DIVERGENCE kind=final_hash "
+      }
+    },
+    {
+      "id": "mapbook-duplicate-accepted",
+      "breaks": "The map book takes an add whose reference is live",
+      "check": "itch_map_compare, the status after every message",
+      "mutations": [
+        {
+          "file": "include/itch/map_book.hpp",
+          "old": "    if (orders_.contains(reference)) {\n",
+          "new": "    if (reference == ~std::uint64_t{0} && orders_.contains(reference)) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_map_compare"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_map_compare",
+        "{tree}/tests/fixtures/oracle/dead_reference.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "MAP_DIVERGENCE kind=status message=\\d+ type=A fast=duplicate_reference map=applied"
+      }
+    },
+    {
+      "id": "mapbook-locate-unchecked",
+      "breaks": "The map book deducts from an order named on another locate",
+      "check": "itch_map_compare, the status after every message",
+      "mutations": [
+        {
+          "file": "include/itch/map_book.hpp",
+          "old": "    if (order.locate != locate) {\n",
+          "new": "    if (order.locate != locate && locate == 0) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_map_compare"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_map_compare",
+        "{tree}/tests/fixtures/oracle/dead_reference.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "MAP_DIVERGENCE kind=status message=\\d+ type=E fast=locate_mismatch map=applied"
+      }
+    },
+    {
+      "id": "mapbook-compare-top-off",
+      "breaks": "The compare stops reading the top of book, with the level total left stale as well",
+      "check": "itch_map_compare, the end-of-run hash, which carries every level's total",
+      "mutations": [
+        {
+          "file": "include/itch/map_book.hpp",
+          "old": "      order.level->second.aggregate_shares -= shares;\n",
+          "new": ""
+        },
+        {
+          "file": "tools/itch_map_compare.cpp",
+          "old": "    ++counters_.top_checks;\n",
+          "new": "    return;\n    ++counters_.top_checks;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_map_compare"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_map_compare",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "MAP_DIVERGENCE kind=final_hash "
+      }
+    },
+    {
+      "id": "mapbook-scenario-empty-level-kept",
+      "breaks": "The map book keeps a level after its last order goes",
+      "check": "test_book, on both map book adapters",
+      "mutations": [
+        {
+          "file": "include/itch/map_book.hpp",
+          "old": "      sides_[side_key(order.locate, order.side)].erase(order.level);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BookScenario/5\\.DeletingTheLastOrderRemovesTheLevel"
+      }
+    },
+    {
+      "id": "mapbook-ager-no-warm-up",
+      "breaks": "The ager allocates no ballast before the book starts",
+      "check": "test_alloc HeapAgeing.WarmUpLeavesHalfItsBlocksAsBallast",
+      "mutations": [
+        {
+          "file": "include/itch/heap_ager.hpp",
+          "old": "      warm.push_back(take());\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] HeapAgeing\\.WarmUpLeavesHalfItsBlocksAsBallast"
+      }
+    },
+    {
+      "id": "mapbook-ager-not-stepped",
+      "breaks": "The ager moves no ballast between adds",
+      "check": "test_alloc HeapAgeing.EachMessageThatAddsAnOrderMovesOneBlockThroughNew",
+      "mutations": [
+        {
+          "file": "include/itch/heap_ager.hpp",
+          "old": "      step();\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] HeapAgeing\\.EachMessageThatAddsAnOrderMovesOneBlockThroughNew"
+      }
+    },
+    {
+      "id": "mapbook-ager-seed-ignored",
+      "breaks": "Every seed draws the same blocks",
+      "check": "test_alloc HeapAgeing.TheSeedAloneFixesEveryDraw",
+      "mutations": [
+        {
+          "file": "include/itch/heap_ager.hpp",
+          "old": "state_{ageing.seed}",
+          "new": "state_{0x243F6A8885A308D3ULL}"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] HeapAgeing\\.TheSeedAloneFixesEveryDraw"
+      }
+    },
+    {
+      "id": "mapbook-ager-unseeded",
+      "breaks": "The ager draws from its own address, so one seed no longer fixes the run",
+      "check": "test_alloc HeapAgeing.TheSeedAloneFixesEveryDraw",
+      "mutations": [
+        {
+          "file": "include/itch/heap_ager.hpp",
+          "old": "state_{ageing.seed}",
+          "new": "state_{ageing.seed ^ reinterpret_cast<std::uintptr_t>(this)}"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] HeapAgeing\\.TheSeedAloneFixesEveryDraw"
+      }
+    },
+    {
+      "id": "mapbook-aged-flag-ignored",
+      "breaks": "itch_map_compare runs a fresh heap whatever --heap says",
+      "check": "test_map_compare_cli, on the ager's count of blocks",
+      "mutations": [
+        {
+          "file": "tools/itch_map_compare.cpp",
+          "old": "      options.aged = value == \"aged\";\n",
+          "new": "      options.aged = false;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_map_compare"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_map_compare_cli$"
+      ],
+      "expect": {
+        "signature": "map compare cli: FAIL \\S+ hash linked aged: ager_allocations None"
+      }
+    }
+  ]
+}

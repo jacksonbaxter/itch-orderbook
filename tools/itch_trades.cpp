@@ -114,7 +114,7 @@ struct Options {
     } else if (arg == "--symbols") {
       options.symbols = args[i];
     } else if (const auto taken = itch::tools::parse_arm_option(arg, args[i], options.arm,
-                                                                 options.config.capacity);
+                                                                options.config.capacity);
                taken != itch::tools::ArmOption::not_an_arm_option) {
       if (taken == itch::tools::ArmOption::bad_value) {
         return std::nullopt;

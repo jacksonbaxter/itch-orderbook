@@ -4,7 +4,8 @@
 // choke point's records, so the hash and the exhaustive compare cover what a write that
 // bypassed the choke point would change. The fast book's words carry its stored totals
 // and its cached top of book, and the reference's are summed from its FIFOs, so a total
-// that has drifted from the orders under it changes the sequence.
+// that has drifted from the orders under it changes the sequence. The map book's words,
+// for the T-DESIGN-1 baseline, carry its stored totals and its own best().
 //
 //     for each non-empty side, by locate then bid before ask:
 //       locate, side, best price, best shares, best orders, level count
@@ -21,6 +22,7 @@
 #include <vector>
 
 #include "itch/book.hpp"
+#include "itch/map_book.hpp"
 #include "oracle/reference_book.hpp"
 
 namespace itch::oracle {
@@ -181,6 +183,42 @@ template <class Sink>
 void emit_reference(const ReferenceBook& book, Sink& sink) {
   for (const auto& [key, levels] : book.sides()) {
     emit_reference_side(book, key, levels, sink);
+  }
+}
+
+template <class Sink>
+void emit_map_side(const MapBook& book, std::uint16_t locate, Side side, Sink& sink) {
+  const MapBook::SideLevels& levels = book.sides()[side_key(locate, side)];
+  if (levels.empty()) {
+    return;
+  }
+  const TopOfBook top = book.best(locate, side);
+  sink(locate);
+  sink(static_cast<std::uint64_t>(side));
+  sink(top.price);
+  sink(top.shares);
+  sink(top.orders);
+  sink(levels.size());
+  book.walk_side(locate, side, [&sink](Price4 price, const MapBook::Level& level) {
+    sink(price);
+    sink(level.fifo.size());
+    sink(level.aggregate_shares);
+    for (const MapBook::Resting& order : level.fifo) {
+      sink(order.reference);
+      sink(order.shares);
+    }
+    return true;
+  });
+}
+
+template <class Sink>
+void emit_map(const MapBook& book, Sink& sink) {
+  const std::size_t count = book.sides().size();
+  for (std::size_t key = 0; key < count; ++key) {
+    if (!book.sides()[key].empty()) {
+      emit_map_side(book, static_cast<std::uint16_t>(key >> 1U),
+                    (key & 1U) == 0 ? Side::bid : Side::ask, sink);
+    }
   }
 }
 
