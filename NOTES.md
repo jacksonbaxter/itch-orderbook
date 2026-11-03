@@ -235,7 +235,7 @@ Both days ran `itch_trades` on the Phase 2 stub: 12302019 and 10302019. `results
 
 **The MIDAS window is 09:35:00 to 16:00:00 in feed timestamps, half open.** The lead was the SEC's method page for its Market Activity Report, which says its sample runs from 9:35 but does not say that of `TradeVol`. It was then pinned by measurement on 12302019, and 10302019 agrees without any refit: shares, hidden shares, trades and hidden trades are equal on 5,771 of 5,771 symbols and on 5,767 of 5,767. The next-best window, 09:30 to 16:00, gets 2,609 and 3,322 symbols on shares. The nearest prints leave a gap of 23.8 ms at the start and 0.7 ms at the end on 12302019, and 3.3 ms and 0.6 ms on 10302019, so equality says no more than that about the bounds.
 
-**The odd-lot columns are not exact, and the failure is left as a failure.** A fixed 100 failed BH and SEB on the first run. Reading the round lot from the directory message, the fix we expected to clear it, moved the failure instead of ending it: BH and SEB now agree, and MKL and NVR fail. Those two are listed at 10, and MIDAS agrees with a lot of 100 on them, to the share, on both days.
+**The odd-lot columns are not exact, and the failure is left as a failure.** The user has since chosen the SEC's rule, and T-TRADE-3 passes on it: see "Two decisions on the strict results" below. This paragraph is the state before that. A fixed 100 failed BH and SEB on the first run. Reading the round lot from the directory message, the fix we expected to clear it, moved the failure instead of ending it: BH and SEB now agree, and MKL and NVR fail. Those two are listed at 10, and MIDAS agrees with a lot of 100 on them, to the share, on both days.
 
 | Symbol | Day | Directory lot | MIDAS odd lots / shares | Feed below directory lot | Feed below 100 |
 |---|---|---|---|---|---|
@@ -353,3 +353,40 @@ That leaves these untested: the Ubuntu and macOS runner images, the `apt` and `b
 **The comparison queues** are `ITCH_COMPARISON_QUEUES`, off by default, and no default configure unpacks them. Their build scripts never run, because `SOURCE_SUBDIR` names a directory they lack. One generated file under the build tree instantiates all three and is compiled, never linked or run. Boost's URL names the tag and not the commit: the tree with its submodules exists only as a release asset. `rigtorp` is pinned to the tag v1.1, and BENCHMARKS.md cites its later `HEAD`, so a Phase 3 result has to say which it ran. liburing comes from `ITCH_LIBURING_ROOT`, and CMake refuses any version but 2.15.
 
 **README tables.** `scripts/results_table.py` writes them between two markers and fails on any difference, on a results file it has no reader for, and on a verdict no row took up. `results/fault_matrix.md` is still the run at `162b602`: the faults added here ran by area and are not in that file.
+
+## Two decisions on the strict results, 2026-11-02
+
+Both decisions are the user's. Both came after seeing real data. Prediction P-0007 was committed first and said T-INV-3 would have 0 violations and T-TRADE-3 would pass, on both days. It held.
+
+| Result | 12302019 | 10302019 |
+|---|---|---|
+| T-ORACLE-1 | PASS, 268,744,780 messages, 0 divergences | PASS, 293,989,079 messages, 0 divergences. First oracle run on this day |
+| T-INV-1 | PASS, 0 violations | PASS, 0 violations |
+| T-INV-2 strict | FAIL, 18,958 crossed and 1,018 locked | FAIL, 4,240 crossed and 34 locked |
+| T-INV-3 | PASS, 0 violations | PASS, 0 violations |
+| T-ALLOC-1 | PASS | PASS |
+| T-TRADE-3 | PASS, 0 violations | PASS, 0 violations |
+
+### T-INV-3
+
+**The rule, in the words the user approved:** "During normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet. Any new cross is a failure." The approval had conditions. T-INV-2 strict stays as it is and is still reported as failing. The new rule is a second, separately named check. It had to hold on 10302019 before it counted as adopted, and it did. The definition is in BENCHMARKS.md. No time limit enters it, so the 50 ms of the published window plays no part.
+
+**It held on 10302019 in the plainest way, and that limits what it shows.** That day has no crossed or locked observation at all with the market open and the symbol in state `T`. Its 8 resumptions found 2 books crossed, CYCN at 08:00:00 and TTMI at 16:35:00, both with the market closed. So the rule's leftover clause was not exercised on that day: nothing needed excusing. 12302019 is the only held day that exercises it, with 654 crossed and 10 locked observations all inside a leftover, 22 leftovers from 33 resumptions, and the longest lasting 1.2 ms.
+
+**The old window already behaved almost like this.** I was told it opened on every resumption, and it does, which is why it counts 33. But it also closes on the first observation that is not crossed or locked, and the resumption's own `H` is such an observation when the book is clear. So on an uncrossed book it closes at once, and a new cross right after a resumption was already outside it. The difference is in what is reported: 22 real leftovers rather than 33 windows, and a stated rule with its own verdict. It also means the fault that opens a leftover on every resumption cannot move the verdict. It is caught on the count of leftovers, and that is the only place it could be.
+
+**A cross message ends a leftover even if the book stays crossed.** The observation after that `Q` is then a violation, as the rule says. No held day has one: every leftover ended on the book.
+
+**The exit codes changed for one fixture.** `crossed.itch` holds a new cross by design, so it now exits 1. `leftover.itch` is the fixture that exits 3. A mutated `lifecycle.itch` exits 1 for the same reason, and `oracle-inv2-crossed-input` now says so.
+
+### The SEC's round lot in T-TRADE-3
+
+**The history, plainly.** T-TRADE-3 first failed on odd lots with a fixed 100, on BH and SEB. The directory's lot cleared those and failed on MKL and NVR. The SEC's rule was chosen after both failures, from the SEC's published text, and nothing was fitted: it comes from the page, and no list was built from the data. Its text is "Until Nov 3, 2025, a round lot is defined as 100 shares for all but three tickers. BRK.A and SEB have a round lot of one. BH has a round lot of 10."
+
+**The page's next sentence does not change the rule, and MIDAS shows why.** It says "All trades involving nine or fewer shares are considered odd lot trades." At a lot of 100 or 10 that adds nothing. At a lot of one it would make small prints odd, and MIDAS does not do that: SEB has 14 prints below 10 shares on 12302019 and 43 on 10302019, and MIDAS gives it no odd lots on either day. So the check takes a print below the lot, and a fault holds that reading.
+
+**BRK.A cannot be exercised on these days.** MIDAS spells it `BRK.A`, with rows on other venues, and no Nasdaq row on either day. The feed spells its sibling `BRK.B` the same way, and Nasdaq's directory does not list BRK.A on either day. So the entry stands in the table under that spelling, the run reports it as not listed, and only a fixture exercises it. BH.A is a separate symbol at the common 100: the directory lists it at 10 and it has no Nasdaq row.
+
+**The date is a guard, not a note.** For a date on or after 2025-11-03 the odd-lot columns are not compared, the tool says `t3_odd_lot_columns not_compared_rule_ended`, and the report and the README table say so. The report holds the date itself as well, so a late day compared on the old rule fails there. Shares and trades are still compared on such a day. No held day reaches this path, so only fixtures do.
+
+**The directory's lot stays as information.** The `t3_round_lot` table still shows what it would give, beside the SEC's lot and below 100 and below 10.

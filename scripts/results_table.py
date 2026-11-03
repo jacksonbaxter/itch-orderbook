@@ -89,18 +89,28 @@ def oracle_rows(name, text):
         "Market open and T, every message", text, name)
     allocations = table_row("Fast book", text, name)[1]
     violations = find(r"^## T-INV-1:.*\n\nVerdict: \*\*\w+\*\*, (.*?)\.$", text, name)[1]
+    new_crosses = find(r"^## T-INV-3:.*\n\nVerdict: \*\*\w+\*\*, (.*?)\.", text, name)[1]
+    new_crossed, new_locked = table_row("With none, a violation", text, name)
+    left_crossed, left_locked = table_row("With a leftover in force, allowed", text, name)
+    resumptions = table_row("Resumptions, `H` into `T`", text, name)[0]
+    leftovers = table_row("Of which found the book crossed or locked, so a leftover opened",
+                          text, name)[0]
     return [
         row("T-ORACLE-1", f"{divergences} divergences in {messages} messages"),
         row("T-INV-1", violations),
         row("T-INV-2", f"strict: {crossed} crossed and {locked} locked of {two_sided} two-sided "
                        f"observations; {open_crossed} and {open_locked} of {open_two_sided} "
                        "with the market open and the symbol trading"),
+        row("T-INV-3", f"{new_crosses}: {new_crossed} crossed and {new_locked} locked with no "
+                       f"leftover from a halt; {left_crossed} and {left_locked} with one in force; "
+                       f"{leftovers} of {resumptions} resumptions found the book crossed or "
+                       "locked"),
         row("T-ALLOC-1", f"{allocations} allocations after warm-up, fast book"),
     ]
 
 
 def odd_lot_detail(text, name):
-    symbols = sorted(set(re.findall(r"^- `t3_odd_lots .*symbol=(\w+)", text, re.MULTILINE)))
+    symbols = sorted(set(re.findall(r"^- `t3_odd_lots .*symbol=(\S+)", text, re.MULTILINE)))
     equal, total = find(r"^- equal_odd_lots (\d+) of (\d+) symbols", text, name).groups()
     window = find(r"Pinned window: `(\w+)`", text, name)[1]
     shares = table_row(window, text, name)[0]
@@ -118,6 +128,8 @@ def trades_rows(name, text):
             detail = find(rf"^{check} is not available on \d+: (.*?), so ", text, name)[1]
         elif check == "T-TRADE-3" and verdict == "FAIL":
             detail = odd_lot_detail(text, name)
+        elif check == "T-TRADE-3" and "odd-lot columns were not compared" in text:
+            detail = f"{violations} violations; odd-lot columns not compared, the SEC's rule ended"
         else:
             detail = f"{violations} violations"
         rows.append(verdict_row(check, day, host, verdict, detail, commit, name))

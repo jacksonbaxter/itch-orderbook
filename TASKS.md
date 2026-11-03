@@ -120,8 +120,9 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [ ] Hot structs: `static_assert` on size, alignment, trivial copyability.
 - [ ] T-BOOK-1 to T-BOOK-4, T-LAT-1 to T-LAT-5, T-DESIGN-1 on the harness.
 - [x] Strict crossed-book run, full day. Count and characterise each violation by symbol, time and trading state. Report both published counts' populations: all observations, and market open with state `T`. The user decides the scope. Done on the Phase 2 stub: `results/oracle_12302019.md`, strict result FAIL.
+- [x] T-INV-3, the scope the user approved after seeing the strict result: a book in normal trading may only be crossed if the cross is left over from a halt and has not cleared. Separate from T-INV-2, which stays strict. Done on the Phase 2 stub on both days: `results/oracle_12302019.md` and `results/oracle_10302019.md`, 0 violations on each.
 - [x] Oracle replay on the Mac under `heavy.sh`, all 268,744,780 messages (T-ORACLE-1). Done on the Phase 2 stub: `results/oracle_12302019.md`.
-- [ ] Repeat T-ORACLE-1, T-INV-1, T-INV-2 and T-ALLOC-1 on 12302019 with the real book, once it replaces the stub.
+- [ ] Repeat T-ORACLE-1, T-INV-1, T-INV-2, T-INV-3 and T-ALLOC-1 on 12302019 with the real book, once it replaces the stub.
 - [ ] Repeat the oracle on every session the archive will serve, up to ten, keeping raw output for each (T-ORACLE-2). Check free disk first. State any shortfall as a gap.
 
 ### Trade-print verification
@@ -135,7 +136,7 @@ Hard means any mismatch fails. Each check needs an injected bug that trips it. C
 - [x] `P`: reference 0, side `B`, no book change. Hard. Whole class excluded from "hits a resting order": count and surface.
 - [x] `Q` per symbol against CrossStats (T-TRADE-2). Hard. Opening shares against Opening, closing against Closing. Halt crosses: sum of `Q` outside CrossStats equals type `H` sum. Test symbols have no row, and are counted apart. Done on 12302019. Not available on 10302019: no CrossStats file for it is pinned.
 - [x] `C_N` against `Q`: per symbol and side `<=`, equal price. Measure first, because no one has confirmed this on real data.
-- [ ] `E + C_Y + P` against MIDAS (T-TRADE-3): exact per-symbol equality once the window is pinned. If it cannot be pinned, report the per-symbol differences as an open gap with the reason. An inequality is never a pass. Add `P` against `HiddenVol`. Open: shares, trades, hidden shares and hidden trades are exact on every symbol on both days at 09:35 to 16:00, and P against HiddenVol with them, but the odd-lot columns fail on MKL and NVR on both days. See `results/trades_12302019.md`, `results/trades_10302019.md` and NOTES.md. The user decides which round lot the check compares.
+- [x] `E + C_Y + P` against MIDAS (T-TRADE-3): exact per-symbol equality once the window is pinned. If it cannot be pinned, report the per-symbol differences as an open gap with the reason. An inequality is never a pass. Add `P` against `HiddenVol`. Done on the Phase 2 stub on both days at 09:35 to 16:00, every column on every symbol, with odd lots on the SEC's round-lot rule, which the user chose after the failures recorded in NOTES.md. See `results/trades_12302019.md` and `results/trades_10302019.md`.
 - [ ] Cboe per-tape check (T-TRADE-4): held. No Cboe data in this project until the user decides. Scripts do not fetch it, nothing depends on it, and no further joins are run.
 - [x] `B` reverses a stored match, hard on 10302019, fixtures otherwise.
 - [x] Match numbers unique across `E`, `C`, `P`, `Q`. Measure first. Measured on both days: unique across the print classes. A far-leg `C_N` shares its number with one print, by design, and is checked against it.

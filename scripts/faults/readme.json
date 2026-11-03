@@ -1,6 +1,10 @@
 {
   "area": "readme",
-  "tree": ["README.md", "results", "scripts"],
+  "tree": [
+    "README.md",
+    "results",
+    "scripts"
+  ],
   "faults": [
     {
       "id": "readme-table-typed-by-hand",
@@ -13,7 +17,13 @@
           "new": "| no allocations at all |"
         }
       ],
-      "command": ["{python}", "{tree}/scripts/results_table.py", "--root", "{tree}", "--check"],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
       "expect": {
         "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
         "exit": 1
@@ -30,7 +40,13 @@
           "new": "strict: 18,959 crossed"
         }
       ],
-      "command": ["{python}", "{tree}/scripts/results_table.py", "--root", "{tree}", "--check"],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
       "expect": {
         "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
         "exit": 1
@@ -47,7 +63,14 @@
           "new": "strict: 18,959 crossed"
         }
       ],
-      "command": ["{python}", "{tree}/scripts/gate_numbers.py", "--root", "{tree}", "--page", "README.md"],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md"
+      ],
       "expect": {
         "signature": "gate_numbers: FAIL README\\.md:\\d+: 18,959 is not in results/oracle_12302019\\.md",
         "exit": 1
@@ -64,7 +87,59 @@
           "new": "| PASS | strict: 18,958 crossed"
         }
       ],
-      "command": ["{python}", "{tree}/scripts/results_table.py", "--root", "{tree}", "--check"],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-table-drops-t-inv-3",
+      "breaks": "The results table leaves out the T-INV-3 row",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        row(\"T-INV-3\", f\"{new_crosses}: {new_crossed} crossed and {new_locked} locked with no \"\n                       f\"leftover from a halt; {left_crossed} and {left_locked} with one in force; \"\n                       f\"{leftovers} of {resumptions} resumptions found the book crossed or \"\n                       \"locked\"),\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL results/oracle_\\d+\\.md: 6 verdicts in the file, 5 rows",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-t-inv-3-leftovers-altered",
+      "breaks": "The README says every resumption had a leftover",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "22 of 33 resumptions found",
+          "new": "33 of 33 resumptions found"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
       "expect": {
         "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
         "exit": 1

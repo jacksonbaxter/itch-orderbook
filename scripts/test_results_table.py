@@ -55,14 +55,37 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 0, output)
 
     def test_every_failing_verdict_is_shown(self):
-        self.assertIn("| **FAIL** |", self.row("T-INV-2", "12302019"))
         for day in ("10302019", "12302019"):
-            row = self.row("T-TRADE-3", day)
-            self.assertIn("| **FAIL** |", row)
-            self.assertIn("MKL and NVR", row)
-            self.assertRegex(row, r"shares equal on ([\d,]+) of \1\b")
+            self.assertIn("| **FAIL** |", self.row("T-INV-2", day))
+            self.assertIn("strict:", self.row("T-INV-2", day))
         self.assertIn("| **NOT AVAILABLE** |", self.row("T-TRADE-2", "10302019"))
         self.assertIn("| PASS |", self.row("T-TRADE-2", "12302019"))
+
+    def test_t_inv_3_stands_beside_t_inv_2_on_both_days(self):
+        row = self.row("T-INV-3", "12302019")
+        self.assertIn("| PASS | 0 violations: 0 crossed and 0 locked with no leftover", row)
+        self.assertIn("22 of 33 resumptions", row)
+        self.assertIn("2 of 8 resumptions", self.row("T-INV-3", "10302019"))
+
+    def test_a_failed_t_inv_3_is_shown_failing(self):
+        self.edit(ORACLE, "Verdict: **PASS**, 0 violations. This check",
+                  "Verdict: **FAIL**, 3 violations. This check")
+        row = self.row("T-INV-3", "12302019")
+        self.assertIn("| **FAIL** | 3 violations:", row)
+
+    def test_a_failed_t_trade_3_names_its_symbols(self):
+        self.edit(TRADES, "| T-TRADE-3 | **PASS** | 0 |", "| T-TRADE-3 | **FAIL** | 2 |")
+        self.edit(TRADES, "## Per message type\n",
+                  "- equal_odd_lots 5766 of 5767 symbols\n"
+                  "- `t3_odd_lots message=1 locate=1 symbol=BRK.A feed 1, MIDAS 2`\n\n"
+                  "## Per message type\n")
+        row = self.row("T-TRADE-3", "10302019")
+        self.assertIn("| **FAIL** | odd-lot columns wrong on BRK.A, equal on 5766 of 5767", row)
+        self.assertRegex(row, r"shares equal on ([\d,]+) of \1\b")
+
+    def test_a_late_day_says_its_odd_lots_were_not_compared(self):
+        self.edit(TRADES, "## Results\n", "## Results\n\nThe odd-lot columns were not compared.\n")
+        self.assertIn("odd-lot columns not compared", self.row("T-TRADE-3", "10302019"))
 
     def test_harness_rows_carry_their_label_and_host(self):
         _, output = self.run_table()
@@ -83,7 +106,7 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("results_table: FAIL README.md:", output)
 
     def test_a_row_typed_over_fails(self):
-        self.edit("README.md", "| PASS | 0 divergences", "| PASS | no divergences at all")
+        self.edit("README.md", "| PASS | 0 divergences in 268", "| PASS | no divergences at all in 268")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
 
@@ -93,7 +116,7 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 1, output)
 
     def test_write_mends_what_check_refused(self):
-        self.edit("README.md", "| PASS | 0 divergences", "| PASS | no divergences at all")
+        self.edit("README.md", "| PASS | 0 divergences in 268", "| PASS | no divergences at all in 268")
         self.assertEqual(self.run_table("--write")[0], 0)
         self.assertEqual(self.run_table("--check")[0], 0)
 
@@ -113,10 +136,10 @@ class ResultsTable(unittest.TestCase):
         self.edit(ORACLE, "## T-ALLOC-1:", "## T-NEW-1: new\n\nVerdict: **FAIL**\n\n## T-ALLOC-1:")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
-        self.assertIn("5 verdicts in the file, 4 rows", output)
+        self.assertIn("6 verdicts in the file, 5 rows", output)
 
     def test_a_trade_verdict_dropped_from_its_table_is_refused(self):
-        self.edit(TRADES, "| T-TRADE-3 | **FAIL** | 4 |\n", "")
+        self.edit(TRADES, "| T-TRADE-3 | **PASS** | 0 |\n", "")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
 
