@@ -36,6 +36,18 @@ zero_length 0
 decode_failures 0
 end end_of_input
 last_message S C locate=0 tracking=7 timestamp_ns=99 offset=86
+directory_repeats 0
+test_symbols 0
+test_symbols_with_orders 0
+"""
+
+WITH_OMISSIONS = GOOD_OUTPUT.replace("type A 2\n", "type Q 1\ntype R 1\n") + """\
+market_category M 1
+authenticity T 1
+round_lot 10 1
+test_type R 1
+cross O count=1 zero_shares=1 zero_price=1 zero_both=1
+after_e_type D 1
 """
 
 GOOD_DAY = {
@@ -108,8 +120,44 @@ class CheckCensus(unittest.TestCase):
                 self.output = GOOD_OUTPUT.replace(f"{field} 0", f"{field} 1")
                 self.assertEqual(self.run_check(), 1)
 
+    def omissions_day(self):
+        self.day["per_type_counts"] = {"Q": 1, "R": 1, "S": 1}
+        self.output = WITH_OMISSIONS
+
+    def test_every_omission_line_is_read(self):
+        parsed = cc.parse_census(WITH_OMISSIONS + "market_category 0x20 2\n")
+        self.assertEqual(parsed["market_category"], {"M": 1, "0x20": 2})
+        self.assertEqual(parsed["authenticity"], {"T": 1})
+        self.assertEqual(parsed["round_lot"], {10: 1})
+        self.assertEqual(parsed["test_type"], {"R": 1})
+        self.assertEqual(parsed["after_e_type"], {"D": 1})
+        self.assertEqual(parsed["cross"]["O"], {"count": 1, "zero_shares": 1, "zero_price": 1,
+                                                "zero_both": 1})
+        self.assertEqual(parsed["test_symbols"], 0)
+
+    def test_the_omission_splits_account_for_the_manifest(self):
+        self.omissions_day()
+        self.assertEqual(self.run_check(), 0)
+
+    def test_a_directory_split_short_of_the_manifest_fails(self):
+        for line in ("market_category M 1\n", "authenticity T 1\n", "round_lot 10 1\n"):
+            with self.subTest(line=line):
+                self.omissions_day()
+                self.output = WITH_OMISSIONS.replace(line, "")
+                self.assertEqual(self.run_check(), 1)
+
+    def test_a_cross_split_short_of_the_manifest_fails(self):
+        self.omissions_day()
+        self.output = WITH_OMISSIONS.replace("cross O count=1", "cross O count=0")
+        self.assertEqual(self.run_check(), 1)
+
+    def test_a_census_without_its_omission_counts_is_an_error(self):
+        self.output = GOOD_OUTPUT.replace("test_symbols 0\n", "")
+        self.assertEqual(self.run_check(), 2)
+
     def test_no_last_message_fails(self):
-        self.output = "\n".join(GOOD_OUTPUT.splitlines()[:-1]) + "\n"
+        self.output = "".join(line for line in GOOD_OUTPUT.splitlines(keepends=True)
+                              if not line.startswith("last_message"))
         self.assertEqual(self.run_check(), 1)
 
     def test_census_failure_fails_even_when_the_counts_agree(self):

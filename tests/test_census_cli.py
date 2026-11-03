@@ -19,6 +19,18 @@ def frame(payload):
     return struct.pack(">H", len(payload)) + payload
 
 
+def patched(payload, *edits):
+    """The payload with each (offset, bytes) written over it."""
+    out = bytearray(payload)
+    for offset, value in edits:
+        out[offset:offset + len(value)] = value
+    return bytes(out)
+
+
+def on_locate(payload, locate, *edits):
+    return frame(patched(payload, (1, struct.pack(">H", locate)), *edits))
+
+
 def main():
     census, scratch, fixture_path = sys.argv[1:4]
     scratch = Path(scratch)
@@ -32,7 +44,41 @@ def main():
 
     failures = []
 
-    def case(name, data, want_exit, *wanted_lines):
+    def directory(locate, category, authenticity, lot):
+        return on_locate(fixtures["kStockDirectory"], locate, (19, category),
+                         (21, struct.pack(">I", lot)), (29, authenticity))
+
+    def cross(locate, shares, price, cross_type):
+        return on_locate(fixtures["kCrossTrade"], locate, (11, struct.pack(">Q", shares)),
+                         (27, struct.pack(">I", price)), (39, cross_type))
+
+    def order(name, locate):
+        return on_locate(fixtures[name], locate)
+
+    # Locates 5 and 7 are test symbols, and 6 is live with a directory message sent twice.
+    omissions = b"".join([
+        system,
+        directory(5, b"M", b"T", 10),
+        directory(6, b"Q", b"P", 100),
+        directory(6, b"Q", b"P", 100),
+        directory(7, b" ", b"T", 1),
+        order("kAddOrder", 5),
+        order("kAddOrderAttributed", 5),
+        order("kAddOrder", 6),
+        order("kOrderCancel", 5),
+        cross(5, 0, 0, b"O"),
+        cross(6, 0, 0, b"O"),
+        cross(6, 0, 500, b"C"),
+        cross(6, 0, 700, b"C"),
+        cross(6, 100, 0, b"C"),
+        cross(6, 100, 500, b"C"),
+        frame(patched(fixtures["kSystemEvent"], (11, b"E"))),
+        order("kOrderCancel", 6),
+        order("kOrderDelete", 5),
+        end,
+    ])
+
+    def case(name, data, want_exit, *wanted_lines, absent=()):
         path = scratch / f"{name}.bin"
         path.write_bytes(data)
         run = subprocess.run([census, str(path)], capture_output=True, text=True, check=False)
@@ -42,6 +88,9 @@ def main():
         for line in wanted_lines:
             if line not in lines:
                 failures.append(f"{name}: no line {line!r} in {lines}")
+        for prefix in absent:
+            if any(line.startswith(prefix) for line in lines):
+                failures.append(f"{name}: a line starts {prefix!r} in {lines}")
 
     case("complete", system + add + add + end, 0,
          "messages 4", "type A 2", "type S 2", "unknown_type 0", "bad_length 0",
@@ -56,6 +105,18 @@ def main():
     case("terminator_after_end", system + end + b"\x00\x00", 0, "zero_length 1", "messages 2")
     case("control_byte_type", system + frame(b"\x01\x02") + end, 0, "type 0x01 1")
     case("empty", b"", 1, "messages 0")
+    case("omissions", omissions, 0,
+         "directory_repeats 1",
+         "market_category M 1", "market_category Q 2", "market_category 0x20 1",
+         "authenticity P 2", "authenticity T 2",
+         "round_lot 1 1", "round_lot 10 1", "round_lot 100 2",
+         "test_symbols 2", "test_symbols_with_orders 1",
+         "test_type R 2", "test_type A 1", "test_type F 1", "test_type X 1", "test_type Q 1",
+         "test_type D 1",
+         "cross O count=2 zero_shares=2 zero_price=2 zero_both=2",
+         "cross C count=4 zero_shares=2 zero_price=1 zero_both=0",
+         "after_e_type X 1", "after_e_type D 1", "after_e_type S 1",
+         absent=("after_e_type A", "after_e_type Q", "test_type S"))
 
     missing = subprocess.run([census, str(scratch / "no-such-file")], capture_output=True,
                              check=False)
@@ -67,7 +128,7 @@ def main():
 
     for failure in failures:
         print(failure, file=sys.stderr)
-    print(f"census cli: 13 cases, {len(failures)} failures")
+    print(f"census cli: 14 cases, {len(failures)} failures")
     return 1 if failures else 0
 
 

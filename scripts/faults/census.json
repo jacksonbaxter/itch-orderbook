@@ -329,6 +329,399 @@
       "expect": {
         "signature": "^FAIL: test_a_count_moved_between_types_fails_though_the_total_holds"
       }
+    },
+    {
+      "id": "census-tool-category-not-counted",
+      "breaks": "Market Category is not counted",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "    ++categories_[index_of(m.market_category)];\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: no line 'market_category M 1'"
+      }
+    },
+    {
+      "id": "census-tool-authenticity-not-counted",
+      "breaks": "Authenticity is not counted",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "    ++authenticity_[index_of(m.authenticity)];\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: no line 'authenticity P 2'"
+      }
+    },
+    {
+      "id": "census-tool-round-lot-fixed",
+      "breaks": "Every directory entry counts as a round lot of 100",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "++round_lots_[m.round_lot_size];",
+          "new": "++round_lots_[100];"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: no line 'round_lot 1 1'"
+      }
+    },
+    {
+      "id": "census-tool-repeat-not-counted",
+      "breaks": "A second directory message for a locate goes uncounted",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "      ++directory_repeats_;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: no line 'directory_repeats 1'"
+      }
+    },
+    {
+      "id": "census-tool-test-by-category",
+      "breaks": "A test symbol is told by Market Category, not Authenticity",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "    } else if (m.authenticity == 'T') {\n",
+          "new": "    } else if (m.market_category == 'M') {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: no line 'test_symbols 2'"
+      }
+    },
+    {
+      "id": "census-tool-test-order-counted-twice",
+      "breaks": "A test symbol with orders counts once per add",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "      locate = Locate::test_with_orders;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: no line 'test_symbols_with_orders 1'"
+      }
+    },
+    {
+      "id": "census-tool-test-types-all-locates",
+      "breaks": "Every locate counts as a test symbol's",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "    if (locate != Locate::test && locate != Locate::test_with_orders) {\n      return;\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: no line 'test_type A 1'"
+      }
+    },
+    {
+      "id": "census-tool-zero-shares-wrong",
+      "breaks": "A cross of no shares is counted from its price",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "cross.zero_shares += m.shares == 0 ? 1U : 0U;",
+          "new": "cross.zero_shares += m.cross_price == 0 ? 1U : 0U;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: no line 'cross C count=4 zero_shares=2 zero_price=1"
+      }
+    },
+    {
+      "id": "census-tool-zero-price-wrong",
+      "breaks": "A cross at no price is counted from its shares",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "cross.zero_price += m.cross_price == 0 ? 1U : 0U;",
+          "new": "cross.zero_price += m.shares == 0 ? 1U : 0U;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: no line 'cross C count=4 zero_shares=2 zero_price=1"
+      }
+    },
+    {
+      "id": "census-tool-zero-both-is-either",
+      "breaks": "A cross with either field at zero counts as both",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "cross.zero_both += m.shares == 0 && m.cross_price == 0 ? 1U : 0U;",
+          "new": "cross.zero_both += m.shares == 0 || m.cross_price == 0 ? 1U : 0U;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: no line 'cross C count=4 zero_shares=2 zero_price=1"
+      }
+    },
+    {
+      "id": "census-tool-after-wrong-event",
+      "breaks": "The count starts at System Event M, not E",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "after_e_ = after_e_ || event->event_code == 'E';",
+          "new": "after_e_ = after_e_ || event->event_code == 'M';"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: no line 'after_e_type X 1'"
+      }
+    },
+    {
+      "id": "census-tool-after-from-start",
+      "breaks": "The count starts at the first message",
+      "check": "test_census_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_census.cpp",
+          "old": "bool after_e_ = false;",
+          "new": "bool after_e_ = true;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_census"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_census_cli$"
+      ],
+      "expect": {
+        "signature": "omissions: a line starts 'after_e_type A'"
+      }
+    },
+    {
+      "id": "census-check-directory-totals-removed",
+      "breaks": "The directory splits are no longer tied to the manifest's R count",
+      "check": "scripts/test_check_census.py",
+      "mutations": [
+        {
+          "file": "scripts/check_census.py",
+          "old": "        pairs.append((f\"{field} total\", directories, sum(census[field].values())))\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/test_check_census.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_directory_split_short_of_the_manifest_fails"
+      }
+    },
+    {
+      "id": "census-check-cross-total-removed",
+      "breaks": "The cross split is no longer tied to the manifest's Q count",
+      "check": "scripts/test_check_census.py",
+      "mutations": [
+        {
+          "file": "scripts/check_census.py",
+          "old": "    pairs.append((\"cross total\", expected_types.get(\"Q\", 0), crosses))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/test_check_census.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_cross_split_short_of_the_manifest_fails"
+      }
+    },
+    {
+      "id": "census-check-omission-counts-optional",
+      "breaks": "A census that stops printing its omission counts still parses",
+      "check": "scripts/test_check_census.py",
+      "mutations": [
+        {
+          "file": "scripts/check_census.py",
+          "old": "\"decode_failures\", \"directory_repeats\", \"test_symbols\", \"test_symbols_with_orders\"}",
+          "new": "\"decode_failures\"}"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/test_check_census.py"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_every_omission_line_is_read|^FAIL: test_a_census_without_its_omission_counts_is_an_error"
+      }
     }
   ]
 }

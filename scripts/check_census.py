@@ -28,9 +28,16 @@ TYPE_LINE = re.compile(r"type (0x[0-9a-f]{2}|\S) (\d+)")
 LAST_LINE = re.compile(
     r"last_message (\S) (\S) locate=(\d+) tracking=(\d+) timestamp_ns=(\d+) offset=(\d+)"
 )
+BYTE_COUNT_LINE = re.compile(
+    r"(market_category|authenticity|test_type|after_e_type) (0x[0-9a-f]{2}|\S) (\d+)"
+)
+ROUND_LOT_LINE = re.compile(r"round_lot (\d+) (\d+)")
+CROSS_LINE = re.compile(
+    r"cross (0x[0-9a-f]{2}|\S) count=(\d+) zero_shares=(\d+) zero_price=(\d+) zero_both=(\d+)"
+)
 NUMERIC_KEYS = frozenset(
     {"bytes", "consumed", "messages", "unknown_type", "bad_length", "zero_length",
-     "decode_failures"}
+     "decode_failures", "directory_repeats", "test_symbols", "test_symbols_with_orders"}
 )
 
 
@@ -40,7 +47,8 @@ class CheckError(Exception):
 
 def parse_census(text):
     """Parses itch_census output. A line it does not recognise is an error."""
-    parsed = {"types": {}}
+    parsed = {"types": {}, "market_category": {}, "authenticity": {}, "test_type": {},
+              "after_e_type": {}, "round_lot": {}, "cross": {}}
     for line in text.splitlines():
         match = TYPE_LINE.fullmatch(line)
         if match:
@@ -59,6 +67,19 @@ def parse_census(text):
                 "timestamp_ns": int(match[5]),
                 "offset": int(match[6]),
             }
+            continue
+        match = BYTE_COUNT_LINE.fullmatch(line)
+        if match:
+            parsed[match[1]][match[2]] = int(match[3])
+            continue
+        match = ROUND_LOT_LINE.fullmatch(line)
+        if match:
+            parsed["round_lot"][int(match[1])] = int(match[2])
+            continue
+        match = CROSS_LINE.fullmatch(line)
+        if match:
+            parsed["cross"][match[1]] = {"count": int(match[2]), "zero_shares": int(match[3]),
+                                         "zero_price": int(match[4]), "zero_both": int(match[5])}
             continue
         key, _, value = line.partition(" ")
         if key in NUMERIC_KEYS and value.isdigit():
@@ -112,6 +133,14 @@ def compare(census, entry):
     actual_last = census.get("last_message", {})
     for field in sorted(expected_last.keys() | actual_last.keys()):
         pairs.append((f"last_message.{field}", expected_last.get(field), actual_last.get(field)))
+
+    # Each split of what the spec leaves out has to account for every message it splits, or
+    # a value it cannot name went missing.
+    directories = expected_types.get("R", 0)
+    for field in ("market_category", "authenticity", "round_lot"):
+        pairs.append((f"{field} total", directories, sum(census[field].values())))
+    crosses = sum(cross["count"] for cross in census["cross"].values())
+    pairs.append(("cross total", expected_types.get("Q", 0), crosses))
 
     return [pair for pair in pairs if pair[1] != pair[2]]
 
