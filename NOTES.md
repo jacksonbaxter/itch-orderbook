@@ -503,3 +503,57 @@ Whole-day runs of the two paged arms on the new default, binaries from 1ae701e, 
 
 Every verdict and count is the one the earlier runs gave, and `itch_oracle` exits 3 for the strict T-INV-2 failure, as before. The oracle's peak footprint fell from 1.84 and 1.87 GiB to 1.56 and 1.59 GiB on 12302019. The smaller capacity accounts for 0.14 GiB of that 0.28 GiB fall; the rest was not traced. Maximum RSS stays at 9.2 to 10.7 GiB, mostly the mapped file. The run times are not measurements and are not reported. Raw logs stay in the research cache.
 
+## Measuring every book design, 2026-11-03
+
+`bench_replay` measures any design by name: `--design hash-linked|hash-flat|paged-linked|paged-flat|map-fresh|map-aged`, `--input-mode ram|mapped`, `--track-top on|off`. `scripts/bench_driver.py --design ...` runs every design named in each repetition, one after the other, so that every design of a run shares the day, the passes and the machine's state, and it writes one results file for each. The decisions, and why:
+
+- **Two input modes, after itch-book's two methods.** `ram` reads the file into anonymous memory before the warm-up and never maps it, which is how itch-book's `book_throughput` times T-BOOK-1: a buffer in RAM, the book alone. `mapped` maps the file read-only, which is what its `itch-replay --book` does for T-BOOK-2. `--track-top on` adds that tool's check: after each message the book applied, read the best bid and ask on its locate and compare price and shares with the last seen there. Each results file says which of the two methods its run is, or that it is neither.
+- **Book memory is measured in a process of its own.** The first try took the charged memory before and after the untimed pass's book, in the same process as the timed passes. It read close to zero for the fast book: the allocator handed back the pages the timed passes' books had freed, so the third book cost nothing new. So each repetition now runs two processes: the timed one (warm-up, throughput, latency), and an untimed one that faults the input in, builds no book, then builds one and runs the counter pass while sampling the charged memory every 2^20 messages. The book's memory is the peak less the reading taken before it was built. The charged figure is `phys_footprint` on macOS and `RssAnon` on Linux, so the mapped file, which is file-backed, is never in it, and the RAM copy is in the baseline. itch-book reports peak RSS less the input buffer, the same quantity.
+- **The map book warms up on the fast book.** A map design's own warm-up would leave its freed nodes in the allocator, and its throughput pass would then run on a heap it had already shaped. Its warm-up pass runs the fast book's default arm instead, which takes no small blocks, so the timed pass's map book is the first the heap has seen. The record says what the warm-up ran on.
+- **Ageing steps are outside the time.** For `map-aged`, the throughput pass stops its clock for each `HeapAger` step and counts it, and the latency pass takes the step before the span opens. The step is the talk's "between the add operation", not part of the book's work.
+- **Ratios are paired by repetition.** T-DESIGN-1 is a ratio on one host in one run, so each repetition's fast throughput is divided by the map design's in the same repetition, and the median of those is reported.
+- **Percentiles below the floor print "below floor".** Every latency table has a raw column and one with each repetition's own measured empty pair taken off, and a row below the floor shows no figure in either.
+- **x86 bars are context on the Mac.** T-BOOK-1, T-BOOK-2, T-LAT-1, T-LAT-2, T-LAT-4 and T-LAT-5 were set on x86 hardware. On macOS the targets table gives the signed gap and says the host differs, and `check_results.py` refuses "met" or "missed" there. T-BOOK-3, T-LAT-3 and T-DESIGN-1 are host-independent and are judged.
+
+**The Mac runs, 12302019.** Two `measure.sh` runs, each under `/usr/bin/time -l`, 3 repetitions, on `macOS (M4 Max)`, not pinned: macOS cannot pin a thread, so no figure below is a pinned one, and none stands for a Linux figure. Run A (P-0008) ran all six designs with the file in memory and the top not tracked, itch-book's T-BOOK-1 method, from 9934df5. Run B (P-0009) ran the four fast arms with the file mapped and the top tracked, its T-BOOK-2 method, from f3fe97a. Every repetition completed, every page was resident at both ends of every timed pass, no message was rejected, every design counted 264,478,375 book messages of 268,744,780, and in run B every arm saw the top move after the same 124,767,189 messages. Peak RSS was 9.59 GiB in each run, the input and the latency samples with the book.
+
+| Design | Run A messages/s | CV | Batch mean ns a book message | Book memory MiB | Over map-fresh | Over map-aged | Run B messages/s | B over A |
+|---|---|---|---|---|---|---|---|---|
+| `paged-flat` | 21,873,432 | 0.76% | 46.46 | 662.8 | 3.79× | 4.08× | 19,335,339 | 0.88 |
+| `hash-flat` | 17,705,490 | 0.55% | 57.39 | 225.2 | 3.07× | 3.31× | 15,408,545 | 0.87 |
+| `paged-linked` | 11,934,176 | 5.28% | 85.14 | 648.7 | 2.07× | 2.23× | 11,070,036 | 0.93 |
+| `hash-linked` | 10,410,417 | 0.32% | 97.61 | 211.2 | 1.80× | 1.94× | 9,626,384 | 0.92 |
+| `map-fresh` | 5,772,425 | 0.65% | 176.03 | 260.8 | | 1.08× | | |
+| `map-aged` | 5,353,839 | 1.27% | 189.79 | 410.1 | 0.93× | | | |
+
+Each target against its bar, from the files' targets tables. On macOS a bar set on x86 is context: the gap is signed, and the host differs.
+
+| Target | Bar | Measured, best arm (`paged-flat`) | Verdict |
+|---|---|---|---|
+| T-BOOK-1 | ≥ 16.4 M msg/s, Ryzen 7 9700X | 21.87 M msg/s; `hash-flat` 17.71 M, the linked arms 10.41 and 11.93 M | host differs: +5.47 M msg/s on the best arm, -5.99 M on `hash-linked` |
+| T-BOOK-2 | ≥ 12.5 M msg/s, Ryzen 7 9700X | 19.34 M msg/s; `hash-flat` 15.41 M, the linked arms 9.63 and 11.07 M | host differs: +6.84 M msg/s on the best arm, -2.87 M on `hash-linked` |
+| T-BOOK-3 | ≤ 1.4 GB of book | 0.69 GB; 0.22 to 0.69 GB on every arm | met on every arm |
+| T-BOOK-4 | ≥ 14.4 M msg/s on 01302019 | | not measured: needs 01302019 |
+| T-LAT-1 | per operation, Ryzen 7 9700X | every p50 below the floor; replace p99.9 1,125 ns against 945 | host differs: replace p99.9 +180 ns, every other resolved figure inside its bar on the flat arms; the linked arms' replace p99 is 4,458 to 4,500 ns |
+| T-LAT-2 | p50 121, p99 552, p99.9 874 ns | p50 below floor, p99 291.67, p99.9 583.33 ns | host differs: p99 -260.33, p99.9 -290.67 ns |
+| T-LAT-3 | mean ≤ 393 ns, p99.9 ≤ 750 ns | mean 45.72 ns, p99.9 583.33 ns | met on the flat arms; missed on the linked arms, p99.9 by 3,708 and 3,750 ns |
+| T-LAT-4 | p50 100, p99 620, p99.9 1,080 ns less the pair; batch mean ≤ 142.36 ns | p50 below floor, p99 289.30, p99.9 580.97 ns; batch mean 46.46 ns | host differs: p99 -330.70, p99.9 -499.03 ns, batch mean -95.90 ns |
+| T-LAT-5 | p50 127, p99 446, p99.9 778 ns | p50 below floor, p99 291.67, p99.9 583.33 ns | host differs: p99 -154.33, p99.9 -194.67 ns |
+| T-DESIGN-1 | ≥ 4.0× the map book | 3.79× over `map-fresh`, 4.08× over `map-aged` | missed over the fresh heap by 0.21×, met over the aged one; every other arm misses both |
+
+**P-0008 against what ran.** Held: `paged-flat` wins; `map-fresh` is between 2.5 and 6 million; every throughput CV is under 10%; the ratio over `map-fresh` is 3.79, near 3.5, and the bar is missed there; the ratio over `map-aged` is 4.08 and met; `hash-linked` holds 0.21 GiB and the paged arms 0.63 and 0.65 GiB; every fast-arm p50, all-message and per operation, is below the floor; p99.9 is resolved everywhere; the mean service time is under 125 ns on every fast arm and the batch mean is 1.6% above it; peak memory is under 10.5 GiB. Not held: `hash-flat` is second, not `paged-linked`, which is third; `paged-flat` runs at 21.87 million, past the 8 to 20 million range, and nowhere near 14; `map-aged` runs at 5.35 million, just past its 2 to 5; and `map-fresh` holds 0.25 GiB, under the 0.3 predicted. The level arm matters more than the index: flat levels are 1.5 to 1.8 times linked ones on either index, and the paged index adds 1.15 to 1.24 times on either level arm.
+
+**P-0009 against what ran.** Held: `paged-flat` wins again; each arm runs at 87% to 93% of its run A rate; every arm saw the same moves of the top in both passes of every repetition; peak memory 9.59 GiB. Not held: the winner runs at 19.34 million, past the 7 to 18 predicted.
+
+**Slow spots seen, left alone.** Tuning is out of scope here, so these are written down and not touched:
+
+- **Linked levels on a deep side.** `replace` has a mean of 444 to 474 ns on the linked arms against 118 to 139 ns on the flat ones, and a p99 of 4.5 µs against 0.6 µs. `add` has a p99.9 of 2.4 µs against 0.3 µs. A side reaches 4,227 levels on this day, and the linked arm walks its list from the best to find a price that is not cached. That walk is what T-LAT-3's p99.9 misses on.
+- **The map book's worst message.** Its max span is 72.9 ms fresh and 79.8 ms aged, against 34 to 98 µs on the fast arms. Not traced. Growing the reference table's `unordered_map` past millions of entries, which rehashes it whole, is the likely cause.
+- **The fast arms' max** is 34 to 98 µs, with p99.99 at 1.1 to 9.3 µs. Not traced, and on an unpinned host a preemption is enough to explain it.
+
+**What went wrong on the way.**
+
+- The first try at book memory read the charged memory before and after the untimed pass's book, in the process that had just run the timed passes, and got close to zero for the fast book: its pages came back from the earlier books. Hence the separate untimed process.
+- The map book first warmed up on itself, which shaped its own heap before the timed pass. Hence the fast-book warm-up for map designs.
+- The first run of P-0008 was refused at its first process: `bench_replay` could not read the day into memory, because macOS refuses a single `read()` of more than INT_MAX bytes and the fixture is far too small to show it. It stays in the run log. Reading in pieces of 1 GiB fixed it, and P-0008 then ran as predicted, with no other change. Before that, the script that wraps the runs failed on its own empty argument list under bash 3.2 before it reached `measure.sh`, so that attempt measured nothing and is not in the run log.
+- Raw records, stderr with the load lines, and `/usr/bin/time` output stay in the research cache. Only the generated files are in `results/`.
