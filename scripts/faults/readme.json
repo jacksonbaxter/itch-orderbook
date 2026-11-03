@@ -13,8 +13,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "| 0 allocations after warm-up, fast book |",
-          "new": "| no allocations at all |"
+          "old": "| T-ALLOC-1 | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 allocations after warm-up, fast book |",
+          "new": "| T-ALLOC-1 | 12302019 | Darwin arm64 Apple M4 Max | PASS | no allocations at all |"
         }
       ],
       "command": [
@@ -118,7 +118,7 @@
         "--check"
       ],
       "expect": {
-        "signature": "results_table: FAIL results/oracle_\\d+\\.md: 6 verdicts in the file, 5 rows",
+        "signature": "results_table: FAIL results/oracle_\\d+\\.md: 5 verdicts in the file, 4 rows",
         "exit": 1
       }
     },
