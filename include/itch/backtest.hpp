@@ -192,6 +192,7 @@ struct Stats {
   std::uint64_t broken_trades = 0;
   std::uint64_t expired = 0;
   std::uint64_t no_order_slot = 0;
+  std::uint64_t after_end = 0;  // Sends refused once the input and its round trip ended.
   std::uint64_t overflows = 0;
   std::uint64_t fee_errors = 0;
 };
@@ -356,12 +357,19 @@ class Engine {
     }
   }
 
-  // The end of input: every pending event runs, then the open orders expire at the time
-  // of the last event, and their reports are delivered.
+  // The end of input. Every pending event runs, and the strategy may still act, until one
+  // round trip after the last message: L_md + L_compute + L_oe + L_resp, by which time
+  // everything that message caused has reached the strategy. A wake set past that is
+  // dropped, so a strategy that always sets one cannot keep the run alive. Then the open
+  // orders expire at the time of the last event, their reports are delivered, and any
+  // send from then on is refused with an invalid id.
   template <Strategy<Book> S>
   void finish(S& strategy) noexcept {
+    wake_limit_ = clock_ + latency_.market_data + latency_.compute + latency_.order_entry +
+                  latency_.response;
     advance(kNever, strategy);
     close_session(clock_);
+    ended_ = true;
     advance(kNever, strategy);
   }
 
@@ -500,7 +508,7 @@ class Engine {
     consider(!deliveries_.empty(), deliveries_.empty() ? 0 : deliveries_.front().time,
              Kind::delivery);
     consider(!reports_.empty(), reports_.empty() ? 0 : reports_.front().time, Kind::report);
-    consider(wake_pending_, wake_time_, Kind::wake);
+    consider(wake_pending_ && wake_time_ <= wake_limit_, wake_time_, Kind::wake);
     return kind;
   }
 
@@ -551,6 +559,10 @@ class Engine {
   // ---- The strategy's calls -----------------------------------------------------------
 
   OrderId send(Nanos now, const OrderRequest& request) noexcept {
+    if (ended_) {
+      ++stats_.after_end;
+      return {};
+    }
     if (free_order_ == kNoIndex) {
       ++stats_.no_order_slot;
       return {};
@@ -581,14 +593,14 @@ class Engine {
   }
 
   void cancel(Nanos now, OrderId order) noexcept {
-    if (queue_arrival(
+    if (!ended_ && queue_arrival(
             now, {.time = 0, .order = order, .action = Action::cancel, .price = 0, .shares = 0})) {
       log_decision(now, Action::cancel, order, 0, 0);
     }
   }
 
   void replace(Nanos now, OrderId order, Price4 price, std::uint32_t shares) noexcept {
-    if (queue_arrival(now, {.time = 0,
+    if (!ended_ && queue_arrival(now, {.time = 0,
                             .order = order,
                             .action = Action::replace,
                             .price = price,
@@ -1229,6 +1241,8 @@ class Engine {
   Ring<Report> reports_;
   bool wake_pending_ = false;
   Nanos wake_time_ = 0;
+  Nanos wake_limit_ = kNever;
+  bool ended_ = false;
 
   Nanos clock_ = 0;
   std::uint64_t sequence_ = 0;

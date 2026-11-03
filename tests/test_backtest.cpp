@@ -732,7 +732,7 @@ TEST(ItchEdges, S34BrokenTradeDoesNotUndoAFill) {
 TEST(ItchEdges, S35EndOfDay) {
   Replay run;
   run.strategy.send(kS, 2000, Side::bid, k1000, 100);
-  run.strategy.send(kS2, 9500, Side::bid, k1000, 100);
+  run.strategy.send(kS2, 9100, Side::bid, k1000, 100);
   run.feed(wire::system_event('Q', 1000));
   run.feed(wire::system_event('M', 9000));
   run.finish();
