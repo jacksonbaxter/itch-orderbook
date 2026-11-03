@@ -57,9 +57,9 @@ constexpr itch::Picodollars kTakerFee = 3'000'000'000;
 constexpr int kS = 1;
 constexpr int kS2 = 2;
 
-Config config(Latency latency) {
+Config config(Latency latency, std::uint32_t date = 20191230) {
   Config config;
-  config.date = 20191230;
+  config.date = date;
   config.latency = latency;
   config.symbols = {kSymbol};
   config.exchange_capacity = kCapacity;
@@ -83,8 +83,9 @@ wire::Bytes printable_execution(std::uint64_t reference, std::uint32_t shares, P
 // One engine and one scripted strategy. The plan is written before the feed reaches it.
 class Replay {
  public:
-  explicit Replay(Latency latency = kLatency) : engine{config(latency)} {
-    feed(wire::directory(kLocate, 'Q', 'P', 100, 1));
+  explicit Replay(Latency latency = kLatency, char category = 'Q', std::uint32_t date = 20191230)
+      : engine{config(latency, date)} {
+    feed(wire::directory(kLocate, category, 'P', 100, 1));
   }
 
   void feed(const wire::Bytes& message) { engine.feed(message, strategy); }
@@ -597,6 +598,58 @@ TEST(Fills, S41MakerOrTakerPerFill) {
   ASSERT_EQ(fills.size(), 2U);
   EXPECT_EQ(fills[0].fees.total(), 100 * kTakerFee);
   EXPECT_EQ(fills[1].fees.total(), -50 * kMakerCreditC);
+}
+
+// ---- Fees in the engine ---------------------------------------------------------------
+
+// NYSE Arca lists on Tape B, which earns $0.0020 a share to add on 2019-12-30.
+TEST(FeesInTheEngine, TheTapeComesFromTheDirectory) {
+  Replay run{kLatency, 'P'};
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.feed(wire::add(kLocate, 2, 'B', 100, k1000, 3000));
+  run.feed(wire::execute(kLocate, 2, 100, 4000));
+  run.advance(10'000);
+  const auto fills = run.fills(kS);
+  ASSERT_EQ(fills.size(), 1U);
+  EXPECT_EQ(fills[0].fees,
+            (itch::FeeBreakdown{.exchange = -200'000'000'000, .section31 = 0, .taf = 0, .cat = 0}));
+}
+
+// A maker sell of 100 at $10.00 on Tape C: the $0.0015 credit, Section 31 on $1,000 at
+// $20.70 per $1M ($0.0207), and TAF at $0.000119 a share ($0.0119).
+TEST(FeesInTheEngine, ASellPaysSection31AndTaf) {
+  Replay run;
+  run.strategy.send(kS, 2000, Side::ask, k1000, 100);
+  run.feed(wire::add(kLocate, 2, 'S', 100, k1000, 3000));
+  run.feed(wire::execute(kLocate, 2, 100, 4000));
+  run.advance(10'000);
+  const auto fills = run.fills(kS);
+  ASSERT_EQ(fills.size(), 1U);
+  EXPECT_EQ(fills[0].fees, (itch::FeeBreakdown{.exchange = -150'000'000'000,
+                                               .section31 = 20'700'000'000,
+                                               .taf = 11'900'000'000,
+                                               .cat = 0}));
+}
+
+// Market Category M is in no spec list, so it has no tape and no fees, and is not traded.
+TEST(FeesInTheEngine, ASymbolWithNoTapeIsNotTraded) {
+  Replay run{kLatency, 'M'};
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.advance(10'000);
+  const auto rejected = run.strategy.reports(kS, ReportKind::rejected);
+  ASSERT_EQ(rejected.size(), 1U);
+  EXPECT_EQ(rejected[0].reason, Reject::unknown_tape);
+}
+
+// A day with no sourced fee schedule replays, and trades nothing.
+TEST(FeesInTheEngine, ADayWithNoScheduleTradesNothing) {
+  Replay run{kLatency, 'Q', 20200102};
+  EXPECT_FALSE(run.engine.ready());
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.advance(10'000);
+  const auto rejected = run.strategy.reports(kS, ReportKind::rejected);
+  ASSERT_EQ(rejected.size(), 1U);
+  EXPECT_EQ(rejected[0].reason, Reject::closed);
 }
 
 // ---- ITCH edge cases ------------------------------------------------------------------

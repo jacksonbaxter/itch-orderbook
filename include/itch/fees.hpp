@@ -31,6 +31,7 @@
 #include <array>
 #include <cstdint>
 #include <expected>
+#include <limits>
 #include <string_view>
 
 #include "itch/book_types.hpp"
@@ -171,8 +172,9 @@ enum class FeeError : std::uint8_t { unknown_tape, overflow };
   return "unnamed";
 }
 
-// The fees on one fill. Each part is computed in 128 bits and refused if it does not fit
-// in 64, which no real fill comes near: 10^6 shares at $200,000 is 4.1 × 10^15.
+// The fees on one fill. Each part is computed in 128 bits and refused past a quarter of
+// the 64-bit range, about $2.3 million, so that their total cannot overflow either. No
+// real fill comes near: Section 31 reaches it only on one sale of about $111 billion.
 [[nodiscard]] constexpr std::expected<FeeBreakdown, FeeError> fill_fees(
     const FeeSchedule& schedule, const FillTerms& fill) noexcept {
   if (fill.tape == Tape::unknown) {
@@ -213,7 +215,7 @@ enum class FeeError : std::uint8_t { unknown_tape, overflow };
     taf = taf > schedule.taf_cap ? Wide{schedule.taf_cap} : taf;
   }
   const Wide cat = schedule.cat_per_share * shares;
-  constexpr Wide kMax = Wide{INT64_MAX} / 4;
+  constexpr Wide kMax = Wide{std::numeric_limits<Picodollars>::max()} / 4;
   for (const Wide part : {exchange, section31, taf, cat}) {
     if (part > kMax || part < -kMax) {
       return std::unexpected(FeeError::overflow);
