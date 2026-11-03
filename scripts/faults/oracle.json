@@ -1167,12 +1167,12 @@
         "^test_oracle_cli$"
       ],
       "expect": {
-        "signature": "oracle cli: FAIL crossed: exit 0, wanted 3"
+        "signature": "oracle cli: FAIL crossed: exit 0, wanted 1"
       }
     },
     {
       "id": "oracle-inv2-crossed-input",
-      "breaks": "The first bid in an otherwise clean file is priced above the ask",
+      "breaks": "The first bid in an otherwise clean file is priced above the ask, so T-INV-2 reports a cross and, as a new cross in normal trading, the exit is hard",
       "check": "T-INV-2, on a mutated input file",
       "inputs": [
         {
@@ -1198,7 +1198,7 @@
       ],
       "expect": {
         "signature": "verdict T-INV-2 FAIL crossed=[1-9]",
-        "exit": 3
+        "exit": 1
       }
     },
     {
@@ -1228,6 +1228,425 @@
       ],
       "expect": {
         "signature": "oracle cli: FAIL crossed: no line 't_inv2_crossed 7'"
+      }
+    },
+    {
+      "id": "oracle-inv3-detection-removed",
+      "breaks": "T-INV-3 no longer looks at any observation",
+      "check": "test_oracle_cli on new_cross.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    if (continuous) {\n      check_leftover(",
+          "new": "    if (continuous && message == 0) {\n      check_leftover("
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL new cross: no line 'verdict T-INV-3 FAIL violations=7'"
+      }
+    },
+    {
+      "id": "oracle-inv3-leftover-never-ends",
+      "breaks": "A leftover, once opened, stays in force whatever the book does",
+      "check": "test_oracle_cli on new_cross.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "      leftover_[locate] = 0;\n      ++ended;\n",
+          "new": "      ++ended;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL new cross: no violation on ENDED "
+      }
+    },
+    {
+      "id": "oracle-inv3-leftover-on-every-resumption",
+      "breaks": "A leftover opens on every resumption, as the reopening window does, whether or not the book is crossed. The next observation of an uncrossed book closes it, so the verdict cannot move and the count is what shows it",
+      "check": "test_oracle_cli on leftover.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "      if (touching_[locate] != 0) {\n        leftover_[locate] = 1;",
+          "new": "      if (touching_[locate] != 2) {\n        leftover_[locate] = 1;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL leftover: no line 't_inv3_leftovers_opened 2'"
+      }
+    },
+    {
+      "id": "oracle-inv3-population-any-state",
+      "breaks": "T-INV-3 reaches symbols that are not in state T",
+      "check": "test_oracle_cli on leftover.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    if (continuous) {\n      check_leftover(",
+          "new": "    if (market_open_) {\n      check_leftover("
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL leftover: violation on CLR"
+      }
+    },
+    {
+      "id": "oracle-inv3-population-market-closed",
+      "breaks": "T-INV-3 reaches state T with the market closed",
+      "check": "test_oracle_cli on leftover.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    if (continuous) {\n      check_leftover(",
+          "new": "    if (state == 'T') {\n      check_leftover("
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL leftover: violation on PRE"
+      }
+    },
+    {
+      "id": "oracle-inv3-population-crossed-only",
+      "breaks": "T-INV-3 stops looking at locked books",
+      "check": "test_oracle_cli on new_cross.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    if (continuous) {\n      check_leftover(",
+          "new": "    if (continuous && crossed) {\n      check_leftover("
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL new cross: no violation on ENDLK "
+      }
+    },
+    {
+      "id": "oracle-inv3-population-no-cross-message",
+      "breaks": "T-INV-3 skips the observation after a cross message",
+      "check": "test_oracle_cli on crossed.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    if (continuous) {\n      check_leftover(",
+          "new": "    if (continuous && type != 'Q') {\n      check_leftover("
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL crossed: no line 't_inv3_new crossed=2 locked=0'"
+      }
+    },
+    {
+      "id": "oracle-inv3-cross-message-ends-nothing",
+      "breaks": "A cross message leaves a leftover in force",
+      "check": "test_oracle_cli on new_cross.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    end_leftover(header.stock_locate, header.timestamp_ns, inv3_ended_by_cross_);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL new cross: no line 't_inv3_ended_by_cross 2'"
+      }
+    },
+    {
+      "id": "oracle-inv3-no-leftover-ever",
+      "breaks": "The book is never seen as crossed at a resumption, so no leftover opens",
+      "check": "test_oracle_cli on leftover.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    touching_[locate] = 1;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL leftover: exit 1, wanted 3"
+      }
+    },
+    {
+      "id": "oracle-inv3-stale-book-at-resumption",
+      "breaks": "A book cleared during a halt still looks crossed at the resumption",
+      "check": "test_oracle_cli on leftover.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "      touching_[locate] = 0;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL leftover: no line 't_inv3_ended_by_book 2'"
+      }
+    },
+    {
+      "id": "oracle-inv3-locked-as-crossed",
+      "breaks": "A locked violation is counted as crossed",
+      "check": "test_oracle_cli on new_cross.itch",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    bump(inv3_new_, crossed);\n",
+          "new": "    bump(inv3_new_, true);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL new cross: no line 't_inv3_new crossed=4 locked=3'"
+      }
+    },
+    {
+      "id": "oracle-inv3-exits-as-t-inv-2",
+      "breaks": "A new cross exits 3, which says only T-INV-2 failed",
+      "check": "test_oracle_cli on new_cross.itch",
+      "mutations": [
+        {
+          "file": "tools/itch_oracle.cpp",
+          "old": "  if (!oracle_pass || !inv1_pass || !inv3_pass) {",
+          "new": "  if (!oracle_pass || !inv1_pass) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL new cross: exit 3, wanted 1"
+      }
+    },
+    {
+      "id": "oracle-inv3-new-cross-input",
+      "breaks": "The first bid in an otherwise clean file is priced above the ask: a new cross in normal trading",
+      "check": "T-INV-3, on a mutated input file",
+      "inputs": [
+        {
+          "file": "tests/fixtures/oracle/lifecycle.itch",
+          "op": "flip_byte",
+          "offset": 280,
+          "mask": 16
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/lifecycle.itch",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "verdict T-INV-3 FAIL violations=[1-9]",
+        "exit": 1
+      }
+    },
+    {
+      "id": "oracle-report-ignores-t-inv-3",
+      "breaks": "The report stops holding the run to T-INV-3",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    require(log[\"verdicts\"].get(\"T-INV-3\") == \"PASS\", \"T-INV-3 verdict is not PASS\")\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_new_cross_is_a_hard_failure_shown_in_full"
+      }
+    },
+    {
+      "id": "oracle-report-t-inv-3-population-unchecked",
+      "breaks": "The report stops tying T-INV-3 to T-INV-2's own count of the population",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    require((new[0] + leftover[0], new[1] + leftover[1]) == population,\n",
+          "new": "    require(True or (new[0] + leftover[0], new[1] + leftover[1]) == population,\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_inv_3_has_to_account_for_its_whole_population"
       }
     },
     {
