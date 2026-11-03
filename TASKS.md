@@ -112,20 +112,20 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 
 ### Book
 - [ ] Order lookup: hash and paged direct index, measured apart from level search. References fit 32 bits on observed days, which is not a guarantee (DS-72).
-- [ ] Levels: flat with best price at the end; FIFO chains; `std::map` levels on fresh and aged heaps as baseline.
+- [ ] Levels: flat with best price at the end; FIFO chains; `std::map` levels on fresh and aged heaps as baseline. The `std::map` baseline is built (`include/itch/map_book.hpp`, aged by `include/itch/heap_ager.hpp`) and agrees with the fast book on the fixtures and both days. None of it is measured yet.
 - [x] Sparse handling for stub quotes (DS-73). Neither level arm indexes a level by its price: both search by comparing prices, and a far quote is one more level at the far end. `BookScenario.AFarStubQuoteIsTheFarthestLevel` runs a $199,999.99 ask and a $0.0001 bid on every arm.
 - [ ] Replace, delete and add measured on 8.7% `U` (2019) and 27.7% `U` (2026) mixes.
 - [ ] Prefetch lookahead D in {0, 4, 8, 16, 32, 64} (E8), and dispatch form (E7). Each hint keeps a measured reason in a comment.
 - [ ] Repeat carteret's layout experiments on our book: hash policy, open addressing against chaining, window width against overflow. Attribute last-level misses by message type, order age and structure before claiming a bottleneck.
 - [x] Hot structs: `static_assert` on size, alignment, trivial copyability. `BookOrder`, `LinkedLevel`, `FlatLevel` and each arm's per-side record.
 - [ ] Measure the four book arms (hash or paged index, linked or flat levels) against each other and pick the default that ships. Hash with linked levels is the default for now, provisionally. `itch_oracle` and `itch_alloc` take `--index` and `--levels`.
-- [ ] Full-day oracle and T-ALLOC-1 on 12302019 for the three arms other than the default, under `heavy.sh`. Only fixtures, unit tests and `fuzz_book` have run them.
+- [x] Full-day oracle and T-ALLOC-1 on 12302019 for the three arms other than the default, under `heavy.sh`. Done on both days, with the trade checks, every arm line for line the same as the default: `scripts/check_real_day.sh --arms all`, `results/oracle_*.md` and `results/trades_*.md`.
 - [ ] Size `PagedIndex` for a day before it is measured. Its default capacity holds 2^19 pages of 256 references (512 MiB of slots) and a 64 MiB directory, up front. 12302019 pins at most 340,939 pages at 256 references a page.
 - [ ] T-BOOK-1 to T-BOOK-4, T-LAT-1 to T-LAT-5, T-DESIGN-1 on the harness.
 - [x] Strict crossed-book run, full day. Count and characterise each violation by symbol, time and trading state. Report both published counts' populations: all observations, and market open with state `T`. The user decides the scope. Done on the Phase 2 stub: `results/oracle_12302019.md`, strict result FAIL.
 - [x] T-INV-3, the scope the user approved after seeing the strict result: a book in normal trading may only be crossed if the cross is left over from a halt and has not cleared. Separate from T-INV-2, which stays strict. Done on the Phase 2 stub on both days: `results/oracle_12302019.md` and `results/oracle_10302019.md`, 0 violations on each.
 - [x] Oracle replay on the Mac under `heavy.sh`, all 268,744,780 messages (T-ORACLE-1). Done on the Phase 2 stub: `results/oracle_12302019.md`.
-- [ ] Repeat T-ORACLE-1, T-INV-1, T-INV-2, T-INV-3 and T-ALLOC-1 on 12302019 with the real book, once it replaces the stub.
+- [x] Repeat T-ORACLE-1, T-INV-1, T-INV-2, T-INV-3 and T-ALLOC-1 on 12302019 with the real book, once it replaces the stub. Done on both days and all four arms, with T-TRADE-1, 2, 3, 5 and PRINTS: the same verdicts and counts as the stub, T-INV-2 strict still failing.
 - [ ] Repeat the oracle on every session the archive will serve, up to ten, keeping raw output for each (T-ORACLE-2). Check free disk first. State any shortfall as a gap.
 
 ### Trade-print verification

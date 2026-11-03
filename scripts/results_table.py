@@ -8,7 +8,9 @@ README.md, and --check fails on any line there that differs from a fresh run.
 
 Every verdict in every results file reaches the table, failures included. A results file
 with no reader here is refused, and so is a file with a verdict no row took up, so that
-neither can drop out unseen. predictions.md is not a result, and run_log.md gets its own
+neither can drop out unseen. An oracle or trades file runs each arm of the fast book, and a
+row says whether every arm gave its verdict. An arm that gave another one makes the row a
+failure that names it. predictions.md is not a result, and run_log.md gets its own
 table, failed runs included. Each row cites its file, so scripts/gate_numbers.py holds the
 row's figures to that file.
 
@@ -64,6 +66,29 @@ def header_commit(text, name):
     return find(r"^- [Cc]ommit: (\w+)", text, name)[1]
 
 
+def arm_verdicts(text, name):
+    """Each arm's verdict under each column of the file's table of every arm."""
+    section = find(r"^## Every arm of the fast book\n((?s:.*?))(?=^## |\Z)", text, name)[1]
+    lines = [line for line in section.splitlines() if line.startswith("| ")]
+    if len(lines) < 2 or not lines[0].startswith("| Arm |"):
+        raise TableError(f"results/{name}: the table of every arm has no rows")
+    heads = [cell.strip() for cell in lines[0].strip("|").split("|")]
+    arms = {}
+    for line in lines[1:]:
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        arms[cells[0].strip("`")] = {head: cell.split(",")[0] for head, cell in zip(heads, cells)}
+    return arms
+
+
+def across_arms(arms, column, verdict, detail):
+    """The verdict and detail of a row once every arm's verdict in its column is read."""
+    other = [f"{arm} {cells.get(column, 'missing')}" for arm, cells in arms.items()
+             if cells.get(column) != verdict]
+    if other:
+        return "FAIL", f"{detail}; the arms disagree: {', '.join(other)}"
+    return verdict, f"{detail}; the same on {len(arms)} arm{'s' if len(arms) != 1 else ''}"
+
+
 def source(name):
     return f"[results/{name}](results/{name})"
 
@@ -74,13 +99,16 @@ def verdict_row(check, day, host, verdict, detail, commit, name):
 
 def oracle_rows(name, text):
     day, host, commit = day_of(name), header_host(text, name), header_commit(text, name)
+    arms = arm_verdicts(text, name)
+    columns = {"T-INV-2": "T-INV-2 strict"}
 
     def row(check, detail):
         verdict = re.search(rf"^## {re.escape(check)}: .*?^Verdict[^*\n]*\*\*(\w+)\*\*", text,
                             re.MULTILINE | re.DOTALL)
         if verdict is None:
             raise TableError(f"results/{name}: no verdict for {check}")
-        return verdict_row(check, day, host, verdict[1], detail, commit, name)
+        shown, detail = across_arms(arms, columns.get(check, check), verdict[1], detail)
+        return verdict_row(check, day, host, shown, detail, commit, name)
 
     messages = table_row("Messages diffed", text, name)[0]
     divergences = table_row("Divergences", text, name)[0]
@@ -121,6 +149,7 @@ def odd_lot_detail(text, name):
 
 def trades_rows(name, text):
     day, host, commit = day_of(name), header_host(text, name), header_commit(text, name)
+    arms = arm_verdicts(text, name)
     rows = []
     for check, verdict, violations in re.findall(r"^\| ([\w-]+) \| \*\*(\w+)\*\* \| (\d+) \|$",
                                                  text, re.MULTILINE):
@@ -132,7 +161,8 @@ def trades_rows(name, text):
             detail = f"{violations} violations; odd-lot columns not compared, the SEC's rule ended"
         else:
             detail = f"{violations} violations"
-        rows.append(verdict_row(check, day, host, verdict, detail, commit, name))
+        shown, detail = across_arms(arms, check, verdict, detail)
+        rows.append(verdict_row(check, day, host, shown, detail, commit, name))
     missing = TRADE_CHECKS - {row[0] for row in rows}
     if missing:
         raise TableError(f"results/{name}: no verdict for {sorted(missing)}")

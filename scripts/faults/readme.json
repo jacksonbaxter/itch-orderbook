@@ -13,8 +13,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "| T-ALLOC-1 | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 allocations after warm-up, fast book |",
-          "new": "| T-ALLOC-1 | 12302019 | Darwin arm64 Apple M4 Max | PASS | no allocations at all |"
+          "old": "| T-ALLOC-1 | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 allocations after warm-up, fast book; the same on 4 arms |",
+          "new": "| T-ALLOC-1 | 12302019 | Darwin arm64 Apple M4 Max | PASS | no allocations at all; the same on 4 arms |"
         }
       ],
       "command": [
@@ -143,6 +143,46 @@
       "expect": {
         "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
         "exit": 1
+      }
+    },
+    {
+      "id": "readme-arm-disagreement-hidden",
+      "breaks": "A row keeps the first arm's verdict when another arm gave a different one",
+      "check": "test_results_table.py",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if other:\n        return \"FAIL\",",
+          "new": "    if other and not other:\n        return \"FAIL\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_arm_with_another_verdict_fails_its_row"
+      }
+    },
+    {
+      "id": "readme-arm-table-optional",
+      "breaks": "An oracle or trades file with no table of arms still gets rows",
+      "check": "test_results_table.py",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    section = find(r\"^## Every arm of the fast book\\n((?s:.*?))(?=^## |\\Z)\", text, name)[1]\n",
+          "new": "    found = re.search(r\"^## Every arm of the fast book\\n((?s:.*?))(?=^## |\\Z)\", text, re.MULTILINE)\n    if found is None:\n        return {}\n    section = found[1]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_with_no_table_of_arms_is_refused"
       }
     }
   ]

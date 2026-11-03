@@ -87,6 +87,31 @@ class ResultsTable(unittest.TestCase):
         self.edit(TRADES, "## Results\n", "## Results\n\nThe odd-lot columns were not compared.\n")
         self.assertIn("odd-lot columns not compared", self.row("T-TRADE-3", "10302019"))
 
+    def test_every_row_says_whether_every_arm_agreed(self):
+        for check in ("T-ORACLE-1", "T-INV-2", "T-ALLOC-1"):
+            self.assertIn("; the same on 4 arms |", self.row(check, "12302019"))
+        self.assertIn("; the same on 4 arms |", self.row("T-TRADE-5", "10302019"))
+
+    def test_an_arm_with_another_verdict_fails_its_row(self):
+        self.edit(ORACLE, "| `paged_flat` | PASS | PASS |", "| `paged_flat` | FAIL | PASS |")
+        row = self.row("T-ORACLE-1", "12302019")
+        self.assertIn("| **FAIL** |", row)
+        self.assertIn("the arms disagree: paged_flat FAIL", row)
+        self.assertIn("| PASS |", self.row("T-INV-1", "12302019"))
+
+    def test_an_arm_with_another_trade_verdict_fails_its_row(self):
+        self.edit(TRADES, "| `hash_flat` | PASS | NOT_AVAILABLE | PASS | PASS |",
+                  "| `hash_flat` | PASS | NOT_AVAILABLE | PASS | FAIL |")
+        row = self.row("T-TRADE-5", "10302019")
+        self.assertIn("| **FAIL** |", row)
+        self.assertIn("the arms disagree: hash_flat FAIL", row)
+
+    def test_a_file_with_no_table_of_arms_is_refused(self):
+        self.edit(ORACLE, "## Every arm of the fast book\n", "## Arms\n")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("Every arm of the fast book", output)
+
     def test_harness_rows_carry_their_label_and_host(self):
         _, output = self.run_table()
         rows = [line for line in output.splitlines() if line.startswith("| Harness proof")]
