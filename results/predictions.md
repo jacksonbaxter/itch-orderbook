@@ -64,3 +64,22 @@ included.
 - Experiment: `scripts/check_real_day.sh --only oracle`, then `--only trades`, on `12302019` and `10302019`, on `macOS (M4 Max)`, through `heavy.sh` and `/usr/bin/time -l`, on the Phase 2 stub book.
 - What it is for: the user adopted T-INV-3 on the condition that it holds on 10302019, and chose the SEC's round-lot rule after T-TRADE-3 failed on its odd-lot columns. The oracle has not run on 10302019 before.
 - Prediction: T-INV-3 has 0 violations on both days, and T-TRADE-3 passes on both days.
+
+## P-0008: every book design on macOS, 12302019, the file in memory
+
+- Experiment: `bench_replay` through `scripts/bench_driver.py` on `12302019.NASDAQ_ITCH50`, `--input-mode ram`, top of book not tracked, 3 repetitions, each running `hash-linked`, `hash-flat`, `paged-linked`, `paged-flat`, `map-fresh` and `map-aged` in turn, each in a fresh timed process and a fresh untimed one, on `macOS (M4 Max)`, not pinned, through `measure.sh` and `/usr/bin/time -l`.
+- What it is for: T-BOOK-1, T-BOOK-3, T-LAT-1 to T-LAT-5 and T-DESIGN-1 for every design, in one run, on the Mac. The x86 bars are context here, not pass or fail.
+- Prediction, winner: `paged-flat` has the highest median throughput, and `paged-linked` is second. The paged index finds an order by its reference with no probe, and references arrive close to in order.
+- Prediction, throughput: every fast arm between 8 and 20 million messages/s, the winner near 14 million. `map-fresh` between 2.5 and 6 million, `map-aged` below it, between 2 and 5 million. CV under 10% on every design, since the Mac is not pinned.
+- Prediction, T-DESIGN-1: the winner's ratio over `map-fresh` between 2.5 and 5, most likely near 3.5, so the ≥ 4× bar is missed against the fresh heap. Its ratio over `map-aged` between 3 and 7, and met.
+- Prediction, memory: book memory near 0.21 GiB for `hash-linked`, between 0.6 and 0.8 GiB for the paged arms, which hold 418 MiB of slots, and between 0.3 and 0.9 GiB for the map designs. Every design meets T-BOOK-3's 1.4 GB.
+- Prediction, latency: on the fast arms the all-message p50 is below the 166.667 ns floor, and so is every per-operation p50. p99.9 is resolved on every design. The mean service time is under 125 ns on every fast arm, so T-LAT-3's mean is met, and the batch mean per book message is within 2% of it.
+- Prediction, harness: every repetition completes, every page of the input is resident at both ends of each timed pass, no message is rejected, and every design counts the same mix of 264,478,375 book messages.
+- Prediction, peak memory: under 10.5 GiB from `/usr/bin/time -l`: 7.68 GiB of input, 1.25 GiB of latency samples and the book.
+
+## P-0009: the fast arms on macOS, 12302019, the file mapped and the top of book tracked
+
+- Experiment: as P-0008, with `--input-mode mapped` and `--track-top`, for the four fast arms only, in its own `measure.sh` run after P-0008's.
+- What it is for: T-BOOK-2, itch-book's `itch-replay --book`, which maps the file and checks the best bid and ask after every book event.
+- Prediction: the same arm wins as in P-0008. Each arm runs at between 70% and 95% of its P-0008 throughput, the winner between 7 and 18 million messages/s. Every arm counts the same number of moves of the top, in both passes of every repetition.
+- Prediction, peak memory: under 10.5 GiB, with the mapped file counted in resident memory but not in the book's figure.
