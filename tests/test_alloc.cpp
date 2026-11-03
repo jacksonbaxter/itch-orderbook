@@ -5,6 +5,8 @@
 // hide behind. The stream makes each arm take its rarer paths too: pages taken, given
 // back and run out, references past the paged index's reach, and flat arrays moving to
 // bigger blocks.
+// The backtester takes a synthetic market with a strategy trading on it, in the same kind
+// of window.
 // The reference book takes the same stream and must allocate, and each form of new is
 // shown reaching its own counter, so a broken counter fails here instead of passing the
 // fast book. The map book, the T-DESIGN-1 baseline, allocates by design, and the heap ager
@@ -22,6 +24,9 @@
 #include <type_traits>
 #include <vector>
 
+#include "backtest/joiner.hpp"
+#include "backtest/market.hpp"
+#include "itch/backtest.hpp"
 #include "itch/book.hpp"
 #include "itch/heap_ager.hpp"
 #include "itch/map_book.hpp"
@@ -145,6 +150,49 @@ TEST(Allocation, TheFastBookAllocatesNothingAfterConstruction) {
   expect_no_allocation<itch::HashIndex, itch::FlatLevels>("hash, flat");
   expect_no_allocation<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked");
   expect_no_allocation<itch::PagedIndex<>, itch::FlatLevels>("paged, flat");
+}
+
+// The backtester, with a strategy that sends, replaces, cancels and takes on every path,
+// over a synthetic market long enough that every ring wraps and every pool recycles. The
+// window opens straight after construction, as the book's does, and covers finish(): the
+// session's close and its reports.
+TEST(Allocation, TheBacktesterAllocatesNothingAfterConstruction) {
+  const auto messages = itch::backtest::synthetic::RandomMarket{20191230}.generate(200'000);
+  const std::vector<std::byte> stream = itch::backtest::synthetic::frame(messages);
+  itch::backtest::Config config;
+  config.date = 20191230;
+  config.symbols = {itch::backtest::synthetic::kSymbol};
+  config.latency = {.market_data = 3'000, .order_entry = 2'000, .response = 2'500, .compute = 500};
+  config.exchange_capacity = {.orders = 1U << 17U,
+                              .levels = 1024,
+                              .index_pages = 64,
+                              .index_bits = 18,
+                              .level_slots = 1U << 14U};
+  config.view_capacity = config.exchange_capacity;
+  config.max_orders = 64;
+  config.queue_capacity = 1024;
+  itch::backtest::Engine<> engine{config};
+  itch::backtest::synthetic::Joiner joiner;
+  reset_alloc_counts();
+  const std::uint64_t messages_fed = engine.run(stream, joiner);
+  const AllocCounts counts = read_alloc_counts();
+  const auto& stats = engine.stats();
+  const auto& made = joiner.counts();
+  std::println(
+      "backtester: {} messages, {} decisions, {} fills ({} maker, {} taker), {} sends, {} "
+      "replaces, {} cancels, {} takes, {} allocations",
+      messages_fed, stats.decisions, stats.fills, stats.maker_fills, stats.taker_fills, made.sends,
+      made.replaces, made.cancels, made.takes, counts.total());
+  EXPECT_EQ(counts.total(), 0U) << "allocation in the backtester's replay";
+  EXPECT_EQ(messages_fed, messages.size());
+  EXPECT_EQ(stats.refused_messages, 0U);
+  EXPECT_EQ(stats.overflows, 0U);
+  EXPECT_GT(stats.maker_fills, 1000U);
+  EXPECT_GT(stats.taker_fills, 1000U);
+  EXPECT_GT(made.replaces, 1000U);
+  EXPECT_GT(made.cancels, 1000U);
+  // More deliveries than one ring holds, so each ring wrapped.
+  EXPECT_GT(stats.deliveries, 100U * config.queue_capacity);
 }
 
 TEST(Allocation, TheControlBookIsSeenAllocating) {

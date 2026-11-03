@@ -746,6 +746,43 @@ TEST(ItchEdges, S35EndOfDay) {
   EXPECT_EQ(run.engine.resting_orders(), 0U);
 }
 
+// A strategy that always sets another wake, and sends on each, cannot keep the run alive
+// after its input: wakes run for one round trip past the last message, L_md + L_compute +
+// L_oe + L_resp = 230 ns, and a send after the close is refused.
+struct Insomniac {
+  template <class Context>
+  void on_market(Context& context, const itch::backtest::MarketEvent& /*event*/) {
+    context.wake_at(context.now() + 50);
+  }
+  template <class Context>
+  void on_report(Context& /*context*/, const Report& /*report*/) {}
+  template <class Context>
+  void on_wake(Context& context) {
+    last_wake = context.now();
+    refused +=
+        context.send({.locate = kLocate, .side = Side::bid, .price = k1000, .shares = 1}).valid()
+            ? 0
+            : 1;
+    context.wake_at(context.now() + 50);
+  }
+  Nanos last_wake = 0;
+  int refused = 0;
+};
+
+TEST(ItchEdges, FinishEndsARunThatAlwaysWakes) {
+  Engine<> engine{config(kLatency)};
+  Insomniac strategy;
+  engine.feed(wire::directory(kLocate, 'Q', 'P', 100, 1), strategy);
+  engine.feed(wire::add(kLocate, 1, 'B', 100, k999, 1000), strategy);
+  engine.finish(strategy);
+  // Woken every 50 ns from 151; the add's delivery at 1100 moves the next wake from 1101
+  // to 1150, then 1200, and 1250 is past 1000 + 230.
+  EXPECT_EQ(strategy.last_wake, 1200U);
+  EXPECT_EQ(strategy.refused, 0);
+  EXPECT_EQ(engine.resting_orders(), 0U);
+  EXPECT_GT(engine.stats().expired, 0U);
+}
+
 // 36. Three messages share S's arrival nanosecond: all apply first, in file order, so
 // only R2 is ahead. The strategy sees them in file order too.
 TEST(ItchEdges, S36SameTimestampBurst) {
