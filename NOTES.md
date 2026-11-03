@@ -557,3 +557,64 @@ Each target against its bar, from the files' targets tables. On macOS a bar set 
 - The map book first warmed up on itself, which shaped its own heap before the timed pass. Hence the fast-book warm-up for map designs.
 - The first run of P-0008 was refused at its first process: `bench_replay` could not read the day into memory, because macOS refuses a single `read()` of more than INT_MAX bytes and the fixture is far too small to show it. It stays in the run log. Reading in pieces of 1 GiB fixed it, and P-0008 then ran as predicted, with no other change. Before that, the script that wraps the runs failed on its own empty argument list under bash 3.2 before it reached `measure.sh`, so that attempt measured nothing and is not in the run log.
 - Raw records, stderr with the load lines, and `/usr/bin/time` output stay in the research cache. Only the generated files are in `results/`.
+
+## The book designs on `debian`, and the default arm, 2026-11-03
+
+Every figure here is from `debian`, pinned to core 4, binaries built there from bfdd4bb exported by `debian_sync.sh`, through `~/quant-projects/bin/measure.sh taskset -c 4` with the driver as its child, as the stub proof ran. Raw records, stderr with the load lines, memory samples and both `machine_check` outputs stay in the research cache. The predictions are P-0010 and P-0011, committed in eb72a15 before either ran.
+
+**Only the mapped run is published.** Run A, all six designs with the day in memory (P-0010), was tried three times and published nothing; run B, the four fast arms with the file mapped and the top tracked (P-0011), ran once and was published. Each attempt has a row in `results/run_log.md`:
+
+- The first attempt ran at nice 5, which zsh gives a job started in the background, and in its first minute the kernel swapped out 2,290 pages of other processes. Stopped by hand after 2 minutes. The later attempts were started from bash, at nice 0.
+- The second was stopped by the host: unattended-upgrades reboots `debian` at 04:02 local time when an upgrade asks for it, and did so 8 minutes in. The reboot also put `perf_event_paranoid` back to 3, so no hardware counter can be opened by a user since: every counter in run B reads `unavailable: perf_event_open: Permission denied`. That is reported, not changed.
+- The third was refused, after 13 minutes: **the day in memory does not fit on `debian` without swapping.** The driver hashes the day through a mapping, which fills the page cache with it, and then each `bench_replay` process copies the 7.68 GiB day into anonymous memory beside it. At each of the four process starts the kernel swapped out other processes' pages: 4, 1,590, 31,210 and 2,455, 35,259 in all (138 MiB), with `MemAvailable` never under 5.24 GiB, no page moving during a timed span, and every input page resident. The book fits; the copy beside a full page cache does not, on a host whose memory is shared with its services. So that mode was refused, as the brief asks, and the mapped mode kept.
+- Run B: `pswpout` did not move in its 69 minutes, `MemAvailable` never fell below 12.54 GiB, every page was resident at both ends of every timed pass, every repetition completed, no migration was seen, and `machine_check` passed before and after.
+
+**Run B, P-0011, 12302019, mapped, top tracked.** Three repetitions; every arm saw the top move after the same 124,767,189 messages, as on the Mac. Peak RSS 9.15 to 9.59 GiB from `getrusage`, the mapped file counted.
+
+| Design | Messages/s | CV | Mean service ns | Batch mean ns a book message | p50 ns | p99 ns | p99.9 ns | Book memory MiB | Mac run B messages/s | Mac over `debian` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `paged-flat` | 5,092,461 | 0.06% | 196.37 | 199.54 | 130.1 | 800.8 | 1,411.9 | 662.8 | 19,335,339 | 3.80× |
+| `hash-flat` | 4,268,175 | 0.24% | 234.29 | 238.07 | 200.2 | 830.8 | 1,552.1 | 225.5 | 15,408,545 | 3.61× |
+| `paged-linked` | 2,732,821 | 0.09% | 365.92 | 371.83 | 140.1 | 4,267.8 | 18,786.6 | 648.3 | 11,070,036 | 4.05× |
+| `hash-linked` | 2,469,451 | 0.34% | 404.95 | 411.48 | 220.2 | 4,368.0 | 19,347.2 | 211.0 | 9,626,384 | 3.90× |
+
+The order is the Mac's. Flat levels are 1.73 times linked ones on the hash index and 1.86 times on the paged one; the paged index is 1.11 times the hash on linked levels and 1.19 times on flat ones. The flat arms' all-message p99.9 is 1.4 to 1.6 µs against 19 µs on the linked arms, which walk a deep side from the best, as on the Mac. Every arm runs 3.6 to 4.05 times slower than on the Mac; without counters, what that is made of is not measured here.
+
+**Each target, from run B.** `debian` is a Ryzen Embedded V1605B: Zen 1 at up to 3.6 GHz, 512 KB of L2 a core and 4 MB of L3, a low-power embedded part. T-BOOK-1, T-BOOK-2, T-LAT-1 and T-LAT-4 were set on Zen 5 or Zen 3 desktop parts and T-LAT-2 and T-LAT-5 on Intel desktop and laptop parts, each with several times the cache and a faster core, so each of those misses below has the host as its reason. No bar is changed.
+
+| Target | Bar | Measured, `paged-flat` | Verdict |
+|---|---|---|---|
+| T-BOOK-1 | ≥ 16.4 M msg/s, in memory | | not measured on `debian`: the in-memory run was refused for swapping |
+| T-BOOK-2 | ≥ 12.5 M msg/s | 5.09 M; 2.47 to 4.27 M on the other arms | missed by 7.41 M msg/s on the best arm, by 10.03 M on `hash-linked`. Host: Ryzen 7 9700X against a V1605B |
+| T-BOOK-3 | ≤ 1.4 GB of book | 0.69 GB; 0.22 to 0.69 GB | met on every arm |
+| T-BOOK-4 | ≥ 14.4 M msg/s on 01302019 | | not measured: a Mac target on a day not held |
+| T-LAT-1 | add 60, 447, 683; delete 70, 599, 768; replace 110, 709, 945; reduce 50, 548, 734 ns | add 90.1, 480.5, 720.7; delete 220.2, 740.8, 981.0; replace 360.4, 1,462.0, 2,594.1; reduce 140.1, 680.7, 890.9 ns | missed at every percentile of every operation, by 30 ns at add p50 up to 1,649 ns at replace p99.9; the linked arms miss replace p99.9 by 52.5 to 53.6 µs. Host: Ryzen 7 9700X |
+| T-LAT-2 | p50 121, p99 552, p99.9 874 ns | 130.1, 800.8, 1,411.9 ns | missed by 9.1, 248.8 and 537.9 ns. Host: Core i5-12400 |
+| T-LAT-3 | mean ≤ 393 ns, p99.9 ≤ 750 ns | mean 196.37 ns, p99.9 1,411.9 ns | mean met on three arms and missed on `hash-linked` by 11.95 ns (404.95); p99.9 missed on every arm, by 661.9 ns on the best and 18.0 to 18.6 µs on the linked arms. This bar holds on every host. A p99.9 span of 1.41 µs is about eleven DRAM round trips at the 123 to 127 ns the chase measured here, and what the slow messages wait on is not measured, since the counters are unavailable |
+| T-LAT-4 | p50 100, p99 620, p99.9 1,080 ns less the pair; batch mean ≤ 142.36 ns | 110.9, 781.1, 1,392.7 ns; batch mean 199.54 ns | missed by 10.9, 161.1, 312.7 and 57.2 ns. Host: Ryzen 9 5950X on an isolated CCD with 32 MB of L3 |
+| T-LAT-5 | p50 127, p99 446, p99.9 778 ns | 130.1, 800.8, 1,411.9 ns | missed by 3.1, 354.8 and 633.9 ns. Host: Core i7-13650HX |
+| T-DESIGN-1 | ≥ 4.0× the map book | | not measured on `debian`: the map designs ran only in the refused in-memory run. On the Mac, 3.79× over `map-fresh` and 4.08× over `map-aged` |
+
+The latency figures come from run B's latency pass, which reads the mapped file and checks the top outside each span, which is carteret's method for T-LAT-4. Every percentile here is above the 40.04 ns floor and resolved in all three repetitions.
+
+**P-0010 against what ran.** Not held: the fit. The day in memory swapped other processes out, so no other part of P-0010 was tested, and it stands as written.
+
+**P-0011 against what ran.** Held: every page resident and `pswpout` still, every repetition complete; the winner, `paged-flat`, at 5.09 million, inside the 4 to 9 million predicted; T-BOOK-2 missed by every arm; the arms in the Mac's order; 124,767,189 moves of the top in both passes of every repetition; peak RSS 9.15 to 9.59 GiB, inside 9.0 to 9.8. Not tested: each arm's share of its P-0010 rate, since P-0010 published nothing. The P-0010 estimate behind the 4 to 9 million was wrong in its reasoning: every arm is 3.6 to 4.05 times slower than on the Mac, not 2.5 to 3.5.
+
+### The default arm
+
+**`FastBook<>` is now the paged index with flat levels.** The measurements decide it, as the provisional default said they would:
+
+- **Speed.** It is the fastest arm on `debian`, the headline host, 1.19 times `hash-flat` and 2.06 times the old default, `hash-linked`. The Mac agrees: 1.24 times `hash-flat` with the day in memory and 1.25 times mapped with the top tracked. It has the lowest p50, p99 and p99.9 on `debian`, and on `debian` the old default misses T-LAT-3's mean budget, at 404.95 ns against 393.
+- **Memory.** It holds 662.8 MiB against 225.5 for `hash-flat`, 2.9 times as much. Nearly all of the 437 MiB difference is the paged index's capacity, 418 MiB of page slots and a 16 MiB directory, sized up front from both days' peaks with a quarter more, and charged whatever the day. That is 0.69 GB against T-BOOK-3's 1.4 GB, so the bar is met with room, and on `debian` the whole run with the mapped day peaked at 9.59 GiB of 15 GB. Memory would decide it on a host where 0.44 GB more cannot be spared, and there `hash-flat` gives 84% of the speed on `debian` (80 to 81% on the Mac) for a third of the memory. It is one template argument away.
+- **What the default costs elsewhere.** A default-capacity book now takes 0.44 GB the moment it is built, however few orders it will hold. The tests that build `FastBook<>` with a handful of orders now give it 4 pages and a reach of 2^16 as well, and the tools' default arm, which follows `FastBook<>`, takes about 1.6 GB beyond the mapped file for the oracle on a real day, not 0.7. A day whose references pass 2^30, or that needs more than 428,032 pages at once, falls back to a hash table and counts every such insert (DS-72): slower, never wrong.
+- **No new oracle run.** Every arm already passed the full-day oracle, T-ALLOC-1 and the trade checks on both days, line for line the same (above), so the switch changes no verdict.
+
+**What the switch touched.** The default template arguments and the comment above them. `tests/test_book.cpp` keeps the default first in its scenario list, now `paged-flat`, with `hash-linked` named beside the others, and its hash-only test names `hash-linked` instead of the default. The map designs' warm-up in `bench_replay` was already named as `hash-linked` in bfdd4bb, before `debian` ran, so it stays the same arm whatever ships. Five faults that break the linked arm or the arm a tool runs had relied on the default being linked: `oracle-bbo-stale`, `oracle-off-bbo` and `oracle-off-touched` now run `itch_oracle --index hash --levels linked` (on the flat arm the moved compare catches `oracle-off-touched` first, which is a catch, but not the one it exists to show), `trades-src-book-best-is-the-second-level` runs `itch_trades` on that arm, and `test_trades_cli` now checks both ways round that the requested arm runs: a tiny flat arena refuses adds on `hash-flat` and not on `hash-linked`. `trades-cli-arm-ignored` was caught only by the first half while linked was the default; it is now caught by the second.
+
+**Left open, and the next experiments.**
+
+- **The in-memory mode on `debian`.** The copy needs the file's pages and its own at once. Reading the day in pieces and dropping each piece's cache as it is copied (`POSIX_FADV_DONTNEED` per piece, as the copy already does for the whole file once it ends), with the driver's hash and the residency check not leaving the whole file cached first, would hold the peak near one piece. Then P-0010 can run again for T-BOOK-1 and T-DESIGN-1 on the headline host.
+- **Counters on `debian`.** They need `perf_event_paranoid` back at 2, which only the user can set, and it resets on every reboot. Then a counter pass, which runs in its own untimed process, can say what the 3.6 to 4.05 times is made of.
+- **The driver writes no run-log row when it is signalled.** `forward_signal` exits straight away, so the three stopped attempts' rows were typed by hand. It should append the row first.
+- **A 4 ms worst span on every arm.** The max is 3.84 to 4.02 ms on every arm, and was 4.02 ms on the stub book too, with p99.99 at 2.8 µs on `paged-flat`. A periodic event on core 4 is the likely cause; it is not traced.

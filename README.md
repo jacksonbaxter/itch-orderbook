@@ -4,7 +4,7 @@ A parser and limit order book for Nasdaq ITCH 5.0 in C++23, built to be measured
 
 ## Where it stands
 
-This is Phase 3 of the plan in [TASKS.md](TASKS.md): the book, measured on the Mac. The `debian` runs come next.
+This is Phase 3 of the plan in [TASKS.md](TASKS.md): the book, measured on the Mac and on `debian`.
 
 Built:
 
@@ -15,7 +15,7 @@ Built:
 - A benchmark harness that measures any book design, with the file in memory or mapped and the top of book tracked or not, records its host, refuses to publish a run it cannot stand behind, and reads hardware counters on Linux.
 - Fuzz targets, sanitizer builds, and a fault matrix that shows each check failing on a planted bug.
 
-Not built: SIMD, the backtester and the demo. The oracle and trade rows below are the real book's. The harness-proof rows are the Phase 2 stub's, and say so. The book-design rows are from macOS, which cannot pin a thread, so none of them is a pinned figure, and none stands for a Linux one. The default arm is not chosen yet.
+Not built: SIMD, the backtester and the demo. The oracle and trade rows below are the real book's. The harness-proof rows are the Phase 2 stub's, and say so. The book-design rows are from macOS, which cannot pin a thread, so none of them is a pinned figure and none stands for a Linux one, and from `debian`, pinned to core 4, where only the mapped run with the top tracked is published: the run with the day in memory swapped other processes out there and was refused, and the host's reboot left its hardware counters closed to a user. The default arm is the paged index with flat levels, the fastest on both hosts.
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` has never executed on GitHub, because this repo has no remote. [NOTES.md](NOTES.md) says which jobs were run by hand and how.
 
