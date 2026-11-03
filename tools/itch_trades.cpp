@@ -4,7 +4,8 @@
 //
 //     itch_trades FILE [--date YYYYMMDD] [--crossstats FILE] [--midas FILE]
 //                 [--midas-rows N] [--symbols FILE] [--details N]
-//                 [--max-orders N] [--max-levels N]
+//                 [--max-orders N] [--max-levels N] [--index hash|paged]
+//                 [--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N]
 //
 // --date        the trading day. Needed with --crossstats or --midas.
 // --crossstats  Nasdaq's cross file for that day. Without it T-TRADE-2 is not run.
@@ -13,6 +14,8 @@
 //               cannot pass as a symbol outside MIDAS's universe.
 // --symbols     writes one line per symbol, for the raw log.
 // --details     how many violations of each check are printed in full. All are counted.
+// --index, --levels  the arm of the fast book, the book's default arm if left out, and the
+//               capacities are as itch_oracle's.
 //
 // Exit codes: 0 every check that ran passed. 2 bad usage or an unreadable file. 3 a
 // reference file failed to parse, with its typed error printed. Otherwise 64 plus one
@@ -31,6 +34,7 @@
 #include <string_view>
 #include <system_error>
 
+#include "book_arms.hpp"
 #include "itch/book.hpp"
 #include "itch/reader.hpp"
 #include "mapped_file.hpp"
@@ -43,8 +47,9 @@ namespace {
 using itch::trades::Group;
 using itch::trades::RunConfig;
 
-// The book under test. Phase 3 changes this line.
-using Run = itch::trades::TradeRun<itch::FastBook<itch::trades::WriteCounter>>;
+// The book under test, on the arm the command line picks.
+template <class Index, class Levels>
+using Run = itch::trades::TradeRun<itch::FastBook<itch::trades::WriteCounter, Index, Levels>>;
 
 constexpr int kExitUsage = 2;
 constexpr int kExitReference = 3;
@@ -58,6 +63,7 @@ struct Options {
   std::uint32_t date = 0;
   std::optional<std::uint64_t> midas_rows;
   RunConfig config;
+  itch::tools::BookArm arm;
 };
 
 [[nodiscard]] std::optional<std::uint64_t> parse_number(std::string_view text) {
@@ -107,6 +113,12 @@ struct Options {
       options.midas = args[i];
     } else if (arg == "--symbols") {
       options.symbols = args[i];
+    } else if (const auto taken = itch::tools::parse_arm_option(arg, args[i], options.arm,
+                                                                 options.config.capacity);
+               taken != itch::tools::ArmOption::not_an_arm_option) {
+      if (taken == itch::tools::ArmOption::bad_value) {
+        return std::nullopt;
+      }
     } else {
       const auto number = parse_number(args[i]);
       if (!number || !take_number(options, arg, *number)) {
@@ -121,6 +133,7 @@ struct Options {
   return options;
 }
 
+template <class Run>
 [[nodiscard]] bool replay(Run& run, itch::FrameReader& reader) {
   itch::Frame frame = reader.next();
   for (; !itch::is_terminal(frame.status); frame = reader.next()) {
@@ -136,6 +149,7 @@ struct Options {
   return frame.status == itch::FrameStatus::end_of_input;
 }
 
+template <class Run>
 [[nodiscard]] int compare_cross_stats(Run& run, const char* path, std::uint32_t date) {
   const auto file = itch::tools::MappedFile::open(path);
   if (!file) {
@@ -152,6 +166,7 @@ struct Options {
   return 0;
 }
 
+template <class Run>
 [[nodiscard]] int compare_midas(Run& run, const Options& options) {
   const auto file = itch::tools::MappedFile::open(options.midas);
   if (!file) {
@@ -169,6 +184,7 @@ struct Options {
   return 0;
 }
 
+template <class Run>
 void write_symbols(const Run& run, const char* path) {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   std::FILE* out = std::fopen(path, "w");
@@ -180,6 +196,7 @@ void write_symbols(const Run& run, const char* path) {
   static_cast<void>(std::fclose(out));  // NOLINT(cppcoreguidelines-owning-memory)
 }
 
+template <class Run>
 [[nodiscard]] int verdicts(const Run& run) {
   struct Line {
     std::string_view not_run;
@@ -208,18 +225,21 @@ void write_symbols(const Run& run, const char* path) {
   return mask == 0 ? 0 : kExitFailureBase + mask;
 }
 
+template <class Index, class Levels>
 int run_tool(const Options& options) {
   const auto file = itch::tools::MappedFile::open(options.path);
   if (!file) {
     std::println(stderr, "itch_trades: cannot read {}", options.path);
     return kExitUsage;
   }
+  std::println("trades_index {}", to_string(options.arm.index));
+  std::println("trades_levels {}", to_string(options.arm.levels));
   std::println("trades_date {}", options.date);
   std::println("trades_max_orders {}", options.config.capacity.orders);
   std::println("trades_max_levels {}", options.config.capacity.levels);
   std::println("bytes {}", file->bytes().size());
 
-  Run run{options.config};
+  Run<Index, Levels> run{options.config};
   itch::FrameReader reader{file->bytes()};
   const auto started = std::chrono::steady_clock::now();
   const bool clean = replay(run, reader);
@@ -260,11 +280,14 @@ int main(int argc, const char* const* argv) {
       static_cast<void>(
           std::fputs("usage: itch_trades FILE [--date YYYYMMDD] [--crossstats FILE] "
                      "[--midas FILE] [--midas-rows N] [--symbols FILE] [--details N] "
-                     "[--max-orders N] [--max-levels N]\n",
+                     "[--max-orders N] [--max-levels N] [--index hash|paged] "
+                     "[--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N]\n",
                      stderr));
       return kExitUsage;
     }
-    return run_tool(*options);
+    return itch::tools::with_book_arm(options->arm, [&options]<class Index, class Levels> {
+      return run_tool<Index, Levels>(*options);
+    });
   } catch (const std::exception& error) {
     static_cast<void>(std::fputs(error.what(), stderr));
     return kExitUsage;

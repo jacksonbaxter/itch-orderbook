@@ -2,10 +2,14 @@
 # The checks that need a real trading day in data/. scripts/check.sh runs everything
 # that does not.
 #
-#     scripts/check_real_day.sh [--only census|oracle|trades]... [DAY...]
+#     scripts/check_real_day.sh [--only census|oracle|trades]... [--arms default|all] [DAY...]
 #
 # With no DAY it checks every day whose counts are pinned in scripts/data_manifest.json.
 # --only runs the named checks and leaves out the rest, repeatable. Default: all three.
+# --arms picks the arms of the fast book that the oracle and trades checks run. default, the
+# default, runs the book's own default arm. all runs each of the four in turn, one at a time,
+# hash with linked levels first. Each report then holds every other arm to the first one's
+# answers, and the oracle's crossed and locked observations have to be the same file.
 # A pinned day with no file is a failure, because a skipped day would look like a pass.
 # Set ITCH_HEAVY_WRAPPER to a command to run each check under it, on a shared machine.
 # Raw logs go to ITCH_REAL_DAY_LOGS, default build/real-day-logs. The curated results go
@@ -68,22 +72,46 @@ run_header() {
   echo "run_command $1"
 }
 
+# The command-line flags that pick an arm, one word per line. default picks none.
+arm_flags() {
+  [ "$1" = default ] || printf '%s\n' --index "${1%_*}" --levels "${1#*_}"
+}
+
 oracle() {
-  local day=$1 oracle_log=$log_dir/oracle_$day.log alloc_log=$log_dir/alloc_$day.log status
-  local observations=$log_dir/observations_$day.txt
-  local file=data/$day.NASDAQ_ITCH50
-  run_header "itch_oracle $file --observations <raw log>" >"$oracle_log"
-  # shellcheck disable=SC2086
-  $(timer) $wrapper build/release/tools/itch_oracle "$file" --observations "$observations" \
-    >>"$oracle_log" 2>&1
-  status=$?
-  echo "real day: $day itch_oracle exited $status"
-  run_header "itch_alloc $file" >"$alloc_log"
-  # shellcheck disable=SC2086
-  $(timer) $wrapper build/release/tools/itch_alloc "$file" >>"$alloc_log" 2>&1
-  echo "real day: $day itch_alloc exited $?"
-  python3 -B scripts/oracle_report.py --day "$day" --log "$oracle_log" --alloc-log "$alloc_log" \
+  local day=$1 file=data/$1.NASDAQ_ITCH50 arm first= status mismatch=0 report_args=()
+  local oracle_log alloc_log observations flags word
+  for arm in "${arms[@]}"; do
+    oracle_log=$log_dir/oracle_${day}_$arm.log
+    alloc_log=$log_dir/alloc_${day}_$arm.log
+    observations=$log_dir/observations_${day}_$arm.txt
+    flags=()
+    while read -r word; do flags+=("$word"); done < <(arm_flags "$arm")
+    run_header "itch_oracle $file ${flags[*]}${flags[*]:+ }--observations <raw log>" >"$oracle_log"
+    # shellcheck disable=SC2086
+    $(timer) $wrapper build/release/tools/itch_oracle "$file" ${flags[@]+"${flags[@]}"} \
+      --observations "$observations" >>"$oracle_log" 2>&1
+    echo "real day: $day $arm itch_oracle exited $?"
+    run_header "itch_alloc $file${flags[*]:+ }${flags[*]}" >"$alloc_log"
+    # shellcheck disable=SC2086
+    $(timer) $wrapper build/release/tools/itch_alloc "$file" ${flags[@]+"${flags[@]}"} \
+      >>"$alloc_log" 2>&1
+    echo "real day: $day $arm itch_alloc exited $?"
+    if [ -z "$first" ]; then
+      first=$arm
+      report_args=(--log "$oracle_log" --alloc-log "$alloc_log")
+    else
+      report_args+=(--arm-log "$oracle_log" "$alloc_log")
+      if ! cmp -s "$log_dir/observations_${day}_$first.txt" "$observations"; then
+        echo "real day: $day $arm observed other crossed or locked books than $first"
+        mismatch=1
+      fi
+    fi
+  done
+  python3 -B scripts/oracle_report.py --day "$day" "${report_args[@]}" \
     --out "results/oracle_$day.md"
+  status=$?
+  [ "$mismatch" -eq 0 ] || return 1
+  return "$status"
 }
 
 # The Nasdaq rows of a day in MIDAS, as pinned in the manifest.
@@ -96,9 +124,8 @@ print(midas["nasdaq_rows"][sys.argv[1]])
 }
 
 trades() {
-  local day=$1 date=${1:4:4}${1:0:4} log=$log_dir/trades_$day.log status
-  local file=data/$day.NASDAQ_ITCH50 cross=data/CrossStats${date}.txt
-  local symbols=$log_dir/trades_symbols_$day.txt member rows
+  local day=$1 date=${1:4:4}${1:0:4} log symbols
+  local file=data/$day.NASDAQ_ITCH50 cross=data/CrossStats${date}.txt member rows
   local months=(jan feb mar apr may jun jul aug sep oct nov dec)
   local month=${months[$((10#${day:0:2} - 1))]}
   member=$month${day:6:2}.csv
@@ -107,21 +134,33 @@ trades() {
     return 1
   fi
   rows=$(midas_rows "$date") || return 1
-  local args=("$file" --date "$date" --midas "build/reference/$member" --midas-rows "$rows"
-    --symbols "$symbols")
-  local report_args=()
+  local args=("$file" --date "$date" --midas "build/reference/$member" --midas-rows "$rows")
+  local report_args=() arm first= flags word
   if [ -f "$cross" ]; then
     args+=(--crossstats "$cross")
   else
     echo "real day: $day has no cross file, so T-TRADE-2 is not available"
     report_args=(--no-cross-file)
   fi
-  run_header "itch_trades ${args[*]/#$symbols/<raw log>}" tools/itch_trades.cpp >"$log"
-  # shellcheck disable=SC2086
-  $(timer) $wrapper build/release/tools/itch_trades "${args[@]}" >>"$log" 2>&1
-  status=$?
-  echo "real day: $day itch_trades exited $status"
-  python3 -B scripts/trades_report.py --day "$day" --log "$log" ${report_args[@]+"${report_args[@]}"} \
+  for arm in "${arms[@]}"; do
+    log=$log_dir/trades_${day}_$arm.log
+    symbols=$log_dir/trades_symbols_${day}_$arm.txt
+    flags=()
+    while read -r word; do flags+=("$word"); done < <(arm_flags "$arm")
+    run_header "itch_trades ${args[*]} --symbols <raw log>${flags[*]:+ }${flags[*]}" \
+      tools/itch_trades.cpp >"$log"
+    # shellcheck disable=SC2086
+    $(timer) $wrapper build/release/tools/itch_trades "${args[@]}" --symbols "$symbols" \
+      ${flags[@]+"${flags[@]}"} >>"$log" 2>&1
+    echo "real day: $day $arm itch_trades exited $?"
+    if [ -z "$first" ]; then
+      first=$arm
+      report_args+=(--log "$log")
+    else
+      report_args+=(--arm-log "$log")
+    fi
+  done
+  python3 -B scripts/trades_report.py --day "$day" "${report_args[@]}" \
     --out "results/trades_$day.md"
 }
 
@@ -134,10 +173,14 @@ check_day() {
 }
 
 checks=()
-while [ "${1:-}" = --only ]; do
-  case ${2:-} in
-    census | oracle | trades) checks+=("$2") ;;
-    *) echo "real day: --only takes census, oracle or trades" >&2; exit 2 ;;
+arms=(default)
+while [ "${1:-}" = --only ] || [ "${1:-}" = --arms ]; do
+  case $1:${2:-} in
+    --only:census | --only:oracle | --only:trades) checks+=("$2") ;;
+    --arms:default) arms=(default) ;;
+    --arms:all) arms=(hash_linked hash_flat paged_linked paged_flat) ;;
+    --only:*) echo "real day: --only takes census, oracle or trades" >&2; exit 2 ;;
+    *) echo "real day: --arms takes default or all" >&2; exit 2 ;;
   esac
   shift 2
 done

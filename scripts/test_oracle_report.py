@@ -35,6 +35,8 @@ run_compiler clang version 23
 run_flags -O3 -DNDEBUG
 run_host Darwin arm64
 run_command itch_oracle data/day.bin
+oracle_index hash
+oracle_levels linked
 oracle_hash_every 2
 oracle_exhaustive 0
 elapsed_seconds 1.5
@@ -50,6 +52,9 @@ bbo_checks 8
 write_set_checks 4
 write_set_writes 8
 write_set_violations 0
+move_reports 5
+moved_checks 1
+empty_moved_checks 0
 periodic_hash_checks 2
 final_hash_checks 1
 production_hash_checks 3
@@ -100,6 +105,8 @@ verdict T-INV-3 PASS violations=0
 """
 
 GOOD_ALLOC = """\
+book_index hash
+book_levels linked
 fast_messages 4
 fast_allocations 0
 control_messages 4
@@ -117,6 +124,8 @@ class OracleReport(unittest.TestCase):
         self.log = GOOD_LOG
         self.alloc = GOOD_ALLOC
 
+        self.arms = []
+
     def run_report(self):
         manifest = self.root / "manifest.json"
         manifest.write_text(json.dumps({"days": {"day": self.day}}), encoding="utf-8")
@@ -124,12 +133,31 @@ class OracleReport(unittest.TestCase):
         log.write_text(self.log, encoding="utf-8")
         alloc = self.root / "alloc"
         alloc.write_text(self.alloc, encoding="utf-8")
+        arm_args = []
+        for number, (arm_log, arm_alloc) in enumerate(self.arms):
+            paths = (self.root / f"arm_log_{number}", self.root / f"arm_alloc_{number}")
+            paths[0].write_text(arm_log, encoding="utf-8")
+            paths[1].write_text(arm_alloc, encoding="utf-8")
+            arm_args += ["--arm-log", str(paths[0]), str(paths[1])]
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
             code = report.main(["--day", "day", "--log", str(log), "--alloc-log", str(alloc),
-                                "--manifest", str(manifest), "--out",
+                                *arm_args, "--manifest", str(manifest), "--out",
                                 str(self.root / "out.md")])
         return code, out.getvalue()
+
+    def other_arm(self, index="paged", levels="flat"):
+        """The good logs as another arm, which moved other levels and took longer."""
+        log = self.log.replace("oracle_index hash", f"oracle_index {index}")
+        log = log.replace("oracle_levels linked", f"oracle_levels {levels}")
+        log = log.replace("move_reports 5", "move_reports 9").replace("moved_checks 1",
+                                                                      "moved_checks 4")
+        log = log.replace("elapsed_seconds 1.5", "elapsed_seconds 2.5")
+        log = log.replace("run_command itch_oracle data/day.bin",
+                          f"run_command itch_oracle data/day.bin --index {index} --levels {levels}")
+        alloc = self.alloc.replace("book_index hash", f"book_index {index}")
+        alloc = alloc.replace("book_levels linked", f"book_levels {levels}")
+        return log, alloc
 
     def assert_fails(self, text):
         code, output = self.run_report()
@@ -284,6 +312,58 @@ class OracleReport(unittest.TestCase):
 
     def test_a_log_with_a_missing_counter_cannot_be_used(self):
         self.log = self.log.replace("bbo_checks 8\n", "")
+        code, _ = self.run_report()
+        self.assertEqual(code, 2)
+
+    def test_every_arm_is_shown_and_may_differ_only_in_its_own_lines(self):
+        self.arms = [self.other_arm("hash", "flat"), self.other_arm("paged", "flat")]
+        code, output = self.run_report()
+        self.assertEqual(code, 0, output)
+        self.assertIn("the same on 3 arms", output)
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("## Every arm of the fast book", written)
+        self.assertIn("| `hash_linked` | PASS | PASS | PASS, 0 crossed and 0 locked | PASS | PASS | "
+                      "4 | `00ff` | 5 | 1 | 1.5 | 1.00 | 2.00 | `log` |", written)
+        self.assertIn("| `paged_flat` | PASS | PASS | PASS, 0 crossed and 0 locked | PASS | PASS | "
+                      "4 | `00ff` | 9 | 4 | 2.5 | 1.00 | 2.00 | `arm_log_1` |", written)
+
+    def test_an_arm_that_ends_on_another_hash_fails(self):
+        log, alloc = self.other_arm()
+        self.arms = [(log.replace("last_hash 00ff", "last_hash 00fe"), alloc)]
+        self.assert_fails("arm paged_flat disagrees with hash_linked on last_hash")
+
+    def test_an_arm_with_another_crossed_count_fails(self):
+        log, alloc = self.other_arm()
+        self.arms = [(log.replace("t_inv2_tally type=U scope=all checks=1 two_sided=1 crossed=0",
+                                  "t_inv2_tally type=U scope=all checks=1 two_sided=1 crossed=1"),
+                      alloc)]
+        self.assert_fails("arm paged_flat disagrees with hash_linked on tallies")
+
+    def test_an_arm_is_held_to_the_hard_checks_on_its_own(self):
+        log, alloc = self.other_arm()
+        self.arms = [(log.replace("bbo_checks 8", "bbo_checks 4"), alloc)]
+        self.assert_fails("arm paged_flat: bbo_checks is not two per message")
+        log, alloc = self.other_arm()
+        self.arms = [(log, alloc.replace("verdict T-ALLOC-1 PASS", "verdict T-ALLOC-1 FAIL"))]
+        self.assert_fails("arm paged_flat: T-ALLOC-1 verdict is not PASS")
+
+    def test_an_arms_allocation_count_must_agree(self):
+        log, alloc = self.other_arm()
+        self.arms = [(log, alloc.replace("control_allocations 9", "control_allocations 8"))]
+        self.assert_fails("arm paged_flat disagrees with hash_linked on allocation "
+                          "control_allocations")
+
+    def test_an_allocation_log_from_another_arm_fails(self):
+        log, _ = self.other_arm()
+        self.arms = [(log, self.alloc)]
+        self.assert_fails("arm paged_flat: its allocation log ran another arm")
+
+    def test_an_arm_given_twice_fails(self):
+        self.arms = [self.other_arm(), self.other_arm()]
+        self.assert_fails("arm paged_flat is given twice")
+
+    def test_a_log_that_does_not_name_its_arm_cannot_be_used(self):
+        self.log = self.log.replace("oracle_index hash\n", "")
         code, _ = self.run_report()
         self.assertEqual(code, 2)
 

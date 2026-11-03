@@ -37,6 +37,8 @@ run_compiler clang version 23
 run_flags -O3 -DNDEBUG
 run_host Darwin arm64
 run_command itch_trades data/day.bin
+trades_index hash
+trades_levels linked
 trades_date 20200106
 trades_max_orders 4096
 trades_max_levels 4096
@@ -205,6 +207,7 @@ class TradesReport(unittest.TestCase):
         self.rows = 4
         self.log = GOOD_LOG
         self.flags = []
+        self.arms = []
 
     def run_report(self, day="01062020"):
         manifest = self.root / "manifest.json"
@@ -214,11 +217,22 @@ class TradesReport(unittest.TestCase):
         }), encoding="utf-8")
         log = self.root / "log"
         log.write_text(self.log, encoding="utf-8")
+        arm_args = []
+        for index, arm_log in enumerate(self.arms):
+            path = self.root / f"arm_log_{index}"
+            path.write_text(arm_log, encoding="utf-8")
+            arm_args += ["--arm-log", str(path)]
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
             code = report.main(["--day", day, "--log", str(log), "--manifest", str(manifest),
-                                "--out", str(self.root / "out.md"), *self.flags])
+                                "--out", str(self.root / "out.md"), *self.flags, *arm_args])
         return code, out.getvalue()
+
+    def other_arm(self, index="paged", levels="flat"):
+        """The good log as another arm, which took longer."""
+        log = self.log.replace("trades_index hash", f"trades_index {index}")
+        log = log.replace("trades_levels linked", f"trades_levels {levels}")
+        return log.replace("elapsed_seconds 0.0", "elapsed_seconds 0.5")
 
     def assert_fails(self, text):
         code, output = self.run_report()
@@ -249,6 +263,35 @@ class TradesReport(unittest.TestCase):
         self.assertIn("| BRK.A | 1 | no | no |", written)
         self.assertIn("| SEB | 1 | yes | yes |", written)
         self.assertIn("Match 1060: `E` on ZTST, 100 shares.", written)
+
+    def test_every_arm_is_shown_and_may_differ_only_in_its_own_lines(self):
+        self.arms = [self.other_arm("hash", "flat"), self.other_arm("paged", "linked")]
+        code, output = self.run_report()
+        self.assertEqual(code, 0, output)
+        self.assertIn("the same on 3 arms", output)
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("## Every arm of the fast book", written)
+        self.assertIn("| `paged_linked` | PASS | PASS | PASS | PASS | PASS | 89 | 0.5 | 1.00 | "
+                      "2.00 | `arm_log_1` |", written)
+
+    def test_an_arm_that_counts_another_figure_fails(self):
+        self.arms = [self.other_arm().replace("t1_shares_executed 2940",
+                                              "t1_shares_executed 2941")]
+        self.assert_fails("arm paged_flat disagrees with hash_linked on t1_shares_executed")
+
+    def test_an_arm_is_held_to_the_hard_checks_on_its_own(self):
+        self.arms = [self.other_arm().replace("verdict T-TRADE-5 PASS violations=0",
+                                              "verdict T-TRADE-5 FAIL violations=1")]
+        self.assert_fails("arm paged_flat: T-TRADE-5 verdict is FAIL")
+
+    def test_an_arm_given_twice_fails(self):
+        self.arms = [self.other_arm(), self.other_arm()]
+        self.assert_fails("arm paged_flat is given twice")
+
+    def test_a_log_that_does_not_name_its_arm_cannot_be_used(self):
+        self.replace("trades_index hash\n", "")
+        code, _ = self.run_report()
+        self.assertEqual(code, 2)
 
     def test_a_late_day_says_its_odd_lots_were_not_compared(self):
         self.rows = None

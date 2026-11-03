@@ -16,6 +16,10 @@ import sys
 from pathlib import Path
 
 SMALL = ("--max-orders", "4096", "--max-levels", "4096")
+# Every arm of the fast book, with the paged index's pool and reach small enough to fall
+# back on the fixture, and the flat arena small enough to move blocks.
+ARMS = (("hash", "linked"), ("hash", "flat"), ("paged", "linked"), ("paged", "flat"))
+ARM_SMALL = ("--max-pages", "8", "--index-bits", "16", "--max-slots", "8192")
 DATE = ("--date", "20200106")
 PINNED_ROWS = ("--midas-rows", "4")
 
@@ -237,6 +241,28 @@ def main():
     for name in ("broken_trade match=1060 class=E symbol=ZTST shares=100",):
         if not any(line.startswith(name) for line in lines):
             failures.append(f"clean: no line starting {name!r}")
+
+    # Every arm prints the same lines as the default arm, apart from the lines naming it
+    # and the time it took.
+    def comparable(output):
+        return [line for line in output.splitlines()
+                if not line.startswith(("trades_index ", "trades_levels ", "elapsed_seconds "))]
+
+    for index, levels in ARMS:
+        arm = run(extra=DATE + PINNED_ROWS + ARM_SMALL + ("--index", index, "--levels", levels),
+                  tag=f"arm_{index}_{levels}")
+        arm_lines = arm.stdout.splitlines()
+        if arm.returncode != 0:
+            failures.append(f"arm {index} {levels}: exit {arm.returncode}")
+        if f"trades_index {index}" not in arm_lines or f"trades_levels {levels}" not in arm_lines:
+            failures.append(f"arm {index} {levels}: the arm is not named")
+        if comparable(arm.stdout) != comparable(done.stdout):
+            failures.append(f"arm {index} {levels}: prints other lines than the default arm")
+    for name, value in (("--index", "hashed"), ("--levels", "tree"), ("--max-pages", "x")):
+        code = subprocess.run([tool, str(fixtures / "day.itch"), *SMALL, name, value],
+                              capture_output=True, check=False).returncode
+        if code != 2:
+            failures.append(f"bad arm {name} {value}: exit {code}, wanted 2")
 
     # The report reads what the tool really prints, so the two cannot drift apart.
     (scratch / "report.log").write_text(done.stdout, encoding="ascii")

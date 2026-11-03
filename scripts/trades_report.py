@@ -2,7 +2,7 @@
 """Checks a real-day itch_trades log against the data manifest and writes the results file.
 
     trades_report.py --day 12302019 --log RAW [--out results/x.md] [--no-cross-file]
-                     [--manifest scripts/data_manifest.json]
+                     [--arm-log RAW]... [--manifest scripts/data_manifest.json]
 
 The tool's own verdicts are not enough here. A tool that read half the day could pass, so
 this recounts what it can from the census pinned in the manifest. The figures in
@@ -10,6 +10,11 @@ PUBLISHED are claims to set ours beside, never expected values.
 
 --no-cross-file says that no CrossStats file exists for this day, so T-TRADE-2 is reported
 as not available. A verdict of NOT_AVAILABLE without it is a failure.
+
+--log is one arm of the fast book, and the detail of the results file is that arm's. Each
+--arm-log is another arm's log. Every arm is held to the same hard checks, and has to print
+every line the first arm does, apart from the lines that name the arm and its run time. A
+difference is a hard failure.
 
 Exit codes: 0 every hard check passed. 1 a hard check failed. 2 the inputs could not be
 used. A failed T-TRADE-3 would exit 1 like any other: it is reported as failing, never as
@@ -33,6 +38,8 @@ SEC_RULE_END = 20251103
 ODD_LOTS_COMPARED = "compared"
 ODD_LOTS_NOT_COMPARED = "not_compared_rule_ended"
 CROSS_CLASSES = ("Q_O", "Q_C", "Q_H", "Q_I")
+# Lines that name the arm or say how long it ran. Every other line has to agree across arms.
+ARM_ONLY = {"trades_index", "trades_levels", "elapsed_seconds"}
 
 # Claims from BENCHMARKS.md and the research, set beside ours and not used as expected
 # values. (label, source, value, how to read ours)
@@ -258,6 +265,76 @@ def hard_failures(log, entry, midas_rows, no_cross_file, date):
     return failures
 
 
+def arm_of(log):
+    """The arm a log ran, as index_levels."""
+    values = log["values"]
+    if "trades_index" not in values or "trades_levels" not in values:
+        raise ReportError("the log does not name its arm with trades_index and trades_levels")
+    return f"{values['trades_index']}_{values['trades_levels']}"
+
+
+def disagreements(first, other):
+    """The parts and lines of two logs that differ, with the arm's own lines left out."""
+    keys = []
+    for part in sorted(set(first) | set(other)):
+        if part in ("run", "time"):
+            continue
+        if part == "values":
+            a, b = first["values"], other["values"]
+            keys += [key for key in sorted(set(a) | set(b))
+                     if key not in ARM_ONLY and a.get(key) != b.get(key)]
+        elif first.get(part) != other.get(part):
+            keys.append(part)
+    return keys
+
+
+def arm_failures(arms, check):
+    """Each arm after the first is held to the hard checks, and every arm to the first."""
+    failures = []
+    seen = set()
+    first = arms[0]
+    for arm in arms:
+        name = arm["name"]
+        if name in seen:
+            failures.append(f"arm {name} is given twice")
+        seen.add(name)
+        if arm is not first:
+            failures += [f"arm {name}: {text}" for text in check(arm["log"])]
+        differ = disagreements(first["log"], arm["log"])
+        if differ:
+            failures.append(f"arm {name} disagrees with {first['name']} on {', '.join(differ)}")
+    return failures
+
+
+def arms_section(arms):
+    """One row per arm. The verdicts here are not marked up: the table below holds them."""
+    gib = 1024.0 ** 3
+    first = arms[0]["name"]
+    lines = [
+        "",
+        "## Every arm of the fast book",
+        "",
+        f"Each arm replayed the whole day on its own. Every line its log prints agrees with "
+        f"`{first}`'s, apart from the lines that name the arm and its run time, and the "
+        f"report fails on any other difference. The sections after this one are `{first}`'s. "
+        "The raw logs are not committed.",
+        "",
+    ]
+    rows = []
+    for arm in arms:
+        log, time = arm["log"], arm["log"]["time"]
+        rows.append((f"`{arm['name']}`",
+                     *(log["verdicts"].get(name, ("missing", 0))[0] for name in RESULTS),
+                     count(number(log, "messages_checked")),
+                     log["values"].get("elapsed_seconds", "?"),
+                     f"{time.get('max_rss', 0) / gib:.2f}",
+                     f"{time.get('peak_footprint', 0) / gib:.2f}",
+                     f"`{arm['raw']}`"))
+    lines += format_table(("Arm", *RESULTS, "Messages checked", "Replay, s", "Maximum RSS, GiB",
+                           "Peak footprint, GiB", "Raw log"), rows)
+    return lines
+
+
 def format_table(header, rows):
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     lines += ["| " + " | ".join(str(cell) for cell in row) + " |" for row in rows]
@@ -394,7 +471,7 @@ def odd_lot_text(log):
             "symbol is 100 on both rules.")
 
 
-def render(log, entry, day, no_cross_file, failures):
+def render(log, entry, day, no_cross_file, failures, arms):
     run = log["run"]
     values = log["values"]
     time = log["time"]
@@ -410,7 +487,8 @@ def render(log, entry, day, no_cross_file, failures):
         f"- Compiler: {run.get('run_compiler', 'unavailable')}",
         f"- Flags: `{run.get('run_flags', 'unavailable')}`",
         f"- Host: {run.get('run_host', 'unavailable')}. Mac numbers stay labelled macOS.",
-        f"- Book: the Phase 2 stub, `FastBook`. This run repeats on the real book.",
+        f"- Book: `FastBook`, {len(arms)} arm{'s' if len(arms) != 1 else ''} below. The run "
+        f"above and the detail after the table are `{arms[0]['name']}`.",
         f"- Dataset: `{entry['name']}`, SHA-256 of the unpacked file `{entry['unpacked_sha256']}`",
         f"- Command: `{run.get('run_command', 'unavailable')}`",
         f"- Elapsed: {values.get('elapsed_seconds', '?')} s in the replay, "
@@ -419,6 +497,9 @@ def render(log, entry, day, no_cross_file, failures):
         f"- Maximum RSS: {time.get('max_rss', 0) / gib:.2f} GiB, which counts resident pages of "
         "the mapped file",
         f"- Peak memory footprint: {time.get('peak_footprint', 0) / gib:.2f} GiB",
+    ]
+    lines += arms_section(arms)
+    lines += [
         "",
         "## Results",
         "",
@@ -628,6 +709,7 @@ def main(argv=None):
     parser.add_argument("--log", type=Path, required=True)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--no-cross-file", action="store_true")
+    parser.add_argument("--arm-log", type=Path, action="append", default=[])
     parser.add_argument("--manifest", type=Path,
                         default=REPO_ROOT / "scripts" / "data_manifest.json")
     args = parser.parse_args(argv)
@@ -640,9 +722,21 @@ def main(argv=None):
         manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
         references = manifest.get("references", {})
         midas_rows = references.get("midas_2019q4", {}).get("nasdaq_rows", {}).get(date)
-        log = parse_log(args.log.read_text(encoding="utf-8", errors="replace"))
-        failures = hard_failures(log, entry, midas_rows, args.no_cross_file, int(date))
-        text = render(log, entry, args.day, args.no_cross_file, failures)
+
+        def read(path):
+            return parse_log(path.read_text(encoding="utf-8", errors="replace"))
+
+        def check(run_log):
+            return hard_failures(run_log, entry, midas_rows, args.no_cross_file, int(date))
+
+        log = read(args.log)
+        failures = check(log)
+        arms = [{"name": arm_of(log), "log": log, "raw": args.log.name}]
+        for path in args.arm_log:
+            other = read(path)
+            arms.append({"name": arm_of(other), "log": other, "raw": path.name})
+        failures += arm_failures(arms, check)
+        text = render(log, entry, args.day, args.no_cross_file, failures, arms)
     except (OSError, ValueError, KeyError, ReportError) as error:
         print(f"trades report: {error!r}", file=sys.stderr)
         return 2
@@ -655,7 +749,8 @@ def main(argv=None):
     if failures:
         return 1
     print(f"trades report: {args.day} every hard check passed, "
-          f"{number(log, 'messages_checked')} messages")
+          f"{number(log, 'messages_checked')} messages, the same on {len(arms)} "
+          f"arm{'s' if len(arms) != 1 else ''}")
     return 0
 
 

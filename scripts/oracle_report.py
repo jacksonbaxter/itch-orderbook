@@ -2,12 +2,17 @@
 """Checks a real-day oracle log against the data manifest and writes the results file.
 
     oracle_report.py --day 12302019 --log RAW [--alloc-log RAW] [--out results/x.md]
-                     [--manifest scripts/data_manifest.json]
+                     [--arm-log ORACLE_RAW ALLOC_RAW]... [--manifest scripts/data_manifest.json]
     oracle_report.py --print-flags build/release/compile_commands.json [SOURCE]
 
 The tool's own verdicts are not enough here. A tool that diffed half the day could still
 pass, so this compares its counters with the census pinned in the manifest. The third-
 party figures in COMPARISON are claims to set ours beside, never expected values.
+
+--log and --alloc-log are one arm of the fast book, and the detail of the results file is
+that arm's. Each --arm-log is another arm's pair of logs. Every arm is held to the same hard
+checks, and has to agree with the first on every line its logs print, apart from the lines
+that only describe the arm, its moves and its run. A difference is a hard failure.
 
 Exit codes: 0 every hard check passed and T-INV-2 passed. 1 a hard check failed, and
 T-INV-3 is one. 2 the inputs could not be used. 3 only T-INV-2 failed: it is strict, so it
@@ -59,6 +64,16 @@ SYMBOL = re.compile(
 VIOLATION = re.compile(
     r"t_inv3_violation kind=(\w+) symbol=(\S+) locate=(\d+) time=(\S+) message=(\d+) type=(.) "
     r"depth=(\d+)")
+
+
+# Lines that describe the arm, how it ran or what only that arm does. Every other line of
+# an arm's logs has to equal the first arm's.
+ARM_ONLY = {
+    "oracle_index", "oracle_levels", "oracle_max_pages", "oracle_index_bits", "oracle_max_slots",
+    "elapsed_seconds", "move_reports", "moved_checks", "empty_moved_checks",
+    "index_fallback_inserts", "index_fallback_live_end", "index_peak_live_pages",
+    "level_slots_used", "level_relocations", "book_index", "book_levels",
+}
 
 
 class ReportError(Exception):
@@ -181,6 +196,68 @@ def pair_of(log, key):
     return log["pairs"][key]
 
 
+def arm_of(log, index_key="oracle_index", levels_key="oracle_levels"):
+    """The arm a log ran, as index_levels."""
+    values = log["values"]
+    if index_key not in values or levels_key not in values:
+        raise ReportError(f"the log does not name its arm with {index_key} and {levels_key}")
+    return f"{values[index_key]}_{values[levels_key]}"
+
+
+def comparable(log):
+    """Everything a log says that does not depend on the arm."""
+    kept = {key: value for key, value in log.items() if key not in ("run", "time", "values")}
+    kept["values"] = {key: value for key, value in log["values"].items() if key not in ARM_ONLY}
+    return kept
+
+
+def disagreements(first, other):
+    """The parts and lines of two logs that differ, with the arm's own lines left out."""
+    a, b = comparable(first), comparable(other)
+    keys = []
+    for part in sorted(set(a) | set(b)):
+        if part == "values":
+            keys += [key for key in sorted(set(a["values"]) | set(b["values"]))
+                     if a["values"].get(key) != b["values"].get(key)]
+        elif a.get(part) != b.get(part):
+            keys.append(part)
+    return keys
+
+
+def arm_failures(arms, entry):
+    """Each arm is held to the hard checks, and every arm to the first one's answers."""
+    failures = []
+    seen = set()
+    first = arms[0]
+    for arm in arms:
+        name = arm["name"]
+        if name in seen:
+            failures.append(f"arm {name} is given twice")
+        seen.add(name)
+        if arm is not first:
+            failures += [f"arm {name}: {text}" for text in hard_failures(arm["log"], entry)]
+            failures += [f"arm {name}: {text}" for text in alloc_failures(arm["alloc"], entry)]
+        if arm["alloc"] is not None and arm_of(arm["alloc"], "book_index", "book_levels") != name:
+            failures.append(f"arm {name}: its allocation log ran another arm")
+        differ = disagreements(first["log"], arm["log"])
+        if arm["alloc"] is not None and first["alloc"] is not None:
+            differ += [f"allocation {key}" for key in disagreements(first["alloc"], arm["alloc"])]
+        if differ:
+            failures.append(f"arm {name} disagrees with {first['name']} on {', '.join(differ)}")
+    return failures
+
+
+def alloc_failures(alloc, entry):
+    if alloc is None:
+        return []
+    failures = []
+    if alloc["verdicts"].get("T-ALLOC-1") != "PASS":
+        failures.append("T-ALLOC-1 verdict is not PASS")
+    if number(alloc, "fast_messages") != entry["messages"]:
+        failures.append("the allocation run did not cover the whole day")
+    return failures
+
+
 def sum_tallies(log, types, scope):
     rows = [value for (kind, tally_scope), value in log["tallies"].items()
             if tally_scope == scope and kind in types]
@@ -285,7 +362,49 @@ def inv3_section(log):
     return lines
 
 
-def render(log, entry, day, alloc):
+def arms_section(arms):
+    """One row per arm. The verdicts here are not marked up: the sections below hold them."""
+    gib = 1024.0 ** 3
+    first = arms[0]["name"]
+    lines = [
+        "",
+        "## Every arm of the fast book",
+        "",
+        f"Each arm replayed the whole day on its own. Every line its logs print agrees with "
+        f"`{first}`'s, apart from the lines that describe the arm, what it moved and how long "
+        "it ran, and the report fails on any other difference. The sections after this one "
+        f"are `{first}`'s. The raw logs are not committed.",
+        "",
+    ]
+    rows = []
+    for arm in arms:
+        log, alloc, time = arm["log"], arm["alloc"], arm["log"]["time"]
+        crossed, locked = number(log, "t_inv2_crossed"), number(log, "t_inv2_locked")
+        rows.append((
+            f"`{arm['name']}`",
+            log["verdicts"].get("T-ORACLE-1", "missing"),
+            log["verdicts"].get("T-INV-1", "missing"),
+            f"{log['verdicts'].get('T-INV-2', 'missing')}, {count(crossed)} crossed and "
+            f"{count(locked)} locked",
+            log["verdicts"].get("T-INV-3", "missing"),
+            alloc["verdicts"].get("T-ALLOC-1", "missing") if alloc else "not run",
+            count(number(log, "messages_diffed")),
+            f"`{log['values'].get('last_hash', '?')}`",
+            count(int(log["values"].get("move_reports", 0))),
+            count(int(log["values"].get("moved_checks", 0))),
+            log["values"].get("elapsed_seconds", "?"),
+            f"{time.get('max_rss', 0) / gib:.2f}",
+            f"{time.get('peak_footprint', 0) / gib:.2f}",
+            f"`{arm['raw']}`",
+        ))
+    lines += format_table(
+        ("Arm", "T-ORACLE-1", "T-INV-1", "T-INV-2 strict", "T-INV-3", "T-ALLOC-1",
+         "Messages diffed", "Last hash", "Moves reported", "Moved levels compared",
+         "Replay, s", "Maximum RSS, GiB", "Peak footprint, GiB", "Raw log"), rows)
+    return lines
+
+
+def render(log, entry, day, alloc, arms):
     run = log["run"]
     values = log["values"]
     time = log["time"]
@@ -306,6 +425,11 @@ def render(log, entry, day, alloc):
         f"{time.get('real', 0.0):.1f} s real, {time.get('user', 0.0):.1f} s user",
         f"- Maximum RSS: {time.get('max_rss', 0) / gib:.2f} GiB, which includes the mapped file",
         f"- Peak memory footprint: {time.get('peak_footprint', 0) / gib:.2f} GiB",
+        f"- Book: `FastBook`, {len(arms)} arm{'s' if len(arms) != 1 else ''} below. The run "
+        f"above and the detail after the table are `{arms[0]['name']}`.",
+    ]
+    lines += arms_section(arms)
+    lines += [
         "",
         "## T-ORACLE-1: the reference book agrees after every message",
         "",
@@ -451,23 +575,30 @@ def main(argv=None):
     parser.add_argument("--log", type=Path, required=True)
     parser.add_argument("--alloc-log", type=Path)
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--arm-log", nargs=2, type=Path, action="append", default=[],
+                        metavar=("ORACLE_RAW", "ALLOC_RAW"))
     parser.add_argument("--manifest", type=Path,
                         default=REPO_ROOT / "scripts" / "data_manifest.json")
     args = parser.parse_args(argv)
+
+    def read(path):
+        return parse_log(path.read_text(encoding="utf-8", errors="replace"))
+
     try:
         days = json.loads(args.manifest.read_text(encoding="utf-8"))["days"]
         if args.day not in days:
             raise ReportError(f"no day {args.day} in the manifest")
         entry = days[args.day]
-        log = parse_log(args.log.read_text(encoding="utf-8", errors="replace"))
+        log = read(args.log)
         failures = hard_failures(log, entry)
-        alloc = None
-        if args.alloc_log:
-            alloc = parse_log(args.alloc_log.read_text(encoding="utf-8", errors="replace"))
-            if alloc["verdicts"].get("T-ALLOC-1") != "PASS":
-                failures.append("T-ALLOC-1 verdict is not PASS")
-            if number(alloc, "fast_messages") != entry["messages"]:
-                failures.append("the allocation run did not cover the whole day")
+        alloc = read(args.alloc_log) if args.alloc_log else None
+        failures += alloc_failures(alloc, entry)
+        arms = [{"name": arm_of(log), "log": log, "alloc": alloc, "raw": args.log.name}]
+        for oracle_path, alloc_path in args.arm_log:
+            other = read(oracle_path)
+            arms.append({"name": arm_of(other), "log": other, "alloc": read(alloc_path),
+                         "raw": oracle_path.name})
+        failures += arm_failures(arms, entry)
     except (OSError, ValueError, KeyError, ReportError) as error:
         print(f"oracle report: {error!r}", file=sys.stderr)
         return 2
@@ -476,12 +607,13 @@ def main(argv=None):
         print(f"oracle report: FAIL {failure}")
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(render(log, entry, args.day, alloc), encoding="utf-8")
+        args.out.write_text(render(log, entry, args.day, alloc, arms), encoding="utf-8")
     if failures:
         return 1
     inv2 = log["verdicts"].get("T-INV-2")
     print(f"oracle report: {args.day} T-ORACLE-1 PASS, T-INV-1 PASS, T-INV-3 PASS, "
-          f"{number(log, 'messages_diffed')} messages diffed, T-INV-2 {inv2}")
+          f"{number(log, 'messages_diffed')} messages diffed, T-INV-2 {inv2}, "
+          f"the same on {len(arms)} arm{'s' if len(arms) != 1 else ''}")
     return 0 if inv2 == "PASS" else 3
 
 
