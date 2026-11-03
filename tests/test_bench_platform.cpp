@@ -39,6 +39,28 @@ struct SteppedClock {
   }
 };
 
+TEST(BenchMemory, RssAnonIsReadFromTheStatusText) {
+  const std::string status =
+      "Name:\tbench_replay\nVmRSS:\t  9000 kB\nRssAnon:\t  123456 kB\nRssFile:\t 7 kB\n";
+  EXPECT_EQ(rss_anon_kb(status), std::optional<std::uint64_t>{123456});
+}
+
+TEST(BenchMemory, NoRssAnonLineIsNoReading) {
+  EXPECT_FALSE(rss_anon_kb("Name:\tx\nVmRSS:\t9000 kB\n").has_value());
+  EXPECT_FALSE(rss_anon_kb("Name:\tx\nRssAnon:\t kB\n").has_value());
+}
+
+TEST(BenchMemory, TheChargedMemoryGrowsWithWhatIsTouched) {
+  const std::optional<std::uint64_t> before = charged_bytes();
+  ASSERT_TRUE(before.has_value());
+  constexpr std::size_t kBytes = std::size_t{64} << 20U;
+  const std::optional<Arena> arena = Arena::make(kBytes, PageHint::base);
+  ASSERT_TRUE(arena.has_value());
+  const std::optional<std::uint64_t> after = charged_bytes();
+  ASSERT_TRUE(after.has_value());
+  EXPECT_GE(*after, *before + (kBytes / 2));
+}
+
 TEST(BenchTimer, QuantumIsTheDivisorOfTheStepsNotTheSmallestStep) {
   SteppedClock clock;
   const TimerProbe probe =

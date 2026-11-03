@@ -1,14 +1,16 @@
-// The arena behind the latency samples, and the check that the input is in memory.
+// The arena behind the latency samples and an input read into memory, the check that the
+// input is in memory, and the memory charged to the process.
 //
-// Arena::make() asks for hugepages where the platform has a hint, touches every page so
-// that no fault lands inside a timed span, and reports the page size it actually got.
-// resident() asks the kernel, so a test can see it say no.
+// Arena::make() asks for hugepages where the platform has a hint, unless told not to,
+// touches every page so that no fault lands inside a timed span, and reports the page size
+// it actually got. resident() asks the kernel, so a test can see it say no.
 #pragma once
 
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include <unistd.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -19,7 +21,13 @@
 #include <type_traits>
 #include <vector>
 
+#ifdef __APPLE__
+#include <mach/mach.h>
+#endif
+
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
+#include <fcntl.h>
+
 #include <fstream>
 #include <sstream>
 #endif
@@ -57,6 +65,68 @@ using MincoreFlag = char;
 #else
 using MincoreFlag = unsigned char;
 #endif
+
+// What the process is charged for now, in bytes, apart from file pages: the measure of a
+// book's memory (T-BOOK-3). On macOS that is phys_footprint, the figure Activity Monitor
+// and `footprint` report, which counts dirty anonymous pages whether resident or
+// compressed. On Linux it is RssAnon, the anonymous pages resident now.
+#ifdef __APPLE__
+inline constexpr std::string_view kChargedSource = "phys_footprint from task_info(TASK_VM_INFO)";
+#else
+inline constexpr std::string_view kChargedSource = "RssAnon from /proc/self/status";
+#endif
+
+// RssAnon in kB from the text of /proc/self/status, or nothing if the line is not there.
+[[nodiscard]] inline std::optional<std::uint64_t> rss_anon_kb(std::string_view status) noexcept {
+  constexpr std::string_view kField = "\nRssAnon:";
+  const std::size_t at = status.find(kField);
+  if (at == std::string_view::npos) {
+    return std::nullopt;
+  }
+  std::size_t i = at + kField.size();
+  while (i < status.size() && (status[i] == ' ' || status[i] == '\t')) {
+    ++i;
+  }
+  if (i == status.size() || status[i] < '0' || status[i] > '9') {
+    return std::nullopt;
+  }
+  std::uint64_t kb = 0;
+  for (; i < status.size() && status[i] >= '0' && status[i] <= '9'; ++i) {
+    kb = (kb * 10) + static_cast<std::uint64_t>(status[i] - '0');
+  }
+  return kb;
+}
+
+// Reads without allocating, so that sampling inside a pass changes no heap a book uses.
+[[nodiscard]] inline std::optional<std::uint64_t> charged_bytes() noexcept {
+#ifdef __APPLE__
+  task_vm_info_data_t info{};
+  mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the Mach call's own type.
+  if (::task_info(mach_task_self(), TASK_VM_INFO, reinterpret_cast<task_info_t>(&info), &count) !=
+      KERN_SUCCESS) {
+    return std::nullopt;
+  }
+  return info.phys_footprint;
+#elif defined(__linux__) && !defined(__EMSCRIPTEN__)
+  std::array<char, 8192> text{};
+  const int fd =
+      ::open("/proc/self/status", O_RDONLY);  // NOLINT(cppcoreguidelines-pro-type-vararg)
+  if (fd < 0) {
+    return std::nullopt;
+  }
+  std::size_t used = 0;
+  for (ssize_t got = 1; got > 0 && used < text.size();) {
+    got = ::read(fd, text.data() + used, text.size() - used);
+    used += got > 0 ? static_cast<std::size_t>(got) : 0U;
+  }
+  ::close(fd);
+  const std::optional<std::uint64_t> kb = rss_anon_kb({text.data(), used});
+  return kb ? std::optional<std::uint64_t>{*kb * 1024U} : std::nullopt;
+#else
+  return std::nullopt;
+#endif
+}
 
 [[nodiscard]] inline Residency resident(std::span<const std::byte> bytes) {
   Residency out;
@@ -134,9 +204,14 @@ struct ArenaReport {
                      report.page_size_obtained, report.hint, report.prefaulted ? "yes" : "no");
 }
 
+// Whether an arena asks for hugepages. The input read into memory does not: the sources
+// for T-BOOK-1 ran with transparent hugepages off.
+enum class PageHint : std::uint8_t { huge, base };
+
 class Arena {
  public:
-  [[nodiscard]] static std::optional<Arena> make(std::size_t bytes);
+  [[nodiscard]] static std::optional<Arena> make(std::size_t bytes,
+                                                 PageHint hint_wanted = PageHint::huge);
 
   Arena(const Arena&) = delete;
   Arena& operator=(const Arena&) = delete;
@@ -168,7 +243,7 @@ class Arena {
   ArenaReport report_;
 };
 
-inline std::optional<Arena> Arena::make(std::size_t bytes) {
+inline std::optional<Arena> Arena::make(std::size_t bytes, PageHint hint_wanted) {
   const std::size_t page = base_page_size();
   const std::size_t wanted = bytes == 0 ? page : (bytes + page - 1) / page * page;
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
@@ -181,10 +256,16 @@ inline std::optional<Arena> Arena::make(std::size_t bytes) {
   }
   const auto address = reinterpret_cast<std::uintptr_t>(base);  // NOLINT
   auto* data = static_cast<std::byte*>(base) + ((kHuge - address % kHuge) % kHuge);
-  const int advised = ::madvise(data, wanted, MADV_HUGEPAGE);
-  std::string hint =
-      advised == 0 ? "madvise(MADV_HUGEPAGE) accepted" : "madvise(MADV_HUGEPAGE) refused";
+  std::string hint;
+  if (hint_wanted == PageHint::huge) {
+    const int advised = ::madvise(data, wanted, MADV_HUGEPAGE);
+    hint = advised == 0 ? "madvise(MADV_HUGEPAGE) accepted" : "madvise(MADV_HUGEPAGE) refused";
+  } else {
+    const int advised = ::madvise(data, wanted, MADV_NOHUGEPAGE);
+    hint = advised == 0 ? "madvise(MADV_NOHUGEPAGE) accepted" : "madvise(MADV_NOHUGEPAGE) refused";
+  }
 #else
+  static_cast<void>(hint_wanted);
   const std::size_t mapped = wanted;
   void* base = ::mmap(nullptr, mapped, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
   if (base == MAP_FAILED) {

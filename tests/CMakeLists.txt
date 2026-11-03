@@ -25,7 +25,8 @@ itch_add_test(test_trade_checks test_trade_checks.cpp)
 itch_add_test(test_bench_platform test_bench_platform.cpp)
 itch_add_test(test_bench_replay test_bench_replay.cpp)
 target_include_directories(test_bench_platform PRIVATE "${PROJECT_SOURCE_DIR}/bench")
-target_include_directories(test_bench_replay PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+target_include_directories(test_bench_replay PRIVATE "${PROJECT_SOURCE_DIR}/bench"
+  "${PROJECT_SOURCE_DIR}/tools")
 
 if(ITCH_BUILD_BENCH)
   add_test(NAME test_bench_cli
