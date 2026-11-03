@@ -480,7 +480,7 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
     session.refuse(pinning_field(pin));
   }
   if constexpr (!std::is_constructible_v<Book, itch::BookCapacity>) {
-    session.warm_with(warm_with_fast_book);
+    session.warm_with("hash-linked", warm_with_fast_book);
   }
   if (timed) {
     session.warm_up();
@@ -546,7 +546,7 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
        .dataset_sha256 = options.dataset_sha256,
        .timer = describe_rate(timer),
        .quantum = std::format("{} ticks, {:.3f} ns", timer.quantum_ticks, timer.quantum_ns()),
-       .pair = std::format("{:.3f} ticks, {:.3f} ns, not subtracted from any figure",
+       .pair = std::format("{:.3f} ticks, {:.3f} ns, subtracted only where a column says so",
                            timer.pair_ticks, timer.pair_ns()),
        .floor = std::format("{:.3f} ns", timer.floor_ns()),
        .pinning = pinning_field(pin),
@@ -586,8 +586,9 @@ int run(int argc, char** argv) {
   if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
     std::println(stderr,
                  "usage: bench_replay --input FILE --out RUN.json [--design NAME] "
-                 "[--input-mode ram|mapped] [--track-top on|off] [--core N] [--commit TEXT] "
-                 "[--dataset NAME] [--dataset-sha256 HEX] [--orders N] [--levels N]");
+                 "[--input-mode ram|mapped] [--track-top on|off] [--passes all|timed|untimed] "
+                 "[--core N] [--commit TEXT] [--dataset NAME] [--dataset-sha256 HEX] "
+                 "[--orders N] [--levels N]");
     return 2;
   }
   const std::optional<OwnedInput> owned = OwnedInput::open(options);

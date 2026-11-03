@@ -11,6 +11,14 @@ from a real measure.sh run, machine_check's output present and passing, and noth
 private. scripts/bench_driver.py and scripts/stamp_load.py run the same checks, so that
 a file failing them is never written as finished.
 
+A book file, any file not labelled as the Phase 2 stub-book harness proof, is held to more:
+the design, input and top-of-book fields, a statement of how the run read the day beside
+itch-book's two methods, the latency table with its pair-subtracted
+column, the per-operation table, the book's memory, the summary's service and batch
+means, the top of book when it was tracked, the design comparison, and a verdict for every
+target in words from a fixed set. On macOS, a bar set on x86 Linux may not be called met
+or missed.
+
 Each violation prints as `check_results: FAIL <code> <file>: <detail>`.
 
 Exit codes: 0 every file passed, 1 at least one failed, 2 bad usage.
@@ -30,6 +38,19 @@ REQUIRED_FIELDS = (
     "measure_load_start", "measure_load_end", "prediction", "run_id", "repetitions",
     "warmup_messages", "timed_messages", "run_started", "run_finished",
 )
+BOOK_FIELDS = ("design", "input", "top_of_book", "book_messages")
+STUB_LABEL = "Stub-book harness proof, not a book result."
+DESIGNS = ("hash-linked", "hash-flat", "paged-linked", "paged-flat", "map-fresh", "map-aged")
+OPERATIONS = ("add", "delete", "replace", "reduce")
+OPERATION_PERCENTILES = ("p50", "p99", "p99.9")
+BOOK_SUMMARY = ("Mean service time per message, ns", "Batch mean per book message, ns",
+                "Book memory, MiB")
+TARGETS = ("T-BOOK-1", "T-BOOK-2", "T-BOOK-3", "T-BOOK-4", "T-LAT-1", "T-LAT-2", "T-LAT-3",
+           "T-LAT-4", "T-LAT-5", "T-DESIGN-1")
+# Bars set on x86 hardware, which a macOS figure neither passes nor fails.
+X86_TARGETS = ("T-BOOK-1", "T-BOOK-2", "T-LAT-1", "T-LAT-2", "T-LAT-4", "T-LAT-5")
+VERDICTS = ("met", "missed: ", "host differs: ", "below floor: ", "not measured in this run: ")
+BELOW_FLOOR = "below floor"
 HOST_LABELS = ("debian", "macOS (M4 Max)", "unknown")
 MAC_HOST = "macOS (M4 Max)"
 # Fields macOS has no way to read, so any value other than unavailable is made up.
@@ -43,6 +64,7 @@ TIMESTAMP = re.compile(r"\bat=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)")
 EXIT_CODE = re.compile(r"\bexit=(\d+)")
 HOST_WORD = re.compile(r"\bhost=(\S.*?)(?: at=|$)")
 PERCENTILE_ROW = re.compile(r"^\| (p[0-9.]+|max) \| (.*?) \|")
+CELLS = re.compile(r"^\|(.*)\|$")
 COUNTER_ROW = re.compile(r"^\| (.+?) \| (measured|multiplexed|unavailable) \| ([^|]*) \|")
 RESIDENT = re.compile(r"^(\d+) of (\d+) pages resident$")
 FIRST_NUMBER = re.compile(r"[0-9][0-9,]*(?:\.[0-9]+)?")
@@ -136,7 +158,7 @@ def check_percentiles(text, fields):
             continue
         rows += 1
         value = match.group(2).strip()
-        if value == "unresolved":
+        if value in ("unresolved", BELOW_FLOOR):
             continue
         figure = number(value)
         if figure is None or floor is None or figure < floor:
@@ -213,6 +235,155 @@ def check_private(text, fields):
             yield "private-text", f"{name}: {match.group(0)}"
 
 
+def is_book_file(text):
+    return STUB_LABEL not in text
+
+
+def table_rows(text, title):
+    """The cells of every row of the tables under a heading, the head and rule left out."""
+    rows = []
+    for line in (section(text, title) or "").splitlines():
+        match = CELLS.match(line.strip())
+        if match is None:
+            continue
+        cells = [cell.strip() for cell in match.group(1).split("|")]
+        if all(re.fullmatch(r"-*", cell) for cell in cells):
+            continue
+        rows.append(cells)
+    return rows
+
+
+def check_value(name, value, floor):
+    """A latency cell: a figure at or above the floor, or below floor."""
+    if value == BELOW_FLOOR:
+        return
+    figure = number(value) if re.fullmatch(r"[0-9][0-9,]*(?:\.[0-9]+)?", value) else None
+    if figure is None:
+        yield "latency-value-malformed", f"{name}: {value!r}"
+    elif floor is None or figure < floor:
+        yield "percentile-below-floor", f"{name} is {value}, floor {floor} ns"
+
+
+def check_book_fields(fields):
+    for name in BOOK_FIELDS:
+        if name not in fields:
+            yield "header-field-missing", name
+    design = fields.get("design", "")
+    if design and not any(design.startswith(f"{name}: ") for name in DESIGNS):
+        yield "design-unknown", design
+    source = fields.get("input", "")
+    if source and not source.startswith(("ram: ", "mapped: ")):
+        yield "input-mode-unknown", source
+    top = fields.get("top_of_book", "")
+    if top and top != "not tracked" and not top.startswith("tracked: "):
+        yield "top-of-book-malformed", top
+    messages = fields.get("book_messages", "")
+    if messages and not re.fullmatch(r"[0-9][0-9,]*", messages):
+        yield "book-messages-malformed", messages
+
+
+def check_book_latency(text, fields):
+    """Every all-message row carries a raw and a pair-subtracted figure, both above the
+    floor or both below it."""
+    floor = number(fields.get("floor", ""))
+    rows = [cells for cells in table_rows(text, "Latency") if PERCENTILE_ROW.match(
+        "| " + " | ".join(cells) + " |")]
+    for cells in rows:
+        if len(cells) != 7:
+            yield "latency-subtracted-missing", f"{cells[0]} has {len(cells)} cells, not 7"
+            continue
+        if (cells[1] == BELOW_FLOOR) != (cells[6] == BELOW_FLOOR):
+            yield "latency-subtracted-missing", f"{cells[0]}: {cells[1]} raw, {cells[6]} less pair"
+        yield from check_value(f"{cells[0]} less the pair", cells[6], floor)
+
+
+def check_operations(text, fields):
+    floor = number(fields.get("floor", ""))
+    rows = table_rows(text, "Per-operation latency")
+    seen = set()
+    for cells in rows:
+        if len(cells) < 8 or cells[0] not in OPERATIONS:
+            continue
+        if cells[1] in OPERATION_PERCENTILES:
+            seen.add((cells[0], cells[1]))
+            yield from check_value(f"{cells[0]} {cells[1]}", cells[2], floor)
+            yield from check_value(f"{cells[0]} {cells[1]} less the pair", cells[7], floor)
+    for operation in OPERATIONS:
+        for percentile in OPERATION_PERCENTILES:
+            if (operation, percentile) not in seen:
+                yield "operation-table-missing", f"no {operation} {percentile} row"
+
+
+def check_book_summary(text):
+    rows = {cells[0]: cells for cells in table_rows(text, "Summary")}
+    for label in BOOK_SUMMARY:
+        if label not in rows:
+            yield "summary-figure-missing", label
+        elif number(rows[label][1]) is None:
+            yield "summary-figure-missing", f"{label}: {rows[label][1]!r}"
+
+
+def check_memory(text):
+    rows = {cells[0]: cells for cells in table_rows(text, "Book memory")}
+    book = rows.get("Book memory, MiB")
+    if book is None or number(book[1]) is None:
+        yield "memory-missing", "no book memory figure"
+
+
+def check_method(text):
+    body = section(text, "How this run reads the day") or ""
+    if "itch-book's" not in body:
+        yield "method-missing", "no statement of how the run reads the day against itch-book's"
+
+
+def check_top(text, fields):
+    if fields.get("top_of_book", "").startswith("tracked: "):
+        body = section(text, "Top of book") or ""
+        if not re.search(r"moved after [0-9][0-9,]* of the [0-9][0-9,]* messages", body):
+            yield "top-of-book-missing", "tracked, with no count of the moves"
+
+
+def check_comparison(text, fields):
+    body = section(text, "Design comparison")
+    if body is None:
+        yield "design-comparison-missing", "no Design comparison section"
+        return
+    design = fields.get("design", "").split(":")[0]
+    ratios = [cells for cells in table_rows(text, "Design comparison") if cells[0] in DESIGNS]
+    if design.startswith("map-") or "No map design ran beside it" in body:
+        return
+    if not ratios:
+        yield "design-comparison-missing", "a fast design with no ratio and no reason"
+    for cells in ratios:
+        if number(cells[1]) is None:
+            yield "design-comparison-missing", f"{cells[0]}: {cells[1]!r}"
+
+
+def check_targets(text, fields):
+    rows = [cells for cells in table_rows(text, "Targets") if cells[0] in TARGETS]
+    for target in TARGETS:
+        if not any(cells[0] == target for cells in rows):
+            yield "target-missing", target
+    for cells in rows:
+        if len(cells) != 5:
+            yield "target-verdict-invalid", f"{cells[0]} has {len(cells)} cells, not 5"
+            continue
+        verdict = cells[4]
+        if not (verdict == "met" or verdict.startswith(VERDICTS[1:])):
+            yield "target-verdict-invalid", f"{cells[0]}: {verdict!r}"
+        elif (fields.get("host") == MAC_HOST and cells[0] in X86_TARGETS
+              and verdict.startswith(("met", "missed: ", "below floor: "))):
+            yield "target-host-blurred", f"{cells[0]} is {verdict.split(':')[0]} on macOS"
+
+
+def check_book(text, fields):
+    for found in (check_book_fields(fields), check_book_latency(text, fields),
+                  check_operations(text, fields), check_book_summary(text), check_memory(text),
+                  check_method(text), check_top(text, fields), check_comparison(text, fields),
+                  check_targets(text, fields)):
+        yield from found
+
+
 def check_text(text):
     """Every violation in one results file, as (code, detail) pairs."""
     fields = parse_header(text)
@@ -224,6 +395,8 @@ def check_text(text):
                   check_counters(text), check_statistics(text), check_load(fields),
                   check_machine(text), check_private(text, fields)):
         violations.extend(found)
+    if is_book_file(text):
+        violations.extend(check_book(text, fields))
     return violations
 
 

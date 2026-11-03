@@ -132,7 +132,8 @@ namespace detail {
   }
   out += "\n  },\n";
   const SessionReport& session = record.session;
-  out += std::format("  \"warmup\": {{\"messages\": {}}},\n", session.warmup_messages);
+  out += std::format("  \"warmup\": {{\"messages\": {}, \"book\": {}}},\n", session.warmup_messages,
+                     json_string(session.warmup_book));
   const MessageMix& mix = session.mix;
   out += std::format("  \"mix\": {{\"messages\": {}, \"book_messages\": {}", mix.messages,
                      mix.book_messages);

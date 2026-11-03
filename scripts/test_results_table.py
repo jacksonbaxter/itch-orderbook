@@ -20,6 +20,9 @@ SCRATCH = REPO_ROOT / "build"
 SCRATCH.mkdir(exist_ok=True)
 ORACLE = "results/oracle_12302019.md"
 TRADES = "results/trades_10302019.md"
+BOOK_FIXTURES = REPO_ROOT / "tests" / "fixtures" / "bench_results"
+BOOK_FIXTURE = "good_book_mac.md"
+BOOK = "bench_book_hash-linked_ram_mac_12302019.md"
 
 
 class ResultsTable(unittest.TestCase):
@@ -168,14 +171,55 @@ class ResultsTable(unittest.TestCase):
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
 
-    def test_a_benchmark_with_no_harness_label_is_refused(self):
+    def test_a_benchmark_with_no_harness_label_is_held_to_the_book_rules(self):
         name = "results/bench_replay_stub_mac_12302019.md"
         text = (self.root / name).read_text(encoding="utf-8")
         (self.root / name).write_text(text.replace(results_table.HARNESS_LABEL, "A result."),
                                       encoding="utf-8")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
-        self.assertIn("harness proof", output)
+        self.assertIn("- design:", output)
+
+    def add_book(self, fixture=BOOK_FIXTURE):
+        name = f"results/{BOOK}"
+        shutil.copy(BOOK_FIXTURES / fixture, self.root / name)
+        return name
+
+    def test_a_book_file_gets_a_row_of_its_own(self):
+        self.add_book()
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        rows = [line for line in output.splitlines() if line.startswith("| `hash-linked` |")]
+        self.assertEqual(len(rows), 1, output)
+        self.assertIn("| ram | not tracked | 12302019 | macOS (M4 Max) | not pinned |", rows[0])
+        self.assertIn(f"[results/{BOOK}](results/{BOOK})", rows[0])
+        self.assertIn("macOS cannot pin a thread", output)
+
+    def test_a_book_file_missing_a_field_is_refused(self):
+        name = self.add_book()
+        for line in ("- design: ", "- input: ", "- top_of_book: ",
+                     "| Batch mean per book message, ns |", "| Book memory, MiB |",
+                     "| Throughput, messages/s |"):
+            with self.subTest(line=line):
+                self.add_book()
+                path = self.root / name
+                text = path.read_text(encoding="utf-8")
+                kept = [row for row in text.splitlines(keepends=True) if not row.startswith(line)]
+                self.assertNotEqual(len(kept), len(text.splitlines()), line)
+                path.write_text("".join(kept), encoding="utf-8")
+                code, output = self.run_table()
+                self.assertEqual(code, 1, output)
+                self.assertIn(f"results_table: FAIL {name}", output)
+
+    def test_a_book_figure_that_is_not_a_number_is_refused(self):
+        name = self.add_book()
+        path = self.root / name
+        text = path.read_text(encoding="utf-8")
+        path.write_text(re.sub(r"^\| Book memory, MiB \| [^|]+\|", "| Book memory, MiB | n/a |",
+                               text, count=1, flags=re.MULTILINE), encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("Book memory, MiB is 'n/a', not a figure", output)
 
     def test_no_stray_markup_in_generated_cells(self):
         _, output = self.run_table()

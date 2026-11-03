@@ -200,6 +200,21 @@ TEST(BenchReplay, EachPassGetsAFreshBook) {
   EXPECT_EQ(rig.books, 3);
 }
 
+TEST(BenchReplay, AWarmUpWithAnotherBookBuildsNoneOfThisDesign) {
+  Rig rig;
+  int warmed = 0;
+  rig.session.warm_with("other", [&](std::span<const std::byte> /*bytes*/) {
+    ++warmed;
+    return PassTotals{.messages = 3, .ticks = 1, .rejected = 0, .top_changes = 0, .pauses = 0};
+  });
+  rig.session.warm_up();
+  EXPECT_EQ(warmed, 1);
+  EXPECT_EQ(rig.books, 0);
+  EXPECT_EQ(rig.session.report().warmup_book, "other");
+  ASSERT_TRUE(rig.session.timed_throughput());
+  EXPECT_EQ(rig.books, 1);
+}
+
 TEST(BenchReplay, NothingIsTimedBeforeTheWarmUp) {
   Rig rig;
   EXPECT_FALSE(rig.session.timed_throughput());

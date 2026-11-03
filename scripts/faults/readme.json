@@ -3,7 +3,8 @@
   "tree": [
     "README.md",
     "results",
-    "scripts"
+    "scripts",
+    "tests/fixtures/bench_results"
   ],
   "faults": [
     {
@@ -183,6 +184,66 @@
       ],
       "expect": {
         "signature": "FAIL: test_a_file_with_no_table_of_arms_is_refused"
+      }
+    },
+    {
+      "id": "readme-book-figure-unchecked",
+      "breaks": "A book row takes a figure that is not a number",
+      "check": "test_results_table.py test_a_book_figure_that_is_not_a_number_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if not re.fullmatch(r\"[0-9][0-9,]*(?:\\.[0-9]+)?\", median):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_book_figure_that_is_not_a_number_is_refused"
+      }
+    },
+    {
+      "id": "readme-book-file-unread",
+      "breaks": "A book file is not given a row",
+      "check": "test_results_table.py test_a_book_file_gets_a_row_of_its_own",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            books.append(book_row(name, text))\n",
+          "new": "            book_row(name, text)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_book_file_gets_a_row_of_its_own"
+      }
+    },
+    {
+      "id": "readme-book-field-optional",
+      "breaks": "A book file missing its design still gets a row",
+      "check": "test_results_table.py test_a_book_file_missing_a_field_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    design = find(r\"^- design: ([a-z-]+): \", text, name)[1]\n",
+          "new": "    found = re.search(r\"^- design: ([a-z-]+): \", text, re.MULTILINE)\n    design = found[1] if found else \"unknown\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_book_file_missing_a_field_is_refused"
       }
     }
   ]

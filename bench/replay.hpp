@@ -315,7 +315,8 @@ struct SessionReport {
   bool warmed = false;
   std::uint64_t warmup_messages = 0;  // Proof the warm-up ran. Published nowhere else.
   std::uint64_t warmup_ticks = 0;
-  MessageMix mix;  // Counted by the warm-up, outside its timing.
+  std::string warmup_book = "this design";  // What the warm-up pass ran on.
+  MessageMix mix;                           // Counted by the warm-up, outside its timing.
   std::optional<PassTotals> throughput;
   std::optional<PassTotals> latency;
   std::string residency = "unavailable: never checked";
@@ -346,8 +347,11 @@ class ReplaySession {
 
   // Another book's pass to warm up with, in place of this design's own. A book that takes
   // small blocks from the heap warms up with one that does not, so that its throughput
-  // pass is the first of its kind the heap has seen.
-  void warm_with(Warm warm) { warm_ = std::move(warm); }
+  // pass is the first of its kind the heap has seen. book names it for the record.
+  void warm_with(std::string book, Warm warm) {
+    report_.warmup_book = std::move(book);
+    warm_ = std::move(warm);
+  }
 
   void warm_up() {
     PassTotals pass;

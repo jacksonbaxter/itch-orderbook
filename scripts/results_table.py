@@ -8,7 +8,8 @@ README.md, and --check fails on any line there that differs from a fresh run.
 
 Every verdict in every results file reaches the table, failures included. A results file
 with no reader here is refused, and so is a file with a verdict no row took up, so that
-neither can drop out unseen. An oracle or trades file runs each arm of the fast book, and a
+neither can drop out unseen. A book benchmark file missing a field its row needs is
+refused as well. An oracle or trades file runs each arm of the fast book, and a
 row says whether every arm gave its verdict. An arm that gave another one makes the row a
 failure that names it. predictions.md is not a result, and run_log.md gets its own
 table, failed runs included. Each row cites its file, so scripts/gate_numbers.py holds the
@@ -189,15 +190,50 @@ def fault_row(name, text):
 
 
 def throughput_row(name, text):
-    if HARNESS_LABEL not in text:
-        raise TableError(f"results/{name}: not labelled as harness proof, and no other benchmark "
-                         "has a reader here yet")
     median, low, high, spread = table_row("Throughput, messages/s", text, name)
     host = find(r"^- host: (.*)$", text, name)[1]
     cpu = find(r"^- cpu: (.*)$", text, name)[1]
     pinning = find(r"^- pinning: (.*?)(?::|$)", text, name)[1]
     commit = header_commit(text, name)
     return ("Harness proof, stub book", day_of(name), host, cpu, pinning, median, low, high, spread,
+            f"`{commit}`", source(name))
+
+
+def header_field(text, field, name):
+    return find(rf"^- {field}: (.*)$", text, name)[1]
+
+
+def summary_median(text, label, name):
+    median = table_row(label, text, name)[0]
+    if not re.fullmatch(r"[0-9][0-9,]*(?:\.[0-9]+)?", median):
+        raise TableError(f"results/{name}: {label} is {median!r}, not a figure")
+    return median
+
+
+def ratio_cell(text, design, name):
+    """The median ratio over a map design, or a dash where the run had none."""
+    section = find(r"^## Design comparison\n((?s:.*?))(?=^## |\Z)", text, name)[1]
+    match = re.search(rf"^\| {re.escape(design)} \| ([0-9.]+) \|", section, re.MULTILINE)
+    return f"{match[1]}×" if match else "–"
+
+
+def book_row(name, text):
+    """One design's run: what it ran on, its rate and memory, and its ratio over the map book."""
+    design = find(r"^- design: ([a-z-]+): ", text, name)[1]
+    input_mode = find(r"^- input: (ram|mapped): ", text, name)[1]
+    top = header_field(text, "top_of_book", name)
+    if top != "not tracked" and not top.startswith("tracked: "):
+        raise TableError(f"results/{name}: top_of_book is {top!r}")
+    host = header_field(text, "host", name)
+    pinning = find(r"^- pinning: (.*?)(?::|$)", text, name)[1]
+    rate = summary_median(text, "Throughput, messages/s", name)
+    spread = table_row("Throughput, messages/s", text, name)[3]
+    batch = summary_median(text, "Batch mean per book message, ns", name)
+    memory = summary_median(text, "Book memory, MiB", name)
+    commit = header_commit(text, name)
+    return (f"`{design}`", input_mode, "tracked" if top != "not tracked" else "not tracked",
+            day_of(name), host, pinning, rate, spread, batch, memory,
+            ratio_cell(text, "map-fresh", name), ratio_cell(text, "map-aged", name),
             f"`{commit}`", source(name))
 
 
@@ -224,6 +260,7 @@ def generate(root):
     verdicts = []
     faults = []
     throughput = []
+    books = []
     for path in sorted((root / "results").glob("*.md")):
         name = path.name
         if name in NOT_RESULTS:
@@ -238,8 +275,11 @@ def generate(root):
         elif name == "fault_matrix.md":
             faults.append(fault_row(name, text))
             rows = []
-        elif name.startswith("bench_"):
+        elif name.startswith("bench_") and HARNESS_LABEL in text:
             throughput.append(throughput_row(name, text))
+            rows = []
+        elif name.startswith("bench_"):
+            books.append(book_row(name, text))
             rows = []
         else:
             raise TableError(f"results/{name}: this script has no reader for it")
@@ -255,6 +295,15 @@ def generate(root):
                   "about a real book, and the two hosts are not to be compared.", ""]
     lines += markdown_table(("Run", "Day", "Host", "CPU", "Pinning", "Median messages/s", "Min",
                              "Max", "CV", "Commit", "File"), throughput)
+    if books:
+        lines += ["", "Book designs. Each row is one design's results file, with its ratio over "
+                      "each map design that ran in the same repetitions (T-DESIGN-1). A macOS row "
+                      "is not pinned: macOS cannot pin a thread, so it is a macOS figure and never "
+                      "a Linux one, and the file's own targets table says so beside each bar.", ""]
+        lines += markdown_table(("Design", "Input", "Top of book", "Day", "Host", "Pinning",
+                                 "Median messages/s", "CV", "Batch mean ns a book message",
+                                 "Book memory MiB", "Over map-fresh", "Over map-aged", "Commit",
+                                 "File"), books)
     lines += ["", "Every benchmark run, failed ones included, from "
                   "[results/run_log.md](results/run_log.md).", ""]
     lines += markdown_table(("Run", "Prediction", "Commit", "OS", "Outcome"), run_rows(run_log))

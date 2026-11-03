@@ -1,22 +1,31 @@
 #!/usr/bin/env python3
-"""Runs a benchmark in fresh processes and writes one results file.
+"""Runs book designs in fresh processes and writes one results file for each.
 
     bench_driver.py --bench BENCH_REPLAY --probe BENCH_PROBE --input FILE \\
         --prediction P-NNNN --raw-dir DIR --out results/bench_NAME.md \\
+        [--design NAME]... [--input-mode ram|mapped] [--track-top] \\
         [--repetitions N] [--core N] [--sibling N] [--title TEXT] [--note TEXT] \\
         [--orders N] [--levels N] [--wrapped-by TEXT] [--allow-dirty] [--bench-arg ARG]...
 
-On a reported run this is measure.sh's direct child, and it runs one repetition at a
-time, so that signalling it stops everything:
+On a reported run this is measure.sh's direct child, and it runs one process at a time,
+so that signalling it stops everything:
 
     measure.sh [taskset -c 4] python3 -B scripts/bench_driver.py ... 2> STDERR
     python3 -B scripts/stamp_load.py --results FILE --stderr STDERR
 
 The order is: hash the input, which also faults it in; confirm the prediction is on
 record; run machine_check.sh, refusing on a failure; run the repetitions; refuse if any
-one of them refused; write the results file with its load lines pending. Figures are the
-median of the repetitions with min, max and CV beside it, never the best of them. A
-percentile is shown only when every repetition resolved it.
+one of them refused; write the results files with their load lines pending. Figures are
+the median of the repetitions with min, max and CV beside it, never the best of them. A
+percentile is shown only when every repetition resolved it, and as below floor otherwise.
+
+Each repetition runs every design in turn, so that the designs share the machine's state
+as closely as an unpinned host allows. Each design takes two processes a repetition: one
+for the warm-up and the timed passes, and one for the untimed pass of counters and memory,
+which builds no other book first, so that the memory it reports is that book's own. With
+more than one design, --out must hold `{design}`, which becomes each design's name. A
+fast design's file compares its throughput with every map design in the same run,
+repetition by repetition (T-DESIGN-1), and every file holds each target beside the bar.
 
 Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
 --raw-dir, which is not committed.
@@ -48,11 +57,19 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 HEADER_ORDER = ("host", "cpu", "kernel", "compiler", "flags", "commit", "dataset",
                 "dataset_sha256", "timer", "quantum", "pair", "floor", "pinning", "migrations",
                 "core", "governor", "frequency", "turbo", "smt", "isolation", "counters", "rdpmc",
-                "page_size", "residency")
+                "page_size", "residency", "design", "input", "top_of_book")
 METRICS = (("Throughput, messages/s", "messages_per_s", ",.0f"),
            ("Latency-pass rate, messages/s", "latency_messages_per_s", ",.0f"),
            ("Mean span of apply(), ns", "mean_ns", ".2f"),
            ("Instrumentation ratio, latency pass over throughput pass", "ratio", ".4f"))
+BOOK_METRICS = (("Mean service time per message, ns", "service_ns", ".2f"),
+                ("Batch mean per book message, ns", "batch_ns", ".2f"),
+                ("Book memory, MiB", "book_mib", ",.1f"))
+MAP_DESIGNS = ("map-fresh", "map-aged")
+FAST_DESIGNS = ("hash-linked", "hash-flat", "paged-linked", "paged-flat")
+OPERATIONS = ("add", "delete", "replace", "reduce")
+OPERATION_PERCENTILES = (50.0, 99.0, 99.9)
+BELOW_FLOOR = "below floor"
 
 
 class Refused(Exception):
@@ -119,13 +136,19 @@ def machine_check(args):
     return result.stdout.strip()
 
 
-def run_repetition(args, index, commit, digest):
+def run_process(args, index, commit, digest, design, passes):
+    """One bench_replay process: the timed passes, or the untimed one."""
     global current_child
-    record_path = args.raw_dir / f"repetition-{index}.json"
-    log_path = args.raw_dir / f"repetition-{index}.log"
+    stem = f"{design}-repetition-{index}-{passes}" if design else f"repetition-{index}-{passes}"
+    record_path = args.raw_dir / f"{stem}.json"
+    log_path = args.raw_dir / f"{stem}.log"
     record_path.unlink(missing_ok=True)
     command = [str(args.bench), "--input", str(args.input), "--out", str(record_path),
-               "--commit", commit, "--dataset", args.input.name, "--dataset-sha256", digest]
+               "--commit", commit, "--dataset", args.input.name, "--dataset-sha256", digest,
+               "--passes", passes, "--input-mode", args.input_mode,
+               "--track-top", "on" if args.track_top else "off"]
+    if design:
+        command += ["--design", design]
     if args.core is not None:
         command += ["--core", str(args.core)]
     if args.orders is not None:
@@ -133,17 +156,32 @@ def run_repetition(args, index, commit, digest):
     if args.levels is not None:
         command += ["--levels", str(args.levels)]
     command += args.bench_arg
+    where = f"repetition {index}" + (f", {design}" if design else "")
     with open(log_path, "w", encoding="utf-8") as log:
         current_child = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
         code = current_child.wait()
         current_child = None
     if not record_path.is_file():
-        raise Refused(f"repetition {index}", f"exited {code} with no record")
+        raise Refused(where, f"exited {code} with no record")
     record = json.loads(record_path.read_text(encoding="utf-8"))
     if code != 0 or record["refusals"]:
-        raise Refused(f"repetition {index}",
-                      f"exited {code}: {'; '.join(record['refusals']) or 'no reason given'}")
+        raise Refused(where, f"exited {code}: {'; '.join(record['refusals']) or 'no reason given'}")
     return record
+
+
+def run_repetition(args, index, commit, digest, design=None):
+    """The timed record, with the counters and memory of its own untimed process."""
+    timed = run_process(args, index, commit, digest, design, "timed")
+    untimed = run_process(args, index, commit, digest, design, "untimed")
+    memory = untimed.get("memory", {})
+    if not memory.get("complete") or not memory.get("first_book"):
+        raise Refused(f"repetition {index}", "the untimed process's memory figure is not the "
+                                             "first book's, or a read of it failed")
+    timed["counters"] = untimed["counters"]
+    timed["memory"] = memory
+    for name in ("counters", "rdpmc"):
+        timed["header"][name] = untimed["header"][name]
+    return timed
 
 
 def validate_run(record):
@@ -157,9 +195,16 @@ def validate_run(record):
         raise Refused("record", f"{record['latency']['samples']} latency samples for {warmup} "
                                 "messages")
     floor = record["timer"]["floor_ns"]
-    for entry in record["latency"]["percentiles"]:
+    entries = [("", entry) for entry in record["latency"]["percentiles"]]
+    for operation in record["latency"].get("operations", []):
+        entries += [(f"{operation['op']} ", entry) for entry in operation["percentiles"]]
+        mix = record.get("mix", {})
+        if operation["op"] in mix and operation["samples"] != mix[operation["op"]]:
+            raise Refused("record", f"{operation['samples']} {operation['op']} spans for "
+                                    f"{mix[operation['op']]} {operation['op']} messages")
+    for name, entry in entries:
         if entry["value_ns"] is not None and entry["value_ns"] < floor:
-            raise Refused("record", f"p{entry['percentile']} is below the {floor} ns floor")
+            raise Refused("record", f"{name}p{entry['percentile']} is below the {floor} ns floor")
     for status in record["counters"]["status"]:
         if status["state"] == "measured" and status["ratio"] < 1.0:
             raise Refused("record", f"{status['name']} is called measured at ratio "
@@ -174,6 +219,24 @@ def spread(values):
             deviation / mean if mean else 0.0)
 
 
+def validate_together(runs):
+    """What every design of one run must agree on: the same day, and the same top of book."""
+    first = next(iter(runs.values()))[0]
+    for design, records in runs.items():
+        for record in records:
+            if record.get("mix") != first.get("mix"):
+                raise Refused("record", f"{design} counted another mix of messages")
+            for name in ("throughput", "latency_pass"):
+                if record[name].get("top_changes") != first[name].get("top_changes"):
+                    raise Refused("record", f"{design} saw {record[name].get('top_changes')} "
+                                            f"moves of the top in its {name}, against "
+                                            f"{first[name].get('top_changes')}")
+
+
+def is_book_record(record):
+    return "mix" in record and "memory" in record
+
+
 def metric_values(records, key):
     if key == "messages_per_s":
         return [record["throughput"]["messages_per_s"] for record in records]
@@ -181,12 +244,21 @@ def metric_values(records, key):
         return [record["latency_pass"]["messages_per_s"] for record in records]
     if key == "mean_ns":
         return [record["latency"]["mean_ns"] for record in records]
+    if key == "service_ns":
+        return [1e9 * record["throughput"]["seconds"] / record["throughput"]["messages"]
+                for record in records]
+    if key == "batch_ns":
+        return [1e9 * record["throughput"]["seconds"] / record["mix"]["book_messages"]
+                for record in records]
+    if key == "book_mib":
+        return [record["memory"]["book_bytes"] / 1024 ** 2 for record in records]
     return [record["instrumentation_ratio"] for record in records]
 
 
 def summary_rows(records):
     rows = []
-    for label, key, shape in METRICS:
+    metrics = METRICS + (BOOK_METRICS if is_book_record(records[0]) else ())
+    for label, key, shape in metrics:
         median, low, high, variation = spread(metric_values(records, key))
         rows.append(f"| {label} | {median:{shape}} | {low:{shape}} | {high:{shape}} "
                     f"| {100 * variation:.2f}% |")
@@ -196,20 +268,63 @@ def summary_rows(records):
 def latency_rows(records):
     rows = []
     positions = [entry["percentile"] for entry in records[0]["latency"]["percentiles"]]
+    pairs = [record["timer"]["pair_ns"] for record in records]
+    book = is_book_record(records[0])
     for position, percentile in enumerate(positions):
         values = [record["latency"]["percentiles"][position]["value_ns"] for record in records]
-        rows.append(percentile_row(f"p{percentile:g}", values))
-    rows.append(percentile_row("max", [record["latency"]["max_ns"] for record in records]))
+        rows.append(percentile_row(f"p{percentile:g}", values, pairs if book else None))
+    rows.append(percentile_row("max", [record["latency"]["max_ns"] for record in records],
+                               pairs if book else None))
     return rows
 
 
-def percentile_row(name, values):
+def percentile_row(name, values, pairs=None):
+    """A row of a percentile across repetitions. With pairs, the median with each
+    repetition's own empty pair taken off goes in a last column."""
     resolved = [value for value in values if value is not None]
     if len(resolved) != len(values):
-        return (f"| {name} | unresolved | | | | resolved in {len(resolved)} of {len(values)} "
-                "repetitions |")
+        if pairs is None:
+            return (f"| {name} | unresolved | | | | resolved in {len(resolved)} of "
+                    f"{len(values)} repetitions |")
+        return (f"| {name} | {BELOW_FLOOR} | | | | resolved in {len(resolved)} of {len(values)} "
+                f"repetitions | {BELOW_FLOOR} |")
     median, low, high, variation = spread(resolved)
-    return f"| {name} | {median:.1f} | {low:.1f} | {high:.1f} | {100 * variation:.2f}% | resolved |"
+    row = f"| {name} | {median:.1f} | {low:.1f} | {high:.1f} | {100 * variation:.2f}% | resolved |"
+    if pairs is not None:
+        row += f" {subtracted(values, pairs):.1f} |"
+    return row
+
+
+def subtracted(values, pairs):
+    """The median of the values, each less its own repetition's measured empty pair."""
+    return statistics.median(value - pair for value, pair in zip(values, pairs))
+
+
+def operation_value(record, operation, percentile):
+    entry = next(item for item in record["latency"]["operations"] if item["op"] == operation)
+    return next(item["value_ns"] for item in entry["percentiles"]
+                if item["percentile"] == percentile)
+
+
+def operation_rows(records):
+    """T-LAT-1: each operation's spans, at the percentiles the target names."""
+    rows = []
+    pairs = [record["timer"]["pair_ns"] for record in records]
+    for operation in OPERATIONS:
+        for percentile in OPERATION_PERCENTILES:
+            values = [operation_value(record, operation, percentile) for record in records]
+            row = percentile_row(f"p{percentile:g}", values, pairs)
+            rows.append(f"| {operation} | {row[2:]}")
+        means = [next(item["mean_ns"] for item in record["latency"]["operations"]
+                      if item["op"] == operation) for record in records]
+        median, low, high, variation = spread(means)
+        rows.append(f"| {operation} | mean | {median:.1f} | {low:.1f} | {high:.1f} "
+                    f"| {100 * variation:.2f}% | a mean, finer than the quantum | |")
+    return rows
+
+
+def operation_counts(record):
+    return ", ".join(f"{record['mix'][operation]:,} {operation}" for operation in OPERATIONS)
 
 
 def counter_rows(records):
@@ -280,7 +395,7 @@ def repetition_rows(records):
 
 def header_lines(records, args, run_id, started, finished):
     header = dict(records[0]["header"])
-    lines = [f"- {name}: {header[name]}" for name in HEADER_ORDER]
+    lines = [f"- {name}: {header[name]}" for name in HEADER_ORDER if name in header]
     warmup = records[0]["warmup"]["messages"]
     lines += [f"- measure_load_start: {check_results.PENDING}",
               f"- measure_load_end: {check_results.PENDING}",
@@ -289,36 +404,339 @@ def header_lines(records, args, run_id, started, finished):
               f"- run_id: {run_id}",
               f"- repetitions: {len(records)}",
               f"- warmup_messages: {warmup:,}",
-              f"- timed_messages: {records[0]['throughput']['messages']:,}",
-              f"- run_started: {started}",
+              f"- timed_messages: {records[0]['throughput']['messages']:,}"]
+    if is_book_record(records[0]):
+        lines.append(f"- book_messages: {records[0]['mix']['book_messages']:,}")
+    lines += [f"- run_started: {started}",
               f"- run_finished: {finished}"]
     return lines
 
 
-def render(records, args, run_id, started, finished, machine_output, command):
-    title = args.title or f"bench_replay on {args.input.name}"
+def design_of(record):
+    return record["header"]["design"].split(":")[0]
+
+
+def median_of(records, key):
+    return statistics.median(metric_values(records, key))
+
+
+def all_message(records, percentile):
+    """The median raw and pair-subtracted value of one all-message percentile, or Nones."""
+    values = [next(entry["value_ns"] for entry in record["latency"]["percentiles"]
+                   if entry["percentile"] == percentile) for record in records]
+    if None in values:
+        return None, None
+    return statistics.median(values), subtracted(values, [r["timer"]["pair_ns"] for r in records])
+
+
+def operation_median(records, operation, percentile):
+    values = [operation_value(record, operation, percentile) for record in records]
+    return None if None in values else statistics.median(values)
+
+
+def paired_ratios(records, baseline):
+    """Each repetition's rate over the baseline's in the same repetition."""
+    return [mine["throughput"]["messages_per_s"] / theirs["throughput"]["messages_per_s"]
+            for mine, theirs in zip(records, baseline)]
+
+
+# Each target: its bar, the hardware it was set on, and whether that bar holds on any host.
+# A bar set on x86 Linux is not passed or failed by a macOS figure: the row says the host
+# differs and gives the measured gap, signed.
+X86_BARS = {"T-BOOK-1", "T-BOOK-2", "T-LAT-1", "T-LAT-2", "T-LAT-4", "T-LAT-5"}
+SET_ON = {
+    "T-BOOK-1": "Ryzen 7 9700X, x86 Linux",
+    "T-BOOK-2": "Ryzen 7 9700X, x86 Linux",
+    "T-BOOK-3": "a size, comparable on any host",
+    "T-BOOK-4": "Apple M2 Pro, macOS, day 01302019",
+    "T-LAT-1": "Ryzen 7 9700X, x86 Linux",
+    "T-LAT-2": "Core i5-12400, x86 Linux under WSL2",
+    "T-LAT-3": "a rate budget, for every host",
+    "T-LAT-4": "Ryzen 9 5950X, x86 Linux",
+    "T-LAT-5": "Core i7-13650HX, x86",
+    "T-DESIGN-1": "a ratio on one host, comparable on any host",
+}
+T_LAT_1 = {"add": (60, 447, 683), "delete": (70, 599, 768), "replace": (110, 709, 945),
+           "reduce": (50, 548, 734)}
+MEGA = 1e6
+GIB_LIMIT = 1.4e9
+
+
+def judge(target, host, parts):
+    """The measured and verdict cells. Each part is (label, value or None, bar, sense, unit),
+    where None is a percentile below the floor and sense is "max" or "min"."""
+    measured = "; ".join(f"{label} {BELOW_FLOOR}" if value is None else f"{label} {value:,.2f}{unit}"
+                         for label, value, _, _, unit in parts)
+    gaps = []
+    missed = []
+    below = [label for label, value, _, _, _ in parts if value is None]
+    for label, value, bar, sense, unit in parts:
+        if value is None:
+            continue
+        gaps.append(f"{label} {value - bar:+,.2f}{unit}")
+        if (sense == "max" and value > bar) or (sense == "min" and value < bar):
+            missed.append(f"{label} by {abs(value - bar):,.2f}{unit}")
+    if target in X86_BARS and host == check_results.MAC_HOST:
+        verdict = ("host differs: a macOS figure against a bar set on x86 Linux, neither a "
+                   f"pass nor a fail; against the bar: {', '.join(gaps) or 'nothing resolved'}")
+        if below:
+            verdict += f"; {', '.join(below)} {BELOW_FLOOR}, not measurable here"
+        return measured, verdict
+    if missed:
+        verdict = f"missed: {', '.join(missed)}"
+    elif below:
+        verdict = (f"{BELOW_FLOOR}: {', '.join(below)} cannot be resolved on this host; "
+                   "every resolved figure is inside the bar")
+    else:
+        verdict = "met"
+    return measured, verdict
+
+
+def target_rows(records, runs):
+    """Every target beside its bar, measured from this file's design in this run."""
+    first = records[0]
+    host = first["header"]["host"]
+    design = design_of(first)
+    ram = first["header"]["input"].startswith("ram:")
+    tracked = first["header"]["top_of_book"].startswith("tracked")
+    rows = []
+
+    def row(target, bar, measured, verdict):
+        rows.append(f"| {target} | {bar} | {SET_ON[target]} | {measured} | {verdict} |")
+
+    def absent(target, bar, why):
+        row(target, bar, "", f"not measured in this run: {why}")
+
+    if design in MAP_DESIGNS:
+        why = "the targets are the fast book's, and this is the baseline it is measured against"
+        for target, bar in (("T-BOOK-1", "≥ 16.4 M msg/s"), ("T-BOOK-2", "≥ 12.5 M msg/s"),
+                            ("T-BOOK-3", "≤ 1.4 GB"), ("T-BOOK-4", "≥ 14.4 M msg/s"),
+                            ("T-LAT-1", "per operation"), ("T-LAT-2", "p50 ≤ 121 ns"),
+                            ("T-LAT-3", "mean ≤ 393 ns"), ("T-LAT-4", "p50 ≤ 100 ns"),
+                            ("T-LAT-5", "p50 ≤ 127 ns"), ("T-DESIGN-1", "≥ 4.0×")):
+            absent(target, bar, why)
+        return rows
+
+    rate = median_of(records, "messages_per_s") / MEGA
+    if ram and not tracked:
+        row("T-BOOK-1", "≥ 16.4 M msg/s",
+            *judge("T-BOOK-1", host, [("rate", rate, 16.4, "min", " M msg/s")]))
+    else:
+        absent("T-BOOK-1", "≥ 16.4 M msg/s", "needs the input in memory and no top-of-book tracking")
+    if not ram and tracked:
+        row("T-BOOK-2", "≥ 12.5 M msg/s",
+            *judge("T-BOOK-2", host, [("rate", rate, 12.5, "min", " M msg/s")]))
+    else:
+        absent("T-BOOK-2", "≥ 12.5 M msg/s", "needs the input mapped and the top of book tracked")
+    book_gb = statistics.median(record["memory"]["book_bytes"] for record in records) / 1e9
+    row("T-BOOK-3", "≤ 1.4 GB of book",
+        *judge("T-BOOK-3", host, [("book", book_gb, GIB_LIMIT / 1e9, "max", " GB")]))
+    if first["header"]["dataset"].startswith("01302019") and host == check_results.MAC_HOST:
+        row("T-BOOK-4", "≥ 14.4 M msg/s on 01302019",
+            *judge("T-BOOK-4", host, [("rate", rate, 14.4, "min", " M msg/s")]))
+    else:
+        absent("T-BOOK-4", "≥ 14.4 M msg/s on 01302019", "set on day 01302019 on macOS only")
+    parts = []
+    for operation, bars in T_LAT_1.items():
+        for percentile, bar in zip(OPERATION_PERCENTILES, bars):
+            parts.append((f"{operation} p{percentile:g}",
+                          operation_median(records, operation, percentile), bar, "max", " ns"))
+    row("T-LAT-1", "add 60, 447, 683; delete 70, 599, 768; replace 110, 709, 945; reduce 50, "
+                   "548, 734 ns at p50, p99, p99.9, raw", *judge("T-LAT-1", host, parts))
+    raw = {p: all_message(records, p)[0] for p in (50.0, 99.0, 99.9)}
+    net = {p: all_message(records, p)[1] for p in (50.0, 99.0, 99.9)}
+    row("T-LAT-2", "p50 ≤ 121, p99 ≤ 552, p99.9 ≤ 874 ns, raw",
+        *judge("T-LAT-2", host, [(f"p{p:g}", raw[p], bar, "max", " ns")
+                                 for p, bar in zip(raw, (121, 552, 874))]))
+    row("T-LAT-3", "mean service ≤ 393 ns a message, p99.9 ≤ 750 ns",
+        *judge("T-LAT-3", host, [("mean", median_of(records, "service_ns"), 393, "max", " ns"),
+                                 ("p99.9", raw[99.9], 750, "max", " ns")]))
+    row("T-LAT-4", "p50 ≤ 100, p99 ≤ 620, p99.9 ≤ 1,080 ns, pair subtracted; batch mean ≤ "
+                   "142.36 ns a book message",
+        *judge("T-LAT-4", host, [*((f"p{p:g}", net[p], bar, "max", " ns")
+                                   for p, bar in zip(net, (100, 620, 1080))),
+                                 ("batch mean", median_of(records, "batch_ns"), 142.36, "max",
+                                  " ns")]))
+    row("T-LAT-5", "p50 ≤ 127, p99 ≤ 446, p99.9 ≤ 778 ns, raw",
+        *judge("T-LAT-5", host, [(f"p{p:g}", raw[p], bar, "max", " ns")
+                                 for p, bar in zip(raw, (127, 446, 778))]))
+    maps = [name for name in MAP_DESIGNS if name in runs]
+    if maps:
+        parts = [(f"over {name}", statistics.median(paired_ratios(records, runs[name])), 4.0,
+                  "min", "×") for name in maps]
+        row("T-DESIGN-1", "≥ 4.0× the map book's throughput, same run", *judge("T-DESIGN-1", host,
+                                                                                parts))
+    else:
+        absent("T-DESIGN-1", "≥ 4.0× the map book's throughput, same run",
+               "no map design ran beside this one")
+    return rows
+
+
+def design_rows(records, runs):
+    rows = []
+    for name in MAP_DESIGNS:
+        if name in runs and name != design_of(records[0]):
+            ratios = paired_ratios(records, runs[name])
+            median, low, high, variation = spread(ratios)
+            rows.append(f"| {name} | {median:.2f} | {low:.2f} | {high:.2f} "
+                        f"| {100 * variation:.2f}% | {len(ratios)} |")
+    return rows
+
+
+def memory_rows(records):
+    rows = []
+    for label, key in (("Book memory, MiB", "book_bytes"),
+                       ("Charged before the book was built, MiB", "baseline_bytes"),
+                       ("Charged once it was built, before any message, MiB", "built_bytes"),
+                       ("Charged at the most, MiB", "peak_bytes")):
+        median, low, high, variation = spread([record["memory"][key] / 1024 ** 2
+                                               for record in records])
+        rows.append(f"| {label} | {median:,.1f} | {low:,.1f} | {high:,.1f} "
+                    f"| {100 * variation:.2f}% |")
+    return rows
+
+
+def method_lines(header):
+    """What the input mode and the top-of-book tracking did, and which of itch-book's two
+    methods that is."""
+    ram = header["input"].startswith("ram:")
+    tracked = header["top_of_book"].startswith("tracked")
+    read = ("The day was read into anonymous memory before the warm-up and never mapped, so "
+            "each pass reads a copy in RAM." if ram else
+            "The day was mapped read-only, and each pass reads the mapping in place.")
+    top = ("After each message the book applied, the best bid and ask on its locate, price and "
+           "shares, were read and compared with the last seen there: inside the throughput "
+           "pass's time, outside each latency span." if tracked else
+           "Nothing read the top of book: each pass timed the book alone.")
+    if ram and not tracked:
+        method = ("This is itch-book's T-BOOK-1 method: its book_throughput reads the whole file "
+                  "into a buffer and times the book alone, with no top-of-book work.")
+    elif tracked and not ram:
+        method = ("This is itch-book's T-BOOK-2 method, `itch-replay --book`: it maps the file "
+                  "and checks the best bid and ask, price and shares, after every book event.")
+    else:
+        method = ("This pairing is neither of itch-book's methods, so it stands for neither "
+                  "T-BOOK-1 nor T-BOOK-2.")
+    return ["", "## How this run reads the day", "", f"{read} {top} {method}"]
+
+
+def book_sections(records, runs):
+    """The sections only a book design's file has."""
+    first = records[0]
+    memory = first["memory"]
+    lines = method_lines(first["header"])
+    lines += ["", "## Per-operation latency", "",
+             f"T-LAT-1. The latency pass's spans, by what the message asks of the book: "
+             f"{operation_counts(first)} messages a pass. `reduce` is `E`, `C` and `X`. The "
+             "last column takes each repetition's own measured empty pair off its figure.", "",
+             "| Operation | Percentile | Median ns | Min ns | Max ns | CV | Status "
+             "| Median ns, pair subtracted |", "|---|---|---|---|---|---|---|---|"]
+    lines += operation_rows(records)
+    ager = ""
+    if memory.get("ager_held_bytes") is not None:
+        ager = (f" The ager's ballast is inside the figure: it holds "
+                f"{memory['ager_held_bytes'] / 1024 ** 2:,.1f} MiB of blocks at the end of the "
+                "pass, and the pages of the blocks it freed stay charged.")
+    lines += ["", "## Book memory", "",
+              f"T-BOOK-3. Read from {memory['source']}, in a process of its own that builds "
+              "no other book first: once before the book is built, once after, every "
+              "1,048,576 messages of the untimed pass and at its end. The book's memory is the "
+              "most charged at any reading less the reading before it was built. That is what "
+              "the book itself takes, not the mapped file or the input copy, which are in the "
+              "first reading, and not the latency samples, which that process never makes. "
+              "itch-book's figure is peak RSS less the input buffer, the same quantity read "
+              f"another way.{ager}", "",
+              "| Figure | Median | Min | Max | CV |", "|---|---|---|---|---|"]
+    lines += memory_rows(records)
+    if first["header"]["top_of_book"].startswith("tracked"):
+        changes = first["throughput"]["top_changes"]
+        lines += ["", "## Top of book", "",
+                  f"The top of book moved after {changes:,} of the "
+                  f"{first['throughput']['messages']:,} messages in every pass of every "
+                  "repetition. Every design in this run saw the same count, and the driver "
+                  "refuses a run where any did not."]
+    lines += ["", "## Design comparison", ""]
+    comparison = design_rows(records, runs)
+    if design_of(first) in MAP_DESIGNS:
+        lines += ["This is the map book, the baseline of T-DESIGN-1. Each fast design's file "
+                  "in this run gives its throughput over this one's."]
+        if comparison:
+            lines += ["", "Over the other map design, repetition by repetition:", "",
+                      "| Against | Median ratio | Min | Max | CV | Repetitions |",
+                      "|---|---|---|---|---|---|", *comparison]
+    elif comparison:
+        lines += ["T-DESIGN-1. This design's throughput over each map design's, taken "
+                  "repetition by repetition, since each repetition ran every design back to "
+                  "back.", "", "| Against | Median ratio | Min | Max | CV | Repetitions |",
+                  "|---|---|---|---|---|---|", *comparison]
+    else:
+        lines += ["No map design ran beside it in this run, so T-DESIGN-1 is not measured here."]
+    lines += ["", "## Targets", "",
+              "Each target from BENCHMARKS.md beside the bar, from this file's medians. A bar "
+              "set on other hardware is the bar and context, not proof about this host.", "",
+              "| Target | Bar | Bar set on | Measured here | Verdict |", "|---|---|---|---|---|"]
+    lines += target_rows(records, runs)
+    return lines
+
+
+def host_note(records):
+    header = records[0]["header"]
+    if header["host"] != check_results.MAC_HOST:
+        return []
+    return [f"**{check_results.MAC_HOST} is not a pinned host.** macOS offers no way to pin a "
+            "thread, so each process ran wherever the scheduler put it, beside whatever else "
+            "the machine was doing under `measure.sh`'s lock. Every figure here is a macOS "
+            "figure, and a bar set on x86 Linux is not passed or failed by one.", ""]
+
+
+def render(records, args, run_id, started, finished, machine_output, command, runs=None):
+    design = design_of(records[0]) if "design" in records[0]["header"] else ""
+    title = (args.title or f"bench_replay on {args.input.name}").replace("{design}", design)
     host = records[0]["header"]["host"]
+    book = is_book_record(records[0])
     lines = [f"# {title}", "",
              "Generated by `scripts/bench_driver.py` from raw records that are not committed. "
              "Do not edit by hand.", "", f"Host: **{host}**. Numbers from the two hosts are "
              "never mixed.", ""]
+    if book:
+        lines += host_note(records)
     if args.note:
         lines += [f"**{args.note}**", ""]
     lines += ["## Header", ""]
     lines += header_lines(records, args, run_id, started, finished)
+    passes = ("one warm-up pass, excluded from every figure here, then a throughput pass and a "
+              "separate latency pass, each on a fresh book")
+    if book:
+        passes += (", and a second process for the untimed pass of counters and memory. Every "
+                   "design of the run ran in each repetition, one after the other")
     lines += ["", "## Summary", "",
-              f"Each repetition is a fresh process: one warm-up pass, excluded from every "
-              f"figure here, then a throughput pass and a separate latency pass, each on a "
-              f"fresh book. {len(records)} repetitions.", "",
-              "| Figure | Median | Min | Max | CV |", "|---|---|---|---|---|"]
+              f"Each repetition is a fresh process: {passes}. {len(records)} repetitions.", ""]
+    if book:
+        lines += ["The mean service time is the throughput pass's time over every message, frame "
+                  "walk included (T-LAT-3). The batch mean is the same time over the "
+                  f"{records[0]['mix']['book_messages']:,} book messages, carteret's "
+                  "denominator: `A`, `F`, `E`, `C`, `X`, `D`, `U`, `P` and `Q` (T-LAT-4).", ""]
+    lines += ["| Figure | Median | Min | Max | CV |", "|---|---|---|---|---|"]
     lines += summary_rows(records)
-    lines += ["", "## Latency", "",
-              "One span is one `apply()`, with the empty pair inside it, and the frame walk "
-              "outside. HdrHistogram saw the samples after the pass. A percentile less than "
-              "the floor above the pair cost is not a measurement, so it has no value here.",
-              "", "| Percentile | Median ns | Min ns | Max ns | CV | Status |",
-              "|---|---|---|---|---|---|"]
+    if book:
+        lines += ["", "## Latency", "",
+                  "One span is one `apply()`, with the empty pair inside it, and the frame walk "
+                  "outside. HdrHistogram saw the samples after the pass. A percentile less than "
+                  "the floor above the pair cost is not a measurement, so it shows as below "
+                  "floor and has no value here. The last column takes each repetition's own "
+                  "measured empty pair off its figure (T-LAT-4); the others are raw.",
+                  "", "| Percentile | Median ns | Min ns | Max ns | CV | Status "
+                  "| Median ns, pair subtracted |", "|---|---|---|---|---|---|---|"]
+    else:
+        lines += ["", "## Latency", "",
+                  "One span is one `apply()`, with the empty pair inside it, and the frame walk "
+                  "outside. HdrHistogram saw the samples after the pass. A percentile less than "
+                  "the floor above the pair cost is not a measurement, so it has no value here.",
+                  "", "| Percentile | Median ns | Min ns | Max ns | CV | Status |",
+                  "|---|---|---|---|---|---|"]
     lines += latency_rows(records)
+    if book:
+        lines += book_sections(records, runs or {design: records})
     lines += ["", "## Counters", "",
               "From a separate pass that is not timed, median over the repetitions. `rdpmc` "
               "in the header is the agreement with `read()` on the descriptors.", "",
@@ -358,6 +776,11 @@ def relative_command(args):
              "--probe", shown(args.probe), "--input", shown(args.input),
              "--prediction", args.prediction, "--repetitions", str(args.repetitions),
              "--raw-dir", "<raw>", "--out", shown(args.out)]
+    for design in args.design:
+        words += ["--design", design]
+    words += ["--input-mode", args.input_mode]
+    if args.track_top:
+        words.append("--track-top")
     if args.core is not None:
         words += ["--core", str(args.core)]
     text = " ".join(shlex.quote(word) if "<" not in word else word for word in words)
@@ -383,19 +806,29 @@ def run(args, run_id, started, commit):
     if code.returncode != 0:
         raise Refused("prediction", code.stdout.strip())
     machine_output = machine_check(args)
-    records = []
+    designs = args.design or [None]
+    runs = {}
     for index in range(1, args.repetitions + 1):
-        record = run_repetition(args, index, commit, digest)
-        validate_run(record)
-        records.append(record)
-    text = render(records, args, run_id, started, utc_now(), machine_output,
-                  relative_command(args))
-    violations = [found for found in check_results.check_text(text)
-                  if found[0] != "load-not-stamped"]
-    if violations:
-        raise Refused("results", "; ".join(f"{code}: {detail}" for code, detail in violations))
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(text, encoding="utf-8")
+        for design in designs:
+            record = run_repetition(args, index, commit, digest, design)
+            validate_run(record)
+            runs.setdefault(design_of(record), []).append(record)
+    validate_together(runs)
+    finished = utc_now()
+    texts = {}
+    for design, records in runs.items():
+        out = Path(str(args.out).replace("{design}", design))
+        texts[out] = render(records, args, run_id, started, finished, machine_output,
+                            relative_command(args), runs)
+        violations = [found for found in check_results.check_text(texts[out])
+                      if found[0] != "load-not-stamped"]
+        if violations:
+            raise Refused("results", f"{out.name}: " + "; ".join(
+                f"{code}: {detail}" for code, detail in violations))
+    for out, text in texts.items():
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+    return list(texts)
 
 
 def parse_args(argv):
@@ -409,6 +842,11 @@ def parse_args(argv):
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--core", type=int)
     parser.add_argument("--sibling", type=int)
+    parser.add_argument("--design", action="append", default=[],
+                        choices=FAST_DESIGNS + MAP_DESIGNS,
+                        help="repeatable; every one runs in each repetition, in this order")
+    parser.add_argument("--input-mode", choices=("ram", "mapped"), default="mapped")
+    parser.add_argument("--track-top", action="store_true")
     parser.add_argument("--orders", type=int)
     parser.add_argument("--levels", type=int)
     parser.add_argument("--title")
@@ -422,6 +860,10 @@ def parse_args(argv):
     args = parser.parse_args(argv)
     if args.repetitions < 3:
         parser.error("median, min, max and CV need at least 3 repetitions")
+    if len(args.design) != len(set(args.design)):
+        parser.error("a design is named twice")
+    if len(args.design) > 1 and "{design}" not in str(args.out):
+        parser.error("with more than one design, --out must hold {design}")
     return args
 
 
@@ -433,9 +875,10 @@ def main(argv=None):
     started = utc_now()
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
     commit = "unknown"
+    written = []
     try:
         commit = git_commit(REPO_ROOT, args.allow_dirty)
-        run(args, run_id, started, commit)
+        written = run(args, run_id, started, commit)
     except Refused as refusal:
         print(f"bench_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
         append_log(args.run_log, run_id, args.prediction, commit,
@@ -446,8 +889,9 @@ def main(argv=None):
         append_log(args.run_log, run_id, args.prediction, commit, f"failed: {error!r}")
         return 1
     append_log(args.run_log, run_id, args.prediction, commit, "published")
-    print(f"bench_driver: wrote {args.out}, load lines pending. Now run scripts/stamp_load.py.",
-          file=sys.stderr)
+    for out in written:
+        print(f"bench_driver: wrote {out}, load lines pending. Now run scripts/stamp_load.py.",
+              file=sys.stderr)
     return 0
 
 

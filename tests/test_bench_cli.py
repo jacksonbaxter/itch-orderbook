@@ -98,6 +98,53 @@ class Cli(unittest.TestCase):
                                 timeout=60, check=False)
         self.assertEqual(result.returncode, 2)
 
+    def test_every_design_replays_the_same_mix_and_top_of_book(self):
+        seen = {}
+        for design in ("hash-linked", "hash-flat", "paged-linked", "paged-flat", "map-fresh",
+                       "map-aged"):
+            for mode in ("ram", "mapped"):
+                result, out = self.replay("--design", design, "--input-mode", mode,
+                                          "--track-top", "on", "--passes", "timed")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                record = json.loads(out.read_text(encoding="utf-8"))
+                self.assertTrue(record["header"]["design"].startswith(f"{design}: "))
+                self.assertEqual(record["warmup"]["book"],
+                                 "hash-linked" if design.startswith("map-") else "this design")
+                self.assertTrue(record["header"]["input"].startswith(f"{mode}: "))
+                self.assertTrue(record["header"]["top_of_book"].startswith("tracked: "))
+                seen[(design, mode)] = (json.dumps(record["mix"], sort_keys=True),
+                                        record["throughput"]["top_changes"],
+                                        record["latency_pass"]["top_changes"])
+                spans = sum(op["samples"] for op in record["latency"]["operations"])
+                mix = record["mix"]
+                self.assertEqual(spans, sum(mix[op] for op in ("add", "delete", "replace",
+                                                               "reduce")))
+        self.assertEqual(len(set(seen.values())), 1, seen)
+        self.assertGreater(next(iter(seen.values()))[1], 0)
+
+    def test_the_untimed_process_measures_the_first_book(self):
+        result, out = self.replay("--design", "paged-flat", "--passes", "untimed")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        memory = json.loads(out.read_text(encoding="utf-8"))["memory"]
+        self.assertTrue(memory["complete"])
+        self.assertTrue(memory["first_book"])
+        # The pages' slots alone are 418 MiB, so a baseline read after the book was built
+        # would leave next to nothing.
+        self.assertGreater(memory["book_bytes"], 400 * 1024 ** 2)
+        self.assertEqual(memory["book_bytes"], memory["peak_bytes"] - memory["baseline_bytes"])
+
+    def test_the_aged_map_book_reports_its_ballast(self):
+        result, out = self.replay("--design", "map-aged", "--passes", "untimed")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        memory = json.loads(out.read_text(encoding="utf-8"))["memory"]
+        self.assertGreater(memory["ager_held_bytes"], 0)
+
+    def test_an_unknown_design_is_a_usage_error(self):
+        result, _ = self.replay("--design", "tree-flat")
+        self.assertEqual(result.returncode, 2)
+        result, _ = self.replay("--input-mode", "disk")
+        self.assertEqual(result.returncode, 2)
+
     def test_a_chase_writes_a_whole_record(self):
         out = SCRATCH / "chase.json"
         result = subprocess.run([str(BENCH.parent / "bench_chase"), "--out", str(out), "--loads",
@@ -158,6 +205,32 @@ class Cli(unittest.TestCase):
         self.assertNotIn("some-machine", stamped)
         self.assertIn(f"host={fields['host']}", stamped)
         self.assertEqual(check_results.check_text(stamped), [])
+
+    @unittest.skipUnless(platform.system() == "Darwin", "machine_check needs a measuring machine")
+    def test_the_driver_writes_a_file_for_each_design(self):
+        predictions = SCRATCH / "records"
+        (predictions / "results").mkdir(parents=True)
+        (predictions / "results" / "predictions.md").write_text(
+            "## P-0999: fixture\n\n- Prediction: it runs.\n", encoding="utf-8")
+        out = SCRATCH / "results" / "bench_book_{design}_ram.md"
+        result = subprocess.run(
+            [sys.executable, "-B", str(REPO_ROOT / "scripts" / "bench_driver.py"),
+             "--bench", str(BENCH), "--probe", str(PROBE), "--input", str(FIXTURE),
+             "--prediction", "P-0999", "--repetitions", "3", "--raw-dir", str(SCRATCH / "raw"),
+             "--out", str(out), "--design", "paged-linked", "--design", "map-fresh",
+             "--design", "map-aged", "--input-mode", "ram", "--allow-dirty",
+             "--predictions-root", str(predictions),
+             "--run-log", str(predictions / "results" / "run_log.md")],
+            capture_output=True, text=True, timeout=300, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for design in ("paged-linked", "map-fresh", "map-aged"):
+            text = Path(str(out).replace("{design}", design)).read_text(encoding="utf-8")
+            self.assertEqual({code for code, _ in check_results.check_text(text)},
+                             {"load-not-stamped"}, design)
+            self.assertIn(f"- design: {design}: ", text)
+        fast = Path(str(out).replace("{design}", "paged-linked")).read_text(encoding="utf-8")
+        self.assertRegex(fast, r"\| map-fresh \| [0-9.]+ \|")
+        self.assertRegex(fast, r"\| map-aged \| [0-9.]+ \|")
 
     @unittest.skipUnless(platform.system() == "Darwin", "machine_check needs a measuring machine")
     def test_a_refused_run_stays_in_the_log(self):

@@ -31,6 +31,9 @@ MAC = (FIXTURES / "good_mac.md").read_text(encoding="utf-8")
 DEBIAN = (FIXTURES / "good_debian.md").read_text(encoding="utf-8")
 PENDING = (FIXTURES / "pending_mac.md").read_text(encoding="utf-8")
 STDERR = (FIXTURES / "measure.stderr").read_text(encoding="utf-8")
+BOOK = (FIXTURES / "good_book_mac.md").read_text(encoding="utf-8")
+BOOK_MAP = (FIXTURES / "good_book_map_mac.md").read_text(encoding="utf-8")
+BOOK_TOP = (FIXTURES / "good_book_top_mac.md").read_text(encoding="utf-8")
 
 
 def codes(text):
@@ -134,6 +137,138 @@ class Results(unittest.TestCase):
     def test_private_text(self):
         self.assertIn("private-text", codes(MAC + "/" + "Users" + "/someone/x\n"))
         self.assertIn("private-text", codes(MAC + "100." + "64.0.1\n"))
+
+
+def without_line(text, prefix):
+    """The text with the first line that starts with prefix taken out."""
+    lines = text.splitlines(keepends=True)
+    for position, line in enumerate(lines):
+        if line.startswith(prefix):
+            return "".join(lines[:position] + lines[position + 1:])
+    raise AssertionError(prefix)
+
+
+def target_verdict(text, target, verdict):
+    """The text with one target's verdict cell, the last in its row, replaced."""
+    lines = text.splitlines(keepends=True)
+    for position, line in enumerate(lines):
+        if line.startswith(f"| {target} |"):
+            cells = line.rstrip("\n").split(" | ")
+            cells[-1] = f"{verdict} |"
+            lines[position] = " | ".join(cells) + "\n"
+            return "".join(lines)
+    raise AssertionError(target)
+
+
+class BookResults(unittest.TestCase):
+    def test_the_book_fixtures_pass(self):
+        for text in (BOOK, BOOK_MAP, BOOK_TOP):
+            self.assertEqual(check_results.check_text(text), [])
+
+    def test_the_stub_label_spares_a_file_the_book_rules(self):
+        self.assertTrue(check_results.is_book_file(BOOK))
+        self.assertFalse(check_results.is_book_file(MAC))
+
+    def test_every_book_field_dropped_in_turn(self):
+        for name in check_results.BOOK_FIELDS:
+            self.assertIn("header-field-missing", codes(without_line(BOOK, f"- {name}: ")), name)
+
+    def test_an_unknown_design(self):
+        self.assertIn("design-unknown", codes(replace(BOOK, "- design: hash-linked:",
+                                                      "- design: tree-linked:")))
+
+    def test_an_unknown_input_mode(self):
+        self.assertIn("input-mode-unknown", codes(replace(BOOK, "- input: ram:", "- input: disk:")))
+
+    def test_a_malformed_top_of_book(self):
+        self.assertIn("top-of-book-malformed", codes(replace(BOOK, "- top_of_book: not tracked",
+                                                             "- top_of_book: maybe")))
+
+    def test_a_malformed_book_message_count(self):
+        self.assertIn("book-messages-malformed", codes(replace(BOOK, "- book_messages: 3,312",
+                                                               "- book_messages: about 3k")))
+
+    def test_a_latency_row_with_no_subtracted_column(self):
+        row = "| p50 | below floor | | | | resolved in 0 of 3 repetitions | below floor |"
+        broken = replace(BOOK, row, "| p50 | below floor | | | | resolved in 0 of 3 repetitions |")
+        self.assertIn("latency-subtracted-missing", codes(broken))
+
+    def test_raw_and_subtracted_disagree_on_the_floor(self):
+        row = "| p99 | below floor | | | | resolved in 0 of 3 repetitions | below floor |"
+        broken = replace(BOOK, row, "| p99 | below floor | | | | resolved in 0 of 3 repetitions "
+                                    "| 300.0 |")
+        self.assertIn("latency-subtracted-missing", codes(broken))
+
+    def test_a_subtracted_figure_under_the_floor(self):
+        row = "| p99 | below floor | | | | resolved in 0 of 3 repetitions | below floor |"
+        broken = replace(BOOK, row, "| p99 | 291.7 | 291.7 | 291.7 | 0.00% | resolved in 3 of 3 "
+                                    "repetitions | 120.0 |")
+        self.assertEqual(codes(broken), {"percentile-below-floor"})
+
+    def test_a_malformed_subtracted_figure(self):
+        row = "| p99 | below floor | | | | resolved in 0 of 3 repetitions | below floor |"
+        broken = replace(BOOK, row, "| p99 | 291.7 | 291.7 | 291.7 | 0.00% | resolved in 3 of 3 "
+                                    "repetitions | fast |")
+        self.assertIn("latency-value-malformed", codes(broken))
+
+    def test_an_operation_row_dropped(self):
+        for operation in check_results.OPERATIONS:
+            for percentile in check_results.OPERATION_PERCENTILES:
+                broken = without_line(BOOK, f"| {operation} | {percentile} |")
+                self.assertIn("operation-table-missing", codes(broken), (operation, percentile))
+
+    def test_an_operation_figure_under_the_floor(self):
+        row = "| delete | p99 | below floor | | | | resolved in 0 of 3 repetitions | below floor |"
+        broken = replace(BOOK, row, "| delete | p99 | 100.0 | 100.0 | 100.0 | 0.00% | resolved "
+                                    "in 3 of 3 repetitions | below floor |")
+        self.assertIn("percentile-below-floor", codes(broken))
+
+    def test_a_summary_figure_dropped(self):
+        for label in check_results.BOOK_SUMMARY:
+            self.assertIn("summary-figure-missing", codes(without_line(BOOK, f"| {label} |")),
+                          label)
+
+    def test_no_book_memory_section(self):
+        self.assertIn("memory-missing", codes(replace(BOOK, "## Book memory\n", "## Memory\n")))
+
+    def test_no_statement_of_how_the_day_was_read(self):
+        broken = replace(BOOK, "## How this run reads the day\n", "## Input\n")
+        self.assertIn("method-missing", codes(broken))
+
+    def test_tracked_with_no_count_of_the_moves(self):
+        broken = replace(BOOK_TOP, "The top of book moved after 207 of the 3,330 messages",
+                         "The top of book moved")
+        self.assertIn("top-of-book-missing", codes(broken))
+
+    def test_no_design_comparison(self):
+        broken = replace(BOOK, "## Design comparison\n", "## Designs\n")
+        self.assertIn("design-comparison-missing", codes(broken))
+
+    def test_a_fast_design_with_no_ratio_and_no_reason(self):
+        broken = without_line(without_line(BOOK, "| map-fresh | 1.27 |"), "| map-aged | 0.72 |")
+        self.assertIn("design-comparison-missing", codes(broken))
+
+    def test_a_ratio_that_is_not_a_figure(self):
+        broken = replace(BOOK, "| map-fresh | 1.27 |", "| map-fresh | n/a |")
+        self.assertIn("design-comparison-missing", codes(broken))
+
+    def test_a_target_dropped(self):
+        for target in check_results.TARGETS:
+            self.assertIn("target-missing", codes(without_line(BOOK, f"| {target} |")), target)
+
+    def test_a_verdict_outside_the_fixed_words(self):
+        broken = target_verdict(BOOK, "T-BOOK-3", "fine")
+        self.assertIn("target-verdict-invalid", codes(broken))
+
+    def test_an_x86_bar_called_met_on_macos(self):
+        for target in check_results.X86_TARGETS:
+            for verdict in ("met", "missed: by 1 ns", "below floor: p50"):
+                broken = target_verdict(BOOK, target, verdict)
+                self.assertIn("target-host-blurred", codes(broken), (target, verdict))
+
+    def test_a_host_independent_bar_may_be_met_or_missed_on_macos(self):
+        for verdict in ("met", "missed: by 0.1 GB"):
+            self.assertEqual(codes(target_verdict(BOOK, "T-BOOK-3", verdict)), set())
 
 
 class Stamp(unittest.TestCase):
@@ -322,6 +457,160 @@ class Driver(unittest.TestCase):
             with self.assertRaises(bench_driver.Refused) as caught:
                 bench_driver.run_repetition(args, 1, "abc", "00")
             self.assertIn("input not resident", str(caught.exception))
+
+
+def book_record(rate=100.0, design="hash-linked", pair=5.0, top=0):
+    """A record from a book run: the mix, the per-operation spans and the book's memory."""
+    book = record(rate)
+    book["header"] = {"design": f"{design}: x", "host": check_results.MAC_HOST,
+                      "input": "ram: x", "top_of_book": "not tracked"}
+    book["mix"] = {"book_messages": 8, "add": 4, "delete": 2, "replace": 1, "reduce": 1}
+    book["throughput"]["top_changes"] = top
+    book["latency_pass"]["top_changes"] = top
+    book["timer"]["pair_ns"] = pair
+    book["latency"]["operations"] = [
+        {"op": op, "samples": count, "mean_ns": 40.0,
+         "percentiles": [{"percentile": 50, "value_ns": None},
+                         {"percentile": 99, "value_ns": 500.0}]}
+        for op, count in (("add", 4), ("delete", 2), ("replace", 1), ("reduce", 1))]
+    book["memory"] = {"complete": True, "first_book": True, "book_bytes": 3 * 1024 ** 2}
+    return book
+
+
+class BookDriver(unittest.TestCase):
+    def test_a_good_book_record_is_accepted(self):
+        bench_driver.validate_run(book_record())
+
+    def test_operation_spans_that_do_not_match_the_mix_are_refused(self):
+        short = book_record()
+        short["latency"]["operations"][1]["samples"] = 1
+        with self.assertRaisesRegex(bench_driver.Refused, "1 delete spans for 2 delete"):
+            bench_driver.validate_run(short)
+
+    def test_an_operation_percentile_under_the_floor_is_refused(self):
+        low = book_record()
+        low["latency"]["operations"][2]["percentiles"][1]["value_ns"] = 80.0
+        with self.assertRaisesRegex(bench_driver.Refused, "replace p99"):
+            bench_driver.validate_run(low)
+
+    def test_designs_that_saw_another_mix_are_refused(self):
+        other = book_record(design="map-fresh")
+        other["mix"]["add"] = 5
+        with self.assertRaisesRegex(bench_driver.Refused, "another mix"):
+            bench_driver.validate_together({"hash-linked": [book_record()],
+                                            "map-fresh": [other]})
+
+    def test_designs_that_saw_another_top_of_book_are_refused(self):
+        with self.assertRaisesRegex(bench_driver.Refused, "moves of the top"):
+            bench_driver.validate_together({"hash-linked": [book_record(top=7)],
+                                            "paged-flat": [book_record(top=8)]})
+
+    def test_designs_that_agree_are_accepted(self):
+        bench_driver.validate_together({"hash-linked": [book_record(top=7)] * 3,
+                                        "map-aged": [book_record(design="map-aged", top=7)] * 3})
+
+    def test_a_below_floor_percentile_shows_no_figure_in_either_column(self):
+        row = bench_driver.percentile_row("p50", [None, 200.0, 210.0], [5.0, 5.0, 5.0])
+        self.assertEqual(row, "| p50 | below floor | | | | resolved in 2 of 3 repetitions "
+                              "| below floor |")
+
+    def test_each_repetition_loses_its_own_pair(self):
+        row = bench_driver.percentile_row("p99", [200.0, 220.0, 210.0], [10.0, 40.0, 5.0])
+        self.assertEqual(row, "| p99 | 210.0 | 200.0 | 220.0 | 4.76% | resolved | 190.0 |")
+
+    def test_ratios_pair_repetition_with_repetition(self):
+        fast = [book_record(300.0), book_record(100.0), book_record(200.0)]
+        slow = [book_record(100.0), book_record(50.0), book_record(200.0)]
+        self.assertEqual(bench_driver.paired_ratios(fast, slow), [3.0, 2.0, 1.0])
+
+    def test_the_book_summary_adds_service_batch_and_memory(self):
+        rows = bench_driver.summary_rows([book_record()] * 3)
+        self.assertIn("| Mean service time per message, ns | 10000000.00 | 10000000.00 "
+                      "| 10000000.00 | 0.00% |", rows)
+        self.assertIn("| Batch mean per book message, ns | 12500000.00 | 12500000.00 "
+                      "| 12500000.00 | 0.00% |", rows)
+        self.assertIn("| Book memory, MiB | 3.0 | 3.0 | 3.0 | 0.00% |", rows)
+
+    def test_an_x86_bar_on_macos_is_neither_met_nor_missed(self):
+        for value in (20e6, 10e6):
+            _, verdict = bench_driver.judge("T-BOOK-1", check_results.MAC_HOST,
+                                            [("rate", value, 16.4e6, "min", "")])
+            self.assertTrue(verdict.startswith("host differs: "), verdict)
+
+    def test_an_x86_bar_on_debian_is_met_or_missed(self):
+        _, verdict = bench_driver.judge("T-BOOK-1", "debian", [("rate", 20.0, 16.4, "min", "")])
+        self.assertEqual(verdict, "met")
+        _, verdict = bench_driver.judge("T-BOOK-1", "debian", [("rate", 10.0, 16.4, "min", "")])
+        self.assertEqual(verdict, "missed: rate by 6.40")
+
+    def test_a_host_independent_bar_on_macos_is_met_or_missed(self):
+        _, verdict = bench_driver.judge("T-BOOK-3", check_results.MAC_HOST,
+                                        [("book", 1.5, 1.4, "max", " GB")])
+        self.assertEqual(verdict, "missed: book by 0.10 GB")
+
+    def test_a_bar_with_a_figure_below_the_floor_says_so(self):
+        measured, verdict = bench_driver.judge("T-LAT-3", "debian",
+                                               [("mean", 40.0, 393, "max", " ns"),
+                                                ("p99.9", None, 750, "max", " ns")])
+        self.assertEqual(measured, "mean 40.00 ns; p99.9 below floor")
+        self.assertTrue(verdict.startswith("below floor: p99.9"), verdict)
+
+    def test_each_pairing_names_the_method_it_matches(self):
+        def method(source, top):
+            return bench_driver.method_lines({"input": f"{source}: x", "top_of_book": top})[-1]
+        self.assertIn("T-BOOK-1 method", method("ram", "not tracked"))
+        self.assertIn("T-BOOK-2 method", method("mapped", "tracked: x"))
+        for source, top in (("ram", "tracked: x"), ("mapped", "not tracked")):
+            self.assertIn("neither of itch-book's methods", method(source, top))
+
+    def test_two_designs_need_a_design_in_the_out_path(self):
+        base = ["--bench", "x", "--probe", "x", "--input", "x", "--prediction", "P-0001",
+                "--raw-dir", "x", "--design", "hash-linked", "--design", "map-fresh"]
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            bench_driver.parse_args([*base, "--out", "x.md"])
+        args = bench_driver.parse_args([*base, "--out", "x_{design}.md"])
+        self.assertEqual(args.design, ["hash-linked", "map-fresh"])
+
+    def test_a_design_named_twice_is_refused(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            bench_driver.parse_args(["--bench", "x", "--probe", "x", "--input", "x",
+                                     "--prediction", "P-0001", "--raw-dir", "x",
+                                     "--out", "{design}", "--design", "hash-flat",
+                                     "--design", "hash-flat"])
+
+    def fake_bench(self, root, untimed):
+        """A bench_replay stand-in that writes the timed record or the untimed one."""
+        fake = root / "bench.sh"
+        timed = book_record()
+        timed["header"].update(counters="none", rdpmc="none")
+        untimed_record = book_record()
+        untimed_record["header"].update(counters="from the untimed pass", rdpmc="unavailable")
+        untimed_record["memory"].update(untimed)
+        fake.write_text(
+            "#!/bin/sh\nwhile [ $# -gt 0 ]; do case $1 in --out) out=$2;; --passes) passes=$2;; "
+            "esac; shift; done\n"
+            f"if [ \"$passes\" = timed ]; then cat > \"$out\" <<'JSON'\n{json.dumps(timed)}\nJSON\n"
+            f"else cat > \"$out\" <<'JSON'\n{json.dumps(untimed_record)}\nJSON\nfi\n",
+            encoding="utf-8")
+        fake.chmod(0o755)
+        return bench_driver.parse_args(
+            ["--bench", str(fake), "--probe", "x", "--input", "x", "--prediction", "P-0001",
+             "--raw-dir", str(root), "--out", "x", "--design", "hash-linked"])
+
+    def test_the_untimed_process_supplies_counters_and_memory(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            args = self.fake_bench(Path(directory), {"book_bytes": 7})
+            merged = bench_driver.run_repetition(args, 1, "abc", "00", "hash-linked")
+            self.assertEqual(merged["memory"]["book_bytes"], 7)
+            self.assertEqual(merged["header"]["counters"], "from the untimed pass")
+            self.assertEqual(merged["header"]["rdpmc"], "unavailable")
+
+    def test_memory_that_is_not_the_first_book_is_refused(self):
+        for broken in ({"first_book": False}, {"complete": False}):
+            with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+                args = self.fake_bench(Path(directory), broken)
+                with self.assertRaisesRegex(bench_driver.Refused, "first book"):
+                    bench_driver.run_repetition(args, 1, "abc", "00", "hash-linked")
 
 
 if __name__ == "__main__":

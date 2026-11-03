@@ -268,8 +268,8 @@
       "mutations": [
         {
           "file": "bench/replay.hpp",
-          "old": "    const PassTotals pass = throughput_pass(input_->bytes(), *book, *clock_);\n    report_.throughput = pass;\n",
-          "new": "    PassTotals pass = throughput_pass(input_->bytes(), *book, *clock_);\n    pass.ticks += report_.warmup_ticks;\n    pass.messages += report_.warmup_messages;\n    report_.throughput = pass;\n"
+          "old": "    const PassTotals pass = tracker ? throughput_pass(input_->bytes(), *book, *clock_, *tracker)\n                                    : throughput_pass(input_->bytes(), *book, *clock_);\n    report_.throughput = pass;\n",
+          "new": "    PassTotals pass = tracker ? throughput_pass(input_->bytes(), *book, *clock_, *tracker)\n                              : throughput_pass(input_->bytes(), *book, *clock_);\n    pass.ticks += report_.warmup_ticks;\n    pass.messages += report_.warmup_messages;\n    report_.throughput = pass;\n"
         }
       ],
       "build": {
@@ -320,8 +320,8 @@
       "mutations": [
         {
           "file": "bench/replay.hpp",
-          "old": "    const std::uint64_t after = clock.stop();\n    sink.push(after - before);\n",
-          "new": "    sink.push(0);\n    const std::uint64_t after = clock.stop();\n    static_cast<void>(after - before);\n"
+          "old": "    const std::uint64_t after = clock.stop();\n    sink.push(after - before, op);\n",
+          "new": "    sink.push(0, op);\n    const std::uint64_t after = clock.stop();\n    static_cast<void>(after - before);\n"
         }
       ],
       "build": {
@@ -1557,8 +1557,8 @@
       "mutations": [
         {
           "file": "bench/replay.hpp",
-          "old": "    const std::unique_ptr<Book> book = make_book_();\n    if (!input_resident()) {\n      return false;\n    }\n    const PassTotals pass = throughput_pass(",
-          "new": "    if (!input_resident()) {\n      return false;\n    }\n    const std::unique_ptr<Book> book = make_book_();\n    const PassTotals pass = throughput_pass("
+          "old": "    const std::unique_ptr<Book> book = make_book_();\n    std::optional<TopTracker> tracker;\n    if (track_top_) {\n      tracker.emplace();\n    }\n    if (!input_resident()) {\n      return false;\n    }\n    const PassTotals pass = tracker ? throughput_pass(",
+          "new": "    if (!input_resident()) {\n      return false;\n    }\n    const std::unique_ptr<Book> book = make_book_();\n    std::optional<TopTracker> tracker;\n    if (track_top_) {\n      tracker.emplace();\n    }\n    const PassTotals pass = tracker ? throughput_pass("
         }
       ],
       "build": {
@@ -1574,6 +1574,1089 @@
       "expect": {
         "signature": "\\[  FAILED  \\] BenchReplay\\.ResidencyIsAskedAfterThePassHasItsBook",
         "exit": 1
+      }
+    },
+    {
+      "id": "bench-op-cancel-not-reduce",
+      "breaks": "A cancel is not counted as a reduce in per-operation latency",
+      "check": "test_bench_replay BenchReplay.EachMessageTypeHasItsOperation",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "    case OrderExecutedWithPrice::kType:\n    case OrderCancel::kType: return OpClass::reduce;\n",
+          "new": "    case OrderExecutedWithPrice::kType: return OpClass::reduce;\n    case OrderCancel::kType: return OpClass::other;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.EachMessageTypeHasItsOperation",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-messages-no-trades",
+      "breaks": "The book-message count leaves out the trade prints",
+      "check": "test_bench_replay BenchReplay.BookMessagesAreTheBookTypesAndTheTwoTradePrints",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "  return op_class(payload) != OpClass::other || type == Trade::kType || type == CrossTrade::kType;",
+          "new": "  return op_class(payload) != OpClass::other || type == Trade::kType;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.BookMessagesAreTheBookTypesAndTheTwoTradePrints",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-ager-step-on-add-only",
+      "breaks": "The replay ages the heap on adds but not replaces, unlike HeapAger",
+      "check": "test_bench_replay BenchReplay.TheClockStopsWhereTheAgerSteps",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "  return op == OpClass::add || op == OpClass::replace;",
+          "new": "  return op == OpClass::add;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.TheClockStopsWhereTheAgerSteps",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-ageing-timed",
+      "breaks": "The throughput pass keeps its clock running through an ageing step",
+      "check": "test_bench_replay BenchReplay.AnAgeingStepIsOutsideTheThroughputTime",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "          totals.ticks += clock.stop() - started;\n          book.age_heap();\n          ++totals.pauses;\n          started = clock.start();\n",
+          "new": "          book.age_heap();\n          ++totals.pauses;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.AnAgeingStepIsOutsideTheThroughputTime",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-ageing-inside-span",
+      "breaks": "The latency pass ages the heap inside the span",
+      "check": "test_bench_replay BenchReplay.AnAgeingStepIsOutsideEveryLatencySpan",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "        book.age_heap();\n        ++totals.pauses;\n      }\n    }\n    const OpClass op = op_class(frame.payload);\n    const std::uint64_t before = clock.start();\n",
+          "new": "        ++totals.pauses;\n      }\n    }\n    const OpClass op = op_class(frame.payload);\n    const std::uint64_t before = clock.start();\n    if constexpr (AgesHeap<Book>) {\n      if (adds_order(frame.payload)) {\n        book.age_heap();\n      }\n    }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.AnAgeingStepIsOutsideEveryLatencySpan",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-op-tag-dropped",
+      "breaks": "Every latency span is tagged other, so per-operation tables are empty",
+      "check": "test_bench_replay BenchReplay.TheLatencyPassTagsEachSpanWithItsOperation",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "    sink.push(after - before, op);\n",
+          "new": "    static_cast<void>(op);\n    sink.push(after - before, OpClass::other);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.TheLatencyPassTagsEachSpanWithItsOperation",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-mix-uncounted",
+      "breaks": "The warm-up does not count the day's mix",
+      "check": "test_bench_replay BenchReplay.TheWarmUpCountsTheMix",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "      mix.book_messages += is_book_message(frame.payload) ? 1U : 0U;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.TheWarmUpCountsTheMix",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-top-shares-ignored",
+      "breaks": "Top-of-book tracking sees prices but not shares",
+      "check": "test_bench_replay BenchReplay.TopTrackingCountsEachMoveOfTheTop",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "Seen{.present = true, .price = top.price, .shares = top.shares}",
+          "new": "Seen{.present = true, .price = top.price, .shares = 0}"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.TopTrackingCountsEachMoveOfTheTop",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-top-rejected-observed",
+      "breaks": "Top-of-book tracking also counts messages the book rejected",
+      "check": "test_bench_replay BenchReplay.TopTrackingCountsEachMoveOfTheTop",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "      if constexpr (Tracker::kActive) {\n        if (status == ApplyStatus::applied) {\n          totals.top_changes += tracker.observe(book, frame.payload) ? 1U : 0U;\n        }\n      }\n    }\n  }\n  totals.ticks += clock.stop() - started;",
+          "new": "      if constexpr (Tracker::kActive) {\n        totals.top_changes += 1U;\n        static_cast<void>(tracker.observe(book, frame.payload));\n      }\n    }\n  }\n  totals.ticks += clock.stop() - started;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.TopTrackingCountsEachMoveOfTheTop",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-warm-with-ignored",
+      "breaks": "A map design warms up with its own book, not the fast book",
+      "check": "test_bench_replay BenchReplay.AWarmUpWithAnotherBookBuildsNoneOfThisDesign",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "    if (warm_) {\n      pass = warm_(input_->bytes());\n    } else {",
+          "new": "    {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.AWarmUpWithAnotherBookBuildsNoneOfThisDesign",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-memory-last-not-peak",
+      "breaks": "The memory figure keeps the last reading, not the most",
+      "check": "test_bench_replay BenchReplay.MemoryHighWaterKeepsThePeakOverTheBaseline",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "    peak_ = peak_ < *now ? *now : peak_;",
+          "new": "    peak_ = *now;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.MemoryHighWaterKeepsThePeakOverTheBaseline",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-memory-failure-hidden",
+      "breaks": "A failed memory read leaves the figure called complete",
+      "check": "test_bench_replay BenchReplay.AMemoryReadThatFailsLeavesTheFigureIncomplete",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "    if (!now) {\n      failed_ = true;\n      return;\n    }",
+          "new": "    if (!now) {\n      return;\n    }"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.AMemoryReadThatFailsLeavesTheFigureIncomplete",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-memory-end-unsampled",
+      "breaks": "The untimed pass takes no memory reading at its end",
+      "check": "test_bench_replay BenchReplay.CountsPassSamplesMemoryOnItsStrideAndAtTheEnd",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "  memory.sample();\n  return missed;\n}",
+          "new": "  return missed;\n}"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.CountsPassSamplesMemoryOnItsStrideAndAtTheEnd",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-ageing-inside-reads",
+      "breaks": "The untimed pass ages the heap between its counter reads",
+      "check": "test_bench_replay BenchReplay.CountsPassTakesAgeingStepsOutsideTheReads",
+      "mutations": [
+        {
+          "file": "bench/replay.hpp",
+          "old": "    const bool opened = group.read_fast(before);\n    static_cast<void>(book.apply(frame.payload));\n",
+          "new": "    const bool opened = group.read_fast(before);\n    if constexpr (AgesHeap<Book>) {\n      if (adds_order(frame.payload)) {\n        book.age_heap();\n      }\n    }\n    static_cast<void>(book.apply(frame.payload));\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.CountsPassTakesAgeingStepsOutsideTheReads",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-rss-anon-wrong-line",
+      "breaks": "The Linux memory reading takes RssFile for RssAnon",
+      "check": "test_bench_platform BenchMemory.RssAnonIsReadFromTheStatusText",
+      "mutations": [
+        {
+          "file": "bench/platform/memory.hpp",
+          "old": "  constexpr std::string_view kField = \"\\nRssAnon:\";",
+          "new": "  constexpr std::string_view kField = \"\\nRssFile:\";"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchMemory\\.RssAnonIsReadFromTheStatusText",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-memory-baseline-after-book",
+      "breaks": "The memory baseline is read once the book is built, so the book is not counted",
+      "check": "test_bench_cli.py test_the_untimed_process_measures_the_first_book",
+      "mutations": [
+        {
+          "file": "bench/bench_replay.cpp",
+          "old": "  MemoryHighWater high_water{[] { return charged_bytes(); }};\n  const std::unique_ptr<Book> book = make_book();\n",
+          "new": "  const std::unique_ptr<Book> book = make_book();\n  MemoryHighWater high_water{[] { return charged_bytes(); }};\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_replay",
+          "bench_probe"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_cli.py",
+        "{build}/bench/bench_replay",
+        "{build}/bench/bench_probe",
+        "{build}/fault_bench_cli",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "Cli.test_the_untimed_process_measures_the_first_book"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_untimed_process_measures_the_first_book"
+      },
+      "timeout": 600
+    },
+    {
+      "id": "bench-map-warms-itself",
+      "breaks": "bench_replay warms a map design up on the map book, so its heap is not fresh",
+      "check": "test_bench_cli.py test_every_design_replays_the_same_mix_and_top_of_book",
+      "mutations": [
+        {
+          "file": "bench/bench_replay.cpp",
+          "old": "    session.warm_with(\"hash-linked\", warm_with_fast_book);\n",
+          "new": "    static_cast<void>(warm_with_fast_book);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_replay",
+          "bench_probe"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_cli.py",
+        "{build}/bench/bench_replay",
+        "{build}/bench/bench_probe",
+        "{build}/fault_bench_cli",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "Cli.test_every_design_replays_the_same_mix_and_top_of_book"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_design_replays_the_same_mix_and_top_of_book"
+      },
+      "timeout": 600
+    },
+    {
+      "id": "bench-driver-first-book-unchecked",
+      "breaks": "The driver takes a memory figure that is not the first book's",
+      "check": "test_bench_results.py test_memory_that_is_not_the_first_book_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if not memory.get(\"complete\") or not memory.get(\"first_book\"):\n",
+          "new": "    if not memory.get(\"complete\"):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_memory_that_is_not_the_first_book_is_refused"
+      }
+    },
+    {
+      "id": "bench-driver-memory-unmerged",
+      "breaks": "The driver keeps the timed process's memory, not the untimed one's",
+      "check": "test_bench_results.py test_the_untimed_process_supplies_counters_and_memory",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    timed[\"memory\"] = memory\n",
+          "new": "    timed[\"memory\"] = timed.get(\"memory\", memory)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_untimed_process_supplies_counters_and_memory"
+      }
+    },
+    {
+      "id": "bench-driver-mix-unchecked",
+      "breaks": "Designs that replayed different messages share a table",
+      "check": "test_bench_results.py test_designs_that_saw_another_mix_are_refused",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "            if record.get(\"mix\") != first.get(\"mix\"):\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_designs_that_saw_another_mix_are_refused"
+      }
+    },
+    {
+      "id": "bench-driver-top-unchecked",
+      "breaks": "Designs whose top of book moved differently share a table",
+      "check": "test_bench_results.py test_designs_that_saw_another_top_of_book_are_refused",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "                if record[name].get(\"top_changes\") != first[name].get(\"top_changes\"):\n",
+          "new": "                if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_designs_that_saw_another_top_of_book_are_refused"
+      }
+    },
+    {
+      "id": "bench-driver-pair-not-subtracted",
+      "breaks": "The pair-subtracted column is the raw figure",
+      "check": "test_bench_results.py test_each_repetition_loses_its_own_pair",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    return statistics.median(value - pair for value, pair in zip(values, pairs))",
+          "new": "    return statistics.median(values)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_repetition_loses_its_own_pair"
+      }
+    },
+    {
+      "id": "bench-driver-below-floor-figure",
+      "breaks": "A percentile below the floor prints a number",
+      "check": "test_bench_results.py test_a_below_floor_percentile_shows_no_figure_in_either_column",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "        return (f\"| {name} | {BELOW_FLOOR} | | | | resolved in {len(resolved)} of {len(values)} \"\n                f\"repetitions | {BELOW_FLOOR} |\")\n",
+          "new": "        return (f\"| {name} | {resolved[0]:.1f} | | | | resolved in {len(resolved)} of {len(values)} \"\n                f\"repetitions | {resolved[0]:.1f} |\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_below_floor_percentile_shows_no_figure_in_either_column"
+      }
+    },
+    {
+      "id": "bench-driver-ratio-unpaired",
+      "breaks": "Map ratios pair one repetition with another's",
+      "check": "test_bench_results.py test_ratios_pair_repetition_with_repetition",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "            for mine, theirs in zip(records, baseline)]",
+          "new": "            for mine, theirs in zip(records, sorted(baseline, key=lambda r: r[\"throughput\"][\"messages_per_s\"]))]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_ratios_pair_repetition_with_repetition"
+      }
+    },
+    {
+      "id": "bench-driver-mac-judged-on-x86-bar",
+      "breaks": "A macOS figure is passed or failed against an x86 bar",
+      "check": "test_bench_results.py test_an_x86_bar_on_macos_is_neither_met_nor_missed",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if target in X86_BARS and host == check_results.MAC_HOST:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_x86_bar_on_macos_is_neither_met_nor_missed"
+      }
+    },
+    {
+      "id": "bench-driver-design-out-shared",
+      "breaks": "Two designs may write the same results file",
+      "check": "test_bench_results.py test_two_designs_need_a_design_in_the_out_path",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if len(args.design) > 1 and \"{design}\" not in str(args.out):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_two_designs_need_a_design_in_the_out_path"
+      }
+    },
+    {
+      "id": "bench-book-file-design-dropped",
+      "breaks": "A book file names no design",
+      "check": "check_results.py header-field-missing",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "- design: hash-linked: ",
+          "new": "- arm: hash-linked: "
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL header-field-missing good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-design-unknown",
+      "breaks": "A book file names a design that is not one of the six",
+      "check": "check_results.py design-unknown",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "- design: hash-linked: ",
+          "new": "- design: tree-linked: "
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL design-unknown good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-input-unknown",
+      "breaks": "A book file's input mode is neither ram nor mapped",
+      "check": "check_results.py input-mode-unknown",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "- input: ram: ",
+          "new": "- input: disk: "
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL input-mode-unknown good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-top-malformed",
+      "breaks": "A book file's top of book is neither tracked nor not",
+      "check": "check_results.py top-of-book-malformed",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "- top_of_book: not tracked",
+          "new": "- top_of_book: sometimes"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL top-of-book-malformed good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-book-messages",
+      "breaks": "A book file's book-message count is not a count",
+      "check": "check_results.py book-messages-malformed",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "- book_messages: 3,312",
+          "new": "- book_messages: most"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL book-messages-malformed good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-no-subtracted",
+      "breaks": "A latency row loses its pair-subtracted column",
+      "check": "check_results.py latency-subtracted-missing",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "| p90 | below floor | | | | resolved in 0 of 3 repetitions | below floor |",
+          "new": "| p90 | below floor | | | | resolved in 0 of 3 repetitions |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL latency-subtracted-missing good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-subtracted-below-floor",
+      "breaks": "A pair-subtracted figure is printed below the floor",
+      "check": "check_results.py percentile-below-floor",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "| p90 | below floor | | | | resolved in 0 of 3 repetitions | below floor |",
+          "new": "| p90 | 250.0 | 250.0 | 250.0 | 0.00% | resolved | 90.0 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL percentile-below-floor good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-latency-malformed",
+      "breaks": "A latency cell holds words, not a figure",
+      "check": "check_results.py latency-value-malformed",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "| p90 | below floor | | | | resolved in 0 of 3 repetitions | below floor |",
+          "new": "| p90 | 250.0 | 250.0 | 250.0 | 0.00% | resolved | quick |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL latency-value-malformed good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-operation-dropped",
+      "breaks": "A per-operation row is left out",
+      "check": "check_results.py operation-table-missing",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "| replace | p99 | below floor | | | | resolved in 0 of 3 repetitions | below floor |\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL operation-table-missing good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-batch-dropped",
+      "breaks": "The batch mean is left out of the summary",
+      "check": "check_results.py summary-figure-missing",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "| Batch mean per book message, ns | 47.10 | 46.80 | 47.40 | 0.64% |\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL summary-figure-missing good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-memory-dropped",
+      "breaks": "A book file has no book memory section",
+      "check": "check_results.py memory-missing",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "## Book memory\n",
+          "new": "## Memory\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL memory-missing good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-top-count-dropped",
+      "breaks": "A tracked run does not say how often the top moved",
+      "check": "check_results.py top-of-book-missing",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_top_mac.md",
+          "op": "replace_text",
+          "old": "moved after 207 of the 3,330 messages",
+          "new": "moved often"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL top-of-book-missing good_book_top_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-comparison-dropped",
+      "breaks": "A book file has no design comparison",
+      "check": "check_results.py design-comparison-missing",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "## Design comparison\n",
+          "new": "## Comparison\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL design-comparison-missing good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-target-dropped",
+      "breaks": "A target is left out of the table",
+      "check": "check_results.py target-missing",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "| T-BOOK-4 |",
+          "new": "| T-BOOK-9 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL target-missing good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-verdict-invented",
+      "breaks": "A target's verdict is outside the fixed words",
+      "check": "check_results.py target-verdict-invalid",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "| book 0.22 GB | met |",
+          "new": "| book 0.22 GB | fine |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL target-verdict-invalid good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-mac-passes-x86-bar",
+      "breaks": "A macOS file calls an x86 bar met",
+      "check": "check_results.py target-host-blurred",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "| rate 21.35 M msg/s | host differs: a macOS figure against a bar set on x86 Linux, neither a pass nor a fail; against the bar: rate +4.95 M msg/s |",
+          "new": "| rate 21.35 M msg/s | met |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL target-host-blurred good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-method-dropped",
+      "breaks": "A book file does not say how it read the day against itch-book's method",
+      "check": "check_results.py method-missing",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_mac.md",
+          "op": "replace_text",
+          "old": "## How this run reads the day\n",
+          "new": "## Input\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_map_mac.md",
+        "{tree}/tests/fixtures/bench_results/good_book_top_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL method-missing good_book_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-method-mislabelled",
+      "breaks": "The driver calls a mapped, untracked run itch-book's T-BOOK-1 method",
+      "check": "test_bench_results.py test_each_pairing_names_the_method_it_matches",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if ram and not tracked:\n        method = (\"This is itch-book's T-BOOK-1 method",
+          "new": "    if not tracked:\n        method = (\"This is itch-book's T-BOOK-1 method"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_pairing_names_the_method_it_matches"
       }
     }
   ]
