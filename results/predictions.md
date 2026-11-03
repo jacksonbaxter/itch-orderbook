@@ -58,3 +58,9 @@ included.
 - Prediction, instrumentation: the latency pass takes between 1.05 and 1.60 times the throughput pass.
 - Prediction, counters: every event is measured at running ratio 1.0000, `rdpmc` and `read()` agree within the harness's limit of 1% or 10,000 events over the pass, and per-message counts are published.
 - Prediction, memory: peak RSS near 8.9 GiB: 7.68 GiB of mapped file, 1.00 GiB of samples and the book. It fits in 15 GB.
+
+## P-0007: T-INV-3 and T-TRADE-3 on both days
+
+- Experiment: `scripts/check_real_day.sh --only oracle`, then `--only trades`, on `12302019` and `10302019`, on `macOS (M4 Max)`, through `heavy.sh` and `/usr/bin/time -l`, on the Phase 2 stub book.
+- What it is for: the user adopted T-INV-3 on the condition that it holds on 10302019, and chose the SEC's round-lot rule after T-TRADE-3 failed on its odd-lot columns. The oracle has not run on 10302019 before.
+- Prediction: T-INV-3 has 0 violations on both days, and T-TRADE-3 passes on both days.
