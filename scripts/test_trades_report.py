@@ -107,8 +107,12 @@ t2_file_opening 620
 t2_file_closing 660
 t2_outside_file 150
 t3_window 0935_1600
+t3_odd_lot_columns compared
 t3_other_round_lots 1
-t3_round_lot symbol=BRVO lot=10 midas=0/0 feed_below_lot=0/0 feed_below_100=1/99
+t3_round_lot symbol=BRVO lot=10 sec_lot=100 feed_below_sec=1/99 midas=1/99 feed_below_lot=0/0 feed_below_100=1/99 feed_below_10=0/0
+t3_sec_lot symbol=BRK.A lot=1 listed=0 compared=0
+t3_sec_lot symbol=SEB lot=1 listed=1 compared=1
+t3_sec_lot symbol=BH lot=10 listed=1 compared=1
 t3_rows 4
 t3_rows_in_file 7
 t3_second_rows 0
@@ -202,17 +206,17 @@ class TradesReport(unittest.TestCase):
         self.log = GOOD_LOG
         self.flags = []
 
-    def run_report(self):
+    def run_report(self, day="01062020"):
         manifest = self.root / "manifest.json"
         manifest.write_text(json.dumps({
-            "days": {"01062020": self.day},
+            "days": {day: self.day},
             "references": {"midas_2019q4": {"nasdaq_rows": {"20200106": self.rows}}},
         }), encoding="utf-8")
         log = self.root / "log"
         log.write_text(self.log, encoding="utf-8")
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-            code = report.main(["--day", "01062020", "--log", str(log), "--manifest", str(manifest),
+            code = report.main(["--day", day, "--log", str(log), "--manifest", str(manifest),
                                 "--out", str(self.root / "out.md"), *self.flags])
         return code, out.getvalue()
 
@@ -240,8 +244,41 @@ class TradesReport(unittest.TestCase):
         self.assertIn("| `Q`, zero shares | 5 | 0 |", written)
         self.assertIn("| `0935_1600` | 4 | 4 | 4 | 4 | 4 | 4 | 0 | 2,489 |", written)
         self.assertIn("| Start | 09:34:59.999999999 | 09:35:00.000000000 |", written)
-        self.assertIn("| BRVO | 10 | 0 / 0 | 0 / 0 | 1 / 99 | directory |", written)
+        self.assertIn("| BRVO | 10 | 100 | 1 / 99 | 1 / 99 | 0 / 0 | 1 / 99 | 0 / 0 | SEC, 100 |",
+                      written)
+        self.assertIn("| BRK.A | 1 | no | no |", written)
+        self.assertIn("| SEB | 1 | yes | yes |", written)
         self.assertIn("Match 1060: `E` on ZTST, 100 shares.", written)
+
+    def test_a_late_day_says_its_odd_lots_were_not_compared(self):
+        self.rows = None
+        self.replace("t3_odd_lot_columns compared", "t3_odd_lot_columns not_compared_rule_ended")
+        self.replace("sec_lot=100 feed_below_sec=1/99", "sec_lot=none feed_below_sec=none")
+        self.replace("equal_hidden_prints=4 equal_odd_lots=4 equal_odd_shares=4",
+                     "equal_hidden_prints=4 equal_odd_lots=0 equal_odd_shares=0")
+        code, output = self.run_report("11032025")
+        self.assertEqual(code, 0, output)
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("T-TRADE-3's odd-lot columns were not compared on 11032025", written)
+        self.assertIn("**The odd-lot columns were not compared on this day.**", written)
+        self.assertIn("| BRVO | 10 | none | 1 / 99 | not compared | 0 / 0 | 1 / 99 | 0 / 0 |",
+                      written)
+        self.assertIn("| `0935_1600` | 4 | 4 | 4 | 4 | not compared | not compared | 0 |", written)
+
+    def test_a_late_day_compared_on_the_old_rule_fails(self):
+        self.rows = None
+        code, output = self.run_report("11032025")
+        self.assertEqual(code, 1, output)
+        self.assertIn("odd-lot columns compared on 20251103, wanted not_compared_rule_ended",
+                      output)
+
+    def test_an_early_day_with_its_odd_lots_left_out_fails(self):
+        self.replace("t3_odd_lot_columns compared", "t3_odd_lot_columns not_compared_rule_ended")
+        self.assert_fails("wanted compared")
+
+    def test_a_log_that_does_not_say_what_became_of_the_odd_lots_fails(self):
+        self.replace("t3_odd_lot_columns compared\n", "")
+        self.assert_fails("odd-lot columns None on 20200106")
 
     def test_a_failing_run_writes_why_into_the_results(self):
         self.replace("window=0935_1600 equal_shares=4", "window=0935_1600 equal_shares=3")

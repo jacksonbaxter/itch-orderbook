@@ -12,6 +12,8 @@ stands for an outside party: tests/test_trades_cli.py works out the same numbers
     day.itch        one session on six symbols that reaches every class of print
     day_cross.txt   the cross file for that session
     day_midas.csv   the MIDAS rows for that session, with other days and venues beside it
+    lots.itch       a session of hidden prints on the SEC's round-lot exceptions
+    lots_midas.csv  its MIDAS rows, on dates either side of the end of that rule
 """
 
 from __future__ import annotations
@@ -229,7 +231,7 @@ def day():
     s.at(clock(3))
     s.system("O")
     for locate, symbol in SYMBOLS.items():
-        # BRVO trades in lots of 10, so its P of 99 is not an odd lot.
+        # BRVO's directory says lots of 10 and the SEC's rule says 100, so its P of 99 is odd.
         s.listing(locate, symbol, "T" if locate == ZTST else "P", 10 if locate == BRVO else 100)
     for locate, symbol in SYMBOLS.items():
         s.trading(locate, symbol, "T")
@@ -266,7 +268,7 @@ MIDAS_ROWS = (
     "20200106,Stock,ALFA,Arca,1.0,1.0,,1.0,5.0,7.0,7.0,7.0,7.0,7.0,7.0,-7.0,7.0,7.0,,7.0\n"
     "20200106,Stock,ALFA,Nasdaq,1.0,1.0,1.0,1.0,5.0,8.0,5.0,4.0,3.0,8.0,4.7,"
     "0.7900000000000001,0.46,0.19,0.33,0.79\n"
-    "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,0.0,1.0,2.0,1.0,0.499,0.4,0.0,"
+    "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,1.0,1.0,2.0,1.0,0.499,0.4,0.099,"
     "0.09899999999999999,0.499\n"
     "20200106,Stock,HLTD,Nasdaq,1.0,1.0,1.0,1.0,5.0,3.0,2.0,0.0,1.0,3.0,0.5,1.2,0.2,0.0,1.0,1.2\n"
     "20200106,Stock,NONE,Nasdaq,,,,,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0\n"
@@ -274,11 +276,75 @@ MIDAS_ROWS = (
 )
 
 
+# Directory lot and the sizes printed. ALFA is the plain case. BH and SEB are the SEC's
+# exceptions, listed at those lots here as the directory lists them. BRK.A is the third,
+# which no held day exercises. BH.A shares a stem with BH and is not on the SEC's list. MKL
+# is the case the directory has wrong. SEB and BRK.A print below 10 and are not odd.
+LOT_PRINTS = {
+    "ALFA": (100, (99, 100, 150)),
+    "BH": (10, (9, 10, 99)),
+    "BH.A": (10, (50,)),
+    "SEB": (1, (1, 5, 9, 99)),
+    "BRK.A": (1, (1, 7)),
+    "MKL": (10, (9, 10, 99)),
+}
+
+# Typed out, not computed: Trades, then OddLots, then TradeVol and OddLotVol in thousands.
+LOT_ROWS = (
+    ("ALFA", "3.0", "1.0", "0.349", "0.099"),
+    ("BH", "3.0", "1.0", "0.118", "0.009"),
+    ("BH.A", "1.0", "1.0", "0.05", "0.05"),
+    ("SEB", "4.0", "0.0", "0.114", "0.0"),
+    ("BRK.A", "2.0", "0.0", "0.008", "0.0"),
+    ("MKL", "3.0", "3.0", "0.118", "0.118"),
+)
+
+
+def lots():
+    s = TradeStream()
+    s.at(clock(3))
+    s.system("O")
+    for locate, (symbol, (lot, _)) in enumerate(LOT_PRINTS.items(), start=1):
+        s.listing(locate, symbol, "P", lot)
+    for locate, symbol in enumerate(LOT_PRINTS, start=1):
+        s.trading(locate, symbol, "T")
+    s.at(clock(4))
+    s.system("S")
+    s.at(clock(9, 30))
+    s.system("Q")
+    s.at(clock(10))
+    match = 5000
+    for locate, (symbol, (_, sizes)) in enumerate(LOT_PRINTS.items(), start=1):
+        for size in sizes:
+            match += 1
+            s.trade(locate, size, 1_000_000, symbol, match)
+    s.at(clock(16))
+    s.system("M")
+    s.system("E")
+    s.system("C")
+    return bytes(s.data)
+
+
+def lot_row(date, symbol, trades, odd_lots, volume, odd_volume):
+    return (f"{date},Stock,{symbol},Nasdaq,1.0,1.0,1.0,1.0,5.0,{trades},0.0,{odd_lots},{trades},"
+            f"{trades},1.0,{volume},0.0,{odd_volume},{volume},{volume}\n")
+
+
+def lots_midas():
+    """Before the rule ends the odd lots are the SEC's. After it they are something else."""
+    rows = [lot_row(date, *row) for date in (20200106, 20251031) for row in LOT_ROWS]
+    rows += [lot_row(20251103, symbol, trades, "7.0", volume, "0.007")
+             for symbol, trades, _, volume, _ in LOT_ROWS]
+    return MIDAS_HEADER + "".join(rows)
+
+
 def builders():
     return {
         "day.itch": day(),
         "day_cross.txt": CROSS_FILE.encode("ascii"),
         "day_midas.csv": (MIDAS_HEADER + MIDAS_ROWS).encode("ascii"),
+        "lots.itch": lots(),
+        "lots_midas.csv": lots_midas().encode("ascii"),
     }
 
 

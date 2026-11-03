@@ -254,6 +254,49 @@ inline constexpr std::array<TimeWindow, 4> kWindows{{
 // The window T-TRADE-3 is judged on.
 inline constexpr std::size_t kMidasWindow = 3;
 
+// What the odd-lot columns of MIDAS are compared with. The SEC's method page for its Market
+// Activity Report: "Until Nov 3, 2025, a round lot is defined as 100 shares for all but
+// three tickers. BRK.A and SEB have a round lot of one. BH has a round lot of 10." Its next
+// sentence, "All trades involving nine or fewer shares are considered odd lot trades", adds
+// nothing at a lot of 100 or 10. At a lot of one it is not what MIDAS does: SEB printed
+// below 10 shares on both days and MIDAS gives it no odd lots. So an odd lot is a print
+// below the lot. From that date the SEC's lots come in tiers that this file cannot state.
+inline constexpr std::uint32_t kSecRuleEndDate = 20251103;  // First date it does not cover.
+inline constexpr std::uint32_t kSecDefaultLot = 100;
+
+struct SecLot {
+  std::string_view symbol;
+  std::uint32_t lot;
+};
+
+// BRK.A is spelt as BRK.B is in both the feed and MIDAS. The Nasdaq directory does not list
+// it on the days held here and MIDAS has no Nasdaq row for it, so its entry cannot fire.
+inline constexpr std::array<SecLot, 3> kSecLots{{
+    {.symbol = "BRK.A", .lot = 1},
+    {.symbol = "SEB", .lot = 1},
+    {.symbol = "BH", .lot = 10},
+}};
+
+[[nodiscard]] constexpr std::uint32_t sec_round_lot(std::string_view symbol) noexcept {
+  for (const SecLot& entry : kSecLots) {
+    if (entry.symbol == symbol) {
+      return entry.lot;
+    }
+  }
+  return kSecDefaultLot;
+}
+
+// What became of the odd-lot columns. Later dates are never compared on the old rule.
+enum class OddLotColumns : std::uint8_t { compared, not_compared_rule_ended };
+
+[[nodiscard]] constexpr std::string_view to_string(OddLotColumns columns) noexcept {
+  return columns == OddLotColumns::compared ? "compared" : "not_compared_rule_ended";
+}
+
+[[nodiscard]] constexpr OddLotColumns odd_lot_columns_on(std::uint32_t date) noexcept {
+  return date < kSecRuleEndDate ? OddLotColumns::compared : OddLotColumns::not_compared_rule_ended;
+}
+
 // The classes of print. Each is counted, whether or not a check applies to it.
 enum class PrintClass : std::uint8_t { e, c_y, c_n, p, q_o, q_c, q_h, q_i };
 
@@ -277,8 +320,13 @@ struct WindowVolume {
   std::uint64_t p_prints = 0;
   std::uint64_t odd_lot_prints = 0;
   std::uint64_t odd_lot_shares = 0;
-  std::uint64_t below_100_prints = 0;  // Reported beside MIDAS. The check uses the round lot.
+  // Reported beside MIDAS, for information. The check uses the SEC's lot.
+  std::uint64_t below_directory_prints = 0;
+  std::uint64_t below_directory_shares = 0;
+  std::uint64_t below_100_prints = 0;
   std::uint64_t below_100_shares = 0;
+  std::uint64_t below_10_prints = 0;
+  std::uint64_t below_10_shares = 0;
 
   [[nodiscard]] std::uint64_t total() const noexcept { return e_shares + c_y_shares + p_shares; }
 };
@@ -294,7 +342,8 @@ struct Listing {
   Stock stock{' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
   bool listed = false;
   bool test = false;
-  std::uint32_t round_lot = 100;
+  std::uint32_t directory_lot = 100;  // What the feed says. Reported, and not the check.
+  std::uint32_t sec_lot = kSecDefaultLot;
 };
 
 // One print, kept so that a B can find it and match numbers can be compared.
@@ -409,8 +458,10 @@ class TradeRun {
     file_closing_ = file_closing;
   }
 
-  void compare_midas(const MidasTable& table, std::optional<std::uint64_t> expected_rows) {
+  void compare_midas(const MidasTable& table, std::optional<std::uint64_t> expected_rows,
+                     std::uint32_t date) {
     midas_compared_ = true;
+    odd_lot_columns_ = odd_lot_columns_on(date);
     midas_rows_ = table.rows.size();
     midas_rows_in_file_ = table.rows_in_file;
     if (expected_rows && *expected_rows != table.rows.size()) {
@@ -596,7 +647,7 @@ class TradeRun {
         print_class == PrintClass::p) {
       for (std::size_t w = 0; w < kWindows.size(); ++w) {
         if (in_window(kWindows[w], timestamp_ns)) {
-          add_to_window(volume.windows[w], print_class, shares, listings_[locate].round_lot);
+          add_to_window(volume.windows[w], print_class, shares, listings_[locate]);
         }
       }
     }
@@ -615,7 +666,7 @@ class TradeRun {
   }
 
   static void add_to_window(WindowVolume& window, PrintClass print_class, std::uint64_t shares,
-                            std::uint32_t round_lot) {
+                            const Listing& listing) {
     switch (print_class) {
       case PrintClass::e: window.e_shares += shares; break;
       case PrintClass::c_y: window.c_y_shares += shares; break;
@@ -625,13 +676,21 @@ class TradeRun {
         break;
     }
     ++window.prints;
-    if (shares < round_lot) {
+    if (shares < listing.sec_lot) {
       ++window.odd_lot_prints;
       window.odd_lot_shares += shares;
+    }
+    if (shares < listing.directory_lot) {
+      ++window.below_directory_prints;
+      window.below_directory_shares += shares;
     }
     if (shares < 100) {
       ++window.below_100_prints;
       window.below_100_shares += shares;
+    }
+    if (shares < 10) {
+      ++window.below_10_prints;
+      window.below_10_shares += shares;
     }
   }
 
@@ -685,7 +744,8 @@ class TradeRun {
     listing.stock = m.stock;
     listing.listed = true;
     listing.test = m.authenticity == 'T';
-    listing.round_lot = m.round_lot_size;
+    listing.directory_lot = m.round_lot_size;
+    listing.sec_lot = sec_round_lot(symbol_view(m.stock));
   }
 
   void on_trading_action(const StockTradingAction& m, std::span<const std::byte> payload) {
@@ -1136,15 +1196,16 @@ class TradeRun {
       fail(Check::t3_hidden_trades, locate,
            std::format("feed {}, MIDAS {}", pinned.p_prints, row.hidden_trades));
     }
-    if (pinned.odd_lot_prints != row.odd_lots) {
+    const bool odd_lots_compared = odd_lot_columns_ == OddLotColumns::compared;
+    if (odd_lots_compared && pinned.odd_lot_prints != row.odd_lots) {
       fail(Check::t3_odd_lots, locate,
            std::format("feed {}, MIDAS {}", pinned.odd_lot_prints, row.odd_lots));
     }
-    if (pinned.odd_lot_shares != row.odd_lot_shares) {
+    if (odd_lots_compared && pinned.odd_lot_shares != row.odd_lot_shares) {
       fail(Check::t3_odd_lot_shares, locate,
            std::format("feed {}, MIDAS {}", pinned.odd_lot_shares, row.odd_lot_shares));
     }
-    if (listings_[locate].round_lot != 100) {
+    if (listings_[locate].directory_lot != 100 || listings_[locate].sec_lot != kSecDefaultLot) {
       other_lots_.push_back(
           {.locate = locate, .odd_lots = row.odd_lots, .odd_lot_shares = row.odd_lot_shares});
     }
@@ -1155,8 +1216,8 @@ class TradeRun {
       fit.equal_hidden += window.p_shares == row.hidden_shares ? 1U : 0U;
       fit.equal_prints += window.prints == row.trades ? 1U : 0U;
       fit.equal_hidden_prints += window.p_prints == row.hidden_trades ? 1U : 0U;
-      fit.equal_odd_lots += window.odd_lot_prints == row.odd_lots ? 1U : 0U;
-      fit.equal_odd += window.odd_lot_shares == row.odd_lot_shares ? 1U : 0U;
+      fit.equal_odd_lots += odd_lots_compared && window.odd_lot_prints == row.odd_lots ? 1U : 0U;
+      fit.equal_odd += odd_lots_compared && window.odd_lot_shares == row.odd_lot_shares ? 1U : 0U;
       fit.below += window.total() < row.trade_shares ? 1U : 0U;
       fit.feed_shares += window.total();
       fit.feed_hidden += window.p_shares;
@@ -1294,18 +1355,12 @@ class TradeRun {
       return;
     }
     std::println(out, "t3_window {}", kWindows[kMidasWindow].name);
+    std::println(out, "t3_odd_lot_columns {}", to_string(odd_lot_columns_));
     std::println(out, "t3_other_round_lots {}",
-                 std::ranges::count_if(
-                     listings_, [](const Listing& l) { return l.listed && l.round_lot != 100; }));
-    for (const OtherLot& other : other_lots_) {
-      const WindowVolume& pinned = volumes_[other.locate].windows[kMidasWindow];
-      std::println(out,
-                   "t3_round_lot symbol={} lot={} midas={}/{} feed_below_lot={}/{} "
-                   "feed_below_100={}/{}",
-                   name_of(listings_[other.locate].stock), listings_[other.locate].round_lot,
-                   other.odd_lots, other.odd_lot_shares, pinned.odd_lot_prints,
-                   pinned.odd_lot_shares, pinned.below_100_prints, pinned.below_100_shares);
-    }
+                 std::ranges::count_if(listings_, [](const Listing& l) {
+                   return l.listed && l.directory_lot != 100;
+                 }));
+    print_round_lots(out);
     std::println(out, "t3_rows {}", midas_rows_);
     std::println(out, "t3_rows_in_file {}", midas_rows_in_file_);
     std::println(out, "t3_second_rows {}", midas_second_rows_);
@@ -1333,6 +1388,35 @@ class TradeRun {
     }
   }
 
+  // A compared symbol that either lot sets apart, and the state of the SEC's three entries.
+  void print_round_lots(std::FILE* out) const {
+    const bool odd_lots_compared = odd_lot_columns_ == OddLotColumns::compared;
+    for (const OtherLot& other : other_lots_) {
+      const Listing& listing = listings_[other.locate];
+      const WindowVolume& pinned = volumes_[other.locate].windows[kMidasWindow];
+      const std::string under_sec =
+          odd_lots_compared ? std::format("sec_lot={} feed_below_sec={}/{}", listing.sec_lot,
+                                          pinned.odd_lot_prints, pinned.odd_lot_shares)
+                            : std::string{"sec_lot=none feed_below_sec=none"};
+      std::println(out,
+                   "t3_round_lot symbol={} lot={} {} midas={}/{} feed_below_lot={}/{} "
+                   "feed_below_100={}/{} feed_below_10={}/{}",
+                   name_of(listing.stock), listing.directory_lot, under_sec, other.odd_lots,
+                   other.odd_lot_shares, pinned.below_directory_prints,
+                   pinned.below_directory_shares, pinned.below_100_prints, pinned.below_100_shares,
+                   pinned.below_10_prints, pinned.below_10_shares);
+    }
+    for (const SecLot& entry : kSecLots) {
+      const auto named = [&entry](const Listing& l) {
+        return l.listed && symbol_view(l.stock) == entry.symbol;
+      };
+      const auto compared = [&](const OtherLot& other) { return named(listings_[other.locate]); };
+      std::println(out, "t3_sec_lot symbol={} lot={} listed={} compared={}", entry.symbol,
+                   entry.lot, std::ranges::any_of(listings_, named) ? 1 : 0,
+                   std::ranges::any_of(other_lots_, compared) ? 1 : 0);
+    }
+  }
+
   void print_checks(std::FILE* out) const {
     for (std::size_t i = 0; i < kCheckCount; ++i) {
       std::println(out, "check {} group={} violations={}", kChecks[i].name,
@@ -1348,7 +1432,7 @@ class TradeRun {
   };
 
   // How one window fares against MIDAS, in symbols that agree.
-  // A compared symbol whose directory round lot is not 100, and what MIDAS says of it.
+  // A compared symbol with a lot other than 100 on either rule, and what MIDAS says of it.
   struct OtherLot {
     std::uint16_t locate = 0;
     std::uint64_t odd_lots = 0;
@@ -1392,6 +1476,7 @@ class TradeRun {
   bool book_checked_empty_ = false;
   bool cross_compared_ = false;
   bool midas_compared_ = false;
+  OddLotColumns odd_lot_columns_ = OddLotColumns::compared;
 
   std::uint64_t orders_opened_ = 0;
   std::uint64_t orders_ran_out_on_execute_ = 0;

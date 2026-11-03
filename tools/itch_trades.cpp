@@ -165,7 +165,7 @@ struct Options {
                  table.error().line);
     return kExitReference;
   }
-  run.compare_midas(*table, options.midas_rows);
+  run.compare_midas(*table, options.midas_rows, options.date);
   return 0;
 }
 

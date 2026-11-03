@@ -77,9 +77,15 @@ CLEAN_LINES = (
     "t2_file_closing 660",
     "t2_outside_file 150",
     "t3_window 0935_1600",
-    # BRVO alone.
+    "t3_odd_lot_columns compared",
+    # BRVO alone. The directory says 10, so the P of 99 would not be odd. The SEC says 100.
     "t3_other_round_lots 1",
-    "t3_round_lot symbol=BRVO lot=10 midas=0/0 feed_below_lot=0/0 feed_below_100=1/99",
+    "t3_round_lot symbol=BRVO lot=10 sec_lot=100 feed_below_sec=1/99 midas=1/99 "
+    "feed_below_lot=0/0 "
+    "feed_below_100=1/99 feed_below_10=0/0",
+    "t3_sec_lot symbol=BRK.A lot=1 listed=0 compared=0",
+    "t3_sec_lot symbol=SEB lot=1 listed=0 compared=0",
+    "t3_sec_lot symbol=BH lot=10 listed=0 compared=0",
     "t3_rows 4",
     "t3_rows_in_file 7",
     "t3_second_rows 0",
@@ -100,6 +106,26 @@ CLEAN_LINES = (
     "verdict T-TRADE-3 PASS violations=0",
     "verdict T-TRADE-5 PASS violations=0",
     "verdict PRINTS PASS violations=0",
+)
+
+# Worked out from LOT_PRINTS in the generator. Prints / shares below each lot.
+LOT_LINES = (
+    "t3_other_round_lots 5",
+    "t3_round_lot symbol=BH lot=10 sec_lot=10 feed_below_sec=1/9 midas=1/9 feed_below_lot=1/9 "
+    "feed_below_100=3/118 feed_below_10=1/9",
+    "t3_round_lot symbol=BH.A lot=10 sec_lot=100 feed_below_sec=1/50 midas=1/50 "
+    "feed_below_lot=0/0 "
+    "feed_below_100=1/50 feed_below_10=0/0",
+    "t3_round_lot symbol=SEB lot=1 sec_lot=1 feed_below_sec=0/0 midas=0/0 feed_below_lot=0/0 "
+    "feed_below_100=4/114 feed_below_10=3/15",
+    "t3_round_lot symbol=BRK.A lot=1 sec_lot=1 feed_below_sec=0/0 midas=0/0 feed_below_lot=0/0 "
+    "feed_below_100=2/8 feed_below_10=2/8",
+    "t3_round_lot symbol=MKL lot=10 sec_lot=100 feed_below_sec=3/118 midas=3/118 "
+    "feed_below_lot=1/9 "
+    "feed_below_100=3/118 feed_below_10=1/9",
+    "t3_sec_lot symbol=BRK.A lot=1 listed=1 compared=1",
+    "t3_sec_lot symbol=SEB lot=1 listed=1 compared=1",
+    "t3_sec_lot symbol=BH lot=10 listed=1 compared=1",
 )
 
 T1, T2, T3, T5, PRINTS = 1, 2, 4, 8, 16
@@ -465,6 +491,57 @@ def main():
     lines = midas_text.splitlines(keepends=True)
     missing = "".join(line for line in lines if ",HLTD,Nasdaq" not in line)
     expect("A row removed", run(midas_file=missing), T3, "t3_row_count")
+
+    # The SEC's round-lot rule, and the date it stops at.
+    lots_midas = (fixtures / "lots_midas.csv").read_bytes().decode("ascii")
+
+    def lots_run(date, midas=lots_midas):
+        midas_path = scratch / "lots_midas.csv"
+        midas_path.write_bytes(midas.encode("ascii"))
+        return subprocess.run(
+            [tool, str(fixtures / "lots.itch"), "--date", date, "--midas", str(midas_path),
+             "--midas-rows", "6", "--details", "6", *SMALL],
+            capture_output=True, text=True, check=False)
+
+    def lots_case(name, done, want_exit, *wanted):
+        lines = done.stdout.splitlines()
+        if done.returncode != want_exit:
+            failures.append(f"{name}: exit {done.returncode}, wanted {want_exit}")
+        for line in wanted:
+            if line not in lines:
+                failures.append(f"{name}: no line {line!r}")
+        return lines
+
+    for date in ("20200106", "20251031"):
+        lots_case(f"lots {date}", lots_run(date), 0, "t3_odd_lot_columns compared", *LOT_LINES,
+                  "verdict T-TRADE-3 PASS violations=0")
+
+    # From the date the rule ends every odd-lot value differs and nothing is compared, and no
+    # line says what the old rule would have given.
+    lines = lots_case("lots 20251103", lots_run("20251103"), 0,
+                      "t3_odd_lot_columns not_compared_rule_ended",
+                      "t3_round_lot symbol=BH lot=10 sec_lot=none feed_below_sec=none midas=7/7 "
+                      "feed_below_lot=1/9 feed_below_100=3/118 feed_below_10=1/9",
+                      "verdict T-TRADE-3 PASS violations=0")
+    fit = [line for line in lines if line.startswith("t3_fit window=0935_1600 ")]
+    if len(fit) != 1 or "equal_odd_lots=0 equal_odd_shares=0" not in fit[0]:
+        failures.append(f"lots 20251103: odd lots were still fitted: {fit}")
+    # The rest of the check goes on after that date.
+    expect("One share of TradeVol after the rule ended",
+           lots_run("20251103", lots_midas.replace("20251103,Stock,BH,Nasdaq,1.0,1.0,1.0,1.0,5.0,"
+                                                   "3.0,0.0,7.0,3.0,3.0,1.0,0.118,",
+                                                   "20251103,Stock,BH,Nasdaq,1.0,1.0,1.0,1.0,5.0,"
+                                                   "3.0,0.0,7.0,3.0,3.0,1.0,0.119,")),
+           T3, "t3_trade_shares")
+
+    # Trades, LitTrades, then OddLots: one odd lot too many on each of the SEC's exceptions.
+    for symbol, trades, odd_lots in (("BH", "3.0", "1.0"), ("SEB", "4.0", "0.0"),
+                                     ("BRK.A", "2.0", "0.0")):
+        row = f"20200106,Stock,{symbol},Nasdaq,1.0,1.0,1.0,1.0,5.0,{trades},0.0,"
+        more = f"{float(odd_lots) + 1}"
+        expect(f"One OddLots on {symbol}",
+               lots_run("20200106", lots_midas.replace(row + odd_lots, row + more)),
+               T3, "t3_odd_lots")
 
     for failure in failures:
         print(f"trades cli: FAIL {failure}")

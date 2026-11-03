@@ -11,6 +11,7 @@
 #include <initializer_list>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include "itch/book.hpp"
@@ -309,6 +310,25 @@ TEST(WindowTable, TheWindowsAreHalfOpenAndNamedForTheirBounds) {
   EXPECT_EQ(pinned.name, "0935_1600");
   EXPECT_EQ(pinned.start_ns, 34'500'000'000'000ULL);
   EXPECT_EQ(pinned.end_ns, 57'600'000'000'000ULL);
+}
+
+TEST(SecRoundLot, ThreeTickersDifferFrom100) {
+  using itch::trades::sec_round_lot;
+  EXPECT_EQ(sec_round_lot("BRK.A"), 1U);
+  EXPECT_EQ(sec_round_lot("SEB"), 1U);
+  EXPECT_EQ(sec_round_lot("BH"), 10U);
+  for (const std::string_view symbol : {"BRK.B", "BH.A", "BHB", "MKL", "NVR", "DIT", "AAPL"}) {
+    EXPECT_EQ(sec_round_lot(symbol), 100U) << symbol;
+  }
+}
+
+TEST(SecRoundLot, TheOldRuleStopsAtTheDateTheSecGives) {
+  using itch::trades::odd_lot_columns_on;
+  using itch::trades::OddLotColumns;
+  EXPECT_EQ(odd_lot_columns_on(20191030), OddLotColumns::compared);
+  EXPECT_EQ(odd_lot_columns_on(20251102), OddLotColumns::compared);
+  EXPECT_EQ(odd_lot_columns_on(20251103), OddLotColumns::not_compared_rule_ended);
+  EXPECT_EQ(odd_lot_columns_on(20260101), OddLotColumns::not_compared_rule_ended);
 }
 
 }  // namespace

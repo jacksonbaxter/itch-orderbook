@@ -2596,8 +2596,8 @@
         {
           "file": "tests/fixtures/trades/day_midas.csv",
           "op": "replace_text",
-          "old": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,0.0,1.0,2.0,1.0,0.499,0.4,0.0,0.09899999999999999,0.499\n",
-          "new": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,0.0,1.0,2.0,1.0,0.499,0.4,0.0,0.098,0.499\n"
+          "old": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,1.0,1.0,2.0,1.0,0.499,0.4,0.099,0.09899999999999999,0.499\n",
+          "new": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,1.0,1.0,2.0,1.0,0.499,0.4,0.099,0.098,0.499\n"
         }
       ],
       "build": {
@@ -2670,14 +2670,14 @@
     },
     {
       "id": "trades-midas-round-lot-odd",
-      "breaks": "A round print of 99 at a round lot of 10 reported as odd",
+      "breaks": "MIDAS gives a print of 99 no odd lot, as the directory's lot of 10 would. The SEC's rule makes it odd",
       "check": "t3_odd_lots",
       "inputs": [
         {
           "file": "tests/fixtures/trades/day_midas.csv",
           "op": "replace_text",
-          "old": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,0.0,1.0,2.0,1.0,0.499,0.4,0.0,0.09899999999999999,0.499\n",
-          "new": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,1.0,1.0,2.0,1.0,0.499,0.4,0.0,0.09899999999999999,0.499\n"
+          "old": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,1.0,1.0,2.0,1.0,0.499,0.4,0.099,0.09899999999999999,0.499\n",
+          "new": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,0.0,1.0,2.0,1.0,0.499,0.4,0.099,0.09899999999999999,0.499\n"
         }
       ],
       "build": {
@@ -2876,7 +2876,7 @@
         {
           "file": "tests/fixtures/trades/day_midas.csv",
           "op": "replace_text",
-          "old": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,0.0,1.0,2.0,1.0,0.499,0.4,0.0,0.09899999999999999,0.499\n",
+          "old": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,1.0,1.0,2.0,1.0,0.499,0.4,0.099,0.09899999999999999,0.499\n",
           "new": ""
         }
       ],
@@ -2956,8 +2956,8 @@
         {
           "file": "tests/fixtures/trades/day_midas.csv",
           "op": "replace_text",
-          "old": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,0.0,1.0,2.0,1.0,0.499,0.4,0.0,0.09899999999999999,0.499\n",
-          "new": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,0.0,1.0,2.0,1.0,0.4995,0.4,0.0,0.09899999999999999,0.499\n"
+          "old": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,1.0,1.0,2.0,1.0,0.499,0.4,0.099,0.09899999999999999,0.499\n",
+          "new": "20200106,ETF,BRVO,Nasdaq,1.0,1.0,1.0,1.0,5.0,2.0,1.0,1.0,1.0,2.0,1.0,0.4995,0.4,0.0,0.09899999999999999,0.499\n"
         }
       ],
       "build": {
@@ -5569,8 +5569,8 @@
       "mutations": [
         {
           "file": "tests/trades/trade_checks.hpp",
-          "old": "    if (shares < round_lot) {\n      ++window.odd_lot_prints;",
-          "new": "    if (shares <= round_lot) {\n      ++window.odd_lot_prints;"
+          "old": "    if (shares < listing.sec_lot) {\n      ++window.odd_lot_prints;",
+          "new": "    if (shares <= listing.sec_lot) {\n      ++window.odd_lot_prints;"
         }
       ],
       "build": {
@@ -5603,13 +5603,13 @@
     },
     {
       "id": "trades-src-odd-lot-fixed-at-100",
-      "breaks": "An odd lot is below 100 whatever the directory says",
+      "breaks": "An odd lot is below 100 whatever the SEC's list says",
       "check": "t3_odd_lots",
       "mutations": [
         {
           "file": "tests/trades/trade_checks.hpp",
-          "old": "add_to_window(volume.windows[w], print_class, shares, listings_[locate].round_lot);",
-          "new": "add_to_window(volume.windows[w], print_class, shares, 100);"
+          "old": "    if (shares < listing.sec_lot) {\n      ++window.odd_lot_prints;",
+          "new": "    if (shares < 100) {\n      ++window.odd_lot_prints;"
         }
       ],
       "build": {
@@ -5620,34 +5620,32 @@
       },
       "command": [
         "{build}/tools/itch_trades",
-        "{tree}/tests/fixtures/trades/day.itch",
+        "{tree}/tests/fixtures/trades/lots.itch",
         "--date",
         "20200106",
-        "--crossstats",
-        "{tree}/tests/fixtures/trades/day_cross.txt",
         "--midas",
-        "{tree}/tests/fixtures/trades/day_midas.csv",
+        "{tree}/tests/fixtures/trades/lots_midas.csv",
         "--midas-rows",
-        "4",
+        "6",
         "--details",
-        "5",
+        "6",
         "--max-orders",
         "4096",
         "--max-levels",
         "4096"
       ],
       "expect": {
-        "signature": "violation t3_odd_lots "
+        "signature": "violation t3_odd_lots .*symbol=SEB feed 4, MIDAS 0"
       }
     },
     {
       "id": "trades-src-round-lot-not-read",
-      "breaks": "The directory's round lot is dropped",
-      "check": "t3_odd_lot_shares",
+      "breaks": "The directory's round lot is dropped, so the information line says 100 for every symbol",
+      "check": "test_trades_cli.py, the t3_round_lot line",
       "mutations": [
         {
           "file": "tests/trades/trade_checks.hpp",
-          "old": "    listing.round_lot = m.round_lot_size;\n",
+          "old": "    listing.directory_lot = m.round_lot_size;\n",
           "new": ""
         }
       ],
@@ -5658,25 +5656,15 @@
         ]
       },
       "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_trades_cli.py",
         "{build}/tools/itch_trades",
-        "{tree}/tests/fixtures/trades/day.itch",
-        "--date",
-        "20200106",
-        "--crossstats",
-        "{tree}/tests/fixtures/trades/day_cross.txt",
-        "--midas",
-        "{tree}/tests/fixtures/trades/day_midas.csv",
-        "--midas-rows",
-        "4",
-        "--details",
-        "5",
-        "--max-orders",
-        "4096",
-        "--max-levels",
-        "4096"
+        "{tree}/build/trades-cli-scratch",
+        "{tree}/tests/fixtures/trades"
       ],
       "expect": {
-        "signature": "violation t3_odd_lot_shares "
+        "signature": "trades cli: FAIL clean: no line 't3_other_round_lots 1'"
       }
     },
     {
@@ -5716,6 +5704,505 @@
       ],
       "expect": {
         "signature": "violation t3_odd_lot_shares "
+      }
+    },
+    {
+      "id": "trades-sec-bh-at-100",
+      "breaks": "BH takes the common lot of 100, not the SEC's 10",
+      "check": "t3_odd_lots on lots.itch",
+      "mutations": [
+        {
+          "file": "tests/trades/trade_checks.hpp",
+          "old": "    {.symbol = \"BH\", .lot = 10},\n",
+          "new": "    {.symbol = \"BH\", .lot = 100},\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_trades",
+        "{tree}/tests/fixtures/trades/lots.itch",
+        "--date",
+        "20200106",
+        "--midas",
+        "{tree}/tests/fixtures/trades/lots_midas.csv",
+        "--midas-rows",
+        "6",
+        "--details",
+        "6",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "violation t3_odd_lots .*symbol=BH feed 3, MIDAS 1"
+      }
+    },
+    {
+      "id": "trades-sec-seb-at-100",
+      "breaks": "SEB takes the common lot of 100, not the SEC's 1",
+      "check": "t3_odd_lots on lots.itch",
+      "mutations": [
+        {
+          "file": "tests/trades/trade_checks.hpp",
+          "old": "    {.symbol = \"SEB\", .lot = 1},\n",
+          "new": "    {.symbol = \"SEB\", .lot = 100},\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_trades",
+        "{tree}/tests/fixtures/trades/lots.itch",
+        "--date",
+        "20200106",
+        "--midas",
+        "{tree}/tests/fixtures/trades/lots_midas.csv",
+        "--midas-rows",
+        "6",
+        "--details",
+        "6",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "violation t3_odd_lots .*symbol=SEB feed 4, MIDAS 0"
+      }
+    },
+    {
+      "id": "trades-sec-brk-a-at-100",
+      "breaks": "BRK.A takes the common lot of 100, not the SEC's 1. No held day can show this, so only the fixture does",
+      "check": "t3_odd_lots on lots.itch",
+      "mutations": [
+        {
+          "file": "tests/trades/trade_checks.hpp",
+          "old": "    {.symbol = \"BRK.A\", .lot = 1},\n",
+          "new": "    {.symbol = \"BRK.A\", .lot = 100},\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_trades",
+        "{tree}/tests/fixtures/trades/lots.itch",
+        "--date",
+        "20200106",
+        "--midas",
+        "{tree}/tests/fixtures/trades/lots_midas.csv",
+        "--midas-rows",
+        "6",
+        "--details",
+        "6",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "violation t3_odd_lots .*symbol=BRK\\.A feed 2, MIDAS 0"
+      }
+    },
+    {
+      "id": "trades-sec-nine-or-fewer-at-lot-one",
+      "breaks": "\"Nine or fewer\" is read literally, so SEB's small prints count as odd",
+      "check": "t3_odd_lots on lots.itch",
+      "mutations": [
+        {
+          "file": "tests/trades/trade_checks.hpp",
+          "old": "    if (shares < listing.sec_lot) {\n      ++window.odd_lot_prints;",
+          "new": "    if (shares < listing.sec_lot || shares <= 9) {\n      ++window.odd_lot_prints;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_trades",
+        "{tree}/tests/fixtures/trades/lots.itch",
+        "--date",
+        "20200106",
+        "--midas",
+        "{tree}/tests/fixtures/trades/lots_midas.csv",
+        "--midas-rows",
+        "6",
+        "--details",
+        "6",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "violation t3_odd_lots .*symbol=SEB feed 3, MIDAS 0"
+      }
+    },
+    {
+      "id": "trades-sec-directory-lot-reinstated",
+      "breaks": "The directory's lot is back in the check, where MKL fails",
+      "check": "t3_odd_lots on lots.itch",
+      "mutations": [
+        {
+          "file": "tests/trades/trade_checks.hpp",
+          "old": "    listing.sec_lot = sec_round_lot(symbol_view(m.stock));\n",
+          "new": "    listing.sec_lot = m.round_lot_size;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_trades",
+        "{tree}/tests/fixtures/trades/lots.itch",
+        "--date",
+        "20200106",
+        "--midas",
+        "{tree}/tests/fixtures/trades/lots_midas.csv",
+        "--midas-rows",
+        "6",
+        "--details",
+        "6",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "violation t3_odd_lots .*symbol=MKL feed 1, MIDAS 3"
+      }
+    },
+    {
+      "id": "trades-sec-matches-a-stem",
+      "breaks": "A symbol that starts with an exception takes its lot, so BH.A goes to 10",
+      "check": "t3_odd_lots on lots.itch",
+      "mutations": [
+        {
+          "file": "tests/trades/trade_checks.hpp",
+          "old": "    if (entry.symbol == symbol) {\n",
+          "new": "    if (symbol.starts_with(entry.symbol)) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_trades",
+        "{tree}/tests/fixtures/trades/lots.itch",
+        "--date",
+        "20200106",
+        "--midas",
+        "{tree}/tests/fixtures/trades/lots_midas.csv",
+        "--midas-rows",
+        "6",
+        "--details",
+        "6",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "violation t3_odd_lots .*symbol=BH\\.A feed 0, MIDAS 1"
+      }
+    },
+    {
+      "id": "trades-sec-date-guard-removed",
+      "breaks": "The old rule runs on every date",
+      "check": "t3_odd_lots on lots.itch, a date after the rule ends",
+      "mutations": [
+        {
+          "file": "tests/trades/trade_checks.hpp",
+          "old": "  return date < kSecRuleEndDate ? OddLotColumns::compared : OddLotColumns::not_compared_rule_ended;\n",
+          "new": "  return date != 0 ? OddLotColumns::compared : OddLotColumns::not_compared_rule_ended;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_trades",
+        "{tree}/tests/fixtures/trades/lots.itch",
+        "--date",
+        "20251103",
+        "--midas",
+        "{tree}/tests/fixtures/trades/lots_midas.csv",
+        "--midas-rows",
+        "6",
+        "--details",
+        "6",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "violation t3_odd_lots .*symbol=ALFA feed 1, MIDAS 7"
+      }
+    },
+    {
+      "id": "trades-sec-date-guard-a-day-late",
+      "breaks": "The rule's first uncovered date is still compared",
+      "check": "the odd-lot outcome on lots.itch",
+      "mutations": [
+        {
+          "file": "tests/trades/trade_checks.hpp",
+          "old": "inline constexpr std::uint32_t kSecRuleEndDate = 20251103;",
+          "new": "inline constexpr std::uint32_t kSecRuleEndDate = 20251104;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_trades",
+        "{tree}/tests/fixtures/trades/lots.itch",
+        "--date",
+        "20251103",
+        "--midas",
+        "{tree}/tests/fixtures/trades/lots_midas.csv",
+        "--midas-rows",
+        "6",
+        "--details",
+        "6",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "t3_odd_lot_columns compared"
+      }
+    },
+    {
+      "id": "trades-sec-date-guard-a-day-early",
+      "breaks": "The last date the rule covers is left out",
+      "check": "test_trades_cli.py",
+      "mutations": [
+        {
+          "file": "tests/trades/trade_checks.hpp",
+          "old": "inline constexpr std::uint32_t kSecRuleEndDate = 20251103;",
+          "new": "inline constexpr std::uint32_t kSecRuleEndDate = 20251031;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_trades_cli.py",
+        "{build}/tools/itch_trades",
+        "{tree}/build/trades-cli-scratch",
+        "{tree}/tests/fixtures/trades"
+      ],
+      "expect": {
+        "signature": "trades cli: FAIL lots 20251031: no line 't3_odd_lot_columns compared'"
+      }
+    },
+    {
+      "id": "trades-sec-late-day-fitted-silently",
+      "breaks": "A late day still counts how the old rule fits, in the fit table",
+      "check": "test_trades_cli.py",
+      "mutations": [
+        {
+          "file": "tests/trades/trade_checks.hpp",
+          "old": "      fit.equal_odd_lots += odd_lots_compared && window.odd_lot_prints == row.odd_lots ? 1U : 0U;\n",
+          "new": "      fit.equal_odd_lots += window.odd_lot_prints != row.odd_lots ? 1U : 0U;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_trades_cli.py",
+        "{build}/tools/itch_trades",
+        "{tree}/build/trades-cli-scratch",
+        "{tree}/tests/fixtures/trades"
+      ],
+      "expect": {
+        "signature": "trades cli: FAIL lots 20251103: odd lots were still fitted"
+      }
+    },
+    {
+      "id": "trades-sec-directory-line-gone",
+      "breaks": "The t3_round_lot line reports the SEC's lot as the directory's",
+      "check": "test_trades_cli.py",
+      "mutations": [
+        {
+          "file": "tests/trades/trade_checks.hpp",
+          "old": "    if (shares < listing.directory_lot) {\n",
+          "new": "    if (shares < listing.sec_lot) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_trades_cli.py",
+        "{build}/tools/itch_trades",
+        "{tree}/build/trades-cli-scratch",
+        "{tree}/tests/fixtures/trades"
+      ],
+      "expect": {
+        "signature": "trades cli: FAIL clean: no line 't3_round_lot symbol=BRVO lot=10"
+      }
+    },
+    {
+      "id": "trades-midas-sec-exception-bh",
+      "breaks": "One OddLots value changed on BH, an exception to the SEC's 100",
+      "check": "t3_odd_lots on lots.itch",
+      "inputs": [
+        {
+          "file": "tests/fixtures/trades/lots_midas.csv",
+          "op": "replace_text",
+          "old": "20200106,Stock,BH,Nasdaq,1.0,1.0,1.0,1.0,5.0,3.0,0.0,1.0,",
+          "new": "20200106,Stock,BH,Nasdaq,1.0,1.0,1.0,1.0,5.0,3.0,0.0,2.0,"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_trades",
+        "{tree}/tests/fixtures/trades/lots.itch",
+        "--date",
+        "20200106",
+        "--midas",
+        "{tree}/tests/fixtures/trades/lots_midas.csv",
+        "--midas-rows",
+        "6",
+        "--details",
+        "6",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "violation t3_odd_lots .*symbol=BH feed 1, MIDAS 2"
+      }
+    },
+    {
+      "id": "trades-midas-sec-exception-seb",
+      "breaks": "One OddLots value changed on SEB, an exception to the SEC's 100",
+      "check": "t3_odd_lots on lots.itch",
+      "inputs": [
+        {
+          "file": "tests/fixtures/trades/lots_midas.csv",
+          "op": "replace_text",
+          "old": "20200106,Stock,SEB,Nasdaq,1.0,1.0,1.0,1.0,5.0,4.0,0.0,0.0,",
+          "new": "20200106,Stock,SEB,Nasdaq,1.0,1.0,1.0,1.0,5.0,4.0,0.0,1.0,"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_trades",
+        "{tree}/tests/fixtures/trades/lots.itch",
+        "--date",
+        "20200106",
+        "--midas",
+        "{tree}/tests/fixtures/trades/lots_midas.csv",
+        "--midas-rows",
+        "6",
+        "--details",
+        "6",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "violation t3_odd_lots .*symbol=SEB feed 0, MIDAS 1"
+      }
+    },
+    {
+      "id": "trades-report-ignores-sec-date",
+      "breaks": "The report takes the tool's word on whether the odd lots were compared",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "    require(odd_lots == wanted, f\"odd-lot columns {odd_lots} on {date}, wanted {wanted}\")\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_late_day_compared_on_the_old_rule_fails"
+      }
+    },
+    {
+      "id": "trades-report-odd-lots-always-required",
+      "breaks": "The report holds a late day's fit to odd lots that were not compared",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "        if odd_lots == ODD_LOTS_COMPARED:\n            keys +=",
+          "new": "        if True:\n            keys +="
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_late_day_says_its_odd_lots_were_not_compared"
       }
     },
     {

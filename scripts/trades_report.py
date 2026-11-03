@@ -27,6 +27,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ("T-TRADE-1", "T-TRADE-2", "T-TRADE-3", "T-TRADE-5", "PRINTS")
 PINNED_WINDOW = "0935_1600"
+# The first date the SEC's stated round-lot rule does not cover. The tool holds the same
+# date, and this is a second reading of it: a late day compared on the old rule fails here.
+SEC_RULE_END = 20251103
+ODD_LOTS_COMPARED = "compared"
+ODD_LOTS_NOT_COMPARED = "not_compared_rule_ended"
 CROSS_CLASSES = ("Q_O", "Q_C", "Q_H", "Q_I")
 
 # Claims from BENCHMARKS.md and the research, set beside ours and not used as expected
@@ -104,7 +109,8 @@ KEY_VALUE = re.compile(r"(\w+)=(\S*)")
 def parse_log(text):
     log = {"values": {}, "types": {}, "classes": {}, "checks": {}, "verdicts": {}, "fits": {},
            "outside": [], "c_price": {}, "far_legs": {}, "cross_legs": {}, "time": {}, "run": {},
-           "violations": [], "edges": {}, "breaks": [], "errors": [], "round_lots": []}
+           "violations": [], "edges": {}, "breaks": [], "errors": [], "round_lots": [],
+           "sec_lots": []}
     for line in text.splitlines():
         stripped = line.strip()
         word, _, rest = stripped.partition(" ")
@@ -137,6 +143,8 @@ def parse_log(text):
             log["edges"].update({k: int(v) for k, v in pairs.items()})
         elif word == "t3_round_lot":
             log["round_lots"].append(pairs)
+        elif word == "t3_sec_lot":
+            log["sec_lots"].append(pairs)
         elif word == "violation":
             log["violations"].append(rest)
         elif word == "broken_trade":
@@ -167,10 +175,11 @@ def class_of(log, name):
     return log["classes"][name]
 
 
-def hard_failures(log, entry, midas_rows, no_cross_file):
+def hard_failures(log, entry, midas_rows, no_cross_file, date):
     """Every reason the run does not meet the trade-print checks on this day.
 
     midas_rows is the manifest's Nasdaq row count for the day, or None if none is pinned.
+    date is the day as YYYYMMDD, which says whether the SEC's round-lot rule covers it.
     """
     failures = []
 
@@ -232,12 +241,17 @@ def hard_failures(log, entry, midas_rows, no_cross_file):
             f"MIDAS rows {number(log, 't3_rows')}, manifest {midas_rows}")
     require(log["values"].get("t3_window") == PINNED_WINDOW,
             f"T-TRADE-3 compared on {log['values'].get('t3_window')}, not {PINNED_WINDOW}")
+    odd_lots = log["values"].get("t3_odd_lot_columns")
+    wanted = ODD_LOTS_COMPARED if date < SEC_RULE_END else ODD_LOTS_NOT_COMPARED
+    require(odd_lots == wanted, f"odd-lot columns {odd_lots} on {date}, wanted {wanted}")
     fit = log["fits"].get(PINNED_WINDOW)
     require(fit is not None, f"no fit for the window {PINNED_WINDOW}")
     if fit is not None:
         symbols = number(log, "t3_symbols_compared")
-        for key in ("equal_shares", "equal_hidden", "equal_prints", "equal_hidden_prints",
-                    "equal_odd_lots", "equal_odd_shares"):
+        keys = ("equal_shares", "equal_hidden", "equal_prints", "equal_hidden_prints")
+        if odd_lots == ODD_LOTS_COMPARED:
+            keys += ("equal_odd_lots", "equal_odd_shares")
+        for key in keys:
             require(fit[key] == symbols, f"{key} {fit[key]} of {symbols} symbols")
     require(number(log, "t3_symbols_compared") + number(log, "t3_second_rows")
             == number(log, "t3_rows"), "MIDAS rows are not all compared")
@@ -265,10 +279,14 @@ def slash(pair):
     return f"{count(int(prints))} / {count(int(shares))}"
 
 
+def slash_or_none(pair):
+    return "not compared" if pair == "none" else slash(pair)
+
+
 def lot_rule_that_fits(row):
-    fits = [name for name, key in (("directory", "feed_below_lot"), ("100", "feed_below_100"))
-            if row[key] == row["midas"]]
-    return " and ".join(fits) or "neither"
+    rules = (("SEC", "feed_below_sec"), ("directory", "feed_below_lot"), ("100", "feed_below_100"))
+    fits = [name for name, key in rules if row[key] == row["midas"]]
+    return ", ".join(fits) or "none"
 
 
 def our_figure(log, key):
@@ -351,6 +369,31 @@ def per_type_rows(log):
     ]
 
 
+def odd_lot_text(log):
+    """The paragraph on the odd-lot columns, whichever way they went on this day."""
+    other = count(number(log, "t3_other_round_lots"))
+    if log["values"].get("t3_odd_lot_columns") != ODD_LOTS_COMPARED:
+        return (f"**The odd-lot columns were not compared on this day.** The SEC's method page "
+                "gives its round-lot rule only until Nov 3, 2025. After that it uses tiers set "
+                "from each security's closing price, which nothing here reads, and the old rule "
+                f"is never applied in their place. {other} listed symbols have a directory round "
+                "lot other than 100 this day. The shares and trades of T-TRADE-3 are still "
+                "compared. What the directory's lot would give is below, for information.")
+    return ("An odd lot is a print below the round lot of the SEC's rule, from its method page "
+            "for the Market Activity Report: \"Until Nov 3, 2025, a round lot is defined as 100 "
+            "shares for all but three tickers. BRK.A and SEB have a round lot of one. BH has a "
+            "round lot of 10.\" T-TRADE-3 first failed on odd lots with a fixed 100, on BH and "
+            "SEB, and then with the directory's lot, on MKL and NVR, which it lists at 10. This "
+            "rule was chosen after those failures, from the SEC's published text, and nothing "
+            "was fitted. The page goes on: \"All trades involving nine or fewer shares are "
+            "considered odd lot trades.\" That adds nothing at a lot of 100 or 10. At a lot of "
+            "one it is not what MIDAS does, as the last column below shows for SEB, so the check "
+            f"takes a print below the lot. {other} listed symbols have a directory round lot "
+            "other than 100 this day. Those with a MIDAS row are below, as prints / shares, "
+            "with what the directory's lot gives kept for information. Every other compared "
+            "symbol is 100 on both rules.")
+
+
 def render(log, entry, day, no_cross_file, failures):
     run = log["run"]
     values = log["values"]
@@ -385,6 +428,10 @@ def render(log, entry, day, no_cross_file, failures):
     lines += format_table(("Result", "Verdict", "Violations"), [
         (name, f"**{verdict[name]}**", count(log["verdicts"].get(name, ("", 0))[1]))
         for name in RESULTS])
+    odd_lots_compared = values.get("t3_odd_lot_columns") == ODD_LOTS_COMPARED
+    if not odd_lots_compared:
+        lines += ["", f"T-TRADE-3's odd-lot columns were not compared on {day}: the SEC's "
+                  "round-lot rule stops at Nov 3, 2025. Shares and trades were compared."]
     if no_cross_file:
         lines += ["", f"T-TRADE-2 is not available on {day}: no CrossStats file for that day is "
                   "in hand, so the crosses of this day were compared with nothing. The "
@@ -501,28 +548,28 @@ def render(log, entry, day, no_cross_file, failures):
               "the lead was the SEC's method page for its Market Activity Report, which says "
               "its sample runs from 9:35 and does not say that of `TradeVol`. Each cell counts "
               f"symbols of {count(number(log, 't3_symbols_compared'))} that agree exactly.", "",
-              "An odd lot is a print below the symbol's round lot, which this check reads from "
-              "its directory message. Neither rule the feed offers fits MIDAS on every symbol: "
-              "a fixed 100 fails BH and SEB, and the directory fails MKL and NVR, which it lists "
-              "at 10. The SEC's method page for its Market Activity Report says that until "
-              "Nov 3, 2025 a round lot is 100 shares for all but three tickers, BRK.A and SEB "
-              "at one and BH at 10. So MIDAS holds its own list, and the check stays failing "
-              "until the user decides which rule it compares. "
-              f"{count(number(log, 't3_other_round_lots'))} listed symbols have a directory "
-              "round lot other than 100 this day. Those with a MIDAS row are below, as prints "
-              "/ shares. Every other compared symbol is 100 on both rules.", ""]
+              odd_lot_text(log), ""]
     lines += format_table(
-        ("Symbol", "Directory lot", "MIDAS odd lots", "Feed below directory lot",
-         "Feed below 100", "Equal to MIDAS"),
-        [(row["symbol"], row["lot"], slash(row["midas"]), slash(row["feed_below_lot"]),
-          slash(row["feed_below_100"]), lot_rule_that_fits(row)) for row in log["round_lots"]])
+        ("Symbol", "Directory lot", "SEC lot", "MIDAS odd lots", "Feed below SEC lot",
+         "Feed below directory lot", "Feed below 100", "Feed below 10", "Equal to MIDAS"),
+        [(row["symbol"], row["lot"], row["sec_lot"], slash(row["midas"]),
+          slash_or_none(row["feed_below_sec"]), slash(row["feed_below_lot"]),
+          slash(row["feed_below_100"]), slash(row["feed_below_10"]), lot_rule_that_fits(row))
+         for row in log["round_lots"]])
+    lines += ["", "The SEC's three entries, and whether this day could exercise them.", ""]
+    lines += format_table(
+        ("Ticker", "SEC lot", "In the Nasdaq directory", "Has a Nasdaq row in MIDAS"),
+        [(row["symbol"], row["lot"], "yes" if row["listed"] == "1" else "no",
+          "yes" if row["compared"] == "1" else "no") for row in log["sec_lots"]])
     lines += [""]
     lines += format_table(
         ("Window", "Shares", "Hidden shares", "Trades", "Hidden trades", "Odd lots",
          "Odd-lot shares", "Feed below MIDAS", "Feed shares"),
         [(f"`{name}`", count(fit["equal_shares"]), count(fit["equal_hidden"]),
           count(fit["equal_prints"]), count(fit["equal_hidden_prints"]),
-          count(fit["equal_odd_lots"]), count(fit["equal_odd_shares"]), count(fit["feed_below"]),
+          count(fit["equal_odd_lots"]) if odd_lots_compared else "not compared",
+          count(fit["equal_odd_shares"]) if odd_lots_compared else "not compared",
+          count(fit["feed_below"]),
           count(fit["feed_shares"]))
          for name, fit in log["fits"].items()])
     edges = log["edges"]
@@ -594,7 +641,7 @@ def main(argv=None):
         references = manifest.get("references", {})
         midas_rows = references.get("midas_2019q4", {}).get("nasdaq_rows", {}).get(date)
         log = parse_log(args.log.read_text(encoding="utf-8", errors="replace"))
-        failures = hard_failures(log, entry, midas_rows, args.no_cross_file)
+        failures = hard_failures(log, entry, midas_rows, args.no_cross_file, int(date))
         text = render(log, entry, args.day, args.no_cross_file, failures)
     except (OSError, ValueError, KeyError, ReportError) as error:
         print(f"trades report: {error!r}", file=sys.stderr)
