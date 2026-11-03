@@ -77,7 +77,7 @@ class HashIndex {
 };
 
 // A paged direct index: the reference itself, split into page and offset, finds the
-// slot. A directory covers every reference below 2^index_bits, 2^32 by default, and
+// slot. A directory covers every reference below 2^index_bits, 2^30 by default, and
 // pages come from a pool sized up front, so a page is held only while one of its
 // references is live.
 //

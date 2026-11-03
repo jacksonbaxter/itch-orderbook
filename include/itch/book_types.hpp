@@ -60,13 +60,16 @@ struct NoWriteObserver {
 struct BookCapacity {
   std::uint32_t orders = 1U << 22U;
   std::uint32_t levels = 1U << 21U;
-  // PagedIndex: pages of direct slots. 12302019 pins at most 340,939 pages of 256
-  // references at once, so this holds it with room. Past it, references fall back to a
-  // hash table.
-  std::uint32_t index_pages = 1U << 19U;
+  // PagedIndex: pages of direct slots, 1 KiB each. The most pages pinned at once is
+  // 340,939 on 12302019 and 305,506 on 10302019, so this is the larger peak with a
+  // quarter more, rounded up to 4,096 pages: 418 MiB of slots. A busier day that runs the
+  // pool dry falls back to a hash table for each reference it cannot place, and counts it.
+  std::uint32_t index_pages = 428'032;
   // PagedIndex: references below 2^index_bits index directly, through a directory of
-  // one entry per page. 12302019 tops out at 308,631,072. At most 40.
-  std::uint32_t index_bits = 32;
+  // one entry per page. The largest reference is 308,631,072 on 12302019 and 316,375,126
+  // on 10302019, so 2^30 reaches more than three times past both, for a 16 MiB
+  // directory. A reference past the reach falls back as well. At most 40.
+  std::uint32_t index_bits = 30;
   // FlatLevels: array entries shared by every side's block. 12302019 reaches 1,642,464.
   std::uint32_t level_slots = 1U << 22U;
 };
