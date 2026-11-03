@@ -1,0 +1,555 @@
+{
+  "area": "backtester",
+  "faults": [
+    {
+      "id": "backtester-queue-cancel-behind-advances",
+      "breaks": "A cancel or delete of a real order behind the simulated one advances its queue position",
+      "check": "test_backtest S01",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "      if (sim.arrival > real.arrival) {\n        sim.ahead -=",
+          "new": "      if (sim.arrival != 0) {\n        sim.ahead -="
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueuePosition\\.S01CancelBehindDoesNotAdvance"
+      }
+    },
+    {
+      "id": "backtester-queue-execution-ahead-ignored",
+      "breaks": "An execution of a real order ahead leaves the simulated order's queue position as it was",
+      "check": "test_backtest S04",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "          sim.ahead -= std::min<std::uint64_t>(sim.ahead, shares);\n          continue;\n",
+          "new": "          continue;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueuePosition\\.S04ExecutionAheadAdvancesWithoutFill"
+      }
+    },
+    {
+      "id": "backtester-queue-joins-at-front",
+      "breaks": "A simulated order joins its price level with nothing ahead of it",
+      "check": "test_backtest S10",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    sim.ahead = real == nullptr ? 0 : real->aggregate_shares;\n",
+          "new": "    sim.ahead = real == nullptr ? 0 : real->aggregate_shares * 0;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] JoinAndLatency\\.S10JoinAtArrival"
+      }
+    },
+    {
+      "id": "backtester-ledger-budget-not-spent",
+      "breaks": "One real execution fills every simulated order it reaches in full, not its shares once",
+      "check": "test_backtest S23",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "        budget -= take;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Fills\\.S23TwoSimulatedOrdersOneExecution"
+      }
+    },
+    {
+      "id": "backtester-ledger-taker-ignores-consumed",
+      "breaks": "A simulated taker takes real shares another simulated order already consumed",
+      "check": "test_backtest S28",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "        const std::uint32_t available = shares - std::min(shares, consumed_[real]);\n",
+          "new": "        const std::uint32_t available = shares;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Fills\\.S28LedgerAcrossSimulatedTakers"
+      }
+    },
+    {
+      "id": "backtester-ledger-cross-not-recorded",
+      "breaks": "A crossing add's shares that fill a resting simulated order stay free for a later fill",
+      "check": "test_backtest S25",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "        consumed_[real] += take;\n        ++stats_.crossing_fills;\n",
+          "new": "        ++stats_.crossing_fills;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Fills\\.S25CrossingAdd"
+      }
+    },
+    {
+      "id": "backtester-ledger-draw-skipped",
+      "breaks": "A real execution of consumed shares fills a simulated order again",
+      "check": "test_backtest S28 draw",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    const std::uint32_t drawn = std::min(shares, real.consumed);\n",
+          "new": "    const std::uint32_t drawn = 0 * std::min(shares, real.consumed);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Fills\\.S28AnExecutionDrawsOnConsumedSharesFirst"
+      }
+    },
+    {
+      "id": "backtester-latency-event-after-message",
+      "breaks": "An event due at a message's own time runs after the message, not before it",
+      "check": "test_backtest S10",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "      if (kind == Kind::none || next >= time) {\n",
+          "new": "      if (kind == Kind::none || next > time) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] JoinAndLatency\\.S10JoinAtArrival"
+      }
+    },
+    {
+      "id": "backtester-latency-arrival-skips-order-entry",
+      "breaks": "An order arrives L_oe early: decision plus L_compute only",
+      "check": "test_backtest S10",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    arrival.time = now + latency_.compute + latency_.order_entry;\n",
+          "new": "    arrival.time = now + latency_.compute;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] JoinAndLatency\\.S10JoinAtArrival"
+      }
+    },
+    {
+      "id": "backtester-latency-report-immediate",
+      "breaks": "A fill reaches the strategy at the exchange time, without L_resp",
+      "check": "test_backtest S14",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "                 .time = time + latency_.response,\n                 .price = price,\n",
+          "new": "                 .time = time,\n                 .price = price,\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] JoinAndLatency\\.S14FillReportDelay"
+      }
+    },
+    {
+      "id": "backtester-lookahead-delivery-immediate",
+      "breaks": "Engine lookahead: market data reaches the strategy at exchange time, without L_md",
+      "check": "test_backtest_validity S15",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    Delivery delivery{.time = time + latency_.market_data,\n",
+          "new": "    Delivery delivery{.time = time,\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest_validity"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest_validity"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Lookahead\\.S15TheStrategySeesTheBookExactlyLmdLate"
+      }
+    },
+    {
+      "id": "backtester-lookahead-context-reads-exchange-book",
+      "breaks": "Engine lookahead: the strategy's book is the exchange's live book, not the delayed view",
+      "check": "test_backtest_validity S15",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "  [[nodiscard]] const Book& book() const noexcept { return engine_->view_; }\n",
+          "new": "  [[nodiscard]] const Book& book() const noexcept { return engine_->book_; }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest_validity"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest_validity"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Lookahead\\.S15TheStrategySeesTheBookExactlyLmdLate"
+      }
+    },
+    {
+      "id": "backtester-replay-sim-order-in-book",
+      "breaks": "A resting simulated order is written into the replayed exchange book",
+      "check": "test_backtest_validity S46",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "  void rest(std::uint32_t slot) noexcept {\n    SimOrder& sim = orders_[slot];\n",
+          "new": "  void rest(std::uint32_t slot) noexcept {\n    SimOrder& sim = orders_[slot];\n    {\n      std::array<std::byte, 36> add{};\n      add[0] = std::byte{'A'};\n      add[1] = static_cast<std::byte>(sim.locate >> 8U);\n      add[2] = static_cast<std::byte>(sim.locate & 0xFFU);\n      add[14] = std::byte{0x7F};\n      add[17] = static_cast<std::byte>(slot >> 8U);\n      add[18] = static_cast<std::byte>(slot & 0xFFU);\n      add[19] = sim.side == Side::bid ? std::byte{'B'} : std::byte{'S'};\n      for (std::size_t i = 0; i < 4; ++i) {\n        add[20 + i] = static_cast<std::byte>((sim.remaining >> (24U - (8U * i))) & 0xFFU);\n        add[32 + i] = static_cast<std::byte>((sim.price >> (24U - (8U * i))) & 0xFFU);\n      }\n      static_cast<void>(book_.apply(add));\n    }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest_validity"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest_validity"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ReplayUnchanged\\.S46TheRealBookIsIdenticalAfterEveryMessage"
+      }
+    },
+    {
+      "id": "backtester-cli-replay-sim-order-in-book",
+      "breaks": "A resting simulated order is written into the replayed exchange book",
+      "check": "itch_backtest replay check, test_backtest_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "  void rest(std::uint32_t slot) noexcept {\n    SimOrder& sim = orders_[slot];\n",
+          "new": "  void rest(std::uint32_t slot) noexcept {\n    SimOrder& sim = orders_[slot];\n    {\n      std::array<std::byte, 36> add{};\n      add[0] = std::byte{'A'};\n      add[1] = static_cast<std::byte>(sim.locate >> 8U);\n      add[2] = static_cast<std::byte>(sim.locate & 0xFFU);\n      add[14] = std::byte{0x7F};\n      add[17] = static_cast<std::byte>(slot >> 8U);\n      add[18] = static_cast<std::byte>(slot & 0xFFU);\n      add[19] = sim.side == Side::bid ? std::byte{'B'} : std::byte{'S'};\n      for (std::size_t i = 0; i < 4; ++i) {\n        add[20 + i] = static_cast<std::byte>((sim.remaining >> (24U - (8U * i))) & 0xFFU);\n        add[32 + i] = static_cast<std::byte>((sim.price >> (24U - (8U * i))) & 0xFFU);\n      }\n      static_cast<void>(book_.apply(add));\n    }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_backtest"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_backtest_cli.py",
+        "{build}/tools/itch_backtest",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "backtest cli: FAIL traded run: no passing line for replay identical to a plain book"
+      }
+    },
+    {
+      "id": "backtester-nonprintable-execution-fills",
+      "breaks": "An execution with price marked non-printable fills a simulated order",
+      "check": "test_backtest S31",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "c.printable == 'Y'",
+          "new": "c.printable != 0"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.S31NonPrintableExecutionDoesNotFill"
+      }
+    },
+    {
+      "id": "backtester-fees-nyse-on-tape-c",
+      "breaks": "Market Category N maps to Tape C, not Tape A",
+      "check": "test_fees tape mapping",
+      "mutations": [
+        {
+          "file": "include/itch/fees.hpp",
+          "old": "    case 'N': return Tape::a;\n",
+          "new": "    case 'N': return Tape::c;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_fees"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_fees"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Tape\\.MarketCategoryGivesTheTape"
+      }
+    },
+    {
+      "id": "backtester-fees-taf-uncapped",
+      "breaks": "TAF has no per-trade cap",
+      "check": "test_fees S40",
+      "mutations": [
+        {
+          "file": "include/itch/fees.hpp",
+          "old": "    taf = taf > schedule.taf_cap ? Wide{schedule.taf_cap} : taf;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_fees"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_fees"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Fees\\.S40TafCap"
+      }
+    },
+    {
+      "id": "backtester-fees-section31-on-buys",
+      "breaks": "Section 31 and TAF fall on buys as well as sells",
+      "check": "test_fees S39",
+      "mutations": [
+        {
+          "file": "include/itch/fees.hpp",
+          "old": "  if (fill.side == Side::ask) {\n",
+          "new": "  if (fill.side == Side::ask || fill.shares != 0) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_fees"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_fees"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Fees\\.S39SellsOnly"
+      }
+    },
+    {
+      "id": "backtester-fees-maker-taker-swapped",
+      "breaks": "A maker fill pays the remove fee and a taker fill earns the add credit",
+      "check": "test_backtest fees per fill",
+      "mutations": [
+        {
+          "file": "include/itch/fees.hpp",
+          "old": "    if (fill.liquidity == Liquidity::taker) {\n      exchange = schedule.remove_per_share",
+          "new": "    if (fill.liquidity == Liquidity::maker) {\n      exchange = schedule.remove_per_share"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Fills\\.S41MakerOrTakerPerFill"
+      }
+    },
+    {
+      "id": "backtester-alloc-hot-path",
+      "breaks": "Each order sent calls operator new",
+      "check": "test_alloc",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "#include <optional>\n",
+          "new": "#include <new>\n#include <optional>\n"
+        },
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    arrival.time = now + latency_.compute + latency_.order_entry;\n",
+          "new": "    ::operator delete(::operator new(8));\n    arrival.time = now + latency_.compute + latency_.order_entry;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Allocation\\.TheBacktesterAllocatesNothingAfterConstruction"
+      }
+    },
+    {
+      "id": "backtester-cli-alloc-hot-path",
+      "breaks": "Each order sent calls operator new",
+      "check": "itch_backtest allocations check, test_backtest_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "#include <optional>\n",
+          "new": "#include <new>\n#include <optional>\n"
+        },
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    arrival.time = now + latency_.compute + latency_.order_entry;\n",
+          "new": "    ::operator delete(::operator new(8));\n    arrival.time = now + latency_.compute + latency_.order_entry;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_backtest"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_backtest_cli.py",
+        "{build}/tools/itch_backtest",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "backtest cli: FAIL traded run: no passing line for allocations"
+      }
+    },
+    {
+      "id": "backtester-cli-traded-check-blind",
+      "breaks": "The tool's traded check passes a run with no fill",
+      "check": "test_backtest_cli.py no-trades case",
+      "mutations": [
+        {
+          "file": "tools/itch_backtest.cpp",
+          "old": "check(stats.fills != 0, ",
+          "new": "check(stats.fills != 0 || options->small, "
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_backtest"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_backtest_cli.py",
+        "{build}/tools/itch_backtest",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "backtest cli: FAIL no trades: exit 0"
+      }
+    }
+  ]
+}

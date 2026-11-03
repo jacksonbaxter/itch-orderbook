@@ -566,6 +566,21 @@ TEST(Fills, S28LedgerAcrossSimulatedTakers) {
   EXPECT_EQ(run.strategy.reports(kS2, ReportKind::cancelled)[0].shares, 150U);
 }
 
+// 28, the other half of the ledger. S2 offers 100 at 10.01 before R1 does, so S2 is ahead
+// of R1. S takes 60 of R1's 100 as taker. A real buyer then executes all 100 of R1: 60 of
+// those shares are the ones S already took, so only the other 40 can fill S2.
+TEST(Fills, S28AnExecutionDrawsOnConsumedSharesFirst) {
+  Replay run;
+  run.strategy.send(kS2, 1000, Side::ask, k1001, 100);
+  run.strategy.send(kS, 3000, Side::bid, k1001, 60, Tif::ioc);
+  run.feed(wire::add(kLocate, 1, 'S', 100, k1001, 2000));
+  run.feed(wire::execute(kLocate, 1, 100, 5000));
+  run.advance(10'000);
+  EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1001, 60, kTaker}}));
+  EXPECT_EQ(fills_of(run.fills(kS2)), (std::vector<Fill>{{k1001, 40, kMaker}}));
+  EXPECT_EQ(run.queue(kS2).remaining, 60U);
+}
+
 // 29. S crosses three levels. Each fill at its level's price, each with the remove fee on
 // its own shares.
 TEST(Fills, S29DepthWalk) {
