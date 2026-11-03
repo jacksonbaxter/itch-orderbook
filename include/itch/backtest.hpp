@@ -215,7 +215,7 @@ class EventHash {
     state_ = (std::rotl(state_ ^ word, 27) * 5ULL) + 0x52DCE729ULL;
     ++words_;
   }
-  [[nodiscard]] std::uint64_t value() const noexcept { return state_ ^ words_; }
+  [[nodiscard]] std::uint64_t digest() const noexcept { return state_ ^ words_; }
 
  private:
   std::uint64_t state_ = 0x9E3779B97F4A7C15ULL;
@@ -365,8 +365,8 @@ class Engine {
   // send from then on is refused with an invalid id.
   template <Strategy<Book> S>
   void finish(S& strategy) noexcept {
-    wake_limit_ = clock_ + latency_.market_data + latency_.compute + latency_.order_entry +
-                  latency_.response;
+    wake_limit_ =
+        clock_ + latency_.market_data + latency_.compute + latency_.order_entry + latency_.response;
     advance(kNever, strategy);
     close_session(clock_);
     ended_ = true;
@@ -390,7 +390,7 @@ class Engine {
   [[nodiscard]] const Book& exchange_book() const noexcept { return book_; }
   [[nodiscard]] const Book& view_book() const noexcept { return view_; }
   [[nodiscard]] const Stats& stats() const noexcept { return stats_; }
-  [[nodiscard]] std::uint64_t event_hash() const noexcept { return hash_.value(); }
+  [[nodiscard]] std::uint64_t event_hash() const noexcept { return hash_.digest(); }
   [[nodiscard]] Nanos clock() const noexcept { return clock_; }
 
   [[nodiscard]] std::optional<QueueState> queue(OrderId order) const noexcept {
@@ -593,7 +593,8 @@ class Engine {
   }
 
   void cancel(Nanos now, OrderId order) noexcept {
-    if (!ended_ && queue_arrival(
+    if (!ended_ &&
+        queue_arrival(
             now, {.time = 0, .order = order, .action = Action::cancel, .price = 0, .shares = 0})) {
       log_decision(now, Action::cancel, order, 0, 0);
     }
@@ -601,10 +602,10 @@ class Engine {
 
   void replace(Nanos now, OrderId order, Price4 price, std::uint32_t shares) noexcept {
     if (!ended_ && queue_arrival(now, {.time = 0,
-                            .order = order,
-                            .action = Action::replace,
-                            .price = price,
-                            .shares = shares})) {
+                                       .order = order,
+                                       .action = Action::replace,
+                                       .price = price,
+                                       .shares = shares})) {
       log_decision(now, Action::replace, order, price, shares);
     }
   }
