@@ -5,9 +5,10 @@
 //
 // OrderIndex finds an order's slot from its reference: HashIndex or PagedIndex, in
 // book_index.hpp. Levels keeps each side's levels in price order: LinkedLevels or
-// FlatLevels, in book_levels.hpp. The defaults, a hash and linked levels, are the
-// simplest pair and the one the oracle has run a whole day on. They are a provisional
-// choice: the measurements of each arm decide the default that ships.
+// FlatLevels, in book_levels.hpp. The default, the paged index with flat levels, is the
+// fastest arm on both hosts measured, on 12302019 with the day in memory and mapped with
+// the top tracked. It holds about three times the memory of the hash arms, nearly all of it
+// the page pool sized up front, and stays under T-BOOK-3. NOTES.md, "The default arm".
 //
 // All storage is sized in the constructor, so apply() never allocates. Orders live in
 // a pool and sit on an intrusive FIFO per level, with the oldest order at the front, in
@@ -38,8 +39,8 @@
 
 namespace itch {
 
-template <class WriteObserver = NoWriteObserver, class OrderIndex = HashIndex,
-          class Levels = LinkedLevels>
+template <class WriteObserver = NoWriteObserver, class OrderIndex = PagedIndex<>,
+          class Levels = FlatLevels>
 class FastBook {
  public:
   using Level = Levels::Level;

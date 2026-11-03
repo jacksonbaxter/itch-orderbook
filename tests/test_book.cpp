@@ -237,10 +237,10 @@ class BookScenario : public ::testing::Test {
 };
 
 // The default arm stays first, so that a failure on it is BookScenario/0.
-using Books =
-    ::testing::Types<FastAdapter<itch::FastBook<>>, FastAdapter<HashFlat>, FastAdapter<PagedLinked>,
-                     FastAdapter<PagedFlat>, ReferenceAdapter, MapAdapter<false>, MapAdapter<true>>;
-static_assert(std::is_same_v<itch::FastBook<>, HashLinked>);
+using Books = ::testing::Types<FastAdapter<itch::FastBook<>>, FastAdapter<HashLinked>,
+                               FastAdapter<HashFlat>, FastAdapter<PagedLinked>, ReferenceAdapter,
+                               MapAdapter<false>, MapAdapter<true>>;
+static_assert(std::is_same_v<itch::FastBook<>, PagedFlat>);
 TYPED_TEST_SUITE(BookScenario, Books);
 
 constexpr std::uint16_t kLocate = 7;
@@ -620,7 +620,8 @@ TEST(SpecOmissions, AStreamOfThemWalksDecodesAndApplies) {
   }
 
   itch::FrameReader reader{stream};
-  itch::FastBook<> book{{.orders = 16, .levels = 16}};
+  itch::FastBook<> book{
+      {.orders = 16, .levels = 16, .index_pages = 4, .index_bits = 16, .level_slots = 64}};
   for (const auto& [message, status] : script) {
     const itch::Frame frame = reader.next();
     ASSERT_EQ(frame.status, itch::FrameStatus::message);
@@ -658,7 +659,7 @@ TEST(FastBook, TheHashIndexKeepsEveryOrderThroughDeletes) {
   constexpr std::uint64_t kLastSlot = 127ULL << 57U;
   const auto reference = [](std::uint64_t i) { return (kLastSlot + i) * kInverse; };
 
-  itch::FastBook<> book{{.orders = 64, .levels = 64}};
+  HashLinked book{{.orders = 64, .levels = 64}};
   for (std::uint64_t i = 1; i <= 40; ++i) {
     ASSERT_EQ(book.apply(wire::add(1, reference(i), 'B', 1, 10)), itch::ApplyStatus::applied);
   }

@@ -497,7 +497,8 @@ TEST(BenchReplay, TopTrackingCountsEachMoveOfTheTop) {
       remove(2),               // The ask goes.
       add(5, 'S', 10, 12, 8),  // Another locate's first ask.
   });
-  itch::FastBook<> book{{.orders = 16, .levels = 16}};
+  itch::FastBook<> book{
+      {.orders = 16, .levels = 16, .index_pages = 4, .index_bits = 16, .level_slots = 64}};
   PlatformClock clock;
   TopTracker tracker;
   const PassTotals totals = throughput_pass(input, book, clock, tracker);

@@ -170,7 +170,12 @@ class Fed {
       : Fed(std::vector<std::vector<std::byte>>{messages}) {}
 
   explicit Fed(const std::vector<std::vector<std::byte>>& messages)
-      : run_{RunConfig{.capacity = {.orders = 64, .levels = 64}, .detail_limit = 0}} {
+      : run_{RunConfig{.capacity = {.orders = 64,
+                                    .levels = 64,
+                                    .index_pages = 4,
+                                    .index_bits = 16,
+                                    .level_slots = 256},
+                       .detail_limit = 0}} {
     for (const auto& message : opening()) {
       run_.on_message(message);
     }

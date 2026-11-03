@@ -158,7 +158,7 @@
     },
     {
       "id": "oracle-bbo-stale",
-      "breaks": "The linked arm's cached top of book is not refreshed when a level closes",
+      "breaks": "The linked arm's cached top of book is not refreshed when a level closes, run on hash with linked levels",
       "check": "the BBO compare",
       "mutations": [
         {
@@ -181,7 +181,11 @@
         "--max-orders",
         "4096",
         "--max-levels",
-        "4096"
+        "4096",
+        "--index",
+        "hash",
+        "--levels",
+        "linked"
       ],
       "expect": {
         "signature": "DIVERGENCE kind=bbo message=\\d+ type=. "
@@ -658,7 +662,7 @@
     },
     {
       "id": "oracle-off-touched",
-      "breaks": "The whole touched-level compare off, and D does not unlink",
+      "breaks": "The whole touched-level compare off, and D does not unlink, on hash with linked levels, where no move compare runs on the level first",
       "check": "the BBO compare or the hash",
       "mutations": [
         {
@@ -686,7 +690,11 @@
         "--max-orders",
         "4096",
         "--max-levels",
-        "4096"
+        "4096",
+        "--index",
+        "hash",
+        "--levels",
+        "linked"
       ],
       "expect": {
         "signature": "touched_checks 0\\n[\\s\\S]*DIVERGENCE kind=(bbo|periodic-hash) "
@@ -694,7 +702,7 @@
     },
     {
       "id": "oracle-off-bbo",
-      "breaks": "BBO compare off, and the linked arm's cached top goes stale",
+      "breaks": "BBO compare off, and the linked arm's cached top goes stale, run on hash with linked levels",
       "check": "the whole-book hash at every message, which carries the top of book",
       "mutations": [
         {
@@ -722,7 +730,11 @@
         "--max-orders",
         "4096",
         "--max-levels",
-        "4096"
+        "4096",
+        "--index",
+        "hash",
+        "--levels",
+        "linked"
       ],
       "expect": {
         "signature": "bbo_checks 0\\n[\\s\\S]*DIVERGENCE kind=periodic-hash message=\\d+ type=. "

@@ -3458,7 +3458,7 @@
     },
     {
       "id": "trades-src-book-best-is-the-second-level",
-      "breaks": "The book reports the wrong best price, its own second level",
+      "breaks": "The book reports the wrong best price, its own second level, on hash with linked levels",
       "check": "e_not_at_best",
       "mutations": [
         {
@@ -3489,7 +3489,11 @@
         "--max-orders",
         "4096",
         "--max-levels",
-        "4096"
+        "4096",
+        "--index",
+        "hash",
+        "--levels",
+        "linked"
       ],
       "expect": {
         "signature": "violation e_not_at_best "
@@ -8203,7 +8207,7 @@
     {
       "id": "trades-cli-arm-ignored",
       "breaks": "itch_trades runs the default arm whatever --index and --levels say",
-      "check": "test_trades_cli, on a flat arena too small for the fixture",
+      "check": "test_trades_cli, on an arena of 8 flat slots that the linked arm has no use for",
       "mutations": [
         {
           "file": "tools/itch_trades.cpp",
@@ -8225,7 +8229,7 @@
         "^test_trades_cli$"
       ],
       "expect": {
-        "signature": "trades cli: FAIL flat capacity: exit 0, no add refused"
+        "signature": "trades cli: FAIL linked capacity: exit \\d+, an add refused"
       }
     },
     {

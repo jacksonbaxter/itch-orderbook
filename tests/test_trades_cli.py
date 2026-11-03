@@ -259,11 +259,18 @@ def main():
         if comparable(arm.stdout) != comparable(done.stdout):
             failures.append(f"arm {index} {levels}: prints other lines than the default arm")
     # The arm really runs: a flat arena too small for the day refuses adds, which the
-    # linked arm does not have and would not refuse.
-    tight = subprocess.run([tool, str(fixtures / "day.itch"), *SMALL, "--levels", "flat",
-                            "--max-slots", "8"], capture_output=True, text=True, check=False)
+    # linked arm does not have and would not refuse. Both ways round, so that neither arm
+    # can pass for the other, whichever is the default.
+    tight = subprocess.run([tool, str(fixtures / "day.itch"), *SMALL, "--index", "hash",
+                            "--levels", "flat", "--max-slots", "8"],
+                           capture_output=True, text=True, check=False)
     if tight.returncode == 0 or "capacity_exhausted" not in tight.stdout:
         failures.append(f"flat capacity: exit {tight.returncode}, no add refused")
+    loose = subprocess.run([tool, str(fixtures / "day.itch"), *SMALL, "--index", "hash",
+                            "--levels", "linked", "--max-slots", "8"],
+                           capture_output=True, text=True, check=False)
+    if loose.returncode != 0 or "capacity_exhausted" in loose.stdout:
+        failures.append(f"linked capacity: exit {loose.returncode}, an add refused")
     for name, value in (("--index", "hashed"), ("--levels", "tree"), ("--max-pages", "x")):
         code = subprocess.run([tool, str(fixtures / "day.itch"), *SMALL, name, value],
                               capture_output=True, check=False).returncode
