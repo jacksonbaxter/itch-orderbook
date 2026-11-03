@@ -67,11 +67,14 @@ concept TradeBook = requires(B& book, const B& view, std::span<const std::byte> 
   { book.observer().writes() } -> std::convertible_to<std::uint64_t>;
 };
 
-// The book's write policy here: how many level writes a message made. A print that must
-// not touch the book has to leave this alone.
+// The book's write policy here: how many level writes and moves a message made. A print
+// that must not touch the book has to leave this alone.
 class WriteCounter {
  public:
   void on_level_write(std::uint16_t /*locate*/, Side /*side*/, Price4 /*price*/) noexcept {
+    ++writes_;
+  }
+  void on_level_move(std::uint16_t /*locate*/, Side /*side*/, Price4 /*price*/) noexcept {
     ++writes_;
   }
   [[nodiscard]] std::uint64_t writes() const noexcept { return writes_; }

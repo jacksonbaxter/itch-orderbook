@@ -58,18 +58,20 @@ class WordList {
 // its words then differ from the reference's.
 inline constexpr std::uint64_t kWalkLimit = 1ULL << 32U;
 
+// The levels come from the book's own walk of its price order, whichever arm it is: the
+// linked list from its head, or the flat array from its end.
 template <class FastBookType, class Sink>
 void emit_fast_side(const FastBookType& book, std::uint16_t locate, Side side, Sink& sink) {
-  const std::uint32_t first = book.best_level(locate, side);
-  if (first == kNoIndex) {
+  using Level = typename FastBookType::Level;
+  std::uint64_t level_count = 0;
+  book.walk_side(locate, side, [&level_count](const Level& /*level*/) {
+    ++level_count;
+    return level_count < kWalkLimit;
+  });
+  if (level_count == 0) {
     return;
   }
   const TopOfBook top = book.best(locate, side);
-  std::uint64_t level_count = 0;
-  for (std::uint32_t at = first; at != kNoIndex && level_count < kWalkLimit;
-       at = book.level_at(at).worse) {
-    ++level_count;
-  }
   sink(locate);
   sink(static_cast<std::uint64_t>(side));
   sink(top.price);
@@ -77,8 +79,7 @@ void emit_fast_side(const FastBookType& book, std::uint16_t locate, Side side, S
   sink(top.orders);
   sink(level_count);
   std::uint64_t remaining = level_count;
-  for (std::uint32_t at = first; remaining != 0; at = book.level_at(at).worse, --remaining) {
-    const BookLevel& level = book.level_at(at);
+  book.walk_side(locate, side, [&book, &sink, &remaining](const Level& level) {
     sink(level.price);
     sink(level.order_count);
     sink(level.aggregate_shares);
@@ -88,7 +89,8 @@ void emit_fast_side(const FastBookType& book, std::uint16_t locate, Side side, S
       sink(book.order_at(order).reference);
       sink(book.order_at(order).shares);
     }
-  }
+    return --remaining != 0;
+  });
 }
 
 // Every locate of a fast book, or just the named ones.
@@ -109,7 +111,7 @@ template <class Top>
     std::span<const Top> sides, std::size_t key) noexcept {
   const Top* const tops = sides.data();
   const std::size_t count = sides.size();
-  while (key < count && tops[key].level == kNoIndex) {
+  while (key < count && tops[key].empty()) {
     ++key;
   }
   return key;

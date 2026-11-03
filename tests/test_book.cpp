@@ -9,6 +9,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <numeric>
 #include <span>
@@ -50,6 +51,24 @@ struct Top {
 
 constexpr Top kEmpty{.present = false, .price = 0, .shares = 0, .orders = 0};
 
+// Small enough to fill on purpose.
+constexpr itch::BookCapacity kSmall{.orders = 256, .levels = 64};
+
+template <class Index, class Levels>
+using Arm = itch::FastBook<itch::NoWriteObserver, Index, Levels>;
+using HashLinked = Arm<itch::HashIndex, itch::LinkedLevels>;
+
+// Runs a check once on each arm of the fast book, named in any failure.
+template <class Check>
+void for_each_arm(const Check& check) {
+  const auto run = [&check]<class Index, class Levels>(std::string_view name) {
+    SCOPED_TRACE(name);
+    check.template operator()<Index, Levels>();
+  };
+  run.template operator()<itch::HashIndex, itch::LinkedLevels>("hash, linked");
+}
+
+template <class Book>
 class FastAdapter {
  public:
   std::string apply(const wire::Bytes& message) {
@@ -58,7 +77,7 @@ class FastAdapter {
 
   [[nodiscard]] Fifo level(std::uint16_t locate, char side, std::uint32_t price) const {
     Fifo fifo;
-    const itch::BookLevel* level =
+    const auto* level =
         book_.find_level(locate, side == 'B' ? itch::Side::bid : itch::Side::ask, price);
     if (level == nullptr) {
       return fifo;
@@ -84,8 +103,19 @@ class FastAdapter {
 
   [[nodiscard]] std::uint64_t live_orders() const { return book_.live_orders(); }
 
+  // The prices of a side's levels, best first, as the arm's own walk gives them.
+  [[nodiscard]] std::vector<std::uint32_t> prices(std::uint16_t locate, char side) const {
+    std::vector<std::uint32_t> prices;
+    book_.walk_side(locate, side == 'B' ? itch::Side::bid : itch::Side::ask,
+                    [&prices](const auto& level) {
+                      prices.push_back(level.price);
+                      return true;
+                    });
+    return prices;
+  }
+
  private:
-  itch::FastBook<> book_{{.orders = 256, .levels = 64}};
+  Book book_{kSmall};
 };
 
 class ReferenceAdapter {
@@ -116,6 +146,21 @@ class ReferenceAdapter {
 
   [[nodiscard]] std::uint64_t live_orders() const { return book_.live_orders(); }
 
+  [[nodiscard]] std::vector<std::uint32_t> prices(std::uint16_t locate, char side) const {
+    std::vector<std::uint32_t> prices;
+    const auto found = book_.sides().find({locate, side});
+    if (found == book_.sides().end()) {
+      return prices;
+    }
+    for (const auto& [price, fifo] : found->second) {
+      prices.push_back(price);
+    }
+    if (side == 'B') {
+      std::ranges::reverse(prices);
+    }
+    return prices;
+  }
+
  private:
   ReferenceBook book_;
 };
@@ -126,7 +171,9 @@ class BookScenario : public ::testing::Test {
   Adapter book_;  // NOLINT(cppcoreguidelines-non-private-member-variables-in-classes)
 };
 
-using Books = ::testing::Types<FastAdapter, ReferenceAdapter>;
+// The default arm stays first, so that a failure on it is BookScenario/0.
+using Books = ::testing::Types<FastAdapter<itch::FastBook<>>, ReferenceAdapter>;
+static_assert(std::is_same_v<itch::FastBook<>, HashLinked>);
 TYPED_TEST_SUITE(BookScenario, Books);
 
 constexpr std::uint16_t kLocate = 7;
@@ -409,6 +456,78 @@ TYPED_TEST(BookScenario, OrderMessagesAfterSystemEventEStillApply) {
   EXPECT_EQ(this->book_.live_orders(), 0U);
 }
 
+// DS-73. Stub quotes sit almost the whole price field away from the market, and real ones
+// reach $199,999.99. No arm indexes a level by its price, so a far quote is just the
+// farthest level on its side, and it becomes the best once the market in front goes.
+TYPED_TEST(BookScenario, AFarStubQuoteIsTheFarthestLevel) {
+  constexpr std::uint32_t kStubBid = 1;
+  constexpr std::uint32_t kStubAsk = 1'999'999'900;
+  EXPECT_EQ(this->book_.apply(wire::add(kLocate, 1, 'B', 100, 5000)), "applied");
+  EXPECT_EQ(this->book_.apply(wire::add(kLocate, 2, 'B', 300, kStubBid)), "applied");
+  EXPECT_EQ(this->book_.apply(wire::add(kLocate, 3, 'S', 100, 5100)), "applied");
+  EXPECT_EQ(this->book_.apply(wire::add(kLocate, 4, 'S', 200, kStubAsk)), "applied");
+  EXPECT_EQ(this->book_.apply(wire::add(kLocate, 5, 'B', 100, 4999)), "applied");
+  EXPECT_EQ(this->book_.apply(wire::add(kLocate, 6, 'S', 100, 5101)), "applied");
+  EXPECT_EQ(this->book_.prices(kLocate, 'B'), (std::vector<std::uint32_t>{5000, 4999, kStubBid}));
+  EXPECT_EQ(this->book_.prices(kLocate, 'S'), (std::vector<std::uint32_t>{5100, 5101, kStubAsk}));
+  EXPECT_EQ(this->book_.best(kLocate, 'B'), (Top{true, 5000, 100, 1}));
+  EXPECT_EQ(this->book_.best(kLocate, 'S'), (Top{true, 5100, 100, 1}));
+
+  for (const std::uint64_t reference : {1U, 5U, 3U, 6U}) {
+    EXPECT_EQ(this->book_.apply(wire::erase(kLocate, reference)), "applied") << reference;
+  }
+  EXPECT_EQ(this->book_.best(kLocate, 'B'), (Top{true, kStubBid, 300, 1}));
+  EXPECT_EQ(this->book_.best(kLocate, 'S'), (Top{true, kStubAsk, 200, 1}));
+  EXPECT_EQ(this->book_.level(kLocate, 'S', kStubAsk), (Fifo{{4, 200}}));
+
+  // The quote comes back to the market, and its old level goes.
+  EXPECT_EQ(this->book_.apply(wire::replace(kLocate, 4, 7, 200, 5200)), "applied");
+  EXPECT_EQ(this->book_.prices(kLocate, 'S'), (std::vector<std::uint32_t>{5200}));
+  EXPECT_EQ(this->book_.level(kLocate, 'S', kStubAsk), Fifo{});
+}
+
+// Levels added in no particular order come out in price order, and stay in order as
+// levels go from the middle and come back.
+TYPED_TEST(BookScenario, ManyLevelsStayInPriceOrder) {
+  constexpr std::uint32_t kLevels = 30;
+  std::vector<std::uint32_t> bids;
+  std::vector<std::uint32_t> asks;
+  for (std::uint32_t i = 0; i < kLevels; ++i) {
+    const std::uint32_t step = (i * 17U) % kLevels;  // Each of 0 to 29 once, out of order.
+    ASSERT_EQ(this->book_.apply(wire::add(kLocate, 1 + i, 'B', 10 + i, 5000 - (step * 10))),
+              "applied");
+    ASSERT_EQ(this->book_.apply(wire::add(kLocate, 101 + i, 'S', 10 + i, 6000 + (step * 10))),
+              "applied");
+    bids.push_back(5000 - (i * 10));
+    asks.push_back(6000 + (i * 10));
+  }
+  EXPECT_EQ(this->book_.prices(kLocate, 'B'), bids);
+  EXPECT_EQ(this->book_.prices(kLocate, 'S'), asks);
+
+  // Every third level goes, the best among them.
+  for (std::uint32_t i = 0; i < kLevels; i += 3) {
+    ASSERT_EQ(this->book_.apply(wire::erase(kLocate, 1 + i)), "applied");
+    ASSERT_EQ(this->book_.apply(wire::erase(kLocate, 101 + i)), "applied");
+    const std::uint32_t step = (i * 17U) % kLevels;
+    std::erase(bids, 5000 - (step * 10));
+    std::erase(asks, 6000 + (step * 10));
+  }
+  EXPECT_EQ(this->book_.prices(kLocate, 'B'), bids);
+  EXPECT_EQ(this->book_.prices(kLocate, 'S'), asks);
+  EXPECT_EQ(this->book_.best(kLocate, 'B').price, bids.front());
+  EXPECT_EQ(this->book_.best(kLocate, 'S').price, asks.front());
+
+  // And come back, through a replace from the far end.
+  ASSERT_EQ(this->book_.apply(wire::add(kLocate, 201, 'B', 5, 5000)), "applied");
+  ASSERT_EQ(this->book_.apply(wire::replace(kLocate, 2, 202, 5, 4995)), "applied");
+  std::erase(bids, 5000 - (((1U * 17U) % kLevels) * 10));
+  bids.push_back(5000);
+  bids.push_back(4995);
+  std::ranges::sort(bids, std::greater{});
+  EXPECT_EQ(this->book_.prices(kLocate, 'B'), bids);
+  EXPECT_EQ(this->book_.level(kLocate, 'B', 4995), (Fifo{{202, 5}}));
+}
+
 // All five cases as one framed stream, through the whole path a real day takes: nothing
 // skipped by the reader, nothing refused by decode, and every status the expected one.
 TEST(SpecOmissions, AStreamOfThemWalksDecodesAndApplies) {
@@ -448,15 +567,17 @@ TEST(SpecOmissions, AStreamOfThemWalksDecodesAndApplies) {
 }
 
 TEST(FastBook, ThePoolsRefuseRatherThanGrow) {
-  itch::FastBook<> book{{.orders = 2, .levels = 2}};
-  EXPECT_EQ(book.apply(wire::add(1, 1, 'B', 1, 10)), itch::ApplyStatus::applied);
-  EXPECT_EQ(book.apply(wire::add(1, 2, 'B', 1, 20)), itch::ApplyStatus::applied);
-  EXPECT_EQ(book.apply(wire::add(1, 3, 'B', 1, 30)), itch::ApplyStatus::capacity_exhausted);
-  EXPECT_EQ(book.live_orders(), 2U);
-  EXPECT_EQ(book.apply(wire::erase(1, 1)), itch::ApplyStatus::applied);
-  EXPECT_EQ(book.apply(wire::add(1, 3, 'B', 1, 30)), itch::ApplyStatus::applied);
-  EXPECT_EQ(book.peak_live_orders(), 2U);
-  EXPECT_EQ(book.peak_live_levels(), 2U);
+  for_each_arm([]<class Index, class Levels>() {
+    Arm<Index, Levels> book{{.orders = 2, .levels = 2}};
+    EXPECT_EQ(book.apply(wire::add(1, 1, 'B', 1, 10)), itch::ApplyStatus::applied);
+    EXPECT_EQ(book.apply(wire::add(1, 2, 'B', 1, 20)), itch::ApplyStatus::applied);
+    EXPECT_EQ(book.apply(wire::add(1, 3, 'B', 1, 30)), itch::ApplyStatus::capacity_exhausted);
+    EXPECT_EQ(book.live_orders(), 2U);
+    EXPECT_EQ(book.apply(wire::erase(1, 1)), itch::ApplyStatus::applied);
+    EXPECT_EQ(book.apply(wire::add(1, 3, 'B', 1, 30)), itch::ApplyStatus::applied);
+    EXPECT_EQ(book.peak_live_orders(), 2U);
+    EXPECT_EQ(book.peak_live_levels(), 2U);
+  });
 }
 
 TEST(FastBook, TheHashIndexKeepsEveryOrderThroughDeletes) {
@@ -489,111 +610,119 @@ TEST(FastBook, TheDefaultObserverCostsNoStorage) {
   EXPECT_LT(sizeof(itch::FastBook<>), sizeof(itch::FastBook<itch::oracle::WriteRecorder>));
 }
 
+// What the write policy saw for one message.
+struct Seen {
+  std::vector<LevelId> writes;
+  std::vector<LevelId> moves;
+};
+
+template <class Book>
+Seen seen(Book& book, const wire::Bytes& message) {
+  book.observer().clear();
+  static_cast<void>(book.apply(message));
+  const auto& observer = book.observer();
+  return {.writes = {observer.kept().begin(), observer.kept().end()},
+          .moves = {observer.moves().begin(), observer.moves().end()}};
+}
+
+template <class Index, class Levels>
+using Recorded = itch::FastBook<itch::oracle::WriteRecorder, Index, Levels>;
+
 TEST(FastBook, TheObserverSeesEveryLevelAMessageWrites) {
-  itch::oracle::OracleFastBook book{{.orders = 16, .levels = 16}};
-  const auto writes = [&book](const wire::Bytes& message) {
-    book.observer().clear();
-    static_cast<void>(book.apply(message));
-    return std::vector<LevelId>(book.observer().kept().begin(), book.observer().kept().end());
+  for_each_arm([]<class Index, class Levels>() {
+    Recorded<Index, Levels> book{kSmall};
+    const auto writes = [&book](const wire::Bytes& message) { return seen(book, message).writes; };
+    const LevelId at_5000{.locate = 1, .side = 'B', .price = 5000};
+    const LevelId at_4900{.locate = 1, .side = 'B', .price = 4900};
+    EXPECT_EQ(writes(wire::add(1, 1, 'B', 100, 5000)), (std::vector{at_5000, at_5000}));
+    EXPECT_EQ(writes(wire::execute(1, 1, 10)), (std::vector{at_5000}));
+    EXPECT_EQ(writes(wire::replace(1, 1, 2, 10, 4900)),
+              (std::vector{at_5000, at_5000, at_4900, at_4900}));
+    EXPECT_TRUE(writes(wire::trade(1, 100, 5000)).empty());
+    EXPECT_TRUE(writes(wire::execute(1, 99, 10)).empty());
+  });
+}
+
+// A linked level's neighbours are rewritten when it comes or goes, and each is reported
+// as moved. Nothing else is.
+TEST(FastBook, TheObserverSeesTheLinkedNeighboursAMessageMoves) {
+  Recorded<itch::HashIndex, itch::LinkedLevels> book{kSmall};
+  const auto moves = [&book](const wire::Bytes& message) { return seen(book, message).moves; };
+  const auto bid = [](std::uint32_t price) {
+    return LevelId{.locate = 1, .side = 'B', .price = price};
   };
-  const LevelId at_5000{.locate = 1, .side = 'B', .price = 5000};
-  const LevelId at_4900{.locate = 1, .side = 'B', .price = 4900};
-  EXPECT_EQ(writes(wire::add(1, 1, 'B', 100, 5000)), (std::vector{at_5000, at_5000}));
-  EXPECT_EQ(writes(wire::execute(1, 1, 10)), (std::vector{at_5000}));
-  EXPECT_EQ(writes(wire::replace(1, 1, 2, 10, 4900)),
-            (std::vector{at_5000, at_5000, at_4900, at_4900}));
-  EXPECT_TRUE(writes(wire::trade(1, 100, 5000)).empty());
-  EXPECT_TRUE(writes(wire::execute(1, 99, 10)).empty());
+  EXPECT_TRUE(moves(wire::add(1, 1, 'B', 100, 5000)).empty());
+  EXPECT_EQ(moves(wire::add(1, 2, 'B', 100, 4900)), (std::vector{bid(5000)}));
+  EXPECT_EQ(moves(wire::add(1, 3, 'B', 100, 4950)), (std::vector{bid(5000), bid(4900)}));
+  EXPECT_TRUE(moves(wire::add(1, 4, 'B', 100, 4950)).empty());
+  EXPECT_TRUE(moves(wire::execute(1, 4, 10)).empty());
+  EXPECT_TRUE(moves(wire::erase(1, 4)).empty());
+  EXPECT_EQ(moves(wire::erase(1, 3)), (std::vector{bid(5000), bid(4900)}));
+  EXPECT_EQ(moves(wire::add(1, 5, 'B', 100, 5100)), (std::vector{bid(5000)}));
 }
 
 // The live order with this reference. A missing one fails here, and comes back all zero.
-itch::RestingOrder resting(const itch::FastBook<>& book, std::uint64_t reference) {
+template <class Book>
+itch::RestingOrder resting(const Book& book, std::uint64_t reference) {
   const auto order = book.resting_order(reference);
   EXPECT_TRUE(order.has_value()) << reference;
   return order.value_or(itch::RestingOrder{});
 }
 
 TEST(FastBook, RestingOrderReportsWhereAnOrderIsAndWhatItHolds) {
-  itch::FastBook<> book{{.orders = 16, .levels = 16}};
-  EXPECT_FALSE(book.resting_order(1).has_value());
-  ASSERT_EQ(book.apply(wire::add(7, 1, 'S', 100, 5000)), itch::ApplyStatus::applied);
-  ASSERT_EQ(book.apply(wire::add(7, 2, 'S', 200, 5000)), itch::ApplyStatus::applied);
+  for_each_arm([]<class Index, class Levels>() {
+    Arm<Index, Levels> book{kSmall};
+    EXPECT_FALSE(book.resting_order(1).has_value());
+    ASSERT_EQ(book.apply(wire::add(7, 1, 'S', 100, 5000)), itch::ApplyStatus::applied);
+    ASSERT_EQ(book.apply(wire::add(7, 2, 'S', 200, 5000)), itch::ApplyStatus::applied);
 
-  const itch::RestingOrder first = resting(book, 1);
-  EXPECT_EQ(first.reference, 1U);
-  EXPECT_EQ(first.locate, 7U);
-  EXPECT_EQ(first.side, itch::Side::ask);
-  EXPECT_EQ(first.price, 5000U);
-  EXPECT_EQ(first.shares, 100U);
-  EXPECT_TRUE(first.at_front);
-  EXPECT_FALSE(resting(book, 2).at_front);
+    const itch::RestingOrder first = resting(book, 1);
+    EXPECT_EQ(first.reference, 1U);
+    EXPECT_EQ(first.locate, 7U);
+    EXPECT_EQ(first.side, itch::Side::ask);
+    EXPECT_EQ(first.price, 5000U);
+    EXPECT_EQ(first.shares, 100U);
+    EXPECT_TRUE(first.at_front);
+    EXPECT_FALSE(resting(book, 2).at_front);
 
-  ASSERT_EQ(book.apply(wire::execute(7, 1, 40)), itch::ApplyStatus::applied);
-  EXPECT_EQ(resting(book, 1).shares, 60U);
-  ASSERT_EQ(book.apply(wire::execute(7, 1, 60)), itch::ApplyStatus::applied);
-  EXPECT_FALSE(book.resting_order(1).has_value());
-  EXPECT_TRUE(resting(book, 2).at_front);
+    ASSERT_EQ(book.apply(wire::execute(7, 1, 40)), itch::ApplyStatus::applied);
+    EXPECT_EQ(resting(book, 1).shares, 60U);
+    ASSERT_EQ(book.apply(wire::execute(7, 1, 60)), itch::ApplyStatus::applied);
+    EXPECT_FALSE(book.resting_order(1).has_value());
+    EXPECT_TRUE(resting(book, 2).at_front);
 
-  // A replace at the same price goes to the back, under a new reference.
-  ASSERT_EQ(book.apply(wire::add(7, 3, 'S', 300, 5000)), itch::ApplyStatus::applied);
-  ASSERT_EQ(book.apply(wire::replace(7, 2, 4, 250, 5000)), itch::ApplyStatus::applied);
-  EXPECT_FALSE(book.resting_order(2).has_value());
-  EXPECT_TRUE(resting(book, 3).at_front);
-  EXPECT_FALSE(resting(book, 4).at_front);
-  EXPECT_EQ(resting(book, 4).shares, 250U);
+    // A replace at the same price goes to the back, under a new reference.
+    ASSERT_EQ(book.apply(wire::add(7, 3, 'S', 300, 5000)), itch::ApplyStatus::applied);
+    ASSERT_EQ(book.apply(wire::replace(7, 2, 4, 250, 5000)), itch::ApplyStatus::applied);
+    EXPECT_FALSE(book.resting_order(2).has_value());
+    EXPECT_TRUE(resting(book, 3).at_front);
+    EXPECT_FALSE(resting(book, 4).at_front);
+    EXPECT_EQ(resting(book, 4).shares, 250U);
+  });
 }
 
 constexpr itch::BookCapacity kRestartCapacity{.orders = 64, .levels = 64};
 
-// Every slot of both pools and every side's record, in use or not, and the counters. The
-// hash index has no accessor. What it holds shows in the lookups the tests make of it.
+// Every slot of every table, in use or not, and the counters. A book compares equal
+// only if each byte it holds does, its free lists and its index among them.
 template <class Book>
 void expect_same_book(const Book& actual, const Book& expected) {
   EXPECT_EQ(actual.live_orders(), expected.live_orders());
   EXPECT_EQ(actual.live_levels(), expected.live_levels());
   EXPECT_EQ(actual.peak_live_orders(), expected.peak_live_orders());
   EXPECT_EQ(actual.peak_live_levels(), expected.peak_live_levels());
-  for (std::uint32_t at = 0; at < kRestartCapacity.orders; ++at) {
-    const itch::BookOrder& a = actual.order_at(at);
-    const itch::BookOrder& e = expected.order_at(at);
-    EXPECT_EQ(a.reference, e.reference) << at;
-    EXPECT_EQ(a.shares, e.shares) << at;
-    EXPECT_EQ(a.level, e.level) << at;
-    EXPECT_EQ(a.older, e.older) << at;
-    EXPECT_EQ(a.newer, e.newer) << at;
-  }
-  for (std::uint32_t at = 0; at < kRestartCapacity.levels; ++at) {
-    const itch::BookLevel& a = actual.level_at(at);
-    const itch::BookLevel& e = expected.level_at(at);
-    EXPECT_EQ(a.aggregate_shares, e.aggregate_shares) << at;
-    EXPECT_EQ(a.price, e.price) << at;
-    EXPECT_EQ(a.order_count, e.order_count) << at;
-    EXPECT_EQ(a.front, e.front) << at;
-    EXPECT_EQ(a.back, e.back) << at;
-    EXPECT_EQ(a.better, e.better) << at;
-    EXPECT_EQ(a.worse, e.worse) << at;
-    EXPECT_EQ(a.locate, e.locate) << at;
-    EXPECT_EQ(a.side, e.side) << at;
-  }
-  const auto sides = actual.sides();
-  const auto expected_sides = expected.sides();
-  ASSERT_EQ(sides.size(), expected_sides.size());
-  for (std::size_t key = 0; key < sides.size(); ++key) {
-    EXPECT_EQ(sides[key].level, expected_sides[key].level) << key;
-    EXPECT_EQ(sides[key].price, expected_sides[key].price) << key;
-    EXPECT_EQ(sides[key].shares, expected_sides[key].shares) << key;
-    EXPECT_EQ(sides[key].orders, expected_sides[key].orders) << key;
-  }
+  EXPECT_TRUE(actual == expected);
 }
 
-std::string report_of(const itch::oracle::OracleRun& run) {
+template <class Run>
+std::string report_of(const Run& run) {
   testing::internal::CaptureStdout();
   run.invariants().print_report();
   return testing::internal::GetCapturedStdout();
 }
 
-void expect_same_run(const itch::oracle::OracleRun& actual,
-                     const itch::oracle::OracleRun& expected) {
+template <class Run>
+void expect_same_run(const Run& actual, const Run& expected) {
   EXPECT_TRUE(actual.divergences().empty());
   EXPECT_TRUE(expected.divergences().empty());
   EXPECT_TRUE(actual.counters() == expected.counters());
@@ -631,66 +760,73 @@ std::vector<wire::Bytes> restart_traffic(std::uint16_t locate) {
 }
 
 TEST(Canonical, TheWholeBookWalkSeesWhatAWalkOfEveryLocateSees) {
-  itch::FastBook<> book{kRestartCapacity};
-  std::uint64_t reference = 0;
-  for (const std::uint16_t locate : std::array<std::uint16_t, 5>{0, 1, 2, 65534, 65535}) {
-    ASSERT_EQ(book.apply(wire::add(locate, ++reference, 'B', 100, 5000)),
-              itch::ApplyStatus::applied);
-    ASSERT_EQ(book.apply(wire::add(locate, ++reference, 'S', 100, 5100)),
-              itch::ApplyStatus::applied);
-  }
-  std::vector<std::uint16_t> every(65536);
-  std::ranges::iota(every, std::uint16_t{0});
+  for_each_arm([]<class Index, class Levels>() {
+    Arm<Index, Levels> book{kRestartCapacity};
+    std::uint64_t reference = 0;
+    for (const std::uint16_t locate : std::array<std::uint16_t, 5>{0, 1, 2, 65534, 65535}) {
+      ASSERT_EQ(book.apply(wire::add(locate, ++reference, 'B', 100, 5000)),
+                itch::ApplyStatus::applied);
+      ASSERT_EQ(book.apply(wire::add(locate, ++reference, 'S', 100, 5100)),
+                itch::ApplyStatus::applied);
+    }
+    std::vector<std::uint16_t> every(65536);
+    std::ranges::iota(every, std::uint16_t{0});
 
-  itch::oracle::WordList whole;
-  itch::oracle::WordList named;
-  itch::oracle::emit_fast(book, whole);
-  itch::oracle::emit_fast(book, std::span<const std::uint16_t>{every}, named);
-  EXPECT_EQ(whole.words(), named.words());
-  // Six words to a side, three to its level and two to its order.
-  EXPECT_EQ(whole.words().size(), std::size_t{10} * 11);
+    itch::oracle::WordList whole;
+    itch::oracle::WordList named;
+    itch::oracle::emit_fast(book, whole);
+    itch::oracle::emit_fast(book, std::span<const std::uint16_t>{every}, named);
+    EXPECT_EQ(whole.words(), named.words());
+    // Six words to a side, three to its level and two to its order.
+    EXPECT_EQ(whole.words().size(), std::size_t{10} * 11);
+  });
 }
 
 TEST(OracleRun, RestartLeavesNothingOfTheLastStream) {
-  const itch::oracle::OracleConfig config{
-      .capacity = kRestartCapacity, .hash_every = 5, .exhaustive = true, .exhaustive_locates = {}};
-  const itch::oracle::OracleRun fresh{config};
-  itch::oracle::OracleRun control{config};
-  itch::oracle::OracleRun used{config};
+  for_each_arm([]<class Index, class Levels>() {
+    using Run = itch::oracle::BasicOracleRun<Index, Levels>;
+    const itch::oracle::OracleConfig config{.capacity = kRestartCapacity,
+                                            .hash_every = 5,
+                                            .exhaustive = true,
+                                            .exhaustive_locates = {}};
+    const Run fresh{config};
+    Run control{config};
+    Run used{config};
 
-  // The directory goes to the used run alone, so that its symbol has to be gone: the
-  // report names a crossed symbol.
-  const wire::Bytes directory = itch::fixtures::all_messages()[1];
-  const std::uint16_t locate = itch::read_header(directory.data()).stock_locate;
-  const std::vector<wire::Bytes> traffic = restart_traffic(locate);
-  ASSERT_TRUE(used.on_message(directory));
-  for (const wire::Bytes& message : traffic) {
-    ASSERT_TRUE(used.on_message(message));
-  }
-  used.finish();
-  ASSERT_GT(used.fast().live_orders(), 0U);
-  ASSERT_GT(used.reference().live_orders(), 0U);
-  ASSERT_GT(used.invariants().inv1_violations(), 0U);
-  ASSERT_GT(used.invariants().crossed(), 0U);
-  ASSERT_NE(used.last_hash(), 0U);
-  ASSERT_NE(report_of(used), report_of(control));
+    // The directory goes to the used run alone, so that its symbol has to be gone: the
+    // report names a crossed symbol.
+    const wire::Bytes directory = itch::fixtures::all_messages()[1];
+    const std::uint16_t locate = itch::read_header(directory.data()).stock_locate;
+    const std::vector<wire::Bytes> traffic = restart_traffic(locate);
+    ASSERT_TRUE(used.on_message(directory));
+    for (const wire::Bytes& message : traffic) {
+      ASSERT_TRUE(used.on_message(message));
+    }
+    used.finish();
+    ASSERT_GT(used.fast().live_orders(), 0U);
+    ASSERT_GT(used.reference().live_orders(), 0U);
+    ASSERT_GT(used.invariants().inv1_violations(), 0U);
+    ASSERT_GT(used.invariants().crossed(), 0U);
+    ASSERT_NE(used.last_hash(), 0U);
+    ASSERT_NE(report_of(used), report_of(control));
 
-  used.restart(fresh);
-  expect_same_run(used, control);
-  EXPECT_EQ(report_of(used), report_of(fresh));
-  for (std::uint64_t reference = 1; reference <= 7; ++reference) {
-    EXPECT_FALSE(used.fast().resting_order(reference).has_value()) << reference;
-  }
+    used.restart(fresh);
+    expect_same_run(used, control);
+    EXPECT_EQ(report_of(used), report_of(fresh));
+    for (std::uint64_t reference = 1; reference <= 7; ++reference) {
+      EXPECT_FALSE(used.fast().resting_order(reference).has_value()) << reference;
+    }
 
-  // The same traffic from here takes the same slots, so the free lists were restored
-  // too, and the report shows no symbol that only the first stream named.
-  for (const wire::Bytes& message : traffic) {
-    ASSERT_TRUE(used.on_message(message));
-    ASSERT_TRUE(control.on_message(message));
-  }
-  used.finish();
-  control.finish();
-  expect_same_run(used, control);
+    // The same traffic from here takes the same slots, so the free lists were restored
+    // too, and the report shows no symbol that only the first stream named.
+    for (const wire::Bytes& message : traffic) {
+      ASSERT_TRUE(used.on_message(message));
+      ASSERT_TRUE(control.on_message(message));
+    }
+    used.finish();
+    control.finish();
+    expect_same_run(used, control);
+  });
 }
 
 }  // namespace

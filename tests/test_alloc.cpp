@@ -1,7 +1,8 @@
 // The hot path allocates nothing, and the counter that says so can see an allocation.
 //
-// The fast book takes a stream through the frame reader, every order path included, in
-// a window that starts straight after construction: it has no warm-up to hide behind.
+// Each arm of the fast book takes a stream through the frame reader, every order path
+// included, in a window that starts straight after construction: it has no warm-up to
+// hide behind.
 // The reference book takes the same stream and must allocate, and each form of new is
 // shown reaching its own counter, so a broken counter fails here instead of passing the
 // fast book.
@@ -14,6 +15,8 @@
 #include <print>
 #include <random>
 #include <span>
+#include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "itch/book.hpp"
@@ -32,7 +35,8 @@ using itch::oracle::reset_alloc_counts;
 namespace wire = itch::oracle::wire;
 
 // Churns a fixed pool of orders through every order path many times over, so that each
-// pool and the hash index recycle, on a stream framed once before any window opens.
+// pool and index recycle, on a stream framed once before any window opens. One new
+// reference in five has bit 40 set.
 std::vector<std::byte> build_stream() {
   std::vector<std::byte> stream;
   const auto put = [&stream](const wire::Bytes& message) {
@@ -50,12 +54,17 @@ std::vector<std::byte> build_stream() {
   constexpr std::uint32_t kPool = 512;
   std::vector<std::uint64_t> live;
   std::uint64_t next_reference = 1;
+  const auto fresh = [&next_reference] {
+    const std::uint64_t reference = next_reference++;
+    return reference % 5 == 0 ? reference | (std::uint64_t{1} << 40U) : reference;
+  };
   for (int step = 0; step < 200000; ++step) {
     const auto price = static_cast<std::uint32_t>(1000 + ((random() % 64) * 100));
     if (live.size() < kPool / 2) {
+      const std::uint64_t reference = fresh();
       put((step % 3 == 0 ? wire::add_attributed : wire::add)(
-          1, next_reference, step % 2 == 0 ? 'B' : 'S', 300, price, 1));
-      live.push_back(next_reference++);
+          1, reference, step % 2 == 0 ? 'B' : 'S', 300, price, 1));
+      live.push_back(reference);
       continue;
     }
     const std::size_t pick = random() % live.size();
@@ -64,10 +73,12 @@ std::vector<std::byte> build_stream() {
       case 0: put(wire::execute(1, reference, 1)); break;
       case 1: put(wire::execute_with_price(1, reference, 1, 77)); break;
       case 2: put(wire::cancel(1, reference, 1)); break;
-      case 3:
-        put(wire::replace(1, reference, next_reference, 300, price));
-        live[pick] = next_reference++;
+      case 3: {
+        const std::uint64_t replaced = fresh();
+        put(wire::replace(1, reference, replaced, 300, price));
+        live[pick] = replaced;
         break;
+      }
       default:
         put(wire::erase(1, reference));
         live[pick] = live.back();
@@ -89,9 +100,13 @@ std::uint64_t replay(std::span<const std::byte> stream, Apply apply) {
   return messages;
 }
 
-TEST(Allocation, TheFastBookAllocatesNothingAfterConstruction) {
+constexpr itch::BookCapacity kCapacity{.orders = 2048, .levels = 2048};
+
+template <class Index, class Levels>
+void expect_no_allocation(std::string_view name) {
+  SCOPED_TRACE(name);
   const std::vector<std::byte> stream = build_stream();
-  itch::FastBook<> book{{.orders = 2048, .levels = 2048}};
+  itch::FastBook<itch::NoWriteObserver, Index, Levels> book{kCapacity};
   std::uint64_t refused = 0;
   reset_alloc_counts();
   const std::uint64_t messages =
@@ -103,11 +118,15 @@ TEST(Allocation, TheFastBookAllocatesNothingAfterConstruction) {
                 : 1U;
       });
   const AllocCounts counts = read_alloc_counts();
-  std::println("fast book: {} messages, {} refused, {} allocations", messages, refused,
+  std::println("fast book, {}: {} messages, {} refused, {} allocations", name, messages, refused,
                counts.total());
   EXPECT_EQ(counts.total(), 0U) << "allocation in the hot path";
   EXPECT_EQ(refused, 0U) << "the stream did not exercise the book";
   EXPECT_GT(messages, 200000U);
+}
+
+TEST(Allocation, TheFastBookAllocatesNothingAfterConstruction) {
+  expect_no_allocation<itch::HashIndex, itch::LinkedLevels>("hash, linked");
 }
 
 TEST(Allocation, TheControlBookIsSeenAllocating) {

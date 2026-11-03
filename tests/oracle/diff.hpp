@@ -9,6 +9,9 @@
 //   3. The best bid and offer of the message's locate are equal, as price, shares and
 //      orders.
 //   4. Every level the fast book wrote through its choke point is in T(m).
+//   5. Every level the fast book moved in its price order, and that is not in T(m), is
+//      equal as in 2. A move rewrites only how a level is found, so it must leave the
+//      level as it was.
 //
 // Every hash_every messages and at the end of the stream, a canonical walk of each whole
 // book must agree. With exhaustive set, that walk runs in full after every message, as a
@@ -30,6 +33,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -42,6 +46,8 @@
 namespace itch::oracle {
 
 // The oracle's write policy: records what the choke point wrote in the current message.
+// Writes are few, and more than kKept is itself a failure. Moves are kept in full, since
+// each one is compared: a flat array can shift a whole side for one message.
 class WriteRecorder {
  public:
   static constexpr std::size_t kKept = 16;
@@ -52,15 +58,25 @@ class WriteRecorder {
     }
     ++count_;
   }
-  void clear() noexcept { count_ = 0; }
+  void on_level_move(std::uint16_t locate, Side side, Price4 price) {
+    moves_.push_back({.locate = locate, .side = side == Side::bid ? 'B' : 'S', .price = price});
+  }
+  void clear() noexcept {
+    count_ = 0;
+    moves_.clear();
+  }
   [[nodiscard]] std::size_t count() const noexcept { return count_; }
   [[nodiscard]] std::span<const LevelId> kept() const noexcept {
     return std::span{writes_}.first(count_ < kKept ? count_ : kKept);
   }
+  [[nodiscard]] std::span<const LevelId> moves() const noexcept { return moves_; }
+
+  friend bool operator==(const WriteRecorder&, const WriteRecorder&) = default;
 
  private:
   std::array<LevelId, kKept> writes_{};
   std::size_t count_ = 0;
+  std::vector<LevelId> moves_;
 };
 
 using OracleFastBook = FastBook<WriteRecorder>;
@@ -125,6 +141,9 @@ struct DiffCounters {
   std::uint64_t write_set_checks = 0;
   std::uint64_t write_set_writes = 0;
   std::uint64_t write_set_violations = 0;
+  std::uint64_t move_reports = 0;
+  std::uint64_t moved_checks = 0;        // Moved levels outside T(m), compared in full.
+  std::uint64_t empty_moved_checks = 0;  // Moved levels both books agree are gone.
   std::uint64_t periodic_hash_checks = 0;
   std::uint64_t final_hash_checks = 0;
   std::uint64_t production_hash_checks = 0;
@@ -141,9 +160,15 @@ struct OracleConfig {
   std::span<const std::uint16_t> exhaustive_locates;
 };
 
-class OracleRun {
+// One arm of the fast book against the reference. OracleRun is the default arm.
+template <class OrderIndex = FastBook<>::Index, class Levels = FastBook<>::LevelArm>
+class BasicOracleRun {
  public:
-  explicit OracleRun(const OracleConfig& config)
+  using Fast = FastBook<WriteRecorder, OrderIndex, Levels>;
+  using Production = FastBook<NoWriteObserver, OrderIndex, Levels>;
+  using Level = typename Fast::Level;
+
+  explicit BasicOracleRun(const OracleConfig& config)
       : config_{config},
         fast_{config.capacity},
         production_{config.capacity},
@@ -154,7 +179,7 @@ class OracleRun {
   // its free lists and the bytes of its unused slots too. The reference book's orders
   // point into its own lists, so it is built anew and never assigned. A member added to
   // this class has to be added here.
-  void restart(const OracleRun& fresh) {
+  void restart(const BasicOracleRun& fresh) {
     config_ = fresh.config_;
     fast_ = fresh.fast_;
     production_ = fresh.production_;
@@ -165,6 +190,7 @@ class OracleRun {
     message_ = fresh.message_;
     type_ = fresh.type_;
     last_hash_ = fresh.last_hash_;
+    moved_ = fresh.moved_;
   }
 
   // Takes one whole message. False once the books have diverged.
@@ -189,6 +215,7 @@ class OracleRun {
     compare_top(outcome.locate, 'B', bid);
     compare_top(outcome.locate, 'S', ask);
     compare_write_set(outcome.touched);
+    compare_moves(outcome.touched);
 
     invariants_.on_outcome(message_, type_, outcome);
     invariants_.observe(message_, type_, outcome.locate, header.timestamp_ns, bid, ask);
@@ -213,8 +240,8 @@ class OracleRun {
   [[nodiscard]] const DiffCounters& counters() const noexcept { return counters_; }
   [[nodiscard]] const Invariants& invariants() const noexcept { return invariants_; }
   [[nodiscard]] Invariants& invariants() noexcept { return invariants_; }
-  [[nodiscard]] const OracleFastBook& fast() const noexcept { return fast_; }
-  [[nodiscard]] const FastBook<>& production() const noexcept { return production_; }
+  [[nodiscard]] const Fast& fast() const noexcept { return fast_; }
+  [[nodiscard]] const Production& production() const noexcept { return production_; }
   [[nodiscard]] const ReferenceBook& reference() const noexcept { return *reference_; }
 
  private:
@@ -236,11 +263,15 @@ class OracleRun {
   }
 
   void compare_level(const LevelId& id) {
+    compare_level(id, counters_.touched_checks, counters_.empty_touched_checks);
+  }
+
+  void compare_level(const LevelId& id, std::uint64_t& present, std::uint64_t& absent) {
     const ReferenceBook::Fifo* expected = reference_->level(id);
-    const BookLevel* actual =
+    const Level* actual =
         fast_.find_level(id.locate, id.side == 'B' ? Side::bid : Side::ask, id.price);
     if (expected == nullptr && actual == nullptr) {
-      ++counters_.empty_touched_checks;
+      ++absent;
       return;
     }
     if (expected == nullptr || actual == nullptr) {
@@ -248,7 +279,7 @@ class OracleRun {
                                                           actual != nullptr, expected != nullptr));
       return;
     }
-    ++counters_.touched_checks;
+    ++present;
     std::uint64_t shares = 0;
     std::uint64_t orders = 0;
     for (const ReferenceBook::Resting& order : *expected) {
@@ -266,8 +297,7 @@ class OracleRun {
     compare_fifo(id, *actual, *expected);
   }
 
-  void compare_fifo(const LevelId& id, const BookLevel& actual,
-                    const ReferenceBook::Fifo& expected) {
+  void compare_fifo(const LevelId& id, const Level& actual, const ReferenceBook::Fifo& expected) {
     std::uint32_t at = actual.front;
     std::size_t position = 0;
     for (const ReferenceBook::Resting& order : expected) {
@@ -328,6 +358,29 @@ class OracleRun {
     }
   }
 
+  // Each level moved and not touched, once, however many times the message moved it.
+  void compare_moves(const TouchedSet& touched) {
+    std::vector<LevelId>& moved = moved_;
+    const std::span<const LevelId> reported = fast_.observer().moves();
+    counters_.move_reports += reported.size();
+    moved.assign(reported.begin(), reported.end());
+    const auto order = [](const LevelId& a, const LevelId& b) {
+      return std::tie(a.locate, a.side, a.price) < std::tie(b.locate, b.side, b.price);
+    };
+    std::ranges::sort(moved, order);
+    const auto [first, last] = std::ranges::unique(moved);
+    moved.erase(first, last);
+    for (const LevelId& id : moved) {
+      if (!touched.contains(id)) {
+        const std::size_t before = divergences_.size();
+        compare_level(id, counters_.moved_checks, counters_.empty_moved_checks);
+        for (std::size_t at = before; at < divergences_.size(); ++at) {
+          divergences_[at].detail.insert(0, "moved ");
+        }
+      }
+    }
+  }
+
   void compare_hash(DivergenceKind kind, std::uint64_t& counter) {
     WordHash fast;
     WordHash reference;
@@ -377,8 +430,8 @@ class OracleRun {
 
  private:
   OracleConfig config_;
-  OracleFastBook fast_;
-  FastBook<> production_;  // The instantiation that ships, held to the same hash.
+  Fast fast_;
+  Production production_;  // The instantiation that ships, held to the same hash.
   std::unique_ptr<ReferenceBook> reference_;
   Invariants invariants_;
   DiffCounters counters_;
@@ -386,6 +439,9 @@ class OracleRun {
   std::uint64_t message_ = 0;
   char type_ = '\0';
   std::uint64_t last_hash_ = 0;
+  std::vector<LevelId> moved_;  // Scratch for compare_moves, kept to reuse its storage.
 };
+
+using OracleRun = BasicOracleRun<>;
 
 }  // namespace itch::oracle
