@@ -58,6 +58,9 @@ if(ITCH_BUILD_TOOLS)
             "$<TARGET_FILE:itch_map_compare>" "${CMAKE_CURRENT_BINARY_DIR}/map_compare_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades")
+  add_test(NAME test_backtest_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_backtest_cli.py"
+            "$<TARGET_FILE:itch_backtest>" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle")
   set_tests_properties(test_census_cli test_oracle_cli test_trades_cli test_map_compare_cli
-    PROPERTIES LABELS unit)
+    test_backtest_cli PROPERTIES LABELS unit)
 endif()
