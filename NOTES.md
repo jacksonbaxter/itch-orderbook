@@ -390,3 +390,21 @@ Both decisions are the user's. Both came after seeing real data. Prediction P-00
 **The date is a guard, not a note.** For a date on or after 2025-11-03 the odd-lot columns are not compared, the tool says `t3_odd_lot_columns not_compared_rule_ended`, and the report and the README table say so. The report holds the date itself as well, so a late day compared on the old rule fails there. Shares and trades are still compared on such a day. No held day reaches this path, so only fixtures do.
 
 **The directory's lot stays as information.** The `t3_round_lot` table still shows what it would give, beside the SEC's lot and below 100 and below 10.
+
+## What the spec leaves out, 2026-11-02
+
+The parser line in Phase 3 named five cases. None needed a change to the parser or the book: decode never validates an enumerated field, and the book gives `R` and `Q` `no_book_effect` and applies `X` wherever it comes. What was missing was proof and counts. The book scenarios in `test_book.cpp` now run each case on both books, `SpecOmissions.AStreamOfThemWalksDecodesAndApplies` runs all five through reader, decode and book as one stream, and `test_messages.cpp` covers round lots and Authenticity. Each test has a fault in `scripts/faults/parser.json` that writes the plausible wrong version: a closed category list, a book that drops test symbols, a fixed lot of 100, a refused or resting zero cross, and `X` ignored after `E` as the current spec text reads.
+
+`itch_census` now counts each case, and `check_census.py` ties every split back to the manifest's `R` and `Q` counts, which `fetch_data.py` counted in Python. A second, separate Python recount gave the same lines on both days. The census takes about 12 s a day.
+
+| Case | 12302019 | 10302019 | What it turned out to be |
+|---|---|---|---|
+| Market Category `M` (DS-64) | 0 | 0 | Not on either day. DS-64 says it starts in 2025 files. Fixture only. |
+| Test symbols, Authenticity `T` (DS-65) | 34, 20 with orders | 34, 20 with orders | Real order flow: 6,546 and 13,185 adds. Prints 3,921 and 13,941, the same as `results/trades_*.md`. |
+| Round lots other than 100 (DS-66) | 10 at 10, 1 at 1, 8,895 at 100 | 10 at 10, 1 at 1, 8,876 at 100 | As DS-66 says for 2019-12-30. No lot 40 here: that is 2026. |
+| `Q` of zero shares (DS-69) | 12,189 of 17,836 | 12,085 of 17,775 | Zero shares and zero price are the same messages on both days: no `Q` has only one of them. All are type `O` or `C`. |
+| Messages after System Event `E` (DS-71) | 51,200 `D`, no `X` | 44,214 `D`, no `X` | The 2026 `X` does not occur on these days. The fixture is the only place it runs. |
+
+**One finding no entry predicted.** On 10302019 the directory lists HERO twice, at 03:07 and again at 05:05, with every field the same but tracking number and timestamp. The book does not read the directory, and every harness consumer overwrites with the same values, so it changes nothing. The census counts it as `directory_repeats`.
+
+**What stays open.** The book holds test symbols exactly like live ones, as it should. Leaving them out of any statistic is the consumer's job, and no production consumer exists yet. The backtester and the demo will need it.

@@ -97,7 +97,7 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 ### Parser
 - [x] `read_be<T>`: `memcpy` plus `std::byteswap`. `read_be48` reads exactly 6 bytes. No `start_lifetime_as`, no `std::simd`.
 - [x] Frame length checked before decode, typed failures, unknown types skipped by length, wire-controlled indexes bounded. No assert, throw or abort reachable from wire content.
-- [ ] Handle what the spec omits: Market Category `M` (DS-64), test symbols (DS-65), round lots other than 100 (DS-66), zero-share and zero-price `Q` (DS-69), `X` after system event `E` (DS-71).
+- [x] Handle what the spec omits: Market Category `M` (DS-64), test symbols (DS-65), round lots other than 100 (DS-66), zero-share and zero-price `Q` (DS-69), `X` after system event `E` (DS-71). Counted on both days by `itch_census`. `M` and post-`E` `X` occur on neither, so fixtures alone exercise them. See NOTES.md, 2026-11-02.
 
 ### SIMD (both architectures, same CMake, no code change)
 - [ ] One kernel header per ISA in `include/itch/kernels/`: `scalar`, `neon`, `ssse3`, `avx2`, `avx512vbmi`, `wasm`, each in its own namespace. Tests compare every kernel with `scalar` on random and real bytes.
