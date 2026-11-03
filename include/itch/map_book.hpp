@@ -152,7 +152,7 @@ class MapBook {
     if (found == orders_.end()) {
       return ApplyStatus::unknown_order;
     }
-    Order& order = found->second;
+    const Order& order = found->second;
     if (order.locate != locate) {
       return ApplyStatus::locate_mismatch;
     }

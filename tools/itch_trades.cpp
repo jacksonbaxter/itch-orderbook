@@ -200,9 +200,9 @@ template <class Run>
 [[nodiscard]] int verdicts(const Run& run) {
   struct Line {
     std::string_view not_run;
-    int bit;
-    Group group;
-    bool ran;
+    int bit = 0;
+    Group group = Group::t1;
+    bool ran = false;
   };
   const std::array<Line, 5> lines{{
       {.not_run = "", .bit = 1, .group = Group::t1, .ran = true},
