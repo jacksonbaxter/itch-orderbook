@@ -8199,6 +8199,74 @@
       "expect": {
         "signature": "FAIL: test_a_shorter_replay_than_the_census_fails"
       }
+    },
+    {
+      "id": "trades-cli-arm-ignored",
+      "breaks": "itch_trades runs the default arm whatever --index and --levels say",
+      "check": "test_trades_cli, on a flat arena too small for the fixture",
+      "mutations": [
+        {
+          "file": "tools/itch_trades.cpp",
+          "old": "    return itch::tools::with_book_arm(options->arm, [&options]<class Index, class Levels> {\n",
+          "new": "    return itch::tools::with_book_arm(itch::tools::BookArm{}, [&options]<class Index, class Levels> {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_trades_cli$"
+      ],
+      "expect": {
+        "signature": "trades cli: FAIL flat capacity: exit 0, no add refused"
+      }
+    },
+    {
+      "id": "trades-report-arms-unchecked",
+      "breaks": "The report stops holding each arm to the first arm's lines",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "        if differ:\n            failures.append(f\"arm {name} disagrees with {first['name']} on {', '.join(differ)}\")\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_arm_that_counts_another_figure_fails"
+      }
+    },
+    {
+      "id": "trades-report-arm-hard-checks-skipped",
+      "breaks": "The report holds only the first arm to the hard checks",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "            failures += [f\"arm {name}: {text}\" for text in check(arm[\"log\"])]\n",
+          "new": "            failures += []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_arm_is_held_to_the_hard_checks_on_its_own"
+      }
     }
   ]
 }

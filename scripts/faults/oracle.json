@@ -2913,6 +2913,66 @@
       "expect": {
         "signature": "fast book, hash, flat: \\d+ messages, \\d+ refused, [1-9]\\d* allocations[\\s\\S]*allocation in the hot path"
       }
+    },
+    {
+      "id": "oracle-report-arms-unchecked",
+      "breaks": "The report stops holding each arm to the first arm's lines",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "        differ = disagreements(first[\"log\"], arm[\"log\"])\n",
+          "new": "        differ = []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_arm_that_ends_on_another_hash_fails"
+      }
+    },
+    {
+      "id": "oracle-report-arm-alloc-unchecked",
+      "breaks": "The report stops comparing each arm's allocation log with the first arm's",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "            differ += [f\"allocation {key}\" for key in disagreements(first[\"alloc\"], arm[\"alloc\"])]\n",
+          "new": "            differ += []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_arms_allocation_count_must_agree"
+      }
+    },
+    {
+      "id": "oracle-report-arm-hard-checks-skipped",
+      "breaks": "The report holds only the first arm to the hard checks",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "            failures += [f\"arm {name}: {text}\" for text in hard_failures(arm[\"log\"], entry)]\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_arm_is_held_to_the_hard_checks_on_its_own"
+      }
     }
   ]
 }

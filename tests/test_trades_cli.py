@@ -258,6 +258,12 @@ def main():
             failures.append(f"arm {index} {levels}: the arm is not named")
         if comparable(arm.stdout) != comparable(done.stdout):
             failures.append(f"arm {index} {levels}: prints other lines than the default arm")
+    # The arm really runs: a flat arena too small for the day refuses adds, which the
+    # linked arm does not have and would not refuse.
+    tight = subprocess.run([tool, str(fixtures / "day.itch"), *SMALL, "--levels", "flat",
+                            "--max-slots", "8"], capture_output=True, text=True, check=False)
+    if tight.returncode == 0 or "capacity_exhausted" not in tight.stdout:
+        failures.append(f"flat capacity: exit {tight.returncode}, no add refused")
     for name, value in (("--index", "hashed"), ("--levels", "tree"), ("--max-pages", "x")):
         code = subprocess.run([tool, str(fixtures / "day.itch"), *SMALL, name, value],
                               capture_output=True, check=False).returncode
