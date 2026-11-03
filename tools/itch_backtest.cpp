@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <exception>
 #include <optional>
 #include <print>
 #include <span>
@@ -67,38 +68,38 @@ constexpr itch::BookCapacity kSmall{
   return stock;
 }
 
+// One flag that takes a value. False if the value does not parse.
+[[nodiscard]] bool take_value(Options& options, std::string_view flag, std::string_view value) {
+  if (flag == "--date") {
+    const auto date = parse_date(value);
+    options.date = date.value_or(0);
+    return date.has_value();
+  }
+  const auto symbol = parse_symbol(value);
+  if (symbol) {
+    options.symbols.push_back(*symbol);
+  }
+  return symbol.has_value();
+}
+
 [[nodiscard]] std::optional<Options> parse_options(std::span<const char* const> args) {
   Options options;
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view arg = args[i];
-    if (arg == "--no-plain-check" || arg == "--small") {
-      (arg == "--small" ? options.small : options.plain_check) = arg == "--small";
-      continue;
-    }
-    if (arg == "--date" || arg == "--symbol") {
-      if (i + 1 == args.size()) {
+    if (arg == "--no-plain-check") {
+      options.plain_check = false;
+    } else if (arg == "--small") {
+      options.small = true;
+    } else if (arg == "--date" || arg == "--symbol") {
+      if (i + 1 == args.size() || !take_value(options, arg, args[i + 1])) {
         return std::nullopt;
       }
-      const std::string_view value = args[++i];
-      if (arg == "--date") {
-        const auto date = parse_date(value);
-        if (!date) {
-          return std::nullopt;
-        }
-        options.date = *date;
-      } else {
-        const auto symbol = parse_symbol(value);
-        if (!symbol) {
-          return std::nullopt;
-        }
-        options.symbols.push_back(*symbol);
-      }
-      continue;
-    }
-    if (arg.starts_with("--") || options.path != nullptr) {
+      ++i;
+    } else if (arg.starts_with("--") || options.path != nullptr) {
       return std::nullopt;
+    } else {
+      options.path = args[i];
     }
-    options.path = args[i];
   }
   if (options.path == nullptr || options.date == 0) {
     return std::nullopt;
@@ -116,10 +117,7 @@ void check(bool passed, std::string_view name, int& failed) {
   failed += passed ? 0 : 1;
 }
 
-}  // namespace
-
-int main(int argc, char** argv) {
-  const auto options = parse_options(std::span<const char* const>{argv + 1, argv + argc});
+int run(const std::optional<Options>& options) {
   if (!options) {
     std::println(stderr,
                  "usage: itch_backtest FILE --date YYYYMMDD [--symbol SYM]... [--no-plain-check] "
@@ -192,4 +190,15 @@ int main(int argc, char** argv) {
     check(engine.exchange_book() == plain, "replay identical to a plain book", failed);
   }
   return failed == 0 ? 0 : 1;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  try {
+    return run(parse_options(std::span<const char* const>{argv + 1, argv + argc}));
+  } catch (const std::exception& error) {
+    static_cast<void>(std::fputs(error.what(), stderr));
+    return 2;
+  }
 }

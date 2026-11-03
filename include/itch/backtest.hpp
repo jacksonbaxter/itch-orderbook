@@ -65,6 +65,10 @@
 // and always at End of System Hours, End of Messages, or the end of input. No order lives
 // overnight.
 //
+// The engine itself throws nothing. The calls that run the strategy, feed, advance, finish
+// and run, are not noexcept, since a strategy may throw; such an exception leaves the run
+// invalid.
+//
 // After the constructor, nothing here allocates: every pool and ring is sized from the
 // Config. A ring that fills counts an overflow and the run is no longer valid.
 #pragma once
@@ -112,10 +116,10 @@ struct OrderId {
 };
 
 struct OrderRequest {
-  std::uint16_t locate;
-  Side side;  // bid buys, ask sells.
-  Price4 price;
-  std::uint32_t shares;
+  std::uint16_t locate = 0;
+  Side side = Side::bid;  // bid buys, ask sells.
+  Price4 price = 0;
+  std::uint32_t shares = 0;
   Tif tif = Tif::day;
 };
 
@@ -141,18 +145,18 @@ enum class Reject : std::uint8_t {
 };
 
 struct Report {
-  ReportKind kind;
-  Reject reason;
-  Liquidity liquidity;
-  Side side;
-  std::uint16_t locate;
+  ReportKind kind = ReportKind::accepted;
+  Reject reason = Reject::none;
+  Liquidity liquidity = Liquidity::maker;
+  Side side = Side::bid;
+  std::uint16_t locate = 0;
   OrderId order;
-  Nanos exchange_time;
-  Nanos time;  // When the strategy sees it: exchange_time + L_resp.
-  Price4 price;
-  std::uint32_t shares;  // Filled, or cancelled or expired.
-  std::uint32_t remaining;
-  FeeBreakdown fees;
+  Nanos exchange_time = 0;
+  Nanos time = 0;  // When the strategy sees it: exchange_time + L_resp.
+  Price4 price = 0;
+  std::uint32_t shares = 0;  // Filled, or cancelled or expired.
+  std::uint32_t remaining = 0;
+  FeeBreakdown fees{};
 };
 
 struct MarketEvent {
@@ -328,7 +332,7 @@ class Engine {
 
   // One real message, in feed order. Everything due before its timestamp runs first.
   template <Strategy<Book> S>
-  void feed(std::span<const std::byte> payload, S& strategy) noexcept {
+  void feed(std::span<const std::byte> payload, S& strategy) {
     if (payload.empty() || payload.size() != message_length(read_char(payload.data()))) {
       ++stats_.refused_messages;
       return;
@@ -346,7 +350,7 @@ class Engine {
   // Runs every event due before `time`. feed() does this; a test may call it to look at
   // the state just before a message.
   template <Strategy<Book> S>
-  void advance(Nanos time, S& strategy) noexcept {
+  void advance(Nanos time, S& strategy) {
     for (;;) {
       Nanos next = 0;
       const Kind kind = next_event(next);
@@ -364,7 +368,7 @@ class Engine {
   // orders expire at the time of the last event, their reports are delivered, and any
   // send from then on is refused with an invalid id.
   template <Strategy<Book> S>
-  void finish(S& strategy) noexcept {
+  void finish(S& strategy) {
     wake_limit_ =
         clock_ + latency_.market_data + latency_.compute + latency_.order_entry + latency_.response;
     advance(kNever, strategy);
@@ -375,7 +379,7 @@ class Engine {
 
   // A whole BinaryFILE stream, then finish(). Returns the messages fed.
   template <Strategy<Book> S>
-  std::uint64_t run(std::span<const std::byte> stream, S& strategy) noexcept {
+  std::uint64_t run(std::span<const std::byte> stream, S& strategy) {
     FrameReader reader{stream};
     for (Frame frame = reader.next(); !is_terminal(frame.status); frame = reader.next()) {
       if (frame.status == FrameStatus::message) {
@@ -463,11 +467,11 @@ class Engine {
   enum class Action : std::uint8_t { order, cancel, replace };
 
   struct Arrival {
-    Nanos time;
+    Nanos time = 0;
     OrderId order;
-    Action action;
-    Price4 price;
-    std::uint32_t shares;
+    Action action = Action::order;
+    Price4 price = 0;
+    std::uint32_t shares = 0;
   };
 
   struct Delivery {
@@ -513,7 +517,7 @@ class Engine {
   }
 
   template <class S>
-  void dispatch(Kind kind, S& strategy) noexcept {
+  void dispatch(Kind kind, S& strategy) {
     switch (kind) {
       case Kind::arrival: {
         const Arrival arrival = arrivals_.front();
@@ -645,7 +649,7 @@ class Engine {
     ++stats_.messages;
     const std::byte* m = payload.data();
     const char type = read_char(m);
-    const std::uint16_t locate = read_be<std::uint16_t>(m + 1);
+    const auto locate = read_be<std::uint16_t>(m + 1);
     switch (type) {
       case AddOrder::kType: {
         const AddOrder add = AddOrder::from_wire(m);
@@ -689,19 +693,7 @@ class Engine {
         }
         break;
       }
-      case OrderReplace::kType: {
-        const OrderReplace u = OrderReplace::from_wire(m);
-        const RealOrder real = before(locate, u.original_order_reference);
-        if (!apply_book(payload)) {
-          break;
-        }
-        const std::uint32_t slot = number_real(locate, u.new_order_reference);
-        if (real.found()) {
-          depletion(locate, real, real.shares);
-          cross(locate, real.side, u.price, slot, time);
-        }
-        break;
-      }
+      case OrderReplace::kType: real_replace(payload, locate, time); break;
       case StockDirectory::kType: {
         const StockDirectory directory = StockDirectory::from_wire(m);
         category_[locate] = directory.market_category;
@@ -719,16 +711,10 @@ class Engine {
         system_event(SystemEvent::from_wire(m).event_code, time);
         break;
       }
-      case Trade::kType: {
-        if (resting_[locate] != 0) {
-          const Price4 price = Trade::from_wire(m).price;
-          if (has_sim_level(locate, Side::bid, price) || has_sim_level(locate, Side::ask, price)) {
-            ++stats_.hidden_prints_at_sim_price;
-          }
-        }
+      case Trade::kType:
+        hidden_print(locate, Trade::from_wire(m).price);
         static_cast<void>(apply_book(payload));
         break;
-      }
       case BrokenTrade::kType:
         ++stats_.broken_trades;
         static_cast<void>(apply_book(payload));
@@ -739,6 +725,30 @@ class Engine {
       deliver(payload, time);
     }
     ++sequence_;
+  }
+
+  // A replace is a delete of the old reference ahead of S and an add of the new one, which
+  // may cross a resting S on the other side.
+  void real_replace(std::span<const std::byte> payload, std::uint16_t locate, Nanos time) noexcept {
+    const OrderReplace u = OrderReplace::from_wire(payload.data());
+    const RealOrder real = before(locate, u.original_order_reference);
+    if (!apply_book(payload)) {
+      return;
+    }
+    const std::uint32_t slot = number_real(locate, u.new_order_reference);
+    if (real.found()) {
+      depletion(locate, real, real.shares);
+      cross(locate, real.side, u.price, slot, time);
+    }
+  }
+
+  // A Trade message is hidden size with no reference: it fills nothing, and is counted when
+  // it prints at a price where a simulated order rests.
+  void hidden_print(std::uint16_t locate, Price4 price) noexcept {
+    if (resting_[locate] != 0 &&
+        (has_sim_level(locate, Side::bid, price) || has_sim_level(locate, Side::ask, price))) {
+      ++stats_.hidden_prints_at_sim_price;
+    }
   }
 
   [[nodiscard]] bool apply_book(std::span<const std::byte> payload) noexcept {

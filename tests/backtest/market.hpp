@@ -71,7 +71,7 @@ class RandomMarket {
   };
   using Fifo = std::deque<std::uint64_t>;
 
-  void put(std::vector<Message>& out, wire::Bytes payload) {
+  static void put(std::vector<Message>& out, wire::Bytes payload) {
     out.push_back({.time = time_of(payload), .payload = std::move(payload)});
   }
 

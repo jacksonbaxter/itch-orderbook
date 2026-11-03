@@ -30,7 +30,7 @@ class Joiner {
 
   template <class Context>
   void on_market(Context& context, const MarketEvent& event) {
-    const std::uint16_t locate = read_be<std::uint16_t>(event.payload.data() + 1);
+    const auto locate = read_be<std::uint16_t>(event.payload.data() + 1);
     if (locate == 0 || stopped_) {
       return;
     }

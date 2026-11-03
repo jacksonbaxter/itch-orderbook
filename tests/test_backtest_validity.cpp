@@ -45,7 +45,6 @@ using itch::backtest::Latency;
 using itch::backtest::MarketEvent;
 using itch::backtest::Nanos;
 using itch::backtest::OrderId;
-using itch::backtest::OrderRequest;
 using itch::backtest::Report;
 using itch::backtest::ReportKind;
 using itch::backtest::Tif;
@@ -388,11 +387,14 @@ class ViewChecker {
     check(context);
   }
 
-  std::uint64_t checks = 0;
-  std::uint64_t mismatches = 0;
-  std::uint64_t late_or_early_ = 0;
+  [[nodiscard]] std::uint64_t checks() const { return checks_; }
+  [[nodiscard]] std::uint64_t mismatches() const { return mismatches_; }
+  [[nodiscard]] std::uint64_t late_or_early() const { return late_or_early_; }
 
  private:
+  std::uint64_t checks_ = 0;
+  std::uint64_t mismatches_ = 0;
+  std::uint64_t late_or_early_ = 0;
   void apply_next() {
     static_cast<void>(mirror_.apply((*messages_)[next_].payload));
     ++next_;
@@ -405,11 +407,11 @@ class ViewChecker {
 
   template <class Context>
   void check(Context& context) {
-    ++checks;
+    ++checks_;
     // Nothing stamped before now - L_md may still be missing.
     const bool complete = next_ == messages_->size() ||
                           (*messages_)[next_].time + kLatency.market_data >= context.now();
-    mismatches += complete && book_hash(context.book()) == book_hash(mirror_) ? 0U : 1U;
+    mismatches_ += complete && book_hash(context.book()) == book_hash(mirror_) ? 0U : 1U;
   }
 
   const std::vector<Message>* messages_;
@@ -425,9 +427,9 @@ TEST(Lookahead, S15TheStrategySeesTheBookExactlyLmdLate) {
     engine.feed(message.payload, checker);
   }
   engine.finish(checker);
-  EXPECT_EQ(checker.late_or_early_, 0U);
-  EXPECT_EQ(checker.mismatches, 0U);
-  EXPECT_GE(checker.checks, messages.size());
+  EXPECT_EQ(checker.late_or_early(), 0U);
+  EXPECT_EQ(checker.mismatches(), 0U);
+  EXPECT_GE(checker.checks(), messages.size());
 }
 
 // ---- 8: ahead never rises, and always equals a recount --------------------------------
@@ -444,11 +446,11 @@ TEST(QueueProperty, S08AheadNeverRisesAndMatchesARecount) {
     Engine<> engine{config()};
     Quoter quoter;
     struct Watched {
-      std::uint64_t arrival;
-      Side side;
-      Price4 price;
+      std::uint64_t arrival = 0;
+      Side side = Side::bid;
+      Price4 price = 0;
       std::vector<std::uint64_t> ahead_of_it;
-      std::uint64_t last;
+      std::uint64_t last = 0;
     };
     std::map<std::uint32_t, Watched> watched;  // By order slot.
     for (const Message& message : messages) {
@@ -530,10 +532,10 @@ class Taker {
       return;
     }
     const std::int64_t notional = std::int64_t{report.price} * report.shares;
-    cash += report.side == Side::bid ? -notional : notional;
-    position +=
+    cash_ += report.side == Side::bid ? -notional : notional;
+    position_ +=
         report.side == Side::bid ? std::int64_t{report.shares} : -std::int64_t{report.shares};
-    fees += report.fees.total();
+    fees_ += report.fees.total();
   }
   template <class Context>
   void on_wake(Context& context) {
@@ -553,21 +555,20 @@ class Taker {
     context.wake_at(context.now() + 1 + (random_() % 50'000));
   }
 
-  std::int64_t cash = 0;  // Price4 × shares.
-  std::int64_t position = 0;
-  itch::Picodollars fees = 0;
+  // Net, in picodollars, marked at `mid`.
+  [[nodiscard]] itch::Picodollars net(Price4 mid) const {
+    constexpr std::int64_t kPicoPerPrice4 = 100'000'000;
+    return ((cash_ + (position_ * std::int64_t{mid})) * kPicoPerPrice4) - fees_;
+  }
 
  private:
+  std::int64_t cash_ = 0;  // Price4 × shares.
+  std::int64_t position_ = 0;
+  itch::Picodollars fees_ = 0;
   std::mt19937 random_;
   std::optional<Price4> oracle_mid_;
   bool started_ = false;
 };
-
-// Net, in picodollars, marked at the last mid.
-itch::Picodollars net(const Taker& taker, Price4 mid) {
-  constexpr std::int64_t kPicoPerPrice4 = 100'000'000;
-  return ((taker.cash + (taker.position * std::int64_t{mid})) * kPicoPerPrice4) - taker.fees;
-}
 
 Price4 last_mid(const std::vector<Message>& messages) {
   itch::FastBook<> book{kCapacity};
@@ -601,9 +602,9 @@ TEST(Controls, S45RandomStrategyMakesNoMoneyAndTheOracleDoes) {
       }
       engine.finish(oracle);
     }
-    random_total += net(random, mid);
-    oracle_total += net(oracle, mid);
-    oracle_wins += net(oracle, mid) > 0 ? 1 : 0;
+    random_total += random.net(mid);
+    oracle_total += oracle.net(mid);
+    oracle_wins += oracle.net(mid) > 0 ? 1 : 0;
   }
   std::println("mean net per seed: random {} pico$, oracle {} pico$; oracle up on {} of {}",
                random_total / kSeeds, oracle_total / kSeeds, oracle_wins, kSeeds);

@@ -22,6 +22,8 @@
 #include "oracle/wire_builder.hpp"
 #include "support/encode.hpp"
 
+// ASSERT_TRUE(x.has_value()) guards each access, which the check cannot see.
+// NOLINTBEGIN(bugprone-unchecked-optional-access)
 namespace {
 
 using itch::Price4;
@@ -117,6 +119,7 @@ struct Fill {
 
 std::vector<Fill> fills_of(const std::vector<Report>& reports) {
   std::vector<Fill> out;
+  out.reserve(reports.size());
   for (const Report& report : reports) {
     out.push_back({.price = report.price, .shares = report.shares, .liquidity = report.liquidity});
   }
@@ -840,3 +843,4 @@ static_assert(ReadsTheViewBook<Context>);
 static_assert(itch::backtest::Strategy<Scripted>);
 
 }  // namespace
+// NOLINTEND(bugprone-unchecked-optional-access)

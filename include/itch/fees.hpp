@@ -172,17 +172,14 @@ enum class FeeError : std::uint8_t { unknown_tape, overflow };
   return "unnamed";
 }
 
-// The fees on one fill. Each part is computed in 128 bits and refused past a quarter of
-// the 64-bit range, about $2.3 million, so that their total cannot overflow either. No
-// real fill comes near: Section 31 reaches it only on one sale of about $111 billion.
-[[nodiscard]] constexpr std::expected<FeeBreakdown, FeeError> fill_fees(
-    const FeeSchedule& schedule, const FillTerms& fill) noexcept {
-  if (fill.tape == Tape::unknown) {
-    return std::unexpected(FeeError::unknown_tape);
-  }
-  using Wide = __int128;
-  const Wide shares = fill.shares;
-  const Wide notional = Wide{fill.price} * shares;
+namespace fee_detail {
+
+using Wide = __int128;
+
+// The exchange's part: a fee to remove, a credit to add as a negative, per share at $1 and
+// up and on notional under $1.
+[[nodiscard]] constexpr Wide exchange_fee(const FeeSchedule& schedule, const FillTerms& fill,
+                                          Wide shares, Wide notional) noexcept {
   Wide exchange = 0;
   if (fill.price >= kOneDollar) {
     if (fill.liquidity == Liquidity::taker) {
@@ -192,21 +189,35 @@ enum class FeeError : std::uint8_t { unknown_tape, overflow };
           -(fill.tape == Tape::c ? schedule.add_credit_tape_c : schedule.add_credit_tape_ab) *
           shares;
     }
-  } else {
-    const bool premarket = !fill.regular_hours;
-    if (fill.liquidity == Liquidity::taker) {
-      const Picodollars rate = premarket && schedule.premarket_remove_under_dollar_per_notional != 0
-                                   ? schedule.premarket_remove_under_dollar_per_notional
-                                   : schedule.remove_under_dollar_per_notional;
-      exchange = rate * notional;
-    } else {
-      const Picodollars rate =
-          premarket && schedule.premarket_add_credit_under_dollar_per_notional != 0
-              ? schedule.premarket_add_credit_under_dollar_per_notional
-              : schedule.add_credit_under_dollar_per_notional;
-      exchange = -(rate * notional);
-    }
+    return exchange;
   }
+  const bool premarket = !fill.regular_hours;
+  if (fill.liquidity == Liquidity::taker) {
+    const Picodollars rate = premarket && schedule.premarket_remove_under_dollar_per_notional != 0
+                                 ? schedule.premarket_remove_under_dollar_per_notional
+                                 : schedule.remove_under_dollar_per_notional;
+    return rate * notional;
+  }
+  const Picodollars rate = premarket && schedule.premarket_add_credit_under_dollar_per_notional != 0
+                               ? schedule.premarket_add_credit_under_dollar_per_notional
+                               : schedule.add_credit_under_dollar_per_notional;
+  return -(rate * notional);
+}
+
+}  // namespace fee_detail
+
+// The fees on one fill. Each part is computed in 128 bits and refused past a quarter of
+// the 64-bit range, about $2.3 million, so that their total cannot overflow either. No
+// real fill comes near: Section 31 reaches it only on one sale of about $111 billion.
+[[nodiscard]] constexpr std::expected<FeeBreakdown, FeeError> fill_fees(
+    const FeeSchedule& schedule, const FillTerms& fill) noexcept {
+  if (fill.tape == Tape::unknown) {
+    return std::unexpected(FeeError::unknown_tape);
+  }
+  using fee_detail::Wide;
+  const Wide shares = fill.shares;
+  const Wide notional = Wide{fill.price} * shares;
+  const Wide exchange = fee_detail::exchange_fee(schedule, fill, shares, notional);
   Wide section31 = 0;
   Wide taf = 0;
   if (fill.side == Side::ask) {
