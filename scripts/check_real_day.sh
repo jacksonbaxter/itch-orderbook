@@ -2,10 +2,10 @@
 # The checks that need a real trading day in data/. scripts/check.sh runs everything
 # that does not.
 #
-#     scripts/check_real_day.sh [--only census|oracle|trades]... [--arms default|all] [DAY...]
+#     scripts/check_real_day.sh [--only census|oracle|trades|map]... [--arms default|all] [DAY...]
 #
 # With no DAY it checks every day whose counts are pinned in scripts/data_manifest.json.
-# --only runs the named checks and leaves out the rest, repeatable. Default: all three.
+# --only runs the named checks and leaves out the rest, repeatable. Default: all four.
 # --arms picks the arms of the fast book that the oracle and trades checks run. default, the
 # default, runs the book's own default arm. all runs each of the four in turn, one at a time,
 # hash with linked levels first. Each report then holds every other arm to the first one's
@@ -24,6 +24,10 @@
 # They read the SEC MIDAS zip and data/CrossStats<YYYYMMDD>.txt. A day with no cross file is
 # reported as T-TRADE-2 not available, and says so in its results. A missing MIDAS zip is a
 # failure.
+#
+# The map check replays the day through the map book, the T-DESIGN-1 baseline, beside the
+# fast book's default arm, once on a fresh heap and once on an aged one, and passes only if
+# itch_map_compare does. Its raw logs are the result: it times nothing.
 #
 # To add a real-day check: add a function taking the day, and call it from check_day.
 
@@ -164,6 +168,20 @@ trades() {
     --out "results/trades_$day.md"
 }
 
+map() {
+  local day=$1 file=data/$1.NASDAQ_ITCH50 heap log status failed=0
+  for heap in fresh aged; do
+    log=$log_dir/map_${day}_$heap.log
+    run_header "itch_map_compare $file --heap $heap" tools/itch_map_compare.cpp >"$log"
+    # shellcheck disable=SC2086
+    $(timer) $wrapper build/release/tools/itch_map_compare "$file" --heap "$heap" >>"$log" 2>&1
+    status=$?
+    echo "real day: $day $heap itch_map_compare exited $status"
+    [ "$status" -eq 0 ] || failed=1
+  done
+  return "$failed"
+}
+
 check_day() {
   local failed=0 check
   for check in "${checks[@]}"; do
@@ -176,17 +194,18 @@ checks=()
 arms=(default)
 while [ "${1:-}" = --only ] || [ "${1:-}" = --arms ]; do
   case $1:${2:-} in
-    --only:census | --only:oracle | --only:trades) checks+=("$2") ;;
+    --only:census | --only:oracle | --only:trades | --only:map) checks+=("$2") ;;
     --arms:default) arms=(default) ;;
     --arms:all) arms=(hash_linked hash_flat paged_linked paged_flat) ;;
-    --only:*) echo "real day: --only takes census, oracle or trades" >&2; exit 2 ;;
+    --only:*) echo "real day: --only takes census, oracle, trades or map" >&2; exit 2 ;;
     *) echo "real day: --arms takes default or all" >&2; exit 2 ;;
   esac
   shift 2
 done
-[ ${#checks[@]} -gt 0 ] || checks=(census oracle trades)
+[ ${#checks[@]} -gt 0 ] || checks=(census oracle trades map)
 
-if ! cmake --build --preset release --parallel 6 --target itch_census itch_oracle itch_alloc itch_trades; then
+if ! cmake --build --preset release --parallel 6 --target itch_census itch_oracle itch_alloc itch_trades \
+  itch_map_compare; then
   echo "real day: could not build the tools. Run: cmake --preset release" >&2
   exit 2
 fi
