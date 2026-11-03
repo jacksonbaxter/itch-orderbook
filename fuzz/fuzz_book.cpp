@@ -1,4 +1,5 @@
-// Random order flow through both books, compared in full after every message.
+// Random order flow through both books, compared in full after every message, on every
+// arm of the fast book in turn.
 //
 // Random bytes would almost never name a live order, and a harness that only saw
 // refusals would pass trivially. So each 5-byte record of the input is an operation
@@ -15,6 +16,11 @@
 //   - T-INV-1 fires exactly on the invalid operations
 //   - T-INV-2 counts exactly what the model counts
 //   - the reference's best prices equal the model's
+//
+// The paged index has 2 pages and a reach of 2^16, so the high references fall back to
+// its hash, and so does a new reference whose page cannot be had while two are pinned. The flat
+// arena holds every block the model's 8 sides can grow to, and a side past 8 levels moves to a
+// bigger one.
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -34,7 +40,6 @@
 namespace {
 
 namespace wire = itch::oracle::wire;
-using itch::oracle::OracleRun;
 
 constexpr std::size_t kRecord = 5;
 constexpr std::array<std::uint16_t, 4> kLocates{0, 1, 2, 65535};
@@ -69,19 +74,25 @@ struct LiveOrder {
   return 10000U + ((byte % 16U) * 100U);
 }
 
-[[nodiscard]] OracleRun fresh_run() {
-  OracleRun run{{.capacity = {.orders = kCapacity, .levels = kCapacity},
-                 .hash_every = 0,
-                 .exhaustive = true,
-                 .exhaustive_locates = kLocates}};
+template <class Run>
+[[nodiscard]] Run fresh_run() {
+  Run run{{.capacity = {.orders = kCapacity,
+                        .levels = kCapacity,
+                        .index_pages = 2,
+                        .index_bits = 16,
+                        .level_slots = 1024},
+           .hash_every = 0,
+           .exhaustive = true,
+           .exhaustive_locates = kLocates}};
   run.invariants().set_inv1_detail_limit(0);
   run.invariants().set_inv3_detail_limit(0);
   return run;
 }
 
+template <class Run>
 class Harness {
  public:
-  explicit Harness(OracleRun& oracle) noexcept : oracle_{&oracle} {}
+  explicit Harness(Run& oracle) noexcept : oracle_{&oracle} {}
 
   void run(const Op& op) {
     switch (op.code % 16U) {
@@ -320,7 +331,7 @@ class Harness {
     send(wire::add(locate, kDeadBit | op.pick, 'Z', 1, 1), locate, false);
   }
 
-  OracleRun* oracle_;
+  Run* oracle_;
   std::vector<LiveOrder> live_;
   std::uint64_t issued_ = 0;
   std::uint64_t expected_violations_ = 0;
@@ -328,18 +339,18 @@ class Harness {
   std::uint64_t expected_locked_ = 0;
 };
 
-}  // namespace
-
-extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
+// One input through one arm.
+template <class Index, class Levels>
+void run_arm(std::span<const std::uint8_t> input) {
+  using Run = itch::oracle::BasicOracleRun<Index, Levels>;
   // Building the books took 40% of an input and freeing them 20%. So one run lasts the
   // whole process, and restart() puts it back as it was. The model is built anew each
   // time. tests/test_book.cpp holds restart() to a run that was never used.
-  static const OracleRun fresh = fresh_run();
-  static OracleRun oracle = fresh_run();
+  static const Run fresh = fresh_run<Run>();
+  static Run oracle = fresh_run<Run>();
   oracle.restart(fresh);
 
-  const std::span input{data, size};
-  Harness harness{oracle};
+  Harness<Run> harness{oracle};
   for (std::size_t at = 0; at + kRecord <= input.size(); at += kRecord) {
     harness.run({.code = input[at],
                  .pick = input[at + 1],
@@ -348,5 +359,15 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
                  .locate = input[at + 4]});
   }
   harness.finish();
+}
+
+}  // namespace
+
+extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
+  const std::span input{data, size};
+  run_arm<itch::HashIndex, itch::LinkedLevels>(input);
+  run_arm<itch::HashIndex, itch::FlatLevels>(input);
+  run_arm<itch::PagedIndex<>, itch::LinkedLevels>(input);
+  run_arm<itch::PagedIndex<>, itch::FlatLevels>(input);
   return 0;
 }
