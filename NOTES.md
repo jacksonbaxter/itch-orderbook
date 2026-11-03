@@ -483,3 +483,23 @@ Every draw comes from splitmix64 on the seed, not from `<random>`, whose distrib
 | 10302019 | aged | 293,989,079 | 587,978,158 | 293 and the final | 0 | 155,200,784 |
 
 The ager's count is a check of its own: 2^20 warm-up blocks plus one per `A`, `F` and `U`, which is 140,270,523 orders opened on 12302019 and 154,152,208 on 10302019, the figures `itch_trades` counts. Peak footprint was 0.50 GiB fresh and 0.66 GiB aged on 12302019, 0.49 and 0.65 on 10302019, both books together. Only the default fast arm was compared, because the oracle runs above show the four arms equal to each other line for line. The ends of both days are empty books, so the final hash says little; the periodic hashes do the work, as in the oracle. No time is reported.
+
+## Sizing the paged index, 2026-11-03
+
+`PagedIndex`'s default capacity was a round 2^19 pages and a reach of 2^32, set before either day had been counted. Both days have now been counted, so the capacity comes from those counts (commit 1ae701e):
+
+- **Pages.** At most 340,939 pages are pinned at once on 12302019 and 305,506 on 10302019. The default takes the larger peak, adds a quarter, and rounds up to a multiple of 4,096: 428,032 pages, 418 MiB of slots, against 512 MiB before. A quarter is room for a busier day than either of these, and no more, since every page is held from the start.
+- **Reach.** The largest reference is 308,631,072 on 12302019 and 316,375,126 on 10302019. 2^30 reaches more than three times past both, for a 16 MiB directory against 64 MiB at 2^32. A reach of 2^29 would be under twice the largest, close enough that a later day could pass it.
+- **DS-72 still holds.** A reference past the reach, or one whose page the pool cannot supply, goes to the fallback hash and is counted. The unit tests that run the index out of pages and past its reach are unchanged and pass.
+
+Whole-day runs of the two paged arms on the new default, binaries from 1ae701e, each under `heavy.sh` and `/usr/bin/time -l`:
+
+| Day | Arm | Oracle | Fallback inserts | Peak pages | Oracle peak footprint | T-ALLOC-1 | `itch_alloc` peak footprint |
+|---|---|---|---|---|---|---|---|
+| 12302019 | paged, linked | T-ORACLE-1, T-INV-1, T-INV-3 PASS; T-INV-2 strict FAIL, 18,958 and 1,018 | 0 | 340,939 | 1.56 GiB | PASS, 0 against 324,511,069 | 0.88 GiB |
+| 12302019 | paged, flat | the same | 0 | 340,939 | 1.59 GiB | PASS, the same | 0.89 GiB |
+| 10302019 | paged, linked | T-ORACLE-1, T-INV-1, T-INV-3 PASS; T-INV-2 strict FAIL, 4,240 and 34 | 0 | 305,506 | 1.55 GiB | PASS, 0 against 361,109,587 | 0.87 GiB |
+| 10302019 | paged, flat | the same | 0 | 305,506 | 1.58 GiB | PASS, the same | 0.88 GiB |
+
+Every verdict and count is the one the earlier runs gave, and `itch_oracle` exits 3 for the strict T-INV-2 failure, as before. The oracle's peak footprint fell from 1.84 and 1.87 GiB to 1.56 and 1.59 GiB on 12302019. The smaller capacity accounts for 0.14 GiB of that 0.28 GiB fall; the rest was not traced. Maximum RSS stays at 9.2 to 10.7 GiB, mostly the mapped file. The run times are not measurements and are not reported. Raw logs stay in the research cache.
+
