@@ -4,17 +4,18 @@ A parser and limit order book for Nasdaq ITCH 5.0 in C++23, built to be measured
 
 ## Where it stands
 
-This is Phase 2 of the plan in [TASKS.md](TASKS.md): the harness, on a stub book.
+This is Phase 3 of the plan in [TASKS.md](TASKS.md): the book, measured on the Mac. The `debian` runs come next.
 
 Built:
 
 - A parser for the framed feed, with no abort reachable from wire content.
-- `FastBook`, a stub that does what the harness needs and is not the book this project is for, and a slow reference book to diff it against.
-- An oracle that compares the two after every message of a real day, and trade-print checks against SEC MIDAS and Nasdaq CrossStats.
-- A benchmark harness that records its host, refuses to publish a run it cannot stand behind, and reads hardware counters on Linux.
+- `FastBook` in four arms, a hash or paged order index with linked or flat levels, and a slow reference book to diff it against.
+- A `std::map` book, on a fresh heap or one aged as it goes, as the baseline the fast book is measured against.
+- An oracle that compares the fast book with the reference after every message of a real day, and trade-print checks against SEC MIDAS and Nasdaq CrossStats.
+- A benchmark harness that measures any book design, with the file in memory or mapped and the top of book tracked or not, records its host, refuses to publish a run it cannot stand behind, and reads hardware counters on Linux.
 - Fuzz targets, sanitizer builds, and a fault matrix that shows each check failing on a planted bug.
 
-Not built: the real book, SIMD, the backtester and the demo. So no result below is a result for the real book. The book in every row is the stub.
+Not built: SIMD, the backtester and the demo. The oracle and trade rows below are the real book's. The harness-proof rows are the Phase 2 stub's, and say so. The book-design rows are from macOS, which cannot pin a thread, so none of them is a pinned figure, and none stands for a Linux one. The default arm is not chosen yet.
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` has never executed on GitHub, because this repo has no remote. [NOTES.md](NOTES.md) says which jobs were run by hand and how.
 
@@ -55,6 +56,21 @@ Throughput. These rows prove the harness on the stub book. They say nothing abou
 | Harness proof, stub book | 12302019 | debian | AMD Ryzen Embedded V1605B with Radeon Vega Gfx | pinned to core 4 | 2,398,753 | 2,280,663 | 2,487,507 | 4.34% | `92e3f74c5766` | [results/bench_replay_stub_debian_12302019.md](results/bench_replay_stub_debian_12302019.md) |
 | Harness proof, stub book | 12302019 | macOS (M4 Max) | Apple M4 Max | not pinned | 3,556,268 | 3,495,302 | 10,255,712 | 67.35% | `747d316af3f5` | [results/bench_replay_stub_mac_12302019.md](results/bench_replay_stub_mac_12302019.md) |
 
+Book designs. Each row is one design's results file, with its ratio over each map design that ran in the same repetitions (T-DESIGN-1). A macOS row is not pinned: macOS cannot pin a thread, so it is a macOS figure and never a Linux one, and the file's own targets table says so beside each bar.
+
+| Design | Input | Top of book | Day | Host | Pinning | Median messages/s | CV | Batch mean ns a book message | Book memory MiB | Over map-fresh | Over map-aged | Commit | File |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `hash-flat` | mapped | tracked | 12302019 | macOS (M4 Max) | not pinned | 15,408,545 | 1.20% | 65.95 | 225.2 | – | – | `f3fe97a93cea` | [results/bench_book_hash-flat_mapped_top_mac_12302019.md](results/bench_book_hash-flat_mapped_top_mac_12302019.md) |
+| `hash-flat` | ram | not tracked | 12302019 | macOS (M4 Max) | not pinned | 17,705,490 | 0.55% | 57.39 | 225.2 | 3.07× | 3.31× | `9934df5c3b7a` | [results/bench_book_hash-flat_ram_mac_12302019.md](results/bench_book_hash-flat_ram_mac_12302019.md) |
+| `hash-linked` | mapped | tracked | 12302019 | macOS (M4 Max) | not pinned | 9,626,384 | 0.54% | 105.56 | 211.2 | – | – | `f3fe97a93cea` | [results/bench_book_hash-linked_mapped_top_mac_12302019.md](results/bench_book_hash-linked_mapped_top_mac_12302019.md) |
+| `hash-linked` | ram | not tracked | 12302019 | macOS (M4 Max) | not pinned | 10,410,417 | 0.32% | 97.61 | 211.2 | 1.80× | 1.94× | `9934df5c3b7a` | [results/bench_book_hash-linked_ram_mac_12302019.md](results/bench_book_hash-linked_ram_mac_12302019.md) |
+| `map-aged` | ram | not tracked | 12302019 | macOS (M4 Max) | not pinned | 5,353,839 | 1.27% | 189.79 | 410.1 | 0.93× | – | `9934df5c3b7a` | [results/bench_book_map-aged_ram_mac_12302019.md](results/bench_book_map-aged_ram_mac_12302019.md) |
+| `map-fresh` | ram | not tracked | 12302019 | macOS (M4 Max) | not pinned | 5,772,425 | 0.65% | 176.03 | 260.8 | – | 1.08× | `9934df5c3b7a` | [results/bench_book_map-fresh_ram_mac_12302019.md](results/bench_book_map-fresh_ram_mac_12302019.md) |
+| `paged-flat` | mapped | tracked | 12302019 | macOS (M4 Max) | not pinned | 19,335,339 | 1.41% | 52.55 | 662.8 | – | – | `f3fe97a93cea` | [results/bench_book_paged-flat_mapped_top_mac_12302019.md](results/bench_book_paged-flat_mapped_top_mac_12302019.md) |
+| `paged-flat` | ram | not tracked | 12302019 | macOS (M4 Max) | not pinned | 21,873,432 | 0.76% | 46.46 | 662.8 | 3.79× | 4.08× | `9934df5c3b7a` | [results/bench_book_paged-flat_ram_mac_12302019.md](results/bench_book_paged-flat_ram_mac_12302019.md) |
+| `paged-linked` | mapped | tracked | 12302019 | macOS (M4 Max) | not pinned | 11,070,036 | 0.83% | 91.79 | 648.2 | – | – | `f3fe97a93cea` | [results/bench_book_paged-linked_mapped_top_mac_12302019.md](results/bench_book_paged-linked_mapped_top_mac_12302019.md) |
+| `paged-linked` | ram | not tracked | 12302019 | macOS (M4 Max) | not pinned | 11,934,176 | 5.28% | 85.14 | 648.7 | 2.07× | 2.23× | `9934df5c3b7a` | [results/bench_book_paged-linked_ram_mac_12302019.md](results/bench_book_paged-linked_ram_mac_12302019.md) |
+
 Every benchmark run, failed ones included, from [results/run_log.md](results/run_log.md).
 
 | Run | Prediction | Commit | OS | Outcome |
@@ -64,6 +80,9 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0003-20261031T091318Z` | `P-0003` | `20cdcde135b0` | Linux | `chase verdict FAIL` |
 | `P-0004-20261031T091341Z` | `P-0004` | `unknown` | Linux | `refused at repetition 1` |
 | `P-0006-20261031T091906Z` | `P-0006` | `92e3f74c5766` | Linux | `published` |
+| `P-0008-20261103T082340Z` | `P-0008` | `3e5b67a8cefe` | Darwin | `refused at repetition 1, hash-linked` |
+| `P-0008-20261103T082514Z` | `P-0008` | `9934df5c3b7a` | Darwin | `published` |
+| `P-0009-20261103T090210Z` | `P-0009` | `f3fe97a93cea` | Darwin | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
