@@ -2,11 +2,15 @@
 // diffs them after every message, and checks T-INV-1, T-INV-2 and T-INV-3.
 //
 //     itch_oracle FILE [--hash-every N] [--exhaustive] [--max-orders N] [--max-levels N]
-//                 [--observations FILE]
+//                 [--observations FILE] [--index hash|paged] [--levels linked|flat]
+//                 [--max-pages N] [--index-bits N] [--max-slots N]
 //
 // --hash-every N  hashes both whole books every N messages. 0 keeps only the final hash.
 // --exhaustive    compares the whole of both books after every message, as a control.
 // --observations  writes one line per crossed or locked observation.
+// --index, --levels  the arm of the fast book. The default is the book's default arm.
+// --max-pages, --index-bits  the paged index's pool and reach. --max-slots  the flat
+//                 levels' arena. Each arm reads only its own.
 //
 // Exit codes: 0 everything passed. 1 the diff, T-INV-1, T-INV-3 or the stream itself
 // failed. 2 bad usage or an unreadable file. 3 only T-INV-2 failed: that result is strict
@@ -23,8 +27,10 @@
 #include <span>
 #include <string_view>
 #include <system_error>
+#include <type_traits>
 #include <vector>
 
+#include "book_arms.hpp"
 #include "itch/messages.hpp"
 #include "itch/reader.hpp"
 #include "mapped_file.hpp"
@@ -34,12 +40,12 @@ namespace {
 
 using itch::oracle::Divergence;
 using itch::oracle::OracleConfig;
-using itch::oracle::OracleRun;
 
 struct Options {
   const char* path = nullptr;
   const char* observations = nullptr;
   OracleConfig config;
+  itch::tools::BookArm arm;
 };
 
 [[nodiscard]] std::optional<std::uint64_t> parse_number(std::string_view text) {
@@ -74,6 +80,22 @@ struct Options {
       options.observations = args[i];
       continue;
     }
+    if (arg == "--index") {
+      const auto index = itch::tools::parse_index_arm(args[i]);
+      if (!index) {
+        return std::nullopt;
+      }
+      options.arm.index = *index;
+      continue;
+    }
+    if (arg == "--levels") {
+      const auto levels = itch::tools::parse_levels_arm(args[i]);
+      if (!levels) {
+        return std::nullopt;
+      }
+      options.arm.levels = *levels;
+      continue;
+    }
     const auto number = parse_number(args[i]);
     if (!number) {
       return std::nullopt;
@@ -84,6 +106,12 @@ struct Options {
       options.config.capacity.orders = static_cast<std::uint32_t>(*number);
     } else if (arg == "--max-levels") {
       options.config.capacity.levels = static_cast<std::uint32_t>(*number);
+    } else if (arg == "--max-pages") {
+      options.config.capacity.index_pages = static_cast<std::uint32_t>(*number);
+    } else if (arg == "--index-bits") {
+      options.config.capacity.index_bits = static_cast<std::uint32_t>(*number);
+    } else if (arg == "--max-slots") {
+      options.config.capacity.level_slots = static_cast<std::uint32_t>(*number);
     } else {
       return std::nullopt;
     }
@@ -102,7 +130,8 @@ struct StreamEnd {
   bool stopped_early = false;
 };
 
-[[nodiscard]] StreamEnd replay(OracleRun& oracle, itch::FrameReader& reader) {
+template <class Run>
+[[nodiscard]] StreamEnd replay(Run& oracle, itch::FrameReader& reader) {
   StreamEnd end;
   itch::Frame frame = reader.next();
   for (; !itch::is_terminal(frame.status); frame = reader.next()) {
@@ -126,7 +155,23 @@ struct StreamEnd {
   return end;
 }
 
-void print_counters(const OracleRun& oracle, const itch::ReaderCounters& reader) {
+// What only one arm has to say: how often the paged index fell back, and how far the
+// flat levels' arena reached.
+template <class Book>
+void print_arm_counters(const Book& book) {
+  if constexpr (std::is_same_v<typename Book::Index, itch::PagedIndex<>>) {
+    std::println("index_fallback_inserts {}", book.index().fallback_inserts());
+    std::println("index_fallback_live_end {}", book.index().fallback_live());
+    std::println("index_peak_live_pages {}", book.index().peak_live_pages());
+  }
+  if constexpr (std::is_same_v<typename Book::LevelArm, itch::FlatLevels>) {
+    std::println("level_slots_used {}", book.levels().slots_used());
+    std::println("level_relocations {}", book.levels().relocations());
+  }
+}
+
+template <class Run>
+void print_counters(const Run& oracle, const itch::ReaderCounters& reader) {
   const itch::oracle::DiffCounters& c = oracle.counters();
   std::println("frames {}", reader.frames);
   for (unsigned type = 0; type < reader.frames_by_type.size(); ++type) {
@@ -142,6 +187,9 @@ void print_counters(const OracleRun& oracle, const itch::ReaderCounters& reader)
   std::println("write_set_checks {}", c.write_set_checks);
   std::println("write_set_writes {}", c.write_set_writes);
   std::println("write_set_violations {}", c.write_set_violations);
+  std::println("move_reports {}", c.move_reports);
+  std::println("moved_checks {}", c.moved_checks);
+  std::println("empty_moved_checks {}", c.empty_moved_checks);
   std::println("periodic_hash_checks {}", c.periodic_hash_checks);
   std::println("final_hash_checks {}", c.final_hash_checks);
   std::println("production_hash_checks {}", c.production_hash_checks);
@@ -151,8 +199,10 @@ void print_counters(const OracleRun& oracle, const itch::ReaderCounters& reader)
   std::println("live_levels_end {}", oracle.fast().live_levels());
   std::println("peak_live_orders {}", oracle.fast().peak_live_orders());
   std::println("peak_live_levels {}", oracle.fast().peak_live_levels());
+  print_arm_counters(oracle.fast());
 }
 
+template <class Index, class Levels>
 int run(const Options& options) {
   const auto file = itch::tools::MappedFile::open(options.path);
   if (!file) {
@@ -169,13 +219,22 @@ int run(const Options& options) {
     }
   }
 
+  std::println("oracle_index {}", to_string(options.arm.index));
+  std::println("oracle_levels {}", to_string(options.arm.levels));
   std::println("oracle_hash_every {}", options.config.hash_every);
   std::println("oracle_exhaustive {}", options.config.exhaustive ? 1 : 0);
   std::println("oracle_max_orders {}", options.config.capacity.orders);
   std::println("oracle_max_levels {}", options.config.capacity.levels);
+  if (options.arm.index == itch::tools::IndexArm::paged) {
+    std::println("oracle_max_pages {}", options.config.capacity.index_pages);
+    std::println("oracle_index_bits {}", options.config.capacity.index_bits);
+  }
+  if (options.arm.levels == itch::tools::LevelsArm::flat) {
+    std::println("oracle_max_slots {}", options.config.capacity.level_slots);
+  }
   std::println("bytes {}", file->bytes().size());
 
-  OracleRun oracle{options.config};
+  itch::oracle::BasicOracleRun<Index, Levels> oracle{options.config};
   oracle.invariants().set_observation_log(observations);
   itch::FrameReader reader{file->bytes()};
   const auto started = std::chrono::steady_clock::now();
@@ -234,11 +293,14 @@ int main(int argc, const char* const* argv) {
     if (!options) {
       static_cast<void>(
           std::fputs("usage: itch_oracle FILE [--hash-every N] [--exhaustive] [--max-orders N] "
-                     "[--max-levels N] [--observations FILE]\n",
+                     "[--max-levels N] [--observations FILE] [--index hash|paged] "
+                     "[--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N]\n",
                      stderr));
       return 2;
     }
-    return run(*options);
+    return itch::tools::with_book_arm(options->arm, [&options]<class Index, class Levels>() {
+      return run<Index, Levels>(*options);
+    });
   } catch (const std::exception& error) {
     static_cast<void>(std::fputs(error.what(), stderr));
     return 2;

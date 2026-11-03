@@ -12,6 +12,10 @@ import sys
 from pathlib import Path
 
 SMALL = ("--max-orders", "4096", "--max-levels", "4096")
+# Every arm of the fast book, with the paged index's pool and reach small enough to fall
+# back on the fixtures, and the flat arena small enough to move blocks.
+ARMS = (("hash", "linked"), ("hash", "flat"), ("paged", "linked"), ("paged", "flat"))
+ARM_SMALL = SMALL + ("--max-pages", "8", "--index-bits", "16", "--max-slots", "8192")
 TYPES = "SRHYLVWKJhAFECXDUPQBINO"
 
 
@@ -203,6 +207,58 @@ def main():
     if run(scratch / "no-such-file").returncode != 2:
         failures.append("missing file: not exit 2")
 
+    # Each arm on the fixtures, with the same verdicts as the default arm. The whole-book
+    # hash is a canonical walk, so equal books hash equal and every arm ends on the same
+    # last_hash. What T(m) and the BBO compare cover comes from the reference, so their
+    # counts agree as well. What moves depends on the arm.
+    shared = ("touched_checks", "empty_touched_checks", "bbo_checks", "write_set_writes",
+              "periodic_hash_checks", "exhaustive_checks", "last_hash", "live_orders_end")
+    for name, path, options, want_exit in (
+            ("lifecycle", lifecycle, ("--exhaustive",), 0),
+            ("session", session, ("--hash-every", "100", "--exhaustive"), 0),
+            ("crossed", crossed, ("--exhaustive",), 1),
+            ("leftover", fixtures / "leftover.itch", ("--exhaustive",), 3),
+            ("dead reference", fixtures / "dead_reference.itch", ("--exhaustive",), 1)):
+        seen = {}
+        for index, levels in ARMS:
+            arm = ("--index", index, "--levels", levels)
+            lines = case(f"{name} {index} {levels}", path, ARM_SMALL + options + arm, want_exit,
+                         f"oracle_index {index}", f"oracle_levels {levels}", "divergences 0",
+                         "verdict T-ORACLE-1 PASS", "write_set_violations 0")
+            values = dict(line.split(" ", 1) for line in lines if " " in line)
+            seen[(index, levels)] = tuple(values.get(key) for key in shared)
+            if index == "paged" and "oracle_max_pages 8" not in lines:
+                failures.append(f"{name} {index} {levels}: the page pool is not reported")
+            if levels == "flat" and "oracle_max_slots 8192" not in lines:
+                failures.append(f"{name} {index} {levels}: the arena is not reported")
+        if len(set(seen.values())) != 1:
+            failures.append(f"{name}: the arms disagree on {shared}: {seen}")
+
+    # lifecycle's 13 new references are 1 to 11, 0 and 2^64 - 1. The last is past any
+    # reach, so it falls back and is counted. With a reach of 2^0 only reference 0 indexes
+    # directly, the other 12 fall back, and the diff is still clean.
+    case("lifecycle paged reach", lifecycle, ARM_SMALL + ("--index", "paged"), 0,
+         "index_fallback_inserts 1", "index_fallback_live_end 0", "verdict T-ORACLE-1 PASS")
+    case("lifecycle paged no reach", lifecycle,
+         SMALL + ("--index", "paged", "--max-pages", "8", "--index-bits", "0", "--exhaustive"), 0,
+         "index_fallback_inserts 12", "index_fallback_live_end 0", "index_peak_live_pages 1",
+         "verdict T-ORACLE-1 PASS")
+    # session is deep enough that its flat arrays move to bigger blocks.
+    lines = case("session flat moves", session, ARM_SMALL + ("--levels", "flat"), 0,
+                 "verdict T-ORACLE-1 PASS")
+    values = dict(line.split(" ", 1) for line in lines if " " in line)
+    if int(values.get("level_relocations", "0")) == 0 or int(values.get("moved_checks", "0")) == 0:
+        failures.append("session flat moves: no block moved, or no moved level was compared")
+    # An arena too small for the session refuses, the reference does not, and the diff
+    # says so at once.
+    lines = case("flat capacity", session,
+                 SMALL + ("--levels", "flat", "--max-slots", "64"), 1, "verdict T-ORACLE-1 FAIL")
+    if not any("kind=status" in line and "capacity_exhausted" in line for line in lines):
+        failures.append("flat capacity: no status divergence")
+    for name, options in (("bad index", ("--index", "tree")), ("bad levels", ("--levels", "map"))):
+        if run(lifecycle, *options).returncode != 2:
+            failures.append(f"usage {name}: not exit 2")
+
     # T-ALLOC-1 on a fixture: the fast pass is clean and the control pass is seen.
     done = subprocess.run([alloc_tool, str(session), *SMALL], capture_output=True, text=True,
                           check=False)
@@ -216,6 +272,20 @@ def main():
                           capture_output=True, text=True, check=False)
     if done.returncode != 1:
         failures.append(f"alloc: a refused message exited {done.returncode}, wanted 1")
+    for index, levels in ARMS:
+        done = subprocess.run([alloc_tool, str(session), *ARM_SMALL, "--index", index, "--levels",
+                               levels], capture_output=True, text=True, check=False)
+        lines = done.stdout.splitlines()
+        for line in (f"book_index {index}", f"book_levels {levels}", "fast_allocations 0",
+                     "fast_refused 0"):
+            if line not in lines:
+                failures.append(f"alloc {index} {levels}: no line {line!r}")
+        if done.returncode != 0 or "control_allocations 0" in lines:
+            failures.append(f"alloc {index} {levels}: exit {done.returncode}")
+    done = subprocess.run([alloc_tool, str(session), "--levels", "map"], capture_output=True,
+                          text=True, check=False)
+    if done.returncode != 2:
+        failures.append(f"alloc: a bad arm exited {done.returncode}, wanted 2")
 
     for failure in failures:
         print(f"oracle cli: FAIL {failure}")

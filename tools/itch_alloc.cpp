@@ -2,10 +2,13 @@
 // the end of warm-up and the end of the stream, and a control book replaying the same
 // stream is seen allocating.
 //
-//     itch_alloc FILE [--warmup N] [--max-orders N] [--max-levels N]
+//     itch_alloc FILE [--warmup N] [--max-orders N] [--max-levels N] [--index hash|paged]
+//                [--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N]
 //
 // Warm-up is the first N messages, 0 by default, so the count starts at the first
-// message after construction. Exit codes: 0 pass, 1 fail, 2 bad usage.
+// message after construction. --index and --levels pick the arm of the fast book, the
+// book's default arm if left out, and the capacities are as itch_oracle's. Exit codes:
+// 0 pass, 1 fail, 2 bad usage.
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -17,6 +20,7 @@
 #include <string_view>
 #include <system_error>
 
+#include "book_arms.hpp"
 #include "itch/book.hpp"
 #include "itch/reader.hpp"
 #include "mapped_file.hpp"
@@ -31,6 +35,7 @@ struct Options {
   const char* path = nullptr;
   std::uint64_t warmup = 0;
   itch::BookCapacity capacity;
+  itch::tools::BookArm arm;
 };
 
 [[nodiscard]] std::optional<std::uint64_t> parse_number(std::string_view text) {
@@ -56,7 +61,21 @@ struct Options {
     if (i + 1 == args.size()) {
       return std::nullopt;
     }
-    const auto number = parse_number(args[++i]);
+    ++i;
+    if (arg == "--index" || arg == "--levels") {
+      const auto index = itch::tools::parse_index_arm(args[i]);
+      const auto levels = itch::tools::parse_levels_arm(args[i]);
+      if (arg == "--index" ? !index : !levels) {
+        return std::nullopt;
+      }
+      if (arg == "--index") {
+        options.arm.index = *index;
+      } else {
+        options.arm.levels = *levels;
+      }
+      continue;
+    }
+    const auto number = parse_number(args[i]);
     if (!number) {
       return std::nullopt;
     }
@@ -66,6 +85,12 @@ struct Options {
       options.capacity.orders = static_cast<std::uint32_t>(*number);
     } else if (arg == "--max-levels") {
       options.capacity.levels = static_cast<std::uint32_t>(*number);
+    } else if (arg == "--max-pages") {
+      options.capacity.index_pages = static_cast<std::uint32_t>(*number);
+    } else if (arg == "--index-bits") {
+      options.capacity.index_bits = static_cast<std::uint32_t>(*number);
+    } else if (arg == "--max-slots") {
+      options.capacity.level_slots = static_cast<std::uint32_t>(*number);
     } else {
       return std::nullopt;
     }
@@ -110,15 +135,18 @@ void print_pass(std::string_view name, const Pass& pass) {
   }
 }
 
+template <class Index, class Levels>
 int run(const Options& options) {
   const auto file = itch::tools::MappedFile::open(options.path);
   if (!file) {
     std::println(stderr, "itch_alloc: cannot read {}", options.path);
     return 2;
   }
+  std::println("book_index {}", to_string(options.arm.index));
+  std::println("book_levels {}", to_string(options.arm.levels));
   std::println("warmup_messages {}", options.warmup);
 
-  itch::FastBook<> fast{options.capacity};
+  itch::FastBook<itch::NoWriteObserver, Index, Levels> fast{options.capacity};
   const Pass fast_pass =
       replay(file->bytes(), options.warmup, [&fast](std::span<const std::byte> payload) {
         const itch::ApplyStatus status = fast.apply(payload);
@@ -153,11 +181,16 @@ int main(int argc, const char* const* argv) {
   try {
     const auto options = parse_options(std::span{argv + 1, static_cast<std::size_t>(argc - 1)});
     if (!options) {
-      static_cast<void>(std::fputs(
-          "usage: itch_alloc FILE [--warmup N] [--max-orders N] [--max-levels N]\n", stderr));
+      static_cast<void>(
+          std::fputs("usage: itch_alloc FILE [--warmup N] [--max-orders N] [--max-levels N] "
+                     "[--index hash|paged] [--levels linked|flat] [--max-pages N] "
+                     "[--index-bits N] [--max-slots N]\n",
+                     stderr));
       return 2;
     }
-    return run(*options);
+    return itch::tools::with_book_arm(options->arm, [&options]<class Index, class Levels>() {
+      return run<Index, Levels>(*options);
+    });
   } catch (const std::exception& error) {
     static_cast<void>(std::fputs(error.what(), stderr));
     return 2;
