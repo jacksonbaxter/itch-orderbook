@@ -95,6 +95,7 @@ The ITCH days and reference files are not in this repo. They go to `data/`, whic
 python3 scripts/fetch_data.py --day 12302019     # fetch one day and verify it
 python3 scripts/fetch_data.py --ref all          # CrossStats and MIDAS
 scripts/check_real_day.sh                        # the checks that need a real day
+scripts/check_real_day.sh --arms all             # the same, on every arm of the fast book
 ```
 
 ## Check everything
