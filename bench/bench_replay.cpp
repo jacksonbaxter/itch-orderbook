@@ -291,7 +291,8 @@ std::string describe_design(const Options& options) {
   const itch::BookCapacity& capacity = options.capacity;
   const std::string name = design_name(design);
   constexpr std::string_view kMapWarmUp =
-      "; the warm-up runs the fast book's default arm, so the throughput pass's book is the "
+      "; the warm-up runs the fast book's hash index with linked levels, so the throughput "
+      "pass's book is the "
       "first to take small blocks from this heap, and the latency pass's heap is the one the "
       "throughput pass's book gave back";
   if (design.kind == DesignKind::map_fresh) {
@@ -473,9 +474,12 @@ std::string core_field(const PinOutcome& pin, const MigrationTracker& migrations
   return std::format("unpinned, last ran on core {}", migrations.last_core());
 }
 
-// The warm-up of a map design: the fast book's default arm, which takes no small blocks.
+// The warm-up of a map design: the fast book's hash index with linked levels, which takes no
+// small blocks. It is named rather than taken as the default, so that every map run warms up
+// on the same arm whichever arm ships.
 PassTotals warm_with_fast_book(std::span<const std::byte> bytes) {
-  const auto book = std::make_unique<itch::FastBook<>>();
+  const auto book =
+      std::make_unique<itch::FastBook<itch::NoWriteObserver, itch::HashIndex, itch::LinkedLevels>>();
   PlatformClock clock;
   return throughput_pass(bytes, *book, clock);
 }
