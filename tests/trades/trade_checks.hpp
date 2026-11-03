@@ -1197,18 +1197,29 @@ class TradeRun {
            std::format("feed {}, MIDAS {}", pinned.p_prints, row.hidden_trades));
     }
     const bool odd_lots_compared = odd_lot_columns_ == OddLotColumns::compared;
-    if (odd_lots_compared && pinned.odd_lot_prints != row.odd_lots) {
-      fail(Check::t3_odd_lots, locate,
-           std::format("feed {}, MIDAS {}", pinned.odd_lot_prints, row.odd_lots));
-    }
-    if (odd_lots_compared && pinned.odd_lot_shares != row.odd_lot_shares) {
-      fail(Check::t3_odd_lot_shares, locate,
-           std::format("feed {}, MIDAS {}", pinned.odd_lot_shares, row.odd_lot_shares));
+    if (odd_lots_compared) {
+      compare_odd_lots(row, locate, pinned);
     }
     if (listings_[locate].directory_lot != 100 || listings_[locate].sec_lot != kSecDefaultLot) {
       other_lots_.push_back(
           {.locate = locate, .odd_lots = row.odd_lots, .odd_lot_shares = row.odd_lot_shares});
     }
+    fit_windows(row, locate, odd_lots_compared);
+  }
+
+  void compare_odd_lots(const MidasRow& row, std::uint16_t locate, const WindowVolume& pinned) {
+    if (pinned.odd_lot_prints != row.odd_lots) {
+      fail(Check::t3_odd_lots, locate,
+           std::format("feed {}, MIDAS {}", pinned.odd_lot_prints, row.odd_lots));
+    }
+    if (pinned.odd_lot_shares != row.odd_lot_shares) {
+      fail(Check::t3_odd_lot_shares, locate,
+           std::format("feed {}, MIDAS {}", pinned.odd_lot_shares, row.odd_lot_shares));
+    }
+  }
+
+  // How each window fares on this symbol. Reported, and only the pinned one is judged.
+  void fit_windows(const MidasRow& row, std::uint16_t locate, bool odd_lots_compared) {
     for (std::size_t w = 0; w < kWindows.size(); ++w) {
       const WindowVolume& window = volumes_[locate].windows[w];
       WindowFit& fit = fits_[w];
