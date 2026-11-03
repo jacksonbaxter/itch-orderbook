@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <charconv>
@@ -254,9 +255,11 @@ class OwnedInput {
     }
     const auto size = static_cast<std::size_t>(info.st_size);
     std::optional<Arena> copy = Arena::make(size, PageHint::base);
+    // macOS refuses a read of more than INT_MAX bytes, so a whole day goes in pieces.
+    constexpr std::size_t kMostPerRead = std::size_t{1} << 30U;
     std::size_t done = 0;
     while (copy && done < size) {
-      const ssize_t got = ::read(fd, copy->data() + done, size - done);
+      const ssize_t got = ::read(fd, copy->data() + done, std::min(size - done, kMostPerRead));
       if (got <= 0) {
         break;
       }
