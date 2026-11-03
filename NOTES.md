@@ -168,7 +168,7 @@ From probes run in the measurement track (`probes-measurement/` in the research 
 
 The brief asks for coverage after every message of the state that can have changed, and a proof that the rest cannot have diverged. `tests/oracle/diff.hpp` is the code. This is the argument.
 
-**The claim.** Call a level `x = (locate, side, price)`, and `S(x)` what it holds: the FIFO of `(reference, shares)`, the aggregate shares and the order count. After every message, `S_fast(x) = S_ref(x)` for every `x`.
+**The claim.** Call a level `x = (locate, side, price)`, and `S(x)` what it holds: the FIFO of `(reference, shares)`, the aggregate shares and the order count. After every message, `S_fast(x) = S_ref(x)` for every `x`. The proof is the same on every arm of the fast book: the order index and the level arm are policies, and both arms of each feed the one choke point.
 
 **The proof, by induction on messages.**
 
@@ -176,12 +176,13 @@ The brief asks for coverage after every message of the state that can have chang
 - Step: assume the claim holds after message `n-1`. The reference applies message `n` and returns `T(n)`, the levels it can have changed, worked out from its own state. It is at most two levels.
   - For `x` in `T(n)`, the diff compares `S(x)` directly, in full, so the claim holds there by check, not by argument.
   - For `x` outside `T(n)`, the reference changed nothing by construction of `T(n)`, so `S_ref(x)` is unchanged. The fast book only changes a level inside `write_level()`, which reports each write to the policy object before making it. The oracle build records those writes, and the diff requires each one to be in `T(n)`. So `x` was not written, `S_fast(x)` is unchanged, and the two are equal by the assumption.
+  - What finds `x` by its price can change without `x` being written. The linked arm relinks the neighbours of a level it opens or closes, and the flat arm shifts the entries after an insert or a removal and copies a whole array when it moves to a bigger block. Each of those is made inside `write_level()` too, by the level arm's `open()` and `close()`, and each reports the level whose link or entry it rewrites, as a move, before making it. The diff compares every moved level outside `T(n)` in full, through `find_level()`, after the message. So a level whose own link or entry was rewritten is checked at once, by the same compare as a touched one.
 
 **What the proof rests on, and what covers each assumption.**
 
 | Assumption | Covered by | Limit |
 |---|---|---|
-| The fast book writes a level only through `write_level()` | The hash and the exhaustive compare, which walk both whole books and never read the choke point's records | A bypassed write is seen at the next hash, up to 1,000,000 messages late, not at once. One undone before that hash escapes on a real day. The exhaustive compare on the fixtures and in the fuzzer has no such gap |
+| The fast book writes a level only through `write_level()`, and rewrites what finds a level only from inside it, reporting each move | The hash and the exhaustive compare, which walk both whole books and never read the choke point's records | A bypassed write is seen at the next hash, up to 1,000,000 messages late, not at once. One undone before that hash escapes on a real day. The exhaustive compare on the fixtures and in the fuzzer has no such gap. The unit tests in `test_book.cpp` hold each arm's move reports to the levels it rewrites |
 | `T(n)` holds everything the reference changed | The same whole-book walks, since a change outside `T(n)` appears as a difference. If the fast book made the same change, the write-set check fires | A wrong `T(n)` that both books agree with is the next row |
 | The two books mean the same thing by a message | Nothing here. The reference decodes its own bytes at its own offsets, which rules out a shared misread offset, not a shared misunderstanding | This is carteret's stated gap. T-TRADE-1 to T-TRADE-3 reach outside both books and are what can close it. The fuzzer's model is a third opinion on prices and liveness, on random flow only |
 | The hash is sound | It mixes every word of a canonical sequence, and the word counts must match as well | 64 bits and not cryptographic. A chance collision is about 2^-64 per comparison, and it is not meant to resist an adversary |
@@ -193,13 +194,14 @@ The brief asks for coverage after every message of the state that can have chang
 |---|---|---|---|
 | Status | Every message | Both books apply or refuse alike, for the same reason | Whether either is right |
 | Touched level | Every message, each level in `T(n)` | Existence, order count, stored aggregate against a sum from the FIFO, and the FIFO itself | Any other level |
-| Best bid and offer | Every message, both sides of its locate | Price, shares and orders in the cached top of book, including a best level reached by a stale link | Depth below the best, and other locates |
+| Best bid and offer | Every message, both sides of its locate | Price, shares and orders at the top of book: the linked arm's cached top, including a best level reached by a stale link, or the flat arm's last entry | Depth below the best, and other locates |
 | Write set | Every message | Each choke-point write lies in `T(n)`, whether or not it changed anything | Writes that bypass the choke point, and whether the write was correct |
+| Moved level | Every message, each level the arm reported as moved and that is not in `T(n)`, once | The same as a touched level, found through the structure as the message left it | A level whose own link or entry was not rewritten but whose path was: on the linked arm, one behind a relinked neighbour |
 | Periodic hash | Every 1,000,000 messages | All of both books, in canonical order, with stored totals and the cached top | Which message did it, and anything undone before it runs |
 | End-of-day hash | Once | The same, after the last message | Little on a real day: the book ends empty, so it says only that both are empty |
 | Exhaustive compare | Every message, fixtures and fuzzer only | All of both books, with the first differing word | Too slow for a whole day |
 
-Price-order links (`better`, `worse`) and the reference index are structure, not level contents, so they are outside `S(x)` and the write set. A broken link shows at the best bid and offer if it reaches the best level, in `find_level()` when the touched compare goes looking, and in the canonical walk, which follows the links. A broken index shows as a status divergence the next time that reference is named.
+Price-order structure (the linked arm's `better` and `worse`, the flat arm's sorted arrays) and the order index (hash or paged) are not level contents, so they are outside `S(x)` and the write set. Every rewrite of the price-order structure is reported as a move and its levels compared at once, which a link or entry gone wrong fails as a level-presence, aggregate, count or FIFO divergence with the detail `moved`. What the moved compare cannot see is the last row above. That shows at the best bid and offer if it reaches the best level, in `find_level()` when the touched compare goes looking, and in the canonical walk, which follows the structure. A broken index shows as a status divergence the next time that reference is named.
 
 ### Building the oracle
 
@@ -408,3 +410,34 @@ The parser line in Phase 3 named five cases. None needed a change to the parser 
 **One finding no entry predicted.** On 10302019 the directory lists HERO twice, at 03:07 and again at 05:05, with every field the same but tracking number and timestamp. The book does not read the directory, and every harness consumer overwrites with the same values, so it changes nothing. The census counts it as `directory_repeats`.
 
 **What stays open.** The book holds test symbols exactly like live ones, as it should. Leaving them out of any statistic is the consumer's job, and no production consumer exists yet. The backtester and the demo will need it.
+
+## Book arms, 2026-11-02
+
+The Phase 2 stub is now `FastBook<WriteObserver, OrderIndex, Levels>`, with two arms of each policy, so that every pairing builds in one binary. `itch_oracle` and `itch_alloc` pick one with `--index hash|paged` and `--levels linked|flat`. Nothing here is a timing, and none is reported.
+
+| Policy | Arm | What it is |
+|---|---|---|
+| Order lookup | `HashIndex` | The Phase 2 open-addressing table, unchanged: linear probing, at most half full, backward-shift deletion |
+| Order lookup | `PagedIndex<8>` | A directory of pages of 256 slots for every reference below `2^index_bits`, pages from a pool and given back when their last reference goes. A reference past that reach, or one whose page the pool cannot supply, goes to a `HashIndex` sized for every order. Each such insert is counted (`index_fallback_inserts`) |
+| Levels | `LinkedLevels` | The Phase 2 best-first list per side, with the best level's totals cached |
+| Levels | `FlatLevels` | One sorted array per side, best at the end, keys apart from level slots. Arrays are blocks of 2^k entries from one arena, first block 8, doubling when full, with a free list per size. A side keeps its block when it empties. Level records stay in a pool, since orders point at them, so only entries move |
+
+**The default is hash with linked levels, and it is provisional.** It is the simplest pair, the only one the oracle has run a whole day on, and the one with no capacity a day can run out of apart from orders and levels. The measurements of the four arms decide what ships.
+
+**What a day asks of each arm.** A scratch probe read 12302019 under `heavy.sh` (34.9 s, 262 MB footprint): 140,270,523 adds, the largest reference 308,631,072 and none at or past 2^32, prices from 1 to 1,999,999,900, at most 1,924,078 live orders and 784,060 live levels. 17,783 sides hold a level at some point, the deepest 4,227 levels. The rest of the probe chose the sizes:
+
+- **Page size.** The most pages pinned at once, by page bits: 8 → 340,939 (349 MB of slots), 10 → 189,644 (777 MB), 12 → 70,185 (1.15 GB), 16 → 4,684 (1.23 GB). A reference stays live for a while among neighbours that have gone, so a bigger page pins more memory, not less. 256 slots a page it is.
+- **The arena.** Grow-only blocks hand out 1,642,464 entries at most, with 1,270,648 in use at the peak, 44,887 moves and 1,128,352 entries copied. Giving a block back when its side empties came to the same numbers (1,642,496 handed out) and would let a removal leave the next add short of room, so a side keeps its block.
+- **Defaults.** 2^19 pages, a reach of 2^32 and 2^22 arena entries hold that day with room. The reach is a capacity field, `index_bits`, because a directory for 2^32 is 64 MiB, too much for every unit test and fuzz input.
+
+**DS-72 and DS-73.** A reference the paged index cannot place falls back and is counted, never dropped, and a test runs it out of pages and past its reach. A full flat side whose block cannot grow returns `capacity_exhausted` and leaves the book as it was, and so does a replace onto it, which checks for room before its old order goes. Neither level arm indexes by price, so a far stub quote is only the farthest level.
+
+**The proof needed one more report.** The flat arm moves entries of levels that no message touched, and the linked arm relinks the neighbours of a level it opens or closes. Neither changes what a level holds, but either can change what `find_level()` returns. So every such rewrite is reported to the write policy as a move, and the oracle compares every moved level outside `T(n)` in full. On `session.itch` with flat levels and an 8,192-entry arena, the moved compare runs and the arrays move to bigger blocks; `test_oracle_cli` holds that. The proof above says what it still cannot see at once.
+
+**The default arm passes a whole day with the moved compare on.** `itch_oracle data/12302019.NASDAQ_ITCH50` under `heavy.sh`, hash with linked levels: 268,744,780 messages, 0 divergences, T-ORACLE-1, T-INV-1 and T-INV-3 pass, T-INV-2 strict fails at 18,958 crossed and 1,018 locked as before, and the peak depth is unchanged. 145,565,666 moves were reported and 122,021,707 moved levels outside `T(n)` were compared in full. Peak footprint 0.66 GiB. Raw output stays outside the repo; `results/oracle_12302019.md` is still the stub's run.
+
+**Every arm gives the same answers.** On every oracle fixture, the four arms give the same verdicts, the same exit, and the same touched, BBO, write-set, hash and exhaustive counts, down to the last hash. Only the move counts differ. `test_book` runs every scenario on every arm and the reference book, and `test_alloc` sees 0 allocations on each arm over 200,018 messages that make the paged index run out of pages and fall back and make flat arrays move.
+
+**`fuzz_book` runs each input through all four arms**, each against its own oracle and the model, with 2 pages, a reach of 2^16 and a 1,024-entry arena. 42,003 runs in 121 s on seed 1, 347 a second, 299 new units, peak 572 MB, clean.
+
+**Faults.** Thirteen book faults went stale, because their anchor text moved into the arms, and three more still matched but no longer built, because they named members the arms took over. Each now targets the new code and is still caught. `oracle-write-untouched-level` finds its neighbour through the arm's own walk and search, so it builds on every arm. One changed what catches it: with the write-set check off, the bad write to a neighbour is now caught by the moved compare at the message that relinks it, not at the next hash, and `oracle-off-write-set` says so. The moved compare also caught `oracle-off-periodic-hash`'s bypassed write, at the last message of `session.itch`, before the end-of-day hash could run. That fault exists to show the end-of-day hash, so it now turns the moved compare off as well, and the end-of-day hash still catches it. Thirteen faults are new: an off-by-one in the flat insert position, a lookup on the wrong page, a FIFO broken on the flat arm only, a flat move pointing an entry at the wrong record (caught first by the moved compare, and by the hash with that compare off), the moved compare not run, the tools ignoring `--levels`, an unreported move on each arm, a dropped fallback, a replace that skips its room check, and an allocation on each arm's rare path.

@@ -102,7 +102,7 @@
         {
           "file": "include/itch/book.hpp",
           "old": "    const LevelId moved{.locate = level.locate, .side = level.side, .price = u.price};\n",
-          "new": "    if (u.price == level.price) {\n      const std::uint32_t at = orders_[order].level;\n      erase_index(u.original_order_reference);\n      levels_[at].aggregate_shares += u.shares;\n      levels_[at].aggregate_shares -= orders_[order].shares;\n      orders_[order].reference = u.new_order_reference;\n      orders_[order].shares = u.shares;\n      insert_index(u.new_order_reference, order);\n      refresh_top(id_of(at));\n      return ApplyStatus::applied;\n    }\n    const LevelId moved{.locate = level.locate, .side = level.side, .price = u.price};\n"
+          "new": "    if (u.price == level.price) {\n      const std::uint32_t at = orders_[order].level;\n      erase_index(u.original_order_reference);\n      levels_[at].aggregate_shares += u.shares;\n      levels_[at].aggregate_shares -= orders_[order].shares;\n      orders_[order].reference = u.new_order_reference;\n      orders_[order].shares = u.shares;\n      insert_index(u.new_order_reference, order);\n      levels_.refresh(id_of(at));\n      return ApplyStatus::applied;\n    }\n    const LevelId moved{.locate = level.locate, .side = level.side, .price = u.price};\n"
         }
       ],
       "build": {
@@ -158,13 +158,13 @@
     },
     {
       "id": "oracle-bbo-stale",
-      "breaks": "The cached top of book is not refreshed when a level closes",
+      "breaks": "The linked arm's cached top of book is not refreshed when a level closes",
       "check": "the BBO compare",
       "mutations": [
         {
           "file": "include/itch/book.hpp",
-          "old": "    refresh_top(id);\n  }\n\n  void open_level",
-          "new": "    if (write.op != LevelOp::close) {\n      refresh_top(id);\n    }\n  }\n\n  void open_level"
+          "old": "    levels_.refresh(id);\n  }\n",
+          "new": "    if (write.op != LevelOp::close) {\n      levels_.refresh(id);\n    }\n  }\n"
         }
       ],
       "build": {
@@ -256,7 +256,7 @@
       "mutations": [
         {
           "file": "include/itch/book.hpp",
-          "old": "    if (levels_[level].front == kNoIndex) {\n      write_level(id, {.op = LevelOp::close, .level = level});\n      give_back_level(level);\n    }\n",
+          "old": "    if (levels_[level].front == kNoIndex) {\n      write_level(id, {.op = LevelOp::close, .level = level});\n      levels_.give_back(level);\n    }\n",
           "new": ""
         }
       ],
@@ -319,7 +319,7 @@
         {
           "file": "include/itch/book.hpp",
           "old": "    insert_index(reference, order);\n    return ApplyStatus::applied;\n",
-          "new": "    insert_index(reference, order);\n    const std::uint32_t neighbour = levels_[level].worse;\n    if (neighbour != kNoIndex && orders_[levels_[neighbour].front].shares > 1) {\n      write_level(id_of(neighbour), {.op = LevelOp::reduce,\n                                     .level = neighbour,\n                                     .order = levels_[neighbour].front,\n                                     .shares = 1});\n    }\n    return ApplyStatus::applied;\n"
+          "new": "    insert_index(reference, order);\n    std::uint32_t neighbour = kNoIndex;\n    bool past = false;\n    levels_.walk(id.locate, id.side, [&](const Level& other) {\n      if (past) {\n        neighbour = levels_.search({.locate = id.locate, .side = id.side, .price = other.price}).level;\n        return false;\n      }\n      past = other.price == id.price;\n      return true;\n    });\n    if (neighbour != kNoIndex && orders_[levels_[neighbour].front].shares > 1) {\n      write_level(id_of(neighbour), {.op = LevelOp::reduce,\n                                     .level = neighbour,\n                                     .order = levels_[neighbour].front,\n                                     .shares = 1});\n    }\n    return ApplyStatus::applied;\n"
         }
       ],
       "build": {
@@ -447,8 +447,8 @@
         },
         {
           "file": "include/itch/book.hpp",
-          "old": "#include <string_view>\n#include <vector>\n",
-          "new": "#include <string_view>\n#include <type_traits>\n#include <vector>\n"
+          "old": "#include <span>\n#include <vector>\n",
+          "new": "#include <span>\n#include <type_traits>\n#include <vector>\n"
         }
       ],
       "build": {
@@ -627,7 +627,7 @@
         },
         {
           "file": "include/itch/book.hpp",
-          "old": "    if (levels_[level].front == kNoIndex) {\n      write_level(id, {.op = LevelOp::close, .level = level});\n      give_back_level(level);\n    }\n",
+          "old": "    if (levels_[level].front == kNoIndex) {\n      write_level(id, {.op = LevelOp::close, .level = level});\n      levels_.give_back(level);\n    }\n",
           "new": ""
         },
         {
@@ -694,7 +694,7 @@
     },
     {
       "id": "oracle-off-bbo",
-      "breaks": "BBO compare off, and the cached top goes stale",
+      "breaks": "BBO compare off, and the linked arm's cached top goes stale",
       "check": "the whole-book hash at every message, which carries the top of book",
       "mutations": [
         {
@@ -704,8 +704,8 @@
         },
         {
           "file": "include/itch/book.hpp",
-          "old": "    refresh_top(id);\n  }\n\n  void open_level",
-          "new": "    if (write.op != LevelOp::close) {\n      refresh_top(id);\n    }\n  }\n\n  void open_level"
+          "old": "    levels_.refresh(id);\n  }\n",
+          "new": "    if (write.op != LevelOp::close) {\n      levels_.refresh(id);\n    }\n  }\n"
         }
       ],
       "build": {
@@ -731,7 +731,7 @@
     {
       "id": "oracle-off-write-set",
       "breaks": "Write-set check off, and an add writes an untouched level",
-      "check": "the whole-book hash",
+      "check": "the moved-level compare, which compares in full the neighbour an add's new level relinks",
       "mutations": [
         {
           "file": "tests/oracle/diff.hpp",
@@ -741,7 +741,7 @@
         {
           "file": "include/itch/book.hpp",
           "old": "    insert_index(reference, order);\n    return ApplyStatus::applied;\n",
-          "new": "    insert_index(reference, order);\n    const std::uint32_t neighbour = levels_[level].worse;\n    if (neighbour != kNoIndex && orders_[levels_[neighbour].front].shares > 1) {\n      write_level(id_of(neighbour), {.op = LevelOp::reduce,\n                                     .level = neighbour,\n                                     .order = levels_[neighbour].front,\n                                     .shares = 1});\n    }\n    return ApplyStatus::applied;\n"
+          "new": "    insert_index(reference, order);\n    std::uint32_t neighbour = kNoIndex;\n    bool past = false;\n    levels_.walk(id.locate, id.side, [&](const Level& other) {\n      if (past) {\n        neighbour = levels_.search({.locate = id.locate, .side = id.side, .price = other.price}).level;\n        return false;\n      }\n      past = other.price == id.price;\n      return true;\n    });\n    if (neighbour != kNoIndex && orders_[levels_[neighbour].front].shares > 1) {\n      write_level(id_of(neighbour), {.op = LevelOp::reduce,\n                                     .level = neighbour,\n                                     .order = levels_[neighbour].front,\n                                     .shares = 1});\n    }\n    return ApplyStatus::applied;\n"
         }
       ],
       "build": {
@@ -761,18 +761,23 @@
         "4096"
       ],
       "expect": {
-        "signature": "write_set_checks 0\\n[\\s\\S]*DIVERGENCE kind=periodic-hash message=\\d+ type=. "
+        "signature": "write_set_checks 0\\n[\\s\\S]*DIVERGENCE kind=aggregate message=\\d+ type=A moved "
       }
     },
     {
       "id": "oracle-off-periodic-hash",
-      "breaks": "Periodic hash off, and a write bypasses the choke point",
+      "breaks": "Periodic hash and moved-level compare off, and a write bypasses the choke point",
       "check": "the end-of-day hash",
       "mutations": [
         {
           "file": "tests/oracle/diff.hpp",
           "old": "if (config_.hash_every != 0 && counters_.messages_diffed % config_.hash_every == 0) {",
           "new": "if (false) {"
+        },
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    counters_.move_reports += reported.size();\n",
+          "new": "    counters_.move_reports += reported.size();\n    return;\n"
         },
         {
           "file": "include/itch/book.hpp",
@@ -797,7 +802,7 @@
         "4096"
       ],
       "expect": {
-        "signature": "periodic_hash_checks 0\\n[\\s\\S]*DIVERGENCE kind=final-hash message=\\d+ type=. "
+        "signature": "moved_checks 0\\n[\\s\\S]*periodic_hash_checks 0\\n[\\s\\S]*DIVERGENCE kind=final-hash message=\\d+ type=. "
       }
     },
     {
@@ -1830,8 +1835,8 @@
       "mutations": [
         {
           "file": "include/itch/book.hpp",
-          "old": "#include <bit>\n",
-          "new": "#include <bit>\n#include <new>\n"
+          "old": "#include <optional>\n",
+          "new": "#include <new>\n#include <optional>\n"
         },
         {
           "file": "include/itch/book.hpp",
@@ -1859,8 +1864,8 @@
       "mutations": [
         {
           "file": "include/itch/book.hpp",
-          "old": "#include <bit>\n",
-          "new": "#include <bit>\n#include <new>\n"
+          "old": "#include <optional>\n",
+          "new": "#include <new>\n#include <optional>\n"
         },
         {
           "file": "include/itch/book.hpp",
@@ -1888,8 +1893,8 @@
       "mutations": [
         {
           "file": "include/itch/book.hpp",
-          "old": "#include <bit>\n",
-          "new": "#include <bit>\n#include <new>\n"
+          "old": "#include <optional>\n",
+          "new": "#include <new>\n#include <optional>\n"
         },
         {
           "file": "include/itch/book.hpp",
@@ -1917,8 +1922,8 @@
       "mutations": [
         {
           "file": "include/itch/book.hpp",
-          "old": "#include <bit>\n",
-          "new": "#include <bit>\n#include <new>\n"
+          "old": "#include <optional>\n",
+          "new": "#include <new>\n#include <optional>\n"
         },
         {
           "file": "include/itch/book.hpp",
@@ -1946,8 +1951,8 @@
       "mutations": [
         {
           "file": "include/itch/book.hpp",
-          "old": "#include <bit>\n",
-          "new": "#include <bit>\n#include <new>\n"
+          "old": "#include <optional>\n",
+          "new": "#include <new>\n#include <optional>\n"
         },
         {
           "file": "include/itch/book.hpp",
@@ -2480,6 +2485,398 @@
       ],
       "expect": {
         "signature": "FAILED  \\] Canonical.TheWholeBookWalkSeesWhatAWalkOfEveryLocateSees"
+      }
+    },
+    {
+      "id": "oracle-flat-insert-off-by-one",
+      "breaks": "A new flat level goes in one place before where its price belongs",
+      "check": "the touched-level and BBO compares, on the flat arm",
+      "mutations": [
+        {
+          "file": "include/itch/book_levels.hpp",
+          "old": "    return {.level = kNoIndex, .position = at};\n",
+          "new": "    return {.level = kNoIndex, .position = at == 0 ? 0 : at - 1};\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--levels",
+        "flat",
+        "--max-slots",
+        "8192"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=[a-z-]+ message=\\d+ type=[AFU] "
+      }
+    },
+    {
+      "id": "oracle-paged-wrong-page",
+      "breaks": "The paged index looks a reference up on the page next to its own",
+      "check": "the status compare, on the paged arm",
+      "mutations": [
+        {
+          "file": "include/itch/book_index.hpp",
+          "old": "      const std::uint32_t page = directory_[reference >> PageBits];\n      if (page != kNoIndex) {\n        const std::uint32_t order",
+          "new": "      const std::uint32_t page = directory_[(reference >> PageBits) ^ 1U];\n      if (page != kNoIndex) {\n        const std::uint32_t order"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--index",
+        "paged",
+        "--max-pages",
+        "64"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=status message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-fifo-front-on-flat",
+      "breaks": "On the flat arm only, an order joins the front of a level that has orders",
+      "check": "the touched-level compare, FIFO, on the flat arm",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "                                     .newer = kNoIndex};\n    if (level.back == kNoIndex) {\n",
+          "new": "                                     .newer = kNoIndex};\n    if constexpr (std::is_same_v<Levels, FlatLevels>) {\n      if (level.front != kNoIndex) {\n        orders_[write.order].older = kNoIndex;\n        orders_[write.order].newer = level.front;\n        orders_[level.front].older = write.order;\n        level.front = write.order;\n        level.aggregate_shares += write.shares;\n        ++level.order_count;\n        return;\n      }\n    }\n    if (level.back == kNoIndex) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--levels",
+        "flat",
+        "--max-slots",
+        "8192"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=fifo message=\\d+ type=[AFU] "
+      }
+    },
+    {
+      "id": "oracle-flat-grow-wrong-slot",
+      "breaks": "A flat array moving to a bigger block points its worst entry at the next level's record",
+      "check": "the moved-level compare",
+      "mutations": [
+        {
+          "file": "include/itch/book_levels.hpp",
+          "old": "      slots_[base + at] = slots_[side.base + at];\n",
+          "new": "      slots_[base + at] = slots_[side.base + (at == 0 ? 1 : at)];\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--levels",
+        "flat",
+        "--max-slots",
+        "8192"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=[a-z-]+ message=\\d+ type=. moved locate="
+      }
+    },
+    {
+      "id": "oracle-off-moved",
+      "breaks": "Moved-level compare off, and a flat array moves an entry onto the wrong record",
+      "check": "the whole-book hash",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    counters_.move_reports += reported.size();\n",
+          "new": "    counters_.move_reports += reported.size();\n    return;\n"
+        },
+        {
+          "file": "include/itch/book_levels.hpp",
+          "old": "      slots_[base + at] = slots_[side.base + at];\n",
+          "new": "      slots_[base + at] = slots_[side.base + (at == 0 ? 1 : at)];\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--levels",
+        "flat",
+        "--max-slots",
+        "8192"
+      ],
+      "expect": {
+        "signature": "moved_checks 0\\n[\\s\\S]*DIVERGENCE kind=periodic-hash message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-silent-moved-compare",
+      "breaks": "The moved-level compare no longer runs",
+      "check": "test_oracle_cli, on the flat arm's moved checks",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_moves(outcome.touched);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL session flat moves: no block moved, or no moved level was compared"
+      }
+    },
+    {
+      "id": "oracle-cli-levels-ignored",
+      "breaks": "itch_oracle and itch_alloc run the linked arm whatever --levels says",
+      "check": "test_oracle_cli, on the arm each run reports",
+      "mutations": [
+        {
+          "file": "tools/book_arms.hpp",
+          "old": "    if (arm.levels == LevelsArm::linked) {\n",
+          "new": "    if (arm.levels == LevelsArm::linked || arm.levels == LevelsArm::flat) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL flat capacity: no status divergence"
+      }
+    },
+    {
+      "id": "oracle-paged-fallback-dropped",
+      "breaks": "A reference the paged index cannot place is dropped, not sent to the hash",
+      "check": "test_book (FastBook.ThePagedIndexFallsBackRatherThanDropAReference)",
+      "mutations": [
+        {
+          "file": "include/itch/book_index.hpp",
+          "old": "    fallback_.insert(reference, order, orders);\n    ++fallback_live_;\n    ++fallback_inserts_;\n",
+          "new": "    static_cast<void>(orders);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] FastBook\\.ThePagedIndexFallsBackRatherThanDropAReference"
+      }
+    },
+    {
+      "id": "oracle-replace-skips-room-check",
+      "breaks": "A replace takes its old order off before it knows the new price has room",
+      "check": "test_book (FastBook.AFlatSideThatCannotGrowRefusesAndChangesNothing)",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    if (!levels_.has_room(moved)) {\n      return ApplyStatus::capacity_exhausted;\n    }\n    remove_order(order);\n",
+          "new": "    remove_order(order);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] FastBook\\.AFlatSideThatCannotGrowRefusesAndChangesNothing"
+      }
+    },
+    {
+      "id": "oracle-linked-move-unreported",
+      "breaks": "Opening a linked level relinks the better neighbour without reporting it",
+      "check": "test_book (FastBook.TheObserverSeesTheLinkedNeighboursAMessageMoves)",
+      "mutations": [
+        {
+          "file": "include/itch/book_levels.hpp",
+          "old": "      moved(place.better);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] FastBook\\.TheObserverSeesTheLinkedNeighboursAMessageMoves"
+      }
+    },
+    {
+      "id": "oracle-flat-move-unreported",
+      "breaks": "Opening a flat level shifts the better entries without reporting them",
+      "check": "test_book (FastBook.TheObserverSeesTheFlatEntriesAMessageMoves)",
+      "mutations": [
+        {
+          "file": "include/itch/book_levels.hpp",
+          "old": "      moved(slots_[at - 1]);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] FastBook\\.TheObserverSeesTheFlatEntriesAMessageMoves"
+      }
+    },
+    {
+      "id": "oracle-alloc-paged-take-page",
+      "breaks": "The paged index allocates each time it takes a page",
+      "check": "test_alloc, on the paged arms",
+      "mutations": [
+        {
+          "file": "include/itch/book_index.hpp",
+          "old": "#include <cstdint>\n",
+          "new": "#include <cstdint>\n#include <new>\n"
+        },
+        {
+          "file": "include/itch/book_index.hpp",
+          "old": "  [[nodiscard]] std::uint32_t take_page(std::uint32_t home) noexcept {\n",
+          "new": "  [[nodiscard]] std::uint32_t take_page(std::uint32_t home) noexcept {\n    ::operator delete(::operator new(8));\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "fast book, paged, linked: \\d+ messages, \\d+ refused, [1-9]\\d* allocations[\\s\\S]*allocation in the hot path"
+      }
+    },
+    {
+      "id": "oracle-alloc-flat-grow",
+      "breaks": "A flat array allocates each time it moves to a bigger block",
+      "check": "test_alloc, on the flat arms",
+      "mutations": [
+        {
+          "file": "include/itch/book_levels.hpp",
+          "old": "#include <cstdint>\n",
+          "new": "#include <cstdint>\n#include <new>\n"
+        },
+        {
+          "file": "include/itch/book_levels.hpp",
+          "old": "    const std::uint32_t base = take_block(capacity);\n",
+          "new": "    ::operator delete(::operator new(8));\n    const std::uint32_t base = take_block(capacity);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "fast book, hash, flat: \\d+ messages, \\d+ refused, [1-9]\\d* allocations[\\s\\S]*allocation in the hot path"
       }
     }
   ]

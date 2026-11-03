@@ -3462,9 +3462,9 @@
       "check": "e_not_at_best",
       "mutations": [
         {
-          "file": "include/itch/book.hpp",
-          "old": "    const Top& top = tops_[top_key(locate, side)];\n    return {.present = top.level != kNoIndex,\n            .price = top.price,",
-          "new": "    const Top& top = tops_[top_key(locate, side)];\n    const bool deeper = top.level != kNoIndex && levels_[top.level].worse != kNoIndex;\n    return {.present = top.level != kNoIndex,\n            .price = deeper ? levels_[levels_[top.level].worse].price : top.price,"
+          "file": "include/itch/book_levels.hpp",
+          "old": "    const Top& top = tops_[side_key(locate, side)];\n    return {.present = top.level != kNoIndex,\n            .price = top.price,",
+          "new": "    const Top& top = tops_[side_key(locate, side)];\n    const bool deeper = top.level != kNoIndex && levels_[top.level].worse != kNoIndex;\n    return {.present = top.level != kNoIndex,\n            .price = deeper ? levels_[levels_[top.level].worse].price : top.price,"
         }
       ],
       "build": {

@@ -445,8 +445,8 @@
         },
         {
           "file": "include/itch/book.hpp",
-          "old": "  std::uint64_t peak_live_levels_ = 0;\n",
-          "new": "  std::uint64_t peak_live_levels_ = 0;\n  std::vector<char> test_ = std::vector<char>(65536);\n"
+          "old": "  std::uint64_t peak_live_orders_ = 0;\n",
+          "new": "  std::uint64_t peak_live_orders_ = 0;\n  std::vector<char> test_ = std::vector<char>(65536);\n"
         }
       ],
       "build": {
@@ -623,8 +623,8 @@
         },
         {
           "file": "include/itch/book.hpp",
-          "old": "  std::uint64_t peak_live_levels_ = 0;\n",
-          "new": "  std::uint64_t peak_live_levels_ = 0;\n  bool ended_ = false;\n"
+          "old": "  std::uint64_t peak_live_orders_ = 0;\n",
+          "new": "  std::uint64_t peak_live_orders_ = 0;\n  bool ended_ = false;\n"
         }
       ],
       "build": {
