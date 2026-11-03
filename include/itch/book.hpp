@@ -127,6 +127,16 @@ class FastBook {
                         .at_front = order.older == kNoIndex};
   }
 
+  // The pool slot of a live order, or kNoIndex. It stays the order's for as long as the
+  // order lives, so a consumer can key its own per-order records on it, in an array of
+  // order_capacity() entries, as the backtester does. order_at() reads the slot.
+  [[nodiscard]] std::uint32_t order_slot(std::uint64_t reference) const noexcept {
+    return find_order(reference);
+  }
+  [[nodiscard]] std::uint32_t order_capacity() const noexcept {
+    return static_cast<std::uint32_t>(orders_.size());
+  }
+
   [[nodiscard]] std::uint64_t live_orders() const noexcept { return live_orders_; }
   [[nodiscard]] std::uint64_t live_levels() const noexcept { return levels_.live(); }
   [[nodiscard]] std::uint64_t peak_live_orders() const noexcept { return peak_live_orders_; }
