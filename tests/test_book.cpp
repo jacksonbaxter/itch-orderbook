@@ -328,6 +328,125 @@ TYPED_TEST(BookScenario, ASideThatIsNeitherBuyNorSellIsRefused) {
   EXPECT_EQ(this->book_.live_orders(), 0U);
 }
 
+// What the spec leaves out or says otherwise. Neither book reads the directory, so what
+// these show is that the case reaches the book and is treated like any other.
+
+// DS-64. Neither real day has 'M', so this is the only place it runs.
+TYPED_TEST(BookScenario, MarketCategoryMListsAnOrdinarySymbol) {
+  EXPECT_EQ(this->book_.apply(wire::directory(kLocate, 'M', 'T', 100)), "no_book_effect");
+  EXPECT_EQ(this->book_.apply(wire::add(kLocate, 1, 'B', 100, 5000)), "applied");
+  EXPECT_EQ(this->book_.best(kLocate, 'B'), (Top{true, 5000, 100, 1}));
+}
+
+// DS-65. Test symbols carry real order flow. Leaving them out of a statistic is the
+// consumer's business, so the book has to hold them exactly as it holds a live one.
+TYPED_TEST(BookScenario, ATestSymbolTradesLikeALiveOne) {
+  constexpr std::uint16_t kLive = kLocate + 1;
+  EXPECT_EQ(this->book_.apply(wire::directory(kLocate, 'Q', 'T', 100)), "no_book_effect");
+  EXPECT_EQ(this->book_.apply(wire::directory(kLive, 'Q', 'P', 100)), "no_book_effect");
+  std::uint64_t reference = 1;
+  for (const std::uint16_t locate : {kLocate, kLive}) {
+    const std::uint64_t first = reference++;
+    const std::uint64_t second = reference++;
+    const std::uint64_t replaced = reference++;
+    EXPECT_EQ(this->book_.apply(wire::add(locate, first, 'B', 100, 5000)), "applied");
+    EXPECT_EQ(this->book_.apply(wire::add_attributed(locate, second, 'B', 200, 5000)), "applied");
+    EXPECT_EQ(this->book_.apply(wire::execute(locate, first, 30)), "applied");
+    EXPECT_EQ(this->book_.apply(wire::cancel(locate, second, 50)), "applied");
+    EXPECT_EQ(this->book_.apply(wire::replace(locate, second, replaced, 90, 4900)), "applied");
+    EXPECT_EQ(this->book_.level(locate, 'B', 5000), (Fifo{{first, 70}}));
+    EXPECT_EQ(this->book_.level(locate, 'B', 4900), (Fifo{{replaced, 90}}));
+    EXPECT_EQ(this->book_.apply(wire::erase(locate, first)), "applied");
+    EXPECT_EQ(this->book_.best(locate, 'B'), (Top{true, 4900, 90, 1}));
+  }
+  EXPECT_EQ(this->book_.live_orders(), 2U);
+}
+
+// DS-66. A book holds shares, whatever a round lot is on this symbol.
+TYPED_TEST(BookScenario, ARoundLotDoesNotShapeTheBook) {
+  std::uint16_t locate = kLocate;
+  std::uint64_t reference = 1;
+  for (const std::uint32_t lot : {1U, 10U, 40U, 100U}) {
+    EXPECT_EQ(this->book_.apply(wire::directory(locate, 'N', 'P', lot)), "no_book_effect");
+    const std::uint64_t odd = reference++;
+    const std::uint64_t mixed = reference++;
+    EXPECT_EQ(this->book_.apply(wire::add(locate, odd, 'S', 7, 5000)), "applied") << lot;
+    EXPECT_EQ(this->book_.apply(wire::add(locate, mixed, 'S', 153, 5000)), "applied") << lot;
+    EXPECT_EQ(this->book_.apply(wire::cancel(locate, mixed, 3)), "applied") << lot;
+    EXPECT_EQ(this->book_.level(locate, 'S', 5000), (Fifo{{odd, 7}, {mixed, 150}})) << lot;
+    ++locate;
+  }
+}
+
+// DS-69. A cross that did not happen prints zero shares at price zero. On both real days
+// every zero-share Q is also zero-price and no other Q is. The two mixed forms are here
+// because nothing but those days rules them out.
+TYPED_TEST(BookScenario, ACrossOfNoSharesOrNoPriceChangesNothing) {
+  this->book_.apply(wire::add(kLocate, 1, 'B', 100, 5000));
+  this->book_.apply(wire::add(kLocate, 2, 'S', 100, 5100));
+  EXPECT_EQ(this->book_.apply(wire::cross(kLocate, 0, 0)), "no_book_effect");
+  EXPECT_EQ(this->book_.apply(wire::cross(kLocate, 0, 5000)), "no_book_effect");
+  EXPECT_EQ(this->book_.apply(wire::cross(kLocate, 100, 0)), "no_book_effect");
+  EXPECT_EQ(this->book_.best(kLocate, 'B'), (Top{true, 5000, 100, 1}));
+  EXPECT_EQ(this->book_.best(kLocate, 'S'), (Top{true, 5100, 100, 1}));
+  EXPECT_EQ(this->book_.level(kLocate, 'B', 0), Fifo{});
+  EXPECT_EQ(this->book_.level(kLocate, 'S', 0), Fifo{});
+  EXPECT_EQ(this->book_.live_orders(), 2U);
+}
+
+// DS-71. The current spec names only Broken Trade and Order Delete after 'E', and 2026
+// files carry partial cancels there as well. Both real days here have only deletes, so
+// the cancel runs nowhere else.
+TYPED_TEST(BookScenario, OrderMessagesAfterSystemEventEStillApply) {
+  this->book_.apply(wire::add(kLocate, 1, 'B', 100, 5000));
+  this->book_.apply(wire::add(kLocate, 2, 'B', 100, 5000));
+  EXPECT_EQ(this->book_.apply(wire::system_event('E')), "no_book_effect");
+  EXPECT_EQ(this->book_.apply(wire::cancel(kLocate, 1, 40)), "applied");
+  EXPECT_EQ(this->book_.level(kLocate, 'B', 5000), (Fifo{{1, 60}, {2, 100}}));
+  EXPECT_EQ(this->book_.apply(wire::erase(kLocate, 1)), "applied");
+  EXPECT_EQ(this->book_.apply(wire::cancel(kLocate, 2, 100)), "applied");
+  EXPECT_EQ(this->book_.apply(wire::system_event('C')), "no_book_effect");
+  EXPECT_EQ(this->book_.live_orders(), 0U);
+}
+
+// All five cases as one framed stream, through the whole path a real day takes: nothing
+// skipped by the reader, nothing refused by decode, and every status the expected one.
+TEST(SpecOmissions, AStreamOfThemWalksDecodesAndApplies) {
+  constexpr std::uint16_t kTest = 7;
+  constexpr std::uint16_t kLotOfTen = 8;
+  const std::vector<std::pair<wire::Bytes, itch::ApplyStatus>> script{
+      {wire::system_event('O'), itch::ApplyStatus::no_book_effect},
+      {wire::directory(kTest, 'M', 'T', 100), itch::ApplyStatus::no_book_effect},
+      {wire::directory(kLotOfTen, 'N', 'P', 10), itch::ApplyStatus::no_book_effect},
+      {wire::add(kTest, 1, 'B', 100, 5000), itch::ApplyStatus::applied},
+      {wire::add(kLotOfTen, 2, 'S', 7, 5100), itch::ApplyStatus::applied},
+      {wire::cross(kTest, 0, 0), itch::ApplyStatus::no_book_effect},
+      {wire::system_event('E'), itch::ApplyStatus::no_book_effect},
+      {wire::cancel(kTest, 1, 40), itch::ApplyStatus::applied},
+      {wire::erase(kTest, 1), itch::ApplyStatus::applied},
+      {wire::erase(kLotOfTen, 2), itch::ApplyStatus::applied},
+      {wire::system_event('C'), itch::ApplyStatus::no_book_effect},
+  };
+  std::vector<std::byte> stream;
+  for (const auto& [message, status] : script) {
+    itch::fixtures::append_frame(stream, message);
+  }
+
+  itch::FrameReader reader{stream};
+  itch::FastBook<> book{{.orders = 16, .levels = 16}};
+  for (const auto& [message, status] : script) {
+    const itch::Frame frame = reader.next();
+    ASSERT_EQ(frame.status, itch::FrameStatus::message);
+    ASSERT_TRUE(itch::decode(frame.payload).has_value());
+    EXPECT_EQ(book.apply(frame.payload), status) << static_cast<char>(message[0]);
+  }
+  EXPECT_EQ(reader.next().status, itch::FrameStatus::end_of_input);
+  EXPECT_EQ(reader.counters().messages, script.size());
+  EXPECT_EQ(reader.counters().unknown_type, 0U);
+  EXPECT_EQ(reader.counters().bad_length, 0U);
+  EXPECT_EQ(book.live_orders(), 0U);
+}
+
 TEST(FastBook, ThePoolsRefuseRatherThanGrow) {
   itch::FastBook<> book{{.orders = 2, .levels = 2}};
   EXPECT_EQ(book.apply(wire::add(1, 1, 'B', 1, 10)), itch::ApplyStatus::applied);

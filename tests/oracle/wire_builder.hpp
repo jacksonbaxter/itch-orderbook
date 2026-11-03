@@ -122,6 +122,25 @@ using Bytes = std::vector<std::byte>;
                                             .reason = HaltReason{' ', ' ', ' ', ' '}});
 }
 
+[[nodiscard]] inline Bytes directory(std::uint16_t locate, char market_category, char authenticity,
+                                     std::uint32_t round_lot, std::uint64_t timestamp = 1) {
+  return testing::encode(StockDirectory{.header = header('R', locate, timestamp),
+                                        .stock = stock('R'),
+                                        .market_category = market_category,
+                                        .financial_status = 'N',
+                                        .round_lot_size = round_lot,
+                                        .round_lots_only = 'N',
+                                        .issue_classification = 'C',
+                                        .issue_sub_type = IssueSubType{'Z', ' '},
+                                        .authenticity = authenticity,
+                                        .short_sale_threshold = 'N',
+                                        .ipo_flag = ' ',
+                                        .luld_price_tier = '2',
+                                        .etp_flag = 'N',
+                                        .etp_leverage_factor = 0,
+                                        .inverse_indicator = 'N'});
+}
+
 [[nodiscard]] inline Bytes system_event(char code, std::uint64_t timestamp = 1) {
   return testing::encode(SystemEvent{.header = header('S', 0, timestamp), .event_code = code});
 }

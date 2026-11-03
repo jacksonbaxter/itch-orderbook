@@ -360,6 +360,285 @@
       "expect": {
         "signature": "\\[  FAILED  \\] Reader\\.TerminalStatesStayAndCountOnce"
       }
+    },
+    {
+      "id": "parser-category-m-refused-by-decode",
+      "breaks": "decode treats Market Category as the spec's closed list and refuses M",
+      "check": "test_messages (Decode.EnumeratedFieldsAreOpenSets)",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": "    case StockDirectory::kType: return StockDirectory::from_wire(m);\n",
+          "new": "    case StockDirectory::kType:\n      if (read_char(m + 19) == 'M') {\n        return std::unexpected(DecodeError::unknown_type);\n      }\n      return StockDirectory::from_wire(m);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_messages"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Decode\\.EnumeratedFieldsAreOpenSets"
+      }
+    },
+    {
+      "id": "parser-category-m-skipped-by-reader",
+      "breaks": "The reader counts a directory message of category M as an unknown type and walks past it",
+      "check": "test_book (SpecOmissions.AStreamOfThemWalksDecodesAndApplies)",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "    if (expected == 0) {\n      ++counters_.unknown_type;",
+          "new": "    if (expected == 0 || (first == std::byte{'R'} && bytes_[offset_ + kLengthPrefix + 19] == std::byte{'M'})) {\n      ++counters_.unknown_type;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SpecOmissions\\.AStreamOfThemWalksDecodesAndApplies"
+      }
+    },
+    {
+      "id": "parser-book-category-m-refused",
+      "breaks": "The book refuses a directory message of category M",
+      "check": "test_book (BookScenario.MarketCategoryMListsAnOrdinarySymbol)",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      case AddOrder::kType: {\n        const AddOrder add = AddOrder::from_wire(m);\n",
+          "new": "      case StockDirectory::kType:\n        return read_char(m + 19) == 'M' ? ApplyStatus::bad_side : ApplyStatus::no_book_effect;\n      case AddOrder::kType: {\n        const AddOrder add = AddOrder::from_wire(m);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BookScenario/0\\.MarketCategoryMListsAnOrdinarySymbol"
+      }
+    },
+    {
+      "id": "parser-book-test-symbol-dropped",
+      "breaks": "The book reads Authenticity and silently leaves test symbols out",
+      "check": "test_book (BookScenario.ATestSymbolTradesLikeALiveOne)",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      case AddOrder::kType: {\n        const AddOrder add = AddOrder::from_wire(m);\n",
+          "new": "      case StockDirectory::kType:\n        test_[read_be<std::uint16_t>(m + 1)] = read_char(m + 29) == 'T' ? 1 : 0;\n        return ApplyStatus::no_book_effect;\n      case AddOrder::kType: {\n        const AddOrder add = AddOrder::from_wire(m);\n        if (test_[add.header.stock_locate] != 0) {\n          return ApplyStatus::no_book_effect;\n        }\n"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "  std::uint64_t peak_live_levels_ = 0;\n",
+          "new": "  std::uint64_t peak_live_levels_ = 0;\n  std::vector<char> test_ = std::vector<char>(65536);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BookScenario/0\\.ATestSymbolTradesLikeALiveOne"
+      }
+    },
+    {
+      "id": "parser-authenticity-fixed",
+      "breaks": "Authenticity is decoded as P for every symbol, so test symbols cannot be told apart",
+      "check": "test_messages (Decode.RoundLotAndAuthenticityArriveAsSent)",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": ".authenticity = read_char(m + 29),",
+          "new": ".authenticity = 'P',"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_messages"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Decode\\.RoundLotAndAuthenticityArriveAsSent"
+      }
+    },
+    {
+      "id": "parser-round-lot-floored",
+      "breaks": "A round lot below 100 is decoded as 100. The spec fixture's 100001 stays right",
+      "check": "test_messages (Decode.RoundLotAndAuthenticityArriveAsSent)",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": ".round_lot_size = read_be<std::uint32_t>(m + 21),",
+          "new": ".round_lot_size = read_be<std::uint32_t>(m + 21) < 100 ? 100 : read_be<std::uint32_t>(m + 21),"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_messages"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Decode\\.RoundLotAndAuthenticityArriveAsSent"
+      }
+    },
+    {
+      "id": "parser-book-odd-lot-refused",
+      "breaks": "The book hard-codes 100 and refuses an add that is not a multiple",
+      "check": "test_book (BookScenario.ARoundLotDoesNotShapeTheBook)",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    if (find_order(reference) != kNoIndex) {\n      return ApplyStatus::duplicate_reference;\n    }\n    return rest_order(\n",
+          "new": "    if (shares % 100U != 0) {\n      return ApplyStatus::bad_side;\n    }\n    if (find_order(reference) != kNoIndex) {\n      return ApplyStatus::duplicate_reference;\n    }\n    return rest_order(\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BookScenario/0\\.ARoundLotDoesNotShapeTheBook"
+      }
+    },
+    {
+      "id": "parser-zero-price-cross-refused-by-decode",
+      "breaks": "decode refuses a Cross Trade at price zero",
+      "check": "test_messages (Decode.EnumeratedFieldsAreOpenSets)",
+      "mutations": [
+        {
+          "file": "include/itch/messages.hpp",
+          "old": "    case CrossTrade::kType: return CrossTrade::from_wire(m);\n",
+          "new": "    case CrossTrade::kType:\n      if (CrossTrade::from_wire(m).cross_price == 0) {\n        return std::unexpected(DecodeError::bad_length);\n      }\n      return CrossTrade::from_wire(m);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_messages"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_messages"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Decode\\.EnumeratedFieldsAreOpenSets"
+      }
+    },
+    {
+      "id": "parser-book-zero-cross-refused",
+      "breaks": "The book reports a Cross Trade of no shares as a failure",
+      "check": "test_book (BookScenario.ACrossOfNoSharesOrNoPriceChangesNothing)",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      case AddOrder::kType: {\n        const AddOrder add = AddOrder::from_wire(m);\n",
+          "new": "      case CrossTrade::kType:\n        return CrossTrade::from_wire(m).shares == 0 ? ApplyStatus::unknown_order : ApplyStatus::no_book_effect;\n      case AddOrder::kType: {\n        const AddOrder add = AddOrder::from_wire(m);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BookScenario/0\\.ACrossOfNoSharesOrNoPriceChangesNothing"
+      }
+    },
+    {
+      "id": "parser-book-zero-cross-rests",
+      "breaks": "A Cross Trade at price zero opens a level, and still reports no effect",
+      "check": "test_book (BookScenario.ACrossOfNoSharesOrNoPriceChangesNothing)",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      case AddOrder::kType: {\n        const AddOrder add = AddOrder::from_wire(m);\n",
+          "new": "      case CrossTrade::kType:\n        if (CrossTrade::from_wire(m).cross_price == 0) {\n          static_cast<void>(add_order(read_be<std::uint16_t>(m + 1), ~std::uint64_t{0}, 'B', 0, 0));\n        }\n        return ApplyStatus::no_book_effect;\n      case AddOrder::kType: {\n        const AddOrder add = AddOrder::from_wire(m);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BookScenario/0\\.ACrossOfNoSharesOrNoPriceChangesNothing"
+      }
+    },
+    {
+      "id": "parser-book-cancel-after-e-refused",
+      "breaks": "The book follows the current spec text and ignores X after System Event E",
+      "check": "test_book (BookScenario.OrderMessagesAfterSystemEventEStillApply)",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      case AddOrder::kType: {\n        const AddOrder add = AddOrder::from_wire(m);\n",
+          "new": "      case SystemEvent::kType:\n        ended_ = ended_ || read_char(m + 11) == 'E';\n        return ApplyStatus::no_book_effect;\n      case AddOrder::kType: {\n        const AddOrder add = AddOrder::from_wire(m);\n"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "        const OrderCancel x = OrderCancel::from_wire(m);\n",
+          "new": "        const OrderCancel x = OrderCancel::from_wire(m);\n        if (ended_) {\n          return ApplyStatus::no_book_effect;\n        }\n"
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "  std::uint64_t peak_live_levels_ = 0;\n",
+          "new": "  std::uint64_t peak_live_levels_ = 0;\n  bool ended_ = false;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BookScenario/0\\.OrderMessagesAfterSystemEventEStillApply"
+      }
     }
   ]
 }

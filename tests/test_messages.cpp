@@ -346,4 +346,21 @@ TEST(Decode, EnumeratedFieldsAreOpenSets) {
   EXPECT_EQ(cross.cross_price, 0U);
 }
 
+// DS-66: 1 and 10 are on the 2019 days and 40 on 2026 ones. DS-65: 'T' is what marks a
+// test symbol, so it has to arrive as it was sent, next to a value no one has seen.
+TEST(Decode, RoundLotAndAuthenticityArriveAsSent) {
+  auto directory = itch::fixtures::kStockDirectory;
+  directory[21] = 0;
+  directory[22] = 0;
+  directory[23] = 0;
+  for (const std::uint32_t lot : {1U, 10U, 40U, 100U}) {
+    directory[24] = static_cast<std::uint8_t>(lot);
+    EXPECT_EQ(decoded<itch::StockDirectory>(directory).round_lot_size, lot);
+  }
+  for (const char authenticity : {'P', 'T', '?'}) {
+    directory[29] = static_cast<std::uint8_t>(authenticity);
+    EXPECT_EQ(decoded<itch::StockDirectory>(directory).authenticity, authenticity);
+  }
+}
+
 }  // namespace
