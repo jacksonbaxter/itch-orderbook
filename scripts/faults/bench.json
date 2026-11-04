@@ -2789,6 +2789,96 @@
         "signature": "FAIL: test_a_signal_during_a_repetition_reaches_the_bench_and_writes_the_row",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-backtest-no-trade-published",
+      "breaks": "A backtest run in which no simulated order traded is published",
+      "check": "test_bench_backtest_cli.py shadow day schedule",
+      "mutations": [
+        {
+          "file": "bench/bench_backtest.cpp",
+          "old": "  if (s.fills == 0) {\n",
+          "new": "  if (s.fills == ~std::uint64_t{0}) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_backtest"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_backtest_cli.py",
+        "{build}/bench/bench_backtest",
+        "{build}/fault_bench_backtest_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "bench backtest cli: FAIL shadow day schedule: exit 0, not 3"
+      }
+    },
+    {
+      "id": "bench-backtest-extract-keeps-every-symbol",
+      "breaks": "The shadow workload's extract keeps every symbol, so its denominator is the whole day",
+      "check": "test_bench_backtest_cli.py shadow",
+      "mutations": [
+        {
+          "file": "bench/bench_backtest.cpp",
+          "old": "  return type == itch::SystemEvent::kType || locates[locate] != 0;\n",
+          "new": "  return type != '\\0' || locates[locate] != 0;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_backtest"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_backtest_cli.py",
+        "{build}/bench/bench_backtest",
+        "{build}/fault_bench_backtest_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "bench backtest cli: FAIL shadow: extract of 3330 messages"
+      }
+    },
+    {
+      "id": "bench-backtest-shadow-latency-kept",
+      "breaks": "The shadow workload runs with the base latencies, not queuetruth's none",
+      "check": "test_bench_backtest_cli.py shadow",
+      "mutations": [
+        {
+          "file": "bench/bench_backtest.cpp",
+          "old": "    config.latency = Latency{.market_data = 0, .order_entry = 0, .response = 0, .compute = 0};\n",
+          "new": "    config.latency = Latency{};\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_backtest"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_backtest_cli.py",
+        "{build}/bench/bench_backtest",
+        "{build}/fault_bench_backtest_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "bench backtest cli: FAIL shadow: latencies not zero"
+      }
     }
   ]
 }
