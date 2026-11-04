@@ -85,6 +85,7 @@ The backtester. Each row is one workload's results file: T-BT-1 replays the whol
 | Workload | Target | Day | Host | Pinning | Median messages/s | CV | Engine events/s | Verdict | Commit | File |
 |---|---|---|---|---|---|---|---|---|---|---|
 | quoting | T-BT-1 | 12302019 | macOS (M4 Max) | not pinned | 16,792,852 | 2.06% | 17,185,873 | host differs | `4fa6701df1cf` | [results/backtest_quoting_mac_12302019.md](results/backtest_quoting_mac_12302019.md) |
+| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | 7,804,654 | 0.24% | 16,661,541 | met | `55978750888d` | [results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md) |
 
 Every benchmark run, failed ones included, from [results/run_log.md](results/run_log.md).
 
@@ -106,6 +107,7 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0013-20261104T054149Z` | `P-0013` | `2810183f1d95` | Linux | `published` |
 | `P-0014-20261104T071049Z` | `P-0014` | `0ffe738913e4` | Linux | `refused at machine_check` |
 | `P-0101-20261104T113327Z` | `P-0101` | `4fa6701df1cf` | Darwin | `published` |
+| `P-0102-20261104T113546Z` | `P-0102` | `55978750888d` | Darwin | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
