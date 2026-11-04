@@ -242,7 +242,11 @@ class OwnedInput {
         bytes_{bytes},
         description_{std::move(description)} {}
 
-  // The whole file read into a prefaulted arena of base pages, with nothing left mapped.
+  // The whole file read into an arena of base pages, with nothing left mapped. The copy and
+  // the file's page cache are never both whole: each piece's pages are faulted in by the read
+  // that fills them, and on Linux that piece's page cache is dropped as soon as it is copied,
+  // so the two together hold about one day and one piece. A day read beside its whole cache
+  // swapped other processes out on debian, whose memory the host's services share.
   [[nodiscard]] static std::optional<OwnedInput> read_into_memory(const std::string& path) {
     const int fd = ::open(path.c_str(), O_RDONLY);  // NOLINT(cppcoreguidelines-pro-type-vararg)
     if (fd < 0) {
@@ -254,22 +258,35 @@ class OwnedInput {
       return std::nullopt;
     }
     const auto size = static_cast<std::size_t>(info.st_size);
-    std::optional<Arena> copy = Arena::make(size, PageHint::base);
-    // macOS refuses a read of more than INT_MAX bytes, so a whole day goes in pieces.
-    constexpr std::size_t kMostPerRead = std::size_t{1} << 30U;
+    std::optional<Arena> copy = Arena::make(size, PageHint::base, Prefault::by_caller);
+    // Small enough that one piece is the most held twice, and under the INT_MAX bytes that
+    // macOS refuses in a single read.
+    constexpr std::size_t kPiece = std::size_t{64} << 20U;
     std::size_t done = 0;
     while (copy && done < size) {
-      const ssize_t got = ::read(fd, copy->data() + done, std::min(size - done, kMostPerRead));
+      const ssize_t got = ::read(fd, copy->data() + done, std::min(size - done, kPiece));
       if (got <= 0) {
         break;
       }
+#ifdef __linux__
+      static_cast<void>(::posix_fadvise(fd, static_cast<off_t>(done), static_cast<off_t>(got),
+                                        POSIX_FADV_DONTNEED));
+#endif
       done += static_cast<std::size_t>(got);
     }
-    std::string description = "ram: read into anonymous memory before the warm-up, prefaulted, ";
+    std::string description = std::format(
+        "ram: read into anonymous memory before the warm-up, in pieces of {} MiB, each page "
+        "faulted in by the read that fills it, ",
+        kPiece >> 20U);
 #ifdef __linux__
-    // The copy is what the passes read, so the file's own pages need not stay cached.
+    // Read-ahead may have cached a little past the last piece dropped.
     static_cast<void>(::posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED));
-    description += "the file's page cache dropped after the copy, ";
+    description +=
+        "each piece's page cache dropped once it is copied (posix_fadvise POSIX_FADV_DONTNEED), ";
+#else
+    description +=
+        "the file's page cache left to the kernel, since this host has no "
+        "posix_fadvise, ";
 #endif
     ::close(fd);
     if (!copy || done != size) {

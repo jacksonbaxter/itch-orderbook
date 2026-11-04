@@ -2658,6 +2658,32 @@
       "expect": {
         "signature": "FAIL: test_each_pairing_names_the_method_it_matches"
       }
+    },
+    {
+      "id": "bench-arena-writer-arena-prefaulted",
+      "breaks": "An arena left to its writer is touched whole when it is made, so the in-memory copy is charged whole beside the file's page cache",
+      "check": "test_bench_platform BenchMemory.AnArenaLeftToItsWriterIsNotTouchedUntilWritten",
+      "mutations": [
+        {
+          "file": "bench/platform/memory.hpp",
+          "old": "  if (prefault == Prefault::now) {\n    for (std::size_t offset",
+          "new": "  if (prefault == Prefault::now || prefault == Prefault::by_caller) {\n    for (std::size_t offset"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchMemory\\.AnArenaLeftToItsWriterIsNotTouchedUntilWritten",
+        "exit": 1
+      }
     }
   ]
 }

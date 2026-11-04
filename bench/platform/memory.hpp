@@ -2,8 +2,9 @@
 // input is in memory, and the memory charged to the process.
 //
 // Arena::make() asks for hugepages where the platform has a hint, unless told not to,
-// touches every page so that no fault lands inside a timed span, and reports the page size
-// it actually got. resident() asks the kernel, so a test can see it say no.
+// touches every page so that no fault lands inside a timed span, unless the caller will
+// write every page itself, and reports the page size it actually got. resident() asks the
+// kernel, so a test can see it say no.
 #pragma once
 
 #include <sys/mman.h>
@@ -208,10 +209,16 @@ struct ArenaReport {
 // for T-BOOK-1 ran with transparent hugepages off.
 enum class PageHint : std::uint8_t { huge, base };
 
+// Whether make() touches every page, or leaves that to the caller's first write. The input
+// read into memory is faulted in by the reads that fill it, a piece at a time, so that the
+// whole copy is never charged before the file's pages have been let go.
+enum class Prefault : std::uint8_t { now, by_caller };
+
 class Arena {
  public:
   [[nodiscard]] static std::optional<Arena> make(std::size_t bytes,
-                                                 PageHint hint_wanted = PageHint::huge);
+                                                 PageHint hint_wanted = PageHint::huge,
+                                                 Prefault prefault = Prefault::now);
 
   Arena(const Arena&) = delete;
   Arena& operator=(const Arena&) = delete;
@@ -243,7 +250,8 @@ class Arena {
   ArenaReport report_;
 };
 
-inline std::optional<Arena> Arena::make(std::size_t bytes, PageHint hint_wanted) {
+inline std::optional<Arena> Arena::make(std::size_t bytes, PageHint hint_wanted,
+                                        Prefault prefault) {
   const std::size_t page = base_page_size();
   const std::size_t wanted = bytes == 0 ? page : (bytes + page - 1) / page * page;
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
@@ -274,8 +282,10 @@ inline std::optional<Arena> Arena::make(std::size_t bytes, PageHint hint_wanted)
   auto* data = static_cast<std::byte*>(base);
   std::string hint = "none on this platform, base pages used";
 #endif
-  for (std::size_t offset = 0; offset < wanted; offset += page) {
-    data[offset] = std::byte{0};
+  if (prefault == Prefault::now) {
+    for (std::size_t offset = 0; offset < wanted; offset += page) {
+      data[offset] = std::byte{0};
+    }
   }
   std::size_t obtained = page;  // NOLINT(misc-const-correctness): the Linux branch moves it.
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
@@ -289,7 +299,7 @@ inline std::optional<Arena> Arena::make(std::size_t bytes, PageHint hint_wanted)
                ArenaReport{.bytes = wanted,
                            .page_size_obtained = obtained,
                            .hint = std::move(hint),
-                           .prefaulted = true}};
+                           .prefaulted = prefault == Prefault::now}};
 }
 
 // Peak resident set of this process in bytes. Linux reports kB and macOS bytes.

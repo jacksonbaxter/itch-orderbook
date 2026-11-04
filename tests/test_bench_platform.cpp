@@ -380,6 +380,22 @@ TEST(BenchMemory, TheArenaIsPrefaultedAndReportsItsPage) {
   EXPECT_TRUE(resident({arena->data(), arena->size()}).complete());
 }
 
+// The input read into memory relies on this: an arena left to its writer charges nothing
+// until it is written, so a copy made a piece at a time grows a piece at a time.
+TEST(BenchMemory, AnArenaLeftToItsWriterIsNotTouchedUntilWritten) {
+  const std::size_t page = base_page_size();
+  const std::optional<Arena> arena = Arena::make(page * 64, PageHint::base, Prefault::by_caller);
+  ASSERT_TRUE(arena.has_value());
+  EXPECT_FALSE(arena->report().prefaulted);
+  const Residency untouched = resident({arena->data(), arena->size()});
+  ASSERT_TRUE(untouched.error.empty());
+  EXPECT_EQ(untouched.resident_pages, 0U);
+  std::fill_n(arena->data(), page * 8, std::byte{1});
+  const Residency written = resident({arena->data(), arena->size()});
+  EXPECT_EQ(written.resident_pages, 8U);
+  EXPECT_FALSE(written.complete());
+}
+
 TEST(BenchMemory, SmapsAnswerIsForTheRightMapping) {
   const std::string smaps =
       "1000-2000 rw-p 00000000 00:00 0\nAnonHugePages:      8 kB\n"
