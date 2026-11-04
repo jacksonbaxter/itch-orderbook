@@ -222,6 +222,26 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn("Book memory, MiB is 'n/a', not a figure", output)
 
+    def test_a_backtest_file_gets_a_row_of_its_own(self):
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        import test_backtest_results  # noqa: E402, PLC0415
+
+        name = "backtest_shadow_fixture_12302019.md"
+        (self.root / "results" / name).write_text(test_backtest_results.SHADOW, encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        rows = [line for line in output.splitlines() if f"(results/{name})" in line]
+        self.assertEqual(len(rows), 1, output)
+        self.assertIn("| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | 5,425,845 |",
+                      rows[0])
+        self.assertIn("| met | `abc` |", rows[0])
+        path = self.root / "results" / name
+        path.write_text(test_backtest_results.SHADOW.replace("| Engine events/s |", "| x |"),
+                        encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL results/{name}", output)
+
     def test_no_stray_markup_in_generated_cells(self):
         _, output = self.run_table()
         for line in output.splitlines():

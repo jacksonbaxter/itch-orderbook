@@ -11,7 +11,15 @@ from a real measure.sh run, machine_check's output present and passing, and noth
 private. scripts/bench_driver.py and scripts/stamp_load.py run the same checks, so that
 a file failing them is never written as finished.
 
-A book file, any file not labelled as the Phase 2 stub-book harness proof, is held to more:
+A backtest file, one with a `workload` field (scripts/backtest_driver.py), has no latency
+or counter tables. It is held instead to its workload's fields, the summary's three rates
+with each median inside its min and max and matching the median of the repetitions table,
+a statement of what one event is and of the rate's denominator, the counts with the queue
+anomalies, the macOS note on a Mac, and its target's verdict in the fixed words, consistent
+with the median and the bar: T-BT-1's bar was set on x86, so a macOS file may not call it
+met or missed, while T-BT-3's was set on a Mac.
+
+A book file, any other file not labelled as the Phase 2 stub-book harness proof, is held to more:
 the design, input and top-of-book fields, a statement of how the run read the day beside
 itch-book's two methods, the latency table with its pair-subtracted
 column, the per-operation table, the book's memory, the summary's service and batch
@@ -49,6 +57,11 @@ TARGETS = ("T-BOOK-1", "T-BOOK-2", "T-BOOK-3", "T-BOOK-4", "T-LAT-1", "T-LAT-2",
            "T-LAT-4", "T-LAT-5", "T-DESIGN-1")
 # Bars set on x86 hardware, which a macOS figure neither passes nor fails.
 X86_TARGETS = ("T-BOOK-1", "T-BOOK-2", "T-LAT-1", "T-LAT-2", "T-LAT-4", "T-LAT-5")
+# Each backtest workload's target, its bar in millions of messages a second, and whether
+# the bar was set on x86.
+BACKTEST_TARGETS = {"quoting": ("T-BT-1", 2.0, True), "shadow": ("T-BT-3", 4.61, False)}
+BACKTEST_FIELDS = ("workload", "symbols", "input", "latency")
+BACKTEST_SUMMARY = ("Replay rate, messages/s", "Engine events/s", "Mean time per message, ns")
 VERDICTS = ("met", "missed: ", "host differs: ", "below floor: ", "not measured in this run: ")
 BELOW_FLOOR = "below floor"
 HOST_LABELS = ("debian", "macOS (M4 Max)", "unknown")
@@ -376,6 +389,80 @@ def check_targets(text, fields):
             yield "target-host-blurred", f"{cells[0]} is {verdict.split(':')[0]} on macOS"
 
 
+def is_backtest_file(fields):
+    return "workload" in fields
+
+
+def check_backtest_summary(text, fields):
+    rows = {cells[0]: cells for cells in table_rows(text, "Summary")}
+    for label in BACKTEST_SUMMARY:
+        cells = rows.get(label)
+        figures = [number(cell) for cell in cells[1:4]] if cells and len(cells) == 5 else None
+        if figures is None or None in figures:
+            yield "summary-figure-missing", label
+        elif not figures[1] <= figures[0] <= figures[2]:
+            yield "summary-inconsistent", f"{label}: median {cells[1]} outside {cells[2]} to {cells[3]}"
+    repetitions = [cells for cells in table_rows(text, "Repetitions")
+                   if cells and re.fullmatch(r"[0-9]+", cells[0])]
+    if len(repetitions) != number(fields.get("repetitions", "0") or "0"):
+        yield "summary-inconsistent", (f"{len(repetitions)} repetition rows, the header says "
+                                       f"{fields.get('repetitions')}")
+    rates = [number(cells[1]) for cells in repetitions if len(cells) > 1]
+    rate = rows.get("Replay rate, messages/s")
+    if rates and None not in rates and rate and number(rate[1]) is not None:
+        median = sorted(rates)[len(rates) // 2] if len(rates) % 2 else \
+            (sorted(rates)[len(rates) // 2 - 1] + sorted(rates)[len(rates) // 2]) / 2
+        if abs(median - number(rate[1])) > 1.0:
+            yield "summary-inconsistent", (f"the summary's median rate {rate[1]} is not the "
+                                           f"repetitions' median, {median:,.0f}")
+
+
+def check_backtest_target(text, fields):
+    workload = fields.get("workload", "")
+    if workload not in BACKTEST_TARGETS:
+        yield "workload-unknown", workload
+        return
+    target, bar, x86 = BACKTEST_TARGETS[workload]
+    rows = [cells for cells in table_rows(text, "Targets") if cells[0] == target]
+    if not rows:
+        yield "target-missing", target
+        return
+    cells = rows[0]
+    if len(cells) != 4:
+        yield "target-verdict-invalid", f"{target} has {len(cells)} cells, not 4"
+        return
+    verdict = cells[3]
+    measured = number(cells[2])
+    rate = {row[0]: row for row in table_rows(text, "Summary")}.get("Replay rate, messages/s")
+    if not (verdict == "met" or verdict.startswith(VERDICTS[1:])):
+        yield "target-verdict-invalid", f"{target}: {verdict!r}"
+    elif fields.get("host") == MAC_HOST and x86 and verdict.startswith(("met", "missed: ")):
+        yield "target-host-blurred", f"{target} is {verdict.split(':')[0]} on macOS"
+    elif measured is None or rate is None or number(rate[1]) is None or \
+            abs(measured - number(rate[1]) / 1e6) > 0.006:
+        yield "target-verdict-wrong", f"{target} measured {cells[2]!r} is not the summary's median"
+    elif (verdict == "met") != (number(rate[1]) / 1e6 >= bar) and not verdict.startswith(
+            VERDICTS[2:]):
+        yield "target-verdict-wrong", (f"{target} is {verdict.split(':')[0]} at {rate[1]} "
+                                       f"messages/s against {bar} M")
+
+
+def check_backtest(text, fields):
+    for name in BACKTEST_FIELDS:
+        if name not in fields:
+            yield "header-field-missing", name
+    yield from check_backtest_summary(text, fields)
+    event = section(text, "What an event is") or ""
+    if "One event here is" not in event or "denominator" not in event:
+        yield "event-definition-missing", "no statement of what one event is and its denominator"
+    counts = {cells[0] for cells in table_rows(text, "Counts")}
+    if "Queue anomalies" not in counts:
+        yield "counts-missing", "no queue anomaly count"
+    if fields.get("host") == MAC_HOST and "is not a pinned host." not in text:
+        yield "host-note-missing", "a macOS file without the note that macOS cannot pin"
+    yield from check_backtest_target(text, fields)
+
+
 def check_book(text, fields):
     for found in (check_book_fields(fields), check_book_latency(text, fields),
                   check_operations(text, fields), check_book_summary(text), check_memory(text),
@@ -391,10 +478,14 @@ def check_text(text):
         return [("header-missing", "no Header section")]
     violations = []
     for found in (check_fields(fields), check_host(fields), check_pin(fields),
-                  check_residency(fields), check_warmup(fields), check_percentiles(text, fields),
-                  check_counters(text), check_statistics(text), check_load(fields),
-                  check_machine(text), check_private(text, fields)):
+                  check_residency(fields), check_warmup(fields), check_statistics(text),
+                  check_load(fields), check_machine(text), check_private(text, fields)):
         violations.extend(found)
+    if is_backtest_file(fields):
+        violations.extend(check_backtest(text, fields))
+        return violations
+    violations.extend(check_percentiles(text, fields))
+    violations.extend(check_counters(text))
     if is_book_file(text):
         violations.extend(check_book(text, fields))
     return violations
