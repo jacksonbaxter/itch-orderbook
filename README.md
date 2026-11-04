@@ -18,7 +18,7 @@ Built:
 
 Not built: SIMD, the market maker and the demo. The oracle and trade rows below are the real book's. The harness-proof rows are the Phase 2 stub's, and say so. The book-design rows are from macOS, which cannot pin a thread, so none of them is a pinned figure and none stands for a Linux one, and from `debian`, pinned to core 4, where only the mapped runs with the top tracked are published, the second with hardware counters: every run with the day in memory there was refused, the last after the kernel swapped out one page, or never got the host. The default arm is the paged index with flat levels, the fastest on both hosts.
 
-The GitHub Actions workflow in `.github/workflows/ci.yml` has never executed on GitHub, because this repo has no remote. [NOTES.md](NOTES.md) says which jobs were run by hand and how.
+The GitHub Actions workflow in `.github/workflows/ci.yml` builds the release preset and runs every unit test on x86-64 Linux with GCC and Clang, arm64 Linux with GCC and arm64 macOS with Clang, and builds the parser with Emscripten. The sanitizers, clang-tidy and the fault matrix run in `scripts/check.sh`, not in CI. [NOTES.md](NOTES.md) says what the first runs on GitHub found.
 
 ## Results
 

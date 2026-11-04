@@ -4,7 +4,7 @@
     lint_workflows.py [--root DIR] [--tools-dir DIR]
 
 This reads the workflows and runs none of them. It checks their syntax, keys, expressions
-and runner labels, which is as far as a repo with no remote can go. shellcheck and pyflakes
+and runner labels, which is as far as a local read can go. shellcheck and pyflakes
 stay off, whether or not a host has them, so that every host gives one result.
 
 Each finding prints as actionlint gives it, followed by `lint_workflows: FAIL`.

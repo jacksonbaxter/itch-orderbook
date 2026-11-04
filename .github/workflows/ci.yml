@@ -1,17 +1,18 @@
-# This workflow has never executed on GitHub. The repo has no remote, so no job here has
-# run on a runner. scripts/check.sh runs actionlint over this file, and that is a read of
-# it, not a run. NOTES.md says how far each job was run by hand, on which host, and what
-# that does not show.
+# This workflow runs on GitHub for every push and pull request. Its first run, at 2810183,
+# failed three jobs, and none of them had got as far as the tests: both GCC jobs at Build,
+# on a -Wconversion error that only Linux's 64-bit uint_fast32_t shows, and the x86-64
+# Clang job at the LLVM fetch, whose 1 GiB zstd window tar's zstd refused. The run at
+# da1a707 was the first with every job green. NOTES.md, "CI's first runs on GitHub".
 #
-# Run by hand, at commit b12d05e, with the same presets on the same compilers:
-#   x86-64 Linux, GCC     g++ 14.2 on debian, release build and ctest in a separate build dir.
-#   x86-64 Linux, Clang   Clang 23.1.4 on debian, the same, with libstdc++ 14 as here, and
-#                         once more with its libc++.
-#   arm64 macOS, Clang    Clang 23.1.4 on an M4 Max Mac, through scripts/check.sh.
-#   Emscripten            Emscripten 6.0.13 on that Mac, through scripts/check.sh.
-#   arm64 Linux, GCC      Not run. No arm64 Linux host was used. The nearest was g++ 14.2 on
-#                         debian with -funsigned-char, which is x86-64 and shows only that
-#                         unsigned char builds and passes.
+# Each job builds the release preset and runs all of ctest on its own compiler:
+#   x86-64 Linux, GCC     g++ 14 from Ubuntu 24.04.
+#   x86-64 Linux, Clang   Clang 23.1.4, the release the repo is tested on, on libstdc++.
+#   arm64 Linux, GCC      g++ 14, where char is unsigned.
+#   arm64 macOS, Clang    Clang 23.1.4 on the macOS SDK.
+#   Emscripten            Emscripten 6.0.13, the parser library and its smoke test.
+#
+# scripts/check.sh runs actionlint over this file locally. The sanitizers, clang-tidy, the
+# fuzz smoke runs and the fault matrix run there, not here.
 #
 # CI calls presets only, and produces no benchmark numbers. It needs nothing from data/.
 

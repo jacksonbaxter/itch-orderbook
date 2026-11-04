@@ -213,6 +213,7 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [ ] T-WASM-1, labelled macOS.
 
 ### Write-up and iteration
+- [x] CI green on GitHub. The first run, at 2810183, failed both GCC jobs on a `-Wconversion` error only Linux shows, and the x86-64 Clang job on the LLVM archive's 1 GiB zstd window. Fixed, and every job passed at da1a707. NOTES.md, "CI's first runs on GitHub".
 - [ ] NOTES.md kept current, including what didn't help.
 - [ ] Phase 3 report, with the crossed-book findings and trade-print class counts.
 
