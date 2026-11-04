@@ -15,7 +15,8 @@ so that signalling it stops everything:
 
 The order is: hash the input, which also faults it in; confirm the prediction is on
 record; run machine_check.sh, refusing on a failure; run the repetitions; refuse if any
-one of them refused; write the results files with their load lines pending. Figures are
+one of them refused, or if the kernel swapped any page out since the run began; write
+the results files with their load lines pending. Figures are
 the median of the repetitions with min, max and CV beside it, never the best of them. A
 percentile is shown only when every repetition resolved it, and as below floor otherwise.
 
@@ -27,10 +28,13 @@ more than one design, --out must hold `{design}`, which becomes each design's na
 fast design's file compares its throughput with every map design in the same run,
 repetition by repetition (T-DESIGN-1), and every file holds each target beside the bar.
 
-Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
---raw-dir, which is not committed.
+Every run gets a row in results/run_log.md, whatever became of it, a run stopped by
+SIGTERM, SIGINT or SIGHUP included: the driver passes the signal to the process running,
+waits for it, writes the row with where the run was, and exits 128 plus the signal.
+Raw output stays in --raw-dir, which is not committed.
 
-Exit codes: 0 results written, 1 refused or failed, 2 bad usage.
+Exit codes: 0 results written, 1 refused or failed, 2 bad usage, 128 + N stopped by
+signal N.
 """
 
 from __future__ import annotations
@@ -80,14 +84,82 @@ class Refused(Exception):
         self.stage = stage
 
 
+class Stopped(BaseException):
+    """A signal stopped the run. Not an Exception, so that nothing on the way catches it."""
+
+    def __init__(self, signum):
+        super().__init__(signum)
+        self.signum = signum
+
+
 current_child = None
+stage = "start"  # Where the run is, for the row of a run a signal stops.
+stopping = False  # Set once a signal has stopped the run, or once its row is being written.
+swap_watch = None  # The run's SwapWatch, so that every process is checked against it.
+CHILD_GRACE_S = 5  # measure.sh sends SIGKILL 10 s after its SIGTERM.
 
 
 def forward_signal(signum, _frame):
     """measure.sh signals only its direct child, so this stops the repetition too."""
+    global stopping
     if current_child is not None and current_child.poll() is None:
         current_child.send_signal(signum)
-    sys.exit(128 + signum)
+    if not stopping:
+        stopping = True
+        raise Stopped(signum)
+
+
+def stop_child():
+    """Waits for the process the signal was passed to, and kills it if it will not stop."""
+    if current_child is None or current_child.poll() is not None:
+        return
+    try:
+        current_child.wait(timeout=CHILD_GRACE_S)
+    except subprocess.TimeoutExpired:
+        current_child.kill()
+        current_child.wait()
+
+
+class SwapWatch:
+    """The kernel's count of pages swapped out, from /proc/vmstat, at the start of the run.
+
+    A run must not push the host's other processes into swap, so any page swapped out
+    after the start, by whatever process, refuses the run at the next check. A host with
+    no /proc/vmstat, macOS among them, is not checked, and the results file says so."""
+
+    def __init__(self, path):
+        self.path = path
+        self.start = self.read()
+        self.end = self.start
+
+    def read(self):
+        try:
+            text = self.path.read_text(encoding="utf-8")
+        except OSError:
+            return None
+        for line in text.splitlines():
+            name, _, value = line.partition(" ")
+            if name == "pswpout":
+                return int(value)
+        return None
+
+    def check(self, where):
+        if self.start is None:
+            return
+        self.end = self.read()
+        if self.end is None or self.end != self.start:
+            moved = "could not be read" if self.end is None else (
+                f"moved by {self.end - self.start:,} pages")
+            raise Refused(where, f"the kernel's pswpout {moved} since the run began, by the "
+                                 "end of this process: the run does not fit beside the host's "
+                                 "other work")
+
+    def line(self):
+        if self.start is None:
+            return "Swap-outs are not read on this host: it has no /proc/vmstat."
+        return (f"The kernel's pswpout was {self.start:,} at the start of the run and "
+                f"{self.end:,} after its last process: no page of any process was swapped out "
+                "while it ran, and the driver refuses a run where one is.")
 
 
 def utc_now():
@@ -109,6 +181,11 @@ def git_commit(root, allow_dirty):
     if stamp.is_file():
         return f"{stamp.read_text(encoding='utf-8').strip()[:12]} (exported by debian_sync.sh)"
     return "unavailable: neither git nor a COMMIT file"
+
+
+def set_stage(text):
+    global stage
+    stage = text
 
 
 def hash_and_fault_in(path):
@@ -157,10 +234,13 @@ def run_process(args, index, commit, digest, design, passes):
         command += ["--levels", str(args.levels)]
     command += args.bench_arg
     where = f"repetition {index}" + (f", {design}" if design else "")
+    set_stage(f"{where}, {passes} process")
     with open(log_path, "w", encoding="utf-8") as log:
         current_child = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
         code = current_child.wait()
         current_child = None
+    if swap_watch is not None:
+        swap_watch.check(where)
     if not record_path.is_file():
         raise Refused(where, f"exited {code} with no record")
     record = json.loads(record_path.read_text(encoding="utf-8"))
@@ -679,6 +759,14 @@ def book_sections(records, runs):
     return lines
 
 
+def counter_names(host):
+    """What each event counts on debian, said the same way in every file from that host."""
+    if host != "debian":
+        return ""
+    return (" On this host, a Zen 1 core: `cache-misses` counts L2 misses on Zen 1, "
+            "`r0843:u` is a floor on DRAM demand fills, and `branch-misses` is branch misses.")
+
+
 def host_note(records):
     header = records[0]["header"]
     if header["host"] != check_results.MAC_HOST:
@@ -739,7 +827,8 @@ def render(records, args, run_id, started, finished, machine_output, command, ru
         lines += book_sections(records, runs or {design: records})
     lines += ["", "## Counters", "",
               "From a separate pass that is not timed, median over the repetitions. `rdpmc` "
-              "in the header is the agreement with `read()` on the descriptors.", "",
+              "in the header is the agreement with `read()` on the descriptors."
+              + counter_names(host), "",
               "| Event | State | Running ratio | Median count | Reason |",
               "|---|---|---|---|---|"]
     lines += counter_rows(records)
@@ -760,6 +849,8 @@ def render(records, args, run_id, started, finished, machine_output, command, ru
               "| Repetition | Messages/s | Instrumentation ratio | Quantum ns | Empty pair ns "
               "| Migrations | Peak RSS GiB |", "|---|---|---|---|---|---|---|"]
     lines += repetition_rows(records)
+    if swap_watch is not None:
+        lines += ["", swap_watch.line()]
     lines += ["", "## machine_check output", "", "```", machine_output, "```", "",
               "## Commands", "", "```", command, "```", ""]
     return "\n".join(lines)
@@ -799,12 +890,17 @@ def append_log(path, run_id, prediction, commit, outcome):
 
 
 def run(args, run_id, started, commit):
+    global swap_watch
+    swap_watch = SwapWatch(args.vmstat)
+    set_stage("hashing the input")
     digest = hash_and_fault_in(args.input)
+    set_stage("checking the prediction")
     code = subprocess.run([sys.executable, "-B", str(REPO_ROOT / "scripts" / "check_predictions.py"),
                            "--root", str(args.predictions_root), "--require", args.prediction],
                           capture_output=True, text=True, check=False)
     if code.returncode != 0:
         raise Refused("prediction", code.stdout.strip())
+    set_stage("machine_check")
     machine_output = machine_check(args)
     designs = args.design or [None]
     runs = {}
@@ -814,6 +910,7 @@ def run(args, run_id, started, commit):
             validate_run(record)
             runs.setdefault(design_of(record), []).append(record)
     validate_together(runs)
+    set_stage("rendering the results files")
     finished = utc_now()
     texts = {}
     for design, records in runs.items():
@@ -825,6 +922,8 @@ def run(args, run_id, started, commit):
         if violations:
             raise Refused("results", f"{out.name}: " + "; ".join(
                 f"{code}: {detail}" for code, detail in violations))
+    # A signal from here on is passed on but stops nothing, so no file is left half written.
+    hold_signals()
     for out, text in texts.items():
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text, encoding="utf-8")
@@ -857,6 +956,8 @@ def parse_args(argv):
     parser.add_argument("--predictions-root", type=Path, default=REPO_ROOT, help=argparse.SUPPRESS)
     parser.add_argument("--run-log", type=Path, default=REPO_ROOT / "results" / "run_log.md",
                         help=argparse.SUPPRESS)
+    parser.add_argument("--vmstat", type=Path, default=Path("/proc/vmstat"),
+                        help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.repetitions < 3:
         parser.error("median, min, max and CV need at least 3 repetitions")
@@ -867,10 +968,16 @@ def parse_args(argv):
     return args
 
 
+def hold_signals():
+    """From here a signal is passed on but no longer stops the driver: its row is next."""
+    global stopping
+    stopping = True
+
+
 def main(argv=None):
     args = parse_args(argv)
-    signal.signal(signal.SIGTERM, forward_signal)
-    signal.signal(signal.SIGINT, forward_signal)
+    for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(signum, forward_signal)
     args.raw_dir.mkdir(parents=True, exist_ok=True)
     started = utc_now()
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
@@ -879,15 +986,26 @@ def main(argv=None):
     try:
         commit = git_commit(REPO_ROOT, args.allow_dirty)
         written = run(args, run_id, started, commit)
+    except Stopped as stop:
+        stop_child()
+        name = signal.Signals(stop.signum).name
+        print(f"bench_driver: stopped by {name} at {stage}", file=sys.stderr)
+        append_log(args.run_log, run_id, args.prediction, commit,
+                   f"stopped by {name} at {stage}; nothing from it is published; the row was "
+                   "written by the driver as it stopped")
+        return 128 + stop.signum
     except Refused as refusal:
+        hold_signals()
         print(f"bench_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
         append_log(args.run_log, run_id, args.prediction, commit,
                    f"refused at {refusal.stage}: {refusal}")
         return 1
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
+        hold_signals()
         print(f"bench_driver: failed: {error!r}", file=sys.stderr)
         append_log(args.run_log, run_id, args.prediction, commit, f"failed: {error!r}")
         return 1
+    hold_signals()
     append_log(args.run_log, run_id, args.prediction, commit, "published")
     for out in written:
         print(f"bench_driver: wrote {out}, load lines pending. Now run scripts/stamp_load.py.",

@@ -2684,6 +2684,111 @@
         "signature": "\\[  FAILED  \\] BenchMemory\\.AnArenaLeftToItsWriterIsNotTouchedUntilWritten",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-driver-swap-ignored",
+      "breaks": "The driver publishes a run during which the kernel swapped pages out",
+      "check": "test_bench_results.py test_a_page_swapped_out_during_a_process_refuses_the_run",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "        if self.end is None or self.end != self.start:\n",
+          "new": "        if self.end is None:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_page_swapped_out_during_a_process_refuses_the_run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-swap-unread-per-process",
+      "breaks": "The driver no longer reads the swap count after each process",
+      "check": "test_bench_results.py test_a_page_swapped_out_during_a_process_refuses_the_run",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if swap_watch is not None:\n        swap_watch.check(where)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_page_swapped_out_during_a_process_refuses_the_run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-signal-exits-with-no-row",
+      "breaks": "A run stopped by a signal leaves no row in the run log, as before",
+      "check": "test_bench_results.py test_a_signal_during_machine_check_writes_the_row",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "        stopping = True\n        raise Stopped(signum)\n",
+          "new": "        stopping = True\n        sys.exit(128 + signum)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_signal_during_machine_check_writes_the_row",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-signal-row-dropped",
+      "breaks": "The driver catches the signal but writes no row",
+      "check": "test_bench_results.py test_a_signal_during_machine_check_writes_the_row",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "        append_log(args.run_log, run_id, args.prediction, commit,\n                   f\"stopped by {name} at {stage}; ",
+          "new": "        print(args.run_log, run_id, args.prediction, commit,\n                   f\"stopped by {name} at {stage}; "
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_signal_during_machine_check_writes_the_row",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-signal-not-forwarded",
+      "breaks": "The driver stops but leaves the bench it started running",
+      "check": "test_bench_results.py test_a_signal_during_a_repetition_reaches_the_bench_and_writes_the_row",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if current_child is not None and current_child.poll() is None:\n        current_child.send_signal(signum)\n    if not stopping:",
+          "new": "    if not stopping:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_signal_during_a_repetition_reaches_the_bench_and_writes_the_row",
+        "exit": 1
+      }
     }
   ]
 }

@@ -10,9 +10,11 @@ import io
 import json
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -611,6 +613,115 @@ class BookDriver(unittest.TestCase):
                 args = self.fake_bench(Path(directory), broken)
                 with self.assertRaisesRegex(bench_driver.Refused, "first book"):
                     bench_driver.run_repetition(args, 1, "abc", "00", "hash-linked")
+
+
+
+class Swap(unittest.TestCase):
+    """The driver refuses a run during which the kernel swapped any page out."""
+
+    def run_one(self, root, swaps):
+        vmstat = root / "vmstat"
+        vmstat.write_text("pgpgin 5\npswpin 3\npswpout 40\n", encoding="utf-8")
+        fake = root / "bench.sh"
+        bump = f"printf 'pswpin 3\\npswpout 41\\n' > '{vmstat}'\n" if swaps else ""
+        fake.write_text(
+            "#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = --out ] && out=$2; shift; done\n"
+            f"{bump}cat > \"$out\" <<'JSON'\n{json.dumps(record())}\nJSON\n", encoding="utf-8")
+        fake.chmod(0o755)
+        args = bench_driver.parse_args(
+            ["--bench", str(fake), "--probe", "x", "--input", "x", "--prediction", "P-0001",
+             "--raw-dir", str(root), "--out", "x", "--vmstat", str(vmstat)])
+        bench_driver.swap_watch = bench_driver.SwapWatch(args.vmstat)
+        self.addCleanup(setattr, bench_driver, "swap_watch", None)
+        return bench_driver.run_process(args, 1, "abc", "00", None, "timed")
+
+    def test_a_page_swapped_out_during_a_process_refuses_the_run(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            with self.assertRaisesRegex(bench_driver.Refused, "pswpout moved by 1 pages"):
+                self.run_one(Path(directory), swaps=True)
+
+    def test_a_still_count_passes_and_is_stated(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            self.run_one(Path(directory), swaps=False)
+            self.assertIn("was 40 at the start of the run and 40 after its last process",
+                          bench_driver.swap_watch.line())
+
+    def test_a_host_with_no_vmstat_says_it_is_not_checked(self):
+        watch = bench_driver.SwapWatch(SCRATCH / "no-such-vmstat")
+        watch.check("repetition 1")
+        self.assertIn("not read on this host", watch.line())
+
+
+class Signals(unittest.TestCase):
+    """A run stopped by a signal writes its own row in the run log."""
+
+    def start(self, root, probe, bench):
+        (root / "results").mkdir()
+        (root / "results" / "predictions.md").write_text("## P-0001: x\n\nIt runs.\n",
+                                                         encoding="utf-8")
+        data = root / "input.bin"
+        data.write_bytes(b"x" * 100)
+        return subprocess.Popen(
+            [sys.executable, "-B", str(REPO_ROOT / "scripts" / "bench_driver.py"),
+             "--bench", str(bench), "--probe", str(probe), "--input", str(data),
+             "--prediction", "P-0001", "--raw-dir", str(root / "raw"), "--out",
+             str(root / "out.md"), "--allow-dirty", "--predictions-root", str(root),
+             "--run-log", str(root / "results" / "run_log.md")],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    def stop_when(self, driver, marker):
+        for _ in range(600):
+            if marker.exists() or driver.poll() is not None:
+                break
+            time.sleep(0.05)
+        if not marker.exists():
+            self.fail(f"the driver never got that far: {driver.communicate(timeout=30)}")
+        driver.send_signal(signal.SIGTERM)
+        _, stderr = driver.communicate(timeout=30)
+        return driver.returncode, stderr
+
+    def script(self, path, body):
+        path.write_text("#!/bin/sh\n" + body, encoding="utf-8")
+        path.chmod(0o755)
+        return path
+
+    def test_a_signal_during_machine_check_writes_the_row(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            root = Path(directory)
+            marker = root / "probe-started"
+            probe = self.script(root / "probe.sh", f"touch '{marker}'\nsleep 2\n")
+            driver = self.start(root, probe, root / "no-bench")
+            code, stderr = self.stop_when(driver, marker)
+            self.assertEqual(code, 128 + signal.SIGTERM, stderr)
+            log_path = root / "results" / "run_log.md"
+            self.assertTrue(log_path.is_file(), f"no run log written: {stderr}")
+            log = log_path.read_text(encoding="utf-8")
+            self.assertRegex(log, r"\| P-0001-\d{8}T\d{6}Z \| P-0001 \| .* \| stopped by "
+                                  r"SIGTERM at machine_check; nothing from it is published")
+            self.assertEqual(log.count("| P-0001-"), 1)
+
+    @unittest.skipUnless(sys.platform == "darwin",
+                         "machine_check.sh passes the fake probe only on macOS, where pinning "
+                         "and the governor are recorded, not enforced")
+    def test_a_signal_during_a_repetition_reaches_the_bench_and_writes_the_row(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            root = Path(directory)
+            marker = root / "bench-started"
+            heard = root / "bench-heard"
+            bench = self.script(root / "bench.sh",
+                                f"trap 'touch \"{heard}\"; exit 143' TERM\ntouch '{marker}'\n"
+                                "i=0\nwhile [ $i -lt 200 ]; do sleep 0.1; i=$((i + 1)); done\n")
+            probe = REPO_ROOT / "tests" / "fixtures" / "machine_check" / "fake_probe.sh"
+            driver = self.start(root, probe, bench)
+            code, stderr = self.stop_when(driver, marker)
+            self.assertEqual(code, 128 + signal.SIGTERM, stderr)
+            self.assertTrue(heard.exists(), "the bench never heard the signal")
+            log_path = root / "results" / "run_log.md"
+            self.assertTrue(log_path.is_file(), f"no run log written: {stderr}")
+            log = log_path.read_text(encoding="utf-8")
+            self.assertIn("stopped by SIGTERM at repetition 1, timed process; nothing from it "
+                          "is published", log)
+            self.assertFalse((root / "out.md").exists())
 
 
 if __name__ == "__main__":
