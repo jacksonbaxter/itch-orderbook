@@ -137,3 +137,21 @@ included.
 - Prediction, T-BOOK-3: met on every arm, each within 2% of its P-0011 figure.
 - Prediction, counters: every event measured at running ratio 1.0000, `rdpmc` agreeing with `read()`. `r0843:u` a message on `paged-linked` within 20% of `hash-linked`'s 4.64, since both walk the same linked levels; fewer on each flat arm than on the linked arm with the same index; on `paged-flat` between 1.5 and 4. `cache-misses` between 1.2 and 4 times `r0843:u` on every arm.
 - Prediction, peak memory: peak RSS from `getrusage` between 9.0 and 9.8 GiB on every arm.
+
+## P-0101: T-BT-1 on macOS, 12302019, the backtester with a quoting strategy
+
+- Experiment: `bench_backtest --workload quoting` through `scripts/backtest_driver.py` on `12302019.NASDAQ_ITCH50`, mapped, 3 repetitions, each a fresh process with one warm-up pass and one timed pass, on `macOS (M4 Max)`, not pinned, through `measure.sh` and `/usr/bin/time -l`. The quoter of `bench/backtest_workloads.hpp` on AAPL, MSFT, SPY and TSLA, base latencies (25 µs each way, 5 µs compute), the queue model with this branch's late-add and printable-`C` rules.
+- What it is for: T-BT-1, the replay rate with the queue model on and a strategy running, on a real day. The bar, 2.0 M events/s, was set on an Intel Core i9-13900H on a synthetic feed, so a macOS figure is context and the verdict is "host differs".
+- What was seen before this was written: the 12302019 smoke of `itch_backtest` with the joiner strategy, 29.5 s of wall time for construction, the engine's whole day and a second plain replay for the identity check, and the Mac's `paged-flat` book at 19.3 M messages/s mapped with the top tracked (P-0009). No time of the engine alone has been measured.
+- Prediction, rate: the median between 12 and 22 M ITCH messages/s, most likely near 16 M, so 6 to 11 times the bar's 2.0 M on a different event; at most 1.3 times slower than the plain `paged-flat` book, since 98% of messages are on symbols the strategy does not trade and cost the exchange-side book and a check of the locate. Engine events/s between 1.02 and 1.06 times the message rate. CV under 3%.
+- Prediction, counts: every repetition gives the same counts and event hash; 268,744,780 messages; 5,425,845 deliveries; 0 queue anomalies; late adds ahead of a simulated order under 200; fills between 100,000 and 2,000,000; no refused message, ring overflow or fee error.
+- Prediction, peak memory: peak RSS from `getrusage` between 8.8 and 9.8 GiB in every repetition, the mapped day counted.
+
+## P-0102: T-BT-3 on macOS, 12302019, queuetruth's shadow orders
+
+- Experiment: `bench_backtest --workload shadow` through `scripts/backtest_driver.py` on `12302019.NASDAQ_ITCH50`, 3 repetitions, each a fresh process that first copies the messages of AAPL, MSFT, SPY and TSLA and every System Event into memory, untimed, then runs one warm-up and one timed pass over that extract, on `macOS (M4 Max)`, not pinned, through `measure.sh` and `/usr/bin/time -l`. 100,000 shadow orders of 100 shares, placed evenly over the regular session at the best price of their side, round-robin over the symbols and sides, each cancelled after 60 s; every latency zero; no strategy.
+- What it is for: T-BT-3, ≥ 4.61 M ITCH messages/s, set on an Apple M1 Pro under macOS, so a macOS figure is held to it.
+- Prediction, denominator: the extract holds 5,425,845 messages, the smoke's deliveries, 4 fewer than queuetruth's 5,425,849.
+- Prediction, rate: the median between 4 and 12 M extract messages/s, most likely near 7 M, so T-BT-3 is met; each message is applied to the exchange-side book and to the view book, with the queue model and a call to the placer, about two plain book applies and the rings. CV under 5%. The untimed extract takes between 1 and 10 s a process.
+- Prediction, counts: every repetition gives the same counts and event hash; 0 queue anomalies; 100,000 placements less fewer than 100 skipped, each placed order cancelled once; at least 10,000 fills.
+- Prediction, peak memory: peak RSS from `getrusage` between 8.5 and 10 GiB, since the extract reads the whole mapped day.
