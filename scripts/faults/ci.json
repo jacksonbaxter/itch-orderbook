@@ -48,6 +48,46 @@
         "signature": "gates: FAIL pinned-actions \\.github/workflows/ci\\.yml:\\d+",
         "exit": 1
       }
+    },
+    {
+      "id": "ci-llvm-zst-through-tar",
+      "breaks": "The LLVM archive goes to tar whole, whose zstd refuses its 1 GiB window, as on CI's first run",
+      "check": "test_fetch_tool.py",
+      "mutations": [
+        {
+          "file": "scripts/fetch_tool.py",
+          "old": "    if archive.suffix != \".zst\":\n",
+          "new": "    if True:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fetch_tool.py"
+      ],
+      "expect": {
+        "signature": "ERROR: test_a_zstd_archive_with_a_1_gib_window_unpacks"
+      }
+    },
+    {
+      "id": "ci-llvm-zst-default-window",
+      "breaks": "zstd unpacks the LLVM archive without --long, so it keeps its 128 MiB window limit",
+      "check": "test_fetch_tool.py",
+      "mutations": [
+        {
+          "file": "scripts/fetch_tool.py",
+          "old": "\"--long=31\", ",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fetch_tool.py"
+      ],
+      "expect": {
+        "signature": "ERROR: test_a_zstd_archive_with_a_1_gib_window_unpacks"
+      }
     }
   ]
 }

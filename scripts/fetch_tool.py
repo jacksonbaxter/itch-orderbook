@@ -102,14 +102,32 @@ def fetch(name, tools_dir, tools=None, host=None):
     staging = tools_dir / f"{home.name}.new"
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir()
-    unpacked = subprocess.run(["tar", "-xf", str(archive), "-C", str(staging),
-                               f"--strip-components={tool.strip}"], check=False)
+    failed = unpack(archive, staging, tool.strip)
     archive.unlink()
-    if unpacked.returncode != 0:
+    if failed:
         shutil.rmtree(staging, ignore_errors=True)
-        raise FetchError(f"tar exited {unpacked.returncode} on {archive.name}")
+        raise FetchError(f"{failed} on {archive.name}")
     staging.rename(home)
     return bin_path.resolve()
+
+
+def unpack(archive, into, strip):
+    """Unpacks the archive into the directory, and says what failed, if anything did."""
+    untar = ["tar", "-xf", str(archive), "-C", str(into), f"--strip-components={strip}"]
+    if archive.suffix != ".zst":
+        return exits({"tar": subprocess.run(untar, check=False).returncode})
+    # LLVM's zstd frame asks for a 1 GiB window, and zstd refuses one past 128 MiB unless
+    # told it may go further, which tar does not tell it. So zstd runs here, with
+    # --long=31, the most it allows, and tar reads what it writes.
+    with subprocess.Popen(["zstd", "-d", "-q", "--long=31", "-c", str(archive)],
+                          stdout=subprocess.PIPE) as zstd:
+        untar[2] = "-"
+        tar = subprocess.run(untar, stdin=zstd.stdout, check=False).returncode
+    return exits({"zstd": zstd.returncode, "tar": tar})
+
+
+def exits(codes):
+    return ", ".join(f"{name} exited {code}" for name, code in codes.items() if code != 0)
 
 
 def main(argv=None):
