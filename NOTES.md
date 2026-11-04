@@ -643,7 +643,7 @@ An example, with L_compute 10 ns and L_oe 50 ns. The bid at $10.00 holds R1 100 
 
 **The 12302019 smoke.** `itch_backtest data/12302019.NASDAQ_ITCH50 --date 20191230` under `heavy.sh` and `/usr/bin/time -l`, at 8c05843, with the trivial strategy in `tests/backtest/joiner.hpp` on AAPL, MSFT, SPY and TSLA: 268,744,780 messages, 857,080 decisions, 346,265 fills (30,711 maker, 315,554 taker, 10,927 by crossing adds), 0 allocations after construction, no refused message, no ring overflow, no fee error, and the replayed book byte for byte equal to a plain book. Peak RSS 9,805,348,864 bytes, the mapped day counted; peak footprint 1,558,011,128 bytes. Repeated at 9d1108b, after the clang-tidy changes: every line the same, event hash `57fa4e60511e29e0` both times, peak footprint 1,557,994,744 bytes. No timing is reported: it is not a benchmark.
 
-**Queue anomalies on the real day.** That run counted 1,347, on 810 simulated orders, all in state T, all at S's own price. A scratch build that printed each one (not committed) found `ahead` equal to an independent recount from the real L3 book in all 1,347: the engine's state is right, and in each case the feed executed an order that joined the level after S while orders that joined before S still rested there, 116 times with only odd lots ahead and 1,231 with round lots. Strict time priority among displayed orders does not explain that, and the cause is not found. The engine stays conservative and fills nothing on these. It is open in TASKS.md, to settle before T-BT-1 reports fill rates.
+**Queue anomalies on the real day.** That run counted 1,347, on 810 simulated orders, all in state T, all at S's own price. A scratch build that printed each one (not committed) found `ahead` equal to an independent recount from the real L3 book in all 1,347: the engine's state is right, and in each case the feed executed an order that joined the level after S while orders that joined before S still rested there, 116 times with only odd lots ahead and 1,231 with round lots. Strict time priority among displayed orders does not explain that, and the cause is not found. The engine stays conservative and fills nothing on these. It is open in TASKS.md, to settle before T-BT-1 reports fill rates. Settled in "Queue jumps" below: they are orders held for the open and shown late, and printable `C` messages at an improved price.
 
 **What didn't work.**
 
@@ -722,3 +722,64 @@ The repo went public on 2026-11-03, and `.github/workflows/ci.yml` ran on GitHub
 **What CI still does not run.** It builds the release preset and runs ctest. The sanitizers, clang-tidy, the fuzz smoke runs, the Python script tests and the fault matrix run in `scripts/check.sh` on the Mac, and nothing there runs on a runner. CI produces no benchmark numbers, and the runners' PMUs are not used.
 
 **Pushing.** GitHub refused the first push of da1a707 twice with `Permission denied (publickey)` and once with an Internal Server Error, with the same key that `ssh -T git@github.com` was accepting and refusing in turn; the fourth attempt went through.
+
+## Queue jumps, 2026-11-04
+
+The 12302019 smoke counted 1,347 queue anomalies on 810 simulated orders (above, "The backtester"): executions that reached a simulated order S while `ahead` was not zero. T-TRADE-5 sees the same thing from the feed's side, as the executions that did not hit the front of their level's queue, 0.19% of 5.68 M on 12302019 and 0.08% of 7.24 M on 10302019. This settles what they are, on both days, and changes the backtester's rule to match.
+
+**The tool.** `tools/itch_queue_jumps` replays a day through the default fast book and, for T-TRADE-5's population (every `E` while the market is open, System Event `Q` to `M`, on a symbol in state `T`, read before the book applies it), asks two questions of each: is the order at the front of its level's FIFO, which is the order of the adds, and does it have the lowest order reference resting at its level. It classifies every jump by what is ahead of it and what became of the front, counts late adds and late replaces over the whole day, and compares every printable `C` in the population with the price its order showed. `--strict` exits 1 unless the finding below holds. Both days, under `heavy.sh` and `/usr/bin/time -l`, from the tree committed as e9d1049:
+
+| | 12302019 | 10302019 |
+|---|---|---|
+| `E` in the day | 5,722,824 | 7,316,703 |
+| Population (T-TRADE-5's) | 5,683,178 | 7,235,306 |
+| At the front of the FIFO | 5,672,613 | 7,229,242 |
+| Jumps | 10,565 | 6,064 |
+| At the lowest reference at its level | 5,683,178 | 7,235,306 |
+| Outside the population, at the lowest reference | 39,646 of 39,646 | 81,397 of 81,397 |
+| Jumps whose order is a late add | 10,565 | 6,064 |
+| Jumps whose reference is below every order ahead | 10,565 | 6,064 |
+| Jumps with the front added before the open | 8,705 | 4,551 |
+| Jumps with only odd lots ahead | 4,856 | 2,289 |
+| Front executed in the same nanosecond / later / removed first / never named | 6,565 / 3,603 / 397 / 0 | 3,258 / 2,561 / 245 / 0 |
+| Symbols with a jump | 436 | 278 |
+| Adds / replaces | 118,631,456 / 21,639,067 | 128,638,557 / 25,513,651 |
+| Late adds, on how many symbols | 945,542 on 8,857 | 895,718 on 8,851 |
+| First and last late add | 09:30:00.000995 to 09:30:39.737 | 09:30:00.000627 to 16:00:00.411 |
+| Late adds before the open / late replaces | 0 / 0 | 0 / 0 |
+| Printable `C` in the population | 91,402 | 122,813 |
+| Of those, at a price better for the aggressor than shown (front / behind) | 12,884 / 78,518 | 24,955 / 97,858 |
+| At the shown price, or better for the resting side | 0 | 0 |
+| `--strict` | pass | pass |
+| Peak RSS / peak footprint, bytes | 8,990,556,160 / 742,742,712 | 9,772,941,312 / 741,891,296 |
+
+The jumps per symbol on 12302019 run MSFT 1,075, AAPL 651, TSLA 572, BYND 541, AMD 411, AMZN 402, ROKU 351, GOOGL 244, NVDA 234, FCEL 184; on 10302019 AAPL 592, TSLA 334, AMD 313, MSFT 285. The jumps are T-TRADE-5's remainder exactly: 5,683,178 − 5,672,613 = 10,565 on 12302019 and 7,235,306 − 7,229,242 = 6,064 on 10302019.
+
+**What the feed says.** Every execution in both days, inside the population or not, hit the lowest order reference resting at its level. The ITCH 5.0 spec (p. 12) defines the Order Reference Number as "The unique reference number assigned to the new order at the time of receipt", so the reference is the exchange's own receipt order, and the feed's add order is not. A late add is an `A` or `F` whose reference is below the highest its symbol has shown, an order received before one the feed showed first. Every jump was of a late add whose reference was below every order ahead of it in the FIFO: the order was ahead in time priority all along, and only shown late. Every late add on 12302019 came in the 40 s after 09:30:00, none before, and on 10302019 also 4 at 16:00:00.41, at the closing cross. None came before the open and no replace ever came late, so a `U`'s new order is always shown in order.
+
+**What rule it is.** These are orders held for the open, shown when the symbol's opening cross releases them. Nasdaq's rules (Equity 4, from a capture of 2024-12-11; the 2019 text of these paragraphs is not in the cache): Rule 4703(a)(5), an order "designated to activate at any time during Market Hours" has a Time-in-Force of "Market Hours Day" or "MDAY"; Rule 4752(c), "System securities in which no Nasdaq Opening Cross occurs shall begin trading at 9:30 a.m. by integrating Market Hours orders into the book in time priority"; and Rule 4757(a)(1)(B), "Equally priced Orders with a Display Attribute will be ranked in time priority". An MDAY order entered before the open is received, and given its reference, then; it reaches the book at the open with that time priority, ahead of orders received after it that were shown before it. In 8,705 of the 10,565 jumps on 12302019 the front was itself added before the open, and in 6,565 the front executed in the same nanosecond as the jump, the sweep that took both. The 397 whose front was removed before it executed were cancelled or deleted.
+
+**Printable `C`.** The other 1,309 of the smoke's 1,347 anomalies were printable `C` messages, Order Executed With Price. In both days every printable `C` in the population traded at a price better for the aggressor than the order showed: the order's executed part was not displayed at that price. Rule 4757(a)(1)(C) ranks "Orders with a Non-Display Attribute, including the Non-Displayed portion of an Order with Reserve Size" in time priority behind displayed ones at a price, so such an execution is not evidence about the displayed queue at the shown price.
+
+**Ruled out.** A replace that re-entered the queue: no jump hit an order made by a `U`, and an exploratory count on 12302019 found all 345,214 executions of `U`-made orders in the population at the front. A reserve refresh: it gets a new and higher reference, so it would sit at the back, as the feed shows. Retail Price Improvement orders: non-displayed, with no add on the feed. Odd lots: 4,856 jumps had only odd lots ahead and 5,709 had round lots, and the rules give odd lots no priority of their own.
+
+**The decision.** The backtester now ranks by receipt, as the feed does:
+
+- **A late add goes ahead.** In `number_real`, an add on a traded locate whose reference is below the highest that locate has shown gets arrival number 0, ahead of every simulated order, and its shares join `ahead` of every simulated order resting at its price on that side. That is exact for a simulated order that arrived after the open, which is every order the strategy can send from a delivery, and conservative for one that arrived before the open, since a held order received after it would in truth be behind it. `Stats::late_adds` and `late_adds_ahead` count them.
+- **A printable `C` reaches only its trade price.** An execution of R reaches S only if S's price is at or better for the aggressor than the price traded, `c.execution_price` for a `C` and R's price for an `E`. A `C` at an improved price takes nothing from a simulated order resting at R's shown price. That is conservative: it may miss a fill the real book gave, and never adds one.
+- **Unchanged.** `ahead` is still never raised by anything else, and a reach with `ahead` above zero is still an anomaly that fills nothing.
+
+The old rule was not conservative on these. With `ahead` at zero, a late add executing behind S filled S, which the feed says was behind the late add; and a printable `C` filled S at its shown price when the trade was at a better one.
+
+**Tests and faults.** S49 (`QueuePosition.S49LateAddGoesAhead`, `S49LateAddDoesNotFillWhatIsAhead`) and S50 (`ItchEdges.S50PrintableCReachesOnlyItsPrice`) are hand-built: a late add of 50 shares raises `ahead` from 100 to 150, a late `F` at another price changes nothing, the recount agrees, and the executions fill only once `ahead` is spent; a printable `C` at $10.01 fills the order at $10.01 and not the one at $10.00. `tests/test_queue_jumps_cli.py` builds a stream with one jump and one printable `C` and works every line of the tool's output out by hand; four broken streams each fail `--strict`. Seven faults in `scripts/faults/backtester.json`: a late add left behind, a late add not counted ahead, a printable `C` reaching its shown price, the tool counting the FIFO front as the lowest reference, the tool never seeing a late add, and `--strict` blind to a late replace or to a `C` at its shown price.
+
+**The smoke again.** `itch_backtest data/12302019.NASDAQ_ITCH50 --date 20191230` under `heavy.sh` and `/usr/bin/time -l`, from the tree committed as e9d1049: 268,744,780 messages, 857,009 decisions, 346,135 fills (30,581 maker, 315,554 taker, 10,929 by crossing adds), 0 queue anomalies, 52,373 late adds on the four symbols of which 46 joined ahead of a simulated order, 6,331 hidden prints at a simulated price, 0 allocations after construction, every check passing, event hash `c3fa26520a4e65ba` (was `57fa4e60511e29e0`). Before the change, with the same strategy: 1,347 anomalies and 30,711 maker fills. Peak RSS 9,805,889,536 bytes, peak footprint 1,558,519,032 bytes.
+
+**What is left.** A held order whose reference is above every one its symbol had shown is not late by this test, and lands behind a simulated order that arrived after the open; that would be optimistic for the simulated order. The feed cannot show it: such an order looks the same as one received after the last order shown. Late adds were released over 40 s on 12302019, so a simulated order sent in that time can meet one. The count of late adds ahead of a simulated order, 46 on the smoke, is reported with every run.
+
+**What didn't work.**
+
+- The first version of the tool asked only whether each jump's order was below the front's reference. That held for every jump but said nothing about the executions at the front, so it now checks every `E` against the lowest reference at its level.
+- With the late-add rule alone the smoke still counted 1,309 anomalies. A probe that counted each by message type found every one was a printable `C`, which led to the second rule.
+- Two fault mutations first failed to build under `-Werror` (an unused `shares`, an unused `traded`), and the fault for `--strict`'s `C` condition first removed a variable; each now changes an expression.
+- The gates' home-path check failed on the worktree's `.git`, a file naming the main repository's path. The walk now skips `.git` by name, file or directory, with a test.
