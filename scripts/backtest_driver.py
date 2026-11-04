@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import signal
 import statistics
@@ -348,7 +349,8 @@ def render(records, args, run_id, started, finished, machine_output, command):
 
 def relative_command(args):
     def shown(path):
-        path = Path(path).resolve()
+        # Absolute without following links, so that a data/ link in a worktree shows as data/.
+        path = Path(os.path.abspath(path))
         try:
             return str(path.relative_to(REPO_ROOT))
         except ValueError:
