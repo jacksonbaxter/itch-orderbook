@@ -65,6 +65,9 @@ if(ITCH_BUILD_TOOLS)
   add_test(NAME test_backtest_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_backtest_cli.py"
             "$<TARGET_FILE:itch_backtest>" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle")
+  add_test(NAME test_queue_jumps_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_queue_jumps_cli.py"
+            "$<TARGET_FILE:itch_queue_jumps>" "${CMAKE_CURRENT_BINARY_DIR}/queue_jumps_cli")
   set_tests_properties(test_census_cli test_oracle_cli test_trades_cli test_map_compare_cli
-    test_backtest_cli PROPERTIES LABELS unit)
+    test_backtest_cli test_queue_jumps_cli PROPERTIES LABELS unit)
 endif()

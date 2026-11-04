@@ -26,3 +26,7 @@ add_executable(itch_backtest itch_backtest.cpp "${PROJECT_SOURCE_DIR}/tests/orac
 target_include_directories(itch_backtest PRIVATE "${PROJECT_SOURCE_DIR}/tests")
 target_link_libraries(itch_backtest PRIVATE itch_parser)
 itch_apply_options(itch_backtest)
+
+add_executable(itch_queue_jumps itch_queue_jumps.cpp)
+target_link_libraries(itch_queue_jumps PRIVATE itch_parser)
+itch_apply_options(itch_queue_jumps)

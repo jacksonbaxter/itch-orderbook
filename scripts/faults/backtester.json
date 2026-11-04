@@ -74,6 +74,54 @@
       }
     },
     {
+      "id": "backtester-queue-late-add-behind",
+      "breaks": "An add shown after later references counts behind the simulated order, in feed order, as the first queue rule did",
+      "check": "test_backtest S49",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    const bool late = reference < highest_reference_[locate];\n",
+          "new": "    const bool late = false;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueuePosition\\.S49LateAdd"
+      }
+    },
+    {
+      "id": "backtester-queue-late-add-not-counted-ahead",
+      "breaks": "A late add is ranked ahead of the simulated order but its shares never join ahead",
+      "check": "test_backtest S49",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "        orders_[sim].ahead += shares;\n",
+          "new": "        orders_[sim].ahead += shares - shares;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueuePosition\\.S49LateAddGoesAhead"
+      }
+    },
+    {
       "id": "backtester-ledger-budget-not-spent",
       "breaks": "One real execution fills every simulated order it reaches in full, not its shares once",
       "check": "test_backtest S23",
@@ -366,6 +414,30 @@
       }
     },
     {
+      "id": "backtester-printable-c-reaches-shown-price",
+      "breaks": "A printable C reaches every simulated order down to its order's shown price, not only to the price it traded at",
+      "check": "test_backtest S50",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "c.printable == 'Y', c.execution_price, time);",
+          "new": "c.printable == 'Y', real.price, time);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.S50PrintableCReachesOnlyItsPrice"
+      }
+    },
+    {
       "id": "backtester-fees-nyse-on-tape-c",
       "breaks": "Market Category N maps to Tape C, not Tape A",
       "check": "test_fees tape mapping",
@@ -549,6 +621,118 @@
       ],
       "expect": {
         "signature": "backtest cli: FAIL no trades: exit 0"
+      }
+    },
+    {
+      "id": "backtester-queue-jumps-fifo-front-as-lowest",
+      "breaks": "The queue-jump tool counts an execution at the front of the feed's FIFO as one at the lowest reference",
+      "check": "test_queue_jumps_cli.py clean case",
+      "mutations": [
+        {
+          "file": "tools/itch_queue_jumps.cpp",
+          "old": "    const bool at_lowest = lowest == e.order_reference;\n",
+          "new": "    const bool at_lowest = order.older == itch::kNoIndex;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_queue_jumps"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_queue_jumps_cli.py",
+        "{build}/tools/itch_queue_jumps",
+        "{build}/queue_jumps_fault"
+      ],
+      "expect": {
+        "signature": "queue jumps cli: FAIL clean: no line 'at_lowest_reference 3'"
+      }
+    },
+    {
+      "id": "backtester-queue-jumps-late-never",
+      "breaks": "The queue-jump tool finds no late add",
+      "check": "test_queue_jumps_cli.py clean case",
+      "mutations": [
+        {
+          "file": "tools/itch_queue_jumps.cpp",
+          "old": "    const bool late = reference < highest_[locate];\n",
+          "new": "    const bool late = false;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_queue_jumps"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_queue_jumps_cli.py",
+        "{build}/tools/itch_queue_jumps",
+        "{build}/queue_jumps_fault"
+      ],
+      "expect": {
+        "signature": "queue jumps cli: FAIL clean: no line 'late_adds 1'"
+      }
+    },
+    {
+      "id": "backtester-queue-jumps-strict-blind-to-late-replace",
+      "breaks": "--strict passes a day with a late replace",
+      "check": "test_queue_jumps_cli.py late-replace case",
+      "mutations": [
+        {
+          "file": "tools/itch_queue_jumps.cpp",
+          "old": "c.late_replaces == 0 && c_improved;",
+          "new": "c_improved;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_queue_jumps"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_queue_jumps_cli.py",
+        "{build}/tools/itch_queue_jumps",
+        "{build}/queue_jumps_fault"
+      ],
+      "expect": {
+        "signature": "queue jumps cli: FAIL late replace: --strict exit 0, not 1"
+      }
+    },
+    {
+      "id": "backtester-queue-jumps-strict-blind-to-c-price",
+      "breaks": "--strict passes a day with a printable C at the price its order showed",
+      "check": "test_queue_jumps_cli.py c-at-shown-price case",
+      "mutations": [
+        {
+          "file": "tools/itch_queue_jumps.cpp",
+          "old": "c_printable_[2] + c_printable_[3] + c_printable_[4] + c_printable_[5] == 0;",
+          "new": "c_printable_[4] + c_printable_[5] == 0;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_queue_jumps"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_queue_jumps_cli.py",
+        "{build}/tools/itch_queue_jumps",
+        "{build}/queue_jumps_fault"
+      ],
+      "expect": {
+        "signature": "queue jumps cli: FAIL c at shown price: --strict exit 0, not 1"
       }
     }
   ]

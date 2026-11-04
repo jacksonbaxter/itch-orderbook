@@ -35,21 +35,35 @@
 // **The queue.** Simulated orders never enter the real book, so the replayed book is the
 // same with and without them. Each real order on a symbol the strategy trades is given an
 // arrival number when it is added, and a simulated order is given one when it arrives, from
-// the same counter, so "R is ahead of S" is "R's number is lower". `ahead` is set once, on
-// arrival, to the shares resting at S's price then, which are all ahead of S. After that it
-// only falls: by the shares of an execute, cancel, delete or replace of an order ahead of
-// S at S's price. A cancel of an order behind S never moves it.
+// the same counter, so "R is ahead of S" is "R's number is lower". `ahead` is set on arrival
+// to the shares resting at S's price then, which are all ahead of S. After that it falls by
+// the shares of an execute, cancel, delete or replace of an order ahead of S at S's price. A
+// cancel of an order behind S never moves it.
+//
+// **Late adds.** Nasdaq ranks by time of receipt, and ITCH assigns the order reference at
+// receipt, but an order held for the open is shown only when its symbol opens, after orders
+// it was received before. Such an add carries a reference below the highest its symbol has
+// already shown. On 12302019 and 10302019 every `E` hit the lowest reference at its level,
+// and every execution behind the front of a level was of a late add (NOTES.md, "Queue
+// jumps"). So a late add gets arrival number 0, ahead of every simulated order, and its shares
+// join `ahead` of each one resting at its price. That is exact for a simulated order that
+// arrived after the open, when every held order had been received, and errs towards fewer
+// fills for one that arrived before it.
 //
 // **Fills.** An execution of real order R at price p, q shares, on S's side reaches S when
 // S's price is better than p, or S is at p and R is behind S: in the counterfactual the
-// aggressor would have met S first. S then fills at its own price, up to q shares less what
-// this execution already gave to other simulated orders, best price and earliest arrival
-// first. A reached S with shares still ahead is a queue anomaly, counted and not filled.
-// A real order that would have crossed a resting S, an add or replace on the other side at
-// a price S reaches, fills S as maker. A simulated order that crosses on arrival walks the
-// real opposite side and fills as taker at each level's price. Non-printable executions
-// (crosses), Trade messages (hidden size, no reference) and Cross Trades never fill, and
-// nothing fills while the symbol is not trading.
+// aggressor would have met S first. A printable Order Executed With Price trades R at a
+// price better for the aggressor than R's own, which on 12302019 every one in regular
+// trading did: R ranked there as non-displayed interest, so the aggressor reached that
+// price and no further. It reaches S when S's price is at least as good as the trade's,
+// since a displayed S ranks before non-displayed interest at its price. S then fills at its own
+// price, up to q shares less what this execution already gave to other simulated orders, best price
+// and earliest arrival first. A reached S with shares still ahead is a queue anomaly, counted and
+// not filled. A real order that would have crossed a resting S, an add or replace on the other side
+// at a price S reaches, fills S as maker. A simulated order that crosses on arrival walks the real
+// opposite side and fills as taker at each level's price. Non-printable executions (crosses), Trade
+// messages (hidden size, no reference) and Cross Trades never fill, and nothing fills while the
+// symbol is not trading.
 //
 // **The ledger.** consumed[R] counts real shares of R that a simulated order has already
 // traded against, as a crossing add or as a taker. A later taker sees only R's shares less
@@ -192,6 +206,8 @@ struct Stats {
   std::uint64_t taker_fills = 0;
   std::uint64_t crossing_fills = 0;  // Maker fills against a real add that crossed S.
   std::uint64_t queue_anomalies = 0;
+  std::uint64_t late_adds = 0;        // Adds on traded locates shown after later references.
+  std::uint64_t late_adds_ahead = 0;  // Of those, the ones at a simulated order's price.
   std::uint64_t hidden_prints_at_sim_price = 0;  // A bound on missed fills, not a fill.
   std::uint64_t broken_trades = 0;
   std::uint64_t expired = 0;
@@ -306,6 +322,7 @@ class Engine {
         view_{config.view_capacity},
         arrival_(book_.order_capacity(), 0),
         consumed_(book_.order_capacity(), 0),
+        highest_reference_(kLocates, 0),
         subscribed_(kLocates, 0),
         category_(kLocates, ' '),
         trading_(kLocates, 'T'),
@@ -653,19 +670,19 @@ class Engine {
     switch (type) {
       case AddOrder::kType: {
         const AddOrder add = AddOrder::from_wire(m);
-        real_add(payload, locate, add.order_reference, add.side, add.price, time);
+        real_add(payload, locate, add.order_reference, add.side, add.price, add.shares, time);
         break;
       }
       case AddOrderAttributed::kType: {
         const AddOrderAttributed add = AddOrderAttributed::from_wire(m);
-        real_add(payload, locate, add.order_reference, add.side, add.price, time);
+        real_add(payload, locate, add.order_reference, add.side, add.price, add.shares, time);
         break;
       }
       case OrderExecuted::kType: {
         const OrderExecuted e = OrderExecuted::from_wire(m);
         const RealOrder real = before(locate, e.order_reference);
         if (apply_book(payload) && real.found()) {
-          execution(locate, real, e.executed_shares, true, time);
+          execution(locate, real, e.executed_shares, true, real.price, time);
         }
         break;
       }
@@ -673,7 +690,7 @@ class Engine {
         const OrderExecutedWithPrice c = OrderExecutedWithPrice::from_wire(m);
         const RealOrder real = before(locate, c.order_reference);
         if (apply_book(payload) && real.found()) {
-          execution(locate, real, c.executed_shares, c.printable == 'Y', time);
+          execution(locate, real, c.executed_shares, c.printable == 'Y', c.execution_price, time);
         }
         break;
       }
@@ -735,7 +752,8 @@ class Engine {
     if (!apply_book(payload)) {
       return;
     }
-    const std::uint32_t slot = number_real(locate, u.new_order_reference);
+    const std::uint32_t slot =
+        number_real(locate, u.new_order_reference, real.side, u.price, u.shares);
     if (real.found()) {
       depletion(locate, real, real.shares);
       cross(locate, real.side, u.price, slot, time);
@@ -775,25 +793,40 @@ class Engine {
   }
 
   void real_add(std::span<const std::byte> payload, std::uint16_t locate, std::uint64_t reference,
-                char side, Price4 price, Nanos time) noexcept {
+                char side, Price4 price, std::uint32_t shares, Nanos time) noexcept {
     if (!apply_book(payload)) {
       return;
     }
-    const std::uint32_t slot = number_real(locate, reference);
+    const Side book_side = side == 'B' ? Side::bid : Side::ask;
+    const std::uint32_t slot = number_real(locate, reference, book_side, price, shares);
     if (slot != kNoIndex) {
-      cross(locate, side == 'B' ? Side::bid : Side::ask, price, slot, time);
+      cross(locate, book_side, price, slot, time);
     }
   }
 
   // Gives a new real order on a traded locate its arrival number and an empty ledger.
-  [[nodiscard]] std::uint32_t number_real(std::uint16_t locate, std::uint64_t reference) noexcept {
+  // A late add, one whose reference is below the highest its locate has shown, goes ahead of
+  // every simulated order instead, and joins `ahead` of those resting at its price.
+  [[nodiscard]] std::uint32_t number_real(std::uint16_t locate, std::uint64_t reference, Side side,
+                                          Price4 price, std::uint32_t shares) noexcept {
     if (subscribed_[locate] == 0) {
       return kNoIndex;
     }
+    const bool late = reference < highest_reference_[locate];
+    highest_reference_[locate] = std::max(highest_reference_[locate], reference);
     const std::uint32_t slot = book_.order_slot(reference);
     if (slot != kNoIndex) {
-      arrival_[slot] = ++arrival_counter_;
+      arrival_[slot] = late ? 0 : ++arrival_counter_;
       consumed_[slot] = 0;
+    }
+    stats_.late_adds += late ? 1U : 0U;
+    const std::uint32_t level =
+        late && resting_[locate] != 0 ? find_sim_level(locate, side, price) : kNoIndex;
+    if (level != kNoIndex) {
+      ++stats_.late_adds_ahead;
+      for (std::uint32_t sim = levels_[level].front; sim != kNoIndex; sim = orders_[sim].newer) {
+        orders_[sim].ahead += shares;
+      }
     }
     return slot;
   }
@@ -825,9 +858,12 @@ class Engine {
     return trading_[locate] == 'T';
   }
 
-  // An execution of R: depletion ahead of S, a fill of S where it reaches S.
+  // An execution of R at `traded`: depletion ahead of S, a fill of S where it reaches S. An
+  // `E` trades at R's price. A printable `C` trades at a price better for the aggressor than
+  // R's, where R ranked as non-displayed interest: the aggressor reached `traded` and no
+  // further, so it reaches an S priced at least as well, and not one at R's own price.
   void execution(std::uint16_t locate, const RealOrder& real, std::uint32_t shares, bool printable,
-                 Nanos time) noexcept {
+                 Price4 traded, Nanos time) noexcept {
     const std::uint32_t drawn = std::min(shares, real.consumed);
     consumed_[real.slot] = real.consumed - drawn;
     std::uint32_t budget = shares - drawn;
@@ -841,6 +877,7 @@ class Engine {
         break;
       }
       const bool at_price = price == real.price;
+      const bool reached = !better(real.side, traded, price);
       std::uint32_t next = kNoIndex;
       for (std::uint32_t slot = levels_[level].front; slot != kNoIndex; slot = next) {
         next = orders_[slot].newer;
@@ -849,7 +886,7 @@ class Engine {
           sim.ahead -= std::min<std::uint64_t>(sim.ahead, shares);
           continue;
         }
-        if (!fills) {
+        if (!fills || !reached) {
           continue;
         }
         if (sim.ahead != 0) {
@@ -1233,8 +1270,9 @@ class Engine {
 
   Book book_;
   Book view_;
-  std::vector<std::uint64_t> arrival_;   // Per real order slot.
-  std::vector<std::uint32_t> consumed_;  // Per real order slot.
+  std::vector<std::uint64_t> arrival_;            // Per real order slot.
+  std::vector<std::uint32_t> consumed_;           // Per real order slot.
+  std::vector<std::uint64_t> highest_reference_;  // Per locate, of the traded ones.
   std::vector<std::uint8_t> subscribed_;
   std::vector<char> category_;
   std::vector<char> trading_;

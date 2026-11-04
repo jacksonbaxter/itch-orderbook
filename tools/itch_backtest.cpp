@@ -168,6 +168,7 @@ int run(const std::optional<Options>& options) {
                stats.maker_fills, stats.taker_fills, stats.crossing_fills);
   std::println("queue_anomalies {} hidden_prints_at_sim_price {} broken_trades {}",
                stats.queue_anomalies, stats.hidden_prints_at_sim_price, stats.broken_trades);
+  std::println("late_adds {} late_adds_ahead {}", stats.late_adds, stats.late_adds_ahead);
   std::println("event_hash {:016x}", engine.event_hash());
   std::println("allocations_after_construction {}", allocations);
 

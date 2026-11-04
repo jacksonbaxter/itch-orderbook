@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <type_traits>
 #include <vector>
@@ -229,6 +230,53 @@ TEST(QueuePosition, S09ReserveRefreshIsBehind) {
   run.feed(wire::execute(kLocate, 3, 30, 3500));
   run.advance(10'000);
   EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1000, 30, kMaker}}));
+}
+
+// 49. Not in the evidence's list: found on the real days (NOTES.md, "Queue jumps"). R1 100
+// (reference 10), S, R2 100 (reference 20). R0 50 is added with reference 5, below what the
+// symbol has shown: an order received before R1 and shown late, as an order held for the
+// open is. It goes ahead of S: ahead 150. A late add at another price moves nothing. R0
+// executes 50: ahead 100, no fill and no anomaly. R1 executes 100: ahead 0. R2 executes
+// 30: S fills 30.
+TEST(QueuePosition, S49LateAddGoesAhead) {
+  Replay run;
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.feed(wire::add(kLocate, 10, 'B', 100, k1000, 1000));
+  run.feed(wire::add(kLocate, 20, 'B', 100, k1000, 3000));
+  EXPECT_EQ(run.ahead(kS), 100U);
+  run.feed(wire::add(kLocate, 5, 'B', 50, k1000, 3100));
+  EXPECT_EQ(run.ahead(kS), 150U);
+  run.feed(wire::add_attributed(kLocate, 6, 'B', 70, k999, 3200));
+  EXPECT_EQ(run.ahead(kS), 150U);
+  EXPECT_EQ(run.engine.recount_ahead(run.strategy.id(kS)), std::optional<std::uint64_t>{150});
+  run.feed(wire::execute(kLocate, 5, 50, 4000));
+  EXPECT_EQ(run.ahead(kS), 100U);
+  run.feed(wire::execute(kLocate, 10, 100, 4100));
+  EXPECT_EQ(run.ahead(kS), 0U);
+  EXPECT_TRUE(run.fills(kS).empty());
+  run.feed(wire::execute(kLocate, 20, 30, 4200));
+  run.advance(10'000);
+  EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1000, 30, kMaker}}));
+  EXPECT_EQ(run.engine.stats().queue_anomalies, 0U);
+  EXPECT_EQ(run.engine.stats().late_adds, 2U);
+  EXPECT_EQ(run.engine.stats().late_adds_ahead, 1U);
+}
+
+// 49, the other way. R1 100 (reference 10), S, then a late R0 50 (reference 5). R1 executes
+// 100, then R0 50. Counting R0 behind S, as adds in feed order would, leaves ahead 0 when
+// R0 executes and fills S 50 from shares that were ahead of it. R0 is ahead: nothing fills.
+TEST(QueuePosition, S49LateAddDoesNotFillWhatIsAhead) {
+  Replay run;
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.feed(wire::add(kLocate, 10, 'B', 100, k1000, 1000));
+  run.feed(wire::add(kLocate, 5, 'B', 50, k1000, 3000));
+  run.feed(wire::execute(kLocate, 10, 100, 4000));
+  EXPECT_EQ(run.ahead(kS), 50U);
+  run.feed(wire::execute(kLocate, 5, 50, 4100));
+  EXPECT_EQ(run.ahead(kS), 0U);
+  run.advance(10'000);
+  EXPECT_TRUE(run.fills(kS).empty());
+  EXPECT_EQ(run.engine.stats().queue_anomalies, 0U);
 }
 
 // ---- Join time and latency ------------------------------------------------------------
@@ -699,6 +747,31 @@ TEST(ItchEdges, S31NonPrintableExecutionDoesNotFill) {
   run.feed(printable_execution(2, 50, k1000, 'Y', 5000));
   run.advance(10'000);
   EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1000, 50, kMaker}}));
+}
+
+// 50. Not in the evidence's list: found on the real day (NOTES.md, "Queue jumps"). R1 100,
+// S at 10.00, R2 100 behind; S2 bids 10.01. A printable C executes 50 of R2 at 10.01, a
+// price better for the seller than R2's 10.00, as every printable C in regular trading on
+// 12302019 did: the seller reached 10.01 and no lower. S2, at the trade's price, fills 50;
+// S, at 10.00 with R1 still ahead, is not reached, so no fill and no anomaly. Then R1
+// executes in full and a second C on R2 at 10.01 fills S2's other 50 and still not S.
+TEST(ItchEdges, S50PrintableCReachesOnlyItsPrice) {
+  Replay run;
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.strategy.send(kS2, 2000, Side::bid, k1001, 100);
+  run.feed(wire::add(kLocate, 1, 'B', 100, k1000, 1000));
+  run.feed(wire::add(kLocate, 2, 'B', 100, k1000, 3000));
+  run.feed(printable_execution(2, 50, k1001, 'Y', 4000));
+  EXPECT_EQ(run.ahead(kS), 100U);
+  EXPECT_EQ(run.engine.stats().queue_anomalies, 0U);
+  run.feed(wire::execute(kLocate, 1, 100, 4100));
+  EXPECT_EQ(run.ahead(kS), 0U);
+  run.feed(printable_execution(2, 50, k1001, 'Y', 4200));
+  run.advance(10'000);
+  EXPECT_TRUE(run.fills(kS).empty());
+  EXPECT_EQ(fills_of(run.fills(kS2)),
+            (std::vector<Fill>{{k1001, 50, kMaker}, {k1001, 50, kMaker}}));
+  EXPECT_EQ(run.engine.stats().queue_anomalies, 0U);
 }
 
 // 32. A Cross Trade at S's price changes nothing for S.
