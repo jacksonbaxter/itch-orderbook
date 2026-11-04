@@ -19,6 +19,12 @@ means, the top of book when it was tracked, the design comparison, and a verdict
 target in words from a fixed set. On macOS, a bar set on x86 Linux may not be called met
 or missed.
 
+A book file whose `passes` field says `throughput only` ran no latency pass, and the field
+must say why. Its file is held to the opposite: no percentile row, no per-operation row, no
+latency-pass figure in the summary, each latency section saying it was not measured, and
+every latency target not measured in this run. A file with no `passes` field predates it
+and ran every pass.
+
 Each violation prints as `check_results: FAIL <code> <file>: <detail>`.
 
 Exit codes: 0 every file passed, 1 at least one failed, 2 bad usage.
@@ -45,6 +51,11 @@ OPERATIONS = ("add", "delete", "replace", "reduce")
 OPERATION_PERCENTILES = ("p50", "p99", "p99.9")
 BOOK_SUMMARY = ("Mean service time per message, ns", "Batch mean per book message, ns",
                 "Book memory, MiB")
+PASSES = ("all: ", "throughput only: ")
+LATENCY_SUMMARY = ("Latency-pass rate, messages/s", "Mean span of apply(), ns",
+                   "Instrumentation ratio, latency pass over throughput pass")
+LATENCY_TARGETS = ("T-LAT-1", "T-LAT-2", "T-LAT-3", "T-LAT-4", "T-LAT-5")
+NOT_MEASURED = "Not measured: "
 TARGETS = ("T-BOOK-1", "T-BOOK-2", "T-BOOK-3", "T-BOOK-4", "T-LAT-1", "T-LAT-2", "T-LAT-3",
            "T-LAT-4", "T-LAT-5", "T-DESIGN-1")
 # Bars set on x86 hardware, which a macOS figure neither passes nor fails.
@@ -145,11 +156,17 @@ def check_warmup(fields):
         yield "warmup-included", f"{timed} timed against {warmup} in one pass"
 
 
+def throughput_only(fields):
+    return fields.get("passes", "").startswith(PASSES[1])
+
+
 def check_percentiles(text, fields):
     floor = number(fields.get("floor", ""))
     table = section(text, "Latency")
     if table is None:
         yield "latency-table-missing", "no Latency section"
+        return
+    if is_book_file(text) and throughput_only(fields):
         return
     rows = 0
     for line in table.splitlines():
@@ -280,6 +297,32 @@ def check_book_fields(fields):
     messages = fields.get("book_messages", "")
     if messages and not re.fullmatch(r"[0-9][0-9,]*", messages):
         yield "book-messages-malformed", messages
+    passes = fields.get("passes")
+    if passes is not None and not passes.startswith(PASSES):
+        yield "passes-malformed", passes
+    elif passes is not None and throughput_only(fields) and \
+            not re.search(r"\bWhy: \S", passes):
+        yield "passes-malformed", f"throughput only with no reason: {passes}"
+
+
+def check_no_latency(text):
+    """A file that ran no latency pass shows no latency figure, and says so."""
+    for title in ("Latency", "Per-operation latency"):
+        body = section(text, title)
+        if body is None or NOT_MEASURED not in body:
+            yield "latency-not-measured", f"the {title} section does not say it was not measured"
+        if any(len(cells) > 1 for cells in table_rows(text, title)):
+            yield "latency-not-measured", f"the {title} section has a table"
+    for cells in table_rows(text, "Summary"):
+        if cells[0] in LATENCY_SUMMARY:
+            yield "latency-not-measured", f"the summary gives {cells[0]}"
+    for cells in table_rows(text, "Repetitions"):
+        if len(cells) > 2 and number(cells[2]) is not None:
+            yield "latency-not-measured", f"repetition {cells[0]} gives a ratio of {cells[2]}"
+    for cells in table_rows(text, "Targets"):
+        if cells[0] in LATENCY_TARGETS and \
+                not cells[-1].startswith("not measured in this run: "):
+            yield "latency-not-measured", f"{cells[0]}: {cells[-1]!r}"
 
 
 def check_book_latency(text, fields):
@@ -377,10 +420,11 @@ def check_targets(text, fields):
 
 
 def check_book(text, fields):
-    for found in (check_book_fields(fields), check_book_latency(text, fields),
-                  check_operations(text, fields), check_book_summary(text), check_memory(text),
-                  check_method(text), check_top(text, fields), check_comparison(text, fields),
-                  check_targets(text, fields)):
+    latency = ((check_no_latency(text),) if throughput_only(fields) else
+               (check_book_latency(text, fields), check_operations(text, fields)))
+    for found in (check_book_fields(fields), *latency, check_book_summary(text),
+                  check_memory(text), check_method(text), check_top(text, fields),
+                  check_comparison(text, fields), check_targets(text, fields)):
         yield from found
 
 

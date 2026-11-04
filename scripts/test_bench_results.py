@@ -36,6 +36,7 @@ STDERR = (FIXTURES / "measure.stderr").read_text(encoding="utf-8")
 BOOK = (FIXTURES / "good_book_mac.md").read_text(encoding="utf-8")
 BOOK_MAP = (FIXTURES / "good_book_map_mac.md").read_text(encoding="utf-8")
 BOOK_TOP = (FIXTURES / "good_book_top_mac.md").read_text(encoding="utf-8")
+BOOK_THROUGHPUT = (FIXTURES / "good_book_throughput_mac.md").read_text(encoding="utf-8")
 
 
 def codes(text):
@@ -164,7 +165,7 @@ def target_verdict(text, target, verdict):
 
 class BookResults(unittest.TestCase):
     def test_the_book_fixtures_pass(self):
-        for text in (BOOK, BOOK_MAP, BOOK_TOP):
+        for text in (BOOK, BOOK_MAP, BOOK_TOP, BOOK_THROUGHPUT):
             self.assertEqual(check_results.check_text(text), [])
 
     def test_the_stub_label_spares_a_file_the_book_rules(self):
@@ -271,6 +272,58 @@ class BookResults(unittest.TestCase):
     def test_a_host_independent_bar_may_be_met_or_missed_on_macos(self):
         for verdict in ("met", "missed: by 0.1 GB"):
             self.assertEqual(codes(target_verdict(BOOK, "T-BOOK-3", verdict)), set())
+
+
+class ThroughputOnly(unittest.TestCase):
+    """A file that ran no latency pass says so, gives the reason, and shows no latency."""
+
+    def test_a_latency_table_it_did_not_measure(self):
+        broken = replace(BOOK_THROUGHPUT, "so no latency figure is published for it.\n",
+                         "so no latency figure is published for it.\n\n| Percentile | Median ns "
+                         "|\n|---|---|\n| p50 | 300.0 |\n")
+        self.assertIn("latency-not-measured", codes(broken))
+
+    def test_a_per_operation_table_it_did_not_measure(self):
+        broken = replace(BOOK_THROUGHPUT, "no per-operation latency figure is published for it.\n",
+                         "no per-operation latency figure is published for it.\n\n"
+                         "| add | p50 | 300.0 |\n")
+        self.assertIn("latency-not-measured", codes(broken))
+
+    def test_a_latency_section_that_does_not_say_it_was_not_measured(self):
+        broken = replace(BOOK_THROUGHPUT, "Not measured: this design ran no latency pass in this "
+                                          "run, as `passes` in the header says, so no latency",
+                         "This design ran no latency pass in this run, as `passes` in the header "
+                         "says, so no latency")
+        self.assertIn("latency-not-measured", codes(broken))
+
+    def test_a_latency_figure_in_the_summary(self):
+        broken = replace(BOOK_THROUGHPUT, "| Mean service time per message, ns |",
+                         "| Latency-pass rate, messages/s | 1,000 | 1,000 | 1,000 | 0.00% |\n"
+                         "| Mean service time per message, ns |")
+        self.assertIn("latency-not-measured", codes(broken))
+
+    def test_an_instrumentation_ratio_in_a_repetition(self):
+        broken = replace(BOOK_THROUGHPUT, "| not measured, no latency pass |", "| 1.5000 |", )
+        self.assertIn("latency-not-measured", codes(broken))
+
+    def test_a_latency_target_judged(self):
+        for target in check_results.LATENCY_TARGETS:
+            broken = target_verdict(BOOK_THROUGHPUT, target, "missed: by 1 ns")
+            self.assertIn("latency-not-measured", codes(broken), target)
+
+    def test_throughput_only_with_no_reason(self):
+        broken = re.sub(r" Why: .*$", "", BOOK_THROUGHPUT, count=1, flags=re.MULTILINE)
+        self.assertIn("passes-malformed", codes(broken))
+
+    def test_passes_outside_the_fixed_words(self):
+        broken = replace(BOOK_THROUGHPUT, "- passes: throughput only: ", "- passes: some: ")
+        self.assertIn("passes-malformed", codes(broken))
+
+    def test_a_file_that_ran_every_pass_keeps_its_latency_rules(self):
+        every = replace(BOOK, "- book_messages: 3,312\n",
+                        "- book_messages: 3,312\n- passes: all: every pass\n")
+        self.assertEqual(codes(every), set())
+        self.assertIn("operation-table-missing", codes(without_line(every, "| add | p50 |")))
 
 
 class Stamp(unittest.TestCase):
@@ -580,6 +633,58 @@ class BookDriver(unittest.TestCase):
                                      "--out", "{design}", "--design", "hash-flat",
                                      "--design", "hash-flat"])
 
+    def test_a_throughput_only_record_is_accepted_only_where_asked_for(self):
+        only = book_record(top=7)
+        only["latency_pass"] = None
+        only["instrumentation_ratio"] = None
+        only["latency"] = {"percentiles": [], "mean_ns": 0.0, "max_ns": None, "samples": 0,
+                           "operations": []}
+        bench_driver.validate_run(only, latency=False)
+        with self.assertRaisesRegex(bench_driver.Refused, "no latency pass in a process asked"):
+            bench_driver.validate_run(only)
+        with self.assertRaisesRegex(bench_driver.Refused, "a latency pass ran in a process"):
+            bench_driver.validate_run(book_record(), latency=False)
+        bench_driver.validate_together({"hash-linked": [book_record(top=7)],
+                                        "map-fresh": [{**only, "header": {}}]})
+
+    def test_a_throughput_only_fast_design_judges_no_latency_target(self):
+        only = book_record()
+        only["latency_pass"] = None
+        only["header"]["dataset"] = "12302019.NASDAQ_ITCH50"
+        rows = bench_driver.target_rows([only] * 3, {"hash-linked": [only] * 3})
+        for target in check_results.LATENCY_TARGETS:
+            row = next(row for row in rows if row.startswith(f"| {target} |"))
+            self.assertIn("not measured in this run: this design ran no latency pass", row)
+        self.assertNotIn("not measured", next(r for r in rows if r.startswith("| T-BOOK-1 |")))
+        self.assertEqual(bench_driver.summary_rows([only] * 3)[1:2],
+                         ["| Mean service time per message, ns | 10000000.00 | 10000000.00 "
+                          "| 10000000.00 | 0.00% |"])
+
+    def test_throughput_only_needs_a_design_the_run_runs_and_a_reason(self):
+        base = ["--bench", "x", "--probe", "x", "--input", "x", "--prediction", "P-0001",
+                "--raw-dir", "x", "--out", "x_{design}.md", "--design", "hash-flat",
+                "--design", "map-fresh"]
+        for extra in (["--throughput-only", "map-aged", "--throughput-only-why", "why"],
+                      ["--throughput-only", "map-fresh"],
+                      ["--throughput-only", "map-fresh", "--throughput-only-why", " "],
+                      ["--throughput-only-why", "why"],
+                      ["--throughput-only", "map-fresh", "--throughput-only", "map-fresh",
+                       "--throughput-only-why", "why"]):
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                bench_driver.parse_args([*base, *extra])
+        args = bench_driver.parse_args([*base, "--throughput-only", "map-fresh",
+                                        "--throughput-only-why", "why"])
+        self.assertEqual(args.throughput_only, ["map-fresh"])
+
+    def test_a_throughput_only_design_asks_the_bench_for_throughput_alone(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            args = self.fake_bench(Path(directory), {"book_bytes": 7})
+            args.throughput_only = ["hash-linked"]
+            bench_driver.run_repetition(args, 1, "abc", "00", "hash-linked")
+            self.assertTrue((Path(directory) / "hash-linked-repetition-1-throughput.json")
+                            .is_file())
+            self.assertFalse((Path(directory) / "hash-linked-repetition-1-timed.json").is_file())
+
     def fake_bench(self, root, untimed):
         """A bench_replay stand-in that writes the timed record or the untimed one."""
         fake = root / "bench.sh"
@@ -591,7 +696,7 @@ class BookDriver(unittest.TestCase):
         fake.write_text(
             "#!/bin/sh\nwhile [ $# -gt 0 ]; do case $1 in --out) out=$2;; --passes) passes=$2;; "
             "esac; shift; done\n"
-            f"if [ \"$passes\" = timed ]; then cat > \"$out\" <<'JSON'\n{json.dumps(timed)}\nJSON\n"
+            f"if [ \"$passes\" != untimed ]; then cat > \"$out\" <<'JSON'\n{json.dumps(timed)}\nJSON\n"
             f"else cat > \"$out\" <<'JSON'\n{json.dumps(untimed_record)}\nJSON\nfi\n",
             encoding="utf-8")
         fake.chmod(0o755)

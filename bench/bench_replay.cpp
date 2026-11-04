@@ -2,7 +2,8 @@
 // two timed passes and HdrHistogram holding the latency distribution.
 //
 //     bench_replay --input FILE --out RUN.json [--design NAME] [--input-mode ram|mapped]
-//                  [--track-top on|off] [--passes all|timed|untimed] [--core N] [--commit TEXT]
+//                  [--track-top on|off] [--passes all|timed|throughput|untimed] [--core N]
+//                  [--commit TEXT]
 //                  [--dataset NAME]
 //                  [--dataset-sha256 HEX] [--orders N] [--levels N] [--benchmark_...]
 //
@@ -15,7 +16,10 @@
 //               every page is resident at both ends of each timed pass.
 // --track-top   on reads the best bid and ask on the locate of every message the book
 //               applied and compares them with the last seen, as that replay tool does.
-// --passes      timed runs the warm-up, throughput and latency passes. untimed runs only the
+// --passes      timed runs the warm-up, throughput and latency passes. throughput runs the
+//               warm-up and the throughput pass alone, and makes no buffer for the latency
+//               samples, five bytes a message, which on a full day is the one large thing
+//               the process holds besides its input. untimed runs only the
 //               pass of counters and memory, after a warm-up that builds no book, so that the
 //               memory it is charged for is that one book's. all, the default, runs both in
 //               one process, and its memory figure is marked as not the first book's.
@@ -112,7 +116,7 @@ class Histogram {
 };
 
 enum class InputMode : std::uint8_t { ram, mapped };
-enum class Passes : std::uint8_t { all, timed, untimed };
+enum class Passes : std::uint8_t { all, timed, throughput, untimed };
 
 struct Options {
   std::string input;
@@ -149,8 +153,11 @@ bool parse_choice(std::string_view text,
 constexpr std::array<std::pair<std::string_view, InputMode>, 2> kInputModes{
     {{"ram", InputMode::ram}, {"mapped", InputMode::mapped}}};
 constexpr std::array<std::pair<std::string_view, bool>, 2> kOnOff{{{"on", true}, {"off", false}}};
-constexpr std::array<std::pair<std::string_view, Passes>, 3> kPassChoices{
-    {{"all", Passes::all}, {"timed", Passes::timed}, {"untimed", Passes::untimed}}};
+constexpr std::array<std::pair<std::string_view, Passes>, 4> kPassChoices{
+    {{"all", Passes::all},
+     {"timed", Passes::timed},
+     {"throughput", Passes::throughput},
+     {"untimed", Passes::untimed}}};
 
 // One option and its value. False for an unknown option or a value it does not take.
 bool parse_option(std::string_view arg, std::string_view value, Options& options) {
@@ -506,7 +513,8 @@ template <class Book, class MakeBook>
 int run_design(const Options& options, const OwnedInput& owned, const MakeBook& make_book) {
   using Session = ReplaySession<ReplayInput, PlatformClock, Book>;
   const bool timed = options.passes != Passes::untimed;
-  const bool untimed = options.passes != Passes::timed;
+  const bool latency = options.passes == Passes::all || options.passes == Passes::timed;
+  const bool untimed = options.passes == Passes::all || options.passes == Passes::untimed;
   const SysSource source = live_source();
   const std::string_view host = host_label(source.os, read_cpu_model(source));
   const PinOutcome pin = pin_current_thread(options.core);
@@ -532,8 +540,8 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
 
   const std::uint64_t messages = session.report().warmup_messages;
   const std::optional<Arena> arena =
-      timed ? Arena::make(messages * SampleBuffer::kBytesPerSample) : std::nullopt;
-  if (timed && !arena) {
+      latency ? Arena::make(messages * SampleBuffer::kBytesPerSample) : std::nullopt;
+  if (latency && !arena) {
     session.refuse("no arena for the latency samples");
   }
   SampleBuffer samples{arena ? std::span<std::byte>{arena->data(), arena->size()}
@@ -544,10 +552,13 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
         ->UseManualTime()
         ->Iterations(1)
         ->Unit(benchmark::kMillisecond);
-    benchmark::RegisterBenchmark("replay/latency", run_latency<Session>, &session, &timer, &samples)
-        ->UseManualTime()
-        ->Iterations(1)
-        ->Unit(benchmark::kMillisecond);
+    if (latency) {
+      benchmark::RegisterBenchmark("replay/latency", run_latency<Session>, &session, &timer,
+                                   &samples)
+          ->UseManualTime()
+          ->Iterations(1)
+          ->Unit(benchmark::kMillisecond);
+    }
     benchmark::RunSpecifiedBenchmarks();
   }
   benchmark::Shutdown();
@@ -556,7 +567,7 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
   CounterGroup group{host};
   RunRecord record;
   if (session.report().publishable()) {
-    if (timed) {
+    if (latency) {
       record.latency = summarise(samples, timer);
     }
     if (untimed) {
@@ -597,7 +608,7 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
        .counters = describe_counters(record.counters.statuses),
        .rdpmc = record.counters.agreement,
        .page_size = arena ? describe_arena(arena->report())
-                          : unavailable("no sample arena in a process with no timed pass"),
+                          : unavailable("no sample arena in a process with no latency pass"),
        .residency = session.report().residency});
   record.header.emplace_back("design", scrub_private(describe_design(options)));
   record.header.emplace_back("input", scrub_private(owned.describe()));
@@ -627,7 +638,8 @@ int run(int argc, char** argv) {
   if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
     std::println(stderr,
                  "usage: bench_replay --input FILE --out RUN.json [--design NAME] "
-                 "[--input-mode ram|mapped] [--track-top on|off] [--passes all|timed|untimed] "
+                 "[--input-mode ram|mapped] [--track-top on|off] "
+                 "[--passes all|timed|throughput|untimed] "
                  "[--core N] [--commit TEXT] [--dataset NAME] [--dataset-sha256 HEX] "
                  "[--orders N] [--levels N]");
     return 2;

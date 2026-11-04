@@ -3,8 +3,9 @@
 
     bench_driver.py --bench BENCH_REPLAY --probe BENCH_PROBE --input FILE \\
         --prediction P-NNNN --raw-dir DIR --out results/bench_NAME.md \\
-        [--design NAME]... [--input-mode ram|mapped] [--track-top] \\
-        [--repetitions N] [--core N] [--sibling N] [--title TEXT] [--note TEXT] \\
+        [--design NAME]... [--throughput-only NAME... --throughput-only-why TEXT] \\
+        [--input-mode ram|mapped] [--track-top] [--repetitions N] [--core N] \\
+        [--sibling N] [--title TEXT] [--note TEXT] \\
         [--orders N] [--levels N] [--wrapped-by TEXT] [--allow-dirty] [--bench-arg ARG]...
 
 On a reported run this is measure.sh's direct child, and it runs one process at a time,
@@ -27,6 +28,13 @@ which builds no other book first, so that the memory it reports is that book's o
 more than one design, --out must hold `{design}`, which becomes each design's name. A
 fast design's file compares its throughput with every map design in the same run,
 repetition by repetition (T-DESIGN-1), and every file holds each target beside the bar.
+
+A design named with --throughput-only runs the warm-up and the throughput pass alone in
+its timed process, with no latency pass and so no buffer for the latency samples. Its file
+says so in a `passes` header field, with the reason given in --throughput-only-why, and
+publishes no latency figure: no percentile, no per-operation table, no latency-pass rate,
+and its latency targets are not measured. The record must show that no latency pass ran,
+and a design not so named must show one, or the run is refused.
 
 Every run gets a row in results/run_log.md, whatever became of it, a run stopped by
 SIGTERM, SIGINT or SIGHUP included: the driver passes the signal to the process running,
@@ -74,6 +82,9 @@ FAST_DESIGNS = ("hash-linked", "hash-flat", "paged-linked", "paged-flat")
 OPERATIONS = ("add", "delete", "replace", "reduce")
 OPERATION_PERCENTILES = (50.0, 99.0, 99.9)
 BELOW_FLOOR = "below floor"
+LATENCY_METRICS = ("latency_messages_per_s", "mean_ns", "ratio")
+SAMPLE_BYTES = 5  # bench/replay.hpp's SampleBuffer::kBytesPerSample: a tick count and an op.
+NOT_MEASURED = "not measured"
 
 
 class Refused(Exception):
@@ -251,7 +262,8 @@ def run_process(args, index, commit, digest, design, passes):
 
 def run_repetition(args, index, commit, digest, design=None):
     """The timed record, with the counters and memory of its own untimed process."""
-    timed = run_process(args, index, commit, digest, design, "timed")
+    passes = "throughput" if design in args.throughput_only else "timed"
+    timed = run_process(args, index, commit, digest, design, passes)
     untimed = run_process(args, index, commit, digest, design, "untimed")
     memory = untimed.get("memory", {})
     if not memory.get("complete") or not memory.get("first_book"):
@@ -264,9 +276,27 @@ def run_repetition(args, index, commit, digest, design=None):
     return timed
 
 
-def validate_run(record):
-    """What a record must show for its numbers to mean anything."""
+def has_latency(record):
+    """Whether the record's timed process ran a latency pass."""
+    return record["latency_pass"] is not None
+
+
+def validate_run(record, latency=True):
+    """What a record must show for its numbers to mean anything. latency is whether its
+    timed process was asked for a latency pass."""
     warmup = record["warmup"]["messages"]
+    if record["throughput"] is None:
+        raise Refused("record", "no throughput pass")
+    if not latency:
+        if has_latency(record) or record["latency"]["samples"] != 0:
+            raise Refused("record", "a latency pass ran in a process asked for throughput only")
+        if record["throughput"]["messages"] != warmup:
+            raise Refused("record", f"throughput timed {record['throughput']['messages']} "
+                                    f"messages, one pass is {warmup}: the warm-up leaked in")
+        validate_counters(record)
+        return
+    if not has_latency(record):
+        raise Refused("record", "no latency pass in a process asked for one")
     for name in ("throughput", "latency_pass"):
         if record[name]["messages"] != warmup:
             raise Refused("record", f"{name} timed {record[name]['messages']} messages, "
@@ -285,6 +315,10 @@ def validate_run(record):
     for name, entry in entries:
         if entry["value_ns"] is not None and entry["value_ns"] < floor:
             raise Refused("record", f"{name}p{entry['percentile']} is below the {floor} ns floor")
+    validate_counters(record)
+
+
+def validate_counters(record):
     for status in record["counters"]["status"]:
         if status["state"] == "measured" and status["ratio"] < 1.0:
             raise Refused("record", f"{status['name']} is called measured at ratio "
@@ -307,6 +341,8 @@ def validate_together(runs):
             if record.get("mix") != first.get("mix"):
                 raise Refused("record", f"{design} counted another mix of messages")
             for name in ("throughput", "latency_pass"):
+                if record[name] is None or first[name] is None:
+                    continue
                 if record[name].get("top_changes") != first[name].get("top_changes"):
                     raise Refused("record", f"{design} saw {record[name].get('top_changes')} "
                                             f"moves of the top in its {name}, against "
@@ -339,6 +375,8 @@ def summary_rows(records):
     rows = []
     metrics = METRICS + (BOOK_METRICS if is_book_record(records[0]) else ())
     for label, key, shape in metrics:
+        if key in LATENCY_METRICS and not has_latency(records[0]):
+            continue
         median, low, high, variation = spread(metric_values(records, key))
         rows.append(f"| {label} | {median:{shape}} | {low:{shape}} | {high:{shape}} "
                     f"| {100 * variation:.2f}% |")
@@ -466,8 +504,10 @@ def repetition_rows(records):
     rows = []
     for index, record in enumerate(records, start=1):
         peak = record["peak_rss_bytes"] / 1024 ** 3
+        ratio = (f"{record['instrumentation_ratio']:.4f}" if has_latency(record)
+                 else f"{NOT_MEASURED}, no latency pass")
         rows.append(f"| {index} | {record['throughput']['messages_per_s']:,.0f} "
-                    f"| {record['instrumentation_ratio']:.4f} "
+                    f"| {ratio} "
                     f"| {record['timer']['quantum_ns']:.3f} | {record['timer']['pair_ns']:.3f} "
                     f"| {record['migrations']} | {peak:.2f} |")
     return rows
@@ -487,9 +527,23 @@ def header_lines(records, args, run_id, started, finished):
               f"- timed_messages: {records[0]['throughput']['messages']:,}"]
     if is_book_record(records[0]):
         lines.append(f"- book_messages: {records[0]['mix']['book_messages']:,}")
+        lines.append(f"- passes: {passes_field(records, args)}")
     lines += [f"- run_started: {started}",
               f"- run_finished: {finished}"]
     return lines
+
+
+def passes_field(records, args):
+    """Which passes this design ran, and why, when it ran fewer than every one."""
+    untimed = "then the untimed pass of counters and memory in a second process"
+    if has_latency(records[0]):
+        return ("all: the warm-up, the throughput pass and the latency pass in one process, "
+                f"{untimed}")
+    buffer = records[0]["warmup"]["messages"] * SAMPLE_BYTES / 1024 ** 2
+    return (f"throughput only: the warm-up and the throughput pass in one process, {untimed}; "
+            "no latency pass, so this file publishes no latency figure, and the process made "
+            f"no buffer for the latency samples, which would have held {buffer:,.1f} MiB. Why: "
+            f"{args.throughput_only_why}")
 
 
 def design_of(record):
@@ -572,50 +626,9 @@ def judge(target, host, parts):
     return measured, verdict
 
 
-def target_rows(records, runs):
-    """Every target beside its bar, measured from this file's design in this run."""
-    first = records[0]
-    host = first["header"]["host"]
-    design = design_of(first)
-    ram = first["header"]["input"].startswith("ram:")
-    tracked = first["header"]["top_of_book"].startswith("tracked")
-    rows = []
-
-    def row(target, bar, measured, verdict):
-        rows.append(f"| {target} | {bar} | {SET_ON[target]} | {measured} | {verdict} |")
-
-    def absent(target, bar, why):
-        row(target, bar, "", f"not measured in this run: {why}")
-
-    if design in MAP_DESIGNS:
-        why = "the targets are the fast book's, and this is the baseline it is measured against"
-        for target, bar in (("T-BOOK-1", "≥ 16.4 M msg/s"), ("T-BOOK-2", "≥ 12.5 M msg/s"),
-                            ("T-BOOK-3", "≤ 1.4 GB"), ("T-BOOK-4", "≥ 14.4 M msg/s"),
-                            ("T-LAT-1", "per operation"), ("T-LAT-2", "p50 ≤ 121 ns"),
-                            ("T-LAT-3", "mean ≤ 393 ns"), ("T-LAT-4", "p50 ≤ 100 ns"),
-                            ("T-LAT-5", "p50 ≤ 127 ns"), ("T-DESIGN-1", "≥ 4.0×")):
-            absent(target, bar, why)
-        return rows
-
-    rate = median_of(records, "messages_per_s") / MEGA
-    if ram and not tracked:
-        row("T-BOOK-1", "≥ 16.4 M msg/s",
-            *judge("T-BOOK-1", host, [("rate", rate, 16.4, "min", " M msg/s")]))
-    else:
-        absent("T-BOOK-1", "≥ 16.4 M msg/s", "needs the input in memory and no top-of-book tracking")
-    if not ram and tracked:
-        row("T-BOOK-2", "≥ 12.5 M msg/s",
-            *judge("T-BOOK-2", host, [("rate", rate, 12.5, "min", " M msg/s")]))
-    else:
-        absent("T-BOOK-2", "≥ 12.5 M msg/s", "needs the input mapped and the top of book tracked")
-    book_gb = statistics.median(record["memory"]["book_bytes"] for record in records) / 1e9
-    row("T-BOOK-3", "≤ 1.4 GB of book",
-        *judge("T-BOOK-3", host, [("book", book_gb, GIB_LIMIT / 1e9, "max", " GB")]))
-    if first["header"]["dataset"].startswith("01302019") and host == check_results.MAC_HOST:
-        row("T-BOOK-4", "≥ 14.4 M msg/s on 01302019",
-            *judge("T-BOOK-4", host, [("rate", rate, 14.4, "min", " M msg/s")]))
-    else:
-        absent("T-BOOK-4", "≥ 14.4 M msg/s on 01302019", "set on day 01302019 on macOS only")
+def latency_targets(records, host, row):
+    """T-LAT-1 to T-LAT-5, from the latency pass, each through row(target, bar, measured,
+    verdict)."""
     parts = []
     for operation, bars in T_LAT_1.items():
         for percentile, bar in zip(OPERATION_PERCENTILES, bars):
@@ -640,6 +653,61 @@ def target_rows(records, runs):
     row("T-LAT-5", "p50 ≤ 127, p99 ≤ 446, p99.9 ≤ 778 ns, raw",
         *judge("T-LAT-5", host, [(f"p{p:g}", raw[p], bar, "max", " ns")
                                  for p, bar in zip(raw, (127, 446, 778))]))
+
+
+def target_rows(records, runs):
+    """Every target beside its bar, measured from this file's design in this run."""
+    first = records[0]
+    host = first["header"]["host"]
+    design = design_of(first)
+    ram = first["header"]["input"].startswith("ram:")
+    tracked = first["header"]["top_of_book"].startswith("tracked")
+    rows = []
+
+    def row(target, bar, measured, verdict):
+        rows.append(f"| {target} | {bar} | {SET_ON[target]} | {measured} | {verdict} |")
+
+    def absent(target, bar, why):
+        row(target, bar, "", f"not measured in this run: {why}")
+
+    if design in MAP_DESIGNS:
+        why = "the targets are the fast book's, and this is the baseline it is measured against"
+        for target, bar in (("T-BOOK-1", "≥ 16.4 M msg/s"), ("T-BOOK-2", "≥ 12.5 M msg/s"),
+                            ("T-BOOK-3", "≤ 1.4 GB"), ("T-BOOK-4", "≥ 14.4 M msg/s"),
+                            ("T-LAT-1", "per operation"), ("T-LAT-2", "p50 ≤ 121 ns"),
+                            ("T-LAT-3", "mean ≤ 393 ns"), ("T-LAT-4", "p50 ≤ 100 ns"),
+                            ("T-LAT-5", "p50 ≤ 127 ns"), ("T-DESIGN-1", "≥ 4.0×")):
+            absent(target, bar, why)
+        return rows
+    latency = has_latency(first)
+
+    rate = median_of(records, "messages_per_s") / MEGA
+    if ram and not tracked:
+        row("T-BOOK-1", "≥ 16.4 M msg/s",
+            *judge("T-BOOK-1", host, [("rate", rate, 16.4, "min", " M msg/s")]))
+    else:
+        absent("T-BOOK-1", "≥ 16.4 M msg/s", "needs the input in memory and no top-of-book tracking")
+    if not ram and tracked:
+        row("T-BOOK-2", "≥ 12.5 M msg/s",
+            *judge("T-BOOK-2", host, [("rate", rate, 12.5, "min", " M msg/s")]))
+    else:
+        absent("T-BOOK-2", "≥ 12.5 M msg/s", "needs the input mapped and the top of book tracked")
+    book_gb = statistics.median(record["memory"]["book_bytes"] for record in records) / 1e9
+    row("T-BOOK-3", "≤ 1.4 GB of book",
+        *judge("T-BOOK-3", host, [("book", book_gb, GIB_LIMIT / 1e9, "max", " GB")]))
+    if first["header"]["dataset"].startswith("01302019") and host == check_results.MAC_HOST:
+        row("T-BOOK-4", "≥ 14.4 M msg/s on 01302019",
+            *judge("T-BOOK-4", host, [("rate", rate, 14.4, "min", " M msg/s")]))
+    else:
+        absent("T-BOOK-4", "≥ 14.4 M msg/s on 01302019", "set on day 01302019 on macOS only")
+    if not latency:
+        why = "this design ran no latency pass in this run, as `passes` in the header says"
+        for target, bar in (("T-LAT-1", "per operation"), ("T-LAT-2", "p50 ≤ 121 ns"),
+                            ("T-LAT-3", "mean ≤ 393 ns"), ("T-LAT-4", "p50 ≤ 100 ns"),
+                            ("T-LAT-5", "p50 ≤ 127 ns")):
+            absent(target, bar, why)
+    else:
+        latency_targets(records, host, row)
     maps = [name for name in MAP_DESIGNS if name in runs]
     if maps:
         parts = [(f"over {name}", statistics.median(paired_ratios(records, runs[name])), 4.0,
@@ -676,6 +744,12 @@ def memory_rows(records):
     return rows
 
 
+def not_measured_line(what):
+    """The whole of a latency section for a design that ran no latency pass."""
+    return (f"Not measured: this design ran no latency pass in this run, as `passes` in the "
+            f"header says, so no {what} figure is published for it.")
+
+
 def method_lines(header):
     """What the input mode and the top-of-book tracking did, and which of itch-book's two
     methods that is."""
@@ -703,15 +777,32 @@ def method_lines(header):
 def book_sections(records, runs):
     """The sections only a book design's file has."""
     first = records[0]
-    memory = first["memory"]
     lines = method_lines(first["header"])
-    lines += ["", "## Per-operation latency", "",
+    if has_latency(first):
+        lines += operation_section(records)
+    else:
+        lines += ["", "## Per-operation latency", "", not_measured_line("per-operation latency")]
+    return lines + memory_section(records, runs)
+
+
+def operation_section(records):
+    """T-LAT-1's table, from the latency pass."""
+    first = records[0]
+    lines = ["", "## Per-operation latency", "",
              f"T-LAT-1. The latency pass's spans, by what the message asks of the book: "
              f"{operation_counts(first)} messages a pass. `reduce` is `E`, `C` and `X`. The "
              "last column takes each repetition's own measured empty pair off its figure.", "",
              "| Operation | Percentile | Median ns | Min ns | Max ns | CV | Status "
              "| Median ns, pair subtracted |", "|---|---|---|---|---|---|---|---|"]
     lines += operation_rows(records)
+    return lines
+
+
+def memory_section(records, runs):
+    """The book's memory, the top of book, the design comparison and the targets."""
+    first = records[0]
+    memory = first["memory"]
+    lines = []
     ager = ""
     if memory.get("ager_held_bytes") is not None:
         ager = (f" The ager's ballast is inside the figure: it holds "
@@ -751,6 +842,13 @@ def book_sections(records, runs):
                   "|---|---|---|---|---|---|", *comparison]
     else:
         lines += ["No map design ran beside it in this run, so T-DESIGN-1 is not measured here."]
+    reduced = [f"`{name}`" for name, others in runs.items()
+               if name != design_of(first) and not has_latency(others[0])]
+    if comparison and reduced:
+        named = " and ".join(filter(None, (", ".join(reduced[:-1]), reduced[-1])))
+        say = "its own file says" if len(reduced) == 1 else "their own files say"
+        lines += ["", f"In this run {named} ran throughput only, as {say}: every ratio here is "
+                  "of throughput passes, which every design ran the same way."]
     lines += ["", "## Targets", "",
               "Each target from BENCHMARKS.md beside the bar, from this file's medians. A bar "
               "set on other hardware is the bar and context, not proof about this host.", "",
@@ -794,6 +892,9 @@ def render(records, args, run_id, started, finished, machine_output, command, ru
     lines += header_lines(records, args, run_id, started, finished)
     passes = ("one warm-up pass, excluded from every figure here, then a throughput pass and a "
               "separate latency pass, each on a fresh book")
+    if not has_latency(records[0]):
+        passes = ("one warm-up pass, excluded from every figure here, then a throughput pass on a "
+                  "fresh book, with no latency pass")
     if book:
         passes += (", and a second process for the untimed pass of counters and memory. Every "
                    "design of the run ran in each repetition, one after the other")
@@ -806,7 +907,9 @@ def render(records, args, run_id, started, finished, machine_output, command, ru
                   "denominator: `A`, `F`, `E`, `C`, `X`, `D`, `U`, `P` and `Q` (T-LAT-4).", ""]
     lines += ["| Figure | Median | Min | Max | CV |", "|---|---|---|---|---|"]
     lines += summary_rows(records)
-    if book:
+    if not has_latency(records[0]):
+        lines += ["", "## Latency", "", not_measured_line("latency")]
+    elif book:
         lines += ["", "## Latency", "",
                   "One span is one `apply()`, with the empty pair inside it, and the frame walk "
                   "outside. HdrHistogram saw the samples after the pass. A percentile less than "
@@ -822,7 +925,8 @@ def render(records, args, run_id, started, finished, machine_output, command, ru
                   "the floor above the pair cost is not a measurement, so it has no value here.",
                   "", "| Percentile | Median ns | Min ns | Max ns | CV | Status |",
                   "|---|---|---|---|---|---|"]
-    lines += latency_rows(records)
+    if has_latency(records[0]):
+        lines += latency_rows(records)
     if book:
         lines += book_sections(records, runs or {design: records})
     lines += ["", "## Counters", "",
@@ -869,6 +973,10 @@ def relative_command(args):
              "--raw-dir", "<raw>", "--out", shown(args.out)]
     for design in args.design:
         words += ["--design", design]
+    for design in args.throughput_only:
+        words += ["--throughput-only", design]
+    if args.throughput_only:
+        words += ["--throughput-only-why", args.throughput_only_why]
     words += ["--input-mode", args.input_mode]
     if args.track_top:
         words.append("--track-top")
@@ -907,7 +1015,7 @@ def run(args, run_id, started, commit):
     for index in range(1, args.repetitions + 1):
         for design in designs:
             record = run_repetition(args, index, commit, digest, design)
-            validate_run(record)
+            validate_run(record, latency=design not in args.throughput_only)
             runs.setdefault(design_of(record), []).append(record)
     validate_together(runs)
     set_stage("rendering the results files")
@@ -944,6 +1052,11 @@ def parse_args(argv):
     parser.add_argument("--design", action="append", default=[],
                         choices=FAST_DESIGNS + MAP_DESIGNS,
                         help="repeatable; every one runs in each repetition, in this order")
+    parser.add_argument("--throughput-only", action="append", default=[], metavar="DESIGN",
+                        choices=FAST_DESIGNS + MAP_DESIGNS,
+                        help="repeatable; a design named by --design that runs no latency pass")
+    parser.add_argument("--throughput-only-why", metavar="TEXT",
+                        help="why, in a sentence each such file prints; required with the above")
     parser.add_argument("--input-mode", choices=("ram", "mapped"), default="mapped")
     parser.add_argument("--track-top", action="store_true")
     parser.add_argument("--orders", type=int)
@@ -965,6 +1078,15 @@ def parse_args(argv):
         parser.error("a design is named twice")
     if len(args.design) > 1 and "{design}" not in str(args.out):
         parser.error("with more than one design, --out must hold {design}")
+    for design in args.throughput_only:
+        if design not in args.design:
+            parser.error(f"--throughput-only {design} names a design the run does not run")
+    if len(args.throughput_only) != len(set(args.throughput_only)):
+        parser.error("a design is named twice with --throughput-only")
+    if args.throughput_only and not (args.throughput_only_why or "").strip():
+        parser.error("--throughput-only needs --throughput-only-why, which its files print")
+    if args.throughput_only_why and not args.throughput_only:
+        parser.error("--throughput-only-why with no --throughput-only design")
     return args
 
 

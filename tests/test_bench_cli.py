@@ -133,6 +133,19 @@ class Cli(unittest.TestCase):
         self.assertGreater(memory["book_bytes"], 400 * 1024 ** 2)
         self.assertEqual(memory["book_bytes"], memory["peak_bytes"] - memory["baseline_bytes"])
 
+    def test_a_throughput_only_process_runs_no_latency_pass(self):
+        result, out = self.replay("--design", "map-aged", "--input-mode", "ram", "--passes",
+                                  "throughput")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(record["refusals"], [])
+        self.assertEqual(record["throughput"]["messages"], record["warmup"]["messages"])
+        self.assertIsNone(record["latency_pass"])
+        self.assertIsNone(record["instrumentation_ratio"])
+        self.assertEqual(record["latency"]["samples"], 0)
+        self.assertEqual(record["header"]["page_size"],
+                         "unavailable: no sample arena in a process with no latency pass")
+
     def test_the_aged_map_book_reports_its_ballast(self):
         result, out = self.replay("--design", "map-aged", "--passes", "untimed")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -231,6 +244,39 @@ class Cli(unittest.TestCase):
         fast = Path(str(out).replace("{design}", "paged-linked")).read_text(encoding="utf-8")
         self.assertRegex(fast, r"\| map-fresh \| [0-9.]+ \|")
         self.assertRegex(fast, r"\| map-aged \| [0-9.]+ \|")
+
+    @unittest.skipUnless(platform.system() == "Darwin", "machine_check needs a measuring machine")
+    def test_the_driver_runs_a_design_throughput_only(self):
+        predictions = SCRATCH / "records"
+        (predictions / "results").mkdir(parents=True)
+        (predictions / "results" / "predictions.md").write_text(
+            "## P-0999: fixture\n\n- Prediction: it runs.\n", encoding="utf-8")
+        out = SCRATCH / "results" / "bench_book_{design}_ram.md"
+        result = subprocess.run(
+            [sys.executable, "-B", str(REPO_ROOT / "scripts" / "bench_driver.py"),
+             "--bench", str(BENCH), "--probe", str(PROBE), "--input", str(FIXTURE),
+             "--prediction", "P-0999", "--repetitions", "3", "--raw-dir", str(SCRATCH / "raw"),
+             "--out", str(out), "--design", "paged-linked", "--design", "map-fresh",
+             "--throughput-only", "map-fresh", "--throughput-only-why", "a test of the option",
+             "--input-mode", "ram", "--allow-dirty", "--predictions-root", str(predictions),
+             "--run-log", str(predictions / "results" / "run_log.md")],
+            capture_output=True, text=True, timeout=300, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        texts = {design: Path(str(out).replace("{design}", design)).read_text(encoding="utf-8")
+                 for design in ("paged-linked", "map-fresh")}
+        for design, text in texts.items():
+            self.assertEqual({code for code, _ in check_results.check_text(text)},
+                             {"load-not-stamped"}, design)
+        self.assertIn("- passes: all: ", texts["paged-linked"])
+        self.assertRegex(texts["paged-linked"], r"\| p50 \| ")
+        self.assertRegex(texts["paged-linked"], r"\| map-fresh \| [0-9.]+ \|")
+        self.assertIn("- passes: throughput only: ", texts["map-fresh"])
+        self.assertIn("Why: a test of the option", texts["map-fresh"])
+        self.assertNotRegex(texts["map-fresh"], r"\| (p50|max|add) \| ")
+        for index in (1, 2, 3):
+            record = json.loads((SCRATCH / "raw" / f"map-fresh-repetition-{index}-throughput.json")
+                                .read_text(encoding="utf-8"))
+            self.assertIsNone(record["latency_pass"])
 
     @unittest.skipUnless(platform.system() == "Darwin", "machine_check needs a measuring machine")
     def test_a_refused_run_stays_in_the_log(self):

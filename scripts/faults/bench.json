@@ -2789,6 +2789,190 @@
         "signature": "FAIL: test_a_signal_during_a_repetition_reaches_the_bench_and_writes_the_row",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-throughput-pass-runs-latency",
+      "breaks": "bench_replay --passes throughput still runs the latency pass and makes its sample buffer",
+      "check": "test_bench_cli.py test_a_throughput_only_process_runs_no_latency_pass",
+      "mutations": [
+        {
+          "file": "bench/bench_replay.cpp",
+          "old": "  const bool latency = options.passes == Passes::all || options.passes == Passes::timed;\n",
+          "new": "  const bool latency = timed;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_replay",
+          "bench_probe"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_cli.py",
+        "{build}/bench/bench_replay",
+        "{build}/bench/bench_probe",
+        "{build}/fault_bench_cli",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "Cli.test_a_throughput_only_process_runs_no_latency_pass"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_throughput_only_process_runs_no_latency_pass"
+      },
+      "timeout": 600
+    },
+    {
+      "id": "bench-driver-throughput-only-not-passed-on",
+      "breaks": "The driver runs a design named throughput only with every pass",
+      "check": "test_bench_results.py test_a_throughput_only_design_asks_the_bench_for_throughput_alone",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    passes = \"throughput\" if design in args.throughput_only else \"timed\"\n",
+          "new": "    passes = \"timed\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_throughput_only_design_asks_the_bench_for_throughput_alone",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-latency-pass-unchecked",
+      "breaks": "The driver accepts a record with a latency pass from a process asked for throughput only",
+      "check": "test_bench_results.py test_a_throughput_only_record_is_accepted_only_where_asked_for",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "        if has_latency(record) or record[\"latency\"][\"samples\"] != 0:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_throughput_only_record_is_accepted_only_where_asked_for",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-prints-unmeasured-latency",
+      "breaks": "The driver writes a latency table for a design that ran no latency pass",
+      "check": "test_bench_cli.py test_the_driver_runs_a_design_throughput_only",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if not has_latency(records[0]):\n        lines += [\"\", \"## Latency\", \"\", not_measured_line(\"latency\")]\n    elif book:\n",
+          "new": "    if book:\n"
+        },
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if has_latency(records[0]):\n        lines += latency_rows(records)\n",
+          "new": "    lines += latency_rows(records)\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_replay",
+          "bench_probe"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_cli.py",
+        "{build}/bench/bench_replay",
+        "{build}/bench/bench_probe",
+        "{build}/fault_bench_cli",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "Cli.test_the_driver_runs_a_design_throughput_only"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_driver_runs_a_design_throughput_only"
+      },
+      "timeout": 600
+    },
+    {
+      "id": "bench-book-file-unmeasured-latency-table",
+      "breaks": "A throughput-only book file prints a latency table it did not measure",
+      "check": "check_results.py latency-not-measured",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_throughput_mac.md",
+          "op": "replace_text",
+          "old": "so no latency figure is published for it.\n",
+          "new": "so no latency figure is published for it.\n\n| Percentile | Median ns |\n|---|---|\n| p50 | 300.0 |\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_throughput_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL latency-not-measured good_book_throughput_mac\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-unmeasured-target-judged",
+      "breaks": "A throughput-only book file gives a latency target a verdict",
+      "check": "check_results.py latency-not-measured",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_throughput_mac.md",
+          "op": "replace_text",
+          "old": "| T-LAT-3 | mean ≤ 393 ns | a rate budget, for every host |  | not measured in this run: the targets are the fast book's, and this is the baseline it is measured against |",
+          "new": "| T-LAT-3 | mean ≤ 393 ns | a rate budget, for every host | mean 55.56 ns | met |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_throughput_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL latency-not-measured good_book_throughput_mac\\.md: T-LAT-3",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-book-file-throughput-only-no-reason",
+      "breaks": "A throughput-only book file does not say why",
+      "check": "check_results.py passes-malformed",
+      "inputs": [
+        {
+          "file": "tests/fixtures/bench_results/good_book_throughput_mac.md",
+          "op": "replace_text",
+          "old": " Why: T-DESIGN-1 needs only the throughput of the map designs, and a run of every design must fit beside the other work of the host",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/tests/fixtures/bench_results/good_book_throughput_mac.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL passes-malformed good_book_throughput_mac\\.md",
+        "exit": 1
+      }
     }
   ]
 }
