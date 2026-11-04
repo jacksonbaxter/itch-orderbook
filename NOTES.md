@@ -783,6 +783,7 @@ The old rule was not conservative on these. With `ahead` at zero, a late add exe
 - With the late-add rule alone the smoke still counted 1,309 anomalies. A probe that counted each by message type found every one was a printable `C`, which led to the second rule.
 - Two fault mutations first failed to build under `-Werror` (an unused `shares`, an unused `traded`), and the fault for `--strict`'s `C` condition first removed a variable; each now changes an expression.
 - The gates' home-path check failed on the worktree's `.git`, a file naming the main repository's path. The walk now skips `.git` by name, file or directory, with a test.
+- The first full `scripts/check.sh` on this branch failed only clang-tidy, on `itch_queue_jumps.cpp` as committed in e9d1049: nested conditional operators, a missing pair of parentheses, and `fopen` without the owning-memory suppression the other tools carry. The fix changes no output, and every other stage passed, the fault matrix at 594 of 594.
 
 ## T-BT-1 and T-BT-3 on the Mac, 2026-11-04
 

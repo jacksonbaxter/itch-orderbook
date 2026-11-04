@@ -351,12 +351,13 @@ class QueueJumps {
     const Price4 traded = c.execution_price;
     // The resting order pays more, or is paid less, than it showed: the aggressor improved.
     const bool aggressor_improved = level.side == Side::bid ? traded > shown : traded < shown;
-    const std::size_t at = (aggressor_improved ? 0U
-                            : traded == shown  ? 1U
-                                               : 2U) *
-                               2U +
-                           (front ? 0U : 1U);
-    ++c_printable_[at];
+    std::size_t price_class = 2U;  // The resting order improved.
+    if (aggressor_improved) {
+      price_class = 0U;
+    } else if (traded == shown) {
+      price_class = 1U;
+    }
+    ++c_printable_[(price_class * 2U) + (front ? 0U : 1U)];
     c_printable_lowest_ += lowest == c.order_reference ? 1U : 0U;
   }
 
@@ -393,9 +394,11 @@ class QueueJumps {
     }
     for (const std::size_t index : found->second) {
       Jump& jump = jumps_[index];
-      jump.fate = !executed           ? Fate::removed_first
-                  : time == jump.time ? Fate::executed_same_ns
-                                      : Fate::executed_later;
+      if (!executed) {
+        jump.fate = Fate::removed_first;
+      } else {
+        jump.fate = time == jump.time ? Fate::executed_same_ns : Fate::executed_later;
+      }
     }
     fronts_.erase(found);
   }
@@ -446,6 +449,7 @@ int run(std::span<const char* const> args) {
   }
   std::FILE* details = nullptr;
   if (details_path != nullptr) {
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     details = std::fopen(details_path, "w");
     if (details == nullptr) {
       std::println(stderr, "itch_queue_jumps: cannot write {}", details_path);
@@ -456,7 +460,7 @@ int run(std::span<const char* const> args) {
   const bool replayed = jumps->replay(file->bytes());
   const bool held = replayed && jumps->print(details);
   if (details != nullptr) {
-    static_cast<void>(std::fclose(details));
+    static_cast<void>(std::fclose(details));  // NOLINT(cppcoreguidelines-owning-memory)
   }
   if (!replayed) {
     return 1;
