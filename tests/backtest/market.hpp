@@ -57,7 +57,7 @@ class RandomMarket {
     put(out, wire::trading_action(kLocate, 'T', time_));
     put(out, wire::system_event('Q', time_));
     for (int step = 0; step < steps; ++step) {
-      time_ += 1 + (random_() % 2'000);
+      time_ += 1 + (draw() % 2'000);
       this->step(out);
     }
     return out;
@@ -76,14 +76,14 @@ class RandomMarket {
   }
 
   void step(std::vector<Message>& out) {
-    const std::uint32_t pick = random_() % 100;
+    const std::uint32_t pick = draw() % 100;
     if (pick < 40 || live_.size() < 8) {
-      const char side = random_() % 2 == 0 ? 'B' : 'S';
-      const auto ticks = static_cast<Price4>(1 + (random_() % 4));
+      const char side = draw() % 2 == 0 ? 'B' : 'S';
+      const auto ticks = static_cast<Price4>(1 + (draw() % 4));
       const Price4 price = side == 'B' ? mid_ - (ticks * kTick) : mid_ + (ticks * kTick);
-      add(out, side, price, 100 * (1 + (random_() % 5)));
+      add(out, side, price, 100 * (1 + (draw() % 5)));
     } else if (pick < 60) {
-      execute_front(out, random_() % 2 == 0 ? 'B' : 'S');
+      execute_front(out, draw() % 2 == 0 ? 'B' : 'S');
     } else if (pick < 72) {
       const std::uint64_t reference = any_live();
       Live& order = live_.at(reference);
@@ -96,14 +96,14 @@ class RandomMarket {
     } else if (pick < 92) {
       const std::uint64_t reference = any_live();
       const Live order = live_.at(reference);
-      const auto ticks = static_cast<Price4>(1 + (random_() % 4));
+      const auto ticks = static_cast<Price4>(1 + (draw() % 4));
       const Price4 price = order.side == 'B' ? mid_ - (ticks * kTick) : mid_ + (ticks * kTick);
       const std::uint64_t fresh = next_reference_++;
       put(out, wire::replace(kLocate, reference, fresh, order.shares, price, time_));
       forget(reference);
       remember(fresh, order.side, price, order.shares);
     } else {
-      move_mid(out, random_() % 2 == 0 ? 1 : -1);
+      move_mid(out, draw() % 2 == 0 ? 1 : -1);
     }
   }
 
@@ -121,7 +121,7 @@ class RandomMarket {
     const auto best = side == 'B' ? std::prev(levels.end()) : levels.begin();
     const std::uint64_t reference = best->second.front();
     Live& order = live_.at(reference);
-    const std::uint32_t shares = 1 + (random_() % order.shares);
+    const std::uint32_t shares = 1 + (draw() % order.shares);
     put(out, wire::execute(kLocate, reference, shares, time_));
     order.shares -= shares;
     if (order.shares == 0) {
@@ -149,9 +149,14 @@ class RandomMarket {
     }
   }
 
+  // std::mt19937 only ever yields 32-bit words, but its result_type is uint_fast32_t,
+  // which is 64 bits wide on Linux and 32 on macOS. The cast changes no value, so the
+  // stream is the same on every platform, and the arithmetic on it is the same width.
+  [[nodiscard]] std::uint32_t draw() { return static_cast<std::uint32_t>(random_()); }
+
   [[nodiscard]] std::uint64_t any_live() {
     auto at = live_.begin();
-    std::advance(at, static_cast<std::ptrdiff_t>(random_() % live_.size()));
+    std::advance(at, static_cast<std::ptrdiff_t>(draw() % live_.size()));
     return at->first;
   }
 
