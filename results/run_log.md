@@ -18,3 +18,4 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0011-20261103T112023Z | P-0011 | bfdd4bb117a7 (exported by debian_sync.sh) | Linux | published |
 | P-0012-20261104T044034Z | P-0012 | 2810183f1d95 (exported by debian_sync.sh) | Linux | refused at repetition 1, map-aged: the kernel's pswpout moved by 1 pages since the run began, by the end of this process: the run does not fit beside the host's other work |
 | P-0013-20261104T054149Z | P-0013 | 2810183f1d95 (exported by debian_sync.sh) | Linux | published |
+| P-0014-20261104T071049Z | P-0014 | 0ffe738913e4 (exported by debian_sync.sh) | Linux | refused at machine_check: machine_check: refused, 1 failed |

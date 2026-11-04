@@ -16,7 +16,7 @@ Built:
 - Fuzz targets, sanitizer builds, and a fault matrix that shows each check failing on a planted bug.
 - The core of an event-driven backtester: simulated orders queued among the real ones by their order references, with latencies, a share ledger and per-fill fees, checked on 48 hand-worked scenarios and for lookahead. It has no market impact, by construction, and nothing about its speed is measured yet.
 
-Not built: SIMD, the market maker and the demo. The oracle and trade rows below are the real book's. The harness-proof rows are the Phase 2 stub's, and say so. The book-design rows are from macOS, which cannot pin a thread, so none of them is a pinned figure and none stands for a Linux one, and from `debian`, pinned to core 4, where only the mapped run with the top tracked is published: the run with the day in memory swapped other processes out there and was refused, and the host's reboot left its hardware counters closed to a user. The default arm is the paged index with flat levels, the fastest on both hosts.
+Not built: SIMD, the market maker and the demo. The oracle and trade rows below are the real book's. The harness-proof rows are the Phase 2 stub's, and say so. The book-design rows are from macOS, which cannot pin a thread, so none of them is a pinned figure and none stands for a Linux one, and from `debian`, pinned to core 4, where only the mapped runs with the top tracked are published, the second with hardware counters: every run with the day in memory there was refused, the last after the kernel swapped out one page, or never got the host. The default arm is the paged index with flat levels, the fastest on both hosts.
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` has never executed on GitHub, because this repo has no remote. [NOTES.md](NOTES.md) says which jobs were run by hand and how.
 
@@ -98,6 +98,7 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0011-20261103T112023Z` | `P-0011` | `bfdd4bb117a7` | Linux | `published` |
 | `P-0012-20261104T044034Z` | `P-0012` | `2810183f1d95` | Linux | `refused at repetition 1, map-aged` |
 | `P-0013-20261104T054149Z` | `P-0013` | `2810183f1d95` | Linux | `published` |
+| `P-0014-20261104T071049Z` | `P-0014` | `0ffe738913e4` | Linux | `refused at machine_check` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
