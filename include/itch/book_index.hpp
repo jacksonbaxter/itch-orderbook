@@ -95,7 +95,7 @@ class PagedIndex {
 
   explicit PagedIndex(const BookCapacity& capacity)
       : reach_{std::uint64_t{1} << std::min(capacity.index_bits, kMostBits)},
-        directory_(((reach_ - 1) >> PageBits) + 1, kNoIndex),
+        directory_(static_cast<std::size_t>(((reach_ - 1) >> PageBits) + 1), kNoIndex),
         slots_(std::size_t{capacity.index_pages} << PageBits, kNoIndex),
         page_live_(capacity.index_pages, 0),
         page_home_(capacity.index_pages, kNoIndex),
@@ -104,7 +104,7 @@ class PagedIndex {
   [[nodiscard]] std::uint32_t find(std::uint64_t reference,
                                    std::span<const BookOrder> orders) const noexcept {
     if (reference < reach_) {
-      const std::uint32_t page = directory_[reference >> PageBits];
+      const std::uint32_t page = directory_[static_cast<std::size_t>(reference >> PageBits)];
       if (page != kNoIndex) {
         const std::uint32_t order = slots_[slot_of(page, reference)];
         if (order != kNoIndex) {
@@ -118,7 +118,7 @@ class PagedIndex {
   void insert(std::uint64_t reference, std::uint32_t order,
               std::span<const BookOrder> orders) noexcept {
     if (reference < reach_) {
-      std::uint32_t& page = directory_[reference >> PageBits];
+      std::uint32_t& page = directory_[static_cast<std::size_t>(reference >> PageBits)];
       if (page == kNoIndex && has_free_page()) {
         page = take_page(static_cast<std::uint32_t>(reference >> PageBits));
       }
@@ -135,7 +135,7 @@ class PagedIndex {
 
   void erase(std::uint64_t reference, std::span<const BookOrder> orders) noexcept {
     if (reference < reach_) {
-      const std::uint32_t page = directory_[reference >> PageBits];
+      const std::uint32_t page = directory_[static_cast<std::size_t>(reference >> PageBits)];
       if (page != kNoIndex && slots_[slot_of(page, reference)] != kNoIndex) {
         slots_[slot_of(page, reference)] = kNoIndex;
         if (--page_live_[page] == 0) {
