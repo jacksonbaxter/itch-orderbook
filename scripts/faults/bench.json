@@ -925,6 +925,69 @@
       }
     },
     {
+      "id": "bench-run-log-prefix-unchecked",
+      "breaks": "A committed run-log row is edited or removed and let through",
+      "check": "test_check_predictions.py test_a_failed_run_removed_from_the_log",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "        if parents and not text.startswith(log_at(root, parents[0])):\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_failed_run_removed_from_the_log",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-log-merge-drops-rows",
+      "breaks": "A merge drops a run-log row the merged branch committed, and it is let through",
+      "check": "test_check_predictions.py test_a_merge_that_drops_a_branch_row",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "        for parent in parents[1:]:\n",
+          "new": "        for parent in parents[1:0]:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_merge_that_drops_a_branch_row",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-log-merge-hidden",
+      "breaks": "The log's history is simplified, so a merge that keeps its first parent's log is never read",
+      "check": "test_check_predictions.py test_a_merge_that_drops_a_branch_row",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "\"log\", \"--full-history\", \"--reverse\"",
+          "new": "\"log\", \"--reverse\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_merge_that_drops_a_branch_row",
+        "exit": 1
+      }
+    },
+    {
       "id": "bench-failed-run-dropped",
       "breaks": "A published run has no row in the run log",
       "check": "check_predictions.py run-missing-from-log",

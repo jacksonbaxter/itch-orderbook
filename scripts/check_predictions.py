@@ -24,6 +24,7 @@ import argparse
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -77,17 +78,30 @@ def check_history(root, identifier, result_path, known):
                f"{commit[:10]} does not precede {result_commit[:10]}")
 
 
+def log_at(root, commit):
+    return git(root, "show", f"{commit}:{RUN_LOG}") or ""
+
+
+def dropped_rows(earlier, text):
+    """The rows of an earlier log that this one no longer holds, each counted as often."""
+    return Counter(earlier.splitlines()) - Counter(text.splitlines())
+
+
 def check_log_history(root):
-    """Every committed version of the log must be a prefix of the next."""
-    history = git(root, "log", "--format=%H", "--reverse", "--", RUN_LOG)
-    earlier = None
-    for commit in (history or "").split():
-        text = git(root, "show", f"{commit}:{RUN_LOG}") or ""
-        if earlier is not None and not text.startswith(earlier):
+    """Every committed version of the log extends its parents': a commit appends to its first
+    parent's log, and a merge also keeps every row of each branch it merges."""
+    history = git(root, "log", "--full-history", "--reverse", "--format=%H %P", "--", RUN_LOG)
+    for line in (history or "").splitlines():
+        commit, *parents = line.split()
+        text = log_at(root, commit)
+        if parents and not text.startswith(log_at(root, parents[0])):
             yield "run-log-rewritten", commit[:10], "an earlier row changed or went"
-        earlier = text
+        for parent in parents[1:]:
+            if dropped_rows(log_at(root, parent), text):
+                yield "run-log-rewritten", commit[:10], f"a row of merged {parent[:10]} went"
+    committed = git(root, "show", f"HEAD:{RUN_LOG}")
     current = (root / RUN_LOG).read_text(encoding="utf-8") if (root / RUN_LOG).is_file() else ""
-    if earlier is not None and not current.startswith(earlier):
+    if committed is not None and not current.startswith(committed):
         yield "run-log-rewritten", "working tree", "an earlier row changed or went"
 
 

@@ -140,6 +140,32 @@ class History(unittest.TestCase):
         code, output = check(self.root)
         self.assertEqual(code, 0, output)
 
+    def merge_two_branches(self, keep_side):
+        """A row appended on a branch and another on the trunk, then the branch merged."""
+        self.in_order()
+        log = self.results / "run_log.md"
+        base = log.read_text(encoding="utf-8")
+        side = "| P-0001-side | P-0001 | abc | Darwin | published |\n"
+        trunk = "| P-0001-trunk | P-0001 | abc | Linux | published |\n"
+        self.git("checkout", "-q", "-b", "side")
+        log.write_text(base + side, encoding="utf-8")
+        self.commit("run_log.md")
+        self.git("checkout", "-q", "-")
+        log.write_text(base + trunk, encoding="utf-8")
+        self.commit("run_log.md")
+        self.git("merge", "-q", "--no-ff", "--no-commit", "-s", "ours", "side")
+        log.write_text(base + trunk + (side if keep_side else ""), encoding="utf-8")
+        self.commit("run_log.md")
+
+    def test_a_merge_keeps_both_branches_rows(self):
+        self.merge_two_branches(keep_side=True)
+        code, output = check(self.root)
+        self.assertEqual(code, 0, output)
+
+    def test_a_merge_that_drops_a_branch_row(self):
+        self.merge_two_branches(keep_side=False)
+        self.assert_fails("run-log-rewritten")
+
     def test_require_before_a_run(self):
         code, output = check(self.root, "--require", "P-0001")
         self.assertEqual(code, 1, output)
