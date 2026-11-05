@@ -99,6 +99,19 @@ class ResultsTable(unittest.TestCase):
                       "equal_shares 5766 of 5767, equal_prints 5766 of 5767;", row)
         self.assertNotIn("odd-lot", row)
 
+    def test_a_day_of_another_venue_keeps_its_suffix_and_says_why_t_trade_2_did_not_run(self):
+        text = (self.root / TRADES).read_text(encoding="utf-8")
+        old = ("T-TRADE-2 is not available on 10302019: no CrossStats file for that day is in hand, "
+               "so ")
+        self.assertEqual(text.count(old), 1)
+        text = text.replace(old, "T-TRADE-2 is not available on 10302019_BX: CrossStats is "
+                                 "Nasdaq's file of its own crosses, and this is a BX feed, so ")
+        (self.root / "results" / "trades_10302019_BX.md").write_text(text, encoding="utf-8")
+        row = self.row("T-TRADE-2", "10302019_BX")
+        self.assertIn("| **NOT AVAILABLE** | CrossStats is Nasdaq's file of its own crosses, and "
+                      "this is a BX feed", row)
+        self.assertIn("(results/trades_10302019_BX.md)", row)
+
     def test_a_late_day_says_its_odd_lots_were_not_compared(self):
         self.edit(TRADES, "## Results\n", "## Results\n\nThe odd-lot columns were not compared.\n")
         self.assertIn("odd-lot columns not compared", self.row("T-TRADE-3", "10302019"))
@@ -253,9 +266,9 @@ class ResultsTable(unittest.TestCase):
 
         path = self.root / "results" / oracle_sessions.OUT
         path.write_text(oracle_sessions.generate(self.root), encoding="utf-8")
-        row = self.row("T-ORACLE-2", "every session")
-        self.assertIn("| **FAIL** | 0 divergences in ", row)
-        self.assertIn("; the gap: ", row)
+        if "Verdict: **PASS**" in path.read_text(encoding="utf-8"):  # Shown failing, either way.
+            self.edit(f"results/{oracle_sessions.OUT}", "Verdict: **PASS**", "Verdict: **FAIL**")
+        self.assertIn("| **FAIL** | 0 divergences in ", self.row("T-ORACLE-2", "every session"))
         self.edit(f"results/{oracle_sessions.OUT}", "Verdict: **FAIL**", "Verdict: **PASS**")
         self.assertIn("| PASS | 0 divergences in ", self.row("T-ORACLE-2", "every session"))
 

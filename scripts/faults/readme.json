@@ -368,6 +368,26 @@
       "expect": {
         "signature": "FAIL: test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol"
       }
+    },
+    {
+      "id": "readme-venue-suffix-dropped",
+      "breaks": "A BX day's rows are labelled with the date alone, as if they were Nasdaq's day",
+      "check": "test_results_table.py test_a_day_of_another_venue_keeps_its_suffix_and_says_why_t_trade_2_did_not_run",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    return find(r\"(\\d{8}(?:_[A-Z]+)?)\", name, name)[1]",
+          "new": "    return find(r\"(\\d{8})\", name, name)[1]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_day_of_another_venue_keeps_its_suffix_and_says_why_t_trade_2_did_not_run"
+      }
     }
   ]
 }

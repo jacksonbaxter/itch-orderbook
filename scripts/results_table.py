@@ -56,7 +56,8 @@ def table_row(label, text, name):
 
 
 def day_of(name):
-    return find(r"(\d{8})", name, name)[1]
+    """The day's manifest key: its date, and a venue suffix such as _BX for another feed."""
+    return find(r"(\d{8}(?:_[A-Z]+)?)", name, name)[1]
 
 
 def header_host(text, name):
@@ -179,7 +180,7 @@ def trades_rows(name, text):
     for check, verdict, violations in re.findall(r"^\| ([\w-]+) \| \*\*(\w+)\*\* \| (\d+) \|$",
                                                  text, re.MULTILINE):
         if verdict == "NOT_AVAILABLE":
-            detail = find(rf"^{check} is not available on \d+: (.*?), so ", text, name)[1]
+            detail = find(rf"^{check} is not available on \w+: (.*?), so ", text, name)[1]
         elif check == "T-TRADE-3" and verdict == "FAIL":
             detail = t3_failure_detail(text, name)
         elif check == "T-TRADE-3" and "odd-lot columns were not compared" in text:
