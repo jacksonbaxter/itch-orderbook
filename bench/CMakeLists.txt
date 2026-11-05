@@ -27,3 +27,18 @@ itch_apply_options(bench_chase)
 add_executable(bench_backtest bench_backtest.cpp)
 target_link_libraries(bench_backtest PRIVATE itch_bench_support)
 itch_apply_options(bench_backtest)
+
+# T-SPSC-1 and T-SPSC-2. Built in every configuration with the project ring and the mutex
+# floor; the third-party queues join when ITCH_COMPARISON_QUEUES fetched them.
+add_executable(bench_spsc bench_spsc.cpp)
+target_link_libraries(bench_spsc PRIVATE itch_bench_support hdr_histogram::hdr_histogram_static)
+if(ITCH_COMPARISON_QUEUES)
+  target_link_libraries(bench_spsc PRIVATE itch::comparison_queues)
+endif()
+itch_apply_options(bench_spsc)
+
+# T-SPSC-3: the pipelined replay against the single-threaded one, on a day.
+add_executable(bench_pipeline bench_pipeline.cpp)
+target_include_directories(bench_pipeline PRIVATE "${PROJECT_SOURCE_DIR}/tests")
+target_link_libraries(bench_pipeline PRIVATE itch_bench_support)
+itch_apply_options(bench_pipeline)
