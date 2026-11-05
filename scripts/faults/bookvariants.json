@@ -66,8 +66,8 @@
       "mutations": [
         {
           "file": "include/itch/lookahead.hpp",
-          "old": "    return halved > spaced ? halved : spaced;\n",
-          "new": "    return halved;\n"
+          "old": "    const unsigned spaced = kStages - stage;\n",
+          "new": "    const unsigned spaced = 0;\n"
         }
       ],
       "build": {
@@ -355,7 +355,7 @@
         {
           "file": "bench/lookup_script.hpp",
           "old": "    mismatches_ += expected == found ? 0U : 1U;\n",
-          "new": "    mismatches_ += 0U;\n"
+          "new": "    mismatches_ += expected == found ? 0U : 0U;\n"
         }
       ],
       "build": {

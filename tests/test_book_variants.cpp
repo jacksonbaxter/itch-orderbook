@@ -443,6 +443,19 @@ TEST(LookupScript, AWrongEntryOrAShortScriptIsCaught) {
   EXPECT_EQ(script.mismatches(), 1U);
   EXPECT_FALSE(script.consumed_exactly());
 
+  // A pass that stops early leaves entries unread, with no mismatch and no overrun.
+  script.rewind();
+  {
+    const auto book =
+        std::make_unique<itch::FastBook<itch::NoWriteObserver,
+                                        ScriptedIndex<Index, ScriptMode::check>, itch::FlatLevels>>(
+            kCapacity);
+    static_cast<void>(itch::bench::switch_pass(std::span<const std::byte>{}, *book));
+  }
+  EXPECT_EQ(script.mismatches(), 0U);
+  EXPECT_FALSE(script.overrun());
+  EXPECT_FALSE(script.consumed_exactly());
+
   std::vector<std::uint32_t> small(16);
   itch::bench::LookupScript short_script{small};
   itch::bench::current_script() = &short_script;
