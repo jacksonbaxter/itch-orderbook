@@ -2894,7 +2894,7 @@
         "{build}/tests/test_alloc"
       ],
       "expect": {
-        "signature": "fast book, paged, linked: \\d+ messages, \\d+ refused, [1-9]\\d* allocations[\\s\\S]*allocation in the hot path"
+        "signature": "fast book, paged, linked, look-ahead 0: \\d+ messages, \\d+ refused, [1-9]\\d* allocations[\\s\\S]*allocation in the hot path"
       }
     },
     {
@@ -2923,7 +2923,7 @@
         "{build}/tests/test_alloc"
       ],
       "expect": {
-        "signature": "fast book, hash, flat: \\d+ messages, \\d+ refused, [1-9]\\d* allocations[\\s\\S]*allocation in the hot path"
+        "signature": "fast book, hash, flat, look-ahead 0: \\d+ messages, \\d+ refused, [1-9]\\d* allocations[\\s\\S]*allocation in the hot path"
       }
     },
     {
