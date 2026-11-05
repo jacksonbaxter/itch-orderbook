@@ -508,8 +508,8 @@
       "mutations": [
         {
           "file": "scripts/check_predictions.py",
-          "old": "\"dispatch_*.md\",\n                   \"spsc_*.md\")",
-          "new": "\"dispatch_*.md\")"
+          "old": "\n                   \"spsc_*.md\", ",
+          "new": "\n                   "
         }
       ],
       "command": [

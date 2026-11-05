@@ -7,8 +7,9 @@
 #     scripts/check.sh --only NAME  one stage, repeatable
 #
 # Needs CC and CXX, or a compiler on PATH, plus cmake, ninja, python3, clang-format and
-# clang-tidy. The wasm stage needs EMSDK. It never reads data/: real-day checks live in
-# scripts/check_real_day.sh.
+# clang-tidy. The wasm and demo stages need EMSDK, and the demo stage opens the page in the
+# headless browser ITCH_BROWSER names, if it names one. It never reads data/: real-day checks
+# live in scripts/check_real_day.sh.
 #
 # Stages run one at a time and a build uses at most ITCH_CHECK_JOBS jobs, so that no two
 # sanitizer or clang-tidy builds ever overlap. A failed stage does not stop the rest.
@@ -155,6 +156,24 @@ stage_tidy() {
 }
 stage_fuzz_smoke() { build_preset fuzz && ctest --preset fuzz-smoke; }
 stage_wasm() { preset_with_tests wasm; }
+# The browser demo: its scripts' tests, docs/numbers.json against results/, T-WASM-1's results
+# file against itself, the replay natively, then the engine in node against the native build on
+# an extract cut at test time, and the page in a headless browser when ITCH_BROWSER names one.
+# Needs EMSDK, and nothing from data/.
+stage_demo() {
+  local browser=()
+  python_test scripts/test_demo.py &&
+    python_test scripts/demo.py numbers --check &&
+    python_test scripts/wasm_report.py check &&
+    build_preset release &&
+    ctest --preset release -R '^(test_demo_replay|test_demo_cli|test_alloc)$' &&
+    build_preset wasm || return 1
+  if [ -n "${ITCH_BROWSER:-}" ]; then
+    browser=(--browser "$ITCH_BROWSER")
+  fi
+  python_test scripts/test_demo_engine.py --release build/release --wasm build/wasm \
+    ${browser[@]+"${browser[@]}"}
+}
 stage_fault_matrix() {
   python_test scripts/fault_matrix.py --log-dir "$log_dir/faults"
 }
@@ -185,6 +204,7 @@ register tidy
 register tsan
 register fuzz_smoke
 register wasm
+register demo
 register fault_matrix
 
 selected=$stage_names

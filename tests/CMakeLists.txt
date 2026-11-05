@@ -27,6 +27,8 @@ itch_add_test(test_fees test_fees.cpp)
 itch_add_test(test_backtest_validity test_backtest_validity.cpp)
 itch_add_test(test_attribution test_attribution.cpp)
 itch_add_test(test_market_maker test_market_maker.cpp)
+itch_add_test(test_demo_replay test_demo_replay.cpp)
+target_link_libraries(test_demo_replay PRIVATE itch_demo_engine)
 # A strategy that always sets a wake costs one event per wake period of simulated time, so a
 # broken decoder's far-apart timestamps make these run for hours. A timeout makes that a
 # failure. The slowest, test_backtest_validity under TSan, takes about 10 s.
@@ -122,4 +124,12 @@ if(ITCH_BUILD_TOOLS)
   set_tests_properties(test_census_cli test_oracle_cli test_trades_cli test_map_compare_cli
     test_backtest_cli test_queue_jumps_cli test_calibrate_cli test_select_cli test_mm_cli
     PROPERTIES LABELS unit)
+endif()
+
+if(ITCH_BUILD_TOOLS AND ITCH_BUILD_BENCH)
+  add_test(NAME test_demo_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_demo_cli.py"
+            "$<TARGET_FILE:itch_extract>" "$<TARGET_FILE:bench_demo>"
+            "${CMAKE_CURRENT_BINARY_DIR}/demo_cli")
+  set_tests_properties(test_demo_cli PROPERTIES LABELS unit)
 endif()

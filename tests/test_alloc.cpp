@@ -5,6 +5,8 @@
 // hide behind. The stream makes each arm take its rarer paths too: pages taken, given
 // back and run out, references past the paged index's reach, and flat arrays moving to
 // bigger blocks.
+// The demo page's replay takes the same stream, through its timed call and through the
+// animation's step(), which also reads each print.
 // The backtester takes a synthetic market with a strategy trading on it, in the same kind
 // of window. So do the SPSC ring and T-SPSC-3's pipelined replay, the window opening once
 // its parser thread is waiting.
@@ -30,6 +32,7 @@
 #include "backtest/market.hpp"
 #include "itch/backtest.hpp"
 #include "itch/book.hpp"
+#include "itch/demo_replay.hpp"
 #include "itch/heap_ager.hpp"
 #include "itch/lookahead.hpp"
 #include "itch/map_book.hpp"
@@ -122,6 +125,27 @@ TEST(Allocation, TheFastBookLookingAheadAllocatesNothingAfterConstruction) {
     expect_no_allocation<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked", prefetch);
     expect_no_allocation<itch::PagedIndex<>, itch::FlatLevels>("paged, flat", prefetch);
   }
+}
+
+// The demo's replay, whose header the page's engine compiles too: replay(), the call
+// T-WASM-1 times, and step(), which looks up each executed order before applying it.
+TEST(Allocation, TheDemoReplayAllocatesNothingAfterConstruction) {
+  const std::vector<std::byte> stream = build_stream();
+  itch::demo::Replay whole{stream, kCapacity};
+  itch::demo::Replay stepped{stream, kCapacity};
+  reset_alloc_counts();
+  const std::uint64_t replayed = whole.replay();
+  std::uint64_t stepped_through = 0;
+  while (!stepped.done()) {
+    stepped_through += stepped.step(1000);
+  }
+  const AllocCounts counts = read_alloc_counts();
+  std::println("demo replay: {} messages, {} prints, {} allocations", replayed, stepped.prints(),
+               counts.total());
+  EXPECT_EQ(counts.total(), 0U) << "allocation in the hot path";
+  EXPECT_GT(replayed, 200000U);
+  EXPECT_EQ(stepped_through, replayed);
+  EXPECT_GT(stepped.prints(), 0U) << "the stream made no print";
 }
 
 // The backtester, with a strategy that sends, replaces, cancels and takes on every path,

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ITCH order book replay in WebAssembly</title>
+<link rel="stylesheet" href="demo.css">
+<script type="module" src="demo.js"></script>
+</head>
+<body>
+<header>
+  <h1>ITCH order book replay in WebAssembly</h1>
+  <p>One symbol's trading day from Nasdaq's TotalView-ITCH 5.0 sample, replayed message by
+  message through the project's own L3 book, compiled to WebAssembly with Emscripten. The
+  engine is the same C++ as the native build: <code>FastBook</code>, the paged index with
+  flat levels, the arm the project ships.</p>
+</header>
+
+<section id="setup" hidden>
+  <h2>Set up the demo</h2>
+  <p id="setup-reason"></p>
+  <p>From the repository's root, with Emscripten and the release build available:</p>
+  <pre><code>python3 scripts/fetch_data.py --day 12302019
+cmake --preset release &amp;&amp; cmake --build --preset release --target itch_extract
+python3 scripts/demo.py extract --day data/12302019.NASDAQ_ITCH50 --symbol AAPL
+python3 scripts/demo.py build
+python3 scripts/demo.py serve</code></pre>
+  <p>Then open the address <code>demo.py serve</code> prints. The extract is Nasdaq's data: it
+  lives in <code>docs/local/</code>, which git ignores, and is never committed or deployed.
+  Opening this file straight from disk does not work, because browsers block module and
+  WebAssembly loads from <code>file://</code>.</p>
+</section>
+
+<main id="demo" hidden>
+  <section class="panel" id="controls">
+    <h2>Replay</h2>
+    <dl class="facts">
+      <dt>Symbol</dt><dd id="symbol"></dd>
+      <dt>Day</dt><dd id="day"></dd>
+      <dt>Exchange time</dt><dd id="clock"></dd>
+      <dt>Messages</dt><dd id="progress"></dd>
+      <dt>Replay rate</dt><dd id="rate"></dd>
+      <dt>Book after the last message</dt><dd id="digest"></dd>
+    </dl>
+    <div class="buttons">
+      <button type="button" id="play">Play</button>
+      <button type="button" id="step">Step one batch</button>
+      <button type="button" id="restart">Restart</button>
+      <label>Batch <select id="batch">
+        <option value="100">100 messages a frame</option>
+        <option value="1000" selected>1,000 messages a frame</option> <!-- figures: not measured -->
+        <option value="10000">10,000 messages a frame</option> <!-- figures: not measured -->
+        <option value="100000">100,000 messages a frame</option> <!-- figures: not measured -->
+      </select></label>
+    </div>
+    <p class="note">The rate is the messages of the last batches over the time those batches
+    took, read from <code>performance.now()</code> around each whole call into the engine.
+    It covers the book's work and the reading of each print for the tape, not the drawing.</p>
+  </section>
+
+  <section class="panel" id="depth-panel">
+    <h2>Depth</h2>
+    <table id="depth">
+      <thead><tr><th>Orders</th><th>Bid shares</th><th>Bid</th><th>Ask</th><th>Ask shares</th><th>Orders</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="panel" id="trades-panel">
+    <h2>Trades</h2>
+    <canvas id="trade-chart" width="640" height="200" aria-label="Recent trade prices"></canvas>
+    <table id="tape">
+      <thead><tr><th>Time</th><th>Price</th><th>Shares</th><th>Kind</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="note">E executes a displayed order at its price, C at another price, P is a
+    trade against a hidden order, and Q is an opening or closing cross. A non-printable C is
+    left out, as the tape leaves it out.</p>
+  </section>
+
+  <section class="panel" id="measure-panel">
+    <h2>Replay rate of the whole extract</h2>
+    <p>Replays the whole extract on a fresh book several times and times each replay as one
+    batch, the way <code>scripts/wasm_bench.py</code> measures T-WASM-1.</p>
+    <div class="buttons"><button type="button" id="measure">Measure</button></div>
+    <p id="measure-result"></p>
+  </section>
+</main>
+
+<section class="panel" id="linux">
+  <h2>Native numbers on Linux</h2>
+  <p>The same book, natively, on <code>debian</code>, pinned to one core, from the harness's
+  results file. These are the project's headline numbers, measured with a cycle counter
+  that a browser cannot reach.</p>
+  <div id="linux-numbers"></div>
+</section>
+
+<section class="panel" id="wasm-mac">
+  <h2>This replay in a browser and natively, on macOS</h2>
+  <p>T-WASM-1: the same replay of the same extract on the same Mac, in a browser and as a
+  native binary. A macOS figure, never a Linux one.</p>
+  <div id="wasm-numbers"></div>
+</section>
+
+<section class="panel" id="limits">
+  <h2>Why this page cannot show low latency</h2>
+  <p>WebAssembly cannot show true low latency, and this page does not try:</p>
+  <ul>
+    <li>The browser's clock is clamped. Chrome rounds <code>performance.now()</code> to 100 µs, or to 5 µs on a cross-origin isolated page; Firefox and Safari to 1 ms, or 20 µs. A book message takes well under a microsecond, so one message is far below what the clock can see.</li> <!-- figures: not measured -->
+    <li id="clock-here">This browser's clock steps by <span id="clock-step">an amount not yet measured</span>, and this page <span id="isolated">has not checked whether it is</span> cross-origin isolated.</li>
+    <li>WebAssembly has no clock, no cycle counter and no way to pin a thread: there is no instruction for any of them. The engine cannot time itself, so the page times whole calls into it from JavaScript, and the JIT, the garbage collector and the rest of the browser run beside it on cores the page cannot choose.</li>
+    <li>So messages per second come from batches only: the time of a batch of many messages, divided by their count. Per-message latency cannot be measured here at all, and the page shows none. The percentiles above come from the native build on a pinned core.</li>
+    <li>Memory is bounded. wasm32 addresses at most 4 GB, and Emscripten's default maximum is 2 GB. This engine has a fixed 1 GiB that never grows, and the book at the capacity the project ships holds about 663 MiB of it, so the page replays one symbol's extract and never the 7.7 GiB day.</li> <!-- figures: not measured -->
+  </ul>
+  <p>GitHub Pages cannot set the headers that isolate a page, so a hosted copy would get Chrome's coarser clock. This page is not deployed anywhere: the extract it replays is Nasdaq's data.</p>
+  <p class="sources">Sources, as cited in BENCHMARKS.md: <a href="https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/timing/time_clamper.h">Chrome's time clamper</a>, <a href="https://github.com/mozilla-firefox/firefox/blob/main/modules/libpref/init/StaticPrefList.yaml">Firefox's preferences</a>, <a href="https://github.com/WebKit/WebKit/blob/main/Source/WebCore/page/Performance.cpp">WebKit's Performance.cpp</a>, <a href="https://webassembly.github.io/spec/core/appendix/index-instructions.html">the WebAssembly instruction index</a>, <a href="https://v8.dev/blog/4gb-wasm-memory">V8 on 4 GB of memory</a>, <a href="https://emscripten.org/docs/tools_reference/settings_reference.html">Emscripten's settings</a>, <a href="https://github.com/orgs/community/discussions/13309">GitHub Pages and isolation headers</a>.</p>
+</section>
+
+<footer>
+  <p>Data: Nasdaq TotalView-ITCH 5.0 sample files, cut and replayed on this machine only. Code
+  and results: the itch-orderbook repository.</p>
+</footer>
+</body>
+</html>

@@ -1,7 +1,7 @@
 {
   "area": "gates",
   "tree": ["CMakeLists.txt", "CMakePresets.json", ".clang-tidy", ".github", "cmake", "include",
-           "src", "tests", "tools", "fuzz", "bench", "scripts", "results"],
+           "src", "tests", "tools", "fuzz", "bench", "scripts", "results", "docs"],
   "faults": [
     {
       "id": "gates-wire-pointer-cast",

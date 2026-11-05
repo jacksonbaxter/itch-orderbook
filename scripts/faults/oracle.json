@@ -2541,8 +2541,8 @@
       "mutations": [
         {
           "file": "include/itch/book_index.hpp",
-          "old": "      const std::uint32_t page = directory_[reference >> PageBits];\n      if (page != kNoIndex) {\n        const std::uint32_t order",
-          "new": "      const std::uint32_t page = directory_[(reference >> PageBits) ^ 1U];\n      if (page != kNoIndex) {\n        const std::uint32_t order"
+          "old": "      const std::uint32_t page = directory_[static_cast<std::size_t>(reference >> PageBits)];\n      if (page != kNoIndex) {\n        const std::uint32_t order",
+          "new": "      const std::uint32_t page = directory_[static_cast<std::size_t>((reference >> PageBits) ^ 1U)];\n      if (page != kNoIndex) {\n        const std::uint32_t order"
         }
       ],
       "build": {

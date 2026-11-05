@@ -9,7 +9,8 @@
 #   x86-64 Linux, Clang   Clang 23.1.4, the release the repo is tested on, on libstdc++.
 #   arm64 Linux, GCC      g++ 14, where char is unsigned.
 #   arm64 macOS, Clang    Clang 23.1.4 on the macOS SDK.
-#   Emscripten            Emscripten 6.0.13, the parser library and its smoke test.
+#   Emscripten            Emscripten 6.0.13, the parser library and its smoke test, and the
+#                         demo's engine, itch_demo, with its smoke test in node.
 #
 # scripts/check.sh runs actionlint over this file locally. The sanitizers, clang-tidy, the
 # fuzz smoke runs and the fault matrix run there, not here.

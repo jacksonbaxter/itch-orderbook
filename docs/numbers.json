@@ -1,0 +1,47 @@
+{
+  "generated_by": "scripts/demo.py numbers",
+  "linux": {
+    "file": "results/bench_book_paged-flat_ram_debian_12302019.md",
+    "host": "debian",
+    "cpu": "AMD Ryzen Embedded V1605B with Radeon Vega Gfx",
+    "kernel": "Linux 6.12.115+deb13.1-amd64",
+    "compiler": "Clang 23.1.4 (https://github.com/llvm/llvm-project 7a941dfb2877a0b8cf30323fefa85ad019e0b0f5)",
+    "flags": "-O3 -DNDEBUG -std=c++23",
+    "commit": "e0f9bb8101a2 (exported by debian_sync.sh)",
+    "dataset": "12302019.NASDAQ_ITCH50",
+    "pinning": "pinned to core 4: pthread_setaffinity_np returned 0, read back [4]",
+    "design": "paged-flat",
+    "prediction": "P-0015",
+    "run_id": "P-0015-20261105T023320Z",
+    "throughput_messages_per_s": "5,145,430",
+    "throughput_cv": "3.16%",
+    "latency": {
+      "p50": {
+        "median_ns": "140.1",
+        "status": "resolved"
+      },
+      "p99": {
+        "median_ns": "840.9",
+        "status": "resolved"
+      },
+      "p99.9": {
+        "median_ns": "1472.0",
+        "status": "resolved"
+      }
+    },
+    "book_memory_mib": "662.8"
+  },
+  "wasm_macos": {
+    "file": "results/wasm_replay_mac_12302019.md",
+    "host": "macOS (M4 Max)",
+    "cpu": "Apple M4 Max",
+    "browser": "Google Chrome for Testing 153.0.8010.12, headless, from the binary's --version",
+    "commit": "545918cf50d4 (clean)",
+    "extract": "AAPL on 12302019.NASDAQ_ITCH50, 1,519,871 messages, 46,286,421 bytes, made by scripts/demo.py extract",
+    "native_messages_per_s": "13,819,522",
+    "wasm_messages_per_s": "11,661,713",
+    "ratio": "1.19×",
+    "bar": "≤ 1.55× native, in Google Chrome",
+    "verdict": "browser differs: Google Chrome for Testing 153.0.8010.12, not Google Chrome; neither a pass nor a fail; against the bar: 1.19× native, within the 1.55× bar by 0.36×"
+  }
+}

@@ -26,7 +26,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-SKIPPED_DIRS = {".git", ".venv", ".claude", "__pycache__", "data"}
+# data/ holds the days and docs/local/ the demo's built engine and extract: both gitignored.
+SKIPPED_DIRS = {".git", ".venv", ".claude", "__pycache__", "data", "local"}
 CXX_SUFFIXES = {".hpp", ".cpp", ".h", ".cc"}
 WIRE_CODE = ("include", "src", "tools")
 PRODUCTION_CODE = ("include", "src")
@@ -77,6 +78,42 @@ PRIVATE_NAMES_ENV = "ITCH_PRIVATE_NAMES"
 LEDGER_FREE = ("include/itch/mm/attribution.hpp",)
 QUOTED_INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"]+)"', re.MULTILINE)
 LEDGER_NAME = re.compile(r"\bLedger\b|\bledger\w*")
+
+# The demo page's own files, held to the styling rules the brief sets for it.
+DEMO_PAGE = "docs"
+DEMO_SUFFIXES = {".html", ".css", ".js", ".mjs"}
+CSS_DECLARATION = re.compile(r"([\w-]+)\s*:\s*([^;{}\n]+)")
+CSS_VARIABLE = re.compile(r"(--[\w-]+)\s*:\s*([^;{}\n]+)")
+JS_COLOUR_SETTING = re.compile(
+    r"\b(?:background(?:Color)?|fillStyle)\s*[:=]\s*[\"'`]([^\"'`]+)[\"'`]")
+HTML_BGCOLOR = re.compile(r"\bbgcolor\s*=\s*[\"']?([^\"'\s>]+)", re.IGNORECASE)
+HEX_COLOUR = re.compile(r"#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b")
+RGB_COLOUR = re.compile(r"rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)")
+VAR_USE = re.compile(r"var\(\s*(--[\w-]+)")
+# Named colours that are cream or off-white.
+CREAM_NAMES = {"ivory", "beige", "linen", "oldlace", "floralwhite", "cornsilk", "seashell",
+               "antiquewhite", "snow", "whitesmoke", "ghostwhite", "honeydew", "mintcream",
+               "azure", "aliceblue", "lavenderblush", "papayawhip", "blanchedalmond", "bisque",
+               "lemonchiffon", "lightyellow", "wheat", "navajowhite", "moccasin", "gainsboro"}
+ITALIC = re.compile(r"font-style\s*:\s*(?:italic|oblique)|\bfontStyle\s*=\s*[\"'`](?:italic|oblique)"
+                    r"|\bfont\s*[:=]\s*[\"'`]?[^;\"'`\n]*\b(?:italic|oblique)\b", re.IGNORECASE)
+HEADING = re.compile(r"<h([1-6])\b[^>]*>(.*?)</h\1\s*>", re.IGNORECASE | re.DOTALL)
+ITALIC_TAG = re.compile(r"<(em|i|cite|var|dfn)\b", re.IGNORECASE)
+NUMBERED_LABEL = re.compile(r"(?<![\w.,:#-])0[1-9](?![\w.,:%-])")
+LEADING_ZERO_COUNTER = re.compile(r"decimal-leading-zero", re.IGNORECASE)
+BORDER_RADIUS = re.compile(r"(?:border(?:-[a-z]+)*-radius|borderRadius)\s*[:=]\s*[\"'`]?([^;\"'`}\n]+)",
+                           re.IGNORECASE)
+RADIUS_VALUE = re.compile(r"(\d*\.?\d+)\s*(px|rem|em|%|vh|vw)?")
+MOST_RADIUS_PX = 6.0
+GRADIENT = re.compile(r"(?:repeating-)?(?:linear|radial|conic)-gradient\s*\(|"
+                      r"create(?:Linear|Radial|Conic)Gradient\s*\(", re.IGNORECASE)
+SCRIPT_OR_STYLE = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
+CODE_BLOCK = re.compile(r"<(pre|code)\b[^>]*>.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
+STYLE_BLOCK = re.compile(r"<style\b[^>]*>(.*?)</style\s*>", re.IGNORECASE | re.DOTALL)
+STYLE_ATTRIBUTE = re.compile(r"\bstyle\s*=\s*\"([^\"]*)\"", re.IGNORECASE)
+TAG = re.compile(r"<[^>]*>")
+JS_STRING = re.compile(r"\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`", re.DOTALL)
+JS_COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
 
 # scripts/test_fetch_data.py asserts that the data scripts do not name the held vendor,
 # so it has to name it.
@@ -255,6 +292,193 @@ def reads_ledger(root, files):
     return violations
 
 
+def demo_files(root):
+    return [path for path in walk(root, DEMO_PAGE) if path.suffix in DEMO_SUFFIXES]
+
+
+def blank(match):
+    """The match with everything but its newlines blanked, so that line numbers hold."""
+    return re.sub(r"[^\n]", " ", match.group(0))
+
+
+def keep_only(text, spans):
+    """The text with everything outside the spans blanked, newlines kept."""
+    kept = list(re.sub(r"[^\n]", " ", text))
+    for start, end in spans:
+        kept[start:end] = text[start:end]
+    return "".join(kept)
+
+
+def is_script(path):
+    return path.suffix in (".js", ".mjs")
+
+
+def css_of(path, text):
+    """The CSS a file carries, at its own positions: a stylesheet whole, less its comments; a
+    page's style blocks and style attributes; nothing of a script."""
+    if path.suffix == ".css":
+        return re.sub(r"/\*.*?\*/", blank, text, flags=re.DOTALL)
+    if path.suffix == ".html":
+        spans = [match.span(1) for pattern in (STYLE_BLOCK, STYLE_ATTRIBUTE)
+                 for match in pattern.finditer(text)]
+        return re.sub(r"/\*.*?\*/", blank, keep_only(text, spans), flags=re.DOTALL)
+    return ""
+
+
+def script_code(path, text):
+    """A script less its comments, or a page's inline scripts less theirs."""
+    if is_script(path):
+        return JS_COMMENT.sub(blank, text)
+    if path.suffix == ".html":
+        spans = [match.span(0) for match in re.finditer(
+            r"(?<=>)[^<]*(?=</script\s*>)", text, re.IGNORECASE)]
+        return JS_COMMENT.sub(blank, keep_only(text, spans))
+    return ""
+
+
+def js_strings(code):
+    """A script's string literals, at their own positions, and nothing else of it."""
+    return keep_only(code, [match.span() for match in JS_STRING.finditer(code)])
+
+
+def page_text(text):
+    """Markup's visible prose: no scripts, styles, code, comments or tags."""
+    text = SCRIPT_OR_STYLE.sub(blank, text)
+    text = CODE_BLOCK.sub(blank, text)
+    text = re.sub(r"<!--.*?-->", blank, text, flags=re.DOTALL)
+    return TAG.sub(blank, text)
+
+
+def markup_of(path, text):
+    """The HTML a file holds: a page less its scripts and styles, or a script's strings."""
+    if path.suffix == ".html":
+        return SCRIPT_OR_STYLE.sub(blank, text)
+    return js_strings(script_code(path, text)) if is_script(path) else ""
+
+
+def colours_of(value, variables, depth=0):
+    """The (r, g, b) of each colour a CSS value names, through custom properties, and the
+    names of any named colours in it."""
+    found, names = [], set()
+    for match in VAR_USE.finditer(value):
+        if depth < 8 and match[1] in variables:
+            more, more_names = colours_of(variables[match[1]], variables, depth + 1)
+            found += more
+            names |= more_names
+    plain = VAR_USE.sub(" ", value)
+    for match in HEX_COLOUR.finditer(plain):
+        digits = match[1]
+        if len(digits) in (3, 4):
+            digits = "".join(char * 2 for char in digits[:3])
+        found.append(tuple(int(digits[i:i + 2], 16) for i in (0, 2, 4)))
+    for match in RGB_COLOUR.finditer(plain):
+        found.append(tuple(int(match[i]) for i in (1, 2, 3)))
+    names |= {word.lower() for word in re.findall(r"[A-Za-z]+", plain)} & CREAM_NAMES
+    return found, names
+
+
+def cream_or_off_white(rgb):
+    """Light enough to read as paper and not pure white: every channel at least 0xE6, or a
+    warm light tint, red and green high and blue lower."""
+    r, g, b = rgb
+    if (r, g, b) == (255, 255, 255):
+        return False
+    return min(r, g, b) >= 0xE6 or (r >= 0xF0 and g >= 0xE0 and b >= 0xB0 and r >= b + 0x10)
+
+
+def demo_background(root, files):
+    """Every background a page sets, in CSS, a bgcolor attribute or a script, colours resolved
+    through the custom properties of every file."""
+    variables = {}
+    for path in files:
+        for match in CSS_VARIABLE.finditer(css_of(path, read_text(path) or "")):
+            variables[match[1]] = match[2]
+    violations = []
+    for path in files:
+        text = read_text(path) or ""
+        css = css_of(path, text)
+        settings = [(css, match.start(2), match[2]) for match in CSS_DECLARATION.finditer(css)
+                    if match[1].lower() in ("background", "background-color")]
+        code = script_code(path, text)
+        settings += [(code, match.start(1), match[1]) for match in JS_COLOUR_SETTING.finditer(code)]
+        if path.suffix == ".html":
+            settings += [(text, match.start(1), match[1]) for match in HTML_BGCOLOR.finditer(text)]
+        for source, at, value in settings:
+            colours, names = colours_of(value, variables)
+            light = [rgb for rgb in colours if cream_or_off_white(rgb)]
+            if names or light:
+                shown = sorted(names)[0] if names else "#%02x%02x%02x" % light[0]
+                violations.append((path, line_of(source, at),
+                                   f"cream or off-white background: {shown}"))
+    return violations
+
+
+def demo_italic_heading(root, files):
+    """No italic anywhere a style can reach, and no tag that is italic by default inside a
+    heading, in a page or in markup a script writes."""
+    violations = []
+    for path in files:
+        text = read_text(path) or ""
+        for scanned in (css_of(path, text), script_code(path, text)):
+            for match in ITALIC.finditer(scanned):
+                violations.append((path, line_of(scanned, match.start()),
+                                   f"italic text: {match[0]}"))
+        markup = markup_of(path, text)
+        for heading in HEADING.finditer(markup):
+            for tag in ITALIC_TAG.finditer(heading.group(2)):
+                violations.append((path, line_of(markup, heading.start(2) + tag.start()),
+                                   f"italic word in a heading: <{tag[1]}>"))
+    return violations
+
+
+def demo_numbered_label(root, files):
+    """No leading-zero number standing alone as a label in a page's prose, in what a script
+    writes, or in generated CSS content, and no leading-zero counter."""
+    violations = []
+    for path in files:
+        text = read_text(path) or ""
+        css = css_of(path, text)
+        content = keep_only(css, [match.span(2) for match in CSS_DECLARATION.finditer(css)
+                                  if match[1].lower() == "content"])
+        for source in (css, script_code(path, text)):
+            for match in LEADING_ZERO_COUNTER.finditer(source):
+                violations.append((path, line_of(source, match.start()),
+                                   "numbered label: decimal-leading-zero"))
+        for source in (content, page_text(markup_of(path, text))):
+            for match in NUMBERED_LABEL.finditer(source):
+                violations.append((path, line_of(source, match.start()),
+                                   f"numbered label: {match[0]}"))
+    return violations
+
+
+def demo_pill_button(root, files):
+    """No corner rounded past MOST_RADIUS_PX, or by a share of the box, in CSS or a script."""
+    violations = []
+    for path in files:
+        text = read_text(path) or ""
+        for scanned in (css_of(path, text), script_code(path, text)):
+            for match in BORDER_RADIUS.finditer(scanned):
+                for value, unit in RADIUS_VALUE.findall(match[1]):
+                    pixels = float(value) * {"rem": 16.0, "em": 16.0}.get(unit, 1.0)
+                    if unit in ("%", "vh", "vw") or pixels > MOST_RADIUS_PX:
+                        violations.append((path, line_of(scanned, match.start()),
+                                           f"rounded enough to make a pill: {match[0].strip()}"))
+                        break
+    return violations
+
+
+def demo_gradient(root, files):
+    """No CSS gradient and no canvas gradient anywhere on the page."""
+    violations = []
+    for path in files:
+        text = read_text(path) or ""
+        scanned = JS_COMMENT.sub(blank, text) if is_script(path) else \
+            re.sub(r"<!--.*?-->|/\*.*?\*/", blank, text, flags=re.DOTALL)
+        for match in GRADIENT.finditer(scanned):
+            violations.append((path, line_of(scanned, match.start()), f"gradient: {match[0]}"))
+    return violations
+
+
 def workflow_files(root):
     return sorted((root / ".github" / "workflows").glob("*.yml"))
 
@@ -302,6 +526,16 @@ def gates():
              reads_ledger, ledger_free_files),
         Gate("pinned-actions", "every action is pinned to a 40-hex SHA, with its tag in a comment",
              unpinned_action, workflow_files),
+        Gate("demo-background", "the demo page has no cream or off-white background",
+             demo_background, demo_files),
+        Gate("demo-italic-heading", "the demo page has no italic text, and no italic word in a heading",
+             demo_italic_heading, demo_files),
+        Gate("demo-numbered-label", "the demo page has no numbered 01 / 02 / 03 labels",
+             demo_numbered_label, demo_files),
+        Gate("demo-pill-button", f"the demo page rounds no corner past {MOST_RADIUS_PX:g}px, so no "
+             "button is a pill", demo_pill_button, demo_files),
+        Gate("demo-gradient", "the demo page has no gradient, so no gradient hero",
+             demo_gradient, demo_files),
     )
 
 

@@ -50,3 +50,7 @@ add_executable(bench_pipeline bench_pipeline.cpp)
 target_include_directories(bench_pipeline PRIVATE "${PROJECT_SOURCE_DIR}/tests")
 target_link_libraries(bench_pipeline PRIVATE itch_bench_support)
 itch_apply_options(bench_pipeline)
+
+add_executable(bench_demo bench_demo.cpp)
+target_link_libraries(bench_demo PRIVATE itch_bench_support)
+itch_apply_options(bench_demo)

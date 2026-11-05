@@ -15,10 +15,11 @@ Built:
 - A benchmark harness that measures any book design, with the file in memory or mapped and the top of book tracked or not, records its host, refuses to publish a run it cannot stand behind, and reads hardware counters on Linux.
 - Fuzz targets, sanitizer builds, and a fault matrix that shows each check failing on a planted bug.
 - The core of an event-driven backtester: simulated orders queued among the real ones by their order references, with latencies, a share ledger and per-fill fees, checked on 48 hand-worked scenarios and for lookahead. It has no market impact, by construction, and nothing about its speed is measured yet.
+- A browser demo in `docs/`: the same `FastBook` compiled to WebAssembly, replaying one symbol's extract that a script cuts locally, and T-WASM-1's harness, which times it against native on the Mac in Chrome for Testing.
 
-Not built: SIMD, the market maker and the demo. The oracle and trade rows below are the real book's. The harness-proof rows are the Phase 2 stub's, and say so. The book-design rows are from macOS, which cannot pin a thread, so none of them is a pinned figure and none stands for a Linux one, and from `debian`, pinned to core 4, where only the mapped runs with the top tracked are published, the second with hardware counters: every run with the day in memory there was refused, the last after the kernel swapped out one page, or never got the host. The default arm is the paged index with flat levels, the fastest on both hosts.
+Not built: SIMD and the market maker. The oracle and trade rows below are the real book's. The harness-proof rows are the Phase 2 stub's, and say so. The book-design rows are from macOS, which cannot pin a thread, so none of them is a pinned figure and none stands for a Linux one, and from `debian`, pinned to core 4, where only the mapped runs with the top tracked are published, the second with hardware counters: every run with the day in memory there was refused, the last after the kernel swapped out one page, or never got the host. The default arm is the paged index with flat levels, the fastest on both hosts.
 
-The GitHub Actions workflow in `.github/workflows/ci.yml` builds the release preset and runs every unit test on x86-64 Linux with GCC and Clang, arm64 Linux with GCC and arm64 macOS with Clang, and builds the parser with Emscripten. The sanitizers, clang-tidy and the fault matrix run in `scripts/check.sh`, not in CI. [NOTES.md](NOTES.md) says what the first runs on GitHub found.
+The GitHub Actions workflow in `.github/workflows/ci.yml` builds the release preset and runs every unit test on x86-64 Linux with GCC and Clang, arm64 Linux with GCC and arm64 macOS with Clang, and builds the parser and the demo's engine with Emscripten. The sanitizers, clang-tidy and the fault matrix run in `scripts/check.sh`, not in CI. [NOTES.md](NOTES.md) says what the first runs on GitHub found.
 
 ## Results
 
@@ -99,6 +100,12 @@ The backtester. Each row is one workload's results file: T-BT-1 replays the whol
 |---|---|---|---|---|---|---|---|---|---|---|
 | quoting | T-BT-1 | 12302019 | macOS (M4 Max) | not pinned | 16,792,852 | 2.06% | 17,185,873 | host differs | `4fa6701df1cf` | [results/backtest_quoting_mac_12302019.md](results/backtest_quoting_mac_12302019.md) |
 | shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | 7,804,654 | 0.24% | 16,661,541 | met | `55978750888d` | [results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md) |
+
+The browser demo's replay of one symbol's extract, in a browser and natively on the same Mac, the same C++ on each side. Rates come from whole replays only: the browser cannot time one message. The bar was set in Google Chrome, so another browser neither meets nor misses it.
+
+| Target | Symbol | Day | Host | Browser | Native messages/s | Browser messages/s | Browser over native | Verdict | Commit | File |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T-WASM-1 | AAPL | 12302019 | macOS (M4 Max) | Google Chrome for Testing 153.0.8010.12 | 13,819,522 | 11,661,713 | 1.19× | browser differs: Google Chrome for Testing 153.0.8010.12, not Google Chrome | `545918cf50d4` | [results/wasm_replay_mac_12302019.md](results/wasm_replay_mac_12302019.md) |
 
 Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows where the samples fell, not a rate, and a macOS profile never stands in for `perf` on `debian`. Each file says what it cannot show.
 
@@ -243,6 +250,12 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0303-20261105T120127Z` | `P-0303` | `f870418ad388` | Darwin | `published by the driver, then withdrawn by hand before it was committed` |
 | `P-0304-20261105T131900Z` | `P-0304` | `660007edd63b` | Darwin | `published by the driver, then withdrawn by hand before it was committed` |
 | `P-0304-20261105T132346Z` | `P-0304` | `bb83ed30c6a6` | Darwin | `published` |
+| `P-0401-20261105T163315Z_native` | `P-0401` | `05215cc6b2b0` | Darwin | `recorded` |
+| `P-0401-20261105T163318Z_browser` | `P-0401` | `05215cc6b2b0` | Darwin | `recorded` |
+| `P-0401-20261105T163315Z_native` | `P-0401` | `05215cc6b2b0` | Darwin | `withdrawn` |
+| `P-0401-20261105T163318Z_browser` | `P-0401` | `05215cc6b2b0` | Darwin | `withdrawn` |
+| `P-0401-20261105T171728Z_native` | `P-0401` | `545918cf50d4` | Darwin | `recorded` |
+| `P-0401-20261105T171731Z_browser` | `P-0401` | `545918cf50d4` | Darwin | `recorded` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
@@ -276,6 +289,19 @@ python3 scripts/fetch_data.py --ref all          # CrossStats and MIDAS
 scripts/check_real_day.sh                        # the checks that need a real day
 scripts/check_real_day.sh --arms all             # the same, on every arm of the fast book
 ```
+
+## Run the demo
+
+`docs/` holds a static page that replays one symbol's extract on the same `FastBook` as the native build, compiled with `em++ -O3 -msimd128` into a fixed 1 GiB memory, and animates its depth and trades. The extract and the engine are made locally into `docs/local/`, which is gitignored, so no market data is committed. The page is not deployed anywhere. <!-- figures: not measured -->
+
+```sh
+cmake --preset release && cmake --build --preset release --target itch_extract
+python3 scripts/demo.py extract --day data/12302019.NASDAQ_ITCH50 --symbol AAPL
+python3 scripts/demo.py build      # needs EMSDK set
+python3 scripts/demo.py serve      # then open http://127.0.0.1:8000/
+```
+
+The server sends the cross-origin isolation headers, so the browser's clock is clamped to 5 µs in Chrome rather than 100 µs, and `file://` cannot load the engine. The page shows messages/sec from whole batches only and no per-message latency, and says why. <!-- figures: not measured -->
 
 ## Check everything
 
