@@ -31,3 +31,7 @@ itch_apply_options(bench_chase)
 add_executable(bench_backtest bench_backtest.cpp)
 target_link_libraries(bench_backtest PRIVATE itch_bench_support)
 itch_apply_options(bench_backtest)
+
+add_executable(bench_demo bench_demo.cpp)
+target_link_libraries(bench_demo PRIVATE itch_bench_support)
+itch_apply_options(bench_demo)

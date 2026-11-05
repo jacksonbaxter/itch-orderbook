@@ -47,3 +47,7 @@ add_executable(itch_mm itch_mm.cpp "${PROJECT_SOURCE_DIR}/tests/oracle/alloc_cou
 target_include_directories(itch_mm PRIVATE "${PROJECT_SOURCE_DIR}/tests")
 target_link_libraries(itch_mm PRIVATE itch_parser)
 itch_apply_options(itch_mm)
+
+add_executable(itch_extract itch_extract.cpp)
+target_link_libraries(itch_extract PRIVATE itch_demo_engine)
+itch_apply_options(itch_extract)
