@@ -30,3 +30,7 @@ itch_apply_options(itch_backtest)
 add_executable(itch_queue_jumps itch_queue_jumps.cpp)
 target_link_libraries(itch_queue_jumps PRIVATE itch_parser)
 itch_apply_options(itch_queue_jumps)
+
+add_executable(itch_as_tables itch_as_tables.cpp)
+target_link_libraries(itch_as_tables PRIVATE itch_parser)
+itch_apply_options(itch_as_tables)
