@@ -130,6 +130,7 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0015-20261105T023320Z` | `P-0015` | `e0f9bb8101a2` | Linux | `published` |
 | `P-0019-20261105T073137Z` | `P-0019` | `5a16936a14e8` | Linux | `published` |
 | `P-0019-20261105T073614Z` | `P-0019` | `5a16936a14e8` | Linux | `published` |
+| `P-0016-20261105T071857Z` | `P-0016` | `5a16936a14e8` | Linux | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.

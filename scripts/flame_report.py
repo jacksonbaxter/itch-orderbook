@@ -4,7 +4,8 @@
     flame_report.py fold-sample --sample SAMPLE.txt --out STACKS.folded
     flame_report.py render --folded STACKS.folded --flamegraph flamegraph.pl \\
         --record RUN.json --source perf|sample --workload NAME --day DAY --command TEXT \\
-        --prediction P-NNNN|none --notes NOTES.md --out results/flamegraph_NAME_HOST_DAY.md \\
+        --prediction P-NNNN|none [--run-id ID --run-log results/run_log.md] --notes NOTES.md \\
+        --out results/flamegraph_NAME_HOST_DAY.md \\
         [--annotate ANNOTATE.txt --annotate-symbol NAME] [--normal FILE --frame-pointer FILE]
     flame_report.py --check FILE...
 
@@ -299,6 +300,8 @@ def render(args):
             f"- workload: {args.workload}", f"- event: {args.event}",
             f"- samples: {total:,}", f"- stacks: {len(stacks):,}",
             f"- prediction: {args.prediction}"]
+    if args.run_id:
+        out.append(f"- run_id: {args.run_id}")
     ratio_lines, delta_rows, ratio = [], [], None
     if args.normal and args.frame_pointer:
         ratio_lines, delta_rows, ratio = delta_lines(throughput(args.normal),
@@ -341,6 +344,13 @@ def render(args):
     args.out.parent.mkdir(parents=True, exist_ok=True)
     svg.write_text(image, encoding="utf-8")
     args.out.write_text(text, encoding="utf-8")
+    if args.run_log:
+        if not args.run_id:
+            raise ReportError("--run-log needs --run-id")
+        commit = scrub(header["commit"])
+        with open(args.run_log, "a", encoding="utf-8") as log:
+            log.write(f"| {args.run_id} | {args.prediction} | {commit} | Linux | published: "
+                      f"a flamegraph of {args.workload}, {total:,} samples |\n")
     print(f"flame_report: wrote {args.out.name} and {svg.name}, {total:,} samples")
     return 0
 
@@ -371,6 +381,8 @@ def check_file(path):
                                            "build"))
         if "frame_pointer_ratio" not in fields or "## The frame-pointer build" not in text:
             found.append(("delta-missing", "the frame-pointer build's delta is not there"))
+        if not fields.get("run_id"):
+            found.append(("run-id-missing", "a debian graph with no run_id"))
         if "## perf annotate, the hottest function" not in text:
             found.append(("annotate-missing", "no perf annotate excerpt"))
     elif "does not replace the `perf` data" not in text:
@@ -411,6 +423,8 @@ def main(argv=None):
     draw.add_argument("--event", default="cycles:u")
     draw.add_argument("--command", required=True)
     draw.add_argument("--prediction", required=True)
+    draw.add_argument("--run-id")
+    draw.add_argument("--run-log", type=Path)
     draw.add_argument("--notes", type=Path, required=True)
     draw.add_argument("--out", type=Path, required=True)
     draw.add_argument("--annotate", type=Path)

@@ -69,6 +69,7 @@ class Zen1Events(unittest.TestCase):
                                  "--prediction", "P-0016", "--command", "run1.sh",
                                  "--commit", "0123456789ab (exported by debian_sync.sh)",
                                  "--dataset", "12302019.NASDAQ_ITCH50",
+                                 "--run-id", "P-0016-20261105T071857Z",
                                  "--out", str(self.out)])
 
     def row(self, event):

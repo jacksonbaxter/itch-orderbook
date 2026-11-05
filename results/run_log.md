@@ -26,3 +26,4 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0015-20261105T023320Z | P-0015 | e0f9bb8101a2 (exported by debian_sync.sh) | Linux | published: typed after the driver's word, the results files cite e0f9bb8, the commit measured, and are committed on 805ba14, which differs from it only by e6e4083, a behaviour-neutral refactor of the timed passes in bench_replay.cpp, and the merged backtester work |
 | P-0019-20261105T073137Z | P-0019 | 5a16936a14e8 (exported by debian_sync.sh) | Linux | published: T-PERF-1 FAIL, T-PERF-2 FAIL |
 | P-0019-20261105T073614Z | P-0019 | 5a16936a14e8 (exported by debian_sync.sh) | Linux | published: T-PERF-1 FAIL, T-PERF-2 FAIL |
+| P-0016-20261105T071857Z | P-0016 | 5a16936a14e8 (exported by debian_sync.sh) | Linux | published: the Zen 1 counter table, of 37 tried, 27 counts, 1 counts zero, 7 not supported, 2 refused |

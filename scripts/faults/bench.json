@@ -3594,6 +3594,27 @@
         "signature": "FAIL: test_per_message_figures_divide_by_both_replays",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-flame-report-run-id-unchecked",
+      "breaks": "--check passes a debian flamegraph with no run_id, so no run-log row ties it to its run",
+      "check": "test_flame_report.py test_check_catches_a_debian_graph_without_its_build_or_delta",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "        if not fields.get(\"run_id\"):",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_debian_graph_without_its_build_or_delta",
+        "exit": 1
+      }
     }
   ]
 }

@@ -2,8 +2,8 @@
 """Writes the Zen 1 counter table: which events are real hardware events on debian with `:u`.
 
     zen1_events.py --part-a DIR --part-b DIR --record RUN.json --machine-check BEFORE AFTER \\
-        --prediction P-NNNN --commit TEXT --dataset NAME --command TEXT \\
-        --out results/counters_zen1_events_debian.md
+        --prediction P-NNNN --commit TEXT --dataset NAME --run-id ID --command TEXT \\
+        --out results/counters_zen1_events_debian.md [--run-log results/run_log.md]
     zen1_events.py --check FILE
 
 Part A is one `perf stat -x,` per event around a replay of the oracle fixture: each event's
@@ -184,6 +184,12 @@ def part_b(root, messages):
     return counts
 
 
+def summary_of(states):
+    return f"of {len(states)} tried, " + ", ".join(
+        f"{sum(1 for e in states.values() if e[0] == state)} {state}"
+        for state in STATES if any(e[0] == state for e in states.values()))
+
+
 def figure(value):
     """Four decimals, or three significant figures for a count too rare for four."""
     return f"{value:.4f}" if value == 0 or value >= 0.001 else f"{value:.2e}"
@@ -205,13 +211,12 @@ def render(args):
     for name in ("host", "cpu", "kernel", "compiler", "flags", "commit", "pinning", "governor"):
         out.append(f"- {name}: {flame_report.scrub(header.get(name, 'unknown'))}")
     out += ["- perf_event_paranoid: 2", f"- prediction: {args.prediction}",
+            f"- run_id: {args.run_id}",
             f"- part_a_input: tests/fixtures/oracle/session.itch, "
             f"{len(states)} `perf stat` and `perf record` runs",
             f"- part_b_input: {header.get('dataset', 'unknown')}, paged-flat, mapped, "
             f"{messages:,} messages replayed twice a process",
-            "- summary: of " + str(len(states)) + " tried, " + ", ".join(
-                f"{sum(1 for e in states.values() if e[0] == state)} {state}"
-                for state in STATES if any(e[0] == state for e in states.values())), "",
+            f"- summary: {summary_of(states)}", "",
             "## The table", "",
             "State is what `perf stat -e EVENT:u` did around a replay of the fixture: counts, "
             "counts zero, not supported (perf opened nothing and said so), or refused (perf "
@@ -287,6 +292,10 @@ def render(args):
     if found:
         raise ReportError(f"the file would not pass its own check: {found}")
     args.out.write_text(text, encoding="utf-8")
+    if args.run_log:
+        with open(args.run_log, "a", encoding="utf-8") as log:
+            log.write(f"| {args.run_id} | {args.prediction} | {args.commit} | Linux | published: "
+                      f"the Zen 1 counter table, {summary_of(states)} |\n")
     print(f"zen1_events: wrote {args.out.name}, {len(real)} of {len(states)} counting")
     return 0
 
@@ -335,6 +344,8 @@ def main(argv=None):
     parser.add_argument("--prediction", required=True)
     parser.add_argument("--commit", required=True, help="the commit measured, as the run knew it")
     parser.add_argument("--dataset", required=True)
+    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--run-log", type=Path)
     parser.add_argument("--command", required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)

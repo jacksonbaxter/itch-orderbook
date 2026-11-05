@@ -88,6 +88,7 @@ class FlameReport(unittest.TestCase):
                 "12302019", "--command", "perf record -g", "--prediction", "P-0018", "--notes",
                 str(self.root / "notes.md"), "--out", str(out), *extra]
         if host == "debian":
+            args += ["--run-id", "P-0018-20261105T090000Z"]
             args += ["--annotate", str(self.root / "annotate.txt"), "--annotate-symbol", "apply",
                      "--normal", str(self.root / "normal.md"), "--frame-pointer",
                      str(self.root / "fp.md")]
@@ -169,6 +170,8 @@ class FlameReport(unittest.TestCase):
         self.assertIn("delta-missing", self.codes(out))
         out.write_text(text.replace("## perf annotate, the hottest function", "## X"), "utf-8")
         self.assertIn("annotate-missing", self.codes(out))
+        out.write_text(text.replace("- run_id:", "- run:"), "utf-8")
+        self.assertIn("run-id-missing", self.codes(out))
 
     def test_a_macos_profile_says_it_does_not_replace_perf(self):
         code, out = self.render(host="macOS (M4 Max)", flags="-O3 -DNDEBUG")
