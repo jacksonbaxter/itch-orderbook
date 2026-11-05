@@ -478,13 +478,13 @@
     },
     {
       "id": "demo-table-stray-cell-markup",
-      "breaks": "results_table puts a stray | inside the T-WASM-1 row's symbol cell, so the row has a cell more than its table",
+      "breaks": "results_table puts a stray | inside the host cell of every verdict row, so each has a cell more than its table",
       "check": "test_results_table test_no_stray_markup_in_generated_cells",
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "    return (\"T-WASM-1\", symbol, day_of(name),",
-          "new": "    return (\"T-WASM-1\", f\"{symbol} | stray\", day_of(name),"
+          "old": "    return (check, day, host, SHOWN[verdict], detail,",
+          "new": "    return (check, day, f\"{host} | stray\", SHOWN[verdict], detail,"
         }
       ],
       "command": [
