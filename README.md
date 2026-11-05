@@ -101,6 +101,7 @@ Profiles and counter tables. A flamegraph shows where the samples fell, not a ra
 
 | What | Host | Summary | Commit | File |
 |---|---|---|---|---|
+| The Zen 1 counter table on debian | debian | of 37 tried, 27 counts, 1 counts zero, 7 not supported, 2 refused | `5a16936a14e8` | [results/counters_zen1_events_debian.md](results/counters_zen1_events_debian.md) |
 | Flamegraph: book replay, paged-flat on macOS (M4 Max), 12302019 | macOS (M4 Max) | 19,118 samples, wall-clock stacks every 1 ms, the hottest frame `itch::FastBook<…>::apply` at 38.24% self | `5a16936a14e8` | [results/profile_paged-flat_mac_12302019.md](results/profile_paged-flat_mac_12302019.md) |
 
 Every benchmark run, failed ones included, from [results/run_log.md](results/run_log.md).

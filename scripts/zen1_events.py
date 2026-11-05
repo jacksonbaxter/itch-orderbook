@@ -209,9 +209,9 @@ def render(args):
             f"{len(states)} `perf stat` and `perf record` runs",
             f"- part_b_input: {header.get('dataset', 'unknown')}, paged-flat, mapped, "
             f"{messages:,} messages replayed twice a process",
-            f"- summary: {len(real)} of {len(states)} events count with `:u`; "
-            f"{sum(1 for e in states.values() if e[0] == 'not supported')} not supported, "
-            f"{sum(1 for e in states.values() if e[0] == 'refused')} refused", "",
+            "- summary: of " + str(len(states)) + " tried, " + ", ".join(
+                f"{sum(1 for e in states.values() if e[0] == state)} {state}"
+                for state in STATES if any(e[0] == state for e in states.values())), "",
             "## The table", "",
             "State is what `perf stat -e EVENT:u` did around a replay of the fixture: counts, "
             "counts zero, not supported (perf opened nothing and said so), or refused (perf "
