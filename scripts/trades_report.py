@@ -11,6 +11,11 @@ PUBLISHED are claims to set ours beside, never expected values.
 --no-cross-file says that no CrossStats file exists for this day, so T-TRADE-2 is reported
 as not available. A verdict of NOT_AVAILABLE without it is a failure.
 
+A day of another venue than Nasdaq names it in the manifest, as `venue` (BX) and
+`midas_exchange`, how MIDAS names it (Boston). The tool has to have compared MIDAS's rows
+of that exchange, the row pin is read from `<exchange>_rows`, and since CrossStats is
+Nasdaq's file of its own crosses, such a day is run with --no-cross-file.
+
 --log is one arm of the fast book, and the detail of the results file is that arm's. Each
 --arm-log is another arm's log. Every arm is held to the same hard checks, and has to print
 every line the first arm does, apart from the lines that name the arm and its run time. A
@@ -182,11 +187,17 @@ def class_of(log, name):
     return log["classes"][name]
 
 
+def venue_of(entry):
+    """The venue of the day's feed and how MIDAS names it: Nasdaq unless the manifest says."""
+    return entry.get("venue", "Nasdaq"), entry.get("midas_exchange", "Nasdaq")
+
+
 def hard_failures(log, entry, midas_rows, no_cross_file, date):
     """Every reason the run does not meet the trade-print checks on this day.
 
-    midas_rows is the manifest's Nasdaq row count for the day, or None if none is pinned.
-    date is the day as YYYYMMDD, which says whether the SEC's round-lot rule covers it.
+    midas_rows is the manifest's row count for the day's exchange, or None if none is
+    pinned. date is the day as YYYYMMDD, which says whether the SEC's round-lot rule
+    covers it. A log from before the tool named its exchange compared Nasdaq's rows.
     """
     failures = []
 
@@ -244,6 +255,10 @@ def hard_failures(log, entry, midas_rows, no_cross_file, date):
         else:
             require(verdict == "PASS", f"{name} verdict is {verdict}")
 
+    exchange = venue_of(entry)[1]
+    compared_on = log["values"].get("trades_midas_exchange", "Nasdaq")
+    require(compared_on == exchange,
+            f"MIDAS compared on {compared_on}'s rows, and the day's exchange is {exchange}")
     require(midas_rows is None or number(log, "t3_rows") == midas_rows,
             f"MIDAS rows {number(log, 't3_rows')}, manifest {midas_rows}")
     require(log["values"].get("t3_window") == PINNED_WINDOW,
@@ -513,7 +528,12 @@ def render(log, entry, day, no_cross_file, failures, arms):
     if not odd_lots_compared:
         lines += ["", f"T-TRADE-3's odd-lot columns were not compared on {day}: the SEC's "
                   "round-lot rule stops at Nov 3, 2025. Shares and trades were compared."]
-    if no_cross_file:
+    venue, exchange = venue_of(entry)
+    if no_cross_file and venue != "Nasdaq":
+        lines += ["", f"T-TRADE-2 is not available on {day}: CrossStats is Nasdaq's file of its "
+                  f"own crosses, and this is a {venue} feed, so its crosses were compared with "
+                  "nothing. The per-message checks on `Q` still ran."]
+    elif no_cross_file:
         lines += ["", f"T-TRADE-2 is not available on {day}: no CrossStats file for that day is "
                   "in hand, so the crosses of this day were compared with nothing. The "
                   "per-message checks on `Q` still ran."]
@@ -639,7 +659,7 @@ def render(log, entry, day, no_cross_file, failures, arms):
          for row in log["round_lots"]])
     lines += ["", "The SEC's three entries, and whether this day could exercise them.", ""]
     lines += format_table(
-        ("Ticker", "SEC lot", "In the Nasdaq directory", "Has a Nasdaq row in MIDAS"),
+        ("Ticker", "SEC lot", f"In the {venue} directory", f"Has a {exchange} row in MIDAS"),
         [(row["symbol"], row["lot"], "yes" if row["listed"] == "1" else "no",
           "yes" if row["compared"] == "1" else "no") for row in log["sec_lots"]])
     lines += [""]
@@ -661,7 +681,7 @@ def render(log, entry, day, no_cross_file, failures, arms):
         ("End", clock(edges.get("last_inside", 0)), clock(edges.get("first_after", 0))),
     ])
     lines += [""]
-    lines += format_table(("MIDAS, Nasdaq rows", "Count"), [
+    lines += format_table((f"MIDAS, {exchange} rows", "Count"), [
         ("Rows that day, of which a second row for a symbol", f"{count(number(log, 't3_rows'))}, "
          f"{count(number(log, 't3_second_rows'))}"),
         ("Symbols compared", count(number(log, "t3_symbols_compared"))),
@@ -674,7 +694,7 @@ def render(log, entry, day, no_cross_file, failures, arms):
         ("Test symbols outside MIDAS", count(number(log, "t3_outside_test_symbols"))),
     ])
     lines += ["", "MIDAS covers Stock and ETF names drawn from CRSP, so whether a symbol has a "
-              "row cannot be told from the feed. The Nasdaq row count is pinned in the manifest "
+              f"row cannot be told from the feed. The {exchange} row count is pinned in the manifest "
               "for that reason: a row lost from the file fails on that pin, and its symbol "
               "would otherwise pass as outside the universe. MIDAS is independent of this code, "
               "not of the feed."]
@@ -703,12 +723,13 @@ def render(log, entry, day, no_cross_file, failures, arms):
     return "\n".join(lines) + "\n"
 
 
-def pinned_midas_rows(references, date):
-    """The Nasdaq row count pinned for the date under its quarter's MIDAS zip, or None."""
-    found = [ref["nasdaq_rows"][date] for key, ref in sorted(references.items())
-             if key.startswith("midas_") and date in ref.get("nasdaq_rows", {})]
+def pinned_midas_rows(references, date, exchange="Nasdaq"):
+    """The exchange's row count pinned for the date under its quarter's MIDAS zip, or None."""
+    rows = f"{exchange.lower()}_rows"
+    found = [ref[rows][date] for key, ref in sorted(references.items())
+             if key.startswith("midas_") and date in ref.get(rows, {})]
     if len(found) > 1:
-        raise ReportError(f"{len(found)} MIDAS zips pin Nasdaq rows for {date}")
+        raise ReportError(f"{len(found)} MIDAS zips pin {exchange} rows for {date}")
     return found[0] if found else None
 
 
@@ -730,7 +751,8 @@ def main(argv=None):
         # The key is MMDDYYYY, with a suffix for a second venue on the same date.
         date = args.day[4:8] + args.day[:4]
         manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
-        midas_rows = pinned_midas_rows(manifest.get("references", {}), date)
+        midas_rows = pinned_midas_rows(manifest.get("references", {}), date,
+                                       venue_of(entry)[1])
 
         def read(path):
             return parse_log(path.read_text(encoding="utf-8", errors="replace"))

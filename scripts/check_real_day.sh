@@ -24,7 +24,8 @@
 #
 # The trade-print checks take a few minutes a day and a few hundred MB beyond the mapped file.
 # They read the SEC MIDAS zip of the day's quarter and data/CrossStats<YYYYMMDD>.txt. A day
-# with no cross file is reported as T-TRADE-2 not available, and says so in its results. A
+# with no cross file is reported as T-TRADE-2 not available, and says so in its results, and
+# so is a day of another venue than Nasdaq, since CrossStats lists Nasdaq's own crosses. A
 # missing MIDAS zip is a failure.
 #
 # The map check replays the day through the map book, the T-DESIGN-1 baseline, beside the
@@ -129,22 +130,31 @@ oracle() {
   return "$status"
 }
 
-# The Nasdaq rows of a day in MIDAS, as pinned in the manifest under its quarter's zip.
+# How MIDAS names the venue of a day's feed: Nasdaq unless the manifest says otherwise.
+midas_exchange() {
+  python3 -B -c '
+import json, sys
+print(json.load(open("scripts/data_manifest.json"))["days"][sys.argv[1]].get("midas_exchange", "Nasdaq"))
+' "$1"
+}
+
+# A venue's rows on a date in MIDAS, as pinned in the manifest under its quarter's zip.
 midas_rows() {
   python3 -B -c '
 import json, sys
 references = json.load(open("scripts/data_manifest.json"))["references"]
-found = [ref["nasdaq_rows"][sys.argv[1]] for key, ref in sorted(references.items())
-         if key.startswith("midas_") and sys.argv[1] in ref.get("nasdaq_rows", {})]
+rows = sys.argv[2].lower() + "_rows"
+found = [ref[rows][sys.argv[1]] for key, ref in sorted(references.items())
+         if key.startswith("midas_") and sys.argv[1] in ref.get(rows, {})]
 if len(found) != 1:
-    sys.exit(f"real day: {len(found)} MIDAS zips pin Nasdaq rows for {sys.argv[1]}")
+    sys.exit(f"real day: {len(found)} MIDAS zips pin {sys.argv[2]} rows for {sys.argv[1]}")
 print(found[0])
-' "$1"
+' "$1" "$2"
 }
 
 trades() {
   local day=$1 date=${1:4:4}${1:0:4} log symbols
-  local file cross=data/CrossStats${date}.txt member rows
+  local file cross=data/CrossStats${date}.txt member rows exchange
   local months=(jan feb mar apr may jun jul aug sep oct nov dec)
   local month=${months[$((10#${day:0:2} - 1))]}
   member=$month${day:6:2}.csv
@@ -153,10 +163,16 @@ trades() {
     echo "real day: $day has no MIDAS member $member" >&2
     return 1
   fi
-  rows=$(midas_rows "$date") || return 1
+  exchange=$(midas_exchange "$day") || return 1
+  rows=$(midas_rows "$date" "$exchange") || return 1
   local args=("$file" --date "$date" --midas "build/reference/$member" --midas-rows "$rows")
   local report_args=() arm first= flags word
-  if [ -f "$cross" ]; then
+  if [ "$exchange" != Nasdaq ]; then
+    # CrossStats is Nasdaq's file of its own crosses, so another venue has none to compare.
+    args+=(--exchange "$exchange")
+    echo "real day: $day is a feed of MIDAS's $exchange, so T-TRADE-2 is not available"
+    report_args=(--no-cross-file)
+  elif [ -f "$cross" ]; then
     args+=(--crossstats "$cross")
   else
     echo "real day: $day has no cross file, so T-TRADE-2 is not available"

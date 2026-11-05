@@ -437,6 +437,46 @@ class TradesReport(unittest.TestCase):
         self.assertEqual(code, 2, output)
         self.assertIn("2 MIDAS zips pin Nasdaq rows for 20200106", output)
 
+    def bx_day(self):
+        """The good day as a BX feed: Boston's rows compared, and no cross file."""
+        self.day = dict(self.day, venue="BX", midas_exchange="Boston")
+        self.replace("trades_date 20200106", "trades_date 20200106\ntrades_midas_exchange Boston")
+        self.replace("verdict T-TRADE-2 PASS violations=0",
+                     "verdict T-TRADE-2 NOT_AVAILABLE violations=0")
+        self.midas_key = "midas_2020q1"
+        self.flags = ["--no-cross-file"]
+
+    def run_bx(self, rows=None):
+        manifest_rows = {"boston_rows": {"20200106": self.rows if rows is None else rows}}
+        self.references = {"midas_2020q1": manifest_rows}
+        self.midas_key = "midas_2019q4"
+        return self.run_report(day="01062020_BX")
+
+    def test_a_bx_day_is_held_to_boston_rows(self):
+        self.bx_day()
+        code, output = self.run_bx()
+        self.assertEqual(code, 0, output)
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("| MIDAS, Boston rows | Count |", written)
+        self.assertIn("| Ticker | SEC lot | In the BX directory | Has a Boston row in MIDAS |",
+                      written)
+        self.assertIn("CrossStats is Nasdaq's file of its own crosses, and this is a BX feed",
+                      written)
+        code, output = self.run_bx(rows=5)
+        self.assertEqual(code, 1, output)
+        self.assertIn("MIDAS rows 4, manifest 5", output)
+
+    def test_a_bx_day_compared_on_nasdaq_rows_fails(self):
+        self.bx_day()
+        self.replace("trades_midas_exchange Boston", "trades_midas_exchange Nasdaq")
+        code, output = self.run_bx()
+        self.assertEqual(code, 1, output)
+        self.assertIn("MIDAS compared on Nasdaq's rows, and the day's exchange is Boston", output)
+
+    def test_a_nasdaq_day_compared_on_another_exchange_fails(self):
+        self.replace("trades_date 20200106", "trades_date 20200106\ntrades_midas_exchange Boston")
+        self.assert_fails("MIDAS compared on Boston's rows, and the day's exchange is Nasdaq")
+
     def test_a_venue_suffix_on_the_key_keeps_the_date(self):
         self.rows = 5
         code, output = self.run_report(day="01062020_BX")

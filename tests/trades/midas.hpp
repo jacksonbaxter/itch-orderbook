@@ -74,7 +74,7 @@ struct MidasError {
   friend bool operator==(const MidasError&, const MidasError&) = default;
 };
 
-// How the file names the venue ITCH is the feed of.
+// How the file names Nasdaq, the venue of the feed by default. BX is Boston.
 inline constexpr std::string_view kMidasExchange = "Nasdaq";
 
 struct MidasQuery {

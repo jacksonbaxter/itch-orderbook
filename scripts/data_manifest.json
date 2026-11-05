@@ -308,6 +308,8 @@
     },
     "01302019_BX": {
       "name": "20190130.BX_ITCH_50",
+      "venue": "BX",
+      "midas_exchange": "Boston",
       "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20BX%20ITCH/20190130.BX_ITCH_50.gz",
       "expected": {
         "compressed_bytes": 1097205622,
@@ -419,6 +421,9 @@
       "nasdaq_rows": {
         "20190130": 5681,
         "20190327": 5665
+      },
+      "boston_rows": {
+        "20190130": 5145
       }
     },
     "midas_2019q2": {

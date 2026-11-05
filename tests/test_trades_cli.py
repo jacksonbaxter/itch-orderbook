@@ -27,6 +27,7 @@ CLEAN_TYPES = {"A": 15, "B": 1, "C": 12, "D": 7, "E": 12, "F": 1, "H": 8, "P": 5
                "S": 6, "U": 1, "X": 2}
 
 CLEAN_LINES = (
+    "trades_midas_exchange Nasdaq",
     "messages_checked 89",
     "class E count=12 shares=1570 zero_share=0 test_count=1 test_shares=100",
     "class C_Y count=3 shares=160 zero_share=0 test_count=0 test_shares=0",
@@ -330,6 +331,16 @@ def main():
     done = run(midas_file=midas_text, extra=("--date", "20200108"))
     if done.returncode != 3 or "reference_error midas no_rows line=0" not in done.stdout:
         failures.append(f"a date with no MIDAS rows: exit {done.returncode}")
+
+    # --exchange names the venue's rows in MIDAS: a BX day reads Boston's rows, and Boston's
+    # rows are not read as Nasdaq's.
+    boston = midas_text.replace(",Nasdaq,", ",Boston,")
+    done = run(midas_file=boston, extra=DATE + PINNED_ROWS + ("--exchange", "Boston"))
+    if done.returncode != 0 or "trades_midas_exchange Boston" not in done.stdout.splitlines():
+        failures.append(f"--exchange Boston: exit {done.returncode}")
+    done = run(midas_file=boston)
+    if done.returncode != 3 or "reference_error midas no_rows line=0" not in done.stdout:
+        failures.append(f"Boston's rows read as Nasdaq's: exit {done.returncode}")
 
     # E: each way a print can fail to hit a resting order.
     def e_of(frames):
