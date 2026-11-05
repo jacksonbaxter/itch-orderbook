@@ -240,7 +240,48 @@
         "gz_sha256": "3f4778eabbc5f8afb113cc178787b156987561fff7590d09388cb44c6564ea1b",
         "unpacked_sha256": "7fa6d9e74975946727460e7971f735cbf039fb4b7ddca5cb1dc7461347d03508",
         "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
-        "agrees": []
+        "agrees": [
+          "gz_sha256",
+          "unpacked_sha256"
+        ]
+      },
+      "compressed_bytes": 4246501580,
+      "etag": "\"3955e17f6717d51:0\"",
+      "last_modified": "Fri, 31 May 2019 04:15:37 GMT",
+      "gz_sha256": "3f4778eabbc5f8afb113cc178787b156987561fff7590d09388cb44c6564ea1b",
+      "gzip_crc32": "fc42f7cd",
+      "gzip_isize": 1417963576,
+      "gzip_members": 1,
+      "unpacked_bytes": 10007898168,
+      "unpacked_sha256": "7fa6d9e74975946727460e7971f735cbf039fb4b7ddca5cb1dc7461347d03508",
+      "messages": 327006172,
+      "per_type_counts": {
+        "A": 144146286,
+        "C": 120275,
+        "D": 140132577,
+        "E": 7218925,
+        "F": 1207474,
+        "H": 8832,
+        "I": 3704017,
+        "J": 18,
+        "K": 1,
+        "L": 204901,
+        "P": 1238971,
+        "Q": 17588,
+        "R": 8795,
+        "S": 6,
+        "U": 26038168,
+        "V": 1,
+        "X": 2950440,
+        "Y": 8897
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 72300000036296,
+        "offset": 10007898154
       }
     },
     "07302019": {
