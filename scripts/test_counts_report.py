@@ -137,8 +137,9 @@ class CountsReport(unittest.TestCase):
         self.assertIn("cost-unshown", codes)
 
     def test_the_command_line_writes_and_checks(self):
-        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent.parent / "build") \
-                as scratch:
+        base = Path(__file__).resolve().parent.parent / "build"
+        base.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as scratch:
             root = Path(scratch)
             records, loads = [], []
             for number in range(2):
