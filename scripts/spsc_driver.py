@@ -57,6 +57,9 @@ Stopped = bench_driver.Stopped
 PERCENTILES = (("p50", 50.0), ("p90", 90.0), ("p99", 99.0), ("p99.9", 99.9),
                ("p99.99", 99.99), ("max", 100.0))
 MODES = ("single", "pipelined", "decoded")
+# About half of 12302019's 263,241,937 ops the book acts on: the day's book is empty at the
+# close, and full here.
+CHECKPOINT_OPS = 131_000_000
 MODE_NAMES = {"single": "Single-threaded", "pipelined": "Pipelined", "decoded": "Decoded"}
 
 SUITES = {
@@ -98,7 +101,9 @@ SUITES = {
             "message the book acts on into a {op_bytes}-byte op and pushes the ops through the "
             "ring, {batch} to a publish, to the book thread, which pops them {batch} at a time "
             "and applies each; and decoded, the pipeline's work on one thread with no "
-            "handover. The ring holds {capacity} ops. `bench/pipeline.hpp`."),
+            "handover. The ring holds {capacity} ops. Each pass also hashes the book once, "
+            "untimed, just after op {checkpoint_ops:,} of those the book acts on: the day's "
+            "book is empty again at the close. `bench/pipeline.hpp`."),
     },
 }
 
@@ -114,6 +119,8 @@ def run_process(args, index, commit, digest):
                "--rotate", str(index - 1)]
     if args.suite != "pipeline":
         command += ["--suite", args.suite]
+    else:
+        command += ["--checkpoint-ops", str(args.checkpoint_ops)]
     if args.core is not None:
         command += ["--core", str(args.core)]
     if args.peer_core is not None:
@@ -146,6 +153,13 @@ def validate_run(record, suite):
             raise Refused("record", "the timed passes are not one of each mode")
         if len({p["book_hash"] for p in passes}) != 1:
             raise Refused("record", "the passes left different books")
+        if not record.get("checkpoint_ops") or any(p["checkpoint_hash"] is None for p in passes):
+            raise Refused("record", "a pass took no checkpoint")
+        if len({p["checkpoint_hash"] for p in passes}) != 1:
+            raise Refused("record", "the passes held different books at the checkpoint")
+        if passes[0]["checkpoint_orders"] == 0:
+            raise Refused("record", "the book was empty at the checkpoint, which then proves "
+                                    "nothing")
         if any(p["ns"] <= 0 for p in passes):
             raise Refused("record", "a pass took no time")
         return
@@ -168,6 +182,8 @@ def validate_together(records):
         if first["suite"] == "pipeline":
             if record["timed"][0]["book_hash"] != first["timed"][0]["book_hash"]:
                 raise Refused("record", f"repetition {index} left another book")
+            if record["timed"][0]["checkpoint_hash"] != first["timed"][0]["checkpoint_hash"]:
+                raise Refused("record", f"repetition {index} held another book at the checkpoint")
         elif sorted(row_keys(record)) != sorted(row_keys(first)):
             raise Refused("record", f"repetition {index} ran other rows")
 
@@ -378,7 +394,8 @@ def describe(records):
     spec = SUITES[first["suite"]]
     if first["suite"] == "pipeline":
         return spec["what"].format(design=first["design"], op_bytes=first["op_bytes"],
-                                   batch=first["batch"], capacity=f"{first['capacity']:,}")
+                                   batch=first["batch"], capacity=f"{first['capacity']:,}",
+                                   checkpoint_ops=first["checkpoint_ops"])
     rows = rows_by_key(first)
     any_row = next(iter(rows.values()))
     trips = next(row["items"] for row in first["rows"] if row["protocol"] == "rtt")
@@ -402,7 +419,8 @@ def repetition_rows(records):
             for p in record["timed"]:
                 rows.append(f"| {index} | {p['mode']} | {p['ns'] / 1e9:.3f} | {p['messages']:,} "
                             f"| {p['ops']:,} | {p['full_waits']:,} | {p['empty_waits']:,} "
-                            f"| {p['book_hash']} | {record['peak_rss_bytes'] / 1024 ** 3:.2f} |")
+                            f"| {p['checkpoint_hash']} | {p['book_hash']} "
+                            f"| {record['peak_rss_bytes'] / 1024 ** 3:.2f} |")
             continue
         for row in record["rows"]:
             value = row["ns_per_item"] if row["protocol"] == "rtt" else (
@@ -424,7 +442,13 @@ def pipeline_sections(records):
              f"`{single['book_hash']}`, by the oracle's canonical hash of every side, level and "
              "order (`tests/oracle/canonical.hpp`), and the driver refuses a run where one "
              f"differs. At the close it held {single['live_orders']:,} orders on "
-             f"{single['live_levels']:,} levels. The single-threaded replay walked "
+             f"{single['live_levels']:,} levels. At the checkpoint, just after op "
+             f"{first['checkpoint_ops']:,} of those the book acts on, every pass held the book "
+             f"`{single['checkpoint_hash']}`, {single['checkpoint_orders']:,} orders on "
+             f"{single['checkpoint_levels']:,} levels, hashed on the book's thread in "
+             f"{single['checkpoint_ns'] / 1e6:.1f} ms that the timed span leaves out; the driver "
+             "refuses a run where one differs there too, or where that book is empty. "
+             f"The single-threaded replay walked "
              f"{single['messages']:,} messages, and `apply()` returned {statuses}; the pipeline "
              f"handed the book {pipelined['ops']:,} of them, every one it acts on, and each "
              "status but no_book_effect came out the same.", "",
@@ -488,7 +512,8 @@ def render(records, args, run_id, started, finished, machine_output, command):
     if suite == "pipeline":
         lines += ["", "## Repetitions", "",
                   "| Repetition | Mode | Timed pass s | Messages | Ops | Full waits | Empty waits "
-                  "| Book hash | Peak RSS GiB |", "|---|---|---|---|---|---|---|---|---|"]
+                  "| Checkpoint hash | Book hash | Peak RSS GiB |",
+                  "|---|---|---|---|---|---|---|---|---|---|"]
     else:
         lines += ["", "## Repetitions", "",
                   "Each row's figure as in the summary, and the core each thread last ran on.", "",
@@ -515,6 +540,8 @@ def relative_command(args):
              "--input", shown_path(args.input), "--prediction", args.prediction,
              "--repetitions", str(args.repetitions), "--raw-dir", "<raw>",
              "--out", shown_path(args.out)]
+    if args.suite == "pipeline":
+        words += ["--checkpoint-ops", str(args.checkpoint_ops)]
     for flag, value in (("--core", args.core), ("--peer-core", args.peer_core)):
         if value is not None:
             words += [flag, str(value)]
@@ -569,6 +596,8 @@ def parse_args(argv):
     parser.add_argument("--core", type=int)
     parser.add_argument("--peer-core", type=int)
     parser.add_argument("--sibling", type=int)
+    parser.add_argument("--checkpoint-ops", type=int, default=CHECKPOINT_OPS,
+                        help="pipeline: hash the book after this many ops it acts on")
     parser.add_argument("--wrapped-by", help="what the run was started under, for the record")
     parser.add_argument("--allow-dirty", action="store_true", help="for tests, not for a report")
     parser.add_argument("--bench-arg", action="append", default=[], metavar="ARG")

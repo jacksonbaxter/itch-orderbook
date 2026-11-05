@@ -673,8 +673,16 @@ def check_spsc(text, fields):
                                     "that cross-core latency there is weak evidence")
     yield from check_spsc_summary(text)
     if suite == "pipeline":
-        if "left the book" not in (section(text, "Book agreement") or ""):
+        agreement = section(text, "Book agreement") or ""
+        if "left the book" not in agreement:
             yield "book-agreement-missing", "no statement that every pass left the same book"
+        # The day's book is empty at the close, so the closing hash alone agrees on nothing.
+        held = re.search(r"At the checkpoint, .*? every pass held the book `[0-9a-f]{16}`, "
+                         r"([\d,]+) orders", agreement)
+        if not held:
+            yield "checkpoint-missing", "no statement that every pass held the same book mid-run"
+        elif int(held.group(1).replace(",", "")) == 0:
+            yield "checkpoint-empty", "the book was empty at the checkpoint"
     else:
         yield from check_spsc_latency(text, fields)
     yield from check_spsc_targets(text, fields, suite)

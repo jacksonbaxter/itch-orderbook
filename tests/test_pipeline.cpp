@@ -1,8 +1,9 @@
 // T-SPSC-3's harness: the pipelined replay, a parser thread handing decoded ops to a book
 // thread through the ring, leaves the same book as the single-threaded replay of the same
 // stream, byte for byte and by the hash the benchmark compares. The decoded path makes the
-// same changes as apply() on each payload, and the hash sees a single lost op. Under the
-// tsan preset this is the two-thread pipeline's race check.
+// same changes as apply() on each payload, and the hash sees a single lost op. The
+// checkpoint each replay takes is the book just after the same op in all three, taken on
+// the book's own thread. Under the tsan preset this is the two-thread pipeline's race check.
 #include <gtest/gtest.h>
 
 #include <cstddef>
@@ -89,6 +90,45 @@ TEST(Pipeline, DecodedOpTakesTheSamePathAsThePayload) {
         << "type " << static_cast<char>(message[0]);
     EXPECT_TRUE(by_op == by_payload) << "type " << static_cast<char>(message[0]);
   }
+}
+
+// The book after the first `at` ops it acts on, one at a time on this thread.
+[[nodiscard]] std::uint64_t hash_after(const std::vector<std::byte>& stream, std::uint64_t at) {
+  Book book{kCapacity};
+  std::uint64_t acted = 0;
+  itch::FrameReader reader{stream};
+  for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status) && acted < at;
+       frame = reader.next()) {
+    acted += book.apply(frame.payload) != ApplyStatus::no_book_effect ? 1 : 0;
+  }
+  EXPECT_EQ(acted, at);
+  return book_hash(book);
+}
+
+TEST(Pipeline, CheckpointIsTheBookAfterTheSameOp) {
+  const std::vector<std::byte> churn = itch::testing::build_stream();
+  Book whole{kCapacity};
+  const ReplayCounts all = itch::bench::replay_decoded(churn, whole);
+  EXPECT_FALSE(all.checkpoint_reached);
+  for (const std::uint64_t at : {std::uint64_t{1}, all.ops / 2, all.ops - 1}) {
+    const std::uint64_t expected = hash_after(churn, at);
+    Book single{kCapacity};
+    Book decoded{kCapacity};
+    Book pipelined{kCapacity};
+    OpRing ring{16};
+    const ReplayCounts by_single = itch::bench::replay_single(churn, single, at);
+    const ReplayCounts by_decoded = itch::bench::replay_decoded(churn, decoded, at);
+    const ReplayCounts by_pipeline =
+        itch::bench::replay_pipelined(churn, pipelined, ring, -1, [] {}, at);
+    for (const ReplayCounts* counts : {&by_single, &by_decoded, &by_pipeline}) {
+      EXPECT_TRUE(counts->checkpoint_reached) << "op " << at;
+      EXPECT_EQ(counts->checkpoint_hash, expected) << "op " << at;
+    }
+    EXPECT_NE(expected, book_hash(whole)) << "op " << at;
+    EXPECT_EQ(book_hash(pipelined), book_hash(whole)) << "op " << at;
+  }
+  Book past{kCapacity};
+  EXPECT_FALSE(itch::bench::replay_single(churn, past, all.ops + 1).checkpoint_reached);
 }
 
 TEST(Pipeline, HashSeesOneLostOp) {

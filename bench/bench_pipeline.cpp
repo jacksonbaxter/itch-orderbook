@@ -3,7 +3,8 @@
 // scripts/spsc_driver.py starts a fresh one for each and writes the results file.
 //
 //     bench_pipeline --input FILE --out RUN.json [--core N] [--peer-core N] [--rotate N]
-//                    [--commit TEXT] [--dataset NAME] [--dataset-sha256 HEX]
+//                    [--checkpoint-ops N] [--commit TEXT] [--dataset NAME]
+//                    [--dataset-sha256 HEX]
 //
 // Three modes, from bench/pipeline.hpp, each on a fresh paged-flat book, the shipped arm:
 // single, the shipped single-threaded replay; pipelined, the parser on the peer thread
@@ -14,7 +15,9 @@
 //
 // Every pass must leave the same book, by the oracle's canonical hash of it, and give the
 // same count of messages and of each status apply() returned (no_book_effect aside, which
-// only the single mode can return), or the run is refused.
+// only the single mode can return), or the run is refused. A real day's book is empty at
+// the close, so with --checkpoint-ops N each pass also hashes the book once mid-run, just
+// after the N-th op the book acted on, untimed; every pass must reach it and agree there.
 //
 // This thread, the book's, is pinned to --core and the parser to --peer-core where the
 // platform can pin.
@@ -64,6 +67,7 @@ struct Options {
   int core = -1;
   int peer_core = -1;
   std::uint64_t rotate = 0;
+  std::uint64_t checkpoint_ops = 0;  // 0: no checkpoint.
 };
 
 template <class Number>
@@ -96,6 +100,8 @@ template <class Number>
       good = parse_number(value, options.peer_core);
     } else if (flag == "--rotate") {
       good = parse_number(value, options.rotate);
+    } else if (flag == "--checkpoint-ops") {
+      good = parse_number(value, options.checkpoint_ops) && options.checkpoint_ops > 0;
     } else {
       good = false;
     }
@@ -124,6 +130,7 @@ struct Pass {
   std::uint64_t live_orders = 0;
   std::uint64_t live_levels = 0;
   double ns = 0.0;
+  double checkpoint_ns = 0.0;  // The checkpoint's untimed walk.
 };
 
 [[nodiscard]] Pass run_pass(std::string_view mode, std::span<const std::byte> day,
@@ -131,15 +138,17 @@ struct Pass {
   const auto book = std::make_unique<itch::FastBook<>>();
   Pass pass;
   pass.mode = mode;
+  const std::uint64_t at = options.checkpoint_ops == 0 ? kNoCheckpoint : options.checkpoint_ops;
   if (mode == "single") {
-    pass.counts = replay_single(day, *book);
+    pass.counts = replay_single(day, *book, at);
   } else if (mode == "decoded") {
-    pass.counts = replay_decoded(day, *book);
+    pass.counts = replay_decoded(day, *book, at);
   } else {
     const auto ring = std::make_unique<OpRing>(kPipelineCapacity);
-    pass.counts = replay_pipelined(day, *book, *ring, options.peer_core, [] {});
+    pass.counts = replay_pipelined(day, *book, *ring, options.peer_core, [] {}, at);
   }
   pass.ns = timer.ticks_to_ns(static_cast<double>(pass.counts.ticks));
+  pass.checkpoint_ns = timer.ticks_to_ns(static_cast<double>(pass.counts.checkpoint_ticks));
   pass.hash = book_hash(*book);
   pass.live_orders = book->live_orders();
   pass.live_levels = book->live_levels();
@@ -154,21 +163,37 @@ struct Pass {
                             json_string(itch::to_string(static_cast<itch::ApplyStatus>(i))),
                             c.by_status[i]);
   }
+  const std::string checkpoint =
+      c.checkpoint_reached
+          ? std::format(R"("checkpoint_hash": "{:016x}", "checkpoint_orders": {}, )"
+                        R"("checkpoint_levels": {}, "checkpoint_ns": {:.0f})",
+                        c.checkpoint_hash, c.checkpoint_orders, c.checkpoint_levels,
+                        pass.checkpoint_ns)
+          : std::string{R"("checkpoint_hash": null)"};
   return std::format(
       R"({{"mode": {}, "ns": {:.0f}, "messages": {}, "ops": {}, "statuses": {{{}}}, )"
       R"("full_waits": {}, "empty_waits": {}, "book_hash": "{:016x}", "live_orders": {}, )"
-      R"("live_levels": {}, "parser_pinning": {}}})",
+      R"("live_levels": {}, {}, "parser_pinning": {}}})",
       json_string(pass.mode), pass.ns, c.messages, c.ops, statuses, c.full_waits, c.empty_waits,
-      pass.hash, pass.live_orders, pass.live_levels,
+      pass.hash, pass.live_orders, pass.live_levels, checkpoint,
       json_string(pass.mode == "pipelined" ? pinning_field(c.parser_pin) : "no parser thread"));
 }
 
-// Every pass against the first: the book's hash, the messages, and each status the book
-// returned on an op it was given.
-[[nodiscard]] std::vector<std::string> disagreements(const std::vector<Pass>& passes) {
+// Every pass against the first: the book's hash at the close and at the checkpoint, the
+// messages, and each status the book returned on an op it was given.
+[[nodiscard]] std::vector<std::string> disagreements(const std::vector<Pass>& passes,
+                                                     std::uint64_t checkpoint_ops) {
   std::vector<std::string> out;
   const Pass& first = passes.front();
   for (const Pass& pass : passes) {
+    if (checkpoint_ops != 0 && !pass.counts.checkpoint_reached) {
+      out.push_back(
+          std::format("{} never reached op {}, the checkpoint", pass.mode, checkpoint_ops));
+    } else if (pass.counts.checkpoint_hash != first.counts.checkpoint_hash) {
+      out.push_back(std::format("{} held book {:016x} at the checkpoint, {} held {:016x}",
+                                pass.mode, pass.counts.checkpoint_hash, first.mode,
+                                first.counts.checkpoint_hash));
+    }
     if (pass.hash != first.hash) {
       out.push_back(std::format("{} left book {:016x}, {} left {:016x}", pass.mode, pass.hash,
                                 first.mode, first.hash));
@@ -218,7 +243,8 @@ template <class Range, class Render>
 [[nodiscard]] std::vector<std::string> refusals_of(const PinOutcome& pin,
                                                    const std::vector<Pass>& warm,
                                                    const std::vector<Pass>& timed,
-                                                   const std::array<Residency, 3>& residency) {
+                                                   const std::array<Residency, 3>& residency,
+                                                   std::uint64_t checkpoint_ops) {
   std::vector<std::string> refusals;
   if (kPinningRequired && !pin.pinned) {
     refusals.push_back(pinning_field(pin));
@@ -236,7 +262,7 @@ template <class Range, class Render>
   }
   std::vector<Pass> every{warm};
   every.insert(every.end(), timed.begin(), timed.end());
-  for (std::string& reason : disagreements(every)) {
+  for (std::string& reason : disagreements(every, checkpoint_ops)) {
     refusals.push_back(std::move(reason));
   }
   return refusals;
@@ -247,7 +273,8 @@ int run(int argc, char** argv) {
   if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
     std::println(stderr,
                  "usage: bench_pipeline --input FILE --out RUN.json [--core N] [--peer-core N] "
-                 "[--rotate N] [--commit TEXT] [--dataset NAME] [--dataset-sha256 HEX]");
+                 "[--rotate N] [--checkpoint-ops N] [--commit TEXT] [--dataset NAME] "
+                 "[--dataset-sha256 HEX]");
     return 2;
   }
   const auto file = itch::tools::MappedFile::open(options.input.c_str());
@@ -285,7 +312,8 @@ int run(int argc, char** argv) {
   }
   residency[2] = resident(day);
 
-  const std::vector<std::string> refusals = refusals_of(pin, warm, timed, residency);
+  const std::vector<std::string> refusals =
+      refusals_of(pin, warm, timed, residency, options.checkpoint_ops);
 
   const std::vector<HeaderField> header = build_header(
       live_source(),
@@ -310,12 +338,13 @@ int run(int argc, char** argv) {
   std::string json = "{\"header\": {" + header_json(header);
   json += std::format(
       R"(}}, "suite": "pipeline", "design": "paged-flat", "capacity": {}, "batch": {}, )"
-      R"("op_bytes": {}, "cache_line": {}, "peer_core": {}, "rotate": {}, )"
+      R"("op_bytes": {}, "cache_line": {}, "peer_core": {}, "rotate": {}, "checkpoint_ops": {}, )"
       R"("input": "mapped: the whole day, read-only, MAP_PRIVATE, posix_madvise(POSIX_MADV_NORMAL), every page read before the warm-ups and again before the timed passes", )"
       R"("residency": [{}, {}, {}], "migrations": {}, "peak_rss_bytes": {}, "warmup": [)",
       kPipelineCapacity, kPipelineBatch, sizeof(itch::BookOp), itch::kCacheLine, options.peer_core,
-      options.rotate, json_string(residency[0].describe()), json_string(residency[1].describe()),
-      json_string(residency[2].describe()), migrations.migrations(), peak_rss_bytes());
+      options.rotate, options.checkpoint_ops, json_string(residency[0].describe()),
+      json_string(residency[1].describe()), json_string(residency[2].describe()),
+      migrations.migrations(), peak_rss_bytes());
   json += joined(warm, pass_json) + "], \"timed\": [" + joined(timed, pass_json) +
           "], \"refusals\": [" + joined(refusals, json_string) + "]}\n";
   std::ofstream out{options.out};

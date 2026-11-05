@@ -4,8 +4,8 @@
     check_predictions.py [--root DIR] [--require ID] [--no-git]
 
 results/predictions.md holds one `## P-NNNN: title` block per experiment. Every
-results/bench_*.md, results/chase_*.md, results/backtest_*.md and results/mm_*.md names one in
-its header.
+results/bench_*.md, results/chase_*.md, results/backtest_*.md, results/mm_*.md and
+results/spsc_*.md names one in its header.
 With git history to read, the block must be committed, its commit must come before the
 result's, and its text must be what that commit wrote: a prediction is never edited. results/run_log.md gets a row for every run,
 failed ones included, and only ever grows.

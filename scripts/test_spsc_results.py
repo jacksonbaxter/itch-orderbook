@@ -111,7 +111,8 @@ def pass_of(mode, seconds):
             "statuses": {"applied": 250_000_000, "no_book_effect": 18_744_780},
             "full_waits": 10 if mode == "pipelined" else 0,
             "empty_waits": 1_000 if mode == "pipelined" else 0, "book_hash": "6a0288a6a5995a4d",
-            "live_orders": 1_061, "live_levels": 423,
+            "live_orders": 1_061, "live_levels": 423, "checkpoint_hash": "5a3d6e3b95eeb051",
+            "checkpoint_orders": 487, "checkpoint_levels": 211, "checkpoint_ns": 2.5e6,
             "parser_pinning": MAC_PIN if mode == "pipelined" else "no parser thread"}
 
 
@@ -120,7 +121,7 @@ def pipeline_record(single=10.0, pipelined=12.0, header=None):
               pass_of("decoded", single * 1.05)]
     return {"header": dict(HEADER) if header is None else header, "suite": "pipeline",
             "design": "paged-flat", "capacity": 65_536, "batch": 64, "op_bytes": 32,
-            "cache_line": 128, "peer_core": -1, "rotate": 0,
+            "cache_line": 128, "peer_core": -1, "rotate": 0, "checkpoint_ops": 131_000_000,
             "input": "mapped: the whole day, read-only",
             "residency": ["1 of 1 pages resident"] * 3, "migrations": 0,
             "peak_rss_bytes": 9_000_000_000, "warmup": copy.deepcopy(passes), "timed": passes,
@@ -261,6 +262,12 @@ class Files(unittest.TestCase):
         broken = replace(PIPELINE_FILE, "left the book", "ended")
         self.assertIn("book-agreement-missing", codes(broken))
 
+    def test_the_checkpoint_dropped_or_empty(self):
+        self.assertIn("At the checkpoint, just after op 131,000,000", PIPELINE_FILE)
+        self.assertIn("checkpoint-missing", codes(replace(
+            PIPELINE_FILE, "every pass held the book", "the passes held books")))
+        self.assertIn("checkpoint-empty", codes(replace(PIPELINE_FILE, "487 orders", "0 orders")))
+
 
 class Debian(unittest.TestCase):
     """On debian, a verdict is met or missed by the ratio against the bar."""
@@ -316,6 +323,23 @@ class Driver(unittest.TestCase):
         bad["timed"][1]["book_hash"] = "0000000000000000"
         with self.assertRaisesRegex(spsc_driver.Refused, "different books"):
             spsc_driver.validate_run(bad, "pipeline")
+
+    def test_a_checkpoint_missed_or_disagreeing_is_refused(self):
+        for change, reason in ((None, "no checkpoint"), ("0000000000000000", "at the checkpoint")):
+            bad = pipeline_record()
+            bad["warmup"][2]["checkpoint_hash"] = change
+            with self.assertRaisesRegex(spsc_driver.Refused, reason):
+                spsc_driver.validate_run(bad, "pipeline")
+        bad = pipeline_record()
+        for one in bad["warmup"] + bad["timed"]:
+            one["checkpoint_orders"] = 0
+        with self.assertRaisesRegex(spsc_driver.Refused, "empty at the checkpoint"):
+            spsc_driver.validate_run(bad, "pipeline")
+        other = pipeline_record()
+        for one in other["warmup"] + other["timed"]:
+            one["checkpoint_hash"] = "1111111111111111"
+        with self.assertRaisesRegex(spsc_driver.Refused, "another book at the checkpoint"):
+            spsc_driver.validate_together([pipeline_record(), other])
 
     def test_repetitions_that_disagree_are_refused(self):
         other = record("queues")

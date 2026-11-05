@@ -11,9 +11,14 @@
 //                         thread pops them in batches and applies each.
 //
 // Each returns the same counts, so the caller can hold the three to one another, and
-// book_hash() reads the book each left. The parser thread is started and waiting before
-// the span opens; the span closes when the book thread has applied the last op. Nothing
-// in a span allocates (tests/test_alloc.cpp).
+// book_hash() reads the book each left. A real day's book is empty again at the close, so
+// each also takes the book's hash once along the way, a checkpoint: the book just after
+// the checkpoint_at-th apply() that returned anything but no_book_effect, the same op in
+// all three, since the decoded paths hand the book exactly the messages it acts on
+// (tests/test_pipeline.cpp). The walk for that hash is left out of the span; in the
+// pipeline the parser keeps filling the ring meanwhile, as it does all day. The parser
+// thread is started and waiting before the span opens; the span closes when the book
+// thread has applied the last op. Nothing in a span allocates (tests/test_alloc.cpp).
 #pragma once
 
 #include <array>
@@ -45,6 +50,15 @@ inline constexpr std::size_t kPipelineBatch = 64;
 inline constexpr std::size_t kStatuses = 8;  // ApplyStatus's values.
 
 using OpRing = SpscRing<BookOp>;
+inline constexpr std::uint64_t kNoCheckpoint = std::numeric_limits<std::uint64_t>::max();
+
+// The whole book as one word, the oracle's canonical walk through its order-sensitive mix.
+template <class Book>
+[[nodiscard]] std::uint64_t book_hash(const Book& book) {
+  oracle::WordHash hash;
+  oracle::emit_fast(book, hash);
+  return hash.value();
+}
 
 struct ReplayCounts {
   std::uint64_t messages = 0;  // Whole frames walked.
@@ -56,15 +70,45 @@ struct ReplayCounts {
   std::uint64_t full_waits = 0;
   std::uint64_t empty_waits = 0;
   PinOutcome parser_pin;  // replay_pipelined() only.
+  bool checkpoint_reached = false;
+  std::uint64_t checkpoint_hash = 0;    // book_hash() at the checkpoint, once reached.
+  std::uint64_t checkpoint_orders = 0;  // The book's live orders and levels there.
+  std::uint64_t checkpoint_levels = 0;
+  std::uint64_t checkpoint_ticks = 0;  // Its walk, left out of `ticks`.
 
   [[nodiscard]] std::uint64_t of(ApplyStatus status) const noexcept {
     return by_status[static_cast<std::size_t>(status)];
   }
 };
 
+// Counts each status and takes the checkpoint's hash when its op comes.
+class Tally {
+ public:
+  explicit Tally(std::uint64_t checkpoint_at) noexcept : at_{checkpoint_at} {}
+
+  template <class Book>
+  void count(ApplyStatus status, const Book& book, ReplayCounts& counts) noexcept {
+    ++counts.by_status[static_cast<std::size_t>(status)];
+    if (status != ApplyStatus::no_book_effect && ++acted_ == at_) {
+      const std::uint64_t start = ticks_start();
+      counts.checkpoint_hash = book_hash(book);
+      counts.checkpoint_reached = true;
+      counts.checkpoint_orders = book.live_orders();
+      counts.checkpoint_levels = book.live_levels();
+      counts.checkpoint_ticks = ticks_stop() - start;
+    }
+  }
+
+ private:
+  std::uint64_t at_;
+  std::uint64_t acted_ = 0;
+};
+
 template <class Book>
-[[nodiscard]] ReplayCounts replay_single(std::span<const std::byte> day, Book& book) noexcept {
+[[nodiscard]] ReplayCounts replay_single(std::span<const std::byte> day, Book& book,
+                                         std::uint64_t checkpoint_at = kNoCheckpoint) noexcept {
   ReplayCounts counts;
+  Tally tally{checkpoint_at};
   const std::uint64_t start = ticks_start();
   FrameReader reader{day};
   for (Frame frame = reader.next(); !is_terminal(frame.status); frame = reader.next()) {
@@ -72,16 +116,18 @@ template <class Book>
       continue;
     }
     ++counts.messages;
-    ++counts.by_status[static_cast<std::size_t>(book.apply(frame.payload))];
+    tally.count(book.apply(frame.payload), book, counts);
   }
-  counts.ticks = ticks_stop() - start;
+  counts.ticks = ticks_stop() - start - counts.checkpoint_ticks;
   counts.ops = counts.messages;
   return counts;
 }
 
 template <class Book>
-[[nodiscard]] ReplayCounts replay_decoded(std::span<const std::byte> day, Book& book) noexcept {
+[[nodiscard]] ReplayCounts replay_decoded(std::span<const std::byte> day, Book& book,
+                                          std::uint64_t checkpoint_at = kNoCheckpoint) noexcept {
   ReplayCounts counts;
+  Tally tally{checkpoint_at};
   const std::uint64_t start = ticks_start();
   FrameReader reader{day};
   for (Frame frame = reader.next(); !is_terminal(frame.status); frame = reader.next()) {
@@ -92,10 +138,10 @@ template <class Book>
     const std::optional<BookOp> op = decode_book_op(frame.payload);
     if (op) {
       ++counts.ops;
-      ++counts.by_status[static_cast<std::size_t>(book.apply(*op))];
+      tally.count(book.apply(*op), book, counts);
     }
   }
-  counts.ticks = ticks_stop() - start;
+  counts.ticks = ticks_stop() - start - counts.checkpoint_ticks;
   return counts;
 }
 
@@ -163,8 +209,10 @@ class Parser {
 // before the span opens: the allocation test opens its window there.
 template <class Book, class Ready>
 [[nodiscard]] ReplayCounts replay_pipelined(std::span<const std::byte> day, Book& book,
-                                            OpRing& ring, int parser_core, Ready ready) {
+                                            OpRing& ring, int parser_core, Ready ready,
+                                            std::uint64_t checkpoint_at = kNoCheckpoint) {
   ReplayCounts counts;
+  Tally tally{checkpoint_at};
   Parser parser{day, ring};
   std::atomic<bool> go{false};
   std::atomic<bool> waiting{false};
@@ -191,24 +239,16 @@ template <class Book, class Ready>
       continue;
     }
     for (std::size_t i = 0; i < got; ++i) {
-      ++counts.by_status[static_cast<std::size_t>(book.apply(ops[i]))];
+      tally.count(book.apply(ops[i]), book, counts);
     }
     applied += got;
   }
-  counts.ticks = ticks_stop() - start;
+  counts.ticks = ticks_stop() - start - counts.checkpoint_ticks;
   thread.join();
   counts.messages = parser.messages();
   counts.ops = applied;
   counts.full_waits = parser.full_waits();
   return counts;
-}
-
-// The whole book as one word, the oracle's canonical walk through its order-sensitive mix.
-template <class Book>
-[[nodiscard]] std::uint64_t book_hash(const Book& book) {
-  oracle::WordHash hash;
-  oracle::emit_fast(book, hash);
-  return hash.value();
 }
 
 }  // namespace itch::bench

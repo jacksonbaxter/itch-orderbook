@@ -260,6 +260,119 @@
       }
     },
     {
+      "id": "spsc-checkpoint-counts-every-message",
+      "breaks": "The checkpoint counts every message, so the single replay takes it at another op than the decoded ones",
+      "check": "test_pipeline CheckpointIsTheBookAfterTheSameOp",
+      "mutations": [
+        {
+          "file": "bench/pipeline.hpp",
+          "old": "    if (status != ApplyStatus::no_book_effect && ++acted_ == at_) {",
+          "new": "    if (++acted_ == at_) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_pipeline"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_pipeline"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Pipeline\\.CheckpointIsTheBookAfterTheSameOp"
+      }
+    },
+    {
+      "id": "spsc-bench-unreached-checkpoint",
+      "breaks": "bench_pipeline publishes a run whose passes never reached the checkpoint",
+      "check": "test_bench_spsc_cli",
+      "mutations": [
+        {
+          "file": "bench/bench_pipeline.cpp",
+          "old": "    if (checkpoint_ops != 0 && !pass.counts.checkpoint_reached) {",
+          "new": "    if (checkpoint_ops == 0 && !pass.counts.checkpoint_reached) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_spsc",
+          "bench_pipeline"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_bench_spsc_cli$"
+      ],
+      "expect": {
+        "signature": "bench spsc cli: FAIL checkpoint past the end"
+      }
+    },
+    {
+      "id": "spsc-driver-checkpoint-disagrees",
+      "breaks": "spsc_driver takes a record whose passes held different books at the checkpoint",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "        if len({p[\"checkpoint_hash\"] for p in passes}) != 1:",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_checkpoint_missed_or_disagreeing_is_refused"
+      }
+    },
+    {
+      "id": "spsc-driver-empty-checkpoint",
+      "breaks": "spsc_driver takes a checkpoint on an empty book, which agrees on nothing",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "        if passes[0][\"checkpoint_orders\"] == 0:",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_checkpoint_missed_or_disagreeing_is_refused"
+      }
+    },
+    {
+      "id": "spsc-results-empty-checkpoint",
+      "breaks": "check_results takes a pipeline file whose checkpoint book was empty",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        elif int(held.group(1).replace(\",\", \"\")) == 0:",
+          "new": "        elif False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_checkpoint_dropped_or_empty"
+      }
+    },
+    {
       "id": "spsc-bench-ignores-queue-filter",
       "breaks": "bench_spsc runs every queue it has whatever --queue asked for",
       "check": "test_bench_spsc_cli",

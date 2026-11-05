@@ -8,8 +8,9 @@ seconds from 09:30 at the day's own pace, replays all of them in 3 ms. Each suit
 small counts. Every record must hold every header field and no refusal, and every row must
 move its items with none wrong: every queue this build has in the comparison, every
 configuration in the ablation, and batch publish against a store per item. bench_pipeline
-must leave the same book three ways, warm-up and timed. Bad usage and an unreadable file
-exit 2. On Linux, where an unpinned run is refused, each run asks for the first two cores
+must leave the same book three ways, warm-up and timed, and hold the same book at its
+checkpoint, op 1000, in each; a checkpoint past the file's last op is refused with exit 3.
+Bad usage and an unreadable file exit 2. On Linux, where an unpinned run is refused, each run asks for the first two cores
 the test may use. A failure prints `bench spsc cli: FAIL <case>: <reason>`.
 """
 
@@ -28,6 +29,7 @@ PROTOCOLS = ("rtt", "saturated", "paced-1000ns", "paced-10000ns", "burst")
 VARIANTS = ("shipped", "uncached", "modulo", "uncached-modulo", "padding-8", "padding-256")
 SESSION_MESSAGES = 3330
 REGULAR_HOURS_MESSAGES = 3313
+CHECKPOINT = 1000
 SMALL = ("--rtt-trips", "2000", "--saturated-items", "300000", "--paced-items", "500")
 
 
@@ -108,18 +110,29 @@ def main():
             if (variant, "saturated-batch-32") not in rows:
                 failures.append(("ablation", f"no {variant} row"))
 
-    replay = record("pipeline", pipeline)
+    replay = record("pipeline", pipeline, "--checkpoint-ops", str(CHECKPOINT))
     if replay:
         passes = replay["warmup"] + replay["timed"]
         if sorted(p["mode"] for p in replay["timed"]) != ["decoded", "pipelined", "single"]:
             failures.append(("pipeline", "not one timed pass of each mode"))
         if len({p["book_hash"] for p in passes}) != 1:
             failures.append(("pipeline", "the passes left different books"))
+        checkpoints = {(p["checkpoint_hash"], p.get("checkpoint_orders")) for p in passes}
+        if replay["checkpoint_ops"] != CHECKPOINT or len(checkpoints) != 1 or \
+                None in checkpoints.pop():
+            failures.append(("pipeline", "the passes held different books at the checkpoint"))
         if any(p["messages"] != SESSION_MESSAGES for p in passes):
             failures.append(("pipeline", "a pass did not read the whole file"))
         ops = {p["ops"] for p in passes if p["mode"] != "single"}
         if len(ops) != 1 or not 0 < ops.pop() < SESSION_MESSAGES:
             failures.append(("pipeline", "the pipelined and decoded passes moved other ops"))
+
+    past = scratch / "past.json"
+    done = subprocess.run([pipeline, "--input", session, "--out", str(past), "--checkpoint-ops",
+                           "100000", *core_arguments()], capture_output=True, text=True,
+                          check=False)
+    if done.returncode != 3 or "never reached op 100000" not in done.stderr:
+        failures.append(("checkpoint past the end", f"exit {done.returncode}: {done.stderr}"))
 
     for name, args in (("no input", ["--out", str(scratch / "x.json")]),
                        ("bad suite", ["--suite", "other", "--input", session, "--out",
