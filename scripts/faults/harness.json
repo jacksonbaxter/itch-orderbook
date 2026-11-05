@@ -164,7 +164,8 @@
       "build": {
         "preset": "wasm",
         "targets": [
-          "itch_wasm_smoke"
+          "itch_wasm_smoke",
+          "itch_demo_smoke"
         ],
         "gtest": false
       },

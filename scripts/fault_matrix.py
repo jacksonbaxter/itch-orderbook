@@ -66,7 +66,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MAX_JOBS = 6
+# check.sh's ITCH_CHECK_JOBS, never more than 6, so that a run outside check.sh can use fewer.
+MAX_JOBS = max(1, min(6, int(os.environ.get("ITCH_CHECK_JOBS", "6"))))
 DEFAULT_TIMEOUT = 300
 DEFAULT_TREE = ("CMakeLists.txt", "CMakePresets.json", ".clang-tidy", ".github", "cmake", "include",
                 "src", "tests", "tools", "fuzz", "bench", "scripts")
@@ -263,12 +264,15 @@ def copy_tree(root, destination, tree):
         shutil.rmtree(destination)
     destination.mkdir(parents=True)
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
+    # docs/local/ is the demo's gitignored extract and engine, never part of a tree under test.
+    page = shutil.ignore_patterns("__pycache__", "*.pyc", "local")
     for name in tree:
         source = root / name
         target = destination / name
         target.parent.mkdir(parents=True, exist_ok=True)
         if source.is_dir():
-            shutil.copytree(source, target, ignore=ignore, symlinks=True)
+            shutil.copytree(source, target, ignore=page if name == "docs" else ignore,
+                            symlinks=True)
         else:
             shutil.copy2(source, target)
 
