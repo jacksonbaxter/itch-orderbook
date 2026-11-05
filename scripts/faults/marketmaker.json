@@ -882,6 +882,209 @@
       }
     },
     {
+      "id": "mm-select-one-tick-share-strict",
+      "breaks": "Group A's 80% at one tick is taken as more than 80%, which drops a symbol at the bar",
+      "check": "test_select_cli.py",
+      "mutations": [
+        {
+          "file": "tools/itch_select.cpp",
+          "old": "             static_cast<unsigned __int128>(kOneTickShareA) * s.valid;",
+          "new": "             static_cast<unsigned __int128>(kOneTickShareA) * s.valid + 1;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_select"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_select_cli.py",
+        "{build}/tools/itch_select",
+        "{build}/select_fault"
+      ],
+      "expect": {
+        "signature": "select cli: FAIL"
+      }
+    },
+    {
+      "id": "mm-select-etp-kept",
+      "breaks": "ETPs stay in the universe",
+      "check": "test_select_cli.py",
+      "mutations": [
+        {
+          "file": "tools/itch_select.cpp",
+          "old": "  if (s.etp == 'Y') {",
+          "new": "  if (s.etp == 'X') {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_select"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_select_cli.py",
+        "{build}/tools/itch_select",
+        "{build}/select_fault"
+      ],
+      "expect": {
+        "signature": "select cli: FAIL"
+      }
+    },
+    {
+      "id": "mm-select-crossed-counted",
+      "breaks": "A crossed book counts as valid time",
+      "check": "test_select_cli.py",
+      "mutations": [
+        {
+          "file": "tools/itch_select.cpp",
+          "old": "bid.present && ask.present && bid.price <= ask.price;",
+          "new": "bid.present && ask.present;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_select"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_select_cli.py",
+        "{build}/tools/itch_select",
+        "{build}/select_fault"
+      ],
+      "expect": {
+        "signature": "select cli: FAIL"
+      }
+    },
+    {
+      "id": "mm-select-pre-open-executions",
+      "breaks": "Executions before the open count towards a symbol's volume",
+      "check": "test_select_cli.py",
+      "mutations": [
+        {
+          "file": "tools/itch_select.cpp",
+          "old": "s.executed += regular_ ? itch::OrderExecuted::from_wire(m).executed_shares : 0U;",
+          "new": "s.executed += itch::OrderExecuted::from_wire(m).executed_shares;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_select"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_select_cli.py",
+        "{build}/tools/itch_select",
+        "{build}/select_fault"
+      ],
+      "expect": {
+        "signature": "select cli: FAIL"
+      }
+    },
+    {
+      "id": "mm-select-non-printable-counted",
+      "breaks": "A non-printable C counts towards a symbol's volume",
+      "check": "test_select_cli.py",
+      "mutations": [
+        {
+          "file": "tools/itch_select.cpp",
+          "old": "regular_ && c.printable == 'Y' ? c.executed_shares",
+          "new": "regular_ ? c.executed_shares"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_select"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_select_cli.py",
+        "{build}/tools/itch_select",
+        "{build}/select_fault"
+      ],
+      "expect": {
+        "signature": "select cli: FAIL"
+      }
+    },
+    {
+      "id": "mm-select-halt-at-open-missed",
+      "breaks": "A symbol not trading at the open is not taken as halted",
+      "check": "test_select_cli.py",
+      "mutations": [
+        {
+          "file": "tools/itch_select.cpp",
+          "old": "s.halted = s.halted || (s.known && s.state != 'T');",
+          "new": "s.halted = s.halted || (s.known && s.state == 'X');"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_select"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_select_cli.py",
+        "{build}/tools/itch_select",
+        "{build}/select_fault"
+      ],
+      "expect": {
+        "signature": "select cli: FAIL"
+      }
+    },
+    {
+      "id": "mm-select-window-start-ignored",
+      "breaks": "The window's start is not applied, so time before it counts",
+      "check": "test_select_cli.py",
+      "mutations": [
+        {
+          "file": "tools/itch_select.cpp",
+          "old": "const Nanos start = std::max(s.since, from_);",
+          "new": "const Nanos start = std::min(s.since, from_);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_select"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_select_cli.py",
+        "{build}/tools/itch_select",
+        "{build}/select_fault"
+      ],
+      "expect": {
+        "signature": "select cli: FAIL"
+      }
+    },
+    {
       "id": "mm-as-tables-figure-edited",
       "breaks": "A measured spread in results/mm_as_tables.md is typed over",
       "check": "as_tables_report.py check",

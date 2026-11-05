@@ -77,6 +77,10 @@ if(ITCH_BUILD_TOOLS)
   add_test(NAME test_calibrate_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_calibrate_cli.py"
             "$<TARGET_FILE:itch_calibrate>" "${CMAKE_CURRENT_BINARY_DIR}/calibrate_cli")
+  add_test(NAME test_select_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_select_cli.py"
+            "$<TARGET_FILE:itch_select>" "${CMAKE_CURRENT_BINARY_DIR}/select_cli")
   set_tests_properties(test_census_cli test_oracle_cli test_trades_cli test_map_compare_cli
-    test_backtest_cli test_queue_jumps_cli test_calibrate_cli PROPERTIES LABELS unit)
+    test_backtest_cli test_queue_jumps_cli test_calibrate_cli test_select_cli
+    PROPERTIES LABELS unit)
 endif()

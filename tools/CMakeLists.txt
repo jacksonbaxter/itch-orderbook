@@ -38,3 +38,7 @@ itch_apply_options(itch_as_tables)
 add_executable(itch_calibrate itch_calibrate.cpp)
 target_link_libraries(itch_calibrate PRIVATE itch_parser)
 itch_apply_options(itch_calibrate)
+
+add_executable(itch_select itch_select.cpp)
+target_link_libraries(itch_select PRIVATE itch_parser)
+itch_apply_options(itch_select)
