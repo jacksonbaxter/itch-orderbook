@@ -112,7 +112,11 @@ class FastBook {
   //
   // measured: the three dependent loads of a lookup and its level hold 79% of apply()'s
   // cycles:u samples on paged-flat on debian (results/flamegraph_paged-flat_debian_12302019.md),
-  // which is what this is for. E8 measures what it gains at each look-ahead (P-0021).
+  // which is what this is for. E8 (P-0021), paged-flat on 12302019: on debian a look-ahead
+  // of 16 gains 16.41% over none (4 to 32 gain 15% to 16%), the floor on DRAM demand fills
+  // falling from 2.01 to 0.82 a message; on the Mac every look-ahead loses, 18% at 4 and 26%
+  // at 64, since the stages' 256 extra instructions a message cost more there than the misses
+  // they hide (results/prefetch_{debian,mac}_12302019.md). So it is an option, off by default.
   //
   // A hint only: it reads the book, never writes it, and takes any payload. What it reads
   // may be stale by the time the message is applied, which costs a wasted load and nothing

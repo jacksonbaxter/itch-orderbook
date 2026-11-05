@@ -13,8 +13,11 @@
 // on the same frame as the one before it would wait for that line here instead of in
 // apply().
 //
-// A distance of 0 is the plain reader. Any other must be between Book::kPrefetchStages
-// and kMostAhead, which valid_distance() says. The frames ahead sit in a ring inside the
+// A distance of 0 is the plain reader, and every tool's default. measured: on paged-flat
+// over 12302019, debian gains 16.41% at 16 and the Mac loses 18% to 26% at every distance
+// (E8, results/prefetch_{debian,mac}_12302019.md), and P-0021 keeps the default at 0 unless
+// both hosts gain. Any other must be between Book::kPrefetchStages and kMostAhead, which
+// valid_distance() says. The frames ahead sit in a ring inside the
 // reader, so it allocates nothing, and prefetch_stage() only reads the book, so the book
 // ends each message as it would have without it.
 //
