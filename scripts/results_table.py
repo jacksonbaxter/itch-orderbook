@@ -317,6 +317,19 @@ def backtest_row(name, text):
             target[2].strip(), f"`{commit}`", source(name))
 
 
+def wasm_row(name, text):
+    """T-WASM-1: the demo's replay in a browser against native, on one host, and its verdict's
+    first clause."""
+    host = header_field(text, "host", name)
+    browser = header_field(text, "browser", name).split(", headless")[0]
+    symbol = header_field(text, "extract", name).split(" on ")[0]
+    native = summary_median(text, "Native, messages/s", name)
+    wasm = summary_median(text, "WebAssembly in the browser, messages/s", name)
+    _, measured, said = table_row("T-WASM-1", text, name)
+    return ("T-WASM-1", symbol, day_of(name), host, browser, native, wasm, measured,
+            said.split(";")[0], f"`{header_commit(text, name)}`", source(name))
+
+
 def run_rows(text):
     rows = []
     for line in text.splitlines():
@@ -342,6 +355,7 @@ def generate(root):
     throughput = []
     books = []
     backtests = []
+    browsers = []
     summaries = []
     pnl = []
     for path in sorted((root / "results").glob("*.md")):
@@ -371,6 +385,9 @@ def generate(root):
             rows = []
         elif name.startswith("backtest_"):
             backtests.append(backtest_row(name, text))
+            rows = []
+        elif name.startswith("wasm_"):
+            browsers.append(wasm_row(name, text))
             rows = []
         elif name.startswith("mm_pnl_"):
             pnl += pnl_rows(name, text)
@@ -408,6 +425,14 @@ def generate(root):
         lines += markdown_table(("Workload", "Target", "Day", "Host", "Pinning",
                                  "Median messages/s", "CV", "Engine events/s", "Verdict",
                                  "Commit", "File"), backtests)
+    if browsers:
+        lines += ["", "The browser demo's replay of one symbol's extract, in a browser and natively "
+                      "on the same Mac, the same C++ on each side. Rates come from whole replays "
+                      "only: the browser cannot time one message. The bar was set in Google "
+                      "Chrome, so another browser neither meets nor misses it.", ""]
+        lines += markdown_table(("Target", "Symbol", "Day", "Host", "Browser", "Native messages/s",
+                                 "Browser messages/s", "Browser over native", "Verdict", "Commit",
+                                 "File"), browsers)
     if summaries:
         lines += ["", "Profiles and counter tables. A flamegraph shows where the samples fell, "
                       "not a rate, and a macOS profile never stands in for `perf` on `debian`. "

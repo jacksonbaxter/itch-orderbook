@@ -1348,8 +1348,8 @@
       "mutations": [
         {
           "file": "scripts/check_predictions.py",
-          "old": "\"flamegraph_*.md\", \"mm_*.md\")",
-          "new": "\"flamegraph_*.md\")"
+          "old": "\"flamegraph_*.md\", \"mm_*.md\", \"wasm_*.md\")",
+          "new": "\"flamegraph_*.md\", \"wasm_*.md\")"
         }
       ],
       "command": [

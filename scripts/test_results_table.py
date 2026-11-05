@@ -255,6 +255,28 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn(f"results_table: FAIL results/{name}", output)
 
+    def test_a_wasm_file_gets_a_row_of_its_own(self):
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        import test_demo  # noqa: E402, PLC0415
+        import wasm_report  # noqa: E402, PLC0415
+
+        native, browser, stderr = test_demo.records()
+        name = "wasm_replay_mac_12302019.md"
+        path = self.root / "results" / name
+        path.write_text(wasm_report.render(native, browser, stderr, stderr), encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        rows = [line for line in output.splitlines() if f"(results/{name})" in line]
+        self.assertEqual(len(rows), 1, output)
+        self.assertIn("| T-WASM-1 | TEST | 12302019 | macOS (M4 Max) | Google Chrome for Testing "
+                      "153.0.8010.12 | 24,875,622 | 19,083,969 | 1.30× | browser differs: Google "
+                      "Chrome for Testing 153.0.8010.12, not Google Chrome | `0123456789ab` |",
+                      rows[0])
+        self.edit(f"results/{name}", "| Native, messages/s |", "| x |")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL results/{name}", output)
+
     def test_t_mm_2_shows_each_spread_and_its_verdict(self):
         row = self.row("T-MM-2", "none")
         self.assertIn("| **FAIL** | average spread 1.4918, 1.3490, 3.0317 against the paper's "
