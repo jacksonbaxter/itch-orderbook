@@ -95,6 +95,22 @@ struct Options {
   return true;
 }
 
+// The options that take a path or a name. False if arg is not one of them.
+[[nodiscard]] bool take_text(Options& options, std::string_view arg, const char* value) {
+  if (arg == "--crossstats") {
+    options.crossstats = value;
+  } else if (arg == "--midas") {
+    options.midas = value;
+  } else if (arg == "--symbols") {
+    options.symbols = value;
+  } else if (arg == "--exchange") {
+    options.exchange = value;
+  } else {
+    return false;
+  }
+  return true;
+}
+
 [[nodiscard]] std::optional<Options> parse_options(std::span<const char* const> args) {
   Options options;
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -110,17 +126,12 @@ struct Options {
       return std::nullopt;
     }
     ++i;
-    if (arg == "--crossstats") {
-      options.crossstats = args[i];
-    } else if (arg == "--midas") {
-      options.midas = args[i];
-    } else if (arg == "--symbols") {
-      options.symbols = args[i];
-    } else if (arg == "--exchange") {
-      options.exchange = args[i];
-    } else if (const auto taken = itch::tools::parse_arm_option(arg, args[i], options.arm,
-                                                                options.config.capacity);
-               taken != itch::tools::ArmOption::not_an_arm_option) {
+    if (take_text(options, arg, args[i])) {
+      continue;
+    }
+    if (const auto taken =
+            itch::tools::parse_arm_option(arg, args[i], options.arm, options.config.capacity);
+        taken != itch::tools::ArmOption::not_an_arm_option) {
       if (taken == itch::tools::ArmOption::bad_value) {
         return std::nullopt;
       }
