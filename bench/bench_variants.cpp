@@ -234,7 +234,7 @@ FormTotals form_pass(DispatchForm form, std::span<const std::byte> bytes, Book& 
     case DispatchForm::switch_case: return switch_pass(bytes, book);
     case DispatchForm::table: return TableForm<Book>::pass(bytes, book);
     case DispatchForm::threaded:
-#if defined(__has_cpp_attribute)
+#ifdef __has_cpp_attribute
 #if __has_cpp_attribute(clang::musttail)
       return ThreadedForm<Book>::pass(bytes, book);
 #endif
@@ -297,7 +297,7 @@ void run_lookup(const Options& options, std::span<const std::byte> bytes, Counte
   const std::uint64_t capacity = most_lookups(record.mix);
   const std::optional<Arena> arena = Arena::make(capacity * sizeof(std::uint32_t));
   if (!arena) {
-    record.refusals.push_back("no arena for the lookup script");
+    record.refusals.emplace_back("no arena for the lookup script");
     return;
   }
   record.script_capacity = capacity;
@@ -313,7 +313,7 @@ void run_lookup(const Options& options, std::span<const std::byte> bytes, Counte
   }
   record.script_entries = script.recorded();
   if (script.overrun()) {
-    record.refusals.push_back("the day made more lookups than the script could hold");
+    record.refusals.emplace_back("the day made more lookups than the script could hold");
   }
   const auto scripted = [&]<ScriptMode Mode>(std::string mode) {
     using Book = itch::FastBook<itch::NoWriteObserver, ScriptedIndex<Index, Mode>, Levels>;

@@ -33,7 +33,7 @@ enum class DispatchForm : std::uint8_t { switch_case, table, threaded, predicate
 
 // Whether this compiler can build the threaded form. Without a guaranteed tail call it is
 // not built at all, and asking for it is an error, never a quiet fallback to another form.
-#if defined(__has_cpp_attribute)
+#ifdef __has_cpp_attribute
 #if __has_cpp_attribute(clang::musttail)
 inline constexpr bool kThreadedBuilt = true;
 #else
@@ -137,7 +137,7 @@ class TableForm {
   static constexpr std::array<Handler, 256> kTable = make();
 };
 
-#if defined(__has_cpp_attribute)
+#ifdef __has_cpp_attribute
 #if __has_cpp_attribute(clang::musttail)
 template <class Book>
 class ThreadedForm {

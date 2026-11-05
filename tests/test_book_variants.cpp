@@ -9,6 +9,7 @@
 // is wrong; a book that runs on it is the book that ran without it.
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -99,6 +100,7 @@ using Book = itch::FastBook<itch::NoWriteObserver, Index, Levels>;
 constexpr std::array kDistances{4U, 5U, 8U, 16U, 32U, 64U};
 
 // A book that only notes which stage it was asked for on which frame.
+// Its log is sized before the walk, so that noting a call cannot throw.
 struct StageLog {
   static constexpr unsigned kPrefetchStages = 4;
   struct Call {
@@ -106,9 +108,16 @@ struct StageLog {
     unsigned stage;
   };
   void prefetch_stage(std::span<const std::byte> payload, unsigned stage) const noexcept {
-    calls.push_back({payload.data(), stage});
+    if (count < log.size()) {
+      log[count] = {.payload = payload.data(), .stage = stage};
+    }
+    ++count;
   }
-  mutable std::vector<Call> calls;
+  [[nodiscard]] std::span<const Call> calls() const noexcept {
+    return std::span{log}.first(std::min(count, log.size()));
+  }
+  mutable std::vector<Call> log = std::vector<Call>(std::size_t{1} << 18U);
+  mutable std::size_t count = 0;
 };
 
 TEST(Lookahead, HandsOverEveryFrameFrameReaderDoesInOrder) {
@@ -136,7 +145,7 @@ TEST(Lookahead, HandsOverEveryFrameFrameReaderDoesInOrder) {
     EXPECT_EQ(ahead.counters().messages, plain.counters().messages);
     EXPECT_GT(frames, 20000U);
     if (distance == 0) {
-      EXPECT_TRUE(log.calls.empty()) << "a distance of 0 looks nothing ahead";
+      EXPECT_EQ(log.count, 0U) << "a distance of 0 looks nothing ahead";
     }
   }
 }
@@ -162,7 +171,8 @@ TEST(Lookahead, AsksForEachStageOfEachMessageOnceNearerStageByStage) {
     }
     std::vector<std::array<std::size_t, StageLog::kPrefetchStages>> when(handed.size());
     std::size_t call = 0;
-    for (const StageLog::Call& c : log.calls) {
+    ASSERT_LE(log.count, log.log.size()) << "the stage log is too small for the stream";
+    for (const StageLog::Call& c : log.calls()) {
       std::size_t at = 0;
       while (at < handed.size() && handed[at] != c.payload) {
         ++at;
@@ -260,7 +270,7 @@ TEST(Lookahead, AStageOnAnyPayloadChangesNothing) {
     static_cast<void>(book->apply(frame.payload));
   }
   const auto before = std::make_unique<B>(*book);
-  std::array<std::byte, 40> bytes{};
+  std::array<std::byte, 64> bytes{};  // Longer than any message.
   for (const char type : {'A', 'F', 'E', 'C', 'X', 'D', 'U', 'S', 'P'}) {
     for (std::uint32_t fill = 0; fill < 256; fill += 51) {
       bytes.fill(static_cast<std::byte>(fill));
@@ -328,7 +338,7 @@ void expect_forms_agree(std::string_view name) {
   EXPECT_EQ(table.messages, want.messages);
   EXPECT_EQ(table.rejected, want.rejected);
   EXPECT_TRUE(*by_table == *by_switch) << "table";
-#if defined(__has_cpp_attribute)
+#ifdef __has_cpp_attribute
 #if __has_cpp_attribute(clang::musttail)
   const auto by_thread = std::make_unique<B>(kCapacity);
   const FormTotals threaded = itch::bench::ThreadedForm<B>::pass(stream, *by_thread);
@@ -346,7 +356,7 @@ TEST(DispatchForms, EveryFormGivesTheSwitchsBook) {
 }
 
 TEST(DispatchForms, TheThreadedFormIsBuiltOnlyWhereATailCallIsGuaranteed) {
-#if defined(__has_cpp_attribute)
+#ifdef __has_cpp_attribute
 #if __has_cpp_attribute(clang::musttail)
   EXPECT_TRUE(itch::bench::kThreadedBuilt);
 #else
