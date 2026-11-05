@@ -8,8 +8,9 @@ Three symbols trade for eight seconds after the open, Δ = S = 1 s, τ = one cen
     open. Bid side, interval 0 reaches 2.5 ticks, 1 reaches 1.5 (at exactly the end of it),
     2 and 3 reach 0.5; the ask side the same in 4 to 7. Hits 8, 4, 2 of exposure 8 at 0.5,
     1.5 and 2.5, so λ = hits/16 = 0.5, 0.25, 0.125: an exact line, k = ln 2 = 0.693147 and
-    A = 0.5·2^0.5 = 0.707107. In interval 3 the best ask leaves and comes back, so the 0.5-tick
-    execution between is 1 tick from the mid of the moment: the depth must use the start mid.
+    A = 0.5·2^0.5 = 0.707107. In interval 3 an ask at the bid locks the book and then leaves, so the
+    0.5-tick execution between is at the mid of the moment, depth 0: the depth must use the
+    start mid.
     That move is AAA's only change of mid: two jumps of half a tick in 8 valid seconds, so
     σ_jump = sqrt(0.5/8) = 0.25, and no clock sample sees it, σ_clock = 0 over 7 changes.
     Decoys: an execution before the open, a non-printable C at 2.5 ticks, a P trade far
@@ -85,25 +86,25 @@ def day():
         (2_300, lambda: s.message("C", AAA, struct.pack(">QIQcI", 3, 10, 9, b"N", 999_800))),
         (2_400, lambda: s.execute(BBB, 11, 10)),  # Interval 2, bid: 1 tick.
         (2_500, lambda: add(s, CCC, 25, "B", 200_100)),
-        (3_100, lambda: s.delete(AAA, 4)),
+        (3_100, lambda: add(s, AAA, 8, "S", 1_000_000)),  # Locked.
         (3_150, lambda: s.execute(AAA, 1, 10)),  # Interval 3, bid: 0.5 from the start mid.
-        (3_200, lambda: add(s, AAA, 7, "S", 1_000_100)),
+        (3_200, lambda: s.delete(AAA, 8)),
         # A delete and an add in one nanosecond: CCC's mid leaves and comes back, no jump.
         (3_200, lambda: s.delete(CCC, 25)),
         (3_200, lambda: add(s, CCC, 26, "B", 200_100)),
         (3_400, lambda: s.execute(BBB, 14, 10)),  # Interval 3, ask: 1 tick.
         (3_600, lambda: s.delete(CCC, 26)),
-        (4_300, lambda: s.execute(AAA, 7, 10)),
+        (4_300, lambda: s.execute(AAA, 4, 10)),
         (4_301, lambda: s.execute(AAA, 5, 10)),
         (4_302, lambda: s.execute(AAA, 6, 10)),  # Interval 4, ask: 2.5.
         (4_500, lambda: s.trading(CCC, "CCC", "H")),
         (5_000, lambda: s.delete(CCC, 21)),
         (5_500, lambda: s.execute(AAA, 5, 10)),  # Interval 5, ask: 1.5.
         (5_500, lambda: s.trading(CCC, "CCC", "T")),
-        (6_500, lambda: s.execute(AAA, 7, 10)),  # Interval 6, ask: 0.5.
+        (6_500, lambda: s.execute(AAA, 4, 10)),  # Interval 6, ask: 0.5.
         (6_500, lambda: add(s, CCC, 27, "S", 200_100)),
         (6_600, lambda: s.trade(AAA, 100, 990_000, "AAA")),
-        (7_500, lambda: s.execute(AAA, 7, 10)),  # Interval 7, ask: 0.5.
+        (7_500, lambda: s.execute(AAA, 4, 10)),  # Interval 7, ask: 0.5.
     )
     for ms, event in events:
         at(s, ms)

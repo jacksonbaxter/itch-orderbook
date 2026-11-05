@@ -22,6 +22,7 @@
 #include <exception>
 #include <format>
 #include <memory>
+#include <optional>
 #include <print>
 #include <span>
 #include <string>
@@ -94,57 +95,60 @@ void print(const Calibrator& c, const CalibrationSettings& settings) {
   return true;
 }
 
-int run(std::span<const char* const> args) {
+// The comma-separated list, each name one to eight characters.
+[[nodiscard]] bool split_symbols(std::string_view list, std::vector<std::string>& symbols) {
+  for (std::size_t start = 0; start <= list.size();) {
+    const std::size_t comma = std::min(list.find(',', start), list.size());
+    const std::string_view name = list.substr(start, comma - start);
+    if (name.empty() || name.size() > itch::Stock{}.size()) {
+      return false;
+    }
+    symbols.emplace_back(name);
+    start = comma + 1;
+  }
+  return true;
+}
+
+struct Usage {
   const char* path = nullptr;
   std::vector<std::string> symbols;
   CalibrationSettings settings;
+};
+
+[[nodiscard]] std::optional<Usage> parse(std::span<const char* const> args) {
+  Usage usage;
   bool valid = true;
   for (std::size_t i = 0; i < args.size() && valid; ++i) {
     const std::string_view arg = args[i];
     const bool has_value = i + 1 < args.size();
     std::uint64_t value = 0;
     if (arg == "--symbols" && has_value) {
-      const std::string_view list = args[++i];
-      for (std::size_t start = 0; start <= list.size();) {
-        const std::size_t comma = std::min(list.find(',', start), list.size());
-        const std::string_view name = list.substr(start, comma - start);
-        valid = valid && !name.empty() && name.size() <= itch::Stock{}.size();
-        symbols.emplace_back(name);
-        start = comma + 1;
-      }
+      valid = split_symbols(args[++i], usage.symbols);
     } else if (arg == "--interval-ms" && has_value && positive(args[++i], value)) {
-      settings.interval = value * kNanosPerMilli;
+      usage.settings.interval = value * kNanosPerMilli;
     } else if (arg == "--sample-ms" && has_value && positive(args[++i], value)) {
-      settings.sample = value * kNanosPerMilli;
+      usage.settings.sample = value * kNanosPerMilli;
     } else if (arg == "--tick" && has_value && positive(args[++i], value) && value <= 1'000'000) {
-      settings.tick = static_cast<itch::Price4>(value);
+      usage.settings.tick = static_cast<itch::Price4>(value);
     } else if (arg == "--max-depth-ticks" && has_value && positive(args[++i], value) &&
                value <= 10'000) {
-      settings.max_depth_ticks = static_cast<std::int64_t>(value);
-    } else if (!arg.starts_with("--") && path == nullptr) {
-      path = args[i];
+      usage.settings.max_depth_ticks = static_cast<std::int64_t>(value);
+    } else if (!arg.starts_with("--") && usage.path == nullptr) {
+      usage.path = args[i];
     } else {
       valid = false;
     }
   }
-  if (path == nullptr || symbols.empty() || !valid) {
-    std::println(stderr,
-                 "usage: itch_calibrate FILE --symbols SYM[,SYM...] [--interval-ms N] "
-                 "[--sample-ms N] [--tick N] [--max-depth-ticks N]");
-    return 2;
+  if (!valid || usage.path == nullptr || usage.symbols.empty()) {
+    return std::nullopt;
   }
-  const auto file = itch::tools::MappedFile::open(path);
-  if (!file) {
-    std::println(stderr, "itch_calibrate: cannot read {}", path);
-    return 2;
-  }
-  std::vector<Calibrator> calibrators;
-  calibrators.reserve(symbols.size());
-  for (const std::string& symbol : symbols) {
-    calibrators.emplace_back(stock_of(symbol), settings);
-  }
+  return usage;
+}
+
+// The day through the book, each calibrator shown every message before and after it.
+[[nodiscard]] bool replay(std::span<const std::byte> bytes, std::vector<Calibrator>& calibrators) {
   const auto book = std::make_unique<itch::FastBook<>>();
-  itch::FrameReader reader{file->bytes()};
+  itch::FrameReader reader{bytes};
   for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status); frame = reader.next()) {
     if (frame.status != itch::FrameStatus::message) {
       continue;
@@ -156,11 +160,36 @@ int run(std::span<const char* const> args) {
     if (status != itch::ApplyStatus::applied && status != itch::ApplyStatus::no_book_effect) {
       std::println(stderr, "itch_calibrate: the book refused a message: {}",
                    itch::to_string(status));
-      return 1;
+      return false;
     }
     for (Calibrator& calibrator : calibrators) {
       calibrator.after(*book, frame.payload);
     }
+  }
+  return true;
+}
+
+int run(std::span<const char* const> args) {
+  const std::optional<Usage> usage = parse(args);
+  if (!usage) {
+    std::println(stderr,
+                 "usage: itch_calibrate FILE --symbols SYM[,SYM...] [--interval-ms N] "
+                 "[--sample-ms N] [--tick N] [--max-depth-ticks N]");
+    return 2;
+  }
+  const auto file = itch::tools::MappedFile::open(usage->path);
+  if (!file) {
+    std::println(stderr, "itch_calibrate: cannot read {}", usage->path);
+    return 2;
+  }
+  const CalibrationSettings& settings = usage->settings;
+  std::vector<Calibrator> calibrators;
+  calibrators.reserve(usage->symbols.size());
+  for (const std::string& symbol : usage->symbols) {
+    calibrators.emplace_back(stock_of(symbol), settings);
+  }
+  if (!replay(file->bytes(), calibrators)) {
+    return 1;
   }
   std::println(
       "calibrate units ticks seconds interval_ms {} sample_ms {} tick {} max_depth_ticks {}",

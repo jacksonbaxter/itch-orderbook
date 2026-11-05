@@ -114,9 +114,9 @@ struct IntensityFit {
 class Calibrator {
  public:
   Calibrator(const Stock& symbol, const CalibrationSettings& settings)
-      : symbol_{symbol},
-        settings_{settings},
-        hits_{std::vector<std::uint64_t>(cap() + 1, 0), std::vector<std::uint64_t>(cap() + 1, 0)} {}
+      : settings_{settings},
+        hits_{std::vector<std::uint64_t>(cap() + 1, 0), std::vector<std::uint64_t>(cap() + 1, 0)},
+        symbol_{symbol} {}
 
   // Before the book applies `payload`: the clocks move to its time, and an execution is
   // measured against the order it hits while that order still rests.
@@ -309,7 +309,7 @@ class Calibrator {
     ++executions_;
     const Mid2 twice = 2 * Mid2{price};
     const Mid2 depth = side == Side::bid ? start_mid2_ - twice : twice - start_mid2_;
-    Mid2& deepest = deepest_.at(side == Side::bid ? 0 : 1);
+    Mid2& deepest = side == Side::bid ? deepest_[0] : deepest_[1];
     deepest = std::max(deepest, depth);
   }
 
@@ -344,43 +344,41 @@ class Calibrator {
     closed_at_ = clock_;
   }
 
-  Stock symbol_;
+  // Widest first, so the class carries no padding to speak of.
+  attribution_detail::Wide sum_ = 0;           // Of the clock's changes, in mid2.
+  attribution_detail::Wide squares_ = 0;       // Of their squares.
+  attribution_detail::Wide jump_squares_ = 0;  // Of the jumps' squares.
+  Nanos opened_at_ = 0;
+  Nanos closed_at_ = 0;
+  Nanos clock_ = 0;
+  Mid2 mid2_ = 0;  // The mid in force: after the last message applied, if valid_.
+  Nanos next_sample_ = 0;
+  Mid2 sample_mid2_ = 0;
+  std::uint64_t changes_ = 0;
+  Nanos group_time_ = 0;
+  Mid2 point_mid2_ = 0;
+  Nanos valid_nanos_ = 0;
+  std::uint64_t jumps_ = 0;
+  Nanos next_interval_ = 0;
+  Mid2 start_mid2_ = 0;
+  std::uint64_t intervals_ = 0;
+  std::uint64_t off_grid_ = 0;
+  std::uint64_t executions_ = 0;
+  std::array<Mid2, 2> deepest_{-1, -1};      // Bid side, ask side; −1 for none.
+  std::array<std::uint64_t, 2> exposure_{};  // By the parity of the depths open.
   CalibrationSettings settings_;
+  // By parity, then the deepest half-tick depth reached, capped.
+  std::array<std::vector<std::uint64_t>, 2> hits_;
   std::uint16_t locate_ = 0;
   bool known_ = false;
   char trading_ = ' ';
   bool open_ = false;
   bool closed_ = false;
-  Nanos opened_at_ = 0;
-  Nanos closed_at_ = 0;
-  Nanos clock_ = 0;
-  bool valid_ = false;  // The mid in force: after the last message applied.
-  Mid2 mid2_ = 0;
-
-  Nanos next_sample_ = 0;
+  bool valid_ = false;
   bool sample_valid_ = false;
-  Mid2 sample_mid2_ = 0;
-  std::uint64_t changes_ = 0;
-  attribution_detail::Wide sum_ = 0;
-  attribution_detail::Wide squares_ = 0;
-
-  Nanos group_time_ = 0;
   bool point_valid_ = false;
-  Mid2 point_mid2_ = 0;
-  Nanos valid_nanos_ = 0;
-  std::uint64_t jumps_ = 0;
-  attribution_detail::Wide jump_squares_ = 0;
-
-  Nanos next_interval_ = 0;
   bool interval_valid_ = false;
-  Mid2 start_mid2_ = 0;
-  std::array<Mid2, 2> deepest_{-1, -1};  // Bid side, ask side; −1 for none.
-  std::uint64_t intervals_ = 0;
-  std::uint64_t off_grid_ = 0;
-  std::uint64_t executions_ = 0;
-  std::array<std::uint64_t, 2> exposure_{};  // By the parity of the depths open.
-  // By parity, then the deepest half-tick depth reached, capped.
-  std::array<std::vector<std::uint64_t>, 2> hits_;
+  Stock symbol_;
 };
 
 }  // namespace itch::mm
