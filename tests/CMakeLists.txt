@@ -41,7 +41,11 @@ if(ITCH_BUILD_BENCH)
             "$<TARGET_FILE:bench_replay>" "$<TARGET_FILE:bench_probe>"
             "${CMAKE_CURRENT_BINARY_DIR}/bench_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
-  set_tests_properties(test_bench_cli PROPERTIES LABELS unit)
+  add_test(NAME test_bench_backtest_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_backtest_cli.py"
+            "$<TARGET_FILE:bench_backtest>" "${CMAKE_CURRENT_BINARY_DIR}/bench_backtest_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
+  set_tests_properties(test_bench_cli test_bench_backtest_cli PROPERTIES LABELS unit)
 endif()
 
 if(ITCH_BUILD_TOOLS)
@@ -65,6 +69,9 @@ if(ITCH_BUILD_TOOLS)
   add_test(NAME test_backtest_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_backtest_cli.py"
             "$<TARGET_FILE:itch_backtest>" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle")
+  add_test(NAME test_queue_jumps_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_queue_jumps_cli.py"
+            "$<TARGET_FILE:itch_queue_jumps>" "${CMAKE_CURRENT_BINARY_DIR}/queue_jumps_cli")
   set_tests_properties(test_census_cli test_oracle_cli test_trades_cli test_map_compare_cli
-    test_backtest_cli PROPERTIES LABELS unit)
+    test_backtest_cli test_queue_jumps_cli PROPERTIES LABELS unit)
 endif()

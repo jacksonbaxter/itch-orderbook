@@ -240,6 +240,11 @@ class Gates(unittest.TestCase):
         code, output = self.run_gates()
         self.assertEqual(code, 0, output)
 
+    def test_a_worktree_git_file_is_not_scanned(self):
+        self.plant({".git": f"gitdir: {HOME}repo/.git/worktrees/w\n"})
+        code, output = self.run_gates()
+        self.assertEqual(code, 0, output)
+
     def test_binary_files_are_skipped(self):
         (self.root / "fuzz").mkdir()
         (self.root / "fuzz" / "seed").write_bytes(b"\x00" + HOME.encode())

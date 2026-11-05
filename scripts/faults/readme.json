@@ -245,6 +245,26 @@
       "expect": {
         "signature": "FAIL: test_a_book_file_missing_a_field_is_refused"
       }
+    },
+    {
+      "id": "readme-backtest-file-unread",
+      "breaks": "A backtest results file gets no row, and a malformed one passes",
+      "check": "test_results_table.py test_a_backtest_file_gets_a_row_of_its_own",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        elif name.startswith(\"backtest_\"):\n            backtests.append(backtest_row(name, text))\n",
+          "new": "        elif name.startswith(\"backtest_\"):\n            pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_backtest_file_gets_a_row_of_its_own"
+      }
     }
   ]
 }

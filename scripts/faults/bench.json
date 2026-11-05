@@ -2973,6 +2973,276 @@
         "signature": "check_results: FAIL passes-malformed good_book_throughput_mac\\.md",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-backtest-no-trade-published",
+      "breaks": "A backtest run in which no simulated order traded is published",
+      "check": "test_bench_backtest_cli.py shadow day schedule",
+      "mutations": [
+        {
+          "file": "bench/bench_backtest.cpp",
+          "old": "  if (s.fills == 0) {\n",
+          "new": "  if (s.fills == ~std::uint64_t{0}) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_backtest"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_backtest_cli.py",
+        "{build}/bench/bench_backtest",
+        "{build}/fault_bench_backtest_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "bench backtest cli: FAIL shadow day schedule: exit 0, not 3"
+      }
+    },
+    {
+      "id": "bench-backtest-extract-keeps-every-symbol",
+      "breaks": "The shadow workload's extract keeps every symbol, so its denominator is the whole day",
+      "check": "test_bench_backtest_cli.py shadow",
+      "mutations": [
+        {
+          "file": "bench/bench_backtest.cpp",
+          "old": "  return type == itch::SystemEvent::kType || locates[locate] != 0;\n",
+          "new": "  return type != '\\0' || locates[locate] != 0;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_backtest"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_backtest_cli.py",
+        "{build}/bench/bench_backtest",
+        "{build}/fault_bench_backtest_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "bench backtest cli: FAIL shadow: extract of 3330 messages"
+      }
+    },
+    {
+      "id": "bench-backtest-shadow-latency-kept",
+      "breaks": "The shadow workload runs with the base latencies, not queuetruth's none",
+      "check": "test_bench_backtest_cli.py shadow",
+      "mutations": [
+        {
+          "file": "bench/bench_backtest.cpp",
+          "old": "    config.latency = Latency{.market_data = 0, .order_entry = 0, .response = 0, .compute = 0};\n",
+          "new": "    config.latency = Latency{};\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_backtest"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_backtest_cli.py",
+        "{build}/bench/bench_backtest",
+        "{build}/fault_bench_backtest_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "bench backtest cli: FAIL shadow: latencies not zero"
+      }
+    },
+    {
+      "id": "bench-backtest-file-mac-passes-x86-bar",
+      "breaks": "A macOS backtest file calls T-BT-1's x86 bar met",
+      "check": "test_backtest_results.py test_t_bt_1_called_met_on_macos",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    elif fields.get(\"host\") == MAC_HOST and x86 and verdict.startswith((\"met\", \"missed: \")):\n",
+          "new": "    elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_bt_1_called_met_on_macos"
+      }
+    },
+    {
+      "id": "bench-backtest-file-verdict-against-figure",
+      "breaks": "A backtest file may call a bar met below it, or missed above it",
+      "check": "test_backtest_results.py test_a_verdict_against_its_figure",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    elif (verdict == \"met\") != (number(rate[1]) / 1e6 >= bar) and not verdict.startswith(\n",
+          "new": "    elif False and (verdict == \"met\") != (number(rate[1]) / 1e6 >= bar) and not verdict.startswith(\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_verdict_against_its_figure"
+      }
+    },
+    {
+      "id": "bench-backtest-file-median-not-the-repetitions",
+      "breaks": "A backtest file's summary rate need not be the median of its repetitions",
+      "check": "test_backtest_results.py test_a_summary_rate_that_is_not_the_repetitions_median",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if abs(median - number(rate[1])) > 1.0:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_summary_rate_that_is_not_the_repetitions_median"
+      }
+    },
+    {
+      "id": "bench-backtest-file-denominator-unstated",
+      "breaks": "A backtest file need not say what its rate is over",
+      "check": "test_backtest_results.py test_no_statement_of_the_event",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if \"One event here is\" not in event or \"denominator\" not in event:\n",
+          "new": "    if not event:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_no_statement_of_the_event"
+      }
+    },
+    {
+      "id": "bench-backtest-file-anomalies-unreported",
+      "breaks": "A backtest file need not report its queue anomalies",
+      "check": "test_backtest_results.py test_no_queue_anomaly_count",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if \"Queue anomalies\" not in counts:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_no_queue_anomaly_count"
+      }
+    },
+    {
+      "id": "bench-backtest-file-held-to-book-rules",
+      "breaks": "A backtest file is held to the book rules and can never pass",
+      "check": "test_backtest_results.py test_the_rendered_files_pass",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    return \"workload\" in fields\n",
+          "new": "    return False\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_rendered_files_pass"
+      }
+    },
+    {
+      "id": "bench-backtest-driver-warmup-unchecked",
+      "breaks": "The backtest driver publishes a warm-up and a timed pass that disagree",
+      "check": "test_backtest_results.py test_a_warmup_that_disagrees_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "        if record[\"warmup\"][name] != record[\"timed\"][name]:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_warmup_that_disagrees_is_refused"
+      }
+    },
+    {
+      "id": "bench-backtest-driver-repetitions-unchecked",
+      "breaks": "The backtest driver publishes repetitions that disagree on a count",
+      "check": "test_backtest_results.py test_repetitions_that_disagree_are_refused",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "            if record[\"timed\"][name] != first[name]:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_repetitions_that_disagree_are_refused"
+      }
+    },
+    {
+      "id": "bench-backtest-driver-x86-bar-judged-on-macos",
+      "breaks": "The backtest driver judges T-BT-1's x86 bar on macOS",
+      "check": "test_backtest_results.py test_verdicts",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    if spec[\"x86\"] and host == check_results.MAC_HOST:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_verdicts"
+      }
     }
   ]
 }

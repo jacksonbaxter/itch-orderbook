@@ -23,3 +23,7 @@ itch_apply_options(bench_replay)
 add_executable(bench_chase bench_chase.cpp)
 target_link_libraries(bench_chase PRIVATE itch_bench_support)
 itch_apply_options(bench_chase)
+
+add_executable(bench_backtest bench_backtest.cpp)
+target_link_libraries(bench_backtest PRIVATE itch_bench_support)
+itch_apply_options(bench_backtest)

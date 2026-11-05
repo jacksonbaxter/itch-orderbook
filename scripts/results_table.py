@@ -237,6 +237,20 @@ def book_row(name, text):
             f"`{commit}`", source(name))
 
 
+def backtest_row(name, text):
+    """One backtester run: its workload, its rate and its target's verdict."""
+    workload = header_field(text, "workload", name)
+    host = header_field(text, "host", name)
+    pinning = find(r"^- pinning: (.*?)(?::|$)", text, name)[1]
+    rate = summary_median(text, "Replay rate, messages/s", name)
+    spread = table_row("Replay rate, messages/s", text, name)[3]
+    events = summary_median(text, "Engine events/s", name)
+    target = find(r"^\| (T-BT-\d) \| [^|]+ \| [^|]+ \| ([^|:]+)", text, name)
+    commit = header_commit(text, name)
+    return (workload, target[1], day_of(name), host, pinning, rate, spread, events,
+            target[2].strip(), f"`{commit}`", source(name))
+
+
 def run_rows(text):
     rows = []
     for line in text.splitlines():
@@ -261,6 +275,7 @@ def generate(root):
     faults = []
     throughput = []
     books = []
+    backtests = []
     for path in sorted((root / "results").glob("*.md")):
         name = path.name
         if name in NOT_RESULTS:
@@ -280,6 +295,9 @@ def generate(root):
             rows = []
         elif name.startswith("bench_"):
             books.append(book_row(name, text))
+            rows = []
+        elif name.startswith("backtest_"):
+            backtests.append(backtest_row(name, text))
             rows = []
         else:
             raise TableError(f"results/{name}: this script has no reader for it")
@@ -304,6 +322,14 @@ def generate(root):
                                  "Median messages/s", "CV", "Batch mean ns a book message",
                                  "Book memory MiB", "Over map-fresh", "Over map-aged", "Commit",
                                  "File"), books)
+    if backtests:
+        lines += ["", "The backtester. Each row is one workload's results file: T-BT-1 replays the "
+                      "whole day with a quoting strategy, T-BT-3 queuetruth's four symbols with "
+                      "its shadow orders. Each file says what one event is and what its rate is "
+                      "over, beside its source's.", ""]
+        lines += markdown_table(("Workload", "Target", "Day", "Host", "Pinning",
+                                 "Median messages/s", "CV", "Engine events/s", "Verdict",
+                                 "Commit", "File"), backtests)
     lines += ["", "Every benchmark run, failed ones included, from "
                   "[results/run_log.md](results/run_log.md).", ""]
     lines += markdown_table(("Run", "Prediction", "Commit", "OS", "Outcome"), run_rows(run_log))

@@ -1,5 +1,5 @@
 /.claude/settings.local.json
-/data/
+/data
 /build*/
 /.venv/
 __pycache__/

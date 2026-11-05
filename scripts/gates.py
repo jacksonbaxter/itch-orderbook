@@ -91,9 +91,10 @@ def walk(root, top=None):
     if not base.is_dir():
         return
     for path in sorted(base.iterdir()):
+        # By name, file or not: in a git worktree .git is a file naming the main repository.
+        if path.name in SKIPPED_DIRS or (path.parent == root and path.name.startswith("build")):
+            continue
         if path.is_dir():
-            if path.name in SKIPPED_DIRS or (path.parent == root and path.name.startswith("build")):
-                continue
             yield from walk(root, path.relative_to(root))
         else:
             yield path
