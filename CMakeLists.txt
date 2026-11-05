@@ -16,12 +16,17 @@ option(ITCH_FUZZ "Link the fuzz targets with libFuzzer instead of the corpus rep
 option(ITCH_TIDY "Run clang-tidy on our targets while compiling" OFF)
 option(ITCH_COMPARISON_QUEUES "Fetch the third-party queues T-SPSC-1 compares against" OFF)
 set(ITCH_SANITIZE "" CACHE STRING "Sanitizers, comma separated, for example address,undefined")
+# A negative control for the SPSC ring's tests and spsc_stress, never for a release:
+# tests/support/spsc_ordering.hpp weakens the named order to relaxed in those builds.
+set(ITCH_SPSC_NEGATIVE_CONTROL "" CACHE STRING
+  "Weaken one SPSC order in the ring's tests: publish, observe, return or reclaim. Empty for none")
 set(ITCH_LIBURING_ROOT "" CACHE PATH "Prefix of a liburing build, Linux only. Empty leaves it off")
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(ItchOptions)
 include(ItchTidy)
 include(ItchDependencies)
+include(ItchCacheLine)
 
 enable_testing()
 

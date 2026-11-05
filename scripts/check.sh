@@ -103,6 +103,7 @@ stage_bench() {
     python_test scripts/test_check_predictions.py &&
     python_test scripts/test_bench_results.py &&
     python_test scripts/test_backtest_results.py &&
+    python_test scripts/test_spsc_results.py &&
     python_test scripts/test_chase_report.py &&
     python_test scripts/test_counts_report.py &&
     python_test scripts/test_flame_report.py &&
@@ -110,7 +111,7 @@ stage_bench() {
     python_test scripts/test_zen1_events.py &&
     python_test scripts/gate_numbers.py &&
     python_test scripts/check_predictions.py || return 1
-  results=$(find results -name 'bench_*.md' -o -name 'backtest_*.md')
+  results=$(find results -name 'bench_*.md' -o -name 'backtest_*.md' -o -name 'spsc_*.md')
   if [ -n "$results" ]; then
     # shellcheck disable=SC2086
     python_test scripts/check_results.py $results || return 1

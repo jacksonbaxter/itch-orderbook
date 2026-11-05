@@ -1008,3 +1008,96 @@ Next to BENCHMARKS.md: 11 of 14 runs lost money at the base tier, as carteret's 
 - P-0022 held: `switch` 2.03 branch misses a message on `debian`, inside 1.9 to 2.6; `table` within 0.1 of it; `predicate` 0.0000, and 24.5 and 12.7 times `switch`; `table` within 3% and `threaded` within −2% to +8% of `switch` on `debian`, both within 5% on the Mac; E7 not refuted by the letter; `predicate`'s peak RSS 0.65 GiB under `switch`'s on both hosts (7.69 against 8.34 GiB). Not held: `threaded` below `switch` by 0.05 to 0.4 misses a message (it is 0.06 above); the Mac's `table` within 10 instructions a message of `switch` (12.1 under).
 
 **Out of scope here, pointers.** carteret's layout experiments (hash policy, open addressing against chaining, window width) and attributing misses by message type, order age and structure: TASKS.md's next Book line, using `bench_counts` for the types. The 8.7% and 27.7% `U` mixes. SIMD parsing kernels (E1 to E6, E9, E11 to E13). The look-ahead on the hash arms is built and tested but measured only on `paged-flat`, the default arm.
+
+## The SPSC ring, 2026-11-05
+
+`include/itch/spsc.hpp`, the comparison and ablation in `bench/bench_spsc.cpp`, the pipeline in `bench/pipeline.hpp` and `bench/bench_pipeline.cpp`, the stress test in `tests/spsc_stress.cpp`, and three results on the Mac. Nothing here ran on `debian`; what is left for it is in TASKS.md.
+
+**The ring.** Free-running 64-bit indices, so a full ring uses every slot. Each side keeps a copy of the other's index and reads the shared one only when its copy says full, or empty. The capacity is rounded up to a power of two and a slot is `index & mask`. The batch calls write or read every slot they can and store their index once. Each of the four is a switch in `SpscConfig`, so T-SPSC-2 builds one variant per change; `modulo` divides by a capacity read at run time, so the compiler cannot turn it back into a mask. Four orders and no more: publish (release), observe (acquire), return (release) and reclaim (acquire), with no fence, seq_cst or read-modify-write. The disassembly shows them as two `stlr` and two `ldapr` in the producer and an `ldapr` and an `stlur` in the consumer. The slots are a vector allocated and zeroed in the constructor, and `test_alloc` counts no allocation in any call after it, the pipeline's included.
+
+**The line size, from one constant.** `kCacheLine` is 128 on Apple silicon and 64 on x86-64 and on other arm64 cores. Apple's cores move 128-byte lines (`hw.cachelinesize`, and XNU's L2 line is 1 << 7, LC-21), so 64 would leave both indices on one line. `std::hardware_destructive_interference_size` is not used: it is the compiler's guess, 256 under Apple clang 21 and 128 under LLVM 23 on the same Mac, and GCC's documentation calls it unfit for a header (LC-17 to LC-20). The value comes from `cmake/ItchCacheLine.cmake`, by target architecture, as `ITCH_CACHE_LINE` on `itch_parser`, because `scripts/gates.py` keeps conditional compilation out of `include/` and `src/`. A target with no measured size leaves it undefined and the header does not compile. `spsc.hpp` asserts it is 64 or 128. `test_spsc` asserts the value per target at compile time, each with its reason, and against the line size the system reports at run time.
+
+**The comparison queues** are pinned by commit in `cmake/ItchDependencies.cmake` behind `ITCH_COMPARISON_QUEUES`, off by default and off in check.sh. Each is used as shipped through its non-blocking single-item calls with its own padding (LC-22). folly is used from one header, `ProducerConsumerQueue.h`, with an empty generated `folly/folly-config.h`. Nothing it includes reads a configure result, so folly is not built, and a configure-time compile checks this. **LC-11 is out of date.** It says folly's queue has no cached index. At the pinned c8c7adb7, `write()` and `read()` each keep a `remoteIndexCache` and load the other side's index only when the cache says full or empty (`ProducerConsumerQueue.h`, lines 113 to 135). The mutex ring yields when it finds the ring full or empty, as a blocking queue would sleep. Without that, the spinning side retook the lock as soon as it let go, and an rtt took 2.2 ms on the Mac.
+
+**TSan does not see a race through memcpy here.** The ring's first two-thread test hands over 256-byte stamped items. Under TSan (LLVM 23, macOS arm64), a build with any of the four orders weakened reported no race. Repros in the research cache show why. A slot copied as a 256-byte item goes through `__tsan_memcpy`, and that range access is not reported against the producer's write. An 8-byte item is reported. So is a local that SROA reduces to one 8-byte load. Popping into an array element is missed. `test_spsc` now also hands over 64-bit words in order (`TwoThreadsHandOverEveryWordInOrder`). Under TSan, each weakened build reported data races on it: 12, 12, 12 and 16 warnings for publish, observe, return and reclaim. TSan failed each process (exit 134), though the test's own order check passed every time. Each build still reported 0 races on the item test. The shipped orders pass `test_spsc`, `test_pipeline` and the stress smoke test under TSan. The faults `spsc-publish-relaxed` and `spsc-reclaim-relaxed` are caught by TSan on the word test.
+
+**The negative control without TSan (LC-37).** `-DITCH_SPSC_NEGATIVE_CONTROL=<order>` builds `tests/support/spsc_ordering.hpp`'s `TestOrdering`, with that one order relaxed. The release `spsc_stress` checks every 256-byte item for place and tearing. It ran 1,000 rounds of 1,000,000 items at capacity 4, then 300 rounds with four noise threads, then 300 rounds at capacity 64. In each weakened build, the disassembly shows exactly that order's instruction gone.
+
+| Order weakened | 1e9 items, capacity 4 | 3e8, 4 noise threads | 3e8, capacity 64 |
+|---|---|---|---|
+| none (shipped) | 0 wrong, 0 torn | 0, 0 | 0, 0 |
+| publish | 571 wrong place, 84,659 torn, from round 0 | 82, 20,974 | 453, 19,702 |
+| observe | 72,498, 78,020, from round 80 | 1, 14 | 46, 6,314 |
+| return | 0, 0 | 0, 0 | 0, 0 |
+| reclaim | 0, 0 | 0, 0 | 0, 0 |
+
+So on the M4 Max, stress catches a weakened publish or observe within the first rounds. It does not catch a weakened return or reclaim in 1.6e9 items. Those two need the consumer's slot loads to pass its index store, or the producer's slot stores to pass its index load. The core did not show that here, and only TSan's word test catches them. These figures come from the code before the stall guard, at fcc07c7. `spsc_stress` and `test_spsc` now give up after 10 s without an item, so a fault that loses one fails instead of hanging. The stall guard changes no ordering. The shipped orders ran all three again on the guarded code at 950867c, with 0 wrong and 0 torn in each: 1e9 items at capacity 4 in 60.52 s, 3e8 with noise in 21.10 s, and 3e8 at capacity 64 in 6.08 s. The weakened builds were not rerun. 22 faults in `scripts/faults/spsc.json`, each detected: the orders, the mask, each cached index, batch publish, the padding constant, the default padding, the pipeline's last batch, the checkpoint, the bench's queue filter, the driver, the result checks, and check_predictions' pattern.
+
+**T-SPSC-1 on the Mac**, P-0301, run P-0301-20261105T115340Z at f870418, clean. `results/spsc_queues_mac_12302019.md`, from `measure.sh /usr/bin/time -l python3 -B scripts/spsc_driver.py --suite queues --bench build/queues/bench/bench_spsc` with 3 repetitions. The element is an 8-byte integer in rtt, saturated and paced, and a 64-byte item in burst. Every queue was asked for 131,072 slots. The runs are unpinned on macOS, which is weak evidence (LC-28). Medians:
+
+- rtt: project 88.98 ns (CV 62%), rigtorp 93.02, folly 87.08, boost 174.2, moodycamel 162.3, xenium 159.2, atomic_queue 245.9, mutex 433.5.
+- Saturated: moodycamel 739.3 M items/s. The others: mutex 61.14, project 24.33, xenium 22.86, boost 21.01, atomic_queue 19.14, folly 17.40, rigtorp 13.93.
+- The bars are set on x86, so the file only says whether this Mac would meet them: boost over project 1.96× (would meet ≥ 1.16), project over moodycamel 0.55× and over rigtorp 0.96× (each would meet ≤ 1.00).
+
+Against P-0301:
+
+- Held: every item moved in order and intact; the burst's 729,611 messages; each ratio inside its range and project rtt inside 70 to 130 ns; moodycamel the fastest saturated queue by more than 5×; the project, rigtorp, boost, folly and atomic_queue within 12 to 60 M items/s; the mutex's p99 the worst on every paced and burst row; p99.99 and max above the floor everywhere.
+- Missed:
+  - The mutex's rtt was 1.76× the next slowest, atomic_queue, not 2×.
+  - atomic_queue's and boost's paced-10000ns p50 were 291.7 and 333.3 ns, not below the floor.
+  - Late sends were under 1% on every paced row, but in the burst they were 186,330 to 204,732 on every lock-free row in every repetition, about 26%, not under 1%.
+  - Peak RSS was 7.71 GiB, not under 1 GiB: the bench walks the mapped day up to 09:30 to find the burst, and the pages it reads count.
+
+The late sends are the data's, not the queues'. A send counts as late when it goes after the next message was due. In the window, 201,138 of the 729,610 gaps between consecutive ITCH timestamps are 0 ns, and 303,339 are at most 500 ns. This comes from a scan of the window under `heavy.sh`, raw `gaps.out` in the research cache. A message that shares its timestamp with the next one is late as soon as one tick passes. So about 201,000 sends are late for any queue whose send takes a tick. The lock-free rows' 186,330 to 204,732 sit around that, and the mutex's 207,563 to 239,686 are above it.
+
+**T-SPSC-2 on the Mac**, P-0302, run P-0302-20261105T115802Z at f870418, clean. `results/spsc_ablation_mac_12302019.md`, from the release build. Medians:
+
+| Variant | rtt, ns | saturated, M items/s |
+|---|---|---|
+| shipped | 86.16 | 24.82 |
+| uncached | 162.2 | 25.49 |
+| modulo | 84.91 | 24.70 |
+| uncached-modulo | 162.4 | 25.83 |
+| padding-8 | 153.6 | 105.0 |
+| padding-64 | 85.39 | 24.98 |
+| padding-256 | 91.17 | 24.66 |
+
+Through the batch calls, 32 items a call, batch publish moved 1,354 M items/s and publish-each 336.0, 4.0×. The four T-SPSC-2 ratios came out at 0.96×, 0.97×, 1.00× and 0.99×. Each is a miss this Mac would make against bars of 3.9× and 4.2× set on an i7-9700 under WSL2. Every P-0302 range held except peak RSS, which was 7.71 GiB for the same reason as above. The predicted reason holds as far as this run can say. With a single-item consumer that keeps up, each item costs one line transfer of about 40 ns. A cached index saves nothing there, and the division hides under the transfer. The cached index does show in rtt, where uncached is 1.88× shipped. Padding-8, both sides on one line, runs saturated 4.2× faster than shipped, with a CV of 61%, at 1.78× shipped's rtt. Why is not known: the Mac gives no counters, and nothing here measured it.
+
+**T-SPSC-3.** The parser thread decodes each message the book acts on into a 32-byte `BookOp` and pushes them through the ring, 64 to a publish, to the book thread. The book thread applies them on a fresh paged-flat book. This is set against the shipped single-threaded replay, and against the pipeline's work done on one thread (decoded). P-0303's run, P-0303-20261105T120127Z at f870418, agreed by hash in every pass. But the closing book held 0 orders on 0 levels, so its hash, `9e3779b97f4a7c15`, is the empty book's. A real day's closing book is empty, as the oracle found ("The end-of-day hash is weak on a real day", in the Harness entry), so equality at the close shows nothing. Its file was withdrawn before commit, and its row in the run log says so. Each replay now also hashes the book once, untimed, on the book's thread, just after the K-th op the book acts on. That op is the same one in all three modes, since the decoded modes hand the book exactly the messages `apply()` acts on. `test_pipeline` checks the checkpoint against a book built one op at a time, at the first op, the middle and the last but one. bench_pipeline refuses a run where a pass misses the checkpoint or disagrees there. The driver also refuses one where the book at the checkpoint is empty. Five faults.
+
+P-0303's run, for the record, before the withdrawal: single 15.81 s, pipelined 13.41 s and decoded 16.34 s. Pipelined over single was 0.963 (0.830 to 1.009), and decoded over single 1.033. The parser found the ring full 7.05 to 8.39 billion times and the book thread found it empty 649,000 to 822,000 times. Peak RSS was 8.34 GiB. These are inside P-0303's ranges except peak RSS, just under 8.5. None of them is published.
+
+P-0304's first run, P-0304-20261105T131900Z at 660007e, is withdrawn too. Another full-day replay ran on the Mac outside measure.sh from about 13:18:55 to 13:19:30 UTC, the first 30 s of the run. Its row in the run log says so, and its file and raw records stay in the research cache.
+
+**T-SPSC-3 on the Mac**, P-0304, run P-0304-20261105T132346Z at bb83ed3, clean. `results/spsc_pipeline_mac_12302019.md`, from `measure.sh /usr/bin/time -l python3 -B scripts/spsc_driver.py --suite pipeline --bench build/release/bench/bench_pipeline --checkpoint-ops 131000000`, 3 repetitions, unpinned, measure.sh's load 1.64 at the start and 1.95 at the end. Medians:
+
+- Single-threaded: 12.69 s (21,173,349 messages/s, CV 0.38%).
+- Pipelined: 12.47 s.
+- Decoded: 13.23 s.
+- Pipelined over single, paired: 0.983 (0.980 to 0.987). Against the 1.31 bar, set on a pinned Ryzen 9 5950X, this Mac would meet it, and the file says only that.
+- Decoded over single: 1.042.
+
+So on this Mac, splitting the parse onto a second thread saves under 2% of a day. Doing the pipeline's decode on one thread costs 4%. The book's work is most of the time either way.
+
+The parser found the ring full 6.87 to 6.90 billion times, and the book thread found it empty 234,571 to 264,866 times. The parser is the faster side, and the ring of 65,536 ops sits full nearly all day. Every pass left the empty closing book. At the checkpoint, every pass held `92e373870f5f9e5e`, 1,769,801 orders on 749,484 levels, in 33.4 to 38.2 ms a walk. `apply()` returned applied 263,241,937 times, and the single replay's other 5,502,843 messages had no book effect. Peak RSS was 8.34 GiB, the mapped day counted.
+
+Against P-0304:
+
+- Held:
+  - every check;
+  - the checkpoint book inside 200,000 to 1,924,078 orders, and its walk inside 1 to 500 ms;
+  - pipelined over single inside 0.80 to 1.10;
+  - decoded over single inside 0.95 to 1.15;
+  - full waits above empty waits;
+  - peak RSS inside 8.0 to 9.0 GiB.
+- Missed: the single-threaded time, 12.69 s, under the 13 to 18 s predicted from P-0303's 15.81 s. P-0303 started at load 3.86 and this run at 1.64. The 20% between them is not otherwise explained.
+
+carteret found the pipeline 1.31 times slower on x86 and single-threaded replay the faster design. Here the two are within 2%, on an unpinned Mac, which is weak evidence. The pinned comparison is left for `debian`.
+
+**Left open.** On `debian`:
+- T-SPSC-1, T-SPSC-2 and T-SPSC-3 pinned, on two physical cores, for example 4 and 6.
+- TSan with the four negative controls, and the x86 stress with each.
+- A cross-core check of the timer before any one-way latency there.
+
+On the Mac, the reason padding-8 runs faster saturated. TASKS.md lists each.

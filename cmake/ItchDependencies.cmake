@@ -28,11 +28,15 @@ FetchContent_Declare(hdr_histogram
   DOWNLOAD_NAME HdrHistogram_c-0.12.1.tar.gz
   SYSTEM)
 
-# The queues T-SPSC-1 compares against. Off by default, so that no default build
-# downloads them. Nothing calls them until Phase 3. Each is data: SOURCE_SUBDIR names a
-# directory none of them has, so that no build script of theirs is ever run. Boost
-# publishes its release tree, submodules included, only as a release asset, so its URL
-# names the tag and not the commit. boost-1.92.0 is afdfa32505af73e3d208144b3f623f0096cb62b6.
+# The queues bench_spsc compares the project's ring against, T-SPSC-1 among them. Off by
+# default, so that no default build downloads them. Each is data: SOURCE_SUBDIR names a
+# directory none of them has, so that no build script of theirs is ever run, and only
+# headers are used. Boost publishes its release tree, submodules included, only as a
+# release asset, so its URL names the tag and not the commit. boost-1.92.0 is
+# afdfa32505af73e3d208144b3f623f0096cb62b6. folly is its release v2026.10.26.00, of which
+# ProducerConsumerQueue.h and the headers it includes are used and nothing is built: they
+# need no configure result, so folly-config.h is written empty (NOTES.md, "The SPSC ring").
+# atomic_queue is the commit of the results LC-1 cites, and xenium the commit LC-9 read.
 if(ITCH_COMPARISON_QUEUES)
   FetchContent_Declare(boost_headers
     URL https://github.com/boostorg/boost/releases/download/boost-1.92.0/boost-1.92.0-b2-nodocs.tar.xz
@@ -55,6 +59,30 @@ if(ITCH_COMPARISON_QUEUES)
     URL_HASH SHA256=4cdffdcab099583c2080dc36ecded701f16e4512674b9baef0f0cc5d1b9964dd
     DOWNLOAD_DIR "${ITCH_DOWNLOADS}"
     DOWNLOAD_NAME readerwriterqueue-v1.0.7.tar.gz
+    SOURCE_SUBDIR itch-headers-only
+    SYSTEM)
+
+  FetchContent_Declare(folly
+    URL https://github.com/facebook/folly/archive/c8c7adb72c6d73e2fced5ff5cebc96aa3ff65b2c.tar.gz
+    URL_HASH SHA256=2a2d95f2f220264b283b34dd0ec73fa3f4f3ebd8af663407277087d6f1df8d5d
+    DOWNLOAD_DIR "${ITCH_DOWNLOADS}"
+    DOWNLOAD_NAME folly-c8c7adb7.tar.gz
+    SOURCE_SUBDIR itch-headers-only
+    SYSTEM)
+
+  FetchContent_Declare(atomic_queue
+    URL https://github.com/max0x7ba/atomic_queue/archive/b7f1befe89446752767243c5e5550779a9a5eed2.tar.gz
+    URL_HASH SHA256=e8aad8b233fbb8f7a4f5eae8f28dca8f1f11b7100e2e2be10a49b26259c32a31
+    DOWNLOAD_DIR "${ITCH_DOWNLOADS}"
+    DOWNLOAD_NAME atomic_queue-b7f1befe.tar.gz
+    SOURCE_SUBDIR itch-headers-only
+    SYSTEM)
+
+  FetchContent_Declare(xenium
+    URL https://github.com/mpoeter/xenium/archive/1c449ae953ce2a440b0d16c5ed1181d2754860ab.tar.gz
+    URL_HASH SHA256=3057321e33c30be3a2ff5d0691cc70cdda8da046d73e5b822ccee4c9d12c83d4
+    DOWNLOAD_DIR "${ITCH_DOWNLOADS}"
+    DOWNLOAD_NAME xenium-1c449ae9.tar.gz
     SOURCE_SUBDIR itch-headers-only
     SYSTEM)
 endif()
@@ -111,24 +139,41 @@ function(itch_require_bench_deps)
 endfunction()
 
 # The comparison queues as itch::comparison_queues, plus one object file under the build
-# tree that instantiates all three, so that a header which stops compiling shows up here
-# and not in Phase 3. That object is compiled and never linked or run.
+# tree that instantiates each, so that a header which stops compiling shows up here and
+# not only in bench_spsc. That object is compiled and never linked or run.
 function(itch_require_comparison_queues)
-  FetchContent_MakeAvailable(boost_headers rigtorp_spsc moodycamel_rwq)
+  FetchContent_MakeAvailable(boost_headers rigtorp_spsc moodycamel_rwq folly atomic_queue xenium)
+  set(folly_config "${CMAKE_BINARY_DIR}/itch_folly_config")
+  file(WRITE "${folly_config}/folly/folly-config.h"
+    "// Written by cmake/ItchDependencies.cmake: empty, since ProducerConsumerQueue.h and the\n"
+    "// folly headers it includes read no configure result.\n"
+    "#pragma once\n")
   add_library(itch_comparison_queues INTERFACE)
   add_library(itch::comparison_queues ALIAS itch_comparison_queues)
   target_include_directories(itch_comparison_queues SYSTEM INTERFACE
     "${boost_headers_SOURCE_DIR}"
     "${rigtorp_spsc_SOURCE_DIR}/include"
-    "${moodycamel_rwq_SOURCE_DIR}")
+    "${moodycamel_rwq_SOURCE_DIR}"
+    "${folly_config}"
+    "${folly_SOURCE_DIR}"
+    "${atomic_queue_SOURCE_DIR}/include"
+    "${xenium_SOURCE_DIR}")
+  target_compile_definitions(itch_comparison_queues INTERFACE ITCH_HAVE_COMPARISON_QUEUES)
+  # xenium's vyukov_bounded_queue holds its slots in std::aligned_storage, which C++23
+  # deprecates, and the warning is raised where our code instantiates it.
+  target_compile_options(itch_comparison_queues INTERFACE -Wno-deprecated-declarations)
 
   set(check "${CMAKE_BINARY_DIR}/itch_comparison_queues_check.cpp")
   file(WRITE "${check}" [=[
 #include <cstdint>
+#include <memory>
 
+#include <atomic_queue/atomic_queue.h>
 #include <boost/lockfree/spsc_queue.hpp>
+#include <folly/ProducerConsumerQueue.h>
 #include <readerwriterqueue.h>
 #include <rigtorp/SPSCQueue.h>
+#include <xenium/vyukov_bounded_queue.hpp>
 
 std::uint32_t itch_comparison_queues_check();
 
@@ -136,6 +181,10 @@ std::uint32_t itch_comparison_queues_check() {
   boost::lockfree::spsc_queue<std::uint32_t, boost::lockfree::capacity<16>> boost_queue;
   rigtorp::SPSCQueue<std::uint32_t> rigtorp_queue{16};
   moodycamel::ReaderWriterQueue<std::uint32_t> moodycamel_queue{16};
+  folly::ProducerConsumerQueue<std::uint32_t> folly_queue{16};
+  atomic_queue::AtomicQueueB2<std::uint32_t, std::allocator<std::uint32_t>, true, false, true>
+      atomic_queue_queue{16};
+  xenium::vyukov_bounded_queue<std::uint32_t> xenium_queue{16};
 
   std::uint32_t total = 0;
   std::uint32_t value = 0;
@@ -147,6 +196,15 @@ std::uint32_t itch_comparison_queues_check() {
     rigtorp_queue.pop();
   }
   if (moodycamel_queue.try_enqueue(3U) && moodycamel_queue.try_dequeue(value)) {
+    total += value;
+  }
+  if (folly_queue.write(4U) && folly_queue.read(value)) {
+    total += value;
+  }
+  if (atomic_queue_queue.try_push(5U) && atomic_queue_queue.try_pop(value)) {
+    total += value;
+  }
+  if (xenium_queue.try_push(6U) && xenium_queue.try_pop(value)) {
     total += value;
   }
   return total;

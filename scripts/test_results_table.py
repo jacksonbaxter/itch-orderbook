@@ -255,6 +255,26 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn(f"results_table: FAIL results/{name}", output)
 
+    def test_an_spsc_file_gets_a_row_for_each_comparison(self):
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        import test_spsc_results  # noqa: E402, PLC0415
+
+        name = "spsc_queues_fixture_12302019.md"
+        (self.root / "results" / name).write_text(test_spsc_results.QUEUES_FILE,
+                                                  encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        rows = [line for line in output.splitlines() if f"(results/{name})" in line]
+        self.assertEqual(len(rows), 3, output)
+        self.assertIn("| T-SPSC-1 | boost rtt / project rtt | 12302019 | macOS (M4 Max) | "
+                      "not pinned | 1.78× | ≥ 1.16× | host differs | `abc` |", rows[0])
+        path = self.root / "results" / name
+        path.write_text(re.sub(r"(?m)^\| T-SPSC-\d \|.*\n", "", test_spsc_results.QUEUES_FILE),
+                        encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL results/{name}: no SPSC target row", output)
+
     def test_t_mm_2_shows_each_spread_and_its_verdict(self):
         row = self.row("T-MM-2", "none")
         self.assertIn("| **FAIL** | average spread 1.4918, 1.3490, 3.0317 against the paper's "
@@ -285,10 +305,17 @@ class ResultsTable(unittest.TestCase):
                       "one row a run", output)
 
     def test_no_stray_markup_in_generated_cells(self):
+        # Every target row has its table's cells, no more: a stray | in a cell adds one.
         _, output = self.run_table()
+        header = None
         for line in output.splitlines():
+            if not line.startswith("|"):
+                header = None
+                continue
+            header = header or line
             if line.startswith("| T-"):
-                self.assertEqual(len(re.findall(r" \| ", line)), 6, line)
+                self.assertEqual(len(re.findall(r" \| ", line)),
+                                 len(re.findall(r" \| ", header)), line)
 
 
 if __name__ == "__main__":

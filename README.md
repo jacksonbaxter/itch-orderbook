@@ -116,6 +116,19 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 | E8: prefetch look-ahead on the book build, mac, 12302019 | macOS (M4 Max) | best look-ahead D=4 at -18.01% over D=0; E8 refuted (under 10% at every D) | `fde07d41bf28` | [results/prefetch_mac_12302019.md](results/prefetch_mac_12302019.md) |
 | Flamegraph: book replay, paged-flat on macOS (M4 Max), 12302019 | macOS (M4 Max) | 19,118 samples, wall-clock stacks every 1 ms, the hottest frame `itch::FastBook<…>::apply` at 38.24% self | `5a16936a14e8` | [results/profile_paged-flat_mac_12302019.md](results/profile_paged-flat_mac_12302019.md) |
 
+The SPSC ring. Each row is one comparison from a results file's targets table: a ratio of two of its medians, or for T-SPSC-3 the median of paired ratios, against BENCHMARKS.md's bar. Every bar was set on x86, so a macOS row says the host differs, and an unpinned Mac's cross-core figures are weak evidence.
+
+| Target | Comparison | Day | Host | Pinning | Measured | Bar | Verdict | Commit | File |
+|---|---|---|---|---|---|---|---|---|---|
+| T-SPSC-2 | cached over uncached, with %: modulo / uncached-modulo | 12302019 | macOS (M4 Max) | not pinned | 0.96× | ≥ 3.90× | host differs | `f870418ad388` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
+| T-SPSC-2 | cached over uncached, with the mask: shipped / uncached | 12302019 | macOS (M4 Max) | not pinned | 0.97× | ≥ 3.90× | host differs | `f870418ad388` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
+| T-SPSC-2 | mask over %, cached: shipped / modulo | 12302019 | macOS (M4 Max) | not pinned | 1.00× | ≥ 4.20× | host differs | `f870418ad388` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
+| T-SPSC-2 | mask over %, uncached: uncached / uncached-modulo | 12302019 | macOS (M4 Max) | not pinned | 0.99× | ≥ 4.20× | host differs | `f870418ad388` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
+| T-SPSC-3 | pipelined time / single-threaded time | 12302019 | macOS (M4 Max) | not pinned | 0.98× | ≤ 1.31× | host differs | `bb83ed30c6a6` | [results/spsc_pipeline_mac_12302019.md](results/spsc_pipeline_mac_12302019.md) |
+| T-SPSC-1 | boost rtt / project rtt | 12302019 | macOS (M4 Max) | not pinned | 1.96× | ≥ 1.16× | host differs | `f870418ad388` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
+| T-SPSC-1 | project rtt / moodycamel rtt | 12302019 | macOS (M4 Max) | not pinned | 0.55× | ≤ 1.00× | host differs | `f870418ad388` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
+| T-SPSC-1 | project rtt / rigtorp rtt | 12302019 | macOS (M4 Max) | not pinned | 0.96× | ≤ 1.00× | host differs | `f870418ad388` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
+
 The market maker on its report day, 12302019, a late-December session, with every parameter chosen on 10302019, an FOMC day. One symbol-day. No edge is claimed. 2 symbols on one day: each is its own symbol-day. The file gives S gross, fees, the markout curve and how Q-off and L-off each change the PnL. Dollars at the base fee tier; a replayed feed cannot react, so market impact is absent.
 
 | Symbol | Run | Fills | Shares | S, $ | A, $ | I, $ | Total, $ | Total, ticks a share | File |
@@ -225,6 +238,11 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0020-20261105T151701Z` | `P-0020` | `fde07d41bf28` | Darwin | `published` |
 | `P-0021-20261105T152154Z` | `P-0021` | `fde07d41bf28` | Darwin | `published` |
 | `P-0022-20261105T153208Z` | `P-0022` | `fde07d41bf28` | Darwin | `published` |
+| `P-0301-20261105T115340Z` | `P-0301` | `f870418ad388` | Darwin | `published` |
+| `P-0302-20261105T115802Z` | `P-0302` | `f870418ad388` | Darwin | `published` |
+| `P-0303-20261105T120127Z` | `P-0303` | `f870418ad388` | Darwin | `published by the driver, then withdrawn by hand before it was committed` |
+| `P-0304-20261105T131900Z` | `P-0304` | `660007edd63b` | Darwin | `published by the driver, then withdrawn by hand before it was committed` |
+| `P-0304-20261105T132346Z` | `P-0304` | `bb83ed30c6a6` | Darwin | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.

@@ -1,0 +1,654 @@
+#!/usr/bin/env python3
+"""Runs the SPSC benchmarks in fresh processes and writes one results file.
+
+    spsc_driver.py --suite queues|ablation|pipeline --bench BENCH --probe BENCH_PROBE \\
+        --input FILE --prediction P-NNNN --raw-dir DIR --out results/spsc_NAME.md \\
+        [--repetitions N] [--core N] [--peer-core N] [--sibling N] [--wrapped-by TEXT] \\
+        [--allow-dirty] [--bench-arg ARG]...
+
+queues and ablation run bench_spsc (T-SPSC-1 with the comparison, T-SPSC-2); pipeline runs
+bench_pipeline (T-SPSC-3). On a reported run this is measure.sh's direct child, as
+scripts/bench_driver.py is, and it shares that driver's order and its signal handling:
+
+    measure.sh /usr/bin/time -l python3 -B scripts/spsc_driver.py ... 2> STDERR
+    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR
+
+Hash the input, which also faults it in; confirm the prediction is on record; run
+machine_check.sh, refusing on a failure; run the repetitions, one process each, the
+order of the queues or modes turned by one each time; refuse if any refused, if the
+records are not of the suite, or if the kernel swapped a page out; write the results file
+with its load lines pending. Figures are the median of the repetitions with min, max and
+CV beside it. A latency cell is the median of the repetitions' figures, a figure under
+the timer's floor counting as below every other, and is written `below floor` when that
+median is under it.
+
+Each target is compared as a ratio, computed from the summary's medians, with the bar
+beside it. Every SPSC bar was set on x86, so a macOS file gives each the verdict `host
+differs` with the ratio and the bar in words; on debian the verdict is met or missed.
+The checks and the comparisons themselves are check_results.py's.
+
+Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
+--raw-dir, which is not committed.
+
+Exit codes: 0 results written, 1 refused or failed, 2 bad usage, 128 + N stopped by
+signal N.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shlex
+import signal
+import statistics
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import bench_driver  # noqa: E402
+import check_results  # noqa: E402
+
+REPO_ROOT = bench_driver.REPO_ROOT
+Refused = bench_driver.Refused
+Stopped = bench_driver.Stopped
+PERCENTILES = (("p50", 50.0), ("p90", 90.0), ("p99", 99.0), ("p99.9", 99.9),
+               ("p99.99", 99.99), ("max", 100.0))
+MODES = ("single", "pipelined", "decoded")
+# About half of 12302019's 263,241,937 ops the book acts on: the day's book is empty at the
+# close, and full here.
+CHECKPOINT_OPS = 131_000_000
+MODE_NAMES = {"single": "Single-threaded", "pipelined": "Pipelined", "decoded": "Decoded"}
+
+SUITES = {
+    "queues": {
+        "title": "T-SPSC-1 and the queue comparison",
+        "what": (
+            "Every queue of `bench/spsc_queues.hpp` by the four protocols of "
+            "`bench/spsc_protocols.hpp`, on two threads: rtt, a ping-pong through two queues "
+            "with one item in flight, the mean over {trips} round trips after a tenth as many "
+            "untimed; saturated, {saturated} sequence numbers pushed as fast as the queue "
+            "takes them, the first lap of the ring left out of the span; paced, one stamped "
+            "item every 1 µs and every 10 µs, {paced} of each after a tenth as many untimed, "
+            "the one-way latency of each recorded; and burst, the {burst} messages of the day "
+            "from {burst_start} for {burst_span}, each in a 64-byte item with its own length of "
+            "real bytes, sent at the gaps between their ITCH timestamps, the one-way latency "
+            "of each recorded. Every queue holds the same element: an 8-byte integer in rtt, "
+            "saturated and paced, and the 64-byte item in burst. Every queue is asked for the "
+            "same capacity, {capacity} items. Each third-party queue runs as shipped, through "
+            "its own non-blocking single-item calls, with its own padding."),
+    },
+    "ablation": {
+        "title": "T-SPSC-2: the project ring with one technique taken away at a time",
+        "what": (
+            "The project ring of `include/itch/spsc.hpp` in every configuration "
+            "`bench_spsc --suite ablation` builds, each differing from the shipped ring in one "
+            "switch, or two for uncached-modulo, Frasch's Fifo3 against his Fifo4 and Fifo4a "
+            "(LC-7): rtt, saturated and burst as in the comparison, {trips} round trips and "
+            "{saturated} items, an 8-byte integer, capacity {capacity}; and batch publish "
+            "against a store of the index per item, by saturated through the batch calls, "
+            "{batch} items a call on each side. The ring pads to {cache_line} bytes on this "
+            "host; padding-8 is no padding at all."),
+    },
+    "pipeline": {
+        "title": "T-SPSC-3: the SPSC ring inside the replay",
+        "what": (
+            "The whole day three ways on the `{design}` book, the shipped arm, each on a fresh "
+            "book: single, the shipped single-threaded replay, the frame walk and `apply()` on "
+            "each payload; pipelined, a parser thread that walks the frames, decodes each "
+            "message the book acts on into a {op_bytes}-byte op and pushes the ops through the "
+            "ring, {batch} to a publish, to the book thread, which pops them {batch} at a time "
+            "and applies each; and decoded, the pipeline's work on one thread with no "
+            "handover. The ring holds {capacity} ops. Each pass also hashes the book once, "
+            "untimed, just after op {checkpoint_ops:,} of those the book acts on: the day's "
+            "book is empty again at the close. `bench/pipeline.hpp`."),
+    },
+}
+
+
+def run_process(args, index, commit, digest):
+    """One benchmark process."""
+    stem = f"{args.suite}-repetition-{index}"
+    record_path = args.raw_dir / f"{stem}.json"
+    log_path = args.raw_dir / f"{stem}.log"
+    record_path.unlink(missing_ok=True)
+    command = [str(args.bench), "--input", str(args.input), "--out", str(record_path),
+               "--commit", commit, "--dataset", args.input.name, "--dataset-sha256", digest,
+               "--rotate", str(index - 1)]
+    if args.suite != "pipeline":
+        command += ["--suite", args.suite]
+    else:
+        command += ["--checkpoint-ops", str(args.checkpoint_ops)]
+    if args.core is not None:
+        command += ["--core", str(args.core)]
+    if args.peer_core is not None:
+        command += ["--peer-core", str(args.peer_core)]
+    command += args.bench_arg
+    where = f"repetition {index}"
+    bench_driver.set_stage(where)
+    with open(log_path, "w", encoding="utf-8") as log:
+        bench_driver.current_child = subprocess.Popen(command, stdout=log,
+                                                      stderr=subprocess.STDOUT)
+        code = bench_driver.current_child.wait()
+        bench_driver.current_child = None
+    if bench_driver.swap_watch is not None:
+        bench_driver.swap_watch.check(where)
+    if not record_path.is_file():
+        raise Refused(where, f"exited {code} with no record")
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    if code != 0 or record["refusals"]:
+        raise Refused(where, f"exited {code}: {'; '.join(record['refusals']) or 'no reason given'}")
+    return record
+
+
+def validate_run(record, suite):
+    """What one record must show for its numbers to mean anything."""
+    if record.get("suite") != suite:
+        raise Refused("record", f"the record is of suite {record.get('suite')!r}")
+    if suite == "pipeline":
+        passes = record["warmup"] + record["timed"]
+        if sorted(p["mode"] for p in record["timed"]) != sorted(MODES):
+            raise Refused("record", "the timed passes are not one of each mode")
+        if len({p["book_hash"] for p in passes}) != 1:
+            raise Refused("record", "the passes left different books")
+        if not record.get("checkpoint_ops") or any(p["checkpoint_hash"] is None for p in passes):
+            raise Refused("record", "a pass took no checkpoint")
+        if len({p["checkpoint_hash"] for p in passes}) != 1:
+            raise Refused("record", "the passes held different books at the checkpoint")
+        if passes[0]["checkpoint_orders"] == 0:
+            raise Refused("record", "the book was empty at the checkpoint, which then proves "
+                                    "nothing")
+        if any(p["ns"] <= 0 for p in passes):
+            raise Refused("record", "a pass took no time")
+        return
+    if record["burst"]["speedup"] != 1:
+        raise Refused("record", "the burst ran faster than the day")
+    for row in record["rows"]:
+        if row["errors"] != 0:
+            raise Refused("record", f"{row['queue']} {row['protocol']}: {row['errors']} wrong")
+        if row["ns"] <= 0 or row["items"] <= 0:
+            raise Refused("record", f"{row['queue']} {row['protocol']} timed nothing")
+
+
+def row_keys(record):
+    return [(row["queue"], row["protocol"]) for row in record["rows"]]
+
+
+def validate_together(records):
+    first = records[0]
+    for index, record in enumerate(records[1:], start=2):
+        if first["suite"] == "pipeline":
+            if record["timed"][0]["book_hash"] != first["timed"][0]["book_hash"]:
+                raise Refused("record", f"repetition {index} left another book")
+            if record["timed"][0]["checkpoint_hash"] != first["timed"][0]["checkpoint_hash"]:
+                raise Refused("record", f"repetition {index} held another book at the checkpoint")
+        elif sorted(row_keys(record)) != sorted(row_keys(first)):
+            raise Refused("record", f"repetition {index} ran other rows")
+
+
+def rows_by_key(record):
+    return {(row["queue"], row["protocol"]): row for row in record["rows"]}
+
+
+def pass_of(record, mode):
+    return next(p for p in record["timed"] if p["mode"] == mode)
+
+
+def figure(record, label):
+    """The value of one summary figure in one record."""
+    if record["suite"] == "pipeline":
+        for mode in MODES:
+            name = MODE_NAMES[mode]
+            if label == f"{name} replay, s":
+                return pass_of(record, mode)["ns"] / 1e9
+            if label == f"{name} replay, messages/s":
+                timed = pass_of(record, mode)
+                return timed["messages"] / (timed["ns"] / 1e9)
+        if label == check_results.PIPELINE_RATIO:
+            return pass_of(record, "pipelined")["ns"] / pass_of(record, "single")["ns"]
+        if label == "Decoded time over single-threaded time":
+            return pass_of(record, "decoded")["ns"] / pass_of(record, "single")["ns"]
+        raise KeyError(label)
+    queue, protocol, unit = (part.strip() for part in label.split(",", 2))
+    row = rows_by_key(record)[(queue, protocol)]
+    if unit == check_results.RTT_UNIT:
+        return row["ns_per_item"]
+    if unit == check_results.RATE_UNIT:
+        return row["items_per_s"] / 1e6
+    if unit == "mean one-way ns":
+        return row["latency"]["mean_ns"]
+    raise KeyError(label)
+
+
+def summary_labels(record):
+    if record["suite"] == "pipeline":
+        labels = []
+        for mode in MODES:
+            labels += [f"{MODE_NAMES[mode]} replay, s", f"{MODE_NAMES[mode]} replay, messages/s"]
+        return labels + [check_results.PIPELINE_RATIO, "Decoded time over single-threaded time"]
+    labels = []
+    for row in record["rows"]:
+        protocol = row["protocol"]
+        if protocol == "rtt":
+            unit = check_results.RTT_UNIT
+        elif protocol.startswith("saturated"):
+            unit = check_results.RATE_UNIT
+        else:
+            unit = "mean one-way ns"
+        labels.append(f"{row['queue']}, {protocol}, {unit}")
+    return labels
+
+
+def ordered_labels(records):
+    """Each label once, in the order of the first repetition with rotation undone."""
+    labels = summary_labels(records[0])
+    if records[0]["suite"] == "pipeline":
+        return labels
+    order = {name: i for i, name in enumerate(
+        ["project", "rigtorp", "boost", "moodycamel", "folly", "atomic_queue", "xenium_vyukov",
+         "mutex", "shipped", "uncached", "modulo", "uncached-modulo", "padding-8", "padding-64",
+         "padding-128", "padding-256", "batch-publish", "publish-each"])}
+    return sorted(labels, key=lambda label: (order.get(label.split(",")[0], 99),
+                                             labels.index(label)))
+
+
+def shown(value):
+    """At least four significant figures, so that a ratio of two shown medians is good to
+    the two decimals it is written with."""
+    if value >= 1000:
+        return f"{value:,.0f}"
+    if value >= 100:
+        return f"{value:.1f}"
+    if value >= 10:
+        return f"{value:.2f}"
+    return f"{value:.3f}"
+
+
+def summary_rows(records):
+    rows = []
+    for label in ordered_labels(records):
+        median, low, high, cv = bench_driver.spread([figure(record, label) for record in records])
+        rows.append(f"| {label} | {shown(median)} | {shown(low)} | {shown(high)} "
+                    f"| {cv * 100:.2f}% |")
+    # The comparisons divide the medians as shown, as check_results.py reads them back.
+    return rows, check_results.spsc_medians("## Summary\n" + "\n".join(rows) + "\n")
+
+
+def percentile_value(row, percentile):
+    for entry in row["latency"]["percentiles"]:
+        if entry["percentile"] == percentile:
+            return entry["value_ns"]
+    raise KeyError(percentile)
+
+
+def median_cell(values):
+    """None is under the floor, so below every figure."""
+    ordered = sorted(values, key=lambda value: -1.0 if value is None else value)
+    middle = ordered[len(ordered) // 2] if len(ordered) % 2 else None
+    if len(ordered) % 2 == 0:
+        low, high = ordered[len(ordered) // 2 - 1], ordered[len(ordered) // 2]
+        middle = None if low is None or high is None else (low + high) / 2
+    return check_results.BELOW_FLOOR if middle is None else f"{middle:,.1f}"
+
+
+def latency_rows(records):
+    rows = []
+    keyed = [rows_by_key(record) for record in records]
+    for key in [(row["queue"], row["protocol"]) for row in records[0]["rows"]]:
+        if "latency" not in keyed[0][key]:
+            continue
+        cells = [median_cell([percentile_value(k[key], value) for k in keyed])
+                 for _, value in PERCENTILES]
+        late = statistics.median(k[key]["late"] for k in keyed)
+        samples = keyed[0][key]["latency"]["samples"]
+        rows.append(f"| {key[0]} | {key[1]} | " + " | ".join(cells) +
+                    f" | {late:,.0f} | {samples:,} |")
+    return sorted(rows, key=lambda row: (row.split(" | ")[1] != "burst", row))
+
+
+def ratio_text(value):
+    return f"{value:.2f}×"
+
+
+def target_rows(records, medians):
+    host = records[0]["header"]["host"]
+    suite = records[0]["suite"]
+    rows = []
+    for (target, comparison), spec in check_results.SPSC_COMPARISONS.items():
+        if spec["suite"] != suite:
+            continue
+        value = check_results.comparison_value(spec, medians)
+        bar = f"{'≥' if spec['op'] == '>=' else '≤'} {spec['bar']:.2f}×"
+        where = f"{host}, {'pinned' if records[0]['header']['pinning'].startswith('pinned') else 'not pinned'}; the bar's: {spec['host']}"
+        if value is None:
+            rows.append(f"| {target} | {comparison} | {bar} | – | {where} | not measured in "
+                        f"this run: {spec['missing']} |")
+            continue
+        holds = value >= spec["bar"] if spec["op"] == ">=" else value <= spec["bar"]
+        if host == check_results.MAC_HOST:
+            verdict = (f"host differs: {ratio_text(value)} on this Mac against a bar set on "
+                       f"{spec['host']}, which it would {'meet' if holds else 'miss'}")
+        elif holds:
+            verdict = "met"
+        else:
+            verdict = f"missed: {ratio_text(value)} against {bar}"
+        rows.append(f"| {target} | {comparison} | {bar} | {ratio_text(value)} | {where} "
+                    f"| {verdict} |")
+    return rows
+
+
+def header_lines(records, args, run_id, started, finished):
+    first = records[0]
+    header = dict(first["header"])
+    lines = [f"- {name}: {header[name]}" for name in bench_driver.HEADER_ORDER if name in header]
+    peer = first["peer_core"]
+    if first["suite"] == "pipeline":
+        pins = {p["parser_pinning"] for r in records for p in r["timed"] if p["mode"] == "pipelined"}
+        lines += [f"- design: {first['design']}: FastBook<> with PagedIndex and FlatLevels",
+                  f"- input: {first['input']}",
+                  f"- warmup_messages: {pass_of(first, 'single')['messages']:,}",
+                  f"- timed_messages: {pass_of(first, 'single')['messages']:,}"]
+    else:
+        pins = {row["peer_pinning"] for r in records for row in r["rows"]}
+        burst = first["burst"]
+        lines += [f"- burst: {burst['messages']:,} messages from {burst['start_ns']:,} ns after "
+                  f"midnight for {burst['span_ns']:,} ns, speedup {burst['speedup']}"]
+    lines += [f"- suite: {first['suite']}",
+              f"- element: {'a 32-byte decoded op' if first['suite'] == 'pipeline' else 'an 8-byte integer in rtt, saturated and paced; a 64-byte item in burst'}",
+              f"- capacity: {first['capacity']:,} "
+              + ("ops in the ring" if first["suite"] == "pipeline" else
+                 "items requested of every queue"),
+              f"- cache_line: {first['cache_line']} bytes, the ring's padding constant",
+              f"- peer_core: {peer if peer >= 0 else 'none requested'}",
+              f"- peer_pinning: {' / '.join(sorted(pins))}",
+              f"- measure_load_start: {check_results.PENDING}",
+              f"- measure_load_end: {check_results.PENDING}",
+              *bench_driver.peak_lines(records),
+              f"- prediction: {args.prediction}",
+              f"- run_id: {run_id}",
+              f"- repetitions: {len(records)}",
+              f"- run_started: {started}",
+              f"- run_finished: {finished}"]
+    return lines
+
+
+def host_lines(records):
+    host = records[0]["header"]["host"]
+    if host != check_results.MAC_HOST:
+        return [f"Host: **{host}**. Numbers from the two hosts are never mixed.", ""]
+    return [f"Host: **{host}**. Numbers from the two hosts are never mixed.", "",
+            f"**{host} is not a pinned host.** macOS offers no way to pin a thread, so both "
+            "threads of every row ran wherever the scheduler put them, beside whatever else "
+            "the machine was doing under `measure.sh`'s lock. Unpinned cross-core latency on "
+            "the Mac is weak evidence: the two threads may share a cluster or not, and a line "
+            "moves between P clusters in about three times the time it takes within one "
+            "(LC-28). The cores each thread last ran on are in the repetitions table. Every "
+            "figure here is a macOS figure, and every bar below was set on x86, so none is met "
+            "or missed here.", ""]
+
+
+def describe(records):
+    first = records[0]
+    spec = SUITES[first["suite"]]
+    if first["suite"] == "pipeline":
+        return spec["what"].format(design=first["design"], op_bytes=first["op_bytes"],
+                                   batch=first["batch"], capacity=f"{first['capacity']:,}",
+                                   checkpoint_ops=first["checkpoint_ops"])
+    rows = rows_by_key(first)
+    any_row = next(iter(rows.values()))
+    trips = next(row["items"] for row in first["rows"] if row["protocol"] == "rtt")
+    saturated = next(row["items"] for row in first["rows"] if row["protocol"] == "saturated")
+    paced = next((row["items"] for row in first["rows"] if row["protocol"].startswith("paced")),
+                 0)
+    burst = first["burst"]
+    del any_row
+    return spec["what"].format(
+        trips=f"{trips:,}", saturated=f"{saturated + first['capacity']:,}",
+        paced=f"{paced:,}", burst=f"{burst['messages']:,}",
+        burst_start=f"{burst['start_ns'] / 3.6e12:.0f}h after midnight, {burst['start_ns']:,} ns",
+        burst_span=f"{burst['span_ns'] / 1e9:g} s", capacity=f"{first['capacity']:,}",
+        batch=first["batch"], cache_line=first["cache_line"])
+
+
+def repetition_rows(records):
+    rows = []
+    for index, record in enumerate(records, start=1):
+        if record["suite"] == "pipeline":
+            for p in record["timed"]:
+                rows.append(f"| {index} | {p['mode']} | {p['ns'] / 1e9:.3f} | {p['messages']:,} "
+                            f"| {p['ops']:,} | {p['full_waits']:,} | {p['empty_waits']:,} "
+                            f"| {p['checkpoint_hash']} | {p['book_hash']} "
+                            f"| {record['peak_rss_bytes'] / 1024 ** 3:.2f} |")
+            continue
+        for row in record["rows"]:
+            value = row["ns_per_item"] if row["protocol"] == "rtt" else (
+                row["items_per_s"] / 1e6 if row["protocol"].startswith("saturated")
+                else row["latency"]["mean_ns"])
+            rows.append(f"| {index} | {row['queue']} | {row['protocol']} | {shown(value)} "
+                        f"| {row['self_core']} | {row['peer_core']} |")
+    return rows
+
+
+def pipeline_sections(records):
+    first = records[0]
+    single = pass_of(first, "single")
+    pipelined = pass_of(first, "pipelined")
+    statuses = ", ".join(f"{name} {count:,}" for name, count in single["statuses"].items()
+                         if count)
+    lines = ["## Book agreement", "",
+             f"Every pass of every repetition, warm-up and timed, left the book "
+             f"`{single['book_hash']}`, by the oracle's canonical hash of every side, level and "
+             "order (`tests/oracle/canonical.hpp`), and the driver refuses a run where one "
+             f"differs. At the close it held {single['live_orders']:,} orders on "
+             f"{single['live_levels']:,} levels. At the checkpoint, just after op "
+             f"{first['checkpoint_ops']:,} of those the book acts on, every pass held the book "
+             f"`{single['checkpoint_hash']}`, {single['checkpoint_orders']:,} orders on "
+             f"{single['checkpoint_levels']:,} levels, hashed on the book's thread in "
+             f"{single['checkpoint_ns'] / 1e6:.1f} ms that the timed span leaves out; the driver "
+             "refuses a run where one differs there too, or where that book is empty. "
+             f"The single-threaded replay walked "
+             f"{single['messages']:,} messages, and `apply()` returned {statuses}; the pipeline "
+             f"handed the book {pipelined['ops']:,} of them, every one it acts on, and each "
+             "status but no_book_effect came out the same.", "",
+             "## Handover", "",
+             "How often each side of the ring found it in the way, counted once per failed try, "
+             "in the timed pipelined pass of each repetition: the parser finding it full, and "
+             "the book thread finding it empty.", "",
+             "| Repetition | Full waits | Empty waits | Parser pinning |", "|---|---|---|---|"]
+    for index, record in enumerate(records, start=1):
+        p = pass_of(record, "pipelined")
+        lines.append(f"| {index} | {p['full_waits']:,} | {p['empty_waits']:,} "
+                     f"| {p['parser_pinning']} |")
+    return lines + [""]
+
+
+def render(records, args, run_id, started, finished, machine_output, command):
+    first = records[0]
+    suite = first["suite"]
+    host = first["header"]["host"]
+    day = first["header"]["dataset"].split(".")[0]
+    summary, medians = summary_rows(records)
+    lines = [f"# {SUITES[suite]['title']}, on {host}, {day}", "",
+             "Generated by `scripts/spsc_driver.py` from raw records that are not committed. "
+             "Do not edit by hand.", ""]
+    lines += host_lines(records)
+    lines += [describe(records), "", "## Header", ""]
+    lines += header_lines(records, args, run_id, started, finished)
+    lines += ["", "## Summary", "",
+              f"Each repetition is a fresh process. {len(records)} repetitions. "
+              + ("Each runs every mode once untimed, as a warm-up, then every mode once timed; "
+                 "the span is the replay of the whole day, from the first frame to the last "
+                 "op applied, and nothing before or after. The time ratios are each "
+                 "repetition's own, paired." if suite == "pipeline" else
+                 "Each runs every row once, in a fresh queue, after its untimed start. An rtt "
+                 "figure is the mean of one span over every round trip, a saturated figure the "
+                 "items over the span, and a mean one-way figure the mean of the histogram: of "
+                 "samples each a whole number of timer quanta, read on two cores, so a mean under "
+                 "the floor is an average over many reads, not one the clock resolved."),
+              "", "| Figure | Median | Min | Max | CV |", "|---|---|---|---|---|"]
+    lines += summary
+    if suite != "pipeline":
+        lines += ["", "## Latency", "",
+                  "One-way, from the sender's clock read to the receiver's, in ns, each cell the "
+                  "median over the repetitions. The two reads are on two cores, so the pair cost "
+                  "is not subtracted. `below floor` is under the timer's floor of "
+                  f"{first['header']['floor']}, where this clock cannot resolve a figure. A send "
+                  "is late when it goes a whole gap behind its time, or, in burst, after the next "
+                  "message was due.", "",
+                  "| Queue | Protocol | p50 | p90 | p99 | p99.9 | p99.99 | max | Late sends "
+                  "| Samples |", "|---|---|---|---|---|---|---|---|---|---|"]
+        lines += latency_rows(records)
+    else:
+        lines += [""] + pipeline_sections(records)[:-1]
+    lines += ["", "## Targets", "",
+              "Each ratio is of the summary's medians above" +
+              (", the pipelined one a median of paired ratios." if suite == "pipeline" else ".")
+              + " Every bar is BENCHMARKS.md's.", "",
+              "| Target | Comparison | Bar | Measured | Host | Verdict |",
+              "|---|---|---|---|---|---|"]
+    lines += target_rows(records, medians)
+    if suite == "pipeline":
+        lines += ["", "## Repetitions", "",
+                  "| Repetition | Mode | Timed pass s | Messages | Ops | Full waits | Empty waits "
+                  "| Checkpoint hash | Book hash | Peak RSS GiB |",
+                  "|---|---|---|---|---|---|---|---|---|---|"]
+    else:
+        lines += ["", "## Repetitions", "",
+                  "Each row's figure as in the summary, and the core each thread last ran on.", "",
+                  "| Repetition | Queue | Protocol | Figure | This thread's core | Peer's core |",
+                  "|---|---|---|---|---|---|"]
+    lines += repetition_rows(records)
+    if bench_driver.swap_watch is not None:
+        lines += ["", bench_driver.swap_watch.line()]
+    lines += ["", "## machine_check output", "", "```", machine_output, "```", "",
+              "## Commands", "", "```", command, "```", ""]
+    return "\n".join(lines)
+
+
+def relative_command(args):
+    def shown_path(path):
+        # Absolute without following links, so that a data/ link in a worktree shows as data/.
+        path = Path(os.path.abspath(path))
+        try:
+            return str(path.relative_to(REPO_ROOT))
+        except ValueError:
+            return f"<raw>/{path.name}"
+    words = ["python3", "-B", "scripts/spsc_driver.py", "--suite", args.suite,
+             "--bench", shown_path(args.bench), "--probe", shown_path(args.probe),
+             "--input", shown_path(args.input), "--prediction", args.prediction,
+             "--repetitions", str(args.repetitions), "--raw-dir", "<raw>",
+             "--out", shown_path(args.out)]
+    if args.suite == "pipeline":
+        words += ["--checkpoint-ops", str(args.checkpoint_ops)]
+    for flag, value in (("--core", args.core), ("--peer-core", args.peer_core)):
+        if value is not None:
+            words += [flag, str(value)]
+    for argument in args.bench_arg:
+        words += [f"--bench-arg={argument}"]
+    text = " ".join(shlex.quote(word) if "<" not in word else word for word in words)
+    return f"{args.wrapped_by} {text}" if args.wrapped_by else text
+
+
+def run(args, run_id, started, commit):
+    bench_driver.swap_watch = bench_driver.SwapWatch(args.vmstat)
+    bench_driver.set_stage("hashing the input")
+    digest = bench_driver.hash_and_fault_in(args.input)
+    bench_driver.set_stage("checking the prediction")
+    code = subprocess.run([sys.executable, "-B", str(REPO_ROOT / "scripts" / "check_predictions.py"),
+                           "--root", str(args.predictions_root), "--require", args.prediction],
+                          capture_output=True, text=True, check=False)
+    if code.returncode != 0:
+        raise Refused("prediction", code.stdout.strip())
+    bench_driver.set_stage("machine_check")
+    machine_output = bench_driver.machine_check(args)
+    records = []
+    for index in range(1, args.repetitions + 1):
+        record = run_process(args, index, commit, digest)
+        validate_run(record, args.suite)
+        records.append(record)
+    validate_together(records)
+    bench_driver.set_stage("rendering the results file")
+    text = render(records, args, run_id, started, bench_driver.utc_now(), machine_output,
+                  relative_command(args))
+    violations = [found for found in check_results.check_text(text)
+                  if found[0] != "load-not-stamped"]
+    if violations:
+        raise Refused("results", f"{args.out.name}: " + "; ".join(
+            f"{code}: {detail}" for code, detail in violations))
+    bench_driver.hold_signals()
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(text, encoding="utf-8")
+    return args.out
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--suite", choices=tuple(SUITES), required=True)
+    parser.add_argument("--bench", type=Path, required=True)
+    parser.add_argument("--probe", type=Path, required=True)
+    parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument("--prediction", required=True)
+    parser.add_argument("--raw-dir", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--repetitions", type=int, default=3)
+    parser.add_argument("--core", type=int)
+    parser.add_argument("--peer-core", type=int)
+    parser.add_argument("--sibling", type=int)
+    parser.add_argument("--checkpoint-ops", type=int, default=CHECKPOINT_OPS,
+                        help="pipeline: hash the book after this many ops it acts on")
+    parser.add_argument("--wrapped-by", help="what the run was started under, for the record")
+    parser.add_argument("--allow-dirty", action="store_true", help="for tests, not for a report")
+    parser.add_argument("--bench-arg", action="append", default=[], metavar="ARG")
+    parser.add_argument("--predictions-root", type=Path, default=REPO_ROOT, help=argparse.SUPPRESS)
+    parser.add_argument("--run-log", type=Path, default=REPO_ROOT / "results" / "run_log.md",
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--vmstat", type=Path, default=Path("/proc/vmstat"),
+                        help=argparse.SUPPRESS)
+    args = parser.parse_args(argv)
+    if args.repetitions < 3:
+        parser.error("median, min, max and CV need at least 3 repetitions")
+    return args
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(signum, bench_driver.forward_signal)
+    args.raw_dir.mkdir(parents=True, exist_ok=True)
+    started = bench_driver.utc_now()
+    run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
+    commit = "unknown"
+    try:
+        commit = bench_driver.git_commit(REPO_ROOT, args.allow_dirty)
+        written = run(args, run_id, started, commit)
+    except Stopped as stop:
+        bench_driver.stop_child()
+        name = signal.Signals(stop.signum).name
+        print(f"spsc_driver: stopped by {name} at {bench_driver.stage}", file=sys.stderr)
+        bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
+                                f"stopped by {name} at {bench_driver.stage}; nothing from it is "
+                                "published; the row was written by the driver as it stopped")
+        return 128 + stop.signum
+    except Refused as refusal:
+        bench_driver.hold_signals()
+        print(f"spsc_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
+        bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
+                                f"refused at {refusal.stage}: {refusal}")
+        return 1
+    except (OSError, ValueError, KeyError, StopIteration, subprocess.SubprocessError) as error:
+        bench_driver.hold_signals()
+        print(f"spsc_driver: failed: {error!r}", file=sys.stderr)
+        bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
+                                f"failed: {error!r}")
+        return 1
+    bench_driver.hold_signals()
+    bench_driver.append_log(args.run_log, run_id, args.prediction, commit, "published")
+    print(f"spsc_driver: wrote {written}, load lines pending. Now run scripts/stamp_load.py.",
+          file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

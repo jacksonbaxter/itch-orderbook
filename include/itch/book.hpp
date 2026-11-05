@@ -33,6 +33,7 @@
 
 #include "itch/book_index.hpp"
 #include "itch/book_levels.hpp"
+#include "itch/book_op.hpp"
 #include "itch/book_types.hpp"
 #include "itch/messages.hpp"
 #include "itch/wire.hpp"
@@ -159,6 +160,26 @@ class FastBook {
       }
       default: return;
     }
+  }
+
+  // A message decode_book_op() took off the wire, perhaps on another thread: the same
+  // paths, with the same fields, as apply() on its payload.
+  [[nodiscard]] ApplyStatus apply(const BookOp& op) noexcept {
+    switch (op.kind) {
+      case BookOpKind::add: return add_order(op.locate, op.reference, op.side, op.shares, op.price);
+      case BookOpKind::deduct: return deduct(op.locate, op.reference, op.shares);
+      case BookOpKind::erase: return delete_order(op.locate, op.reference);
+      case BookOpKind::replace:
+        return replace_order(OrderReplace{.header = {.message_type = OrderReplace::kType,
+                                                     .stock_locate = op.locate,
+                                                     .tracking_number = 0,
+                                                     .timestamp_ns = 0},
+                                          .original_order_reference = op.reference,
+                                          .new_order_reference = op.new_reference,
+                                          .shares = op.shares,
+                                          .price = op.price});
+    }
+    return ApplyStatus::no_book_effect;
   }
 
   // The level at this price, or nullptr.

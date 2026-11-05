@@ -6,13 +6,15 @@
 // back and run out, references past the paged index's reach, and flat arrays moving to
 // bigger blocks.
 // The backtester takes a synthetic market with a strategy trading on it, in the same kind
-// of window.
+// of window. So do the SPSC ring and T-SPSC-3's pipelined replay, the window opening once
+// its parser thread is waiting.
 // The reference book takes the same stream and must allocate, and each form of new is
 // shown reaching its own counter, so a broken counter fails here instead of passing the
 // fast book. The map book, the T-DESIGN-1 baseline, allocates by design, and the heap ager
 // that its aged run uses is shown making the calls it says it makes, from its seed alone.
 #include <gtest/gtest.h>
 
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -35,9 +37,12 @@
 #include "itch/mm/session.hpp"
 #include "itch/mm/strategy.hpp"
 #include "itch/reader.hpp"
+#include "itch/spsc.hpp"
 #include "oracle/alloc_counter.hpp"
 #include "oracle/reference_book.hpp"
 #include "oracle/wire_builder.hpp"
+#include "pipeline.hpp"
+#include "support/churn.hpp"
 #include "support/fixtures.hpp"
 
 namespace {
@@ -46,62 +51,7 @@ using itch::oracle::AllocCounts;
 using itch::oracle::AllocForm;
 using itch::oracle::read_alloc_counts;
 using itch::oracle::reset_alloc_counts;
-namespace wire = itch::oracle::wire;
-
-// Churns a fixed pool of orders through every order path many times over, so that each
-// pool and index recycle, on a stream framed once before any window opens. One new
-// reference in five has bit 40 set.
-std::vector<std::byte> build_stream() {
-  std::vector<std::byte> stream;
-  const auto put = [&stream](const wire::Bytes& message) {
-    itch::fixtures::append_frame(stream, message);
-  };
-  for (const auto& message : itch::fixtures::all_messages()) {
-    const char type = static_cast<char>(message[0]);
-    if (type != 'E' && type != 'C' && type != 'X' && type != 'D' && type != 'U') {
-      put(message);
-    }
-  }
-  // The same stream every run.
-  // NOLINTNEXTLINE(cert-msc32-c,cert-msc51-cpp,bugprone-random-generator-seed)
-  std::mt19937 random{20191230};
-  constexpr std::uint32_t kPool = 512;
-  std::vector<std::uint64_t> live;
-  std::uint64_t next_reference = 1;
-  const auto fresh = [&next_reference] {
-    const std::uint64_t reference = next_reference++;
-    return reference % 5 == 0 ? reference | (std::uint64_t{1} << 40U) : reference;
-  };
-  for (int step = 0; step < 200000; ++step) {
-    const auto price = static_cast<std::uint32_t>(1000 + ((random() % 64) * 100));
-    if (live.size() < kPool / 2) {
-      const std::uint64_t reference = fresh();
-      put((step % 3 == 0 ? wire::add_attributed : wire::add)(
-          1, reference, step % 2 == 0 ? 'B' : 'S', 300, price, 1));
-      live.push_back(reference);
-      continue;
-    }
-    const std::size_t pick = random() % live.size();
-    const std::uint64_t reference = live[pick];
-    switch (random() % 5) {
-      case 0: put(wire::execute(1, reference, 1)); break;
-      case 1: put(wire::execute_with_price(1, reference, 1, 77)); break;
-      case 2: put(wire::cancel(1, reference, 1)); break;
-      case 3: {
-        const std::uint64_t replaced = fresh();
-        put(wire::replace(1, reference, replaced, 300, price));
-        live[pick] = replaced;
-        break;
-      }
-      default:
-        put(wire::erase(1, reference));
-        live[pick] = live.back();
-        live.pop_back();
-        break;
-    }
-  }
-  return stream;
-}
+using itch::testing::build_stream;
 
 template <class Reader, class Apply>
 std::uint64_t replay_with(Reader reader, Apply apply) {
@@ -275,6 +225,41 @@ TEST(Allocation, TheMarketMakerAllocatesNothingAfterConstruction) {
   config.latency_off = true;
   // With no latency its quotes keep up with the mid, and this market fills them less often.
   check(itch::mm::AsModel{parameters, 1'000'000'000}, "Avellaneda-Stoikov, L-off", 500);
+}
+
+// The SPSC ring's single and batch calls on one thread, then T-SPSC-3's pipelined replay:
+// a parser thread pushing decoded ops through a small ring to the paged-flat book on this
+// one, the window opening once the parser thread is started and waiting.
+TEST(Allocation, TheRingAndThePipelineAllocateNothingAfterConstruction) {
+  itch::SpscRing<std::uint64_t> ring{64};
+  std::array<std::uint64_t, 16> batch{};
+  std::uint64_t moved = 0;
+  reset_alloc_counts();
+  for (std::uint64_t round = 0; round < 10'000; ++round) {
+    moved += ring.try_push(round) ? 1U : 0U;
+    moved += ring.try_push_batch(batch);
+    moved += ring.try_pop_batch(batch);
+    moved += ring.try_pop(batch[0]) ? 1U : 0U;
+  }
+  const AllocCounts by_ring = read_alloc_counts();
+  std::println("ring: {} items moved, {} allocations", moved, by_ring.total());
+  EXPECT_EQ(by_ring.total(), 0U) << "allocation in the ring";
+  EXPECT_GT(moved, 100U * ring.capacity());
+
+  // The checkpoint's hash walk, mid-stream, runs inside the counted span too.
+  constexpr std::uint64_t kCheckpointOp = 100'000;
+  const std::vector<std::byte> stream = build_stream();
+  itch::FastBook<> book{kCapacity};
+  itch::bench::OpRing ops{64};
+  const itch::bench::ReplayCounts counts = itch::bench::replay_pipelined(
+      stream, book, ops, -1, [] { reset_alloc_counts(); }, kCheckpointOp);
+  const AllocCounts by_pipeline = read_alloc_counts();
+  std::println("pipeline: {} messages, {} ops, {} full waits, {} allocations", counts.messages,
+               counts.ops, counts.full_waits, by_pipeline.total());
+  EXPECT_EQ(by_pipeline.total(), 0U) << "allocation in the pipelined replay";
+  EXPECT_EQ(counts.of(itch::ApplyStatus::applied), counts.ops);
+  EXPECT_GT(counts.ops, 100U * ops.capacity()) << "the ring did not wrap";
+  EXPECT_TRUE(counts.checkpoint_reached) << "the checkpoint's hash walk was not counted";
 }
 
 TEST(Allocation, TheControlBookIsSeenAllocating) {

@@ -1,5 +1,8 @@
 add_library(itch_parser STATIC parser.cpp)
 target_include_directories(itch_parser PUBLIC "${PROJECT_SOURCE_DIR}/include")
+if(ITCH_CACHE_LINE)
+  target_compile_definitions(itch_parser PUBLIC "ITCH_CACHE_LINE=${ITCH_CACHE_LINE}")
+endif()
 itch_apply_options(itch_parser)
 
 if(EMSCRIPTEN)

@@ -31,6 +31,26 @@ itch_add_test(test_market_maker test_market_maker.cpp)
 # broken decoder's far-apart timestamps make these run for hours. A timeout makes that a
 # failure. The slowest, test_backtest_validity under TSan, takes about 10 s.
 set_tests_properties(test_backtest test_backtest_validity PROPERTIES TIMEOUT 60)
+# The ring's tests, and the stress tool that runs it without TSan. Both take the
+# negative-control switch; nothing else does.
+itch_add_test(test_spsc test_spsc.cpp)
+add_executable(spsc_stress spsc_stress.cpp)
+target_link_libraries(spsc_stress PRIVATE itch_test_support)
+itch_apply_options(spsc_stress)
+add_test(NAME spsc_stress_smoke COMMAND spsc_stress --rounds 4 --messages 50000)
+set_tests_properties(spsc_stress_smoke PROPERTIES LABELS unit)
+if(ITCH_SPSC_NEGATIVE_CONTROL)
+  if(NOT ITCH_SPSC_NEGATIVE_CONTROL MATCHES "^(publish|observe|return|reclaim)$")
+    message(FATAL_ERROR "ITCH_SPSC_NEGATIVE_CONTROL is publish, observe, return or reclaim")
+  endif()
+  string(TOUPPER "${ITCH_SPSC_NEGATIVE_CONTROL}" itch_weakened)
+  target_compile_definitions(test_spsc PRIVATE "ITCH_SPSC_WEAKEN_${itch_weakened}")
+  target_compile_definitions(spsc_stress PRIVATE "ITCH_SPSC_WEAKEN_${itch_weakened}")
+  message(STATUS "SPSC negative control: ${ITCH_SPSC_NEGATIVE_CONTROL} weakened to relaxed")
+endif()
+itch_add_test(test_pipeline test_pipeline.cpp)
+target_include_directories(test_pipeline PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+target_include_directories(test_alloc PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 itch_add_test(test_bench_platform test_bench_platform.cpp)
 itch_add_test(test_bench_replay test_bench_replay.cpp)
 target_include_directories(test_bench_platform PRIVATE "${PROJECT_SOURCE_DIR}/bench")
@@ -57,8 +77,13 @@ if(ITCH_BUILD_BENCH)
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_variants_cli.py"
             "$<TARGET_FILE:bench_variants>" "${CMAKE_CURRENT_BINARY_DIR}/bench_variants_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
+  add_test(NAME test_bench_spsc_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_spsc_cli.py"
+            "$<TARGET_FILE:bench_spsc>" "$<TARGET_FILE:bench_pipeline>"
+            "${CMAKE_CURRENT_BINARY_DIR}/bench_spsc_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
   set_tests_properties(test_bench_cli test_bench_backtest_cli test_bench_counts_cli
-    test_bench_variants_cli PROPERTIES LABELS unit)
+    test_bench_variants_cli test_bench_spsc_cli PROPERTIES LABELS unit)
 endif()
 
 if(ITCH_BUILD_TOOLS)
