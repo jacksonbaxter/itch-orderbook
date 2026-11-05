@@ -105,6 +105,7 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 | What | Host | Summary | Commit | File |
 |---|---|---|---|---|
 | The Zen 1 counter table on debian | debian | of 37 tried, 27 counts, 1 counts zero, 7 not supported, 2 refused | `5a16936a14e8` | [results/counters_zen1_events_debian.md](results/counters_zen1_events_debian.md) |
+| E7: dispatch form, debian, 12302019 | debian | fastest form threaded; branch misses a message spread 0.0702 across the book forms; E7 not refuted | `54e5dc3b4938` | [results/dispatch_debian_12302019.md](results/dispatch_debian_12302019.md) |
 | Flamegraph: the backtester, quoting on debian, 12302019 | debian | 119,933 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 38.53% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_backtest-quoting_debian_12302019.md](results/flamegraph_backtest-quoting_debian_12302019.md) |
 | Flamegraph: the map baseline, map-fresh on debian, 12302019 | debian | 243,786 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::rest_order` at 22.63% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_map-fresh_debian_12302019.md](results/flamegraph_map-fresh_debian_12302019.md) |
 | Flamegraph: the book replay, paged-flat on debian, 12302019 | debian | 105,077 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 42.14% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md) |
@@ -178,6 +179,7 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0020-20261105T171616Z` | `P-0020` | `54e5dc3b4938` | Linux | `withdrawn` |
 | `P-0020-20261105T172111Z` | `P-0020` | `54e5dc3b4938` | Linux | `published` |
 | `P-0021-20261105T174823Z` | `P-0021` | `54e5dc3b4938` | Linux | `published` |
+| `P-0022-20261105T181819Z` | `P-0022` | `54e5dc3b4938` | Linux | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
