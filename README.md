@@ -88,6 +88,25 @@ The backtester. Each row is one workload's results file: T-BT-1 replays the whol
 | quoting | T-BT-1 | 12302019 | macOS (M4 Max) | not pinned | 16,792,852 | 2.06% | 17,185,873 | host differs | `4fa6701df1cf` | [results/backtest_quoting_mac_12302019.md](results/backtest_quoting_mac_12302019.md) |
 | shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | 7,804,654 | 0.24% | 16,661,541 | met | `55978750888d` | [results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md) |
 
+The market maker on its report day, 12302019, a late-December session, with every parameter chosen on 10302019, an FOMC day. One symbol-day. No edge is claimed. 2 symbols on one day: each is its own symbol-day. The file gives S gross, fees, the markout curve and how Q-off and L-off each change the PnL. Dollars at the base fee tier; a replayed feed cannot react, so market impact is absent.
+
+| Symbol | Run | Fills | Shares | S, $ | A, $ | I, $ | Total, $ | Total, ticks a share | File |
+|---|---|---|---|---|---|---|---|---|---|
+| AMD | AS Base | 11 | 1,066 | +15.90 | -27.50 | -14.36 | -25.96 | -2.435 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| AMD | AS Q-off conservative | 10 | 901 | +14.94 | -18.51 | -20.07 | -23.64 | -2.623 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| AMD | AS Q-off proportional | 12 | 900 | +14.93 | -18.50 | -25.00 | -28.57 | -3.175 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| AMD | AS L-off | 7 | 700 | +14.23 | -15.00 | +2.00 | +1.23 | +0.176 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| AMD | AS both off, conservative | 7 | 700 | +14.23 | -15.00 | +2.00 | +1.23 | +0.176 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| AMD | AS both off, proportional | 12 | 900 | +18.43 | -15.50 | -59.50 | -56.57 | -6.286 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| AMD | GLFT Base | 11 | 1,066 | +16.79 | -30.50 | +18.64 | +4.93 | +0.463 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| BYND | AS Base | 53 | 3,299 | +143.64 | -165.11 | -393.04 | -414.51 | -12.565 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| BYND | AS Q-off conservative | 54 | 3,299 | +143.64 | -163.11 | -393.04 | -412.51 | -12.504 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| BYND | AS Q-off proportional | 58 | 3,271 | +142.31 | -158.53 | -393.25 | -409.46 | -12.518 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| BYND | AS L-off | 53 | 2,837 | +131.54 | -157.22 | -301.86 | -327.53 | -11.545 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| BYND | AS both off, conservative | 53 | 2,837 | +131.54 | -157.22 | -301.86 | -327.53 | -11.545 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| BYND | AS both off, proportional | 57 | 2,980 | +140.91 | -157.26 | -375.41 | -391.76 | -13.146 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+| BYND | GLFT Base | 66 | 3,624 | +152.26 | -184.33 | -430.67 | -462.74 | -12.769 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
+
 Every benchmark run, failed ones included, from [results/run_log.md](results/run_log.md).
 
 | Run | Prediction | Commit | OS | Outcome |
@@ -111,6 +130,7 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0102-20261104T113546Z` | `P-0102` | `55978750888d` | Darwin | `published` |
 | `P-0201-20261105T053845Z` | `P-0201` | `abfb37c88eb0` | Darwin | `published` |
 | `P-0201-20261105T053946Z` | `P-0201` | `9fee6ab0cb7b` | Darwin | `published` |
+| `P-0202-20261105T080745Z` | `P-0202` | `0999cb43a604` | Darwin | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.

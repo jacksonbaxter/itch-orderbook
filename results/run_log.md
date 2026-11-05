@@ -23,3 +23,4 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0102-20261104T113546Z | P-0102 | 55978750888d (clean) | Darwin | published |
 | P-0201-20261105T053845Z | P-0201 | abfb37c88eb0 (clean) | Darwin | published |
 | P-0201-20261105T053946Z | P-0201 | 9fee6ab0cb7b (clean) | Darwin | published |
+| P-0202-20261105T080745Z | P-0202 | 0999cb43a604 (clean) | Darwin | published |
