@@ -43,26 +43,21 @@
 namespace itch {
 
 // The size of the line the ring pads to, from the hardware, one constant for every
-// padded member. std::hardware_destructive_interference_size is not used: it is the
-// compiler's __GCC_DESTRUCTIVE_SIZE, which on this Mac is 256 under Apple clang 21 and
-// 128 under LLVM 23, and which GCC's own documentation calls unfit for a header because
-// it changes with the compiler (components.md, LC-17 to LC-20).
-#if defined(__APPLE__) && defined(__aarch64__)
-// Apple's cores move 128-byte lines: hw.cachelinesize is 128 on M-series, and XNU sizes
-// its L2 line as 1 << 7 (LC-21). Padding to 64 would leave both indices on one line.
-inline constexpr std::size_t kCacheLine = 128;
-static_assert(kCacheLine == 128, "Apple silicon moves 128-byte lines; 64 would false-share");
-#elif defined(__x86_64__)
-// 64 on every x86-64 part, AMD's Zen 1 on debian among them (LC-24).
-inline constexpr std::size_t kCacheLine = 64;
-static_assert(kCacheLine == 64, "x86-64 moves 64-byte lines");
-#elif defined(__aarch64__)
-// Arm's Neoverse and Cortex-A cores, the arm64 Linux CI runners among them, have 64-byte
-// lines. test_spsc reads the line size the system reports and fails on a mismatch.
-inline constexpr std::size_t kCacheLine = 64;
-#else
-#error "itch/spsc.hpp has no measured cache line size for this target"
-#endif
+// padded member, set for the build's target by cmake/ItchCacheLine.cmake, since parser
+// code holds no conditional compilation (scripts/gates.py): 128 on Apple silicon, whose
+// cores move 128-byte lines (hw.cachelinesize is 128 on M-series, and XNU sizes its L2
+// line as 1 << 7, LC-21), where 64 would leave both indices on one line; 64 on x86-64,
+// AMD's Zen 1 on debian among them (LC-24), and on other arm64 cores, the Linux CI
+// runners' Neoverse among them. A target CMake has no measured size for leaves it
+// undefined, and this does not compile. test_spsc asserts the value against the
+// compiler's own target at compile time and against the line size the system reports at
+// run time. std::hardware_destructive_interference_size is not used: it is the compiler's
+// __GCC_DESTRUCTIVE_SIZE, which on this Mac is 256 under Apple clang 21 and 128 under
+// LLVM 23, and which GCC's own documentation calls unfit for a header because it changes
+// with the compiler (components.md, LC-17 to LC-20).
+inline constexpr std::size_t kCacheLine = ITCH_CACHE_LINE;
+static_assert(kCacheLine == 64 || kCacheLine == 128,
+              "every line size measured for this project is 64 or 128 bytes");
 static_assert(std::has_single_bit(kCacheLine), "a line size is a power of two");
 
 enum class SpscWrap : std::uint8_t { mask, modulo };

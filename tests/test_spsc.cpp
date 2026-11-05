@@ -27,6 +27,17 @@
 #include "itch/spsc.hpp"
 #include "support/spsc_ordering.hpp"
 
+// The padding constant against the compiler's own target, so that a build that set it
+// wrong for the target does not compile: cmake/ItchCacheLine.cmake chooses it, and
+// include/itch/spsc.hpp may not hold a platform #if.
+#if defined(__APPLE__) && defined(__aarch64__)
+static_assert(itch::kCacheLine == 128, "Apple silicon moves 128-byte lines; 64 would false-share");
+#elif defined(__x86_64__)
+static_assert(itch::kCacheLine == 64, "x86-64 moves 64-byte lines");
+#elif defined(__aarch64__)
+static_assert(itch::kCacheLine == 64, "Neoverse and Cortex-A cores move 64-byte lines");
+#endif
+
 namespace {
 
 using itch::kCacheLine;
