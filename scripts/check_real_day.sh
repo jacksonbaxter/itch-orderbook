@@ -101,12 +101,12 @@ oracle() {
     observations=$log_dir/observations_${day}_$arm.txt
     flags=()
     while read -r word; do flags+=("$word"); done < <(arm_flags "$arm")
-    run_header "itch_oracle $file ${flags[*]}${flags[*]:+ }--observations <raw log>" >"$oracle_log"
+    run_header "itch_oracle $file ${flags[*]-}${flags[*]:+ }--observations <raw log>" >"$oracle_log"
     # shellcheck disable=SC2086
     $(timer) $wrapper build/release/tools/itch_oracle "$file" ${flags[@]+"${flags[@]}"} \
       --observations "$observations" >>"$oracle_log" 2>&1
     echo "real day: $day $arm itch_oracle exited $?"
-    run_header "itch_alloc $file${flags[*]:+ }${flags[*]}" >"$alloc_log"
+    run_header "itch_alloc $file${flags[*]:+ }${flags[*]-}" >"$alloc_log"
     # shellcheck disable=SC2086
     $(timer) $wrapper build/release/tools/itch_alloc "$file" ${flags[@]+"${flags[@]}"} \
       >>"$alloc_log" 2>&1
@@ -167,7 +167,7 @@ trades() {
     symbols=$log_dir/trades_symbols_${day}_$arm.txt
     flags=()
     while read -r word; do flags+=("$word"); done < <(arm_flags "$arm")
-    run_header "itch_trades ${args[*]} --symbols <raw log>${flags[*]:+ }${flags[*]}" \
+    run_header "itch_trades ${args[*]} --symbols <raw log>${flags[*]:+ }${flags[*]-}" \
       tools/itch_trades.cpp >"$log"
     # shellcheck disable=SC2086
     $(timer) $wrapper build/release/tools/itch_trades "${args[@]}" --symbols "$symbols" \
