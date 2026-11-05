@@ -160,6 +160,19 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn("results/new_kind.md", output)
 
+    def test_a_profile_gets_a_summary_row_and_one_without_a_summary_is_refused(self):
+        text = ("# Flamegraph: replay on debian\n\n## Header\n\n- host: debian\n"
+                "- commit: 0123456789ab (clean)\n- summary: 10 samples, cycles:u\n")
+        path = self.root / "results" / "flamegraph_fixture_debian_12302019.md"
+        path.write_text(text, encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        self.assertIn("| Flamegraph: replay on debian | debian | 10 samples, cycles:u | "
+                      "`0123456789ab` |", output)
+        path.write_text(text.replace("- summary:", "- note:"), encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+
     def test_a_verdict_no_row_took_up_is_refused(self):
         self.edit(ORACLE, "## T-ALLOC-1:", "## T-NEW-1: new\n\nVerdict: **FAIL**\n\n## T-ALLOC-1:")
         code, output = self.run_table()

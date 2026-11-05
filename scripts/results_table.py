@@ -195,6 +195,17 @@ def counters_rows(name, text):
     return rows
 
 
+def summary_row(name, text):
+    """A flamegraph, a macOS profile or a counter table: what it is, from its own summary."""
+    title = find(r"^# (.*)$", text, name)[1]
+    host = find(r"^- host: (.*)$", text, name)[1]
+    summary = find(r"^- summary: (.*)$", text, name)[1]
+    return (title, host, summary, f"`{header_commit(text, name)}`", source(name))
+
+
+SUMMARY_PREFIXES = ("flamegraph_", "profile_", "counters_zen1_")
+
+
 def fault_row(name, text):
     result = find(r"^- Result: (.*)$", text, name)[1]
     controls = find(r"^- Controls: (.*)$", text, name)[1]
@@ -292,6 +303,7 @@ def generate(root):
     throughput = []
     books = []
     backtests = []
+    summaries = []
     for path in sorted((root / "results").glob("*.md")):
         name = path.name
         if name in NOT_RESULTS:
@@ -305,6 +317,9 @@ def generate(root):
             rows = chase_rows(name, text)
         elif name.startswith("counters_by_type_"):
             rows = counters_rows(name, text)
+        elif name.startswith(SUMMARY_PREFIXES):
+            summaries.append(summary_row(name, text))
+            rows = []
         elif name == "fault_matrix.md":
             faults.append(fault_row(name, text))
             rows = []
@@ -348,6 +363,11 @@ def generate(root):
         lines += markdown_table(("Workload", "Target", "Day", "Host", "Pinning",
                                  "Median messages/s", "CV", "Engine events/s", "Verdict",
                                  "Commit", "File"), backtests)
+    if summaries:
+        lines += ["", "Profiles and counter tables. A flamegraph shows where the samples fell, "
+                      "not a rate, and a macOS profile never stands in for `perf` on `debian`. "
+                      "Each file says what it cannot show.", ""]
+        lines += markdown_table(("What", "Host", "Summary", "Commit", "File"), summaries)
     lines += ["", "Every benchmark run, failed ones included, from "
                   "[results/run_log.md](results/run_log.md).", ""]
     lines += markdown_table(("Run", "Prediction", "Commit", "OS", "Outcome"), run_rows(run_log))

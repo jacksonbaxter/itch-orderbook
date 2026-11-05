@@ -93,6 +93,12 @@ The backtester. Each row is one workload's results file: T-BT-1 replays the whol
 | quoting | T-BT-1 | 12302019 | macOS (M4 Max) | not pinned | 16,792,852 | 2.06% | 17,185,873 | host differs | `4fa6701df1cf` | [results/backtest_quoting_mac_12302019.md](results/backtest_quoting_mac_12302019.md) |
 | shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | 7,804,654 | 0.24% | 16,661,541 | met | `55978750888d` | [results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md) |
 
+Profiles and counter tables. A flamegraph shows where the samples fell, not a rate, and a macOS profile never stands in for `perf` on `debian`. Each file says what it cannot show.
+
+| What | Host | Summary | Commit | File |
+|---|---|---|---|---|
+| Flamegraph: book replay, paged-flat on macOS (M4 Max), 12302019 | macOS (M4 Max) | 19,118 samples, wall-clock stacks every 1 ms, the hottest frame `itch::FastBook<…>::apply` at 38.24% self | `5a16936a14e8` | [results/profile_paged-flat_mac_12302019.md](results/profile_paged-flat_mac_12302019.md) |
+
 Every benchmark run, failed ones included, from [results/run_log.md](results/run_log.md).
 
 | Run | Prediction | Commit | OS | Outcome |

@@ -3426,6 +3426,174 @@
         "signature": "FAIL: test_check_catches_a_total_edited_after_the_fact",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-flame-report-private-unchecked",
+      "breaks": "--check passes an SVG that names this machine",
+      "check": "test_flame_report.py test_check_catches_a_private_name_in_the_svg",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "        leaked = private_found(body)\n",
+          "new": "        leaked = None\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_private_name_in_the_svg",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-samples-unchecked",
+      "breaks": "--check passes a sample count that differs from the SVG's",
+      "check": "test_flame_report.py test_check_catches_a_sample_count_that_differs",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    if drawn is None or stated is None or drawn.group(1) != stated.group(1):",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_sample_count_that_differs",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-build-unchecked",
+      "breaks": "render draws a perf graph from a build without frame pointers",
+      "check": "test_flame_report.py test_a_perf_graph_from_a_build_without_frame_pointers_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    if args.source == \"perf\" and not mentions_frame_pointers(header.get(\"flags\", \"\")):",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_perf_graph_from_a_build_without_frame_pointers_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-delta-unchecked",
+      "breaks": "--check passes a debian graph without the frame-pointer build's delta",
+      "check": "test_flame_report.py test_check_catches_a_debian_graph_without_its_build_or_delta",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "        if \"frame_pointer_ratio\" not in fields or \"## The frame-pointer build\" not in text:",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_debian_graph_without_its_build_or_delta",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-fold-inclusive",
+      "breaks": "fold-sample charges a frame its callees' samples as its own",
+      "check": "test_flame_report.py test_a_sample_tree_folds_to_each_frames_own_samples",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "                stacks[names] += count - callees",
+          "new": "                stacks[names] += count"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_sample_tree_folds_to_each_frames_own_samples",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-zen1-names-unchecked",
+      "breaks": "--check passes a Zen 1 table that names cache-misses without saying L2 misses",
+      "check": "test_zen1_events.py test_the_written_file_passes_its_check_and_a_dropped_name_does_not",
+      "mutations": [
+        {
+          "file": "scripts/zen1_events.py",
+          "old": "            if pattern.search(line) and said not in line:",
+          "new": "            if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_zen1_events.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_written_file_passes_its_check_and_a_dropped_name_does_not",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-zen1-states-unchecked",
+      "breaks": "--check passes a state the script never writes",
+      "check": "test_zen1_events.py test_check_catches_a_state_it_never_writes",
+      "mutations": [
+        {
+          "file": "scripts/zen1_events.py",
+          "old": "            if cells[2].split(\",\")[0] not in STATES:",
+          "new": "            if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_zen1_events.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_state_it_never_writes",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-zen1-one-replay",
+      "breaks": "Part B per-message figures divide by one replay where the process ran two",
+      "check": "test_zen1_events.py test_per_message_figures_divide_by_both_replays",
+      "mutations": [
+        {
+          "file": "scripts/zen1_events.py",
+          "old": "    replayed = 2 * messages",
+          "new": "    replayed = messages"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_zen1_events.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_per_message_figures_divide_by_both_replays",
+        "exit": 1
+      }
     }
   ]
 }

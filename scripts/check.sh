@@ -105,6 +105,8 @@ stage_bench() {
     python_test scripts/test_backtest_results.py &&
     python_test scripts/test_chase_report.py &&
     python_test scripts/test_counts_report.py &&
+    python_test scripts/test_flame_report.py &&
+    python_test scripts/test_zen1_events.py &&
     python_test scripts/gate_numbers.py &&
     python_test scripts/check_predictions.py || return 1
   results=$(find results -name 'bench_*.md' -o -name 'backtest_*.md')
@@ -118,6 +120,13 @@ stage_bench() {
   for counts in results/counters_by_type_*.md; do
     [ -f "$counts" ] || continue
     python_test scripts/counts_report.py --check "$counts" || return 1
+  done
+  if [ -f results/counters_zen1_events_debian.md ]; then
+    python_test scripts/zen1_events.py --check results/counters_zen1_events_debian.md || return 1
+  fi
+  for graph in results/flamegraph_*.md results/profile_*.md; do
+    [ -f "$graph" ] || continue
+    python_test scripts/flame_report.py --check "$graph" || return 1
   done
   build_preset release && ctest --preset release -R '^test_bench'
 }
