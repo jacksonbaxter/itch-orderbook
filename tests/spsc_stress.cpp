@@ -107,16 +107,23 @@ struct Tally {
   std::uint64_t torn = 0;
   std::uint64_t first_bad_round = 0;
   bool seen_bad = false;
+  bool stalled = false;
 };
+
+// How long the consumer waits on an empty ring before it calls the round stalled, so that
+// a ring that loses items or never sees them ends the run instead of hanging it.
+constexpr std::chrono::seconds kStallLimit{10};
+constexpr std::uint64_t kPollsPerClockRead = std::uint64_t{1} << 20U;
 
 // One round: the producer on a thread of its own, alternating single pushes with batches
 // of three, and the consumer here.
 void run_round(const Options& options, std::uint64_t index, Tally& tally) {
   const auto ring = std::make_unique<Ring>(options.capacity);
-  std::thread producer{[&ring, &options] {
+  std::atomic<bool> abandon{false};
+  std::thread producer{[&ring, &options, &abandon] {
     std::array<Item, 3> batch{};
     std::uint64_t next = 0;
-    while (next < options.messages) {
+    while (next < options.messages && !abandon.load(std::memory_order_relaxed)) {
       if (next % 2 == 0) {
         Item item;
         item.fill(next);
@@ -133,8 +140,23 @@ void run_round(const Options& options, std::uint64_t index, Tally& tally) {
   }};
   Item item;
   std::uint64_t wrong = 0;
+  std::uint64_t polls = 0;
+  std::uint64_t checked_place = 0;
+  auto checked_at = std::chrono::steady_clock::now();
   for (std::uint64_t place = 0; place < options.messages;) {
     if (!ring->try_pop(item)) {
+      if (++polls % kPollsPerClockRead == 0) {
+        const auto now = std::chrono::steady_clock::now();
+        if (place != checked_place) {
+          checked_place = place;
+          checked_at = now;
+        } else if (now - checked_at > kStallLimit) {
+          abandon.store(true, std::memory_order_relaxed);
+          tally.stalled = true;
+          wrong += options.messages - place;
+          break;
+        }
+      }
       continue;
     }
     tally.wrong_sequence += item.sequence == place ? 0U : 1U;
@@ -160,6 +182,7 @@ int run(int argc, char** argv) {
   }
   std::atomic<bool> stop{false};
   std::vector<std::thread> noise;
+  noise.reserve(options.noise);
   for (std::uint64_t n = 0; n < options.noise; ++n) {
     noise.emplace_back([&stop, &options] {
       std::vector<std::uint64_t> bytes(options.noise_mib * (std::size_t{1} << 20U) / 8);
@@ -176,7 +199,7 @@ int run(int argc, char** argv) {
                TestOrdering::kWeakened);
   const auto started = std::chrono::steady_clock::now();
   Tally tally;
-  for (std::uint64_t index = 0; index < options.rounds; ++index) {
+  for (std::uint64_t index = 0; index < options.rounds && !tally.stalled; ++index) {
     run_round(options, index, tally);
   }
   const std::chrono::duration<double> took = std::chrono::steady_clock::now() - started;
@@ -191,7 +214,8 @@ int run(int argc, char** argv) {
       options.noise, options.noise_mib, tally.messages, tally.wrong_sequence, tally.torn,
       took.count());
   if (tally.seen_bad) {
-    std::println("spsc_stress: FAIL, first in round {}", tally.first_bad_round);
+    std::println("spsc_stress: FAIL, first in round {}{}", tally.first_bad_round,
+                 tally.stalled ? ", where the consumer waited 10 s for an item and gave up" : "");
     return 1;
   }
   std::println("spsc_stress: pass");

@@ -177,8 +177,9 @@ template <class Number>
       plan.byte_sum += item.bytes[b];
     }
     plan.items.push_back(item);
-    plan.due_ticks.push_back(static_cast<std::uint64_t>(
-        static_cast<double>((at - first) / options.burst_speedup) * timer.calibrated_hz / 1e9));
+    plan.due_ticks.push_back(static_cast<std::uint64_t>(static_cast<double>(at - first) /
+                                                        static_cast<double>(options.burst_speedup) *
+                                                        timer.calibrated_hz / 1e9));
   }
   return plan;
 }
@@ -283,7 +284,7 @@ struct Variant {
 };
 
 template <class Run>
-void each_variant(Run&& run) {
+void each_variant(const Run& run) {
   run("shipped", Variant<SpscConfig{}>{});
   run("uncached", Variant<SpscConfig{.cached_indices = false}>{});
   run("modulo", Variant<SpscConfig{.wrap = SpscWrap::modulo}>{});
@@ -344,6 +345,42 @@ void ablation_rows(std::vector<Row>& rows, const Options& options, const TimerIn
   return std::format("unpinned, last ran on core {}", migrations.last_core());
 }
 
+// Each element through `render`, joined with ", ".
+template <class Range, class Render>
+[[nodiscard]] std::string joined(const Range& range, const Render& render) {
+  std::string text;
+  for (const auto& element : range) {
+    text += (text.empty() ? "" : ", ") + render(element);
+  }
+  return text;
+}
+
+[[nodiscard]] std::string header_json(const std::vector<HeaderField>& header) {
+  return joined(header, [](const HeaderField& field) {
+    return std::format("{}: {}", json_string(field.first), json_string(field.second));
+  });
+}
+
+// Every reason the run cannot be published.
+[[nodiscard]] std::vector<std::string> refusals_of(const PinOutcome& pin,
+                                                   const std::vector<Row>& rows) {
+  std::vector<std::string> refusals;
+  if (kPinningRequired && !pin.pinned) {
+    refusals.push_back(pinning_field(pin));
+  }
+  for (const Row& row : rows) {
+    if (row.run.errors != 0) {
+      refusals.push_back(
+          std::format("{} {}: {} items wrong", row.queue, row.protocol, row.run.errors));
+    }
+    if (kPinningRequired && !row.run.peer_pin.pinned) {
+      refusals.push_back(std::format("{} {}: the peer was not pinned: {}", row.queue, row.protocol,
+                                     pinning_field(row.run.peer_pin)));
+    }
+  }
+  return refusals;
+}
+
 int run(int argc, char** argv) {
   Options options;
   if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
@@ -369,10 +406,6 @@ int run(int argc, char** argv) {
     std::println(stderr, "bench_spsc: no message in the burst stretch");
     return 2;
   }
-  std::vector<std::string> refusals;
-  if (kPinningRequired && !pin.pinned) {
-    refusals.push_back(pinning_field(pin));
-  }
   std::vector<Row> rows;
   if (options.suite == Suite::queues) {
     queue_rows(rows, options, timer, plan);
@@ -380,16 +413,7 @@ int run(int argc, char** argv) {
     ablation_rows(rows, options, timer, plan);
   }
   migrations.sample();
-  for (const Row& row : rows) {
-    if (row.run.errors != 0) {
-      refusals.push_back(
-          std::format("{} {}: {} items wrong", row.queue, row.protocol, row.run.errors));
-    }
-    if (kPinningRequired && !row.run.peer_pin.pinned) {
-      refusals.push_back(std::format("{} {}: the peer was not pinned: {}", row.queue, row.protocol,
-                                     pinning_field(row.run.peer_pin)));
-    }
-  }
+  const std::vector<std::string> refusals = refusals_of(pin, rows);
   const std::vector<HeaderField> header = build_header(
       live_source(),
       {.compiler = __VERSION__,
@@ -411,11 +435,7 @@ int run(int argc, char** argv) {
        .rdpmc = unavailable("bench_spsc reads no counters"),
        .page_size = std::format("{} bytes, base pages", base_page_size()),
        .residency = resident(file->bytes()).describe()});
-  std::string json = "{\"header\": {";
-  for (std::size_t i = 0; i < header.size(); ++i) {
-    json += std::format("{}{}: {}", i == 0 ? "" : ", ", json_string(header[i].first),
-                        json_string(header[i].second));
-  }
+  std::string json = "{\"header\": {" + header_json(header);
   json += std::format(
       R"(}}, "suite": {}, "capacity": {}, "batch": {}, "element_bytes": 8, )"
       R"("burst_element_bytes": {}, "cache_line": {}, "peer_core": {}, "rotate": {}, )"
@@ -429,11 +449,7 @@ int run(int argc, char** argv) {
   for (std::size_t i = 0; i < rows.size(); ++i) {
     json += (i == 0 ? "\n  " : ",\n  ") + row_json(rows[i], timer);
   }
-  json += "], \"refusals\": [";
-  for (std::size_t i = 0; i < refusals.size(); ++i) {
-    json += (i == 0 ? "" : ", ") + json_string(refusals[i]);
-  }
-  json += "]}\n";
+  json += "], \"refusals\": [" + joined(refusals, json_string) + "]}\n";
   std::ofstream out{options.out};
   out << json;
   if (!out) {

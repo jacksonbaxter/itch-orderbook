@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <print>
@@ -16,9 +18,9 @@
 #include <thread>
 #include <vector>
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 #include <sys/sysctl.h>
-#elif defined(__linux__)
+#elifdef __linux__
 #include <unistd.h>
 
 #include <fstream>
@@ -32,9 +34,9 @@
 // include/itch/spsc.hpp may not hold a platform #if.
 #if defined(__APPLE__) && defined(__aarch64__)
 static_assert(itch::kCacheLine == 128, "Apple silicon moves 128-byte lines; 64 would false-share");
-#elif defined(__x86_64__)
+#elifdef __x86_64__
 static_assert(itch::kCacheLine == 64, "x86-64 moves 64-byte lines");
-#elif defined(__aarch64__)
+#elifdef __aarch64__
 static_assert(itch::kCacheLine == 64, "Neoverse and Cortex-A cores move 64-byte lines");
 #endif
 
@@ -91,14 +93,22 @@ void expect_fifo(std::size_t capacity) {
     for (std::size_t i = 0; i < want_in; ++i) {
       batch[i] = pushed + i;
     }
-    const std::size_t in = round % 2 == 0 ? ring.try_push_batch(std::span{batch}.first(want_in))
-                                          : static_cast<std::size_t>(ring.try_push(pushed) ? 1 : 0);
+    std::size_t in = 0;
+    if (round % 2 == 0) {
+      in = ring.try_push_batch(std::span{batch}.first(want_in));
+    } else if (ring.try_push(pushed)) {
+      in = 1;
+    }
     pushed += in;
     ASSERT_LE(pushed - popped, ring.capacity());
     const std::size_t want_out = 1 + (round * 5 % 11);
     std::array<std::uint64_t, 13> out{};
-    const std::size_t got = round % 3 == 0 ? ring.try_pop_batch(std::span{out}.first(want_out))
-                                           : static_cast<std::size_t>(ring.try_pop(out[0]) ? 1 : 0);
+    std::size_t got = 0;
+    if (round % 3 == 0) {
+      got = ring.try_pop_batch(std::span{out}.first(want_out));
+    } else if (ring.try_pop(out[0])) {
+      got = 1;
+    }
     for (std::size_t i = 0; i < got; ++i) {
       ASSERT_EQ(out[i], popped + i) << "round " << round;
     }
@@ -182,11 +192,11 @@ TEST(SpscRing, PadsEachSideToItsOwnLine) {
 
 // The line size the system reports, or 0 when it reports none.
 [[nodiscard]] std::size_t reported_line() {
-#if defined(__APPLE__)
+#ifdef __APPLE__
   std::uint64_t line = 0;
   std::size_t size = sizeof(line);
   return ::sysctlbyname("hw.cachelinesize", &line, &size, nullptr, 0) == 0 ? line : 0;
-#elif defined(__linux__)
+#elifdef __linux__
   const long line = ::sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
   if (line > 0) {
     return static_cast<std::size_t>(line);
@@ -208,16 +218,50 @@ TEST(SpscRing, PaddingConstantIsTheHardwareLine) {
   EXPECT_EQ(kCacheLine, line);
 }
 
+// How long a consumer waits on an empty ring before it calls the handover stalled, so
+// that a ring that loses items, or never sees them, fails the test instead of hanging it.
+constexpr std::chrono::seconds kStallLimit{10};
+
+// Pops until `items` have arrived, `check` returns false, or the ring has given nothing for
+// kStallLimit, and then tells the producer to stop. Returns how many arrived in order.
+template <class Ring, class Pop, class Check>
+std::uint64_t consume(Ring& ring, std::uint64_t items, std::atomic<bool>& abandon, Pop pop,
+                      Check check) {
+  std::uint64_t expected = 0;
+  auto progress = std::chrono::steady_clock::now();
+  std::uint64_t polls = 0;
+  while (expected < items) {
+    const std::size_t got = pop(ring, expected);
+    if (got == 0) {
+      if (++polls % 4096 == 0 && std::chrono::steady_clock::now() - progress > kStallLimit) {
+        break;
+      }
+      continue;
+    }
+    if (!check(expected, got)) {
+      break;
+    }
+    expected += got;
+    progress = std::chrono::steady_clock::now();
+  }
+  abandon.store(true, std::memory_order_relaxed);
+  return expected;
+}
+
 // A producer and a consumer on two threads, the producer alternating single pushes with
 // batches and the consumer single pops with batches, through a small ring so that it is
-// full and empty again and again. Every item must arrive once, in order, whole.
+// full and empty again and again. Every item must arrive once, in order, whole. A 256-byte
+// item checks that no item arrives torn; its copy is a memcpy, which TSan on this Mac did
+// not check for the race a weakened order leaves (NOTES.md, "The SPSC ring"), so an 8-byte
+// item, copied by a single load and store, runs the same handover for TSan to see.
 template <SpscConfig Config>
 void expect_handover(std::uint64_t items) {
   SpscRing<Stamped, Config, TestOrdering> ring{16};
-  std::thread producer{[&ring, items] {
+  std::atomic<bool> abandon{false};
+  std::thread producer{[&ring, &abandon, items] {
     std::array<Stamped, 5> batch{};
     std::uint64_t next = 0;
-    while (next < items) {
+    while (next < items && !abandon.load(std::memory_order_relaxed)) {
       if (next % 2 == 0) {
         next += ring.try_push(Stamped::of(next)) ? 1 : 0;
         continue;
@@ -229,20 +273,63 @@ void expect_handover(std::uint64_t items) {
       next += ring.try_push_batch(std::span{batch}.first(want));
     }
   }};
-  std::uint64_t expected = 0;
-  std::uint64_t wrong = 0;
   std::array<Stamped, 7> out{};
-  while (expected < items && wrong == 0) {
-    const std::size_t got = expected % 3 == 0 ? ring.try_pop_batch(out)
-                                              : static_cast<std::size_t>(ring.try_pop(out[0]));
-    for (std::size_t i = 0; i < got; ++i) {
-      wrong += out[i].sequence == expected + i && out[i].intact() ? 0U : 1U;
-    }
-    expected += got;
-  }
+  const std::uint64_t arrived = consume(
+      ring, items, abandon,
+      [&out](auto& r, std::uint64_t expected) {
+        return expected % 3 == 0 ? r.try_pop_batch(out)
+                                 : static_cast<std::size_t>(r.try_pop(out[0]));
+      },
+      [&out](std::uint64_t expected, std::size_t got) {
+        for (std::size_t i = 0; i < got; ++i) {
+          if (out[i].sequence != expected + i || !out[i].intact()) {
+            return false;
+          }
+        }
+        return true;
+      });
   producer.join();
-  EXPECT_EQ(wrong, 0U) << "an item arrived out of order or torn, near " << expected;
-  EXPECT_EQ(expected, items);
+  EXPECT_EQ(arrived, items) << "an item arrived out of order or torn, or none came for "
+                            << kStallLimit.count() << " s, after " << arrived;
+}
+
+template <SpscConfig Config>
+void expect_word_handover(std::uint64_t items) {
+  SpscRing<std::uint64_t, Config, TestOrdering> ring{16};
+  std::atomic<bool> abandon{false};
+  std::thread producer{[&ring, &abandon, items] {
+    std::array<std::uint64_t, 5> batch{};
+    std::uint64_t next = 0;
+    while (next < items && !abandon.load(std::memory_order_relaxed)) {
+      if (next % 2 == 0) {
+        next += ring.try_push(next) ? 1 : 0;
+        continue;
+      }
+      const std::size_t want = static_cast<std::size_t>(std::min<std::uint64_t>(5, items - next));
+      for (std::size_t i = 0; i < want; ++i) {
+        batch[i] = next + i;
+      }
+      next += ring.try_push_batch(std::span{batch}.first(want));
+    }
+  }};
+  std::array<std::uint64_t, 7> out{};
+  const std::uint64_t arrived = consume(
+      ring, items, abandon,
+      [&out](auto& r, std::uint64_t expected) {
+        return expected % 3 == 0 ? r.try_pop_batch(out)
+                                 : static_cast<std::size_t>(r.try_pop(out[0]));
+      },
+      [&out](std::uint64_t expected, std::size_t got) {
+        for (std::size_t i = 0; i < got; ++i) {
+          if (out[i] != expected + i) {
+            return false;
+          }
+        }
+        return true;
+      });
+  producer.join();
+  EXPECT_EQ(arrived, items) << "a word arrived out of order, or none came for "
+                            << kStallLimit.count() << " s, after " << arrived;
 }
 
 // TSan runs each access through its runtime, so fewer items there.
@@ -254,6 +341,14 @@ TEST(SpscRing, TwoThreadsHandOverEveryItemInOrder) {
   expect_handover<kUncached>(kHandover);
   expect_handover<kModulo>(kHandover);
   expect_handover<kSingle>(kHandover);
+}
+
+TEST(SpscRing, TwoThreadsHandOverEveryWordInOrder) {
+  std::println("orders: {} ({})", itch::testing::ordering_label(), TestOrdering::kWeakened);
+  expect_word_handover<kShipped>(kHandover);
+  expect_word_handover<kUncached>(kHandover);
+  expect_word_handover<kModulo>(kHandover);
+  expect_word_handover<kSingle>(kHandover);
 }
 
 }  // namespace

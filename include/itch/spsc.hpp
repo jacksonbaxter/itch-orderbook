@@ -36,9 +36,9 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <span>
 #include <type_traits>
+#include <vector>
 
 namespace itch {
 
@@ -91,8 +91,8 @@ class SpscRing {
   // queue does. At least one slot.
   explicit SpscRing(std::size_t capacity)
       : shared_{.slots = nullptr, .capacity = slots_for(capacity), .mask = slots_for(capacity) - 1},
-        storage_(std::make_unique<T[]>(shared_.capacity)) {
-    shared_.slots = storage_.get();
+        storage_(shared_.capacity) {
+    shared_.slots = storage_.data();
   }
 
   SpscRing(const SpscRing&) = delete;
@@ -235,7 +235,7 @@ class SpscRing {
   Producer producer_;
   Consumer consumer_;
   Shared shared_;
-  std::unique_ptr<T[]> storage_;  // Owns what shared_.slots points at.
+  std::vector<T> storage_;  // Owns what shared_.slots points at; never resized.
 };
 
 }  // namespace itch

@@ -50,7 +50,6 @@ using itch::oracle::AllocCounts;
 using itch::oracle::AllocForm;
 using itch::oracle::read_alloc_counts;
 using itch::oracle::reset_alloc_counts;
-namespace wire = itch::oracle::wire;
 using itch::testing::build_stream;
 
 template <class Apply>

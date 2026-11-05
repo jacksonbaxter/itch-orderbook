@@ -182,7 +182,7 @@ inline constexpr bool kHaveComparisonQueues = false;
 // Calls `run` with a null pointer of the named queue's type over T, so that the caller
 // builds it; false for a name this build does not have.
 template <class T, class Run>
-bool with_queue(std::string_view name, Run&& run) {
+bool with_queue(std::string_view name, const Run& run) {
   if (name == "project") {
     run(static_cast<ProjectQueue<T>*>(nullptr));
     return true;

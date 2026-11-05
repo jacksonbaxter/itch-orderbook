@@ -17,16 +17,16 @@
 namespace itch::testing {
 
 struct TestOrdering : SpscOrdering {
-#if defined(ITCH_SPSC_WEAKEN_PUBLISH)
+#ifdef ITCH_SPSC_WEAKEN_PUBLISH
   static constexpr std::memory_order kPublish = std::memory_order_relaxed;
   static constexpr std::string_view kWeakened = "publish";
-#elif defined(ITCH_SPSC_WEAKEN_OBSERVE)
+#elifdef ITCH_SPSC_WEAKEN_OBSERVE
   static constexpr std::memory_order kObserve = std::memory_order_relaxed;
   static constexpr std::string_view kWeakened = "observe";
-#elif defined(ITCH_SPSC_WEAKEN_RETURN)
+#elifdef ITCH_SPSC_WEAKEN_RETURN
   static constexpr std::memory_order kReturn = std::memory_order_relaxed;
   static constexpr std::string_view kWeakened = "return";
-#elif defined(ITCH_SPSC_WEAKEN_RECLAIM)
+#elifdef ITCH_SPSC_WEAKEN_RECLAIM
   static constexpr std::memory_order kReclaim = std::memory_order_relaxed;
   static constexpr std::string_view kWeakened = "reclaim";
 #else
@@ -34,9 +34,9 @@ struct TestOrdering : SpscOrdering {
 #endif
 };
 
-#if defined(__SANITIZE_THREAD__)
+#ifdef __SANITIZE_THREAD__
 inline constexpr bool kUnderTsan = true;
-#elif defined(__has_feature)
+#elifdef __has_feature
 #if __has_feature(thread_sanitizer)
 inline constexpr bool kUnderTsan = true;
 #else

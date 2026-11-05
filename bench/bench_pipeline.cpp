@@ -198,6 +198,50 @@ struct Pass {
   return std::format("unpinned, last ran on core {}", migrations.last_core());
 }
 
+// Each element through `render`, joined with ", ".
+template <class Range, class Render>
+[[nodiscard]] std::string joined(const Range& range, const Render& render) {
+  std::string text;
+  for (const auto& element : range) {
+    text += (text.empty() ? "" : ", ") + render(element);
+  }
+  return text;
+}
+
+[[nodiscard]] std::string header_json(const std::vector<HeaderField>& header) {
+  return joined(header, [](const HeaderField& field) {
+    return std::format("{}: {}", json_string(field.first), json_string(field.second));
+  });
+}
+
+// Every reason the run cannot be published.
+[[nodiscard]] std::vector<std::string> refusals_of(const PinOutcome& pin,
+                                                   const std::vector<Pass>& warm,
+                                                   const std::vector<Pass>& timed,
+                                                   const std::array<Residency, 3>& residency) {
+  std::vector<std::string> refusals;
+  if (kPinningRequired && !pin.pinned) {
+    refusals.push_back(pinning_field(pin));
+  }
+  for (const Pass& pass : timed) {
+    if (kPinningRequired && pass.mode == "pipelined" && !pass.counts.parser_pin.pinned) {
+      refusals.push_back("the parser thread was not pinned: " +
+                         pinning_field(pass.counts.parser_pin));
+    }
+  }
+  for (const Residency& check : residency) {
+    if (!check.complete()) {
+      refusals.push_back(std::format("input not resident: {}", check.describe()));
+    }
+  }
+  std::vector<Pass> every{warm};
+  every.insert(every.end(), timed.begin(), timed.end());
+  for (std::string& reason : disagreements(every)) {
+    refusals.push_back(std::move(reason));
+  }
+  return refusals;
+}
+
 int run(int argc, char** argv) {
   Options options;
   if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
@@ -241,26 +285,7 @@ int run(int argc, char** argv) {
   }
   residency[2] = resident(day);
 
-  std::vector<std::string> refusals;
-  if (kPinningRequired && !pin.pinned) {
-    refusals.push_back(pinning_field(pin));
-  }
-  for (const Pass& pass : timed) {
-    if (kPinningRequired && pass.mode == "pipelined" && !pass.counts.parser_pin.pinned) {
-      refusals.push_back("the parser thread was not pinned: " +
-                         pinning_field(pass.counts.parser_pin));
-    }
-  }
-  for (const Residency& check : residency) {
-    if (!check.complete()) {
-      refusals.push_back(std::format("input not resident: {}", check.describe()));
-    }
-  }
-  std::vector<Pass> every{warm};
-  every.insert(every.end(), timed.begin(), timed.end());
-  for (std::string& reason : disagreements(every)) {
-    refusals.push_back(std::move(reason));
-  }
+  const std::vector<std::string> refusals = refusals_of(pin, warm, timed, residency);
 
   const std::vector<HeaderField> header = build_header(
       live_source(),
@@ -282,11 +307,7 @@ int run(int argc, char** argv) {
        .rdpmc = unavailable("bench_pipeline reads no counters"),
        .page_size = std::format("{} bytes, base pages", base_page_size()),
        .residency = residency[2].describe()});
-  std::string json = "{\"header\": {";
-  for (std::size_t i = 0; i < header.size(); ++i) {
-    json += std::format("{}{}: {}", i == 0 ? "" : ", ", json_string(header[i].first),
-                        json_string(header[i].second));
-  }
+  std::string json = "{\"header\": {" + header_json(header);
   json += std::format(
       R"(}}, "suite": "pipeline", "design": "paged-flat", "capacity": {}, "batch": {}, )"
       R"("op_bytes": {}, "cache_line": {}, "peer_core": {}, "rotate": {}, )"
@@ -295,18 +316,8 @@ int run(int argc, char** argv) {
       kPipelineCapacity, kPipelineBatch, sizeof(itch::BookOp), itch::kCacheLine, options.peer_core,
       options.rotate, json_string(residency[0].describe()), json_string(residency[1].describe()),
       json_string(residency[2].describe()), migrations.migrations(), peak_rss_bytes());
-  for (std::size_t i = 0; i < warm.size(); ++i) {
-    json += (i == 0 ? "" : ", ") + pass_json(warm[i]);
-  }
-  json += "], \"timed\": [";
-  for (std::size_t i = 0; i < timed.size(); ++i) {
-    json += (i == 0 ? "" : ", ") + pass_json(timed[i]);
-  }
-  json += "], \"refusals\": [";
-  for (std::size_t i = 0; i < refusals.size(); ++i) {
-    json += (i == 0 ? "" : ", ") + json_string(refusals[i]);
-  }
-  json += "]}\n";
+  json += joined(warm, pass_json) + "], \"timed\": [" + joined(timed, pass_json) +
+          "], \"refusals\": [" + joined(refusals, json_string) + "]}\n";
   std::ofstream out{options.out};
   out << json;
   if (!out) {
