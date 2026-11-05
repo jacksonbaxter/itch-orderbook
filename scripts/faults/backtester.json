@@ -743,7 +743,7 @@
         {
           "file": "include/itch/backtest.hpp",
           "old": "case QueueModel::conservative: sim.ahead = std::min(sim.ahead, left); break;",
-          "new": "case QueueModel::conservative: sim.ahead -= std::min<std::uint64_t>(sim.ahead, shares); break;"
+          "new": "case QueueModel::conservative: static_cast<void>(left); sim.ahead -= std::min<std::uint64_t>(sim.ahead, shares); break;"
         }
       ],
       "build": {
@@ -767,7 +767,7 @@
         {
           "file": "include/itch/backtest.hpp",
           "old": "case QueueModel::conservative: sim.ahead = std::min(sim.ahead, left); break;",
-          "new": "case QueueModel::conservative: break;"
+          "new": "case QueueModel::conservative: static_cast<void>(left); break;"
         }
       ],
       "build": {
@@ -791,7 +791,7 @@
         {
           "file": "include/itch/backtest.hpp",
           "old": "case QueueModel::conservative: sim.ahead = std::min(sim.ahead, left); break;",
-          "new": "case QueueModel::conservative: break;"
+          "new": "case QueueModel::conservative: static_cast<void>(left); break;"
         }
       ],
       "build": {
