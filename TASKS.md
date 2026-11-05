@@ -185,12 +185,13 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [x] Report `hidden_prints_at_sim_price` with T-BT-1 as a bound on fills the model cannot see (6,331 on the 12302019 smoke). In each results file's counts: 5,068 in T-BT-1 and 7,109 in T-BT-3.
 
 ### Market maker
-- [ ] Avellaneda-Stoikov as the demo, with the finite-horizon form as named by the user. GLFT stationary form as a labelled variant, because the evidence recommends it on tick-constrained stocks.
+- [x] Avellaneda-Stoikov as the demo, with the finite-horizon form as named by the user. GLFT stationary form as a labelled variant, because the evidence recommends it on tick-constrained stocks. `include/itch/mm/quoting.hpp` and `strategy.hpp`, on the backtester's strategy interface, integer prices from the rounding on, no allocation after construction (`test_alloc`). Not yet run on a real day. NOTES.md, "The market maker".
 - [ ] Commit symbols, γ, h = 15 s and order size before the first evaluation run. Selection cannot look at the result.
+- [x] Calibration tool: `tools/itch_calibrate` reads a day and a symbol list and writes σ (on a clock and from jumps), A and k (deepest aggressor depth per interval, on the depths a quote could take, OLS on log λ) with every count behind them. Tested on a hand-built day with every figure worked by hand (`tests/test_calibrate_cli.py`), eight faults. Not run on a real day.
 - [ ] Calibrate σ, A, k from the market tape on 10302019 only. Report on 12302019. Label both. 10302019 is an FOMC day, and 12302019 is a late-December session.
-- [ ] Attribution in a module that never reads the ledger. Integers, `==`, no tolerance (T-MM-1).
-- [ ] Property tests 1 to 16 from `market-maker.md`, including the negative test.
-- [ ] Replication of the AS tables (T-MM-2).
+- [x] Attribution in a module that never reads the ledger. Integers, `==`, no tolerance (T-MM-1). `include/itch/mm/attribution.hpp`, per-fill and path forms; the gate `attribution-without-ledger` holds it and its includes away from `ledger.hpp`.
+- [x] Property tests 1 to 16 from `market-maker.md`, including the negative test. `tests/test_attribution.cpp` (1 to 14 and the worked example), `tests/test_market_maker.cpp` (15 and 16); each caught a fault of its own in `scripts/faults/marketmaker.json`. Test 15 covers latency, model and γ; Q-off does not exist in the engine yet.
+- [x] Replication of the AS tables (T-MM-2). P-0201, `results/mm_as_tables.md`: average spread 1.4918, 1.3490, 3.0317 against 1.49, 1.35, 3.02, so FAIL at γ = 1 by 0.01, from the time grid as predicted (the 201-point grid gives 3.0217); 23 of 24 other columns within two standard errors.
 - [ ] Four runs, one switch at a time: Base, Q-off, L-off, Both-off. Same mark path hash in all. Q-off must name its fill rule. Published bias runs from −21.2% (conservative) to −0.7% (proportional), so report both as separate rows.
 - [ ] Report: S gross, fees, A, I, total, in dollars, per share and in ticks. Markout curve. No return, no Sharpe. Fixed sentence: "One symbol-day. No edge is claimed."
 
