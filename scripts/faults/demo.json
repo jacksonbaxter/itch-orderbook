@@ -455,6 +455,26 @@
         "signature": "FAIL: bench_demo on a six-symbol day",
         "exit": 1
       }
+    },
+    {
+      "id": "demo-report-times-unrounded",
+      "breaks": "wasm_report.py render takes native times past the microsecond the table shows, so its summary disagrees with its own table",
+      "check": "test_demo test_times_past_the_microsecond_render_a_file_that_passes",
+      "mutations": [
+        {
+          "file": "scripts/wasm_report.py",
+          "old": "native_ms = [as_shown(repetition[\"ns\"] / 1e6)",
+          "new": "native_ms = [(repetition[\"ns\"] / 1e6)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_times_past_the_microsecond_render_a_file_that_passes"
+      }
     }
   ]
 }

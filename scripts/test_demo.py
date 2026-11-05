@@ -335,6 +335,13 @@ class Report(unittest.TestCase):
         self.assertNotIn("somewhere", text)
         self.assertIn("measure.sh: start load1=1.20 at=2026-11-05T10:00:00Z", text)
 
+    def test_times_past_the_microsecond_render_a_file_that_passes(self):
+        native, browser, stderr = records(wasm_ms=[52.0001234 + 0.2 * i for i in range(5)])
+        for i, repetition in enumerate(native["repetitions"]):
+            repetition["ns"] = 40_000_000 + 100_000 * i + 377
+        text = wasm_report.render(native, browser, stderr, stderr)
+        self.assertEqual(self.violations(text), [])
+
     def test_google_chrome_itself_is_held_to_the_bar(self):
         met = self.render(browser_name="Google Chrome 153.0.8010.12")
         self.assertRegex(met, r"\| 1\.30× \| met \|")

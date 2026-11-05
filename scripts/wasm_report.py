@@ -75,6 +75,11 @@ def shown(value, kind):
     return f"{value:,.0f}" if kind == "rate" else f"{value:.3f}"
 
 
+def as_shown(ms):
+    """A time in ms as the repetitions table writes it."""
+    return float(f"{ms:.3f}")
+
+
 def summary_cells(values, kind):
     median, low, high, cv = spread(values)
     return [shown(median, kind), shown(low, kind), shown(high, kind), f"{cv * 100:.2f}%"]
@@ -142,8 +147,10 @@ def render(native, browser, native_stderr, browser_stderr):
         raise ReportError(f"host {header['host']!r}: T-WASM-1 runs on the Mac")
     manifest = native["extract_manifest"]
     messages = manifest["messages"]
-    native_ms = [repetition["ns"] / 1e6 for repetition in native["repetitions"]]
-    wasm_ms = [repetition["ms"] for repetition in browser["repetitions"]]
+    # Every figure comes from the times as the repetitions table shows them, to the
+    # microsecond, so that check can recompute each one from the file alone.
+    native_ms = [as_shown(repetition["ns"] / 1e6) for repetition in native["repetitions"]]
+    wasm_ms = [as_shown(repetition["ms"]) for repetition in browser["repetitions"]]
     if len(native_ms) != len(wasm_ms):
         raise ReportError("the two sides ran different numbers of repetitions")
     if any(r["messages"] != messages for r in native["repetitions"] + browser["repetitions"]):
