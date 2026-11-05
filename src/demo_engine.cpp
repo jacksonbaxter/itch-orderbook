@@ -6,7 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
+#include <memory>
 #include <span>
 #include <utility>
 #include <vector>
@@ -21,7 +21,9 @@ using itch::demo::Replay;
 
 struct Engine {
   std::vector<std::byte> input;
-  std::optional<Replay> replay;
+  // On the heap rather than in a std::optional: GCC 14 at -O3 warns that emplace()'s reset of
+  // the static optional may read its payload uninitialized (-Wmaybe-uninitialized).
+  std::unique_ptr<Replay> replay;
   std::array<DepthLevel, itch::demo::kDepthLevels> depth{};
   std::array<char, 9> symbol{};
 };
@@ -33,8 +35,7 @@ Engine& engine() {
 
 // The replay, or nullptr before the first load.
 Replay* live() {
-  std::optional<Replay>& replay = engine().replay;
-  return replay.has_value() ? &*replay : nullptr;
+  return engine().replay.get();
 }
 
 double count(std::uint64_t value) { return static_cast<double>(value); }
@@ -57,8 +58,8 @@ std::byte* demo_input(double bytes) {
 int demo_load() {
   Engine& e = engine();
   e.replay.reset();  // The old book goes before the new one is built: memory holds one.
-  const Replay& replay = e.replay.emplace(std::span<const std::byte>{e.input});
-  return static_cast<int>(replay.extract_status());
+  e.replay = std::make_unique<Replay>(std::span<const std::byte>{e.input});
+  return static_cast<int>(e.replay->extract_status());
 }
 
 double demo_replay() {
