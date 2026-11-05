@@ -35,3 +35,4 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0201-20261105T053845Z | P-0201 | abfb37c88eb0 (clean) | Darwin | published |
 | P-0201-20261105T053946Z | P-0201 | 9fee6ab0cb7b (clean) | Darwin | published |
 | P-0202-20261105T080745Z | P-0202 | 0999cb43a604 (clean) | Darwin | published |
+| P-0502-20261105T175851Z | P-0502 | 9d5d4db0d16d (clean) | Darwin | stopped by SIGTERM at repetition 1, paged-flat, timed process; nothing from it is published; the row was written by the driver as it stopped; typed after the driver's words: withdrawn under the sampler rule and stopped by hand, since from the first sample inside the run the sampler logged other processes above 20% CPU, a restic backup and its rclone at 22% to 165%; the first signal went by mistake to measure.sh, which released the measure lock some seconds before the driver itself stopped, so for those seconds the run was outside the lock; rerun under P-0502 |
