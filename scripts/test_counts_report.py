@@ -120,7 +120,7 @@ class CountsReport(unittest.TestCase):
         self.assertIn("name-unsaid", codes)
 
     def test_check_catches_a_home_path(self):
-        text = self.render([record()]) + "\n/home/someone/x\n"
+        text = self.render([record()]) + "\n/" + "home" + "/someone/x\n"
         codes = [code for code, _ in counts_report.check_published(text)]
         self.assertIn("private-text", codes)
 
