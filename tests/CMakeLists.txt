@@ -45,7 +45,12 @@ if(ITCH_BUILD_BENCH)
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_backtest_cli.py"
             "$<TARGET_FILE:bench_backtest>" "${CMAKE_CURRENT_BINARY_DIR}/bench_backtest_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
-  set_tests_properties(test_bench_cli test_bench_backtest_cli PROPERTIES LABELS unit)
+  add_test(NAME test_bench_counts_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_counts_cli.py"
+            "$<TARGET_FILE:bench_counts>" "${CMAKE_CURRENT_BINARY_DIR}/bench_counts_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
+  set_tests_properties(test_bench_cli test_bench_backtest_cli test_bench_counts_cli
+    PROPERTIES LABELS unit)
 endif()
 
 if(ITCH_BUILD_TOOLS)

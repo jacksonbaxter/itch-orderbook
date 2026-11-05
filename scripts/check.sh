@@ -104,6 +104,7 @@ stage_bench() {
     python_test scripts/test_bench_results.py &&
     python_test scripts/test_backtest_results.py &&
     python_test scripts/test_chase_report.py &&
+    python_test scripts/test_counts_report.py &&
     python_test scripts/gate_numbers.py &&
     python_test scripts/check_predictions.py || return 1
   results=$(find results -name 'bench_*.md' -o -name 'backtest_*.md')
@@ -114,6 +115,10 @@ stage_bench() {
   if [ -f results/chase_debian.md ]; then
     python_test scripts/chase_report.py --check results/chase_debian.md || return 1
   fi
+  for counts in results/counters_by_type_*.md; do
+    [ -f "$counts" ] || continue
+    python_test scripts/counts_report.py --check "$counts" || return 1
+  done
   build_preset release && ctest --preset release -R '^test_bench'
 }
 stage_tsan() { preset_with_tests tsan; }

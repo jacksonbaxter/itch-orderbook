@@ -20,6 +20,10 @@ target_link_libraries(bench_replay PRIVATE
   itch_bench_support benchmark::benchmark hdr_histogram::hdr_histogram_static)
 itch_apply_options(bench_replay)
 
+add_executable(bench_counts bench_counts.cpp)
+target_link_libraries(bench_counts PRIVATE itch_bench_support)
+itch_apply_options(bench_counts)
+
 add_executable(bench_chase bench_chase.cpp)
 target_link_libraries(bench_chase PRIVATE itch_bench_support)
 itch_apply_options(bench_chase)

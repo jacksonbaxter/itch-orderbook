@@ -18,6 +18,7 @@
 #include "replay.hpp"
 #include "run_record.hpp"
 #include "support/encode.hpp"
+#include "typed_counts.hpp"
 
 // ASSERT_TRUE guards each dereference here, which the check cannot see.
 // NOLINTBEGIN(bugprone-unchecked-optional-access)
@@ -627,6 +628,104 @@ TEST(BenchReplay, CountsPassCountsWhatItCouldNotRead) {
   const std::vector<std::byte> input = system_events(2);
   EXPECT_EQ(counts_pass(input, book, group, sink), 2U);
   EXPECT_TRUE(sink.counts.empty());
+}
+
+// Counters that follow the trace's clock: each read costs `read_cost` of its own, and the
+// second event counts twice what the first does, so that a span's two figures differ.
+struct TraceGroup {
+  Trace* trace;
+  std::uint64_t read_cost = 0;
+  bool works = true;
+  [[nodiscard]] static std::size_t event_count() { return 2; }
+  [[nodiscard]] bool read_fast(std::span<std::uint64_t> out) const {
+    trace->now += read_cost;
+    out[0] = trace->now;
+    out[1] = 2 * trace->now;
+    return works;
+  }
+};
+
+constexpr auto slot_of(char type) { return static_cast<std::uint8_t>(type); }
+
+TEST(TypedCounts, EachSpanIsChargedToItsMessagesType) {
+  Trace trace;
+  FakeBook book{.trace = &trace};
+  TraceGroup group{.trace = &trace};
+  TypeTally tally{TraceGroup::event_count()};
+  const std::vector<std::byte> input = frames({add(1, 'B', 100, 10), remove(1), add(2, 'S', 1, 9)});
+  const TypedPass pass = typed_counts_pass(input, book, group, tally);
+  EXPECT_EQ(pass.frames, 3U);
+  EXPECT_EQ(pass.missed, 0U);
+  EXPECT_EQ(tally.spans(slot_of('A')), 2U);
+  EXPECT_EQ(tally.spans(slot_of('D')), 1U);
+  EXPECT_EQ(tally.sum(slot_of('A'), 0), 200U);
+  EXPECT_EQ(tally.sum(slot_of('A'), 1), 400U);
+  EXPECT_EQ(tally.sum(slot_of('D'), 0), 100U);
+  EXPECT_EQ(tally.spans(kNoMessageSlot), 0U);
+}
+
+TEST(TypedCounts, TheSpansTileTheWholePassReadsIncluded) {
+  Trace trace;
+  FakeBook book{.trace = &trace};
+  TraceGroup group{.trace = &trace, .read_cost = 7};
+  TypeTally tally{TraceGroup::event_count()};
+  const std::vector<std::byte> input =
+      frames({add(1, 'B', 100, 10), sized('P'), cancel(1, 10), remove(1), sized('S')});
+  const TypedPass pass = typed_counts_pass(input, book, group, tally);
+  // The first read opens the pass and is in no span. Every later one closes a span.
+  EXPECT_EQ(pass.whole(0), 5U * (100 + 7));
+  EXPECT_EQ(pass.whole(1), 2 * pass.whole(0));
+  EXPECT_EQ(tally.total(0), pass.whole(0));
+  EXPECT_EQ(tally.total(1), pass.whole(1));
+  EXPECT_EQ(tally.sum(slot_of('X'), 0), 107U);
+  EXPECT_TRUE(spans_tile(pass, tally));
+}
+
+TEST(TypedCounts, AFrameWalkedPastIsChargedToSlotZero) {
+  Trace trace;
+  FakeBook book{.trace = &trace};
+  TraceGroup group{.trace = &trace, .read_cost = 3};
+  TypeTally tally{TraceGroup::event_count()};
+  const std::vector<std::byte> input = frames({type_only('z'), remove(1)});
+  const TypedPass pass = typed_counts_pass(input, book, group, tally);
+  EXPECT_EQ(tally.spans(kNoMessageSlot), 1U);
+  EXPECT_EQ(tally.sum(kNoMessageSlot, 0), 3U);
+  EXPECT_EQ(tally.sum(slot_of('D'), 0), 103U);
+  EXPECT_TRUE(spans_tile(pass, tally));
+}
+
+TEST(TypedCounts, ATallyThatLosesOrAddsASpanDoesNotTile) {
+  Trace trace;
+  FakeBook book{.trace = &trace};
+  TraceGroup group{.trace = &trace, .read_cost = 7};
+  TypeTally tally{TraceGroup::event_count()};
+  const std::vector<std::byte> input = frames({add(1, 'B', 100, 10), remove(1)});
+  const TypedPass pass = typed_counts_pass(input, book, group, tally);
+  ASSERT_TRUE(spans_tile(pass, tally));
+  const std::array<std::uint64_t, 2> start{0, 0};
+  const std::array<std::uint64_t, 2> now{1, 0};
+  tally.add(slot_of('A'), now, start);
+  EXPECT_FALSE(spans_tile(pass, tally));
+}
+
+TEST(TypedCounts, ReadsThatGiveNothingAreCountedAndRejectionsToo) {
+  Trace trace;
+  FakeBook book{.trace = &trace, .status = ApplyStatus::unknown_order};
+  TraceGroup group{.trace = &trace, .read_cost = 0, .works = false};
+  TypeTally tally{TraceGroup::event_count()};
+  const std::vector<std::byte> input = frames({add(1, 'B', 100, 10), remove(1)});
+  const TypedPass pass = typed_counts_pass(input, book, group, tally);
+  EXPECT_EQ(pass.missed, 3U);
+  EXPECT_EQ(pass.rejected, 2U);
+}
+
+TEST(TypedCounts, AnEmptySpanHoldsTheReadAndNothingElse) {
+  Trace trace;
+  TraceGroup group{.trace = &trace, .read_cost = 7};
+  const EmptySpans empty = empty_spans(group, 1000);
+  EXPECT_EQ(empty.spans, 1000U);
+  EXPECT_EQ(empty.missed, 0U);
+  EXPECT_EQ(empty.sums, (std::vector<std::uint64_t>{7000, 14000}));
 }
 
 }  // namespace

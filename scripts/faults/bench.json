@@ -3243,6 +3243,189 @@
       "expect": {
         "signature": "FAIL: test_verdicts"
       }
+    },
+    {
+      "id": "bench-typed-span-not-restarted",
+      "breaks": "Every span of the typed pass is counted from the pass's first reading",
+      "check": "test_bench_replay TypedCounts.EachSpanIsChargedToItsMessagesType",
+      "mutations": [
+        {
+          "file": "bench/typed_counts.hpp",
+          "old": "    tally.add(slot, now, start);\n    std::swap(now, start);\n    ++pass.frames;",
+          "new": "    tally.add(slot, now, start);\n    ++pass.frames;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] TypedCounts\\.EachSpanIsChargedToItsMessagesType",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-typed-tiling-check-blind",
+      "breaks": "The check that the spans add up to the whole pass always passes",
+      "check": "test_bench_replay TypedCounts.ATallyThatLosesOrAddsASpanDoesNotTile",
+      "mutations": [
+        {
+          "file": "bench/typed_counts.hpp",
+          "old": "    if (tally.total(event) != pass.whole(event)) {",
+          "new": "    if (false && tally.total(event) != pass.whole(event)) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] TypedCounts\\.ATallyThatLosesOrAddsASpanDoesNotTile",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-typed-empty-span-without-addition",
+      "breaks": "An empty span leaves out the tally's addition a message's span holds",
+      "check": "test_bench_replay TypedCounts.AnEmptySpanHoldsTheReadAndNothingElse",
+      "mutations": [
+        {
+          "file": "bench/typed_counts.hpp",
+          "old": "    out.missed += group.read_fast(now) ? 0U : 1U;\n    tally.add(kNoMessageSlot, now, start);\n    std::swap(now, start);\n  }",
+          "new": "    out.missed += group.read_fast(now) ? 0U : 1U;\n    std::swap(now, start);\n  }"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] TypedCounts\\.AnEmptySpanHoldsTheReadAndNothingElse",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-report-tiling-unchecked",
+      "breaks": "The report publishes records whose spans do not add up to the whole pass",
+      "check": "test_counts_report.py test_spans_that_do_not_add_up_to_the_whole_pass_are_refused",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    if totals != whole or by_name(record, pass_[\"by_type_total\"]) != whole or not pass_[\"tiled\"]:",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_spans_that_do_not_add_up_to_the_whole_pass_are_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-report-cost-taken-silently",
+      "breaks": "The raw per-message column has the empty span's cost taken off",
+      "check": "test_counts_report.py test_the_cost_of_counting_is_beside_every_figure_and_never_quietly_taken_off",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        figures = [per(s[\"types\"][code][\"sums\"][name], s[\"types\"][code][\"spans\"])\n                   for s in summaries if code in s[\"types\"]]",
+          "new": "        figures = [per(s[\"types\"][code][\"sums\"][name], s[\"types\"][code][\"spans\"]) - cost\n                   for s in summaries if code in s[\"types\"]]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_cost_of_counting_is_beside_every_figure_and_never_quietly_taken_off",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-report-names-unchecked",
+      "breaks": "--check lets cache-misses or r0843 appear without saying what they count",
+      "check": "test_counts_report.py test_check_catches_a_name_left_unsaid",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "NAME_RULES = ((re.compile(r\"cache-misses\"), \"L2 miss\"),\n              (re.compile(r\"r0843\"), \"floor on DRAM demand fills\"))",
+          "new": "NAME_RULES = ()"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_name_left_unsaid",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-report-verdict-unchecked",
+      "breaks": "--check accepts a verdict its own figure does not give",
+      "check": "test_counts_report.py test_check_catches_a_faked_verdict",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if printed[target][0] != expected or abs(printed[target][1] - figure[0]) > 0.0005:",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_faked_verdict",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-report-totals-unchecked",
+      "breaks": "--check accepts a totals table whose types do not add up",
+      "check": "test_counts_report.py test_check_catches_a_total_edited_after_the_fact",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "            if not total == listed == whole:",
+          "new": "            if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_total_edited_after_the_fact",
+        "exit": 1
+      }
     }
   ]
 }

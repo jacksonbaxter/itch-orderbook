@@ -179,6 +179,22 @@ def chase_rows(name, text):
                         commit, name)]
 
 
+def counters_rows(name, text):
+    """T-PERF-1 and T-PERF-2 from a file of counts by message type."""
+    host = find(r"^- host: (.*)$", text, name)[1]
+    commit = header_commit(text, name)
+    design = find(r"^- design: ([\w-]+):", text, name)[1]
+    rows = []
+    for target in ("T-PERF-1", "T-PERF-2"):
+        what, verdict, figure = find(
+            rf"^- {target}, (.*?), against ≤ [0-9.]+: \*\*(PASS|FAIL)\*\*\. Measured ([0-9.]+) raw",
+            text, name).groups()
+        rows.append(verdict_row(target, day_of(name), host, verdict,
+                                f"{figure} {what.split(',')[0]}, `{design}`, the empty span's "
+                                "cost shown beside it", commit, name))
+    return rows
+
+
 def fault_row(name, text):
     result = find(r"^- Result: (.*)$", text, name)[1]
     controls = find(r"^- Controls: (.*)$", text, name)[1]
@@ -287,6 +303,8 @@ def generate(root):
             rows = trades_rows(name, text)
         elif name.startswith("chase_"):
             rows = chase_rows(name, text)
+        elif name.startswith("counters_by_type_"):
+            rows = counters_rows(name, text)
         elif name == "fault_matrix.md":
             faults.append(fault_row(name, text))
             rows = []
