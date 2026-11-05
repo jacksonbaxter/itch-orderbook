@@ -703,6 +703,15 @@ def render(log, entry, day, no_cross_file, failures, arms):
     return "\n".join(lines) + "\n"
 
 
+def pinned_midas_rows(references, date):
+    """The Nasdaq row count pinned for the date under its quarter's MIDAS zip, or None."""
+    found = [ref["nasdaq_rows"][date] for key, ref in sorted(references.items())
+             if key.startswith("midas_") and date in ref.get("nasdaq_rows", {})]
+    if len(found) > 1:
+        raise ReportError(f"{len(found)} MIDAS zips pin Nasdaq rows for {date}")
+    return found[0] if found else None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--day", required=True)
@@ -718,10 +727,10 @@ def main(argv=None):
         if args.day not in days:
             raise ReportError(f"no day {args.day} in the manifest")
         entry = days[args.day]
-        date = args.day[4:] + args.day[:4]
+        # The key is MMDDYYYY, with a suffix for a second venue on the same date.
+        date = args.day[4:8] + args.day[:4]
         manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
-        references = manifest.get("references", {})
-        midas_rows = references.get("midas_2019q4", {}).get("nasdaq_rows", {}).get(date)
+        midas_rows = pinned_midas_rows(manifest.get("references", {}), date)
 
         def read(path):
             return parse_log(path.read_text(encoding="utf-8", errors="replace"))

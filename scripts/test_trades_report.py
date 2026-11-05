@@ -208,13 +208,14 @@ class TradesReport(unittest.TestCase):
         self.log = GOOD_LOG
         self.flags = []
         self.arms = []
+        self.midas_key = "midas_2019q4"
+        self.references = {}
 
     def run_report(self, day="01062020"):
         manifest = self.root / "manifest.json"
-        manifest.write_text(json.dumps({
-            "days": {day: self.day},
-            "references": {"midas_2019q4": {"nasdaq_rows": {"20200106": self.rows}}},
-        }), encoding="utf-8")
+        references = {self.midas_key: {"nasdaq_rows": {"20200106": self.rows}}, **self.references}
+        manifest.write_text(json.dumps({"days": {day: self.day}, "references": references}),
+                            encoding="utf-8")
         log = self.root / "log"
         log.write_text(self.log, encoding="utf-8")
         arm_args = []
@@ -424,6 +425,23 @@ class TradesReport(unittest.TestCase):
     def test_the_midas_row_pin_is_compared(self):
         self.rows = 5
         self.assert_fails("MIDAS rows 4, manifest 5")
+
+    def test_the_midas_row_pin_is_found_under_any_quarter(self):
+        self.midas_key = "midas_2020q1"
+        self.rows = 5
+        self.assert_fails("MIDAS rows 4, manifest 5")
+
+    def test_a_date_pinned_under_two_zips_is_refused(self):
+        self.references = {"midas_2020q1": {"nasdaq_rows": {"20200106": 4}}}
+        code, output = self.run_report()
+        self.assertEqual(code, 2, output)
+        self.assertIn("2 MIDAS zips pin Nasdaq rows for 20200106", output)
+
+    def test_a_venue_suffix_on_the_key_keeps_the_date(self):
+        self.rows = 5
+        code, output = self.run_report(day="01062020_BX")
+        self.assertEqual(code, 1, output)
+        self.assertIn("MIDAS rows 4, manifest 5", output)
 
     def test_another_window_is_not_a_pass(self):
         self.replace("t3_window 0935_1600", "t3_window 0930_1600")

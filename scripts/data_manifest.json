@@ -300,7 +300,8 @@
       "note": "SEC MIDAS 2019 Q4. sec.gov returns 403 to curl, so this capture is the copy used. Never committed.",
       "nasdaq_rows": {
         "20191230": 5772,
-        "20191030": 5767
+        "20191030": 5767,
+        "20191018": 5772
       }
     },
     "crossstats_20190130": {
@@ -374,7 +375,10 @@
       "bytes": 118017607,
       "sha256": "e85d0ce9713b69a25ce34b68a21a5fb4e9ab92de1e008183a30bdff73ad384c9",
       "note": "SEC MIDAS 2019 Q1. sec.gov returns 403 to curl, so this capture is the copy used. Never committed.",
-      "nasdaq_rows": {}
+      "nasdaq_rows": {
+        "20190130": 5681,
+        "20190327": 5665
+      }
     },
     "midas_2019q2": {
       "url": "https://web.archive.org/web/20190912025532id_/https://www.sec.gov/files/opa/data/market-structure/metrics-individual-security-and-exchange/individual_security_exchange_2019_q2.zip",
@@ -383,7 +387,9 @@
       "bytes": 122342991,
       "sha256": "833ae7dd0a6f4e81f28889c623814fd0899d767d97aadd63a159a9fa4e251454",
       "note": "SEC MIDAS 2019 Q2. sec.gov returns 403 to curl, so this capture is the copy used. Never committed.",
-      "nasdaq_rows": {}
+      "nasdaq_rows": {
+        "20190530": 5712
+      }
     },
     "midas_2019q3": {
       "url": "https://web.archive.org/web/20201021215045id_/https://www.sec.gov/files/opa/data/market-structure/metrics-individual-security-and-exchange/individual_security_exchange_2019_q3.zip",
@@ -392,7 +398,10 @@
       "bytes": 126283883,
       "sha256": "459b877791f1d65412b81732b7cc9ba9772731a27f5a855ef564a4fe9d020bbe",
       "note": "SEC MIDAS 2019 Q3. sec.gov returns 403 to curl, so this capture is the copy used. Never committed.",
-      "nasdaq_rows": {}
+      "nasdaq_rows": {
+        "20190730": 5752,
+        "20190830": 5739
+      }
     },
     "midas_2020q1": {
       "url": "https://web.archive.org/web/20201020134844id_/https://www.sec.gov/files/opa/data/market-structure/metrics-individual-security-and-exchange/individual_security_exchange_2020_q1.zip",
@@ -401,7 +410,9 @@
       "bytes": 129915351,
       "sha256": "b130a067e0f0ebfab026112e1dd5f7fd1f149b154a9397a8feff4fad1daf475a",
       "note": "SEC MIDAS 2020 Q1. sec.gov returns 403 to curl, so this capture is the copy used. Never committed.",
-      "nasdaq_rows": {}
+      "nasdaq_rows": {
+        "20200130": 5772
+      }
     }
   }
 }

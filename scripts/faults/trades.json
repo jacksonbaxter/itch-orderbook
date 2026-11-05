@@ -8165,6 +8165,66 @@
       }
     },
     {
+      "id": "trades-report-row-pin-one-quarter",
+      "breaks": "The report looks for the MIDAS row pin under 2019 Q4's zip only, so another quarter's day has none",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "             if key.startswith(\"midas_\") and date in ref.get(\"nasdaq_rows\", {})]\n",
+          "new": "             if key == \"midas_2019q4\" and date in ref.get(\"nasdaq_rows\", {})]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_midas_row_pin_is_found_under_any_quarter"
+      }
+    },
+    {
+      "id": "trades-report-row-pin-first-of-two",
+      "breaks": "The report takes the first of two MIDAS zips that pin rows for the same date",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "    if len(found) > 1:\n",
+          "new": "    if len(found) > 2:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_date_pinned_under_two_zips_is_refused"
+      }
+    },
+    {
+      "id": "trades-report-key-suffix-in-date",
+      "breaks": "The report reads the date from the whole key, so a venue suffix ends up in it",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "        date = args.day[4:8] + args.day[:4]\n",
+          "new": "        date = args.day[4:] + args.day[:4]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "test_a_venue_suffix_on_the_key_keeps_the_date"
+      }
+    },
+    {
       "id": "trades-report-ignores-t5-population",
       "breaks": "E outside the population can go unaccounted",
       "check": "test_trades_report.py",

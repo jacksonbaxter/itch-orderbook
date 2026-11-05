@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The checks that need a real trading day in data/. scripts/check.sh runs everything
-# that does not.
+# that does not. A day is its key in scripts/data_manifest.json, MMDDYYYY with a suffix
+# for a second venue on the same date, and its file is data/<the manifest's name>.
 #
 #     scripts/check_real_day.sh [--only census|oracle|trades|map]... [--arms default|all] [DAY...]
 #
@@ -22,9 +23,9 @@
 # oracle_report.py separates that from a broken book, which is status 1.
 #
 # The trade-print checks take a few minutes a day and a few hundred MB beyond the mapped file.
-# They read the SEC MIDAS zip and data/CrossStats<YYYYMMDD>.txt. A day with no cross file is
-# reported as T-TRADE-2 not available, and says so in its results. A missing MIDAS zip is a
-# failure.
+# They read the SEC MIDAS zip of the day's quarter and data/CrossStats<YYYYMMDD>.txt. A day
+# with no cross file is reported as T-TRADE-2 not available, and says so in its results. A
+# missing MIDAS zip is a failure.
 #
 # The map check replays the day through the map book, the T-DESIGN-1 baseline, beside the
 # fast book's default arm, once on a fresh heap and once on an aged one, and passes only if
@@ -60,6 +61,14 @@ for day, entry in json.load(open("scripts/data_manifest.json"))["days"].items():
 '
 }
 
+# The day's file, by the name the manifest gives it.
+day_file() {
+  python3 -B -c '
+import json, sys
+print("data/" + json.load(open("scripts/data_manifest.json"))["days"][sys.argv[1]]["name"])
+' "$1"
+}
+
 census() {
   # shellcheck disable=SC2086
   $wrapper python3 -B scripts/check_census.py --day "$1"
@@ -83,8 +92,9 @@ arm_flags() {
 }
 
 oracle() {
-  local day=$1 file=data/$1.NASDAQ_ITCH50 arm first= status mismatch=0 report_args=()
+  local day=$1 file arm first= status mismatch=0 report_args=()
   local oracle_log alloc_log observations flags word
+  file=$(day_file "$day") || return 1
   for arm in "${arms[@]}"; do
     oracle_log=$log_dir/oracle_${day}_$arm.log
     alloc_log=$log_dir/alloc_${day}_$arm.log
@@ -119,21 +129,26 @@ oracle() {
   return "$status"
 }
 
-# The Nasdaq rows of a day in MIDAS, as pinned in the manifest.
+# The Nasdaq rows of a day in MIDAS, as pinned in the manifest under its quarter's zip.
 midas_rows() {
   python3 -B -c '
 import json, sys
-midas = json.load(open("scripts/data_manifest.json"))["references"]["midas_2019q4"]
-print(midas["nasdaq_rows"][sys.argv[1]])
+references = json.load(open("scripts/data_manifest.json"))["references"]
+found = [ref["nasdaq_rows"][sys.argv[1]] for key, ref in sorted(references.items())
+         if key.startswith("midas_") and sys.argv[1] in ref.get("nasdaq_rows", {})]
+if len(found) != 1:
+    sys.exit(f"real day: {len(found)} MIDAS zips pin Nasdaq rows for {sys.argv[1]}")
+print(found[0])
 ' "$1"
 }
 
 trades() {
   local day=$1 date=${1:4:4}${1:0:4} log symbols
-  local file=data/$day.NASDAQ_ITCH50 cross=data/CrossStats${date}.txt member rows
+  local file cross=data/CrossStats${date}.txt member rows
   local months=(jan feb mar apr may jun jul aug sep oct nov dec)
   local month=${months[$((10#${day:0:2} - 1))]}
   member=$month${day:6:2}.csv
+  file=$(day_file "$day") || return 1
   if ! python3 -B -I scripts/extract_midas.py --member "$member"; then
     echo "real day: $day has no MIDAS member $member" >&2
     return 1
@@ -170,7 +185,8 @@ trades() {
 }
 
 map() {
-  local day=$1 file=data/$1.NASDAQ_ITCH50 heap log status failed=0
+  local day=$1 file heap log status failed=0
+  file=$(day_file "$day") || return 1
   for heap in fresh aged; do
     log=$log_dir/map_${day}_$heap.log
     run_header "itch_map_compare $file --heap $heap" tools/itch_map_compare.cpp >"$log"
