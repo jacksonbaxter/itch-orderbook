@@ -62,6 +62,12 @@ class Spread(unittest.TestCase):
         self.assertIn("| 1 | 3.02 | 3.0317 | 3.03 | does not match |", text)
         self.assertIn("| 0.1 | 1.49 | 1.4918 | 1.49 | matches |", text)
 
+    def test_the_grid_sentence_counts_the_201_point_grid_that_rounds_to_the_paper(self):
+        self.assertIn("On the 201-point grid, 3 of 3 round", body(raw()))
+        text = body(raw(spreads=(1.4917704228, 1.3490085437, 3.0316512475)))
+        self.assertIn("On the 201-point grid, 2 of 3 round", text)
+        self.assertIn("here 0.0000, 0.0000, 0.0000:", text)
+
     def test_a_half_rounds_up_as_printed_tables_round(self):
         # 1.345 rounds to 1.35, where Python's round() would give 1.34.
         self.assertEqual(str(report.round_half_up(1.345, 2)), "1.35")

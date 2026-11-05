@@ -32,9 +32,11 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import json
 import math
 import platform
 import re
+import shlex
 import subprocess
 import sys
 from decimal import ROUND_HALF_UP, Decimal
@@ -157,11 +159,18 @@ def render_body(parsed):
                   "measurement:", "",
               "| γ | Simulated grid | Grid with t = T, 201 points | Grid from t = dt to T |",
               "|---|---|---|---|"]
-    for gamma, _, _, _, _, table in spreads:
+    inclusive = 0
+    for gamma, paper_spread, _, _, _, table in spreads:
+        inclusive += round_half_up(table["spread_grid_with_t_equal_T"], 2) == Decimal(paper_spread)
         lines.append(f"| {gamma} | {table['spread_grid_simulated']:.4f} | "
                      f"{table['spread_grid_with_t_equal_T']:.4f} | "
                      f"{table['spread_grid_from_dt']:.4f} |")
-    lines.append("")
+    shifts = ", ".join(f"{table['spread_grid_simulated'] - table['spread_grid_with_t_equal_T']:.4f}"
+                       for _, _, _, _, _, table in spreads)
+    lines += ["", "Neighbouring grids differ by γσ²·dt/2, here "
+                  f"{shifts}: the spread's slope in T − t times the half step. On the 201-point "
+                  f"grid, {inclusive} of {len(PAPER)} round to the paper's figures. The paper "
+                  "does not state its grid.", ""]
     consistent = 0
     total = 0
     outside = []
@@ -240,13 +249,15 @@ def compiler_and_flags(root, tool):
     flags = (tool_flags(str(commands), "tools/itch_as_tables.cpp") if commands.is_file()
              else "unavailable")
     compiler = "unavailable"
-    match = re.search(r"\b(\S*clang\+\+|\S*g\+\+)\b", commands.read_text(encoding="utf-8")
-                      if commands.is_file() else "")
-    if match:
-        version = subprocess.run([match[1], "--version"], capture_output=True, text=True,
-                                 check=False).stdout.splitlines()
-        named = re.search(r"\b(?:clang|g\+\+|gcc) version \S+", version[0] if version else "")
-        compiler = named[0] if named else "unavailable"
+    entries = json.loads(commands.read_text(encoding="utf-8")) if commands.is_file() else []
+    for entry in entries:
+        if entry["file"].endswith("tools/itch_as_tables.cpp"):
+            program = entry["arguments"][0] if "arguments" in entry else shlex.split(
+                entry["command"])[0]
+            version = subprocess.run([program, "--version"], capture_output=True, text=True,
+                                     check=False).stdout.splitlines()
+            compiler = version[0].split(" (")[0] if version else "unavailable"
+            break
     return compiler, flags
 
 
