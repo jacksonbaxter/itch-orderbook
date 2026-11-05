@@ -109,6 +109,136 @@
         "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. No published hash for this day is recorded here.",
         "agrees": []
       }
+    },
+    "01302019": {
+      "name": "01302019.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/01302019.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 4764426091,
+        "messages": 368366634
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "8c97b5b13bc451c012c2466fb7e258da134dab29aa47b67fe7b0088c78e870be",
+        "unpacked_sha256": "1d0972ffc25b35902ccc3f9069aae517da56903d5795f872902b8697315f30c3",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": []
+      }
+    },
+    "03272019": {
+      "name": "03272019.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/03272019.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 5510131732,
+        "messages": 422264305
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "7997025b9e09dd6c2ecb0bfa48a856197e6e800711ab67367ee0f2ab724b9ba8",
+        "unpacked_sha256": "08339b7ebb453975d4785338472021c1fe2d55a8672659b0301f9e2a0b2b7ec9",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": []
+      }
+    },
+    "05302019": {
+      "name": "05302019.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20PSX%20ITCH/05302019.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 4246501580,
+        "messages": 327006172
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "3f4778eabbc5f8afb113cc178787b156987561fff7590d09388cb44c6564ea1b",
+        "unpacked_sha256": "7fa6d9e74975946727460e7971f735cbf039fb4b7ddca5cb1dc7461347d03508",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": []
+      }
+    },
+    "07302019": {
+      "name": "07302019.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/07302019.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 3662140094,
+        "messages": 282229684
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "c65784c48c28735901ae442dc00e215834218a359bc12a139ab4eec209bc2d4a",
+        "unpacked_sha256": "9f8634a048b8195ccdcbe618e5833a759e35e04486d74e36b79176d35172654a",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": []
+      }
+    },
+    "08302019": {
+      "name": "08302019.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/08302019.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 4075649457,
+        "messages": 310317357
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "2f6639a37487f377851883ed54171f5565f164556c1855a28abc8475ce408b47",
+        "unpacked_sha256": "7c1a7843874882807df840008bca2a45b51a09192562ebf1429c4cdd8a88a7a2",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": []
+      }
+    },
+    "10182019": {
+      "name": "S101819-v50.txt",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/S101819-v50.txt.gz",
+      "expected": {
+        "compressed_bytes": 3951201663,
+        "messages": 302347067
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "390acb4df5a01d3d8e6c34557858604ac7c655c8edc0a9e312da3c032c5d8da4",
+        "unpacked_sha256": "fa98fcfc3f7375fc2466d9c567e780f3ebc53e831b9f2e2e200cd8574b63a3aa",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": []
+      }
+    },
+    "01302020": {
+      "name": "01302020.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/01302020.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 5597158940,
+        "messages": 423285709
+      },
+      "third_party": {
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. No published hash for this day is recorded here.",
+        "agrees": []
+      }
+    },
+    "01302019_BX": {
+      "name": "20190130.BX_ITCH_50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20BX%20ITCH/20190130.BX_ITCH_50.gz",
+      "expected": {
+        "compressed_bytes": 1097205622,
+        "messages": 82841542
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "unpacked_sha256": "d670c9dd0e2391a4007fa407668bfaaa9ded346f0804bb5d7b2a6c381bdcadd3",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": []
+      }
     }
   },
   "references": {
