@@ -3,12 +3,16 @@
 
     variants_report.py --experiment lookup|prefetch|dispatch --record RUN.json... \\
         --load STDERR... --prediction P-NNNN --out results/EXPERIMENT_HOST_DAY.md \\
-        [--machine-check BEFORE AFTER] [--host-state START END] [--run-log results/run_log.md]
+        [--machine-check BEFORE AFTER] [--host-state START END] [--sampler LOG] \\
+        [--run-log results/run_log.md]
     variants_report.py --check FILE
 
 Each record is one fresh process of one variant, and each --load is the stderr measure.sh
 wrote around it, in the same order. On debian the machine check before and after, and the
-host's state at the start and end (uptime, perf_event_paranoid, nice), are required.
+host's state at the start and end (uptime, perf_event_paranoid, nice), are required. On
+macOS, where nothing pins the benchmark and nothing holds other work off the cores, the log
+of a CPU sampler that ran beside it is required, and a process is published only if the
+sampler ran over its whole span and saw no other process above 20% CPU in it.
 
   lookup    the order lookup apart from the rest of the message: per arm, the check passes
             less the answer passes over the same day (bench/lookup_script.hpp).
@@ -22,7 +26,8 @@ a host label that does not match the file name, a debian run that was not pinned
 under the performance governor, a missing or failed machine check, perf_event_paranoid other
 than 2 or a nice other than 0 at either end, a load line that is not measure.sh's, a line
 that names `cache-misses` without saying it counts L2 misses or `r0843` without saying it is a
-floor on DRAM demand fills, and anything private.
+floor on DRAM demand fills, a macOS file that does not say its processes were sampled
+quiet, and anything private.
 
 Each violation prints as `variants_report: FAIL <code>: <detail>`.
 
@@ -33,6 +38,7 @@ unusable input, a refused record among them.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import re
 import statistics
@@ -65,6 +71,10 @@ BOOK_FORMS = ("switch", "table", "threaded")
 DESIGNS = ("paged-flat", "hash-flat", "paged-linked", "hash-linked")
 E8_GAIN = 0.10
 E7_FLAT = 0.05
+SAMPLE_GAP = 5  # seconds: the sampler writes a line every 2 s, so a longer gap is a stop
+FOREIGN_CPU = 20.0
+INTERFERENCE = ("sampled every 2 s over each process's whole span; no other process above "
+                "20% CPU during any of them (NOTES.md, \"The Mac rule for other work\")")
 TITLES = {"lookup": "The order lookup apart from the level work",
           "prefetch": "E8: prefetch look-ahead on the book build",
           "dispatch": "E7: dispatch form"}
@@ -451,7 +461,8 @@ def peak_rss(records, stderrs):
     return line
 
 
-def render(experiment, records, stderrs, prediction, machine_checks, host_states):
+def render(experiment, records, stderrs, prediction, machine_checks, host_states,
+           sampler=None):
     judge(records, experiment)
     header = records[0]["header"]
     host = header["host"]
@@ -461,6 +472,10 @@ def render(experiment, records, stderrs, prediction, machine_checks, host_states
     if host == DEBIAN and (len(machine_checks) != 2 or len(host_states) != 2):
         raise ReportError("a debian run needs the machine check and the host state at both ends")
     lines = [load_lines(text, host) for text in stderrs]
+    if host == MAC:
+        if sampler is None:
+            raise ReportError("a macOS run needs the CPU sampler's log (--sampler)")
+        quiet_spans(sampler, lines)
     run_id = f"{prediction}-" + timestamp(lines[0][0]).replace(":", "").replace("-", "")
     rows = rows_of(records, experiment, events)
     results, found, summary = computed_sections(experiment, rows, events, host)
@@ -479,6 +494,8 @@ def render(experiment, records, stderrs, prediction, machine_checks, host_states
             f"- measure_load_start: {lines[0][0]}", f"- measure_load_end: {lines[-1][1]}",
             f"- run_started: {timestamp(lines[0][0])}",
             f"- run_finished: {timestamp(lines[-1][1])}"]
+    if host == MAC:
+        out.append(f"- interference: {INTERFERENCE}")
     for name, state in zip(("host_state_start", "host_state_end"), host_states):
         out.append(f"- {name}: {stamp_load.HOST.sub(f'host={host}', state.strip())}")
     out += [f"- summary: {summary}", "", "## What was run", "", METHOD[experiment], "",
@@ -514,6 +531,37 @@ def command_line(experiment, host, day):
             f"{core} --commit <commit> --out <raw>/VARIANT-N.json")
 
 
+def instant(text):
+    return datetime.datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
+
+
+def quiet_spans(sampler_text, lines):
+    """Raises unless the sampler ran over each process's span and saw nothing else busy.
+
+    The sampler writes `<UTC time> sample` every 2 s, and `<UTC time> FOREIGN <cpu> <command>`
+    for each other process above 20% CPU at that sample. A process is quiet if a sample falls
+    at or before its start and at or after its end, no two samples between are more than
+    SAMPLE_GAP seconds apart, and no FOREIGN line falls from its start to its end."""
+    samples, foreign = [], []
+    for line in sampler_text.splitlines():
+        parts = line.split(maxsplit=3)
+        if len(parts) >= 2 and parts[1] == "sample":
+            samples.append(instant(parts[0]))
+        elif len(parts) >= 3 and parts[1] == "FOREIGN" and float(parts[2]) > FOREIGN_CPU:
+            foreign.append((instant(parts[0]), line))
+    samples.sort()
+    for start_line, end_line in lines:
+        start, end = instant(timestamp(start_line)), instant(timestamp(end_line))
+        covered = [t for t in samples if start - datetime.timedelta(seconds=SAMPLE_GAP) <= t
+                   <= end + datetime.timedelta(seconds=SAMPLE_GAP)]
+        if not covered or covered[0] > start or covered[-1] < end or any(
+                (b - a).total_seconds() > SAMPLE_GAP for a, b in zip(covered, covered[1:])):
+            raise ReportError(f"the sampler did not run over the whole of {start_line!r}")
+        busy = [line for t, line in foreign if start <= t <= end]
+        if busy:
+            raise ReportError(f"another process was busy during {start_line!r}: {busy[0]!r}")
+
+
 def check_published(text, name=None):
     """What is wrong with a published file, read alone, as (code, detail) pairs."""
     fields = check_results.parse_header(text)
@@ -546,6 +594,8 @@ def check_published(text, name=None):
                 found.append(("host-state", f"{state}: {line!r}"))
     elif fields.get("pinning", "").startswith("pinned"):
         found.append(("pin-claimed", "macOS cannot pin"))
+    if host == MAC and fields.get("interference") != INTERFERENCE:
+        found.append(("interference-unsaid", repr(fields.get("interference"))))
     for number, line in enumerate(text.splitlines(), start=1):
         for pattern, said in NAME_RULES:
             if pattern.search(line) and said not in line:
@@ -591,6 +641,7 @@ def main(argv=None):
     parser.add_argument("--load", type=Path, nargs="+", default=[])
     parser.add_argument("--machine-check", type=Path, nargs="+", default=[])
     parser.add_argument("--host-state", type=Path, nargs="+", default=[])
+    parser.add_argument("--sampler", type=Path)
     parser.add_argument("--prediction")
     parser.add_argument("--out", type=Path)
     parser.add_argument("--run-log", type=Path)
@@ -609,8 +660,9 @@ def main(argv=None):
             print(f"variants_report: ok {args.check.name}")
             return 0
         records, stderrs, checks, states = read_inputs(args)
+        sampler = args.sampler.read_text(encoding="utf-8") if args.sampler else None
         text, run_id, summary = render(args.experiment, records, stderrs, args.prediction,
-                                       checks, states)
+                                       checks, states, sampler)
         violations = check_published(text, args.out.name)
         if violations:
             return report_violations(violations)

@@ -28,6 +28,20 @@ STATE = ("uptime: 180000.00 700000.00 | up 2 days | perf_event_paranoid=2 | pswp
          "MemAvailable: 14000000 kB | nice 0")
 
 
+def quiet_sampler(gap_at=None, foreign_at=None):
+    """A sampler's log from 08:59:58 to 09:09:58, a line every 2 s, as bookx1's sampler.sh."""
+    lines = []
+    for second in range(-2, 600, 2):
+        at = f"2026-11-05T09:{second // 60:02d}:{second % 60:02d}Z" if second >= 0 else \
+            "2026-11-05T08:59:58Z"
+        if gap_at is not None and gap_at <= second < gap_at + 6:
+            continue
+        lines.append(f"{at} sample")
+        if foreign_at == second:
+            lines.append(f"{at} FOREIGN 93.6 /somewhere/build/tests/unit_tests --gtest_filter=X")
+    return "\n".join(lines) + "\n"
+
+
 def header(host):
     pinning = ("pinned to core 4: pthread_setaffinity_np returned 0, read back [4]"
                if host == DEBIAN else "not pinned: macOS has no thread affinity")
@@ -79,11 +93,14 @@ def lookup_record(host, design, check_s, answer_s, lookups=1_100_000):
 
 
 class Variants(unittest.TestCase):
-    def render(self, experiment, records, host=DEBIAN, checks=None, states=None):
+    def render(self, experiment, records, host=DEBIAN, checks=None, states=None, sampler=None):
         loads = [START.format(n=i) + "\n" + END.format(n=i) + "\n" for i in range(len(records))]
         checks = [CHECK, CHECK] if checks is None and host == DEBIAN else (checks or [])
         states = [STATE, STATE] if states is None and host == DEBIAN else (states or [])
-        return variants_report.render(experiment, records, loads, "P-0021", checks, states)
+        if sampler is None and host == MAC:
+            sampler = quiet_sampler()
+        return variants_report.render(experiment, records, loads, "P-0021", checks, states,
+                                      sampler)
 
     def name(self, experiment, host=DEBIAN):
         return f"{experiment}_{variants_report.HOST_FILE[host]}_12302019.md"
@@ -193,6 +210,23 @@ class Variants(unittest.TestCase):
         text, _, _ = self.render("prefetch", mac, host=MAC)
         self.assertIn("pin-claimed", self.violations(
             text.replace("- pinning: not pinned", "- pinning: pinned"), host=MAC))
+
+    def test_a_mac_process_is_published_only_if_sampled_quiet(self):
+        mac = [replay_record(MAC, prefetch=d) for d in (0, 4)]
+        text, _, _ = self.render("prefetch", mac, host=MAC)
+        self.assertIn(f"- interference: {variants_report.INTERFERENCE}", text)
+        # Process 1 runs from 09:01:00 to 09:01:30; another busy at 09:01:20 is in it, at
+        # 09:01:40 is not, and a stopped sampler from 09:01:10 leaves it uncovered.
+        for sampler in (quiet_sampler(foreign_at=80), quiet_sampler(gap_at=70), ""):
+            with self.assertRaises(variants_report.ReportError):
+                self.render("prefetch", mac, host=MAC, sampler=sampler)
+        text, _, _ = self.render("prefetch", mac, host=MAC, sampler=quiet_sampler(foreign_at=100))
+        self.assertEqual(self.violations(text, host=MAC), set())
+        self.assertIn("interference-unsaid", self.violations(
+            text.replace("- interference: sampled", "- interference: seen"), host=MAC))
+        with self.assertRaises(variants_report.ReportError):
+            variants_report.render("prefetch", mac, [START.format(n=0) + "\n" + END.format(n=0)]
+                                   * 2, "P-0021", [], [], None)
 
     def test_bad_records_are_refused(self):
         refused = self.prefetch_records(0.05)

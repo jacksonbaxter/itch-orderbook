@@ -605,6 +605,69 @@
         "signature": "^FAIL: test_a_book_variants_result_naming_no_prediction",
         "exit": 1
       }
+    },
+    {
+      "id": "bookvariants-report-foreign-ignored",
+      "breaks": "A Mac process is published with another process busy during it",
+      "check": "test_variants_report.py test_a_mac_process_is_published_only_if_sampled_quiet",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "        busy = [line for t, line in foreign if start <= t <= end]\n",
+          "new": "        busy = []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_mac_process_is_published_only_if_sampled_quiet",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-report-sampler-gap-ignored",
+      "breaks": "A Mac process is published with the sampler stopped during it",
+      "check": "test_variants_report.py test_a_mac_process_is_published_only_if_sampled_quiet",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "        if not covered or covered[0] > start or covered[-1] < end or any(\n                (b - a).total_seconds() > SAMPLE_GAP for a, b in zip(covered, covered[1:])):\n",
+          "new": "        if not covered:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_mac_process_is_published_only_if_sampled_quiet",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-report-interference-unchecked",
+      "breaks": "A macOS results file that does not say its processes were sampled quiet passes the check",
+      "check": "test_variants_report.py test_a_mac_process_is_published_only_if_sampled_quiet",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "    if host == MAC and fields.get(\"interference\") != INTERFERENCE:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_mac_process_is_published_only_if_sampled_quiet",
+        "exit": 1
+      }
     }
   ]
 }
