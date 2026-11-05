@@ -106,6 +106,7 @@ stage_bench() {
     python_test scripts/test_chase_report.py &&
     python_test scripts/test_counts_report.py &&
     python_test scripts/test_flame_report.py &&
+    python_test scripts/test_variants_report.py &&
     python_test scripts/test_zen1_events.py &&
     python_test scripts/gate_numbers.py &&
     python_test scripts/check_predictions.py || return 1
@@ -127,6 +128,10 @@ stage_bench() {
   for graph in results/flamegraph_*.md results/profile_*.md; do
     [ -f "$graph" ] || continue
     python_test scripts/flame_report.py --check "$graph" || return 1
+  done
+  for variants in results/lookup_*.md results/prefetch_*.md results/dispatch_*.md; do
+    [ -f "$variants" ] || continue
+    python_test scripts/variants_report.py --check "$variants" || return 1
   done
   build_preset release && ctest --preset release -R '^test_bench'
 }

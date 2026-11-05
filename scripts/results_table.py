@@ -203,7 +203,8 @@ def summary_row(name, text):
     return (title, host, summary, f"`{header_commit(text, name)}`", source(name))
 
 
-SUMMARY_PREFIXES = ("flamegraph_", "profile_", "counters_zen1_")
+SUMMARY_PREFIXES = ("flamegraph_", "profile_", "counters_zen1_", "lookup_", "prefetch_",
+                    "dispatch_")
 
 
 def mm_rows(name, text):
@@ -409,9 +410,10 @@ def generate(root):
                                  "Median messages/s", "CV", "Engine events/s", "Verdict",
                                  "Commit", "File"), backtests)
     if summaries:
-        lines += ["", "Profiles and counter tables. A flamegraph shows where the samples fell, "
-                      "not a rate, and a macOS profile never stands in for `perf` on `debian`. "
-                      "Each file says what it cannot show.", ""]
+        lines += ["", "Profiles, counter tables and the book's hot-loop experiments. A "
+                      "flamegraph shows where the samples fell, not a rate, and a macOS profile "
+                      "never stands in for `perf` on `debian`. Each file says what it cannot "
+                      "show.", ""]
         lines += markdown_table(("What", "Host", "Summary", "Commit", "File"), summaries)
     if pnl:
         lines += ["", "The market maker on its report day, 12302019, a late-December session, "

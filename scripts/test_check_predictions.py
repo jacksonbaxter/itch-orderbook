@@ -76,6 +76,15 @@ class History(unittest.TestCase):
         (self.results / "mm_fixture.md").write_text("# nothing\n", encoding="utf-8")
         self.assert_fails("prediction-missing")
 
+    def test_a_book_variants_result_naming_no_prediction(self):
+        self.in_order()
+        for name in ("lookup_fixture.md", "prefetch_fixture.md", "dispatch_fixture.md"):
+            with self.subTest(name=name):
+                path = self.results / name
+                path.write_text("# nothing\n", encoding="utf-8")
+                self.assert_fails("prediction-missing")
+                path.unlink()
+
     def test_a_result_naming_an_unknown_prediction(self):
         self.in_order()
         (self.results / "predictions.md").write_text("## P-0002: other\n", encoding="utf-8")
