@@ -35,3 +35,5 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0201-20261105T053845Z | P-0201 | abfb37c88eb0 (clean) | Darwin | published |
 | P-0201-20261105T053946Z | P-0201 | 9fee6ab0cb7b (clean) | Darwin | published |
 | P-0202-20261105T080745Z | P-0202 | 0999cb43a604 (clean) | Darwin | published |
+| P-0401-20261105T163315Z_native | P-0401 | 05215cc6b2b0 (clean) | Darwin | recorded: T-WASM-1's native side, for scripts/wasm_report.py |
+| P-0401-20261105T163318Z_browser | P-0401 | 05215cc6b2b0 (clean) | Darwin | recorded: T-WASM-1's browser side, for scripts/wasm_report.py |

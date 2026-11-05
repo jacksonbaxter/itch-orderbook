@@ -100,6 +100,12 @@ The backtester. Each row is one workload's results file: T-BT-1 replays the whol
 | quoting | T-BT-1 | 12302019 | macOS (M4 Max) | not pinned | 16,792,852 | 2.06% | 17,185,873 | host differs | `4fa6701df1cf` | [results/backtest_quoting_mac_12302019.md](results/backtest_quoting_mac_12302019.md) |
 | shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | 7,804,654 | 0.24% | 16,661,541 | met | `55978750888d` | [results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md) |
 
+The browser demo's replay of one symbol's extract, in a browser and natively on the same Mac, the same C++ on each side. Rates come from whole replays only: the browser cannot time one message. The bar was set in Google Chrome, so another browser neither meets nor misses it.
+
+| Target | Symbol | Day | Host | Browser | Native messages/s | Browser messages/s | Browser over native | Verdict | Commit | File |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T-WASM-1 | AAPL | 12302019 | macOS (M4 Max) | Google Chrome for Testing 153.0.8010.12 | 13,454,830 | 11,723,781 | 1.15× | browser differs: Google Chrome for Testing 153.0.8010.12, not Google Chrome | `05215cc6b2b0` | [results/wasm_replay_mac_12302019.md](results/wasm_replay_mac_12302019.md) |
+
 Profiles and counter tables. A flamegraph shows where the samples fell, not a rate, and a macOS profile never stands in for `perf` on `debian`. Each file says what it cannot show.
 
 | What | Host | Summary | Commit | File |
@@ -164,6 +170,8 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0201-20261105T053845Z` | `P-0201` | `abfb37c88eb0` | Darwin | `published` |
 | `P-0201-20261105T053946Z` | `P-0201` | `9fee6ab0cb7b` | Darwin | `published` |
 | `P-0202-20261105T080745Z` | `P-0202` | `0999cb43a604` | Darwin | `published` |
+| `P-0401-20261105T163315Z_native` | `P-0401` | `05215cc6b2b0` | Darwin | `recorded` |
+| `P-0401-20261105T163318Z_browser` | `P-0401` | `05215cc6b2b0` | Darwin | `recorded` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
