@@ -1,0 +1,72 @@
+{
+  "about": "The market maker's evaluation, fixed before any strategy ran on any real day: chosen on 10302019, an FOMC day, and reported on 12302019, a late-December session. NOTES.md, \"The market maker's evaluation\", gives the rule and the reasons. Nothing here may change after the first run on 12302019.",
+  "selection_day": "10302019",
+  "selection_label": "FOMC day",
+  "report_day": "12302019",
+  "report_label": "late-December session",
+  "select": {
+    "rule": "market-maker.md, MK-75",
+    "command": "itch_select data/10302019.NASDAQ_ITCH50 --top 15",
+    "raw": "select_10302019.out",
+    "window": "09:45:00 to 15:45:00",
+    "universe": 1716,
+    "group_a_members": 117,
+    "group_b_members": 1092,
+    "group_a": "AMD",
+    "group_b": "BYND"
+  },
+  "calibrate": {
+    "command": "itch_calibrate data/10302019.NASDAQ_ITCH50 --symbols AMD,BYND",
+    "raw": "calibrate_10302019.out",
+    "interval_ms": 100,
+    "sample_ms": 1000,
+    "tick": 100,
+    "max_depth_ticks": 20
+  },
+  "gamma_rule": "gamma = 1 / (sigma^2 (stop - start)), so that the Avellaneda-Stoikov risk term gamma sigma^2 (T - t) is one tick at the start, falling to zero at the stop",
+  "symbols": {
+    "AMD": {
+      "group": "A, tick-constrained",
+      "sigma": 0.727768,
+      "sigma_jump": 0.694522,
+      "k": 0.748212,
+      "a": 0.096422,
+      "fit_points": 18,
+      "r_squared": 0.734962,
+      "gamma": 8.74098e-05
+    },
+    "BYND": {
+      "group": "B, not constrained",
+      "sigma": 2.592559,
+      "sigma_jump": 3.892782,
+      "k": 0.243074,
+      "a": 0.170163,
+      "fit_points": 40,
+      "r_squared": 0.991704,
+      "gamma": 6.88793e-06
+    }
+  },
+  "horizon_s": 15,
+  "lot": 100,
+  "max_lots": 5,
+  "start": "09:45:00",
+  "stop": "15:45:00",
+  "close": "16:00:00",
+  "latency_ns": {
+    "market_data": 25000,
+    "order_entry": 25000,
+    "response": 25000,
+    "compute": 5000
+  },
+  "fee_date": 20191230,
+  "fee_tier": "base",
+  "runs": [
+    {"name": "AS Base", "model": "as", "queue": "exact", "latency_off": false},
+    {"name": "AS Q-off conservative", "model": "as", "queue": "conservative", "latency_off": false},
+    {"name": "AS Q-off proportional", "model": "as", "queue": "proportional", "latency_off": false},
+    {"name": "AS L-off", "model": "as", "queue": "exact", "latency_off": true},
+    {"name": "AS both off, conservative", "model": "as", "queue": "conservative", "latency_off": true},
+    {"name": "AS both off, proportional", "model": "as", "queue": "proportional", "latency_off": true},
+    {"name": "GLFT Base", "model": "glft", "queue": "exact", "latency_off": false}
+  ]
+}
