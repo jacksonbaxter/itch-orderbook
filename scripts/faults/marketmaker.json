@@ -1,0 +1,1100 @@
+{
+  "area": "marketmaker",
+  "tree": [
+    "CMakeLists.txt",
+    "CMakePresets.json",
+    ".clang-tidy",
+    ".github",
+    "cmake",
+    "include",
+    "src",
+    "tests",
+    "tools",
+    "fuzz",
+    "bench",
+    "scripts",
+    "results",
+    "README.md"
+  ],
+  "faults": [
+    {
+      "id": "mm-attribution-spread-at-the-post-fill-mark",
+      "breaks": "S and A take the mark at the fill, after it, instead of just before it",
+      "check": "test_attribution P02",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "const std::optional<Mid2> before = marks.before(fill.time);",
+          "new": "const std::optional<Mid2> before = marks.at(fill.time);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P02PerFillAndPathFormsAgree"
+      }
+    },
+    {
+      "id": "mm-attribution-fee-dropped",
+      "breaks": "The fee sub-line of S is left out",
+      "check": "test_attribution P01",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": ".fee = fill.fee,",
+          "new": ".fee = 0,"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P01SumEqualsLedgerTotalForEveryHorizon"
+      }
+    },
+    {
+      "id": "mm-attribution-opening-position-dropped",
+      "breaks": "I leaves out Q0(mT - m0), the opening position's term",
+      "check": "test_attribution P04",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "Wide{window.opening_position} * (Wide{*close} - *open)",
+          "new": "Wide{0} * (Wide{*close} - *open)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P04PastTheCloseInventoryIsTheOpeningPositionAlone"
+      }
+    },
+    {
+      "id": "mm-attribution-path-ages-a-fill-early",
+      "breaks": "The path form moves a fill from A to I at t + h instead of after it",
+      "check": "test_attribution P02",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "time - fills[aged].time > horizon",
+          "new": "time - fills[aged].time >= horizon"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P02PerFillAndPathFormsAgree"
+      }
+    },
+    {
+      "id": "mm-attribution-horizon-past-the-close",
+      "breaks": "A fill's horizon runs past the close unless h itself is past it",
+      "check": "test_attribution P12",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "return horizon >= close - fill ? close : fill + horizon;",
+          "new": "return horizon >= close ? close : fill + horizon;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P12AFillWithinTheHorizonOfTheCloseHasNoInventoryTerm"
+      }
+    },
+    {
+      "id": "mm-identity-check-always-holds",
+      "breaks": "Test 1's identity check passes whatever the ledger says: the negative test must catch it",
+      "check": "test_attribution P14",
+      "mutations": [
+        {
+          "file": "tests/test_attribution.cpp",
+          "old": "  return components.has_value() &&\n         components->total() == ledger_total(",
+          "new": "  return components.has_value() ||\n         components->total() == ledger_total("
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P14TheIdentityFailsWhenOneSideLosesAFeeAFillOrAMark"
+      }
+    },
+    {
+      "id": "mm-ledger-ignores-fees",
+      "breaks": "The ledger leaves fees out of cash",
+      "check": "test_attribution P01",
+      "mutations": [
+        {
+          "file": "include/itch/mm/ledger.hpp",
+          "old": "    cash_ -= fill.fee;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P01SumEqualsLedgerTotalForEveryHorizon"
+      }
+    },
+    {
+      "id": "mm-attribution-inventory-from-the-pre-fill-mark",
+      "breaks": "I runs from the mark before the fill, so the horizon's move is counted in A and again in I",
+      "check": "test_attribution P03",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "const auto inventory = narrow(quantity * (Wide{*close} - *later) * unit);",
+          "new": "const auto inventory = narrow(quantity * (Wide{*close} - *before) * unit);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P03TotalSpreadAndPositioningDoNotDependOnTheHorizon"
+      }
+    },
+    {
+      "id": "mm-attribution-spread-rounded-per-fill",
+      "breaks": "Each fill's gross spread is truncated to the cent, so splitting a fill changes S",
+      "check": "test_attribution P05",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "const auto gross = narrow(quantity * (Wide{*before} - price2) * unit);",
+          "new": "const auto gross = narrow(quantity * (Wide{*before} - price2) * unit / 10'000'000'000 * 10'000'000'000);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P05SplittingAFillChangesNothing"
+      }
+    },
+    {
+      "id": "mm-attribution-price-not-doubled",
+      "breaks": "The fill price is set against mid2 without doubling, so S depends on the price level",
+      "check": "test_attribution P06",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "const Wide price2 = Wide{2} * fill.price;",
+          "new": "const Wide price2 = Wide{1} * fill.price;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P06ShiftingEveryPriceAndMarkChangesNothing"
+      }
+    },
+    {
+      "id": "mm-attribution-fee-sign-by-side",
+      "breaks": "A sell's fee enters S with the opposite sign to a buy's",
+      "check": "test_attribution P07",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": ".fee = fill.fee,",
+          "new": ".fee = fill.quantity > 0 ? fill.fee : -fill.fee,"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P07MirroringSidesAndPricesChangesNothing"
+      }
+    },
+    {
+      "id": "mm-attribution-adverse-to-the-close",
+      "breaks": "A runs to the close instead of to the horizon",
+      "check": "test_attribution P08",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "const auto adverse = narrow(quantity * (Wide{*later} - *before) * unit);",
+          "new": "const auto adverse = narrow(quantity * (Wide{*close} - *before) * unit);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P08EffectiveIsRealizedPlusImpactPerShare"
+      }
+    },
+    {
+      "id": "mm-attribution-adverse-from-the-price",
+      "breaks": "A is measured from the fill price, the realized spread, instead of from the mark before the fill",
+      "check": "test_attribution P09",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "const auto adverse = narrow(quantity * (Wide{*later} - *before) * unit);",
+          "new": "const auto adverse = narrow(quantity * (Wide{*later} - price2) * unit);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P09FlatMarkHasNoAdverseSelectionOrInventory"
+      }
+    },
+    {
+      "id": "mm-attribution-spread-sign",
+      "breaks": "S is the price less the mark, so a round trip at the touch loses the spread",
+      "check": "test_attribution P10",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "const auto gross = narrow(quantity * (Wide{*before} - price2) * unit);",
+          "new": "const auto gross = narrow(quantity * (price2 - Wide{*before}) * unit);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P10RoundTripEarnsTheFullSpreadAndNothingElse"
+      }
+    },
+    {
+      "id": "mm-attribution-opening-marks-swapped",
+      "breaks": "The opening position is valued from the close back to the open",
+      "check": "test_attribution P11",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "Wide{window.opening_position} * (Wide{*close} - *open)",
+          "new": "Wide{window.opening_position} * (Wide{*open} - *close)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P11FlatEndIgnoresTheFinalMark"
+      }
+    },
+    {
+      "id": "mm-attribution-fee-in-the-gross-spread",
+      "breaks": "The fee is taken out of the gross spread as well as reported as its own line",
+      "check": "test_attribution P13",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": ".gross_spread = *gross,",
+          "new": ".gross_spread = *gross - fill.fee,"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_attribution"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_attribution"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Attribution\\.P13RebatesOffChangeOnlyTheFeeSubLine"
+      }
+    },
+    {
+      "id": "mm-as-reservation-skews-the-wrong-way",
+      "breaks": "r = s + q gamma sigma^2 tau: long inventory raises the quotes",
+      "check": "test_market_maker eq. 29",
+      "mutations": [
+        {
+          "file": "include/itch/mm/quoting.hpp",
+          "old": "return mid - (lots * gamma_ * variance_ * remaining);",
+          "new": "return mid + (lots * gamma_ * variance_ * remaining);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_market_maker"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_market_maker"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] AvellanedaStoikov\\.ReservationPriceAndSpreadAreEquations29And30"
+      }
+    },
+    {
+      "id": "mm-as-spread-halves-the-intensity-term",
+      "breaks": "Eq. 30 with half its (2/gamma) ln(1 + gamma/k) term",
+      "check": "test_market_maker eq. 30 and the tables' spreads",
+      "mutations": [
+        {
+          "file": "include/itch/mm/quoting.hpp",
+          "old": "return (gamma_ * variance_ * remaining) + constant_;",
+          "new": "return (gamma_ * variance_ * remaining) + (constant_ / 2.0);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_market_maker"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_market_maker"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] AvellanedaStoikov\\.TheContinuousAverageSpreadRoundsToThePapersTables"
+      }
+    },
+    {
+      "id": "mm-glft-ask-mirrors-the-wrong-inventory",
+      "breaks": "GLFT's ask depth at q is the bid's at q, not at -q",
+      "check": "test_market_maker GLFT symmetry",
+      "mutations": [
+        {
+          "file": "include/itch/mm/quoting.hpp",
+          "old": "    return bid_depth(-lots);",
+          "new": "    return bid_depth(lots);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_market_maker"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_market_maker"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Glft\\.QuotesAreSymmetricAndSkewWithInventory"
+      }
+    },
+    {
+      "id": "mm-marks-read-the-view-book",
+      "breaks": "The mark path reads the strategy's late view book, so latency moves it",
+      "check": "test_market_maker P15",
+      "mutations": [
+        {
+          "file": "include/itch/mm/session.hpp",
+          "old": "marks.observe(engine.exchange_book(), frame.payload);",
+          "new": "marks.observe(engine.view_book(), frame.payload);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_market_maker"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_market_maker"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MarketMaker\\.P15TheMarkPathIsTheSameInEveryRunOfASwitchMatrix"
+      }
+    },
+    {
+      "id": "mm-report-depends-on-the-run",
+      "breaks": "The report carries state from an earlier run",
+      "check": "test_market_maker P16",
+      "mutations": [
+        {
+          "file": "include/itch/mm/session.hpp",
+          "old": "  out += std::format(\"horizon_ns {}\\n\", input.horizon);",
+          "new": "  static int reports = 0;\n  out += std::format(\"horizon_ns {} {}\\n\", input.horizon, ++reports);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_market_maker"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_market_maker"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MarketMaker\\.P16TwoRunsOfOneConfigurationGiveTheSameReport"
+      }
+    },
+    {
+      "id": "mm-quoter-ignores-the-bound",
+      "breaks": "A new order is sent with no room left under the inventory bound",
+      "check": "test_market_maker inventory bound",
+      "mutations": [
+        {
+          "file": "include/itch/mm/strategy.hpp",
+          "old": "    if (target && !mine.id.valid() && lot > room) {\n      return;\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_market_maker"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_market_maker"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Quoter\\.StopsBuyingAtTheInventoryBound"
+      }
+    },
+    {
+      "id": "mm-quoter-replace-overfills",
+      "breaks": "A replace ignores what its order can still fill before it lands",
+      "check": "test_market_maker inventory on replay",
+      "mutations": [
+        {
+          "file": "include/itch/mm/strategy.hpp",
+          "old": "mine.price != *target && mine.remaining + lot > room) {",
+          "new": "mine.price != *target && lot > room) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_market_maker"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_market_maker"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MarketMaker\\.TheIdentityHoldsOnEveryRunAndInventoryStaysInBounds"
+      }
+    },
+    {
+      "id": "mm-quoter-sells-through-the-bid",
+      "breaks": "An ask at or under the best bid is sent as it is",
+      "check": "test_market_maker post-only",
+      "mutations": [
+        {
+          "file": "include/itch/mm/strategy.hpp",
+          "old": "    if (sell && *sell <= bid.price) {\n      sell = bid.price + config_.tick;\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_market_maker"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_market_maker"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Quoter\\.NeverPricesThroughTheOtherSide"
+      }
+    },
+    {
+      "id": "mm-quoter-allocates-per-fill",
+      "breaks": "The fill log grows per fill instead of being sized once",
+      "check": "test_alloc TheMarketMakerAllocatesNothingAfterConstruction",
+      "mutations": [
+        {
+          "file": "include/itch/mm/strategy.hpp",
+          "old": "    if (filled_ == fills_.size()) {",
+          "new": "    fills_.reserve(fills_.size() + 1);\n    if (filled_ == fills_.size()) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Allocation\\.TheMarketMakerAllocatesNothingAfterConstruction"
+      }
+    },
+    {
+      "id": "mm-calibrate-depth-from-the-current-mid",
+      "breaks": "An execution's depth is taken from the mid of the moment, not the interval's start",
+      "check": "test_calibrate_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/mm/calibration.hpp",
+          "old": "const Mid2 depth = side == Side::bid ? start_mid2_ - twice : twice - start_mid2_;",
+          "new": "const Mid2 depth = side == Side::bid ? mid2_ - twice : twice - mid2_;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL AAA: no line 'depth 0\\.5 exposure 8 hits 8",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-counts-non-printable",
+      "breaks": "A non-printable C counts as an aggressor reaching its depth",
+      "check": "test_calibrate_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/mm/calibration.hpp",
+          "old": "if (c.printable == 'Y' && order && order->locate == locate_) {",
+          "new": "if (order && order->locate == locate_) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL AAA: no line 'depth 2\\.5 exposure 8 hits 2",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-no-nanosecond-collapse",
+      "breaks": "Changes inside one nanosecond count as jumps of their own",
+      "check": "test_calibrate_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/mm/calibration.hpp",
+          "old": "    if (time > group_time_) {",
+          "new": "    if (time >= group_time_) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL CCC: no line 'sigma_jump_count 4'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-jump-across-a-halt",
+      "breaks": "The change of mid across a halt counts as a jump",
+      "check": "test_calibrate_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/mm/calibration.hpp",
+          "old": "if (point_valid_ && mid2_ != point_mid2_) {",
+          "new": "if (mid2_ != point_mid2_) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL CCC: no line 'sigma_jump_count 4'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-every-depth-open",
+      "breaks": "Whole-tick depths are open on a one-tick spread, where no quote can rest",
+      "check": "test_calibrate_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/mm/calibration.hpp",
+          "old": "const auto parity = static_cast<std::size_t>((start_mid2_ / tick) % 2);",
+          "new": "const auto parity = static_cast<std::size_t>(0);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL AAA",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-interval-boundary",
+      "breaks": "An execution at the end of an interval counts in the next one",
+      "check": "test_calibrate_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/mm/calibration.hpp",
+          "old": "    while (next_interval_ < time) {",
+          "new": "    while (next_interval_ <= time) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL AAA: no line 'depth 1\\.5 exposure 8 hits 4",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-sigma-not-demeaned",
+      "breaks": "sigma on the clock is the root mean square of the changes, not their standard deviation",
+      "check": "test_calibrate_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/mm/calibration.hpp",
+          "old": "const auto spread = (n * squares_) - (sum_ * sum_);",
+          "new": "const auto spread = (n * squares_);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL CCC at 1\\.5 s: no line 'sigma_clock 0\\.384900'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-r-squared",
+      "breaks": "R squared is Sxy/Syy instead of the explained share",
+      "check": "test_calibrate_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/mm/calibration.hpp",
+          "old": ".r_squared = syy == 0 ? 1.0 : (slope * sxy) / syy};",
+          "new": ".r_squared = syy == 0 ? 1.0 : sxy / syy};"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL BBB: no line 'fit points 3 k 0\\.346574 A 0\\.314980 r_squared 0\\.750000'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-as-tables-figure-edited",
+      "breaks": "A measured spread in results/mm_as_tables.md is typed over",
+      "check": "as_tables_report.py check",
+      "mutations": [
+        {
+          "file": "results/mm_as_tables.md",
+          "old": "| 0.1 | 1.49 | 1.4918 |",
+          "new": "| 0.1 | 1.49 | 1.4917 |"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_as_tables"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/as_tables_report.py",
+        "check",
+        "--tool",
+        "{build}/tools/itch_as_tables",
+        "{tree}/results/mm_as_tables.md"
+      ],
+      "expect": {
+        "signature": "as_tables_report: FAIL differs-from-rerun mm_as_tables\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-as-tables-verdict-flipped",
+      "breaks": "T-MM-2's verdict in the results file is turned to a pass",
+      "check": "as_tables_report.py check",
+      "mutations": [
+        {
+          "file": "results/mm_as_tables.md",
+          "old": "**Verdict: FAIL**",
+          "new": "**Verdict: PASS**"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_as_tables"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/as_tables_report.py",
+        "check",
+        "--tool",
+        "{build}/tools/itch_as_tables",
+        "{tree}/results/mm_as_tables.md"
+      ],
+      "expect": {
+        "signature": "as_tables_report: FAIL differs-from-rerun mm_as_tables\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-as-tables-prediction-dropped",
+      "breaks": "The results file no longer names its prediction",
+      "check": "as_tables_report.py check",
+      "mutations": [
+        {
+          "file": "results/mm_as_tables.md",
+          "old": "- prediction: P-0201\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_as_tables"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/as_tables_report.py",
+        "check",
+        "--tool",
+        "{build}/tools/itch_as_tables",
+        "{tree}/results/mm_as_tables.md"
+      ],
+      "expect": {
+        "signature": "as_tables_report: FAIL header-field-missing mm_as_tables\\.md: no prediction",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-as-tables-simulation-changed",
+      "breaks": "The simulation behind the results file changed: the symmetric strategy quotes narrower",
+      "check": "as_tables_report.py check",
+      "mutations": [
+        {
+          "file": "tools/itch_as_tables.cpp",
+          "old": "trade(plain, mid - (average / 2.0), mid + (average / 2.0)",
+          "new": "trade(plain, mid - (average / 2.1), mid + (average / 2.1)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_as_tables"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/as_tables_report.py",
+        "check",
+        "--tool",
+        "{build}/tools/itch_as_tables",
+        "{tree}/results/mm_as_tables.md"
+      ],
+      "expect": {
+        "signature": "as_tables_report: FAIL differs-from-rerun mm_as_tables\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-as-tables-spread-within-a-hundredth",
+      "breaks": "A spread a hundredth off the paper's at two decimals counts as a match",
+      "check": "test_as_tables_report.py test_the_left_point_grid_at_gamma_one_fails_by_a_hundredth",
+      "mutations": [
+        {
+          "file": "scripts/as_tables_report.py",
+          "old": "        ok = shown == Decimal(paper_spread)\n",
+          "new": "        ok = abs(shown - Decimal(paper_spread)) <= Decimal(\"0.01\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_as_tables_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_left_point_grid_at_gamma_one_fails_by_a_hundredth",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-as-tables-three-standard-errors",
+      "breaks": "The other columns are allowed three standard errors, not the two P-0201 fixed",
+      "check": "test_as_tables_report.py test_within_two_errors_and_half_a_unit_is_consistent",
+      "mutations": [
+        {
+          "file": "scripts/as_tables_report.py",
+          "old": "SE_MULTIPLE = 2\n",
+          "new": "SE_MULTIPLE = 3\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_as_tables_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_within_two_errors_and_half_a_unit_is_consistent",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-predictions-skip-market-maker-results",
+      "breaks": "A market maker results file is not held to a prediction",
+      "check": "test_check_predictions.py test_a_market_maker_result_naming_no_prediction",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "\"backtest_*.md\", \"mm_*.md\")",
+          "new": "\"backtest_*.md\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_market_maker_result_naming_no_prediction",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-readme-row-always-passes",
+      "breaks": "The README row for T-MM-2 shows a pass whatever the file's verdict",
+      "check": "test_results_table.py test_t_mm_2_shows_each_spread_and_its_verdict",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "return [verdict_row(\"T-MM-2\", \"none\", header_host(text, name), verdict, detail,",
+          "new": "return [verdict_row(\"T-MM-2\", \"none\", header_host(text, name), \"PASS\", detail,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_t_mm_2_shows_each_spread_and_its_verdict",
+        "exit": 1
+      }
+    },
+    {
+      "id": "check-market-maker-stage",
+      "breaks": "A figure in results/mm_as_tables.md is typed over, and check.sh must say so",
+      "check": "check.sh market_maker stage",
+      "mutations": [
+        {
+          "file": "results/mm_as_tables.md",
+          "old": "| 0.01 | 1.35 | 1.3490 |",
+          "new": "| 0.01 | 1.35 | 1.3491 |"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": []
+      },
+      "command": [
+        "bash",
+        "{tree}/scripts/check.sh",
+        "--only",
+        "market_maker"
+      ],
+      "expect": {
+        "signature": "as_tables_report: FAIL differs-from-rerun mm_as_tables\\.md[\\s\\S]*market_maker +FAIL",
+        "exit": 1
+      },
+      "timeout": 1200
+    }
+  ]
+}
