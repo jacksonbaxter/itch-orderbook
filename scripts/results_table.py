@@ -195,6 +195,29 @@ def mm_rows(name, text):
                         header_commit(text, name), name)]
 
 
+def pnl_rows(name, text):
+    """The market maker's report day: each symbol's runs, their fills, shares and PnL in dollars."""
+    rows = []
+    for symbol, section in re.findall(r"^## ([A-Z]+)\n((?s:.*?))(?=^## |\Z)", text, re.MULTILINE):
+        counts = re.findall(r"^\| ([^|]+?) \| ([\d,]+) \| [\d,]+ \| [\d,]+ \| ([\d,]+) \|",
+                            section, re.MULTILINE)
+        money = section[section.index("PnL in dollars:"):section.index("PnL in dollars a share:")]
+        amounts = re.findall(r"^\| ([^|]+?) \| ([^|]+) \| [^|]+ \| ([^|]+) \| ([^|]+) \| "
+                             r"([^|]+) \| ([^|]+) \|$", money, re.MULTILINE)[1:]
+        ticks = section[section.index("PnL in ticks a share:"):]
+        per_share = re.findall(r"^\| ([^|]+?) \|(?: [^|]+ \|){5} ([^|]+) \|$", ticks,
+                               re.MULTILINE)[1:]
+        if not counts or len(counts) != len(amounts) or len(counts) != len(per_share):
+            raise TableError(f"results/{name}: {symbol}'s tables do not have one row a run")
+        for (run, fills, shares), amount, (_, total_ticks) in zip(counts, amounts, per_share,
+                                                                    strict=True):
+            rows.append((symbol, run, fills, shares, *(cell.strip() for cell in amount[2:]),
+                         total_ticks.strip(), source(name)))
+    if not rows:
+        raise TableError(f"results/{name}: no symbol's runs")
+    return rows
+
+
 def fault_row(name, text):
     result = find(r"^- Result: (.*)$", text, name)[1]
     controls = find(r"^- Controls: (.*)$", text, name)[1]
@@ -292,6 +315,7 @@ def generate(root):
     throughput = []
     books = []
     backtests = []
+    pnl = []
     for path in sorted((root / "results").glob("*.md")):
         name = path.name
         if name in NOT_RESULTS:
@@ -314,6 +338,9 @@ def generate(root):
             rows = []
         elif name.startswith("backtest_"):
             backtests.append(backtest_row(name, text))
+            rows = []
+        elif name.startswith("mm_pnl_"):
+            pnl += pnl_rows(name, text)
             rows = []
         elif name.startswith("mm_"):
             rows = mm_rows(name, text)
@@ -348,6 +375,15 @@ def generate(root):
         lines += markdown_table(("Workload", "Target", "Day", "Host", "Pinning",
                                  "Median messages/s", "CV", "Engine events/s", "Verdict",
                                  "Commit", "File"), backtests)
+    if pnl:
+        lines += ["", "The market maker on its report day, 12302019, a late-December session, "
+                      "with every parameter chosen on 10302019, an FOMC day. One symbol-day. No "
+                      "edge is claimed. Each symbol is its own symbol-day, and the file gives S "
+                      "gross, fees, the markout curve and how Q-off and L-off each change the "
+                      "PnL. Dollars at the base fee tier; a replayed feed cannot react, so market "
+                      "impact is absent.", ""]
+        lines += markdown_table(("Symbol", "Run", "Fills", "Shares", "S, $", "A, $", "I, $",
+                                 "Total, $", "Total, ticks a share", "File"), pnl)
     lines += ["", "Every benchmark run, failed ones included, from "
                   "[results/run_log.md](results/run_log.md).", ""]
     lines += markdown_table(("Run", "Prediction", "Commit", "OS", "Outcome"), run_rows(run_log))

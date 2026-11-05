@@ -1409,6 +1409,286 @@
         "exit": 1
       },
       "timeout": 1200
+    },
+    {
+      "id": "mm-report-components-not-checked",
+      "breaks": "A run whose S + A + I is not its total is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "    if parts != figures[\"total\"]:\n",
+          "new": "    if parts != figures[\"total\"] and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_total_that_is_not_s_plus_a_plus_i"
+      }
+    },
+    {
+      "id": "mm-report-ledger-not-checked",
+      "breaks": "A run whose total is not the ledger's is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "    if figures[\"total\"] != figures[\"ledger_total\"]:\n",
+          "new": "    if figures[\"total\"] != figures[\"ledger_total\"] and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_ledger_that_differs"
+      }
+    },
+    {
+      "id": "mm-report-fees-not-checked",
+      "breaks": "S that is not S gross less the fees is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "    if figures[\"gross_spread\"] - figures[\"fees\"] != figures[\"spread_capture\"]:\n",
+          "new": "    if figures[\"gross_spread\"] + figures[\"fees\"] != figures[\"spread_capture\"] and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_s_that_is_not_gross_less_fees"
+      }
+    },
+    {
+      "id": "mm-report-markout-total-not-checked",
+      "breaks": "A markout horizon whose A(h) + I(h) moves the total is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "        if adverse + inventory != held:\n",
+          "new": "        if adverse + inventory != held and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_markout_that_moves_the_total"
+      }
+    },
+    {
+      "id": "mm-report-mark-path-not-checked",
+      "breaks": "Two mark paths in one symbol's runs are accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "            if len(values) != 1:\n",
+          "new": "            if len(values) > 2:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_second_mark_path"
+      }
+    },
+    {
+      "id": "mm-report-parameters-not-checked",
+      "breaks": "A run with a parameter other than the committed one is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "        if have.get(key) is None or float(have[key]) != fit[key]:\n",
+          "new": "        if have.get(key) is None:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_parameter_not_committed"
+      }
+    },
+    {
+      "id": "mm-report-day-not-checked",
+      "breaks": "A run on another day is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "\"close_ns\": str(clock_ns(evaluation[\"close\"])), \"date\": report_date(evaluation)}",
+          "new": "\"close_ns\": str(clock_ns(evaluation[\"close\"]))}"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_run_on_another_day"
+      }
+    },
+    {
+      "id": "mm-report-tool-checks-ignored",
+      "breaks": "A run whose tool reported a failed check is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "        if figures[\"checks\"].get(name) != \"pass\":\n",
+          "new": "        if figures[\"checks\"].get(name) not in (\"pass\", \"FAIL\"):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_failed_tool_check"
+      }
+    },
+    {
+      "id": "mm-report-matrix-not-checked",
+      "breaks": "A matrix missing a committed run is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "    if list(runs) != wanted:\n",
+          "new": "    if len(runs) < len(wanted) - 1:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "(?:FAIL|ERROR): test_a_missing_run"
+      }
+    },
+    {
+      "id": "mm-report-sharpe-allowed",
+      "breaks": "A Sharpe ratio in the results file is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "FORBIDDEN = re.compile(r\"\\b(?:sharpe|returns?)\\b\", re.IGNORECASE)",
+          "new": "FORBIDDEN = re.compile(r\"\\b(?:returns?)\\b\", re.IGNORECASE)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_sharpe_ratio"
+      }
+    },
+    {
+      "id": "mm-report-fixed-sentence-unchecked",
+      "breaks": "The results file without the fixed sentence is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "    for sentence in (FIXED, NO_IMPACT, \"out of sample by day\",",
+          "new": "    for sentence in (NO_IMPACT, \"out of sample by day\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_fixed_sentence_removed"
+      }
+    },
+    {
+      "id": "mm-report-rounds-half-even",
+      "breaks": "Amounts are rounded half to even, not half up",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "rounding=ROUND_HALF_UP)\n    return value if",
+          "new": "rounding=\"ROUND_HALF_EVEN\")\n    return value if"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_amounts_in_dollars_per_share_and_ticks"
+      }
+    },
+    {
+      "id": "mm-report-body-not-rerendered",
+      "breaks": "A figure typed over in the body is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "        if have != want:\n            violations.append((\"differs-from-output\"",
+          "new": "        if have != want and \"|\" not in have:\n            violations.append((\"differs-from-output\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_figure_typed_over_in_the_body"
+      }
+    },
+    {
+      "id": "mm-report-run-ignores-tool-failure",
+      "breaks": "A run whose tool exits 2 is published",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "            if done.returncode not in (0, 1):\n",
+          "new": "            if done.returncode not in (0, 1, 2):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_tool_that_fails_is_logged_and_refused"
+      }
     }
   ]
 }
