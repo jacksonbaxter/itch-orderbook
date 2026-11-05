@@ -34,3 +34,7 @@ itch_apply_options(itch_queue_jumps)
 add_executable(itch_as_tables itch_as_tables.cpp)
 target_link_libraries(itch_as_tables PRIVATE itch_parser)
 itch_apply_options(itch_as_tables)
+
+add_executable(itch_calibrate itch_calibrate.cpp)
+target_link_libraries(itch_calibrate PRIVATE itch_parser)
+itch_apply_options(itch_calibrate)
