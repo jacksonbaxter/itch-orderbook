@@ -521,7 +521,45 @@
         "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
         "unpacked_sha256": "d670c9dd0e2391a4007fa407668bfaaa9ded346f0804bb5d7b2a6c381bdcadd3",
         "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the unpacked SHA-256 for this day; the fetch fails on any difference.",
-        "agrees": []
+        "agrees": [
+          "unpacked_sha256"
+        ]
+      },
+      "compressed_bytes": 1097205622,
+      "etag": "\"ad1370cd24b9d41:0\"",
+      "last_modified": "Thu, 31 Jan 2019 05:21:21 GMT",
+      "gz_sha256": "b581ad9a3b2cea24927b54bf977c12484e20c047b0aed2d3fa46deea9fc2812c",
+      "gzip_crc32": "d96b992f",
+      "gzip_isize": 2422694511,
+      "gzip_members": 1,
+      "unpacked_bytes": 2422694511,
+      "unpacked_sha256": "d670c9dd0e2391a4007fa407668bfaaa9ded346f0804bb5d7b2a6c381bdcadd3",
+      "messages": 82841542,
+      "per_type_counts": {
+        "A": 34828527,
+        "B": 3,
+        "C": 6915,
+        "D": 33864580,
+        "E": 1339986,
+        "F": 48596,
+        "H": 8804,
+        "L": 5869,
+        "N": 8301264,
+        "P": 325381,
+        "R": 8713,
+        "S": 6,
+        "U": 3385851,
+        "V": 1,
+        "X": 708225,
+        "Y": 8821
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 68700000008170,
+        "offset": 2422694497
       }
     }
   },
