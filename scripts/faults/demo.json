@@ -495,6 +495,106 @@
       "expect": {
         "signature": "FAIL: test_no_stray_markup_in_generated_cells"
       }
+    },
+    {
+      "id": "demo-sampler-foreign-ignored",
+      "breaks": "The sampler rule lets a side through whatever other process the sampler saw in its span",
+      "check": "test_demo test_render_refuses_a_side_the_sampler_saw_shared",
+      "mutations": [
+        {
+          "file": "scripts/wasm_bench.py",
+          "old": "if len(words) == 4 and words[1] == \"FOREIGN\" and begin <= at(words[0]) <= end:",
+          "new": "if len(words) == 4 and words[1] == \"FOREIGN\" and False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_render_refuses_a_side_the_sampler_saw_shared"
+      }
+    },
+    {
+      "id": "demo-sampler-gap-ignored",
+      "breaks": "The sampler rule lets a side through with a gap of any length between samples",
+      "check": "test_demo test_render_refuses_a_gap_in_the_sampler",
+      "mutations": [
+        {
+          "file": "scripts/wasm_bench.py",
+          "old": "        if (after - before).total_seconds() > LONGEST_GAP_S:",
+          "new": "        if (after - before).total_seconds() > 60 * LONGEST_GAP_S:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_render_refuses_a_gap_in_the_sampler"
+      }
+    },
+    {
+      "id": "demo-sampler-own-children-foreign",
+      "breaks": "The sampler counts the browser and bench_demo, the measured processes under the driver, as foreign",
+      "check": "test_demo test_own_processes_and_their_wrappers_are_not_foreign",
+      "mutations": [
+        {
+          "file": "scripts/wasm_bench.py",
+          "old": "            stack.extend(children.get(pid, ()))",
+          "new": "            stack.extend(())"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_own_processes_and_their_wrappers_are_not_foreign"
+      }
+    },
+    {
+      "id": "demo-report-publishes-unsampled",
+      "breaks": "wasm_report.py render publishes a side the sampler did not show quiet",
+      "check": "test_demo test_render_refuses_a_side_with_no_sampler_or_one_that_stopped_early",
+      "mutations": [
+        {
+          "file": "scripts/wasm_report.py",
+          "old": "    if not sampler:\n        raise ReportError(f\"{side}: no CPU sampler ran beside it, so it is not published\")",
+          "new": "    if not sampler:\n        return \"quiet: unsampled\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_render_refuses_a_side_with_no_sampler_or_one_that_stopped_early"
+      }
+    },
+    {
+      "id": "demo-report-sampler-line-unchecked",
+      "breaks": "wasm_report.py check passes a file whose sampler line is not quiet",
+      "check": "test_demo test_check_catches_a_sampler_line_that_is_not_quiet",
+      "mutations": [
+        {
+          "file": "scripts/wasm_report.py",
+          "old": "        if not fields.get(name, \"\").startswith(\"quiet: \"):",
+          "new": "        if not fields.get(name, \"\"):"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_sampler_line_that_is_not_quiet"
+      }
     }
   ]
 }

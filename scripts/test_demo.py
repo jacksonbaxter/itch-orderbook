@@ -7,6 +7,7 @@ data/ or docs/local/.
 """
 
 import contextlib
+import datetime
 import http.client
 import io
 import json
@@ -203,6 +204,11 @@ class Bench(Scratch):
         self.write("results/predictions.md", "# Predictions\n\n## P-0401: a test\n\n- Experiment.\n")
         self.log = self.root / "results" / "run_log.md"
         self.check_script = self.write("machine_check.sh", FAKE_CHECK)
+        self.foreign = []
+        real = wasm_bench.processes
+        wasm_bench.processes = lambda: [(os.getpid(), 1, 0.0, "python3 wasm_bench.py"),
+                                        *self.foreign]
+        self.addCleanup(setattr, wasm_bench, "processes", real)
         self.common = ["--probe", "probe", "--prediction", "P-0401", "--raw-dir",
                        str(self.root / "raw"), "--repetitions", "3", "--allow-dirty",
                        "--run-log", str(self.log), "--docs", str(self.root / "docs"),
@@ -225,6 +231,21 @@ class Bench(Scratch):
         self.assertIn("recorded: T-WASM-1's native side", self.log.read_text())
         self.assertIn(record["run_id"], self.log.read_text())
         self.assertRegex(record["run_id"], r"^P-0401-\w+$")
+
+    def test_a_foreign_process_withdraws_the_run(self):
+        self.foreign = [(999_999, 1, 97.5, "build/fuzz/bin/some_fuzzer -max_total_time=300")]
+        bench = self.executable("bench.py", FAKE_BENCH.format(python=sys.executable,
+                                                              digest=self.manifest["digest"]))
+        code, output = quietly(wasm_bench.main, ["native", "--bench", str(bench), *self.common])
+        self.assertEqual(code, wasm_bench.WITHDRAWN, output)
+        self.assertIn("withdrawn: T-WASM-1's native side; the CPU sampler saw some_fuzzer at "
+                      "97.5% CPU", self.log.read_text())
+        record = json.loads((self.root / "raw" / "native.json").read_text())
+        self.assertTrue(any("FOREIGN 97.5" in line for line in record["sampler"]["lines"]))
+        self.assertIn("FOREIGN 97.5", (self.root / "raw" / "native.sampler.txt").read_text())
+        with self.assertRaisesRegex(wasm_report.ReportError, "native: not published under the "
+                                                             "sampler rule: the CPU sampler saw"):
+            wasm_report.sampler_line(record, "native")
 
     def test_native_refuses_another_book(self):
         bench = self.executable("bench.py", FAKE_BENCH.format(python=sys.executable,
@@ -282,6 +303,16 @@ class Bench(Scratch):
         self.assertIn("refused at engine: the engine was built from 000000000000", self.log.read_text())
 
 
+def quiet_samples(first="2026-11-05T09:59:58Z", last="2026-11-05T10:05:02Z"):
+    """A sampler's lines every 2 s from first to last, with nothing foreign."""
+    at, end = wasm_bench.at(first), wasm_bench.at(last)
+    lines = []
+    while at <= end:
+        lines.append(f"{at:%Y-%m-%dT%H:%M:%SZ} sample")
+        at += datetime.timedelta(seconds=2)
+    return lines
+
+
 def records(browser_name="Google Chrome for Testing 153.0.8010.12", wasm_ms=None):
     """A native and a browser record, as wasm_bench.py writes them, and their stderr."""
     native_ns = [40_000_000 + 100_000 * i for i in range(5)]
@@ -293,7 +324,10 @@ def records(browser_name="Google Chrome for Testing 153.0.8010.12", wasm_ms=None
               "run_started": "2026-11-05T10:00:00Z", "run_finished": "2026-11-05T10:05:00Z",
               "machine_check": "machine_check: pass", "extract_manifest": manifest,
               "digest": manifest["digest"]}
-    native = {**common, "side": "native", "run_id": "P-0401-20261105T100000Z_native",
+    def sampler():
+        return {"every_s": 2.0, "foreign_cpu": 20.0, "longest_gap_s": 5, "lines": quiet_samples()}
+
+    native = {**common, "sampler": sampler(), "side": "native", "run_id": "P-0401-20261105T100000Z_native",
               "command": "python3 -B scripts/wasm_bench.py native ...",
               "header": {"host": "macOS (M4 Max)", "cpu": "Apple M4 Max", "kernel": "Darwin 27.2.0",
                          "compiler": "Clang 23.1.4 (x)", "flags": "-O3 -DNDEBUG -std=c++23",
@@ -301,7 +335,7 @@ def records(browser_name="Google Chrome for Testing 153.0.8010.12", wasm_ms=None
                          "pinning": "not pinned"},
               "warmup": {"ns": 45_000_000},
               "repetitions": [{"ns": ns, "messages": 1_000_000} for ns in native_ns]}
-    browser = {**common, "side": "browser", "run_id": "P-0401-20261105T100100Z_browser",
+    browser = {**common, "sampler": sampler(), "side": "browser", "run_id": "P-0401-20261105T100100Z_browser",
                "command": "python3 -B scripts/wasm_bench.py browser ...",
                "browser": browser_name, "browser_flags": ["--headless=new"],
                "user_agent": "Mozilla/5.0 HeadlessChrome/153.0.0.0", "cross_origin_isolated": True,
@@ -341,6 +375,60 @@ class Report(unittest.TestCase):
             repetition["ns"] = 40_000_000 + 100_000 * i + 377
         text = wasm_report.render(native, browser, stderr, stderr)
         self.assertEqual(self.violations(text), [])
+
+    def test_render_refuses_a_side_the_sampler_saw_shared(self):
+        native, browser, stderr = records()
+        browser["sampler"]["lines"].insert(
+            60, "2026-11-05T10:01:58Z FOREIGN 99.0 build/fuzz/bin/some_fuzzer -runs=0")
+        with self.assertRaisesRegex(wasm_report.ReportError,
+                                    "browser: not published under the sampler rule: the CPU "
+                                    "sampler saw some_fuzzer at 99.0% CPU"):
+            wasm_report.render(native, browser, stderr, stderr)
+
+    def test_a_foreign_process_outside_the_span_does_not_count(self):
+        native, browser, stderr = records()
+        native["sampler"]["lines"].insert(0, "2026-11-05T09:59:58Z FOREIGN 99.0 some_fuzzer")
+        self.assertEqual(self.violations(wasm_report.render(native, browser, stderr, stderr)), [])
+
+    def test_render_refuses_a_gap_in_the_sampler(self):
+        native, browser, stderr = records()
+        del native["sampler"]["lines"][40:44]
+        with self.assertRaisesRegex(wasm_report.ReportError,
+                                    "native: not published under the sampler rule: the CPU "
+                                    "sampler went 10 s without a sample"):
+            wasm_report.render(native, browser, stderr, stderr)
+
+    def test_render_refuses_a_side_with_no_sampler_or_one_that_stopped_early(self):
+        native, browser, stderr = records()
+        del native["sampler"]
+        with self.assertRaisesRegex(wasm_report.ReportError, "native: no CPU sampler"):
+            wasm_report.render(native, browser, stderr, stderr)
+        native, browser, stderr = records()
+        browser["sampler"]["lines"] = quiet_samples(last="2026-11-05T10:04:58Z")
+        with self.assertRaisesRegex(wasm_report.ReportError, "did not cover the whole span"):
+            wasm_report.render(native, browser, stderr, stderr)
+
+    def test_check_catches_a_sampler_line_that_is_not_quiet(self):
+        text = self.render()
+        self.assertIn(wasm_report.SAMPLER_RULE, text)
+        self.assertIn("- browser_sampler: quiet: 153 samples from 2026-11-05T09:59:58Z", text)
+        edited = text.replace("- browser_sampler: quiet: ", "- browser_sampler: shared: ")
+        self.assertIn("sampler-not-quiet", {c for c, _ in self.violations(edited)})
+        dropped = text.replace(wasm_report.SAMPLER_RULE, "")
+        self.assertIn("sampler-rule-missing", {c for c, _ in self.violations(dropped)})
+
+    def test_own_processes_and_their_wrappers_are_not_foreign(self):
+        rows = [(1, 0, 0.0, "launchd"),
+                (10, 1, 0.1, "bash measure.sh /usr/bin/time -l python3 wasm_bench.py"),
+                (11, 10, 0.0, "/usr/bin/time -l python3 wasm_bench.py"),
+                (12, 11, 30.0, "python3 wasm_bench.py browser"),
+                (13, 12, 99.0, "Google Chrome for Testing --headless=new"),
+                (14, 13, 98.0, "Google Chrome for Testing Helper (Renderer) --type=renderer"),
+                (20, 1, 45.0, "build/fuzz/bin/other_fuzzer"),
+                (21, 1, 15.0, "below the bar")]
+        lines = wasm_bench.sample_lines(rows, 12, "2026-11-05T10:00:00Z")
+        self.assertEqual(lines, ["2026-11-05T10:00:00Z sample",
+                                 "2026-11-05T10:00:00Z FOREIGN 45.0 build/fuzz/bin/other_fuzzer"])
 
     def test_google_chrome_itself_is_held_to_the_bar(self):
         met = self.render(browser_name="Google Chrome 153.0.8010.12")

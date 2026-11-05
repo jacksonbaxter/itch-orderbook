@@ -8,11 +8,12 @@
 render reads the two records scripts/wasm_bench.py wrote and the stderr each run left, which
 holds measure.sh's load lines and /usr/bin/time -l's memory, and writes the file. It refuses
 records that do not replay the same extract, reach the same digest, or come from one commit
-and one host.
+and one host, and, under the Mac's sampler rule, a side whose CPU sampler did not cover its
+whole span with no gap over 5 s, or saw another process above 20% CPU in it.
 
 check holds a written file to itself, with no raw record: every header field present; the
-host macOS on Darwin and the browser named; each summary figure the median, min, max and CV
-of the repetitions table; the ratio the browser's median over native's; the verdict in a word
+host macOS on Darwin and the browser named; each side's sampler line quiet and the rule
+stated; each summary figure the median, min, max and CV of the repetitions table; the ratio the browser's median over native's; the verdict in a word
 from the fixed set, and the one those figures and the browser give; the load lines stamped;
 both runs in results/run_log.md; and no per-message figure. With no FILE it checks every
 results/wasm_*.md.
@@ -35,6 +36,10 @@ import statistics
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import wasm_bench  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAC_HOST = "macOS (M4 Max)"
 BAR = 1.55
@@ -45,12 +50,16 @@ FIELDS = ("host", "cpu", "kernel", "commit", "extract", "extract_sha256", "day_s
           "wasm_sha256", "wasm_memory", "browser", "browser_flags", "user_agent",
           "cross_origin_isolated", "page_clock_step", "pinning", "native_load_start",
           "native_load_end", "browser_load_start", "browser_load_end", "native_peak_rss",
-          "browser_peak_rss", "prediction", "run_id", "native_run_id", "repetitions",
+          "browser_peak_rss", "native_sampler", "browser_sampler", "prediction", "run_id", "native_run_id", "repetitions",
           "messages", "digest", "run_started", "run_finished")
 SUMMARY = (("Native, messages/s", "native", "rate"),
            ("WebAssembly in the browser, messages/s", "wasm", "rate"),
            ("Native, ms a replay", "native", "ms"),
            ("WebAssembly in the browser, ms a replay", "wasm", "ms"))
+SAMPLER_RULE = ("The Mac's sampler rule was applied: a CPU sampler ran beside each side every "
+                "2 s from before it started to after it ended, and a side is published only if "
+                "the sampler covered its whole span with no gap over 5 s and saw no other "
+                "process above 20% CPU in it.")
 NO_LATENCY = ("No per-message latency is shown: a replay is the only span either side "
               "times, and the browser's clock cannot resolve one message.")
 HEADER_LINE = re.compile(r"^- ([a-z0-9_]+): (.*)$")
@@ -126,6 +135,22 @@ def load_lines(stderr_text, name):
     return found, peak
 
 
+def sampler_line(record, side):
+    """The header's line for one side's sampler, after refusing a side it does not show quiet."""
+    sampler = record.get("sampler")
+    if not sampler:
+        raise ReportError(f"{side}: no CPU sampler ran beside it, so it is not published")
+    lines = sampler["lines"]
+    why = wasm_bench.unquiet(lines, record["run_started"], record["run_finished"])
+    if why:
+        raise ReportError(f"{side}: not published under the sampler rule: {why}")
+    samples = [line.split()[0] for line in lines if line.split()[1:2] == ["sample"]]
+    stamps = [wasm_bench.at(stamp) for stamp in samples]
+    gap = max((b - a).total_seconds() for a, b in zip(stamps, stamps[1:])) if len(stamps) > 1 else 0
+    return (f"quiet: {len(samples)} samples from {samples[0]} to {samples[-1]}, the longest gap "
+            f"{gap:g} s, no other process above {sampler['foreign_cpu']:g}% CPU")
+
+
 def gib(value):
     return f"{value / 1024 ** 3:.2f} GiB"
 
@@ -155,6 +180,8 @@ def render(native, browser, native_stderr, browser_stderr):
         raise ReportError("the two sides ran different numbers of repetitions")
     if any(r["messages"] != messages for r in native["repetitions"] + browser["repetitions"]):
         raise ReportError("a repetition did not replay every message of the extract")
+    native_sampler = sampler_line(native, "native")
+    browser_sampler = sampler_line(browser, "browser")
     native_load, native_peak = load_lines(native_stderr, "native stderr")
     browser_load, browser_peak = load_lines(browser_stderr, "browser stderr")
     engine = browser["engine_built"]
@@ -186,6 +213,7 @@ def render(native, browser, native_stderr, browser_stderr):
         "browser_peak_rss": (f"{gib(browser_peak['maximum resident set size'])}, /usr/bin/time -l "
                              "of the driver, the largest process of the browser's tree it waited "
                              "for"),
+        "native_sampler": native_sampler, "browser_sampler": browser_sampler,
         "prediction": native["prediction"], "run_id": browser["run_id"],
         "native_run_id": native["run_id"], "repetitions": str(len(native_ms)),
         "messages": f"{messages:,}", "digest": native["digest"],
@@ -198,6 +226,7 @@ def render(native, browser, native_stderr, browser_stderr):
              "Do not edit by hand.", "",
              f"Host: **{MAC_HOST}**. A macOS figure, never a Linux one: `debian` has no browser. "
              "macOS offers no way to pin a thread, so neither side was pinned.", "",
+             SAMPLER_RULE, "",
              "## Header", ""]
     lines += [f"- {name}: {fields[name]}" for name in FIELDS]
     lines += ["", "## What is timed", "",
@@ -284,6 +313,11 @@ def check_text(text, run_log):
     for name in ("native_load_start", "native_load_end", "browser_load_start", "browser_load_end"):
         if not fields.get(name, "").startswith("measure.sh: "):
             yield "load-not-stamped", name
+    for name in ("native_sampler", "browser_sampler"):
+        if not fields.get(name, "").startswith("quiet: "):
+            yield "sampler-not-quiet", f"{name}: {fields.get(name)!r}"
+    if SAMPLER_RULE not in text:
+        yield "sampler-rule-missing", "the file must say the sampler rule was applied"
     for name in ("run_id", "native_run_id"):
         if fields.get(name) and fields[name] not in run_log:
             yield "run-missing-from-log", f"{fields[name]} has no row in results/run_log.md"

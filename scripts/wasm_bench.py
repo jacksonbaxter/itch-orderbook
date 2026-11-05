@@ -24,16 +24,27 @@ its record: the same warm-up and N timed replays, timed by performance.now() aro
 call. Then it stops the browser. The browser's name and version come from the binary itself.
 A page that fails, a browser that exits, or no record by --timeout refuses the run.
 
+Other work shares this Mac and does not always wait for measure.sh, so a CPU sampler runs
+beside each side, from before the run starts to after it ends: every 2 s a `sample` line, and a
+`FOREIGN` line for each process above 20% CPU that is not this driver, a process under it (the
+browser's helpers included) or the measure.sh and /usr/bin/time above it. Its lines go into the
+record and into <side>.sampler.txt. A side whose span the sampler did not cover with no gap over
+5 s, or in which it saw a foreign process, is withdrawn: its record is kept but its row says
+why, and scripts/wasm_report.py refuses to publish it.
+
 Each writes <side>.json to the raw directory, and every run gets a row in results/run_log.md,
 whatever became of it. scripts/wasm_report.py turns the two records into the results file.
 
-Exit codes: 0 record written, 1 refused or failed, 2 bad usage, 128 + N stopped by signal N.
+Exit codes: 0 record written, 1 refused or failed, 2 bad usage, 4 withdrawn under the sampler
+rule, 128 + N stopped by signal N.
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
+import os
 import json
 import platform
 import resource
@@ -53,6 +64,12 @@ REPO_ROOT = bench_driver.REPO_ROOT
 Refused = bench_driver.Refused
 Stopped = bench_driver.Stopped
 MOST_POST_BYTES = 1 << 20
+SAMPLE_EVERY_S = 2.0
+FOREIGN_CPU = 20.0
+LONGEST_GAP_S = 5
+WITHDRAWN = 4
+# The measured process's own ancestors, which use no CPU of their own while it runs.
+OWN_WRAPPERS = ("measure.sh", "/usr/bin/time")
 # Each flag keeps the headless browser from doing work of its own while the page runs.
 BROWSER_FLAGS = ("--headless=new", "--no-first-run", "--no-default-browser-check",
                  "--disable-extensions", "--disable-background-networking",
@@ -114,6 +131,111 @@ def run_child(command, log_path, timeout=None):
         finally:
             bench_driver.current_child = None
     return code
+
+
+# the sampler
+
+def processes():
+    """(pid, parent pid, %CPU, command) for every process, as ps gives them."""
+    listed = subprocess.run(["ps", "-Ao", "pid=,ppid=,pcpu=,args="], capture_output=True,
+                            text=True, check=True).stdout
+    rows = []
+    for line in listed.splitlines():
+        words = line.split(None, 3)
+        if len(words) >= 3:
+            rows.append((int(words[0]), int(words[1]), float(words[2]),
+                         words[3] if len(words) == 4 else ""))
+    return rows
+
+
+def own_processes(rows, me):
+    """This driver, every process under it, and the measure.sh and /usr/bin/time above it."""
+    children = {}
+    parent = {}
+    command = {}
+    for pid, ppid, _, args in rows:
+        children.setdefault(ppid, []).append(pid)
+        parent[pid] = ppid
+        command[pid] = args
+    own = set()
+    stack = [me]
+    while stack:
+        pid = stack.pop()
+        if pid not in own:
+            own.add(pid)
+            stack.extend(children.get(pid, ()))
+    above = parent.get(me)
+    while above and any(wrapper in command.get(above, "") for wrapper in OWN_WRAPPERS):
+        own.add(above)
+        above = parent.get(above)
+    return own
+
+
+def sample_lines(rows, me, at):
+    """One sample: its line, then a FOREIGN line for each other process above the bar."""
+    own = own_processes(rows, me)
+    lines = [f"{at} sample"]
+    for pid, _, cpu, args in sorted(rows, key=lambda row: -row[2]):
+        if cpu > FOREIGN_CPU and pid not in own:
+            lines.append(f"{at} FOREIGN {cpu:.1f} {args[:150]}")
+    return lines
+
+
+class Sampler:
+    """Samples every SAMPLE_EVERY_S on a thread of its own, from start() to stop()."""
+
+    def __init__(self, path):
+        self.path = path
+        self.lines = []
+        self.done = threading.Event()
+        self.thread = threading.Thread(target=self.loop, daemon=True)
+
+    def sample(self):
+        try:
+            lines = sample_lines(processes(), os.getpid(), bench_driver.utc_now())
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            lines = [f"{bench_driver.utc_now()} failed {error!r}"]
+        self.lines += lines
+        with open(self.path, "a", encoding="utf-8") as out:
+            out.write("".join(line + "\n" for line in lines))
+
+    def loop(self):
+        while not self.done.wait(SAMPLE_EVERY_S):
+            self.sample()
+
+    def start(self):
+        self.path.unlink(missing_ok=True)
+        self.sample()
+        self.thread.start()
+
+    def stop(self):
+        self.done.set()
+        self.thread.join()
+        self.sample()
+
+
+def at(stamp):
+    return datetime.datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ")
+
+
+def unquiet(lines, started, finished):
+    """Why the sampler does not show the span from started to finished quiet, or None."""
+    samples = [at(line.split()[0]) for line in lines if line.split()[1:2] == ["sample"]]
+    begin, end = at(started), at(finished)
+    if not samples or samples[0] > begin or samples[-1] < end:
+        return "the CPU sampler did not cover the whole span"
+    for before, after in zip(samples, samples[1:]):
+        if (after - before).total_seconds() > LONGEST_GAP_S:
+            return (f"the CPU sampler went {(after - before).total_seconds():g} s without a "
+                    f"sample after {before:%H:%M:%S}")
+    for line in lines:
+        words = line.split(None, 3)
+        if len(words) > 1 and words[1] == "failed" and begin <= at(words[0]) <= end:
+            return f"the CPU sampler failed at {words[0]}"
+        if len(words) == 4 and words[1] == "FOREIGN" and begin <= at(words[0]) <= end:
+            name = words[3].split()[0].rsplit("/", 1)[-1] if words[3].split() else "?"
+            return f"the CPU sampler saw {name} at {words[2]}% CPU at {words[0]}"
+    return None
 
 
 # native
@@ -264,7 +386,7 @@ def command_line(args):
     return " ".join(shlex.quote(word) if "<" not in word else word for word in words)
 
 
-def run(args, run_id, started, commit):
+def run(args, run_id, started, commit, sampler):
     bench_driver.set_stage("checking the extract")
     manifest, extract_path = the_extract(args.docs / "local")
     bench_driver.set_stage("checking the prediction")
@@ -276,13 +398,17 @@ def run(args, run_id, started, commit):
     else:
         record = browser(args, manifest, commit)
     bench_driver.hold_signals()
+    finished = bench_driver.utc_now()
+    sampler.stop()
     record.update({"side": args.side, "prediction": args.prediction, "run_id": run_id,
-                   "commit": commit, "run_started": started, "run_finished": bench_driver.utc_now(),
+                   "commit": commit, "run_started": started, "run_finished": finished,
                    "machine_check": machine_output, "command": command_line(args),
-                   "extract_manifest": manifest})
+                   "extract_manifest": manifest,
+                   "sampler": {"every_s": SAMPLE_EVERY_S, "foreign_cpu": FOREIGN_CPU,
+                               "longest_gap_s": LONGEST_GAP_S, "lines": sampler.lines}})
     out = args.raw_dir / f"{args.side}.json"
     out.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
-    return out
+    return out, unquiet(sampler.lines, started, finished)
 
 
 def parse_args(argv):
@@ -317,13 +443,15 @@ def main(argv=None):
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)
     args.raw_dir.mkdir(parents=True, exist_ok=True)
+    sampler = Sampler(args.raw_dir / f"{args.side}.sampler.txt")
+    sampler.start()
     started = bench_driver.utc_now()
     # One word after the prediction, as results_table.py reads the log's rows.
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}_{args.side}"
     commit = "unknown"
     try:
         commit = bench_driver.git_commit(REPO_ROOT, args.allow_dirty)
-        written = run(args, run_id, started, commit)
+        written, withdrawn = run(args, run_id, started, commit, sampler)
     except Stopped as stop:
         bench_driver.stop_child()
         name = signal.Signals(stop.signum).name
@@ -344,9 +472,18 @@ def main(argv=None):
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
                                 f"T-WASM-1 {args.side}: failed: {error!r}")
         return 1
+    finally:
+        sampler.done.set()
     bench_driver.hold_signals()
+    if withdrawn:
+        bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
+                                f"withdrawn: T-WASM-1's {args.side} side; {withdrawn}; nothing from "
+                                f"it is published, and it is rerun under {args.prediction}")
+        print(f"wasm_bench: withdrawn: {withdrawn}; the record is in {written}", file=sys.stderr)
+        return WITHDRAWN
     bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
-                            f"recorded: T-WASM-1's {args.side} side, for scripts/wasm_report.py")
+                            f"recorded: T-WASM-1's {args.side} side, for scripts/wasm_report.py; "
+                            "the CPU sampler saw no other process above 20% CPU")
     print(f"wasm_bench: wrote {written}", file=sys.stderr)
     return 0
 
