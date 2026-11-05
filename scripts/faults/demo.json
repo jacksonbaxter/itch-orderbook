@@ -1,0 +1,460 @@
+{
+  "area": "demo",
+  "tree": [
+    "CMakeLists.txt",
+    "CMakePresets.json",
+    ".clang-tidy",
+    ".github",
+    "cmake",
+    "include",
+    "src",
+    "tests",
+    "tools",
+    "fuzz",
+    "bench",
+    "scripts",
+    "results",
+    "docs",
+    "README.md"
+  ],
+  "faults": [
+    {
+      "id": "demo-style-cream-background",
+      "breaks": "The page's background is cream",
+      "check": "gates.py demo-background",
+      "mutations": [
+        {
+          "file": "docs/demo.css",
+          "old": "--page: #11151a;",
+          "new": "--page: #fdf6e3;"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL demo-background docs/demo\\.css:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "demo-style-italic-heading-word",
+      "breaks": "The page's title sets one word in italics",
+      "check": "gates.py demo-italic-heading",
+      "mutations": [
+        {
+          "file": "docs/index.html",
+          "old": "<h1>ITCH order book replay in WebAssembly</h1>",
+          "new": "<h1>ITCH order book replay in <em>WebAssembly</em></h1>"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL demo-italic-heading docs/index\\.html:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "demo-style-numbered-section-label",
+      "breaks": "A section heading carries a numbered label",
+      "check": "gates.py demo-numbered-label",
+      "mutations": [
+        {
+          "file": "docs/index.html",
+          "old": "<h2>Depth</h2>",
+          "new": "<h2>02 / Depth</h2>"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL demo-numbered-label docs/index\\.html:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "demo-style-pill-button",
+      "breaks": "The buttons' corners are rounded into pills",
+      "check": "gates.py demo-pill-button",
+      "mutations": [
+        {
+          "file": "docs/demo.css",
+          "old": "  border-radius: 2px;\n  padding: 6px 12px;",
+          "new": "  border-radius: 999px;\n  padding: 6px 12px;"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL demo-pill-button docs/demo\\.css:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "demo-style-gradient-hero",
+      "breaks": "The page's background is a gradient",
+      "check": "gates.py demo-gradient",
+      "mutations": [
+        {
+          "file": "docs/demo.css",
+          "old": "  padding: 24px;\n  background: var(--page);\n",
+          "new": "  padding: 24px;\n  background: linear-gradient(var(--page), var(--panel));\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL demo-gradient docs/demo\\.css:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "demo-numbers-json-edited",
+      "breaks": "docs/numbers.json says something results/ does not",
+      "check": "demo.py numbers --check",
+      "mutations": [
+        {
+          "file": "docs/numbers.json",
+          "old": "\"pinning\": \"pinned to core 4",
+          "new": "\"pinning\": \"pinned to core 5"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/demo.py",
+        "numbers",
+        "--check",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "demo: FAIL numbers-stale",
+        "exit": 1
+      }
+    },
+    {
+      "id": "demo-linux-slot-takes-a-mac-file",
+      "breaks": "The Linux slot takes a results file from any host",
+      "check": "test_demo test_a_mac_file_never_fills_the_linux_slot",
+      "mutations": [
+        {
+          "file": "scripts/demo.py",
+          "old": "    if header.get(\"host\") != LINUX_HOST or not header.get(\"kernel\", \"\").startswith(\"Linux\"):",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_mac_file_never_fills_the_linux_slot"
+      }
+    },
+    {
+      "id": "demo-bench-engine-from-any-commit",
+      "breaks": "wasm_bench.py browser times an engine built from another commit",
+      "check": "test_demo test_browser_refuses_an_engine_from_another_commit",
+      "mutations": [
+        {
+          "file": "scripts/wasm_bench.py",
+          "old": "    if info.get(\"commit\", \"\").split()[0] != commit.split()[0] or not clean:",
+          "new": "    if not clean:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_browser_refuses_an_engine_from_another_commit"
+      }
+    },
+    {
+      "id": "demo-report-verdict-unchecked",
+      "breaks": "wasm_report.py check passes a verdict the ratio does not give",
+      "check": "test_demo test_check_catches_an_edited_verdict_or_ratio",
+      "mutations": [
+        {
+          "file": "scripts/wasm_report.py",
+          "old": "    if said != verdict(ratio, browser):",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_an_edited_verdict_or_ratio"
+      }
+    },
+    {
+      "id": "demo-report-summary-unchecked",
+      "breaks": "wasm_report.py check passes a summary the repetitions do not give",
+      "check": "test_demo test_check_catches_an_edited_repetition",
+      "mutations": [
+        {
+          "file": "scripts/wasm_report.py",
+          "old": "        if summary.get(label) != summary_cells(values, kind):",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_an_edited_repetition"
+      }
+    },
+    {
+      "id": "demo-report-testing-build-is-chrome",
+      "breaks": "Chrome for Testing is held to the Google Chrome bar",
+      "check": "test_demo test_a_rendered_file_passes_its_check",
+      "mutations": [
+        {
+          "file": "scripts/wasm_report.py",
+          "old": "    return browser.startswith(CHROME) and not browser.startswith(CHROME + \"for Testing\")",
+          "new": "    return browser.startswith(CHROME)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_rendered_file_passes_its_check"
+      }
+    },
+    {
+      "id": "demo-predictions-skip-wasm-results",
+      "breaks": "check_predictions leaves wasm_*.md results unread",
+      "check": "test_check_predictions test_a_wasm_result_naming_no_prediction",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "\"mm_*.md\", \"wasm_*.md\")",
+          "new": "\"mm_*.md\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_wasm_result_naming_no_prediction"
+      }
+    },
+    {
+      "id": "demo-table-whole-verdict",
+      "breaks": "results_table puts the whole T-WASM-1 verdict in the row",
+      "check": "test_results_table test_a_wasm_file_gets_a_row_of_its_own",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            said.split(\";\")[0], f\"`{header_commit(text, name)}`\", source(name))",
+          "new": "            said, f\"`{header_commit(text, name)}`\", source(name))"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_wasm_file_gets_a_row_of_its_own"
+      }
+    },
+    {
+      "id": "demo-print-price-from-the-order",
+      "breaks": "A C print takes the resting order's price, not the execution price",
+      "check": "test_demo_replay DemoReplay.StepKeepsEachPrintTheBookCanPrice",
+      "mutations": [
+        {
+          "file": "include/itch/demo_replay.hpp",
+          "old": ".price = c.execution_price,",
+          "new": ".price = order->price,"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_demo_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_demo_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] DemoReplay\\.StepKeepsEachPrintTheBookCanPrice"
+      }
+    },
+    {
+      "id": "demo-step-counts-no-status",
+      "breaks": "step() applies a message without counting its status",
+      "check": "test_demo_replay DemoReplay.StepAndReplayLeaveTheSameBook",
+      "mutations": [
+        {
+          "file": "include/itch/demo_replay.hpp",
+          "old": "      record_print(frame.payload);\n      ++statuses_[static_cast<std::size_t>(book_.apply(frame.payload))];",
+          "new": "      record_print(frame.payload);\n      static_cast<void>(book_.apply(frame.payload));"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_demo_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_demo_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] DemoReplay\\.StepAndReplayLeaveTheSameBook"
+      }
+    },
+    {
+      "id": "demo-digest-skips-shares",
+      "breaks": "The digest leaves out each level's shares",
+      "check": "test_demo_replay DemoReplay.StepAndReplayLeaveTheSameBook",
+      "mutations": [
+        {
+          "file": "include/itch/demo_replay.hpp",
+          "old": "        mix(level.aggregate_shares);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_demo_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_demo_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] DemoReplay\\.StepAndReplayLeaveTheSameBook"
+      }
+    },
+    {
+      "id": "demo-step-allocates",
+      "breaks": "record_print allocates on every message it does not keep",
+      "check": "test_alloc Allocation.TheDemoReplayAllocatesNothingAfterConstruction",
+      "mutations": [
+        {
+          "file": "include/itch/demo_replay.hpp",
+          "old": "      default: break;\n    }\n  }",
+          "new": "      default: ::operator delete(::operator new(16)); break;\n    }\n  }"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_alloc",
+        "--gtest_filter=Allocation.TheDemoReplay*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Allocation\\.TheDemoReplayAllocatesNothingAfterConstruction"
+      }
+    },
+    {
+      "id": "demo-extract-keeps-every-locate",
+      "breaks": "itch_extract keeps every symbol's frames",
+      "check": "test_demo_cli",
+      "mutations": [
+        {
+          "file": "tools/itch_extract.cpp",
+          "old": "    if (type != itch::SystemEvent::kType && ours[locate] == 0) {",
+          "new": "    if (false) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_extract",
+          "bench_demo"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_demo_cli.py",
+        "{build}/tools/itch_extract",
+        "{build}/bench/bench_demo",
+        "{tree}/build/demo_cli_fault"
+      ],
+      "expect": {
+        "signature": "FAIL: the extract is not exactly S3's frames",
+        "exit": 1
+      }
+    },
+    {
+      "id": "demo-bench-times-a-mixed-extract",
+      "breaks": "bench_demo times an extract of more than one symbol",
+      "check": "test_demo_cli",
+      "mutations": [
+        {
+          "file": "bench/bench_demo.cpp",
+          "old": "  if (survey.extract_status() != itch::demo::ExtractStatus::ok) {",
+          "new": "  if (false) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_extract",
+          "bench_demo"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_demo_cli.py",
+        "{build}/tools/itch_extract",
+        "{build}/bench/bench_demo",
+        "{tree}/build/demo_cli_fault"
+      ],
+      "expect": {
+        "signature": "FAIL: bench_demo on a six-symbol day",
+        "exit": 1
+      }
+    }
+  ]
+}
