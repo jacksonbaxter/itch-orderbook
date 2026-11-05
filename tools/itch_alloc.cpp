@@ -4,11 +4,14 @@
 //
 //     itch_alloc FILE [--warmup N] [--max-orders N] [--max-levels N] [--index hash|paged]
 //                [--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N]
+//                [--prefetch D]
 //
 // Warm-up is the first N messages, 0 by default, so the count starts at the first
 // message after construction. --index and --levels pick the arm of the fast book, the
-// book's default arm if left out, and the capacities are as itch_oracle's. Exit codes:
-// 0 pass, 1 fail, 2 bad usage.
+// book's default arm if left out, and the capacities are as itch_oracle's. --prefetch
+// walks the fast book's pass with itch/lookahead.hpp's reader, D messages ahead, so that
+// the reader's ring and the book's look-ahead are inside the count. Exit codes: 0 pass,
+// 1 fail, 2 bad usage.
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -22,6 +25,7 @@
 
 #include "book_arms.hpp"
 #include "itch/book.hpp"
+#include "itch/lookahead.hpp"
 #include "itch/reader.hpp"
 #include "mapped_file.hpp"
 #include "oracle/alloc_counter.hpp"
@@ -36,6 +40,7 @@ struct Options {
   std::uint64_t warmup = 0;
   itch::BookCapacity capacity;
   itch::tools::BookArm arm;
+  std::uint64_t prefetch = 0;  // Messages the fast book looks ahead.
 };
 
 [[nodiscard]] std::optional<std::uint64_t> parse_number(std::string_view text) {
@@ -73,6 +78,8 @@ struct Options {
     }
     if (arg == "--warmup") {
       options.warmup = *number;
+    } else if (arg == "--prefetch") {
+      options.prefetch = *number;
     } else if (arg == "--max-orders") {
       options.capacity.orders = static_cast<std::uint32_t>(*number);
     } else if (arg == "--max-levels") {
@@ -90,10 +97,9 @@ struct Pass {
   AllocCounts allocations;
 };
 
-template <class Apply>
-[[nodiscard]] Pass replay(std::span<const std::byte> bytes, std::uint64_t warmup, Apply apply) {
+template <class Reader, class Apply>
+[[nodiscard]] Pass replay(Reader reader, std::uint64_t warmup, Apply apply) {
   Pass pass;
-  itch::FrameReader reader{bytes};
   if (warmup == 0) {
     itch::oracle::reset_alloc_counts();
   }
@@ -131,22 +137,26 @@ int run(const Options& options) {
   std::println("book_index {}", to_string(options.arm.index));
   std::println("book_levels {}", to_string(options.arm.levels));
   std::println("warmup_messages {}", options.warmup);
+  std::println("book_prefetch {}", options.prefetch);
 
-  itch::FastBook<itch::NoWriteObserver, Index, Levels> fast{options.capacity};
-  const Pass fast_pass =
-      replay(file->bytes(), options.warmup, [&fast](std::span<const std::byte> payload) {
+  using Fast = itch::FastBook<itch::NoWriteObserver, Index, Levels>;
+  Fast fast{options.capacity};
+  const Pass fast_pass = replay(
+      itch::LookaheadReader<Fast>{file->bytes(), fast, static_cast<unsigned>(options.prefetch)},
+      options.warmup, [&fast](std::span<const std::byte> payload) {
         const itch::ApplyStatus status = fast.apply(payload);
         return status == itch::ApplyStatus::applied || status == itch::ApplyStatus::no_book_effect;
       });
   print_pass("fast", fast_pass);
 
   itch::oracle::ReferenceBook control;
-  const Pass control_pass =
-      replay(file->bytes(), options.warmup, [&control](std::span<const std::byte> payload) {
-        const itch::oracle::RefStatus status = control.apply(payload).status;
-        return status == itch::oracle::RefStatus::applied ||
-               status == itch::oracle::RefStatus::no_book_effect;
-      });
+  const Pass control_pass = replay(itch::FrameReader{file->bytes()}, options.warmup,
+                                   [&control](std::span<const std::byte> payload) {
+                                     const itch::oracle::RefStatus status =
+                                         control.apply(payload).status;
+                                     return status == itch::oracle::RefStatus::applied ||
+                                            status == itch::oracle::RefStatus::no_book_effect;
+                                   });
   print_pass("control", control_pass);
 
   const bool fast_clean = fast_pass.allocations.total() == 0 && fast_pass.refused == 0;
@@ -170,11 +180,19 @@ int main(int argc, const char* const* argv) {
       static_cast<void>(
           std::fputs("usage: itch_alloc FILE [--warmup N] [--max-orders N] [--max-levels N] "
                      "[--index hash|paged] [--levels linked|flat] [--max-pages N] "
-                     "[--index-bits N] [--max-slots N]\n",
+                     "[--index-bits N] [--max-slots N] [--prefetch D]\n",
                      stderr));
       return 2;
     }
     return itch::tools::with_book_arm(options->arm, [&options]<class Index, class Levels> {
+      using Fast = itch::FastBook<itch::NoWriteObserver, Index, Levels>;
+      if (options->prefetch > itch::LookaheadReader<Fast>::kMostAhead ||
+          !itch::LookaheadReader<Fast>::valid_distance(static_cast<unsigned>(options->prefetch))) {
+        std::println(stderr, "itch_alloc: --prefetch {} is neither 0 nor {} to {} for this arm",
+                     options->prefetch, Fast::kPrefetchStages,
+                     itch::LookaheadReader<Fast>::kMostAhead);
+        return 2;
+      }
       return run<Index, Levels>(*options);
     });
   } catch (const std::exception& error) {

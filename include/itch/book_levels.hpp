@@ -9,6 +9,10 @@
 // Stub quotes are real and span almost the whole price field (DS-73), so neither arm
 // indexes a level by its price. Both search by comparing prices, and a far price is just
 // one more entry at the far end.
+//
+// For a reader running ahead of the book (itch/lookahead.hpp), each arm can ask for a
+// level record's line, a side's record, and the first thing a search of that side reads
+// after it. Each only reads, takes any index, and asks for nothing past its storage.
 #pragma once
 
 #include <array>
@@ -35,6 +39,7 @@ class LevelPool {
   [[nodiscard]] bool has_free() const noexcept {
     return free_ != kNoIndex || fresh_ < levels_.size();
   }
+  [[nodiscard]] std::size_t size() const noexcept { return levels_.size(); }
 
   [[nodiscard]] std::uint32_t take() noexcept {
     ++live_;
@@ -131,6 +136,21 @@ class LinkedLevels {
     }
     const bool exists = worse != kNoIndex && levels_[worse].price == id.price;
     return {.level = exists ? worse : kNoIndex, .better = better, .worse = worse};
+  }
+
+  void prefetch_level(std::uint32_t level) const noexcept {
+    if (level < levels_.size()) {
+      // measured: E8, see FastBook::prefetch_stage.
+      __builtin_prefetch(&levels_[level]);
+    }
+  }
+  void prefetch_side(std::uint16_t locate, Side side) const noexcept {
+    // measured: E8, see FastBook::prefetch_stage.
+    __builtin_prefetch(&tops_[side_key(locate, side)]);
+  }
+  // A search starts at the best level.
+  void prefetch_search(std::uint16_t locate, Side side) const noexcept {
+    prefetch_level(tops_[side_key(locate, side)].level);
   }
 
   [[nodiscard]] bool has_room(const LevelId& /*id*/) const noexcept { return levels_.has_free(); }
@@ -292,6 +312,25 @@ class FlatLevels {
       return {.level = slots_[side.base + at - 1], .position = at - 1};
     }
     return {.level = kNoIndex, .position = at};
+  }
+
+  void prefetch_level(std::uint32_t level) const noexcept {
+    if (level < levels_.size()) {
+      // measured: E8, see FastBook::prefetch_stage.
+      __builtin_prefetch(&levels_[level]);
+    }
+  }
+  void prefetch_side(std::uint16_t locate, Side side) const noexcept {
+    // measured: E8, see FastBook::prefetch_stage.
+    __builtin_prefetch(&sides_[side_key(locate, side)]);
+  }
+  // A search reads keys from the end of the side's block, where the best price is.
+  void prefetch_search(std::uint16_t locate, Side side) const noexcept {
+    const Top& top = sides_[side_key(locate, side)];
+    if (top.count != 0) {
+      // measured: E8, see FastBook::prefetch_stage.
+      __builtin_prefetch(&keys_[top.base + top.count - 1]);
+    }
   }
 
   [[nodiscard]] bool has_room(const LevelId& id) const noexcept {

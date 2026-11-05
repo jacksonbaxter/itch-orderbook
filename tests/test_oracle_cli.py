@@ -234,6 +234,35 @@ def main():
         if len(set(seen.values())) != 1:
             failures.append(f"{name}: the arms disagree on {shared}: {seen}")
 
+    # The fast book looking ahead (itch/lookahead.hpp) changes nothing the oracle can see:
+    # on every arm, at the shortest and longest look-ahead, the same verdicts and the same
+    # shared counts as without it, the whole book compared after every message. A distance
+    # the arm cannot stage is bad usage.
+    for name, path, options, want_exit in (
+            ("lifecycle", lifecycle, ("--exhaustive",), 0),
+            ("session", session, ("--hash-every", "100", "--exhaustive"), 0),
+            ("crossed", crossed, ("--exhaustive",), 1)):
+        for index, levels in ARMS:
+            arm = ("--index", index, "--levels", levels)
+            plain = case(f"{name} {index} {levels} no look-ahead", path,
+                         ARM_SMALL + options + arm, want_exit, "oracle_prefetch 0")
+            want = {key: value for key, value in (line.split(" ", 1) for line in plain
+                                                 if " " in line) if key in shared}
+            for distance in ("4", "64"):
+                lines = case(f"{name} {index} {levels} look-ahead {distance}", path,
+                             ARM_SMALL + options + arm + ("--prefetch", distance), want_exit,
+                             f"oracle_prefetch {distance}", "divergences 0",
+                             "verdict T-ORACLE-1 PASS", "write_set_violations 0")
+                got = {key: value for key, value in (line.split(" ", 1) for line in lines
+                                                    if " " in line) if key in shared}
+                if got != want:
+                    failures.append(f"{name} {index} {levels} look-ahead {distance}: "
+                                    f"{got} against {want}")
+    for distance, index in (("3", "paged"), ("2", "hash"), ("65", "hash"), ("4294967300", "paged")):
+        done = run(lifecycle, "--index", index, "--prefetch", distance)
+        if done.returncode != 2 or "--prefetch" not in done.stderr:
+            failures.append(f"usage look-ahead {distance} on {index}: exit {done.returncode}")
+
     # lifecycle's 13 new references are 1 to 11, 0 and 2^64 - 1. The last is past any
     # reach, so it falls back and is counted. With a reach of 2^0 only reference 0 indexes
     # directly, the other 12 fall back, and the diff is still clean.
@@ -282,6 +311,20 @@ def main():
                 failures.append(f"alloc {index} {levels}: no line {line!r}")
         if done.returncode != 0 or "control_allocations 0" in lines:
             failures.append(f"alloc {index} {levels}: exit {done.returncode}")
+    for index, levels in ARMS:
+        done = subprocess.run([alloc_tool, str(session), *ARM_SMALL, "--index", index, "--levels",
+                               levels, "--prefetch", "16"], capture_output=True, text=True,
+                              check=False)
+        lines = done.stdout.splitlines()
+        for line in ("book_prefetch 16", "fast_allocations 0", "fast_refused 0"):
+            if line not in lines:
+                failures.append(f"alloc {index} {levels} look-ahead 16: no line {line!r}")
+        if done.returncode != 0 or not any(x.startswith("verdict T-ALLOC-1 PASS") for x in lines):
+            failures.append(f"alloc {index} {levels} look-ahead 16: exit {done.returncode}")
+    done = subprocess.run([alloc_tool, str(session), "--prefetch", "3"], capture_output=True,
+                          text=True, check=False)
+    if done.returncode != 2:
+        failures.append(f"alloc: look-ahead 3 on the paged index exited {done.returncode}, wanted 2")
     done = subprocess.run([alloc_tool, str(session), "--levels", "map"], capture_output=True,
                           text=True, check=False)
     if done.returncode != 2:

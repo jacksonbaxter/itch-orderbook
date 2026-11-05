@@ -88,6 +88,75 @@ class FastBook {
     }
   }
 
+  // apply() for a payload whose type byte the caller has already read and found to be
+  // Type, as a dispatch table does. The same checks and the same result as apply(), by
+  // its own path, so that apply() itself is unchanged (E7 in simd.md's experiments).
+  template <char Type>
+  [[nodiscard]] ApplyStatus apply_as(std::span<const std::byte> payload) noexcept {
+    if (payload.size() != message_length(Type)) {
+      return ApplyStatus::no_book_effect;
+    }
+    return apply_whole<Type>(payload.data());
+  }
+
+  // The dependent loads apply() makes on a message's way to its order and level, in the
+  // order it makes them: the index's own (OrderIndex::kPrefetchStages), then the order's
+  // record, then its level's. For a new order, the index's loads of the duplicate check,
+  // then the side's record, then the first entries a search of the side reads.
+  static constexpr unsigned kPrefetchStages = OrderIndex::kPrefetchStages + 2;
+
+  // Starts load `stage` of a message that apply() will see later, so that it is in cache
+  // by then. A reader running ahead calls this for each stage a little nearer the message
+  // than the stage before (itch/lookahead.hpp), so that each stage reads only lines the
+  // one before it asked for.
+  //
+  // measured: the three dependent loads of a lookup and its level hold 79% of apply()'s
+  // cycles:u samples on paged-flat on debian (results/flamegraph_paged-flat_debian_12302019.md),
+  // which is what this is for. E8 measures what it gains at each look-ahead (P-0021).
+  //
+  // A hint only: it reads the book, never writes it, and takes any payload. What it reads
+  // may be stale by the time the message is applied, which costs a wasted load and nothing
+  // else.
+  void prefetch_stage(std::span<const std::byte> payload, unsigned stage) const noexcept {
+    if (payload.empty() || payload.size() != message_length(read_char(payload.data()))) {
+      return;
+    }
+    const std::byte* const m = payload.data();
+    switch (read_char(m)) {
+      case AddOrder::kType: {
+        const AddOrder order = AddOrder::from_wire(m);
+        prefetch_new_order(order.header.stock_locate, order.order_reference, order.side, stage);
+        return;
+      }
+      case AddOrderAttributed::kType: {
+        const AddOrderAttributed order = AddOrderAttributed::from_wire(m);
+        prefetch_new_order(order.header.stock_locate, order.order_reference, order.side, stage);
+        return;
+      }
+      case OrderExecuted::kType:
+        prefetch_order(OrderExecuted::from_wire(m).order_reference, stage);
+        return;
+      case OrderExecutedWithPrice::kType:
+        prefetch_order(OrderExecutedWithPrice::from_wire(m).order_reference, stage);
+        return;
+      case OrderCancel::kType:
+        prefetch_order(OrderCancel::from_wire(m).order_reference, stage);
+        return;
+      case OrderDelete::kType:
+        prefetch_order(OrderDelete::from_wire(m).order_reference, stage);
+        return;
+      case OrderReplace::kType: {
+        const OrderReplace u = OrderReplace::from_wire(m);
+        prefetch_order(u.original_order_reference, stage);
+        if (stage < OrderIndex::kPrefetchStages) {
+          index_.prefetch_stage(u.new_order_reference, stage);
+        }
+        return;
+      }
+      default: return;
+    }
+  }
+
   // The level at this price, or nullptr.
   [[nodiscard]] const Level* find_level(std::uint16_t locate, Side side,
                                         Price4 price) const noexcept {
@@ -152,6 +221,38 @@ class FastBook {
 
  private:
   using Place = Levels::Place;
+
+  // A message of type Type at the type's own length.
+  template <char Type>
+  [[nodiscard]] ApplyStatus apply_whole(const std::byte* m) noexcept {
+    if constexpr (Type == AddOrder::kType) {
+      const AddOrder order = AddOrder::from_wire(m);
+      return add_order(order.header.stock_locate, order.order_reference, order.side, order.shares,
+                       order.price);
+    } else if constexpr (Type == AddOrderAttributed::kType) {
+      const AddOrderAttributed order = AddOrderAttributed::from_wire(m);
+      return add_order(order.header.stock_locate, order.order_reference, order.side, order.shares,
+                       order.price);
+    } else if constexpr (Type == OrderExecuted::kType) {
+      const OrderExecuted executed = OrderExecuted::from_wire(m);
+      return deduct(executed.header.stock_locate, executed.order_reference,
+                    executed.executed_shares);
+    } else if constexpr (Type == OrderExecutedWithPrice::kType) {
+      const OrderExecutedWithPrice executed = OrderExecutedWithPrice::from_wire(m);
+      return deduct(executed.header.stock_locate, executed.order_reference,
+                    executed.executed_shares);
+    } else if constexpr (Type == OrderCancel::kType) {
+      const OrderCancel cancel = OrderCancel::from_wire(m);
+      return deduct(cancel.header.stock_locate, cancel.order_reference, cancel.cancelled_shares);
+    } else if constexpr (Type == OrderDelete::kType) {
+      const OrderDelete gone = OrderDelete::from_wire(m);
+      return delete_order(gone.header.stock_locate, gone.order_reference);
+    } else if constexpr (Type == OrderReplace::kType) {
+      return replace_order(OrderReplace::from_wire(m));
+    } else {
+      return ApplyStatus::no_book_effect;
+    }
+  }
 
   enum class LevelOp : std::uint8_t { open, append, reduce, unlink, close };
 
@@ -324,6 +425,40 @@ class FastBook {
     if (levels_[level].front == kNoIndex) {
       write_level(id, {.op = LevelOp::close, .level = level});
       levels_.give_back(level);
+    }
+  }
+
+  void prefetch_order(std::uint64_t reference, unsigned stage) const noexcept {
+    if (stage < OrderIndex::kPrefetchStages) {
+      index_.prefetch_stage(reference, stage);
+      return;
+    }
+    const std::uint32_t order = index_.peek(reference);
+    if (order >= orders_.size()) {
+      return;
+    }
+    if (stage == OrderIndex::kPrefetchStages) {
+      // measured: E8, see prefetch_stage.
+      __builtin_prefetch(&orders_[order]);
+    } else {
+      levels_.prefetch_level(orders_[order].level);
+    }
+  }
+
+  void prefetch_new_order(std::uint16_t locate, std::uint64_t reference, char side,
+                          unsigned stage) const noexcept {
+    if (stage < OrderIndex::kPrefetchStages) {
+      index_.prefetch_stage(reference, stage);
+      return;
+    }
+    if (side != 'B' && side != 'S') {
+      return;
+    }
+    const Side on = side == 'B' ? Side::bid : Side::ask;
+    if (stage == OrderIndex::kPrefetchStages) {
+      levels_.prefetch_side(locate, on);
+    } else {
+      levels_.prefetch_search(locate, on);
     }
   }
 

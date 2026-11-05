@@ -3,12 +3,15 @@
 //
 //     itch_oracle FILE [--hash-every N] [--exhaustive] [--max-orders N] [--max-levels N]
 //                 [--observations FILE] [--index hash|paged] [--levels linked|flat]
-//                 [--max-pages N] [--index-bits N] [--max-slots N]
+//                 [--max-pages N] [--index-bits N] [--max-slots N] [--prefetch D]
 //
 // --hash-every N  hashes both whole books every N messages. 0 keeps only the final hash.
 // --exhaustive    compares the whole of both books after every message, as a control.
 // --observations  writes one line per crossed or locked observation.
 // --index, --levels  the arm of the fast book. The default is the book's default arm.
+// --prefetch D    walks the stream with itch/lookahead.hpp's reader, the fast book looking
+//                 D messages ahead. 0, the default, looks none. A distance the arm cannot
+//                 take is bad usage.
 // --max-pages, --index-bits  the paged index's pool and reach. --max-slots  the flat
 //                 levels' arena. Each arm reads only its own.
 //
@@ -31,6 +34,7 @@
 #include <vector>
 
 #include "book_arms.hpp"
+#include "itch/lookahead.hpp"
 #include "itch/messages.hpp"
 #include "itch/reader.hpp"
 #include "mapped_file.hpp"
@@ -46,6 +50,7 @@ struct Options {
   const char* observations = nullptr;
   OracleConfig config;
   itch::tools::BookArm arm;
+  std::uint64_t prefetch = 0;  // Messages the fast book looks ahead.
 };
 
 [[nodiscard]] std::optional<std::uint64_t> parse_number(std::string_view text) {
@@ -91,6 +96,8 @@ struct Options {
     }
     if (arg == "--hash-every") {
       options.config.hash_every = *number;
+    } else if (arg == "--prefetch") {
+      options.prefetch = *number;
     } else if (arg == "--max-orders") {
       options.config.capacity.orders = static_cast<std::uint32_t>(*number);
     } else if (arg == "--max-levels") {
@@ -113,8 +120,8 @@ struct StreamEnd {
   bool stopped_early = false;
 };
 
-template <class Run>
-[[nodiscard]] StreamEnd replay(Run& oracle, itch::FrameReader& reader) {
+template <class Run, class Reader>
+[[nodiscard]] StreamEnd replay(Run& oracle, Reader& reader) {
   StreamEnd end;
   itch::Frame frame = reader.next();
   for (; !itch::is_terminal(frame.status); frame = reader.next()) {
@@ -219,7 +226,9 @@ int run(const Options& options) {
 
   itch::oracle::BasicOracleRun<Index, Levels> oracle{options.config};
   oracle.invariants().set_observation_log(observations);
-  itch::FrameReader reader{file->bytes()};
+  itch::LookaheadReader<typename itch::oracle::BasicOracleRun<Index, Levels>::Fast> reader{
+      file->bytes(), oracle.fast(), static_cast<unsigned>(options.prefetch)};
+  std::println("oracle_prefetch {}", reader.distance());
   const auto started = std::chrono::steady_clock::now();
   const StreamEnd end = replay(oracle, reader);
   if (!end.stopped_early) {
@@ -277,11 +286,20 @@ int main(int argc, const char* const* argv) {
       static_cast<void>(
           std::fputs("usage: itch_oracle FILE [--hash-every N] [--exhaustive] [--max-orders N] "
                      "[--max-levels N] [--observations FILE] [--index hash|paged] "
-                     "[--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N]\n",
+                     "[--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N] "
+                     "[--prefetch D]\n",
                      stderr));
       return 2;
     }
     return itch::tools::with_book_arm(options->arm, [&options]<class Index, class Levels> {
+      using Fast = itch::oracle::BasicOracleRun<Index, Levels>::Fast;
+      if (options->prefetch > itch::LookaheadReader<Fast>::kMostAhead ||
+          !itch::LookaheadReader<Fast>::valid_distance(static_cast<unsigned>(options->prefetch))) {
+        std::println(stderr, "itch_oracle: --prefetch {} is neither 0 nor {} to {} for this arm",
+                     options->prefetch, Fast::kPrefetchStages,
+                     itch::LookaheadReader<Fast>::kMostAhead);
+        return 2;
+      }
       return run<Index, Levels>(*options);
     });
   } catch (const std::exception& error) {

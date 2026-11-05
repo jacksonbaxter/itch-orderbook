@@ -4,6 +4,13 @@
 // the order pool, because the hash keeps only slots and confirms a key by reading the
 // order. The book calls insert only for a reference that find did not return, and erase
 // only for one that is live.
+//
+// Each arm also names the dependent loads a lookup makes before it has the order's slot,
+// kPrefetchStages of them, so that a reader running ahead of the book can ask for each in
+// turn (itch/lookahead.hpp): prefetch_stage(reference, s) starts load s, reading only what
+// stages before it should already have brought in, and peek() then gives the slot those
+// loads lead to without reading the order pool. Both only read, and neither may be
+// trusted: by the time the message is applied the slot may hold another order.
 #pragma once
 
 #include <algorithm>
@@ -27,6 +34,19 @@ class HashIndex {
       : slots_(std::bit_ceil(std::size_t{2} * orders), kNoIndex),
         mask_{slots_.size() - 1},
         shift_{64U - static_cast<unsigned>(std::countr_zero(slots_.size()))} {}
+
+  // One load before the slot: the home slot's line.
+  static constexpr unsigned kPrefetchStages = 1;
+
+  void prefetch_stage(std::uint64_t reference, unsigned /*stage*/) const noexcept {
+    // measured: E8, see FastBook::prefetch_stage.
+    __builtin_prefetch(&slots_[home_slot(reference)]);
+  }
+
+  // The order in the home slot, which is the reference's own unless it was displaced.
+  [[nodiscard]] std::uint32_t peek(std::uint64_t reference) const noexcept {
+    return slots_[home_slot(reference)];
+  }
 
   [[nodiscard]] std::uint32_t find(std::uint64_t reference,
                                    std::span<const BookOrder> orders) const noexcept {
@@ -100,6 +120,34 @@ class PagedIndex {
         page_live_(capacity.index_pages, 0),
         page_home_(capacity.index_pages, kNoIndex),
         fallback_(capacity.orders) {}
+
+  // Two loads before the slot: the directory entry, then the page's slot. A reference
+  // past the reach or on the fallback hash is not looked ahead for.
+  static constexpr unsigned kPrefetchStages = 2;
+
+  void prefetch_stage(std::uint64_t reference, unsigned stage) const noexcept {
+    if (reference >= reach_) {
+      return;
+    }
+    if (stage == 0) {
+      // measured: E8, see FastBook::prefetch_stage.
+      __builtin_prefetch(&directory_[reference >> PageBits]);
+      return;
+    }
+    const std::uint32_t page = directory_[reference >> PageBits];
+    if (page != kNoIndex) {
+      // measured: E8, see FastBook::prefetch_stage.
+      __builtin_prefetch(&slots_[slot_of(page, reference)]);
+    }
+  }
+
+  [[nodiscard]] std::uint32_t peek(std::uint64_t reference) const noexcept {
+    if (reference >= reach_) {
+      return kNoIndex;
+    }
+    const std::uint32_t page = directory_[reference >> PageBits];
+    return page == kNoIndex ? kNoIndex : slots_[slot_of(page, reference)];
+  }
 
   [[nodiscard]] std::uint32_t find(std::uint64_t reference,
                                    std::span<const BookOrder> orders) const noexcept {

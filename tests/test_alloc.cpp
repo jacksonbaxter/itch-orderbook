@@ -29,6 +29,7 @@
 #include "itch/backtest.hpp"
 #include "itch/book.hpp"
 #include "itch/heap_ager.hpp"
+#include "itch/lookahead.hpp"
 #include "itch/map_book.hpp"
 #include "itch/mm/marks.hpp"
 #include "itch/mm/session.hpp"
@@ -102,10 +103,9 @@ std::vector<std::byte> build_stream() {
   return stream;
 }
 
-template <class Apply>
-std::uint64_t replay(std::span<const std::byte> stream, Apply apply) {
+template <class Reader, class Apply>
+std::uint64_t replay_with(Reader reader, Apply apply) {
   std::uint64_t messages = 0;
-  itch::FrameReader reader{stream};
   for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status); frame = reader.next()) {
     apply(frame.payload);
     ++messages;
@@ -118,24 +118,34 @@ std::uint64_t replay(std::span<const std::byte> stream, Apply apply) {
 constexpr itch::BookCapacity kCapacity{
     .orders = 2048, .levels = 2048, .index_pages = 4, .index_bits = 20, .level_slots = 4096};
 
+template <class Apply>
+std::uint64_t replay(std::span<const std::byte> stream, Apply apply) {
+  return replay_with(itch::FrameReader{stream}, apply);
+}
+
+// With `prefetch` messages of look-ahead (itch/lookahead.hpp), the reader is made inside
+// the window, so that its ring and every stage it asks of the book are counted too.
 template <class Index, class Levels>
-void expect_no_allocation(std::string_view name) {
+void expect_no_allocation(std::string_view name, unsigned prefetch = 0) {
   SCOPED_TRACE(name);
+  SCOPED_TRACE(prefetch);
+  using Book = itch::FastBook<itch::NoWriteObserver, Index, Levels>;
   const std::vector<std::byte> stream = build_stream();
-  itch::FastBook<itch::NoWriteObserver, Index, Levels> book{kCapacity};
+  Book book{kCapacity};
   std::uint64_t refused = 0;
   reset_alloc_counts();
   const std::uint64_t messages =
-      replay(stream, [&book, &refused](std::span<const std::byte> payload) {
-        const itch::ApplyStatus status = book.apply(payload);
-        refused +=
-            status == itch::ApplyStatus::applied || status == itch::ApplyStatus::no_book_effect
-                ? 0U
-                : 1U;
-      });
+      replay_with(itch::LookaheadReader<Book>{stream, book, prefetch},
+                  [&book, &refused](std::span<const std::byte> payload) {
+                    const itch::ApplyStatus status = book.apply(payload);
+                    refused += status == itch::ApplyStatus::applied ||
+                                       status == itch::ApplyStatus::no_book_effect
+                                   ? 0U
+                                   : 1U;
+                  });
   const AllocCounts counts = read_alloc_counts();
-  std::println("fast book, {}: {} messages, {} refused, {} allocations", name, messages, refused,
-               counts.total());
+  std::println("fast book, {}, look-ahead {}: {} messages, {} refused, {} allocations", name,
+               prefetch, messages, refused, counts.total());
   EXPECT_EQ(counts.total(), 0U) << "allocation in the hot path";
   EXPECT_EQ(refused, 0U) << "the stream did not exercise the book";
   EXPECT_GT(messages, 200000U);
@@ -153,6 +163,15 @@ TEST(Allocation, TheFastBookAllocatesNothingAfterConstruction) {
   expect_no_allocation<itch::HashIndex, itch::FlatLevels>("hash, flat");
   expect_no_allocation<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked");
   expect_no_allocation<itch::PagedIndex<>, itch::FlatLevels>("paged, flat");
+}
+
+TEST(Allocation, TheFastBookLookingAheadAllocatesNothingAfterConstruction) {
+  for (const unsigned prefetch : {4U, 16U, 64U}) {
+    expect_no_allocation<itch::HashIndex, itch::LinkedLevels>("hash, linked", prefetch);
+    expect_no_allocation<itch::HashIndex, itch::FlatLevels>("hash, flat", prefetch);
+    expect_no_allocation<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked", prefetch);
+    expect_no_allocation<itch::PagedIndex<>, itch::FlatLevels>("paged, flat", prefetch);
+  }
 }
 
 // The backtester, with a strategy that sends, replaces, cancels and takes on every path,
