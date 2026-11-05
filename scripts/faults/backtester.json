@@ -8,8 +8,8 @@
       "mutations": [
         {
           "file": "include/itch/backtest.hpp",
-          "old": "      if (sim.arrival > real.arrival) {\n        sim.ahead -=",
-          "new": "      if (sim.arrival != 0) {\n        sim.ahead -="
+          "old": "          if (sim.arrival > real.arrival) {\n            sim.ahead -=",
+          "new": "          if (sim.arrival != 0) {\n            sim.ahead -="
         }
       ],
       "build": {
@@ -128,8 +128,8 @@
       "mutations": [
         {
           "file": "include/itch/backtest.hpp",
-          "old": "        budget -= take;\n",
-          "new": ""
+          "old": "        }\n        budget -= take;\n",
+          "new": "        }\n"
         }
       ],
       "build": {
@@ -733,6 +733,222 @@
       ],
       "expect": {
         "signature": "queue jumps cli: FAIL c at shown price: --strict exit 0, not 1"
+      }
+    },
+    {
+      "id": "backtester-qoff-conservative-cancel-ahead-advances",
+      "breaks": "Under Q-off conservative, a cancel at the simulated order's price comes off the queue ahead of it",
+      "check": "test_backtest QueueOff conservative",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "case QueueModel::conservative: sim.ahead = std::min(sim.ahead, left); break;",
+          "new": "case QueueModel::conservative: static_cast<void>(left); sim.ahead -= std::min<std::uint64_t>(sim.ahead, shares); break;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueueOff\\.ConservativeAdvancesOnlyOnExecutionsAndTheLevelsSize"
+      }
+    },
+    {
+      "id": "backtester-qoff-conservative-ahead-passes-the-level",
+      "breaks": "Under Q-off conservative, ahead is never capped at the shares left at its price",
+      "check": "test_backtest QueueOff conservative",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "case QueueModel::conservative: sim.ahead = std::min(sim.ahead, left); break;",
+          "new": "case QueueModel::conservative: static_cast<void>(left); break;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueueOff\\.ConservativeAdvancesOnlyOnExecutionsAndTheLevelsSize"
+      }
+    },
+    {
+      "id": "backtester-qoff-conservative-property-blind",
+      "breaks": "Under Q-off conservative, ahead is never capped at the shares left at its price, seen by the property test on the synthetic markets",
+      "check": "test_backtest_validity QOffAheadNeverRisesNorPassesItsLevel",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "case QueueModel::conservative: sim.ahead = std::min(sim.ahead, left); break;",
+          "new": "case QueueModel::conservative: static_cast<void>(left); break;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest_validity"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest_validity"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueueProperty\\.QOffAheadNeverRisesNorPassesItsLevel"
+      }
+    },
+    {
+      "id": "backtester-qoff-proportional-divides-by-the-level-after",
+      "breaks": "Under Q-off proportional, c·a/d divides by the level after the cancel instead of before it",
+      "check": "test_backtest QueueOff proportional",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "remove_in_proportion(sim, shares, real.level_shares);",
+          "new": "remove_in_proportion(sim, shares, left);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueueOff\\.ProportionalRemovesItsShareOfEachCancel"
+      }
+    },
+    {
+      "id": "backtester-qoff-proportional-whole-shares",
+      "breaks": "Under Q-off proportional, the fraction of a share ahead is dropped after each cancel",
+      "check": "test_backtest QueueOff proportional rounding",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    set_ahead(sim, ahead - std::min(ahead, removed));",
+          "new": "    set_ahead(sim, (ahead - std::min(ahead, removed)) / kQueueUnitsPerShare * kQueueUnitsPerShare);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueueOff\\.ProportionalRoundsEachRemovalDownInMillionths"
+      }
+    },
+    {
+      "id": "backtester-qoff-late-add-goes-ahead",
+      "breaks": "Under Q-off, a late add joins the queue ahead of the simulated order, as under the exact rule",
+      "check": "test_backtest QueueOff conservative",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "late && model_ == QueueModel::exact && resting_[locate] != 0",
+          "new": "late && resting_[locate] != 0"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueueOff\\.ConservativeAdvancesOnlyOnExecutionsAndTheLevelsSize"
+      }
+    },
+    {
+      "id": "backtester-qoff-conservative-executions-by-reference",
+      "breaks": "Under Q-off conservative, an execution at the simulated order's price is placed by its order reference, as under the exact rule",
+      "check": "test_backtest QueueOff conservative",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "if (at_price && model_ != QueueModel::exact) {",
+          "new": "if (at_price && model_ == QueueModel::proportional) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueueOff\\.ConservativeAdvancesOnlyOnExecutionsAndTheLevelsSize"
+      }
+    },
+    {
+      "id": "backtester-loff-keeps-compute",
+      "breaks": "L-off zeroes three latencies and keeps L_compute",
+      "check": "test_backtest LatencyOff",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": ".response = 0, .compute = 0}",
+          "new": ".response = 0, .compute = config.latency.compute}"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] LatencyOff\\.EveryLatencyIsZero"
+      }
+    },
+    {
+      "id": "backtester-loff-ignored",
+      "breaks": "The L-off switch does nothing",
+      "check": "test_backtest LatencyOff",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "      : latency_{config.latency_off\n",
+          "new": "      : latency_{false\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] LatencyOff\\.EveryLatencyIsZero"
       }
     }
   ]

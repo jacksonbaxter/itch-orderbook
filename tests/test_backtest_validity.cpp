@@ -25,6 +25,7 @@
 #include <print>
 #include <random>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include "backtest/market.hpp"
@@ -508,6 +509,65 @@ TEST(QueueProperty, S08AheadNeverRisesAndMatchesARecount) {
   std::println("checked {} queue states, ahead fell {} times", checked, fell);
   EXPECT_GT(checked, 10'000U);
   EXPECT_GT(fell, 500U);
+}
+
+// ---- Q-off: ahead never rises, and never passes the shares at its price ----------------
+
+// The two rules of an aggregate feed (backtest.hpp, "Q-off") on the same markets as S08. After
+// each message, every resting order's ahead, in millionths of a share, is at most what the
+// level at its price holds, and never more than after the message before.
+TEST(QueueProperty, QOffAheadNeverRisesNorPassesItsLevel) {
+  using itch::backtest::kQueueUnitsPerShare;
+  using itch::backtest::QueueModel;
+  for (const QueueModel model : {QueueModel::conservative, QueueModel::proportional}) {
+    std::uint64_t checked = 0;
+    std::uint64_t fell = 0;
+    std::uint64_t fractions = 0;
+    for (const std::uint32_t seed : {11U, 12U, 13U, 14U}) {
+      const std::vector<Message> messages = market(seed, 4000);
+      Config switched = config();
+      switched.queue = model;
+      Engine<> engine{switched};
+      Quoter quoter;
+      std::map<std::uint32_t, std::pair<std::uint64_t, std::uint64_t>> last;  // Arrival, ahead.
+      for (const Message& message : messages) {
+        engine.feed(message.payload, quoter);
+        const std::vector<OrderId> candidates = quoter.resting_candidates();
+        for (std::size_t index = 0; index < candidates.size(); ++index) {
+          const auto state = engine.queue(candidates[index]);
+          if (!state) {
+            continue;
+          }
+          // The quoter's first order is its bid, the second its ask.
+          const Side side = index == 0 ? Side::bid : Side::ask;
+          const auto* level = engine.exchange_book().find_level(kLocate, side, state->price);
+          const std::uint64_t resting = level == nullptr ? 0 : level->aggregate_shares;
+          const std::uint64_t ahead = (state->ahead * kQueueUnitsPerShare) + state->ahead_fraction;
+          EXPECT_LE(ahead, resting * kQueueUnitsPerShare)
+              << itch::backtest::to_string(model) << " seed " << seed << " at " << message.time;
+          const auto before = last.find(candidates[index].slot);
+          if (before != last.end() && before->second.first == state->arrival) {
+            EXPECT_LE(ahead, before->second.second) << "ahead rose";
+            fell += ahead < before->second.second ? 1U : 0U;
+          }
+          fractions += state->ahead_fraction != 0 ? 1U : 0U;
+          last[candidates[index].slot] = {state->arrival, ahead};
+          ++checked;
+        }
+      }
+      engine.finish(quoter);
+      EXPECT_GT(quoter.fills(), 20U) << itch::backtest::to_string(model) << " seed " << seed;
+    }
+    std::println("{}: checked {} queue states, ahead fell {} times, {} with a fraction",
+                 itch::backtest::to_string(model), checked, fell, fractions);
+    EXPECT_GT(checked, 10'000U);
+    EXPECT_GT(fell, 500U);
+    if (model == QueueModel::proportional) {
+      EXPECT_GT(fractions, 0U);
+    } else {
+      EXPECT_EQ(fractions, 0U);
+    }
+  }
 }
 
 // ---- 45: a random strategy makes no money; the oracle makes a great deal --------------

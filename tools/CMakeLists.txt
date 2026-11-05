@@ -30,3 +30,20 @@ itch_apply_options(itch_backtest)
 add_executable(itch_queue_jumps itch_queue_jumps.cpp)
 target_link_libraries(itch_queue_jumps PRIVATE itch_parser)
 itch_apply_options(itch_queue_jumps)
+
+add_executable(itch_as_tables itch_as_tables.cpp)
+target_link_libraries(itch_as_tables PRIVATE itch_parser)
+itch_apply_options(itch_as_tables)
+
+add_executable(itch_calibrate itch_calibrate.cpp)
+target_link_libraries(itch_calibrate PRIVATE itch_parser)
+itch_apply_options(itch_calibrate)
+
+add_executable(itch_select itch_select.cpp)
+target_link_libraries(itch_select PRIVATE itch_parser)
+itch_apply_options(itch_select)
+
+add_executable(itch_mm itch_mm.cpp "${PROJECT_SOURCE_DIR}/tests/oracle/alloc_counter.cpp")
+target_include_directories(itch_mm PRIVATE "${PROJECT_SOURCE_DIR}/tests")
+target_link_libraries(itch_mm PRIVATE itch_parser)
+itch_apply_options(itch_mm)

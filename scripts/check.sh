@@ -130,6 +130,18 @@ stage_bench() {
   done
   build_preset release && ctest --preset release -R '^test_bench'
 }
+# The market maker: T-MM-2's report on its fixtures and its results file against a rerun; the
+# report day's report on its fixtures and its results file against the tool output it carries;
+# then the attribution, model, allocation, calibration, selection and run-tool tests. Needs
+# nothing from data/.
+stage_market_maker() {
+  python_test scripts/test_as_tables_report.py &&
+    python_test scripts/test_mm_report.py &&
+    python_test scripts/mm_report.py check &&
+    build_preset release &&
+    python_test scripts/as_tables_report.py check --tool build/release/tools/itch_as_tables &&
+    ctest --preset release -R '^(test_attribution|test_market_maker|test_alloc|test_calibrate_cli|test_select_cli|test_mm_cli)$'
+}
 stage_tsan() { preset_with_tests tsan; }
 # From clean: ninja does not track .clang-tidy, so an incremental run could be a stale pass.
 stage_tidy() {
@@ -161,6 +173,7 @@ register release quick
 register oracle quick
 register trades quick
 register bench quick
+register market_maker quick
 register asan_ubsan quick
 register tidy
 register tsan

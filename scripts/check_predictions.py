@@ -4,8 +4,8 @@
     check_predictions.py [--root DIR] [--require ID] [--no-git]
 
 results/predictions.md holds one `## P-NNNN: title` block per experiment. Every
-results/bench_*.md, chase_*.md, backtest_*.md, counters_*.md and flamegraph_*.md names one
-in its header.
+results/bench_*.md, chase_*.md, backtest_*.md, counters_*.md, flamegraph_*.md and
+mm_*.md names one in its header.
 With git history to read, the block must be committed, its commit must come before the
 result's, and its text must be what that commit wrote: a prediction is never edited. results/run_log.md gets a row for every run,
 failed ones included, and only ever grows.
@@ -30,7 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PREDICTIONS = "results/predictions.md"
 RUN_LOG = "results/run_log.md"
 RESULT_PATTERNS = ("bench_*.md", "chase_*.md", "backtest_*.md", "counters_*.md",
-                   "flamegraph_*.md")
+                   "flamegraph_*.md", "mm_*.md")
 BLOCK = re.compile(r"^## (P-\d{4}): .*?(?=^## |\Z)", re.MULTILINE | re.DOTALL)
 FIELD = re.compile(r"^- (prediction|run_id): (.*)$", re.MULTILINE)
 

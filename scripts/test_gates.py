@@ -39,6 +39,9 @@ CLEAN_FILES = {
     "tools/tool.cpp": "int main() { return 0; }\n",
     "tests/test.cpp": "int clean_test() { return 0; }\n",
     "scripts/tool.py": "print('clean')\n",
+    "include/itch/mm/attribution.hpp": ('#pragma once\n#include "itch/mm/fills.hpp"\n'
+                                        "// Never reads the ledger.\nint attribute();\n"),
+    "include/itch/mm/fills.hpp": "#pragma once\nint fill();\n",
     "NOTES.md": "Notes.\n",
     "results/run.md": "Host: debian.\n",
     ".github/workflows/ci.yml": f"jobs:\n  a:\n    steps:\n      - uses: {PINNED} # v1.2.3\n",
@@ -249,6 +252,25 @@ class Gates(unittest.TestCase):
             with self.subTest(name):
                 self.reset()
                 self.assert_only_gate_fails("toolchain-path", name, f"p = 'x/{TOOLCHAIN}env.sh'\n")
+
+    def test_attribution_without_ledger(self):
+        name = "include/itch/mm/attribution.hpp"
+        self.assert_only_gate_fails("attribution-without-ledger", name,
+                                    '#pragma once\n#include "itch/mm/ledger.hpp"\nint a();\n')
+        self.reset()
+        self.assert_only_gate_fails("attribution-without-ledger", name,
+                                    "#pragma once\nint a(const Ledger& book);\n")
+        self.reset()
+        # Through a header the attribution includes.
+        self.assert_only_gate_fails("attribution-without-ledger", "include/itch/mm/fills.hpp",
+                                    "#pragma once\nlong ledger_total();\n")
+        self.reset()
+        self.assert_passes(name, '#pragma once\n#include "itch/mm/fills.hpp"\n'
+                                 '// Not the Ledger.\nconst char* a = "ledger";\n')
+        (self.root / name).unlink()
+        code, output = self.run_gates()
+        self.assertEqual(code, 1, output)
+        self.assertIn("FAIL attribution-without-ledger: scanned no files", output)
 
     def test_a_gate_that_scans_nothing_fails(self):
         scratch = tempfile.TemporaryDirectory(dir=SCRATCH)

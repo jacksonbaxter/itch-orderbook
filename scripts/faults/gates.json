@@ -203,6 +203,28 @@
         "signature": "gates: FAIL private-name results/chase_debian\\.md:\\d+",
         "exit": 1
       }
+    },
+    {
+      "id": "gates-attribution-reads-the-ledger",
+      "breaks": "The attribution includes the ledger it must never read (T-MM-1)",
+      "check": "gates.py attribution-without-ledger",
+      "mutations": [
+        {
+          "file": "include/itch/mm/attribution.hpp",
+          "old": "#include \"itch/mm/fills.hpp\"\n",
+          "new": "#include \"itch/mm/fills.hpp\"\n#include \"itch/mm/ledger.hpp\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL attribution-without-ledger include/itch/mm/attribution\\.hpp:\\d+: includes itch/mm/ledger\\.hpp",
+        "exit": 1
+      }
     }
   ]
 }

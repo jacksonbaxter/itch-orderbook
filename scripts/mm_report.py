@@ -1,0 +1,726 @@
+#!/usr/bin/env python3
+"""The market maker on its report day: runs itch_mm's matrix, writes the results file, checks it.
+
+    mm_report.py run --tool TOOL --data FILE --raw-dir DIR --prediction P-NNNN
+                     [--wrap CMD]... [--time PATH] [--out FILE] [--root DIR]
+    mm_report.py check [FILE] [--root DIR]
+    mm_report.py render [FILE] [--root DIR]
+
+`run` takes every parameter from scripts/mm_evaluation.json, which was committed before
+anything ran on the report day, and runs itch_mm once for each symbol and each run named
+there, one at a time, each a whole day in a fresh process as `WRAP... TIME -l itch_mm ...`.
+It keeps each run's output and `time -l` output in DIR, which is not committed, writes the
+results file (results/mm_pnl_12302019.md by default), appends the matrix to
+results/run_log.md, and then checks what it wrote. The prediction must already be committed.
+
+The results file carries each run's tool output and the two lines of `time -l` it uses, in
+its last section, and everything above that section is rendered from them. `check` needs no
+data: it renders the body again from the file's own tool output and requires it to be what
+the file says, so a figure typed over is caught. It also holds every run's output to these,
+each with ==, never a tolerance:
+
+  - the run's parameters are the committed ones, on the report day, and the matrix is
+    exactly the committed runs on the committed symbols, in order;
+  - every check line of the tool passes, and the identity line holds;
+  - S gross − fees == S, S + A + I == total, total == the ledger's total, and at every
+    markout horizon A(h) + I(h) == A + I, the horizons the amended Rule 605 grid's;
+  - one mark-path hash, one count of mark points and one window across a symbol's runs;
+  - the header names a prediction, a run and the raw folder, and the body says what one day
+    can and cannot show: the fixed sentences, both days' labels, the fee tier, no return and
+    no Sharpe.
+
+`render` writes the body again from the file's own header and tool output, for a change to
+how the figures are shown, and then checks the file.
+
+Each violation prints as `mm_report: FAIL <code> <where>: <detail>`.
+
+Exit codes: 0 done or the file holds, 1 a violation, 2 bad usage or a run that could not be used.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime
+import json
+import platform
+import re
+import shlex
+import subprocess
+import sys
+from decimal import ROUND_HALF_UP, Decimal
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+EVALUATION = "scripts/mm_evaluation.json"
+RUN_LOG = "results/run_log.md"
+BODY_START = "## What this is"
+RAW_START = "## Tool output"
+PICODOLLARS_PER_DOLLAR = 10**12
+PICODOLLARS_PER_TICK = 10**10  # $0.01
+MARKOUT_GRID = (50_000_000, 1_000_000_000, 15_000_000_000, 60_000_000_000, 300_000_000_000)
+HORIZON_NAMES = ("50 ms", "1 s", "15 s", "1 min", "5 min")
+FIXED = "One symbol-day. No edge is claimed."
+NO_IMPACT = "A replayed feed cannot react to the strategy, so market impact is absent."
+FORBIDDEN = re.compile(r"\b(?:sharpe|returns?)\b", re.IGNORECASE)
+CHECK_LINES = ("allocations", "no refused message", "no refused delivery", "no overflow",
+               "no fee error", "every fill in the window", "identity")
+# Each comparison changes one switch: (label, run after, run before).
+SWITCHES = (
+    ("Q-off conservative, latency on", "AS Q-off conservative", "AS Base"),
+    ("Q-off proportional, latency on", "AS Q-off proportional", "AS Base"),
+    ("L-off, exact queue", "AS L-off", "AS Base"),
+    ("Q-off conservative, latency off", "AS both off, conservative", "AS L-off"),
+    ("Q-off proportional, latency off", "AS both off, proportional", "AS L-off"),
+    ("L-off, conservative queue", "AS both off, conservative", "AS Q-off conservative"),
+    ("L-off, proportional queue", "AS both off, proportional", "AS Q-off proportional"),
+)
+MODEL_CHANGE = ("GLFT against AS, both Base", "GLFT Base", "AS Base")
+
+
+class ReportError(Exception):
+    """A run's output or the results file cannot be used."""
+
+
+# ---- Reading the tool's output
+
+def parse_output(text):
+    """The figures of one run, from itch_mm's output and the two lines of `time -l` after it."""
+    lines = text.splitlines()
+    if not lines or not lines[0].startswith("mm "):
+        raise ReportError("the output does not start with the tool's parameter line")
+    words = lines[0].split()[1:]
+    run = {"header": lines[0], "parameters": dict(zip(words[::2], words[1::2])),
+           "markouts": [], "checks": {}}
+    for line in lines[1:]:
+        words = line.split()
+        if not words or line == "market maker attribution, amounts in picodollars":
+            continue
+        if words[0] == "markout_ns":
+            run["markouts"].append((int(words[1]), int(words[3]), int(words[5])))
+        elif words[0] == "check":
+            name, _, result = line[len("check "):].rpartition(": ")
+            run["checks"][name] = result
+        elif words[0] == "attribution" and words[1] == "refused:":
+            raise ReportError(f"attribution refused: {' '.join(words[2:])}")
+        elif words[0] in ("engine", "strategy"):
+            run[words[0]] = {key: int(value) for key, value in zip(words[1::2], words[2::2])}
+        elif words[0] == "messages":
+            run.update({key: int(value) for key, value in zip(words[::2], words[1::2])})
+        elif words[0] == "queue_anomalies":
+            run.update({key: int(value) for key, value in zip(words[::2], words[1::2])})
+        elif words[0] == "identity" or words[0] == "mark_hash":
+            run[words[0]] = words[1]
+        elif words[1:] == ["maximum", "resident", "set", "size"]:
+            run["peak_rss"] = int(words[0])
+        elif len(words) == 6 and words[1] == "real":
+            run["wall"] = words[0]
+        elif len(words) == 2 and re.fullmatch(r"-?\d+", words[1]):
+            run[words[0]] = int(words[1])
+        else:
+            raise ReportError(f"a line the report does not know: {line}")
+    needed = ("fills", "shares", "gross_spread", "fees", "spread_capture", "adverse_selection",
+              "inventory", "total", "ledger_total", "identity", "mark_hash", "bought", "sold",
+              "engine", "peak_rss", "wall")
+    missing = [field for field in needed if field not in run]
+    if missing:
+        raise ReportError(f"no {', '.join(missing)}")
+    return run
+
+
+def time_lines(stderr):
+    """The two lines of `time -l` the report keeps: the wall time and the peak resident set."""
+    kept = [line.strip() for line in stderr.splitlines()
+            if re.fullmatch(r"\s*[\d.]+ real\s+[\d.]+ user\s+[\d.]+ sys\s*", line)
+            or re.fullmatch(r"\s*\d+\s+maximum resident set size\s*", line)]
+    if len(kept) != 2:
+        raise ReportError("time -l printed no wall time or no peak resident set size")
+    return kept
+
+
+# ---- The matrix the evaluation committed
+
+def slug(name):
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def clock_ns(text):
+    hours, minutes, seconds = (int(part) for part in text.split(":"))
+    return ((hours * 3600) + (minutes * 60) + seconds) * 1_000_000_000
+
+
+def report_date(evaluation):
+    day = evaluation["report_day"]  # MMDDYYYY, the feed's own naming.
+    return f"{day[4:]}{day[:4]}"
+
+
+def matrix(evaluation):
+    """(symbol, run) for every run, in the order they run and are shown."""
+    return [(symbol, run) for symbol in evaluation["symbols"] for run in evaluation["runs"]]
+
+
+def tool_args(evaluation, symbol, run, data_name):
+    """itch_mm's arguments for one run, the data file given by name."""
+    fit = evaluation["symbols"][symbol]
+    args = [data_name, "--date", report_date(evaluation), "--symbol", symbol,
+            "--model", run["model"], "--gamma", str(fit["gamma"]), "--sigma", str(fit["sigma"]),
+            "--k", str(fit["k"]), "--a", str(fit["a"]), "--lot", str(evaluation["lot"]),
+            "--max-lots", str(evaluation["max_lots"]), "--start", evaluation["start"],
+            "--stop", evaluation["stop"], "--close", evaluation["close"], "--queue", run["queue"]]
+    return [*args, "--latency-off"] if run["latency_off"] else args
+
+
+def raw_name(evaluation, symbol, run):
+    return f"mm_{evaluation['report_day']}_{symbol}_{slug(run['name'])}"
+
+
+def data_name(evaluation):
+    return f"{evaluation['report_day']}.NASDAQ_ITCH50"
+
+
+# ---- Formatting: integer picodollars to dollars and ticks, rounded half up
+
+def rounded(amount, unit, places):
+    """amount / unit rounded half up to places, a zero always unsigned: -0.0000 is 0.0000."""
+    value = (Decimal(amount) / unit).quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
+    return value if value != 0 else abs(value)
+
+
+def dollars(amount):
+    return f"{rounded(amount, PICODOLLARS_PER_DOLLAR, 2):+,.2f}"
+
+
+def money(amount):
+    """Dollars in prose: -$1,234.56."""
+    value = rounded(amount, PICODOLLARS_PER_DOLLAR, 2)
+    return f"{'-' if value < 0 else ''}${abs(value):,.2f}"
+
+
+def per_share(amount, shares):
+    if shares == 0:
+        return "–"
+    return f"{rounded(amount, shares * PICODOLLARS_PER_DOLLAR, 4):+.4f}"
+
+
+def ticks(amount, shares):
+    if shares == 0:
+        return "–"
+    return f"{rounded(amount, shares * PICODOLLARS_PER_TICK, 3):+.3f}"
+
+
+def count(value):
+    return f"{value:,}"
+
+
+def gib(value):
+    return f"{Decimal(value) / 2**30:.2f}"
+
+
+COMPONENTS = (("S gross", "gross_spread"), ("Fees", "fees"), ("S", "spread_capture"),
+              ("A", "adverse_selection"), ("I", "inventory"), ("Total", "total"))
+
+
+# ---- The body
+
+def render_body(evaluation, runs):
+    """The lines from BODY_START to the tool output, from the runs' figures alone."""
+    selection = f"{evaluation['selection_day']}, an {evaluation['selection_label']}"
+    report = f"{evaluation['report_day']}, a {evaluation['report_label']}"
+    symbols = list(evaluation["symbols"])
+    tier = f"the {evaluation['fee_tier']} tier of the {fee_day(evaluation)} schedule"
+    lines = [BODY_START, "",
+             f"{FIXED} {len(symbols)} symbols, {' and '.join(symbols)}, are traded, each on "
+             f"one day, {evaluation['report_day']}: {len(symbols)} symbol-days, each its own "
+             "sample.", "",
+             f"- Tuned on {selection}; reported on {report}: out of sample by day. The "
+             "symbols, γ, h, the order size and σ, k and A were committed before anything ran "
+             f"on {evaluation['report_day']} (`{EVALUATION}`, NOTES.md, \"The market maker's "
+             "evaluation\").",
+             f"- {NO_IMPACT} Every fill is priced against the historical book, which went on "
+             "as if the strategy were not there.",
+             f"- Fees: {tier}, per fill, in integer picodollars. The fee line is what was "
+             "paid; a negative fee line is a net rebate.",
+             "- S = Σq(m⁻ − P) − Σf, spread capture against the mid just before each fill, its "
+             "gross and fee lines shown apart. A = Σq(mʰ − m⁻), adverse selection, the mid "
+             f"{evaluation['horizon_s']} s after each fill against the mid before it. I = "
+             "Q₀(m_T − m₀) + Σq(m_T − mʰ), inventory. S + A + I is the total, and it equals "
+             "the ledger's total, computed apart, with == in every run.",
+             f"- A tick is $0.01. Per share and ticks a share divide by the run's shares "
+             "traded, bought plus sold. Each run is a whole day in a fresh process.",
+             "- No return and no Sharpe ratio are computed: one day cannot support either.", ""]
+    lines += render_parameters(evaluation)
+    for symbol in symbols:
+        lines += render_symbol(evaluation, symbol, runs)
+    lines += render_switches(evaluation, runs)
+    lines += render_context(evaluation, runs)
+    lines += render_runs(evaluation, runs)
+    return lines
+
+
+def fee_day(evaluation):
+    day = str(evaluation["fee_date"])
+    return f"{day[:4]}-{day[4:6]}-{day[6:]}"
+
+
+def render_parameters(evaluation):
+    latency = evaluation["latency_ns"]
+    lines = ["## Parameters", "",
+             f"Committed in `{EVALUATION}` before the first run on "
+             f"{evaluation['report_day']}. γ follows its rule: {evaluation['gamma_rule']}.", "",
+             "| Symbol | Group | σ, $/√s | k, 1/tick | A, 1/s | γ |", "|---|---|---|---|---|---|"]
+    for symbol, fit in evaluation["symbols"].items():
+        lines.append(f"| {symbol} | {fit['group']} | {fit['sigma']} | {fit['k']} | {fit['a']} | "
+                     f"{fit['gamma']} |")
+    lines += ["", f"- h = {evaluation['horizon_s']} s; {evaluation['lot']} shares an order; at "
+                  f"most {evaluation['max_lots']} lots long or short.",
+              f"- Quoting from {evaluation['start']} to {evaluation['stop']}; the PnL window "
+              f"runs from the start, flat, to {evaluation['close']}, marked to the mid.",
+              f"- Base latencies: market data {latency['market_data']:,} ns, order entry "
+              f"{latency['order_entry']:,} ns, response {latency['response']:,} ns, compute "
+              f"{latency['compute']:,} ns. L-off sets all four to zero.",
+              "- Q-off replaces the exact FIFO position with a named rule. Conservative: a "
+              "cancel never moves the order up, so only executions and the level's own size "
+              "do. Proportional: each cancel removes its share of what is ahead, c·a/d. "
+              "`include/itch/backtest.hpp`, \"Q-off\", gives both with their sources.", ""]
+    return lines
+
+
+def run_of(runs, symbol, name):
+    return runs[(symbol, name)]
+
+
+def render_symbol(evaluation, symbol, runs):
+    names = [run["name"] for run in evaluation["runs"]]
+    first = run_of(runs, symbol, names[0])
+    heads = " | ".join(head for head, _ in COMPONENTS)
+    rule = "|---" * (len(COMPONENTS) + 1) + "|"
+    lines = [f"## {symbol}", "",
+             f"Mark path: {first['mark_points']:,} points, hash `{first['mark_hash']}`, the "
+             f"same in all {len(names)} runs. Fee tier: {evaluation['fee_tier']}, "
+             f"{fee_day(evaluation)} schedule, in every run.", "",
+             "| Run | Fills | Maker | Taker | Shares | Bought | Sold | Largest position | "
+             "Closing position |", "|---|---|---|---|---|---|---|---|---|"]
+    for name in names:
+        run = run_of(runs, symbol, name)
+        lines.append(f"| {name} | {count(run['fills'])} | {count(run['engine']['maker'])} | "
+                     f"{count(run['engine']['taker'])} | {count(run['shares'])} | "
+                     f"{count(run['bought'])} | {count(run['sold'])} | "
+                     f"{count(run['largest_position'])} | {count(run['closing_position'])} |")
+    for title, cell in (("dollars", lambda amount, _: dollars(amount)),
+                        ("dollars a share", per_share), ("ticks a share", ticks)):
+        lines += ["", f"PnL in {title}:", "", f"| Run | {heads} |", rule]
+        for name in names:
+            run = run_of(runs, symbol, name)
+            cells = " | ".join(cell(run[key], run["shares"]) for _, key in COMPONENTS)
+            lines.append(f"| {name} | {cells} |")
+    lines += ["", f"Markout curve: A(h), adverse selection at each horizon of the amended Rule "
+                  f"605 grid, in ticks a share and then in dollars. I(h) moves the other way, "
+                  f"so S + A(h) + I(h) is the same total at every h.", "",
+              "| Run | " + " | ".join(HORIZON_NAMES) + " |", "|---" * 6 + "|"]
+    for name in names:
+        run = run_of(runs, symbol, name)
+        lines.append(f"| {name} | " + " | ".join(ticks(a, run["shares"])
+                                                for _, a, _ in run["markouts"]) + " |")
+    lines += ["", "| Run | " + " | ".join(HORIZON_NAMES) + " |", "|---" * 6 + "|"]
+    for name in names:
+        run = run_of(runs, symbol, name)
+        lines.append(f"| {name} | " + " | ".join(dollars(a) for _, a, _ in run["markouts"]) +
+                     " |")
+    lines.append("")
+    return lines
+
+
+def difference(after, before):
+    return {key: after[key] - before[key] for key in ("fills", "shares", "spread_capture",
+                                                      "adverse_selection", "inventory", "total")}
+
+
+def largest_change(change):
+    """Which of S, A and I moved most, in words, or that none moved."""
+    key = max(("spread_capture", "adverse_selection", "inventory"),
+              key=lambda name: abs(change[name]))
+    if change[key] == 0:
+        return "none of S, A and I moves"
+    letter = {"spread_capture": "S", "adverse_selection": "A", "inventory": "I"}[key]
+    return f"of S, A and I, {letter} moves most"
+
+
+def render_switches(evaluation, runs):
+    lines = ["## One switch at a time", "",
+             "Each row changes one switch and holds everything else, so its differences are "
+             "that switch's effect on this day's PnL. The last row changes the model, not a "
+             "switch. Differences in dollars, after minus before; the total a share is shown "
+             "before and after, since the shares change too.", ""]
+    for symbol in evaluation["symbols"]:
+        lines += [f"### {symbol}", "",
+                  "| Change | Fills | Shares | ΔS | ΔA | ΔI | ΔTotal | Total, ticks a share |",
+                  "|---|---|---|---|---|---|---|---|"]
+        statements = []
+        for label, after_name, before_name in (*SWITCHES, MODEL_CHANGE):
+            after = run_of(runs, symbol, after_name)
+            before = run_of(runs, symbol, before_name)
+            change = difference(after, before)
+            lines.append(
+                f"| {label} | {count(before['fills'])} → {count(after['fills'])} | "
+                f"{count(before['shares'])} → {count(after['shares'])} | "
+                f"{dollars(change['spread_capture'])} | {dollars(change['adverse_selection'])} | "
+                f"{dollars(change['inventory'])} | {dollars(change['total'])} | "
+                f"{ticks(before['total'], before['shares'])} → "
+                f"{ticks(after['total'], after['shares'])} |")
+            statements.append(
+                f"- {label} ({before_name} to {after_name}): the total moves by "
+                f"{'+' if change['total'] > 0 else ''}{money(change['total'])}, from "
+                f"{money(before['total'])} to {money(after['total'])}; "
+                f"{largest_change(change)}.")
+        lines += ["", *statements, ""]
+    return lines
+
+
+def render_context(evaluation, runs):
+    losing = sum(run["total"] < 0 for run in runs.values())
+    bases = [(symbol, run_of(runs, symbol, "AS Base")) for symbol in evaluation["symbols"]]
+    base = "; ".join(f"{symbol} {money(run['total'])}, {ticks(run['total'], run['shares'])} "
+                     "ticks a share" for symbol, run in bases)
+    return ["## Against BENCHMARKS.md", "",
+            "BENCHMARKS.md gives context and no target. carteret's exploratory maker on real "
+            "ITCH, with exact queue position, lost money in every arm at the base fee tier, "
+            "gross −0.34 to −0.57 half-spreads a fill on 2019-10-30 and 2020-01-30. It is a "
+            "queue-imbalance strategy, not Avellaneda-Stoikov, on other days. LukasUser's "
+            "passive replay on this report day made −0.23¢ a share across 100 stocks at 10 µs, "
+            "with 39 of 100 profitable.",
+            "",
+            f"Here {losing} of {len(runs)} runs end with a negative total at the base tier, and "
+            f"AS Base ends at {base}. Different strategies, symbols and days: this sits beside "
+            "those results and shows nothing about them from one day.", ""]
+
+
+def render_runs(evaluation, runs):
+    lines = ["## Runs", "",
+             "Each run: `heavy.sh /usr/bin/time -l itch_mm ...` with these arguments, the day "
+             "by name; its raw output and `time -l` output are `<raw>.out` and `<raw>.err` in "
+             "the raw folder, which is not committed. Peak memory is the maximum resident set "
+             "size from `time -l`, the mapped day counted.", "",
+             "| Symbol | Run | Command | Raw | Peak RSS, bytes | Peak RSS, GiB | Wall, s |",
+             "|---|---|---|---|---|---|---|"]
+    for symbol, run in matrix(evaluation):
+        figures = run_of(runs, symbol, run["name"])
+        command = " ".join(["itch_mm", *tool_args(evaluation, symbol, run, data_name(evaluation))])
+        lines.append(f"| {symbol} | {run['name']} | `{command}` | "
+                     f"`{raw_name(evaluation, symbol, run)}` | {count(figures['peak_rss'])} | "
+                     f"{gib(figures['peak_rss'])} | {figures['wall']} |")
+    lines.append("")
+    return lines
+
+
+def render_raw(evaluation, outputs):
+    lines = [RAW_START, "",
+             "Each run's output, then the two lines of `time -l` the report uses. Everything "
+             "above is rendered from these, and `mm_report.py check` holds it to them.", ""]
+    for symbol, run in matrix(evaluation):
+        lines += [f"### {symbol}, {run['name']}", "", "```text",
+                  *outputs[(symbol, run["name"])].rstrip("\n").split("\n"), "```", ""]
+    return lines
+
+
+def render(evaluation, outputs, header):
+    runs = {key: parse_output(text) for key, text in outputs.items()}
+    return "\n".join(header + [""] + render_body(evaluation, runs) +
+                     render_raw(evaluation, outputs)).rstrip("\n") + "\n"
+
+
+# ---- The checks
+
+def raw_blocks(text):
+    """{(symbol, run name): output} from the file's last section."""
+    section = text[text.index(RAW_START):]
+    blocks = {}
+    for match in re.finditer(r"^### (\S+), ([^\n]+)\n\n```text\n(.*?)\n```$", section,
+                             re.MULTILINE | re.DOTALL):
+        key = (match[1], match[2])
+        if key in blocks:
+            raise ReportError(f"two blocks for {match[1]}, {match[2]}")
+        blocks[key] = match[3] + "\n"
+    return blocks
+
+
+def check_parameters(evaluation, symbol, run, figures, where):
+    fit = evaluation["symbols"][symbol]
+    have = figures["parameters"]
+    want = {"symbol": symbol, "model": run["model"], "queue": run["queue"],
+            "latency_off": "1" if run["latency_off"] else "0", "lot": str(evaluation["lot"]),
+            "max_lots": str(evaluation["max_lots"]), "start_ns": str(clock_ns(evaluation["start"])),
+            "stop_ns": str(clock_ns(evaluation["stop"])),
+            "close_ns": str(clock_ns(evaluation["close"])), "date": report_date(evaluation)}
+    for key, value in want.items():
+        if have.get(key) != value:
+            yield ("parameter-not-committed", where, f"{key} is {have.get(key)}, not {value}")
+    for key in ("gamma", "sigma", "k", "a"):
+        if have.get(key) is None or float(have[key]) != fit[key]:
+            yield ("parameter-not-committed", where, f"{key} is {have.get(key)}, not {fit[key]}")
+
+
+def check_run(figures, where):
+    for name in CHECK_LINES:
+        if figures["checks"].get(name) != "pass":
+            yield ("tool-check-failed", where, f"check {name}: {figures['checks'].get(name)}")
+    if figures["identity"] != "holds":
+        yield ("identity-fails", where, f"the tool says identity {figures['identity']}")
+    if figures["gross_spread"] - figures["fees"] != figures["spread_capture"]:
+        yield ("s-not-gross-less-fees", where,
+               f"{figures['gross_spread']} - {figures['fees']} != {figures['spread_capture']}")
+    parts = figures["spread_capture"] + figures["adverse_selection"] + figures["inventory"]
+    if parts != figures["total"]:
+        yield ("components-not-total", where, f"S + A + I = {parts} != {figures['total']}")
+    if figures["total"] != figures["ledger_total"]:
+        yield ("total-not-ledger", where, f"{figures['total']} != {figures['ledger_total']}")
+    if [horizon for horizon, _, _ in figures["markouts"]] != list(MARKOUT_GRID):
+        yield ("markout-grid", where, "the horizons are not 50 ms, 1 s, 15 s, 1 min and 5 min")
+    held = figures["adverse_selection"] + figures["inventory"]
+    for horizon, adverse, inventory in figures["markouts"]:
+        if adverse + inventory != held:
+            yield ("markout-not-total", where, f"at {horizon} ns A + I = {adverse + inventory} "
+                                               f"!= {held}")
+    if figures["bought"] + figures["sold"] != figures["shares"]:
+        yield ("shares-not-bought-and-sold", where, "bought + sold != shares")
+
+
+def names(keys):
+    return "; ".join(f"{symbol}, {name}" for symbol, name in keys)
+
+
+def check_runs(evaluation, runs):
+    wanted = [(symbol, run["name"]) for symbol, run in matrix(evaluation)]
+    if list(runs) != wanted:
+        yield ("matrix-not-committed", "tool output",
+               f"the runs are {names(runs)}, not the committed {names(wanted)}")
+        return
+    for symbol, run in matrix(evaluation):
+        where = f"{symbol}, {run['name']}"
+        figures = runs[(symbol, run["name"])]
+        yield from check_parameters(evaluation, symbol, run, figures, where)
+        yield from check_run(figures, where)
+    for symbol in evaluation["symbols"]:
+        mine = [runs[(symbol, run["name"])] for run in evaluation["runs"]]
+        for field in ("mark_hash", "mark_points", "window_open_ns", "window_close_ns"):
+            values = sorted({str(figures[field]) for figures in mine})
+            if len(values) != 1:
+                yield ("mark-path-differs", symbol, f"{field} takes {len(values)} values: "
+                                                    f"{', '.join(values)}")
+
+
+def check_text(text, evaluation, where):
+    """The violations of a results file."""
+    violations = []
+    for field in ("prediction", "run_id"):
+        if re.search(rf"^- {field}: \S+", text, re.MULTILINE) is None:
+            violations.append(("header-field-missing", where, f"no {field}"))
+    if re.search(r"^- Raw folder: `[^`]+`", text, re.MULTILINE) is None:
+        violations.append(("header-field-missing", where, "no raw folder"))
+    for sentence in (FIXED, NO_IMPACT, "out of sample by day",
+                     f"{evaluation['selection_day']}, an {evaluation['selection_label']}",
+                     f"{evaluation['report_day']}, a {evaluation['report_label']}",
+                     f"the {evaluation['fee_tier']} tier of the {fee_day(evaluation)} schedule"):
+        if sentence not in text:
+            violations.append(("sentence-missing", where, f"no '{sentence}'"))
+    head = text[:text.index(RAW_START)] if RAW_START in text else text
+    for match in FORBIDDEN.finditer(head.replace("No return and no Sharpe ratio", "")):
+        violations.append(("return-or-sharpe", where, f"'{match[0]}' outside the one sentence "
+                                                      "that rules them out"))
+    if BODY_START not in text or RAW_START not in text:
+        violations.append(("body-missing", where, f"no '{BODY_START}' or no '{RAW_START}'"))
+        return violations
+    outputs = raw_blocks(text)
+    runs = {key: parse_output(output) for key, output in outputs.items()}
+    violations += list(check_runs(evaluation, runs))
+    if any(code == "matrix-not-committed" for code, _, _ in violations):
+        return violations
+    body = text[text.index(BODY_START):text.index(RAW_START)].rstrip("\n").split("\n")
+    fresh = render_body(evaluation, runs)
+    while fresh and fresh[-1] == "":
+        fresh.pop()
+    for index in range(max(len(body), len(fresh))):
+        have = body[index] if index < len(body) else "<no line>"
+        want = fresh[index] if index < len(fresh) else "<no line>"
+        if have != want:
+            violations.append(("differs-from-output", where,
+                               f"line {index + 1} of the body: have {have!r}, want {want!r}"))
+            break
+    return violations
+
+
+def load_evaluation(root):
+    return json.loads((root / EVALUATION).read_text(encoding="utf-8"))
+
+
+def command_check(args):
+    root = args.root.resolve()
+    path = Path(args.file) if args.file else root / default_out(load_evaluation(root))
+    try:
+        violations = check_text(path.read_text(encoding="utf-8"), load_evaluation(root), path.name)
+    except (ReportError, OSError, ValueError, KeyError) as error:
+        print(f"mm_report: FAIL unusable {path.name}: {error}")
+        return 2
+    for code, where, detail in violations:
+        print(f"mm_report: FAIL {code} {where}: {detail}")
+    if violations:
+        return 1
+    print(f"mm_report: ok {path.name}")
+    return 0
+
+
+# ---- The run
+
+def default_out(evaluation):
+    return f"results/mm_pnl_{evaluation['report_day']}.md"
+
+
+def git(root, *args):
+    result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True,
+                            check=False)
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def host_line():
+    system, machine = platform.system(), platform.machine()
+    cpu = ""
+    if system == "Darwin":
+        cpu = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True,
+                             text=True, check=False).stdout.strip()
+    label = "Mac numbers stay labelled macOS." if system == "Darwin" else "Linux host."
+    return f"{system} {machine} {cpu}".strip() + f". {label}"
+
+
+def compiler_and_flags(root, tool):
+    """The compiler's first line and the tool's flags, from the build's compile commands."""
+    sys.path.insert(0, str(root / "scripts"))
+    from oracle_report import tool_flags  # noqa: PLC0415
+
+    commands = Path(tool).resolve().parent.parent / "compile_commands.json"
+    flags = (tool_flags(str(commands), "tools/itch_mm.cpp") if commands.is_file()
+             else "unavailable")
+    compiler = "unavailable"
+    entries = json.loads(commands.read_text(encoding="utf-8")) if commands.is_file() else []
+    for entry in entries:
+        if entry["file"].endswith("tools/itch_mm.cpp"):
+            program = entry["arguments"][0] if "arguments" in entry else shlex.split(
+                entry["command"])[0]
+            version = subprocess.run([program, "--version"], capture_output=True, text=True,
+                                     check=False).stdout.splitlines()
+            compiler = version[0].split(" (")[0] if version else "unavailable"
+            break
+    return compiler, flags
+
+
+def command_run(args):
+    root = args.root.resolve()
+    evaluation = load_evaluation(root)
+    committed = subprocess.run([sys.executable, "-B", str(root / "scripts/check_predictions.py"),
+                                "--root", str(root), "--require", args.prediction],
+                               capture_output=True, text=True, check=False)
+    if committed.returncode != 0:
+        print(committed.stdout.strip())
+        return 1
+    stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
+    run_id = f"{args.prediction}-{stamp}"
+    status = git(root, "status", "--porcelain", "--untracked-files=no")
+    commit = git(root, "rev-parse", "--short=12", "HEAD") or "unavailable"
+    commit_cell = f"{commit} ({'clean' if status == '' else 'modified'})"
+    log_path = root / RUN_LOG
+    outputs = {}
+    for symbol, run in matrix(evaluation):
+        name = raw_name(evaluation, symbol, run)
+        command = [*args.wrap, args.time, "-l", str(args.tool),
+                   *tool_args(evaluation, symbol, run, str(args.data))]
+        print(f"mm_report: {symbol}, {run['name']}", flush=True)
+        done = subprocess.run(command, capture_output=True, text=True, check=False)
+        (args.raw_dir / f"{name}.out").write_text(done.stdout, encoding="utf-8")
+        (args.raw_dir / f"{name}.err").write_text(done.stderr, encoding="utf-8")
+        try:
+            if done.returncode not in (0, 1):
+                raise ReportError(f"exited {done.returncode}: {done.stderr.strip()[-200:]}")
+            output = done.stdout.rstrip("\n") + "\n" + "\n".join(time_lines(done.stderr)) + "\n"
+            parse_output(output)
+        except ReportError as error:
+            with log_path.open("a", encoding="utf-8") as log:
+                log.write(f"| {run_id} | {args.prediction} | {commit_cell} | "
+                          f"{platform.system()} | refused at {symbol}, {run['name']}: {error} |\n")
+            print(f"mm_report: FAIL run {symbol}, {run['name']}: {error}")
+            return 2
+        outputs[(symbol, run["name"])] = output
+    compiler, flags = compiler_and_flags(root, args.tool)
+    header = [f"# The market maker on {evaluation['report_day']}, a "
+              f"{evaluation['report_label']}: PnL attribution, Q-off and L-off", "",
+              "Generated by `scripts/mm_report.py` from raw logs, which are not committed. Do "
+              "not edit by hand. `mm_report.py check` renders the body again from the tool "
+              "output in the last section and holds the file to it.", "",
+              f"- prediction: {args.prediction}",
+              f"- run_id: {run_id}",
+              f"- Commit: {commit_cell}",
+              f"- Compiler: {compiler}",
+              f"- Flags: `{flags}`",
+              f"- Host: {host_line()}",
+              f"- Data: `{data_name(evaluation)}`, {evaluation['report_day']}, a "
+              f"{evaluation['report_label']}",
+              f"- Parameters: `{EVALUATION}`, chosen on {evaluation['selection_day']}, an "
+              f"{evaluation['selection_label']}",
+              f"- Raw folder: `{args.raw_dir.name}/`, one `.out` and one `.err` a run",
+              "- These are PnL results, not timings. The wall times below say only how long "
+              "each run took."]
+    out = root / (args.out or default_out(evaluation))
+    text = render(evaluation, outputs, header)
+    out.write_text(text, encoding="utf-8")
+    violations = check_text(text, evaluation, out.name)
+    outcome = "published" if not violations else f"published, {len(violations)} checks failed"
+    with log_path.open("a", encoding="utf-8") as log:
+        log.write(f"| {run_id} | {args.prediction} | {commit_cell} | {platform.system()} | "
+                  f"{outcome} |\n")
+    for code, where, detail in violations:
+        print(f"mm_report: FAIL {code} {where}: {detail}")
+    print(f"mm_report: wrote {out.relative_to(root)}, run {run_id}")
+    return 1 if violations else 0
+
+
+def command_render(args):
+    """Renders the file again from its own header and tool output, as `run` would have."""
+    root = args.root.resolve()
+    evaluation = load_evaluation(root)
+    path = Path(args.file) if args.file else root / default_out(evaluation)
+    try:
+        text = path.read_text(encoding="utf-8")
+        if BODY_START not in text or RAW_START not in text:
+            raise ReportError(f"no '{BODY_START}' or no '{RAW_START}'")
+        header = text[:text.index(BODY_START)].rstrip("\n").split("\n")
+        fresh = render(evaluation, raw_blocks(text), header)
+    except (ReportError, OSError, ValueError, KeyError) as error:
+        print(f"mm_report: FAIL unusable {path.name}: {error}")
+        return 2
+    path.write_text(fresh, encoding="utf-8")
+    violations = check_text(fresh, evaluation, path.name)
+    for code, where, detail in violations:
+        print(f"mm_report: FAIL {code} {where}: {detail}")
+    print(f"mm_report: rendered {path.name}")
+    return 1 if violations else 0
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    commands = parser.add_subparsers(dest="command", required=True)
+    run = commands.add_parser("run")
+    run.add_argument("--tool", type=Path, required=True)
+    run.add_argument("--data", type=Path, required=True)
+    run.add_argument("--raw-dir", type=Path, required=True)
+    run.add_argument("--prediction", required=True)
+    run.add_argument("--wrap", action="append", default=[])
+    run.add_argument("--time", default="/usr/bin/time")
+    run.add_argument("--out")
+    run.add_argument("--root", type=Path, default=REPO_ROOT)
+    for name in ("check", "render"):
+        command = commands.add_parser(name)
+        command.add_argument("file", nargs="?")
+        command.add_argument("--root", type=Path, default=REPO_ROOT)
+    args = parser.parse_args(argv)
+    return {"run": command_run, "check": command_check, "render": command_render}[
+        args.command](args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -32,3 +32,6 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0018-20261105T081446Z | P-0018 | 5a16936a14e8 | Linux | published: a flamegraph of the backtester, quoting, 119,933 samples |
 | P-0017-20261105T074512Z | P-0017 | 5a16936a14e8 (exported by debian_sync.sh) | Linux | published |
 | P-0017-20261105T075659Z | P-0017 | 5a16936a14e8 (exported by debian_sync.sh) | Linux | published |
+| P-0201-20261105T053845Z | P-0201 | abfb37c88eb0 (clean) | Darwin | published |
+| P-0201-20261105T053946Z | P-0201 | 9fee6ab0cb7b (clean) | Darwin | published |
+| P-0202-20261105T080745Z | P-0202 | 0999cb43a604 (clean) | Darwin | published |
