@@ -115,7 +115,7 @@ class Replay {
   }
 
   // The best `out.size()` levels of a side, best first. Returns how many were written.
-  std::size_t depth(Side side, std::span<DepthLevel> out) const noexcept {
+  [[nodiscard]] std::size_t depth(Side side, std::span<DepthLevel> out) const noexcept {
     std::size_t written = 0;
     book_.walk_side(locate_, side, [&](const Book::Level& level) {
       if (written == out.size()) {
@@ -133,8 +133,8 @@ class Replay {
   [[nodiscard]] std::uint64_t digest() const noexcept {
     std::uint64_t hash = 0xcbf29ce484222325ULL;
     const auto mix = [&hash](std::uint64_t value) {
-      for (int byte = 0; byte < 8; ++byte) {
-        hash = (hash ^ ((value >> (8 * byte)) & 0xFFU)) * 0x100000001b3ULL;
+      for (unsigned byte = 0; byte < 8U; ++byte) {
+        hash = (hash ^ ((value >> (8U * byte)) & 0xFFU)) * 0x100000001b3ULL;
       }
     };
     for (const std::uint64_t count : statuses_) {

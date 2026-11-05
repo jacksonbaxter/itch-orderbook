@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include "itch/book_types.hpp"
@@ -30,6 +31,12 @@ Engine& engine() {
   return instance;
 }
 
+// The replay, or nullptr before the first load.
+Replay* live() {
+  std::optional<Replay>& replay = engine().replay;
+  return replay.has_value() ? &*replay : nullptr;
+}
+
 double count(std::uint64_t value) { return static_cast<double>(value); }
 
 }  // namespace
@@ -50,79 +57,96 @@ std::byte* demo_input(double bytes) {
 int demo_load() {
   Engine& e = engine();
   e.replay.reset();  // The old book goes before the new one is built: memory holds one.
-  e.replay.emplace(std::span<const std::byte>{e.input});
-  return static_cast<int>(e.replay->extract_status());
+  const Replay& replay = e.replay.emplace(std::span<const std::byte>{e.input});
+  return static_cast<int>(replay.extract_status());
 }
 
-double demo_replay() { return engine().replay ? count(engine().replay->replay()) : 0.0; }
+double demo_replay() {
+  Replay* replay = live();
+  return replay != nullptr ? count(replay->replay()) : 0.0;
+}
 
 double demo_step(double messages) {
-  Engine& e = engine();
-  if (!e.replay || !(messages > 0.0)) {
+  Replay* replay = live();
+  if (replay == nullptr || !(messages > 0.0)) {
     return 0.0;
   }
-  return count(e.replay->step(static_cast<std::uint64_t>(messages)));
+  return count(replay->step(static_cast<std::uint64_t>(messages)));
 }
 
-double demo_messages() { return engine().replay ? count(engine().replay->messages()) : 0.0; }
-double demo_applied() { return engine().replay ? count(engine().replay->applied()) : 0.0; }
+double demo_messages() {
+  const Replay* replay = live();
+  return replay != nullptr ? count(replay->messages()) : 0.0;
+}
+double demo_applied() {
+  const Replay* replay = live();
+  return replay != nullptr ? count(replay->applied()) : 0.0;
+}
 
 double demo_status(int status) {
-  if (!engine().replay || status < 0 || status >= static_cast<int>(itch::demo::kStatusCount)) {
+  const Replay* replay = live();
+  if (replay == nullptr || status < 0 || std::cmp_greater_equal(status, itch::demo::kStatusCount)) {
     return 0.0;
   }
-  return count(engine().replay->status_count(static_cast<itch::ApplyStatus>(status)));
+  return count(replay->status_count(static_cast<itch::ApplyStatus>(status)));
 }
 
 double demo_first_timestamp_ns() {
-  return engine().replay ? count(engine().replay->first_timestamp_ns()) : 0.0;
+  const Replay* replay = live();
+  return replay != nullptr ? count(replay->first_timestamp_ns()) : 0.0;
 }
 double demo_last_timestamp_ns() {
-  return engine().replay ? count(engine().replay->last_timestamp_ns()) : 0.0;
+  const Replay* replay = live();
+  return replay != nullptr ? count(replay->last_timestamp_ns()) : 0.0;
 }
 
 const char* demo_symbol() {
   Engine& e = engine();
   e.symbol.fill('\0');
-  if (e.replay) {
-    const itch::Stock& stock = e.replay->symbol();
-    std::copy(stock.begin(), stock.end(), e.symbol.begin());
+  if (const Replay* replay = live(); replay != nullptr) {
+    std::ranges::copy(replay->symbol(), e.symbol.begin());
   }
   return e.symbol.data();
 }
 
 int demo_depth(int side, int levels) {
   Engine& e = engine();
-  if (!e.replay || (side != 0 && side != 1) || levels <= 0) {
+  const Replay* replay = live();
+  if (replay == nullptr || (side != 0 && side != 1) || levels <= 0) {
     return 0;
   }
   const auto wanted = std::min(static_cast<std::size_t>(levels), e.depth.size());
-  return static_cast<int>(e.replay->depth(side == 0 ? itch::Side::bid : itch::Side::ask,
-                                          std::span<DepthLevel>{e.depth}.first(wanted)));
+  return static_cast<int>(replay->depth(side == 0 ? itch::Side::bid : itch::Side::ask,
+                                        std::span<DepthLevel>{e.depth}.first(wanted)));
 }
 
 const DepthLevel* demo_depth_buffer() { return engine().depth.data(); }
 
-double demo_prints() { return engine().replay ? count(engine().replay->prints()) : 0.0; }
+double demo_prints() {
+  const Replay* replay = live();
+  return replay != nullptr ? count(replay->prints()) : 0.0;
+}
 
 const itch::demo::Print* demo_print(double n) {
-  const Engine& e = engine();
-  if (!e.replay || !(n >= 0.0)) {
+  const Replay* replay = live();
+  if (replay == nullptr || !(n >= 0.0)) {
     return nullptr;
   }
   const auto at = static_cast<std::uint64_t>(n);
-  const std::uint64_t total = e.replay->prints();
+  const std::uint64_t total = replay->prints();
   if (at >= total || total - at > itch::demo::kPrintRing) {
     return nullptr;
   }
-  return &e.replay->print(at);
+  return &replay->print(at);
 }
 
 double demo_digest_high() {
-  return engine().replay ? count(engine().replay->digest() >> 32U) : 0.0;
+  const Replay* replay = live();
+  return replay != nullptr ? count(replay->digest() >> 32U) : 0.0;
 }
 double demo_digest_low() {
-  return engine().replay ? count(engine().replay->digest() & 0xFFFFFFFFU) : 0.0;
+  const Replay* replay = live();
+  return replay != nullptr ? count(replay->digest() & 0xFFFFFFFFU) : 0.0;
 }
 
 double demo_max_input_bytes() { return count(itch::demo::kMaxInputBytes); }
