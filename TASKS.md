@@ -212,7 +212,7 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [x] Native Linux numbers from a `debian` results file. The page shows them as missing until they exist. No Mac numbers in that slot.
 - [x] State plainly that WASM cannot show true low latency, and why.
 - [x] Runs locally from `docs/` over a local HTTP server, because `file://` blocks loading.
-- [x] T-WASM-1, labelled macOS. 1.15× native in Google Chrome for Testing 153.0.8010.12, headless: Google Chrome is not installed, so the verdict is "browser differs". `results/wasm_replay_mac_12302019.md`.
+- [ ] T-WASM-1, labelled macOS.
 
 ### Write-up and iteration
 - [x] CI green on GitHub. The first run, at 2810183, failed both GCC jobs on a `-Wconversion` error only Linux shows, and the x86-64 Clang job on the LLVM archive's 1 GiB zstd window. Fixed, and every job passed at da1a707. NOTES.md, "CI's first runs on GitHub".

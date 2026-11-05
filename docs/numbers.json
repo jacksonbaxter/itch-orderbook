@@ -32,16 +32,6 @@
     "book_memory_mib": "662.8"
   },
   "wasm_macos": {
-    "file": "results/wasm_replay_mac_12302019.md",
-    "host": "macOS (M4 Max)",
-    "cpu": "Apple M4 Max",
-    "browser": "Google Chrome for Testing 153.0.8010.12, headless, from the binary's --version",
-    "commit": "05215cc6b2b0 (clean)",
-    "extract": "AAPL on 12302019.NASDAQ_ITCH50, 1,519,871 messages, 46,286,421 bytes, made by scripts/demo.py extract",
-    "native_messages_per_s": "13,454,830",
-    "wasm_messages_per_s": "11,723,781",
-    "ratio": "1.15×",
-    "bar": "≤ 1.55× native, in Google Chrome",
-    "verdict": "browser differs: Google Chrome for Testing 153.0.8010.12, not Google Chrome; neither a pass nor a fail; against the bar: 1.15× native, within the 1.55× bar by 0.40×"
+    "missing": "no results/wasm_replay_mac_*.md yet: T-WASM-1 has not run"
   }
 }
