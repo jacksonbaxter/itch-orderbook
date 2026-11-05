@@ -3392,7 +3392,7 @@
       "mutations": [
         {
           "file": "scripts/counts_report.py",
-          "old": "        if printed[target][0] != expected or abs(printed[target][1] - figure[0]) > 0.0005:",
+          "old": "        if printed[target][0] != expected or abs(printed[target][1] - figure[0]) > 0.00055:",
           "new": "        if False:"
         }
       ],

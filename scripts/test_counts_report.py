@@ -111,6 +111,13 @@ class CountsReport(unittest.TestCase):
         codes = [code for code, _ in counts_report.check_published(text)]
         self.assertIn("verdict-faked", codes)
 
+    def test_a_figure_rounded_to_three_places_beside_its_four_place_median_is_not_faked(self):
+        text = self.render([record()]).replace("Measured 2.159 raw", "Measured 2.002 raw", 1)
+        text = text.replace("| 2.1591 | 2.1591 | 2.1591 | 0.0000 | 2.1591 |",
+                            "| 2.0025 | 2.0025 | 2.0025 | 0.0000 | 2.0025 |", 1)
+        codes = [code for code, _ in counts_report.check_published(text)]
+        self.assertNotIn("verdict-faked", codes)
+
     def test_check_catches_a_name_left_unsaid(self):
         text = self.render([record()]) + "\nThe cache-misses rose.\n"
         codes = [code for code, _ in counts_report.check_published(text)]

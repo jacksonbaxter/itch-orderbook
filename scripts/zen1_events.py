@@ -2,7 +2,8 @@
 """Writes the Zen 1 counter table: which events are real hardware events on debian with `:u`.
 
     zen1_events.py --part-a DIR --part-b DIR --record RUN.json --machine-check BEFORE AFTER \\
-        --prediction P-NNNN --command TEXT --out results/counters_zen1_events_debian.md
+        --prediction P-NNNN --commit TEXT --dataset NAME --command TEXT \\
+        --out results/counters_zen1_events_debian.md
     zen1_events.py --check FILE
 
 Part A is one `perf stat -x,` per event around a replay of the oracle fixture: each event's
@@ -131,7 +132,10 @@ def read_csv(path):
             continue
         raw = cells[0].strip()
         value = int(raw) if raw.isdigit() else None
-        rows[cells[2].strip()] = (value, raw, cells[4].strip())
+        event = cells[2].strip()
+        # perf prints the generic cache events without the `:u` they were asked with; every
+        # event here was asked for with it, and `perf stat -vv` shows exclude_kernel set.
+        rows[event if ":" in event else event + ":u"] = (value, raw, cells[4].strip())
     return rows
 
 
@@ -140,7 +144,7 @@ def first_error(path):
         return ""
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         line = line.strip()
-        if line and not line.startswith(("measure.sh:", "#")) and "Performance counter" not in line:
+        if line and line != "Error:" and not line.startswith(("measure.sh:", "#")):
             return flame_report.scrub(line)[:160]
     return ""
 
@@ -165,8 +169,9 @@ def part_a(root):
             state = "not supported" if "not supported" in raw else "refused"
         else:
             state = "counts" if value > 0 else "counts zero"
-        states[spec] = (state, code, value, first_error(root / f"{name}.err")
-                        if state in ("refused", "not supported") else raw)
+        detail = {"refused": first_error(root / f"{name}.err"),
+                  "not supported": "perf stat printed `<not supported>`"}.get(state, raw)
+        states[spec] = (state, code, value, detail)
     return states
 
 
@@ -179,9 +184,14 @@ def part_b(root, messages):
     return counts
 
 
+def figure(value):
+    """Four decimals, or three significant figures for a count too rare for four."""
+    return f"{value:.4f}" if value == 0 or value >= 0.001 else f"{value:.2e}"
+
+
 def render(args):
     record = json.loads(args.record.read_text(encoding="utf-8"))
-    header = record["header"]
+    header = dict(record["header"], commit=args.commit, dataset=args.dataset)
     if header.get("host") != "debian":
         raise ReportError(f"host {header.get('host')!r}")
     messages = record["mix"]["messages"]
@@ -218,7 +228,7 @@ def render(args):
         if state in ("refused", "not supported") and detail:
             fixture = f"n/a: {detail}"
         day = counts.get(spec)
-        per = f"{day[0] / replayed:.4f}" if day and day[0] is not None else "n/a"
+        per = figure(day[0] / replayed) if day and day[0] is not None else "n/a"
         running = f"{day[2]}%" if day and day[0] is not None else "n/a"
         out.append(f"| `{event}` | {encoding} | {state} | {fixture} | {per} | {running} "
                    f"| {meaning} |")
@@ -229,7 +239,9 @@ def render(args):
                    + {"cycles:k": "Kernel cycles: refused to an unprivileged user at "
                                   "`perf_event_paranoid=2`, so no kernel frame in any graph.",
                       "cycles:upp": "Precise sampling goes to IBS, which does not take `:u`.",
-                      "lbr": "Zen 1 has no LBR: the kernel has none before family 19h."}[spec]
+                      "lbr": "perf refused it with its permission message, which by itself "
+                             "does not say why; the kernel source gives Zen 1 no LBR at all "
+                             "(`brs.c` and `lbr.c`: family 19h and LBR v2 only)."}[spec]
                    + " |")
     out += ["", "## Against the prediction", "",
             "| Event | Per replayed message | Predicted | Held |", "|---|---|---|---|"]
@@ -321,6 +333,8 @@ def main(argv=None):
     parser.add_argument("--record", type=Path, required=True)
     parser.add_argument("--machine-check", type=Path, nargs=2, required=True)
     parser.add_argument("--prediction", required=True)
+    parser.add_argument("--commit", required=True, help="the commit measured, as the run knew it")
+    parser.add_argument("--dataset", required=True)
     parser.add_argument("--command", required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)

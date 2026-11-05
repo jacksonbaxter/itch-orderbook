@@ -424,7 +424,7 @@ def check_published(text):
             found.append(("verdict-missing", target))
             continue
         expected = "PASS" if figure[0] <= bar else "FAIL"
-        if printed[target][0] != expected or abs(printed[target][1] - figure[0]) > 0.0005:
+        if printed[target][0] != expected or abs(printed[target][1] - figure[0]) > 0.00055:
             found.append(("verdict-faked", f"{target}: the table gives {figure[0]} and "
                                            f"{expected}, the line says {printed[target]}"))
     return found

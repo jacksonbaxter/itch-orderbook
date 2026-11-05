@@ -48,7 +48,7 @@ class Zen1Events(unittest.TestCase):
         (b / "group1.csv").write_text(
             csv_line("r0843:u", 2 * MESSAGES * 2) + "5000,,cache-misses:u,1000,100.00,,\n"
             + "5001,,r0964:u,1000,100.00,,\n" + f"{2 * MESSAGES * 2},,branch-misses:u,1000,"
-            "99.50,,\n", encoding="utf-8")
+            "99.50,,\n" + "300,,dTLB-load-misses,1000,100.00,,\n", encoding="utf-8")
         record = {"header": {"host": "debian", "cpu": "AMD Ryzen Embedded V1605B",
                              "kernel": "Linux 6.12", "commit": "0123456789ab (clean)",
                              "dataset": "12302019.NASDAQ_ITCH50"},
@@ -67,6 +67,8 @@ class Zen1Events(unittest.TestCase):
                                  "--record", str(root / "run.json"), "--machine-check",
                                  str(root / "before.out"), str(root / "after.out"),
                                  "--prediction", "P-0016", "--command", "run1.sh",
+                                 "--commit", "0123456789ab (exported by debian_sync.sh)",
+                                 "--dataset", "12302019.NASDAQ_ITCH50",
                                  "--out", str(self.out)])
 
     def row(self, event):
@@ -87,6 +89,7 @@ class Zen1Events(unittest.TestCase):
     def test_per_message_figures_divide_by_both_replays(self):
         self.assertEqual(self.write(), 0)
         self.assertEqual(self.row("r0843")[4], "2.0000")
+        self.assertEqual(self.row("dTLB-load-misses")[4], "0.1500")
         text = self.out.read_text(encoding="utf-8")
         self.assertIn("| `r0964:u` against `cache-misses:u`, both L2 misses, relative gap "
                       "| 0.020% | under 0.1% | yes |", text)
