@@ -1,0 +1,610 @@
+{
+  "area": "bookvariants",
+  "faults": [
+    {
+      "id": "bookvariants-lookahead-skips-a-frame",
+      "breaks": "The look-ahead reader skips a frame and hands the next one twice",
+      "check": "test_book_variants Lookahead.HandsOverEveryFrameFrameReaderDoesInOrder",
+      "mutations": [
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "    const Frame frame = ring_[handed_ & kRingMask];\n",
+          "new": "    const Frame frame = ring_[(handed_ + (handed_ == 100 ? 1U : 0U)) & kRingMask];\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book_variants"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_book_variants"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Lookahead\\.HandsOverEveryFrameFrameReaderDoesInOrder",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-cli-lookahead-skips-a-frame",
+      "breaks": "itch_oracle --prefetch walks a stream with a frame skipped",
+      "check": "test_oracle_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "    const Frame frame = ring_[handed_ & kRingMask];\n",
+          "new": "    const Frame frame = ring_[(handed_ + (handed_ == 100 ? 1U : 0U)) & kRingMask];\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_oracle_cli.py",
+        "{build}/tools/itch_oracle",
+        "{build}/tests/fault_oracle_cli",
+        "{tree}/tests/fixtures/oracle",
+        "{build}/tools/itch_alloc"
+      ],
+      "expect": {
+        "signature": "^oracle cli: FAIL session .* look-ahead 4: ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-lookahead-stage-on-the-frame",
+      "breaks": "The last stage runs on the frame being handed over, not ahead of it",
+      "check": "test_book_variants Lookahead.AsksForEachStageOfEachMessageOnceNearerStageByStage",
+      "mutations": [
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "    return halved > spaced ? halved : spaced;\n",
+          "new": "    return halved;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book_variants"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_book_variants"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Lookahead\\.AsksForEachStageOfEachMessageOnceNearerStageByStage",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-lookahead-takes-short-distance",
+      "breaks": "A look-ahead shorter than the arm's stages is taken",
+      "check": "test_book_variants Lookahead.TakesOnlyDistancesEachArmCanStage",
+      "mutations": [
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "(distance >= kStages && distance <= kMostAhead)",
+          "new": "(distance >= 1 && distance <= kMostAhead)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book_variants"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_book_variants"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Lookahead\\.TakesOnlyDistancesEachArmCanStage",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-cli-oracle-takes-short-distance",
+      "breaks": "itch_oracle and itch_alloc take a look-ahead shorter than the arm's stages",
+      "check": "test_oracle_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "(distance >= kStages && distance <= kMostAhead)",
+          "new": "(distance >= 1 && distance <= kMostAhead)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_oracle_cli.py",
+        "{build}/tools/itch_oracle",
+        "{build}/tests/fault_oracle_cli",
+        "{tree}/tests/fixtures/oracle",
+        "{build}/tools/itch_alloc"
+      ],
+      "expect": {
+        "signature": "^oracle cli: FAIL usage look-ahead 3 on paged",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-prefetch-writes-the-book",
+      "breaks": "A prefetch stage changes an order's shares",
+      "check": "test_book_variants Lookahead.EveryArmEndsEveryMessageAsWithoutIt",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      __builtin_prefetch(&orders_[order]);\n",
+          "new": "      __builtin_prefetch(&orders_[order]);\n      ++const_cast<FastBook*>(this)->orders_[order].shares;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book_variants"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_book_variants"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Lookahead\\.EveryArmEndsEveryMessageAsWithoutIt",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-cli-prefetch-writes-the-book",
+      "breaks": "itch_oracle --prefetch on a book that a prefetch stage writes",
+      "check": "test_oracle_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      __builtin_prefetch(&orders_[order]);\n",
+          "new": "      __builtin_prefetch(&orders_[order]);\n      ++const_cast<FastBook*>(this)->orders_[order].shares;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_oracle_cli.py",
+        "{build}/tools/itch_oracle",
+        "{build}/tests/fault_oracle_cli",
+        "{tree}/tests/fixtures/oracle",
+        "{build}/tools/itch_alloc"
+      ],
+      "expect": {
+        "signature": "^oracle cli: FAIL session .* look-ahead ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-lookahead-allocates",
+      "breaks": "The look-ahead reader allocates while it fills its ring",
+      "check": "test_alloc Allocation.TheFastBookLookingAheadAllocatesNothingAfterConstruction",
+      "mutations": [
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "#include <span>\n",
+          "new": "#include <new>\n#include <span>\n"
+        },
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "      const Frame frame = reader_.next();\n",
+          "new": "      ::operator delete(::operator new(8));\n      const Frame frame = reader_.next();\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Allocation\\.TheFastBookLookingAheadAllocatesNothingAfterConstruction",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-cli-lookahead-allocates",
+      "breaks": "itch_alloc --prefetch on a reader that allocates",
+      "check": "test_oracle_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "#include <span>\n",
+          "new": "#include <new>\n#include <span>\n"
+        },
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "      const Frame frame = reader_.next();\n",
+          "new": "      ::operator delete(::operator new(8));\n      const Frame frame = reader_.next();\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_oracle_cli.py",
+        "{build}/tools/itch_oracle",
+        "{build}/tests/fault_oracle_cli",
+        "{tree}/tests/fixtures/oracle",
+        "{build}/tools/itch_alloc"
+      ],
+      "expect": {
+        "signature": "^oracle cli: FAIL alloc .* look-ahead 16",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-apply-as-skips-length",
+      "breaks": "apply_as applies a payload of the wrong length",
+      "check": "test_book_variants ApplyAs.IsApplyForItsType",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    if (payload.size() != message_length(Type)) {\n      return ApplyStatus::no_book_effect;\n    }\n    return apply_whole<Type>(payload.data());\n",
+          "new": "    return apply_whole<Type>(payload.data());\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book_variants"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_book_variants"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ApplyAs\\.IsApplyForItsType",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-table-misroutes",
+      "breaks": "The table form sends E to the C handler",
+      "check": "test_book_variants DispatchForms.EveryFormGivesTheSwitchsBook",
+      "mutations": [
+        {
+          "file": "bench/dispatch.hpp",
+          "old": "    return book.template apply_as<Type>(payload);\n",
+          "new": "    return book.template apply_as<(Type == 'E' ? 'C' : Type)>(payload);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book_variants"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_book_variants"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] DispatchForms\\.EveryFormGivesTheSwitchsBook",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-threaded-misroutes",
+      "breaks": "The threaded form sends E to the C handler",
+      "check": "test_book_variants DispatchForms.EveryFormGivesTheSwitchsBook",
+      "mutations": [
+        {
+          "file": "bench/dispatch.hpp",
+          "old": "refused(state.book->template apply_as<Type>(payload))",
+          "new": "refused(state.book->template apply_as<(Type == 'E' ? 'C' : Type)>(payload))"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book_variants"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_book_variants"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] DispatchForms\\.EveryFormGivesTheSwitchsBook",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-script-mismatch-uncounted",
+      "breaks": "A check pass finds the script wrong and counts nothing",
+      "check": "test_book_variants LookupScript.AWrongEntryOrAShortScriptIsCaught",
+      "mutations": [
+        {
+          "file": "bench/lookup_script.hpp",
+          "old": "    mismatches_ += expected == found ? 0U : 1U;\n",
+          "new": "    mismatches_ += 0U;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book_variants"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_book_variants"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] LookupScript\\.AWrongEntryOrAShortScriptIsCaught",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-script-short-accepted",
+      "breaks": "A pass that leaves script entries unread counts as exact",
+      "check": "test_book_variants LookupScript.AWrongEntryOrAShortScriptIsCaught",
+      "mutations": [
+        {
+          "file": "bench/lookup_script.hpp",
+          "old": "    return !overrun_ && mismatches_ == 0 && cursor_ == recorded_;\n",
+          "new": "    return !overrun_ && mismatches_ == 0;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book_variants"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_book_variants"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] LookupScript\\.AWrongEntryOrAShortScriptIsCaught",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-cli-prefetch-with-table",
+      "breaks": "bench_variants runs a look-ahead with the table form instead of refusing",
+      "check": "test_bench_variants_cli.py",
+      "mutations": [
+        {
+          "file": "bench/bench_variants.cpp",
+          "old": "(options.dispatch != DispatchForm::switch_case || options.pass != PassKind::replay)",
+          "new": "(options.pass != PassKind::replay)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_variants"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_variants_cli.py",
+        "{build}/bench/bench_variants",
+        "{build}/tests/fault_bench_variants_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "^bench variants cli: FAIL prefetch with table: ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-cli-lookup-script-short",
+      "breaks": "The lookup script loses its last entry, so a lookup pass no longer replays the recorded day",
+      "check": "test_bench_variants_cli.py",
+      "mutations": [
+        {
+          "file": "bench/lookup_script.hpp",
+          "old": "    if (cursor_ < recorded_) {\n",
+          "new": "    if (cursor_ + 1 < recorded_) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_variants"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_variants_cli.py",
+        "{build}/bench/bench_variants",
+        "{build}/tests/fault_bench_variants_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "^bench variants cli: FAIL lookup_paged-flat: ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-report-e8-threshold",
+      "breaks": "E8 is judged against 5%, not 10%",
+      "check": "test_variants_report.py test_e8_is_refuted_below_ten_percent_and_not_at_it",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "E8_GAIN = 0.10\n",
+          "new": "E8_GAIN = 0.05\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_e8_is_refuted_below_ten_percent_and_not_at_it",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-report-e7-always-flat",
+      "breaks": "E7 is refuted at any spread of branch misses",
+      "check": "test_variants_report.py test_e7_judges_the_spread_of_branch_misses_and_not_on_the_mac",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "            refuted = spread < E7_FLAT\n",
+          "new": "            refuted = True\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_e7_judges_the_spread_of_branch_misses_and_not_on_the_mac",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-report-lookup-not-a-difference",
+      "breaks": "The lookup figure is the check pass alone, not check less answer",
+      "check": "test_variants_report.py test_lookup_is_check_less_answer_over_the_lookups",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "            per_lookup.append((check_s - answer_s) * 1e9 / lookups)\n",
+          "new": "            per_lookup.append(check_s * 1e9 / lookups)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_lookup_is_check_less_answer_over_the_lookups",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-report-paranoid-unchecked",
+      "breaks": "A debian run at another perf_event_paranoid is published",
+      "check": "test_variants_report.py test_the_debian_host_must_be_fit_at_both_ends",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "            if \"perf_event_paranoid=2 \" not in line + \" \" or not re.search(r\"\\bnice 0\\b\", line):\n",
+          "new": "            if not re.search(r\"\\bnice 0\\b\", line):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_debian_host_must_be_fit_at_both_ends",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-report-governor-unchecked",
+      "breaks": "A debian run off the performance governor is published",
+      "check": "test_variants_report.py test_the_debian_host_must_be_fit_at_both_ends",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "        if fields.get(\"governor\") != \"performance\":\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_debian_host_must_be_fit_at_both_ends",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-report-mac-pin-claim",
+      "breaks": "A macOS file claiming a pin is published",
+      "check": "test_variants_report.py test_names_files_and_privacy",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "    elif fields.get(\"pinning\", \"\").startswith(\"pinned\"):\n",
+          "new": "    elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_names_files_and_privacy",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-predictions-skip-dispatch-results",
+      "breaks": "A dispatch results file is not held to a prediction",
+      "check": "test_check_predictions.py test_a_book_variants_result_naming_no_prediction",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": ", \"dispatch_*.md\")",
+          "new": ")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_book_variants_result_naming_no_prediction",
+        "exit": 1
+      }
+    }
+  ]
+}
