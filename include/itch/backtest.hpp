@@ -65,6 +65,33 @@
 // messages (hidden size, no reference) and Cross Trades never fill, and nothing fills while the
 // symbol is not trading.
 //
+// **Q-off.** Config::queue names the queue rule, so that a run without the queue says which
+// rule it used instead (BENCHMARKS.md, "Exact against modelled queue position": carteret found
+// fill rates on 2019-12-30 21.2% below exact under one and 0.7% below under the other). Both
+// are what a backtest on an aggregate feed must assume, since it cannot tell which order a
+// message names. `ahead` is set on arrival as above. Then, at S's price:
+//
+//   - Every execution takes its shares from the front, whichever order it hits: from `ahead`
+//     first, and the rest reach S, which fills them as above.
+//   - An add never goes ahead of S, a late add included.
+//   - A cancel, delete or replace of c shares, from a level of d with a ahead of S, takes
+//     conservative:  from behind S while shares rest behind it, so a becomes min(a, d − c).
+//                    hftbacktest's RiskAverse model, "your order queue position doesn't
+//                    change" on a cancel (backtester.md, BT-2), whose code caps the queue
+//                    ahead at the level's new size, and carteret's conservative attribution,
+//                    "assume every cancel came from behind" (its design record 030).
+//     proportional:  c·a/d from ahead, carteret's proportional attribution ("a cancel of c
+//                    from a level of d with a ahead removes c·a/d from in front", record 030),
+//                    which is hftbacktest's ProbQueueModel with f(x) = x (BT-2). a is held in
+//                    millionths of a share and each removal is rounded down; shares that reach
+//                    S are counted in whole shares, rounded down.
+//
+// Neither rule lets a exceed the shares resting at S's price. A trade through S's price, and
+// a real order crossing a resting S, fill as above under every rule.
+//
+// **L-off.** Config::latency_off sets all four latencies to zero, whatever Config::latency
+// holds. The tie order above still puts every Real at t before anything else at t.
+//
 // **The ledger.** consumed[R] counts real shares of R that a simulated order has already
 // traded against, as a crossing add or as a taker. A later taker sees only R's shares less
 // consumed[R], and a later execution of R draws first on consumed[R]: those shares were
@@ -120,6 +147,21 @@ struct Latency {
 };
 
 enum class Tif : std::uint8_t { day, ioc };
+
+// The queue rule: the order references' FIFO, or one of the two rules of "Q-off" above.
+enum class QueueModel : std::uint8_t { exact, conservative, proportional };
+
+[[nodiscard]] constexpr const char* to_string(QueueModel model) noexcept {
+  switch (model) {
+    case QueueModel::exact: return "exact";
+    case QueueModel::conservative: return "conservative";
+    case QueueModel::proportional: return "proportional";
+  }
+  return "unknown";
+}
+
+// A share in the units of a proportional queue.
+inline constexpr std::uint64_t kQueueUnitsPerShare = 1'000'000;
 
 struct OrderId {
   std::uint32_t slot = kNoIndex;
@@ -183,6 +225,8 @@ struct MarketEvent {
 struct Config {
   std::uint32_t date = 0;  // YYYYMMDD. Picks the fee schedule; a day without one is refused.
   Latency latency{};
+  bool latency_off = false;  // L-off: every latency zero.
+  QueueModel queue = QueueModel::exact;
   std::vector<Stock> symbols;  // The symbols the strategy sees and trades.
   bool cancel_at_market_close = true;
   BookCapacity exchange_capacity{};
@@ -220,9 +264,10 @@ struct Stats {
 // A resting simulated order as the exchange side holds it, for tests and tools.
 struct QueueState {
   Price4 price;
-  std::uint64_t ahead;
+  std::uint64_t ahead;  // Whole shares.
   std::uint32_t remaining;
   std::uint64_t arrival;
+  std::uint64_t ahead_fraction;  // Millionths of a share beyond `ahead`: proportional only.
 };
 
 // An order-sensitive mix of 64-bit words: the event log's hash.
@@ -314,7 +359,10 @@ class Engine {
   using Level = Book::Level;
 
   explicit Engine(const Config& config)
-      : latency_{config.latency},
+      : latency_{config.latency_off
+                     ? Latency{.market_data = 0, .order_entry = 0, .response = 0, .compute = 0}
+                     : config.latency},
+        model_{config.queue},
         symbols_{config.symbols},
         cancel_at_close_{config.cancel_at_market_close},
         schedule_{find_fee_schedule(config.date)},
@@ -422,8 +470,11 @@ class Engine {
     if (sim.generation != order.generation || sim.state != OrderState::resting) {
       return std::nullopt;
     }
-    return QueueState{
-        .price = sim.price, .ahead = sim.ahead, .remaining = sim.remaining, .arrival = sim.arrival};
+    return QueueState{.price = sim.price,
+                      .ahead = sim.ahead,
+                      .remaining = sim.remaining,
+                      .arrival = sim.arrival,
+                      .ahead_fraction = sim.ahead_fraction};
   }
 
   // The shares ahead of a resting order, recounted from the book's FIFO at its price: the
@@ -458,6 +509,7 @@ class Engine {
 
   struct SimOrder {
     std::uint64_t ahead = 0;
+    std::uint64_t ahead_fraction = 0;  // Millionths of a share, under the proportional rule.
     std::uint64_t arrival = 0;
     Price4 price = 0;
     std::uint32_t remaining = 0;
@@ -509,6 +561,7 @@ class Engine {
     Price4 price = 0;
     std::uint32_t shares = 0;
     std::uint64_t arrival = 0;
+    std::uint64_t level_shares = 0;  // Every real share at its price, itself included.
     std::uint32_t consumed = 0;
 
     [[nodiscard]] bool found() const noexcept { return slot != kNoIndex; }
@@ -606,6 +659,7 @@ class Engine {
     sim.remaining = request.shares;
     sim.tif = request.tif;
     sim.ahead = 0;
+    sim.ahead_fraction = 0;
     sim.level = kNoIndex;
     sim.older = kNoIndex;
     sim.newer = kNoIndex;
@@ -820,8 +874,9 @@ class Engine {
       consumed_[slot] = 0;
     }
     stats_.late_adds += late ? 1U : 0U;
-    const std::uint32_t level =
-        late && resting_[locate] != 0 ? find_sim_level(locate, side, price) : kNoIndex;
+    const std::uint32_t level = late && model_ == QueueModel::exact && resting_[locate] != 0
+                                    ? find_sim_level(locate, side, price)
+                                    : kNoIndex;
     if (level != kNoIndex) {
       ++stats_.late_adds_ahead;
       for (std::uint32_t sim = levels_[level].front; sim != kNoIndex; sim = orders_[sim].newer) {
@@ -851,6 +906,7 @@ class Engine {
             .price = level.price,
             .shares = order.shares,
             .arrival = arrival_[slot],
+            .level_shares = level.aggregate_shares,
             .consumed = consumed_[slot]};
   }
 
@@ -882,6 +938,16 @@ class Engine {
       for (std::uint32_t slot = levels_[level].front; slot != kNoIndex; slot = next) {
         next = orders_[slot].newer;
         SimOrder& sim = orders_[slot];
+        if (at_price && model_ != QueueModel::exact) {
+          const std::uint64_t reaching = take_from_front(sim, shares);
+          const auto take = static_cast<std::uint32_t>(
+              std::min<std::uint64_t>(std::min(sim.remaining, budget), reaching));
+          if (fills && reached && take != 0) {
+            budget -= take;
+            fill(slot, take, sim.price, Liquidity::maker, time);
+          }
+          continue;
+        }
         if (at_price && sim.arrival > real.arrival) {
           sim.ahead -= std::min<std::uint64_t>(sim.ahead, shares);
           continue;
@@ -904,17 +970,54 @@ class Engine {
   }
 
   // A cancel, delete or replace of R: depletion ahead of S at R's price, and nothing else.
+  // Under Q-off the rule decides how much of it was ahead.
   void depletion(std::uint16_t locate, const RealOrder& real, std::uint32_t shares) noexcept {
     const std::uint32_t level = find_sim_level(locate, real.side, real.price);
     if (level == kNoIndex) {
       return;
     }
+    const std::uint64_t left =
+        real.level_shares - std::min<std::uint64_t>(real.level_shares, shares);
     for (std::uint32_t slot = levels_[level].front; slot != kNoIndex; slot = orders_[slot].newer) {
       SimOrder& sim = orders_[slot];
-      if (sim.arrival > real.arrival) {
-        sim.ahead -= std::min<std::uint64_t>(sim.ahead, shares);
+      switch (model_) {
+        case QueueModel::exact:
+          if (sim.arrival > real.arrival) {
+            sim.ahead -= std::min<std::uint64_t>(sim.ahead, shares);
+          }
+          break;
+        case QueueModel::conservative: sim.ahead = std::min(sim.ahead, left); break;
+        case QueueModel::proportional: remove_in_proportion(sim, shares, real.level_shares); break;
       }
     }
+  }
+
+  // Under Q-off, an execution of `shares` at S's price: what was ahead goes first, and the
+  // whole shares left over reach S.
+  [[nodiscard]] static std::uint64_t take_from_front(SimOrder& sim, std::uint32_t shares) noexcept {
+    const std::uint64_t ahead = (sim.ahead * kQueueUnitsPerShare) + sim.ahead_fraction;
+    const std::uint64_t traded = std::uint64_t{shares} * kQueueUnitsPerShare;
+    const std::uint64_t used = std::min(ahead, traded);
+    set_ahead(sim, ahead - used);
+    return (traded - used) / kQueueUnitsPerShare;
+  }
+
+  // The proportional rule: c·a/d of a cancel of c from a level of d, in millionths of a share,
+  // rounded down.
+  static void remove_in_proportion(SimOrder& sim, std::uint32_t cancelled,
+                                   std::uint64_t level) noexcept {
+    if (level == 0) {
+      return;
+    }
+    const std::uint64_t ahead = (sim.ahead * kQueueUnitsPerShare) + sim.ahead_fraction;
+    const auto removed =
+        static_cast<std::uint64_t>((static_cast<unsigned __int128>(ahead) * cancelled) / level);
+    set_ahead(sim, ahead - std::min(ahead, removed));
+  }
+
+  static void set_ahead(SimOrder& sim, std::uint64_t units) noexcept {
+    sim.ahead = units / kQueueUnitsPerShare;
+    sim.ahead_fraction = units % kQueueUnitsPerShare;
   }
 
   // A real order on `side` at `price` that a resting simulated order on the other side
@@ -1203,6 +1306,7 @@ class Engine {
     SimOrder& sim = orders_[slot];
     const Level* real = book_.find_level(sim.locate, sim.side, sim.price);
     sim.ahead = real == nullptr ? 0 : real->aggregate_shares;
+    sim.ahead_fraction = 0;
     const std::size_t key = side_key(sim.locate, sim.side);
     std::uint32_t worse = sim_heads_[key];
     std::uint32_t better_level = kNoIndex;
@@ -1264,6 +1368,7 @@ class Engine {
   }
 
   Latency latency_;
+  QueueModel model_;
   std::vector<Stock> symbols_;
   bool cancel_at_close_;
   const FeeSchedule* schedule_;

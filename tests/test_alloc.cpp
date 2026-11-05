@@ -198,9 +198,9 @@ TEST(Allocation, TheBacktesterAllocatesNothingAfterConstruction) {
   EXPECT_GT(stats.deliveries, 100U * config.queue_capacity);
 }
 
-// The market maker on the same market, with both models and the mark recorder: the replay,
-// the strategy's quoting and fill log, and the path, all after construction. The attribution
-// itself runs after the session and is not on this path.
+// The market maker on the same market, with both models, each switch and the mark recorder: the
+// replay, the strategy's quoting and fill log, and the path, all after construction. The
+// attribution itself runs after the session and is not on this path.
 TEST(Allocation, TheMarketMakerAllocatesNothingAfterConstruction) {
   const auto messages = itch::backtest::synthetic::RandomMarket{20191231}.generate(200'000);
   const std::vector<std::byte> stream = itch::backtest::synthetic::frame(messages);
@@ -224,7 +224,8 @@ TEST(Allocation, TheMarketMakerAllocatesNothingAfterConstruction) {
                                        .start = 0,
                                        .stop = 1'000'000'000,
                                        .max_fills = 1U << 16U};
-  const auto check = [&](const auto& model, std::string_view name) {
+  const auto check = [&](const auto& model, std::string_view name,
+                         std::uint64_t least_fills = 1000) {
     itch::backtest::Engine<> engine{config};
     itch::mm::Quoter maker{quoting, model};
     itch::mm::MarkRecorder marks{itch::backtest::synthetic::kSymbol, 1U << 20U};
@@ -241,11 +242,20 @@ TEST(Allocation, TheMarketMakerAllocatesNothingAfterConstruction) {
     EXPECT_EQ(engine.stats().overflows, 0U);
     EXPECT_EQ(marks.overflows(), 0U);
     EXPECT_EQ(maker.counts().fill_overflows, 0U);
-    EXPECT_GT(maker.counts().fills, 1000U) << name;
+    EXPECT_GT(maker.counts().fills, least_fills) << name;
     EXPECT_GT(maker.counts().replaces, 1000U) << name;
   };
   check(itch::mm::AsModel{parameters, 1'000'000'000}, "Avellaneda-Stoikov");
   check(itch::mm::GlftModel{parameters, 5}, "GLFT");
+  // The switches of the with-and-without runs, each on its own.
+  config.queue = itch::backtest::QueueModel::conservative;
+  check(itch::mm::AsModel{parameters, 1'000'000'000}, "Avellaneda-Stoikov, Q-off conservative");
+  config.queue = itch::backtest::QueueModel::proportional;
+  check(itch::mm::AsModel{parameters, 1'000'000'000}, "Avellaneda-Stoikov, Q-off proportional");
+  config.queue = itch::backtest::QueueModel::exact;
+  config.latency_off = true;
+  // With no latency its quotes keep up with the mid, and this market fills them less often.
+  check(itch::mm::AsModel{parameters, 1'000'000'000}, "Avellaneda-Stoikov, L-off", 500);
 }
 
 TEST(Allocation, TheControlBookIsSeenAllocating) {

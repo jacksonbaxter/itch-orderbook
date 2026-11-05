@@ -179,10 +179,18 @@ const itch::backtest::Latency kLatency{.market_data = kLatencyStep,
                                        .response = kLatencyStep,
                                        .compute = 0};
 
-itch::backtest::Config config(itch::backtest::Latency latency = kLatency) {
+// The switches of the with-and-without runs: Q-off names its rule, L-off zeroes every latency.
+struct Switches {
+  itch::backtest::QueueModel queue = itch::backtest::QueueModel::exact;
+  bool latency_off = false;
+};
+
+itch::backtest::Config config(itch::backtest::Latency latency = kLatency, Switches switches = {}) {
   itch::backtest::Config out;
   out.date = 20191230;
   out.latency = latency;
+  out.queue = switches.queue;
+  out.latency_off = switches.latency_off;
   out.symbols = {synthetic::kSymbol};
   out.exchange_capacity = {.orders = 1U << 16U,
                            .levels = 1024,
@@ -323,8 +331,8 @@ struct Outcome {
 
 template <class Model>
 Outcome run_session(const std::vector<std::byte>& stream, itch::backtest::Latency latency,
-                    const Model& model) {
-  itch::backtest::Engine<> engine{config(latency)};
+                    const Model& model, Switches switches = {}) {
+  itch::backtest::Engine<> engine{config(latency, switches)};
   itch::mm::Quoter<Model> maker{quoter_config(), model};
   itch::mm::MarkRecorder marks{synthetic::kSymbol, 1U << 18U};
   static_cast<void>(itch::mm::replay(engine, stream, maker, marks));
@@ -354,31 +362,55 @@ Outcome run_session(const std::vector<std::byte>& stream, itch::backtest::Latenc
   return out;
 }
 
-const itch::backtest::Latency kZeroLatency{
-    .market_data = 0, .order_entry = 0, .response = 0, .compute = 0};
 const itch::backtest::Latency kBaseLatency{};
 
-// Test 15: every run of a switch matrix sees one mark path. The switches here are the ones
-// this backtester has, latency on and off, and the model and γ; the path is also the one a
-// plain book replays.
+// An order-sensitive hash of a fill log, to tell two runs' fills apart.
+std::uint64_t digest(const std::vector<itch::mm::Fill>& fills) {
+  itch::backtest::EventHash hash;
+  for (const itch::mm::Fill& fill : fills) {
+    hash(fill.time);
+    hash(static_cast<std::uint64_t>(fill.quantity));
+    hash(fill.price);
+    hash(static_cast<std::uint64_t>(fill.fee));
+  }
+  return hash.digest();
+}
+
+// Test 15: every run of a switch matrix sees one mark path. The switches are those of the
+// evaluation runs, Base, Q-off under each rule, L-off and both off, and beside them the model
+// and γ; the path is also the one a plain book replays. Each switch on its own must change the
+// fills, or the equal hashes would prove nothing.
 TEST(MarketMaker, P15TheMarkPathIsTheSameInEveryRunOfASwitchMatrix) {
+  using itch::backtest::QueueModel;
   const std::vector<std::byte> stream = market(31);
   std::set<std::uint64_t> hashes;
   std::set<std::size_t> fill_counts;
-  for (const auto& latency : {kBaseLatency, kZeroLatency}) {
-    for (const double gamma : {0.01, 0.1}) {
-      ModelParameters parameters = kSynthetic;
-      parameters.gamma = gamma;
-      const Outcome as = run_session(stream, latency, itch::mm::AsModel{parameters, kHorizonEnd});
-      const Outcome glft = run_session(stream, latency, itch::mm::GlftModel{parameters, 5});
-      hashes.insert(as.mark_hash);
-      hashes.insert(glft.mark_hash);
-      fill_counts.insert(as.fills.size());
-      fill_counts.insert(glft.fills.size());
+  std::set<std::uint64_t> base_and_single_switches;  // Digests of the fill logs.
+  for (const QueueModel queue :
+       {QueueModel::exact, QueueModel::conservative, QueueModel::proportional}) {
+    for (const bool latency_off : {false, true}) {
+      for (const double gamma : {0.01, 0.1}) {
+        ModelParameters parameters = kSynthetic;
+        parameters.gamma = gamma;
+        const Switches switches{.queue = queue, .latency_off = latency_off};
+        const Outcome as =
+            run_session(stream, kBaseLatency, itch::mm::AsModel{parameters, kHorizonEnd}, switches);
+        const Outcome glft =
+            run_session(stream, kBaseLatency, itch::mm::GlftModel{parameters, 5}, switches);
+        hashes.insert(as.mark_hash);
+        hashes.insert(glft.mark_hash);
+        fill_counts.insert(as.fills.size());
+        fill_counts.insert(glft.fills.size());
+        if (gamma == 0.1 && (queue == QueueModel::exact || !latency_off)) {
+          base_and_single_switches.insert(digest(as.fills));
+        }
+      }
     }
   }
   EXPECT_EQ(hashes.size(), 1U);
   EXPECT_GT(fill_counts.size(), 1U) << "the switches changed no fill, so they prove nothing";
+  EXPECT_EQ(base_and_single_switches.size(), 4U)
+      << "Base, Q-off under each rule and L-off must each give other fills";
 
   itch::FastBook<> plain{config().exchange_capacity};
   itch::mm::MarkRecorder marks{synthetic::kSymbol, 1U << 18U};
@@ -403,14 +435,20 @@ TEST(MarketMaker, P16TwoRunsOfOneConfigurationGiveTheSameReport) {
 }
 
 // The whole chain on many markets: the engine's fills and fees, the recorded path, and the
-// identity, with the inventory bound never passed.
+// identity, with the inventory bound never passed, under Base and each switch.
 TEST(MarketMaker, TheIdentityHoldsOnEveryRunAndInventoryStaysInBounds) {
+  using itch::backtest::QueueModel;
   std::uint64_t fills = 0;
   for (std::uint32_t seed = 40; seed < 48; ++seed) {
     const std::vector<std::byte> stream = market(seed);
-    for (const auto& latency : {kBaseLatency, kZeroLatency}) {
-      const Outcome as = run_session(stream, latency, itch::mm::AsModel{kSynthetic, kHorizonEnd});
-      const Outcome glft = run_session(stream, latency, itch::mm::GlftModel{kSynthetic, 5});
+    for (const Switches switches :
+         {Switches{}, Switches{.queue = QueueModel::exact, .latency_off = true},
+          Switches{.queue = QueueModel::conservative, .latency_off = false},
+          Switches{.queue = QueueModel::proportional, .latency_off = false}}) {
+      const Outcome as =
+          run_session(stream, kBaseLatency, itch::mm::AsModel{kSynthetic, kHorizonEnd}, switches);
+      const Outcome glft =
+          run_session(stream, kBaseLatency, itch::mm::GlftModel{kSynthetic, 5}, switches);
       for (const Outcome* each : {&as, &glft}) {
         EXPECT_NE(each->report.find("identity holds"), std::string::npos) << seed;
         EXPECT_LE(each->max_position, 500) << seed;

@@ -33,6 +33,7 @@ using itch::backtest::Config;
 using itch::backtest::Engine;
 using itch::backtest::Latency;
 using itch::backtest::Nanos;
+using itch::backtest::QueueModel;
 using itch::backtest::QueueState;
 using itch::backtest::Reject;
 using itch::backtest::Report;
@@ -60,10 +61,18 @@ constexpr itch::Picodollars kTakerFee = 3'000'000'000;
 constexpr int kS = 1;
 constexpr int kS2 = 2;
 
-Config config(Latency latency, std::uint32_t date = 20191230) {
+// The two switches of the with-and-without runs, Q-off and L-off.
+struct Switches {
+  QueueModel queue = QueueModel::exact;
+  bool latency_off = false;
+};
+
+Config config(Latency latency, std::uint32_t date = 20191230, Switches switches = {}) {
   Config config;
   config.date = date;
   config.latency = latency;
+  config.queue = switches.queue;
+  config.latency_off = switches.latency_off;
   config.symbols = {kSymbol};
   config.exchange_capacity = kCapacity;
   config.view_capacity = kCapacity;
@@ -89,6 +98,10 @@ class Replay {
   explicit Replay(Latency latency = kLatency, char category = 'Q', std::uint32_t date = 20191230)
       : engine{config(latency, date)} {
     feed(wire::directory(kLocate, category, 'P', 100, 1));
+  }
+  // The base latencies of this file with a switch thrown.
+  explicit Replay(Switches switches) : engine{config(kLatency, 20191230, switches)} {
+    feed(wire::directory(kLocate, 'Q', 'P', 100, 1));
   }
 
   void feed(const wire::Bytes& message) { engine.feed(message, strategy); }
@@ -277,6 +290,138 @@ TEST(QueuePosition, S49LateAddDoesNotFillWhatIsAhead) {
   run.advance(10'000);
   EXPECT_TRUE(run.fills(kS).empty());
   EXPECT_EQ(run.engine.stats().queue_anomalies, 0U);
+}
+
+// ---- Q-off: the two rules of an aggregate feed ------------------------------------------
+//
+// Feeds like those of S01 to S09, under the rules of "Q-off" in backtest.hpp. The exact
+// rule's figure is given beside a step where the rule departs from it.
+
+// Conservative. R1 100 and R2 100, then S: ahead 200. R3 100 joins behind, so the level is
+// 300. X R1 50: d − c = 250, ahead stays 200 (exact 150). D R2: 250 − 100 = 150, so ahead
+// falls to 150, only because nothing else was left behind (exact 50). D R3, behind: the
+// level falls to 50, and so does ahead (exact 50). E R1 30: ahead 20, no fill. R4 joins
+// behind; E R4 40 takes the 20 ahead and 20 reach S (exact: R4 is behind S with 20 still
+// ahead, an anomaly). A late add, reference 5, does not go ahead (exact: ahead 50), and E of
+// it 30 reaches S with nothing ahead: 30.
+TEST(QueueOff, ConservativeAdvancesOnlyOnExecutionsAndTheLevelsSize) {
+  Replay run{Switches{.queue = QueueModel::conservative}};
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.feed(wire::add(kLocate, 10, 'B', 100, k1000, 1000));
+  run.feed(wire::add(kLocate, 20, 'B', 100, k1000, 1001));
+  run.advance(3000);
+  EXPECT_EQ(run.ahead(kS), 200U);
+  run.feed(wire::add(kLocate, 30, 'B', 100, k1000, 3000));
+  EXPECT_EQ(run.ahead(kS), 200U);
+  run.feed(wire::cancel(kLocate, 10, 50, 3100));
+  EXPECT_EQ(run.ahead(kS), 200U);
+  run.feed(wire::erase(kLocate, 20, 3200));
+  EXPECT_EQ(run.ahead(kS), 150U);
+  run.feed(wire::erase(kLocate, 30, 3300));
+  EXPECT_EQ(run.ahead(kS), 50U);
+  run.feed(wire::execute(kLocate, 10, 30, 3400));
+  EXPECT_EQ(run.ahead(kS), 20U);
+  run.feed(wire::add(kLocate, 40, 'B', 100, k1000, 3500));
+  run.feed(wire::execute(kLocate, 40, 40, 3600));
+  EXPECT_EQ(run.ahead(kS), 0U);
+  run.feed(wire::add(kLocate, 5, 'B', 50, k1000, 3700));
+  EXPECT_EQ(run.ahead(kS), 0U);
+  run.feed(wire::execute(kLocate, 5, 30, 3800));
+  run.advance(10'000);
+  EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1000, 20, kMaker}, {k1000, 30, kMaker}}));
+  EXPECT_EQ(run.queue(kS).remaining, 50U);
+  EXPECT_EQ(run.queue(kS).ahead_fraction, 0U);
+  EXPECT_EQ(run.engine.stats().queue_anomalies, 0U);
+  EXPECT_EQ(run.engine.stats().late_adds_ahead, 0U);
+}
+
+// Proportional. R1 100 and R2 100, then S: ahead 200. R3 200 joins behind: the level is
+// 400. X R3 100 removes 100·200/400 = 50 from ahead: 150 (exact 200). X R1 30, level 300:
+// 30·150/300 = 15, so 135 (exact 170). X R3 7, level 270: 7·135/270 = 3.5, so 131.5. E R1
+// 70: 61.5, no fill. E R2 64 takes the 61.5 ahead, and 2.5 shares are left, so 2 reach S.
+TEST(QueueOff, ProportionalRemovesItsShareOfEachCancel) {
+  Replay run{Switches{.queue = QueueModel::proportional}};
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.feed(wire::add(kLocate, 10, 'B', 100, k1000, 1000));
+  run.feed(wire::add(kLocate, 20, 'B', 100, k1000, 1001));
+  run.advance(3000);
+  EXPECT_EQ(run.ahead(kS), 200U);
+  run.feed(wire::add(kLocate, 30, 'B', 200, k1000, 3000));
+  run.feed(wire::cancel(kLocate, 30, 100, 3100));
+  EXPECT_EQ(run.ahead(kS), 150U);
+  EXPECT_EQ(run.queue(kS).ahead_fraction, 0U);
+  run.feed(wire::cancel(kLocate, 10, 30, 3200));
+  EXPECT_EQ(run.ahead(kS), 135U);
+  run.feed(wire::cancel(kLocate, 30, 7, 3300));
+  EXPECT_EQ(run.ahead(kS), 131U);
+  EXPECT_EQ(run.queue(kS).ahead_fraction, 500'000U);
+  run.feed(wire::execute(kLocate, 10, 70, 3400));
+  EXPECT_EQ(run.ahead(kS), 61U);
+  EXPECT_EQ(run.queue(kS).ahead_fraction, 500'000U);
+  run.feed(wire::execute(kLocate, 20, 64, 3500));
+  run.advance(10'000);
+  EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1000, 2, kMaker}}));
+  EXPECT_EQ(run.ahead(kS), 0U);
+  EXPECT_EQ(run.queue(kS).ahead_fraction, 0U);
+}
+
+// R1 100, then S, then R2 200: the level is 300. X R2 1 removes 100/300 of a share,
+// 333,333 millionths rounded down, leaving 99 shares and 666,667 millionths ahead. A late
+// add does not go ahead, and deleting the whole level leaves nothing ahead.
+TEST(QueueOff, ProportionalRoundsEachRemovalDownInMillionths) {
+  Replay run{Switches{.queue = QueueModel::proportional}};
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.feed(wire::add(kLocate, 10, 'B', 100, k1000, 1000));
+  run.feed(wire::add(kLocate, 20, 'B', 200, k1000, 3000));
+  run.feed(wire::cancel(kLocate, 20, 1, 3100));
+  EXPECT_EQ(run.ahead(kS), 99U);
+  EXPECT_EQ(run.queue(kS).ahead_fraction, 666'667U);
+  run.feed(wire::add(kLocate, 5, 'B', 40, k1000, 3200));
+  EXPECT_EQ(run.ahead(kS), 99U);
+  run.feed(wire::erase(kLocate, 10, 3300));
+  run.feed(wire::erase(kLocate, 20, 3301));
+  run.feed(wire::erase(kLocate, 5, 3302));
+  EXPECT_EQ(run.ahead(kS), 0U);
+  EXPECT_EQ(run.queue(kS).ahead_fraction, 0U);
+}
+
+// L-off. The config's latencies are this file's base ones, and the switch zeroes all four:
+// S decided at 2000 arrives at 2000, behind R1 and R2. Its accept and its fill reach the
+// strategy at their exchange times, and every message reaches it at its own timestamp. The run
+// equals one with every latency set to 0, and differs from the base run.
+TEST(LatencyOff, EveryLatencyIsZero) {
+  const auto play = [](Replay& run) {
+    run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+    run.feed(wire::add(kLocate, 1, 'B', 100, k1000, 1000));
+    run.feed(wire::add(kLocate, 2, 'B', 100, k1000, 1500));
+    run.feed(wire::execute(kLocate, 1, 100, 3000));
+    run.feed(wire::execute(kLocate, 2, 100, 3001));
+    run.feed(wire::add(kLocate, 3, 'B', 100, k1000, 3002));
+    run.feed(wire::execute(kLocate, 3, 40, 3003));
+    run.feed(wire::add(kLocate, 4, 'B', 100, k999, 4000));
+    run.finish();
+  };
+  Replay off{Switches{.latency_off = true}};
+  play(off);
+  const auto accepted = off.strategy.reports(kS, ReportKind::accepted);
+  ASSERT_EQ(accepted.size(), 1U);
+  EXPECT_EQ(accepted[0].exchange_time, 2000U);
+  EXPECT_EQ(accepted[0].time, 2000U);
+  const auto fills = off.fills(kS);
+  ASSERT_EQ(fills.size(), 1U);
+  EXPECT_EQ(fills[0].shares, 40U);
+  EXPECT_EQ(fills[0].exchange_time, 3003U);
+  EXPECT_EQ(fills[0].time, 3003U);
+  EXPECT_FALSE(off.strategy.seen().empty());
+  for (const Scripted::Seen& seen : off.strategy.seen()) {
+    EXPECT_EQ(seen.time, seen.exchange_time);
+  }
+  Replay zero{{.market_data = 0, .order_entry = 0, .response = 0, .compute = 0}};
+  play(zero);
+  EXPECT_EQ(off.engine.event_hash(), zero.engine.event_hash());
+  Replay base;
+  play(base);
+  EXPECT_NE(off.engine.event_hash(), base.engine.event_hash());
 }
 
 // ---- Join time and latency ------------------------------------------------------------

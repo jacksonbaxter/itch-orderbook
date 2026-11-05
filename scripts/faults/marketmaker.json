@@ -498,6 +498,30 @@
       }
     },
     {
+      "id": "mm-qoff-switch-not-wired",
+      "breaks": "The engine ignores Config::queue, so every Q-off run is the Base run",
+      "check": "test_market_maker P15",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "        model_{config.queue},",
+          "new": "        model_{QueueModel::exact},"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_market_maker"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_market_maker"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MarketMaker\\.P15TheMarkPathIsTheSameInEveryRunOfASwitchMatrix"
+      }
+    },
+    {
       "id": "mm-report-depends-on-the-run",
       "breaks": "The report carries state from an earlier run",
       "check": "test_market_maker P16",
