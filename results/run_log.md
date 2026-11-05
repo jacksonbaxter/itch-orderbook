@@ -27,3 +27,4 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0301-20261105T115340Z | P-0301 | f870418ad388 (clean) | Darwin | published |
 | P-0302-20261105T115802Z | P-0302 | f870418ad388 (clean) | Darwin | published |
 | P-0303-20261105T120127Z | P-0303 | f870418ad388 (clean) | Darwin | published by the driver, then withdrawn by hand before it was committed: every pass agreed by hash, but on the closing book, which held 0 orders on 0 levels, so the agreement showed nothing; nothing from it is published, and P-0304 runs it again with the book compared mid-day; this outcome is typed |
+| P-0304-20261105T131900Z | P-0304 | 660007edd63b (clean) | Darwin | published by the driver, then withdrawn by hand before it was committed: the Mac was shared with another full-day replay, run outside measure.sh, from about 13:18:55 to 13:19:30 UTC, the first 30 s of this run; nothing from it is published, and P-0304 runs again; this outcome is typed |
