@@ -9,10 +9,13 @@ orders over 3 ms with a 1 ms life, so that some trade; on its default schedule, 
 the day's regular hours, none can, and the run is refused with its record still written.
 Each record must hold every header field, a warm-up and a timed pass that agree, and the
 counts that say what the workload was. Bad usage, an unreadable file and a day with no fee
-schedule exit 2. A failure prints `bench backtest cli: FAIL <case>: <reason>`.
+schedule exit 2. On Linux, where an unpinned run is refused, each run asks for the first
+core the test may use. A failure prints `bench backtest cli: FAIL <case>: <reason>`.
 """
 
 import json
+import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +27,12 @@ HEADER = ("host", "cpu", "kernel", "compiler", "flags", "commit", "dataset", "da
 AGREED = ("messages", "deliveries", "arrivals", "decisions", "fills", "strategy_events",
           "wakes", "event_hash")
 SESSION_MESSAGES = 3330
+
+
+def core_arguments():
+    if platform.system() == "Linux":
+        return ["--core", str(min(os.sched_getaffinity(0)))]
+    return []
 
 
 def main():
@@ -38,7 +47,8 @@ def main():
     def record(name, *args, code=0):
         out = scratch / f"{name}.json"
         out.unlink(missing_ok=True)
-        done = run("--input", session, "--out", str(out), "--date", "20191230", *args)
+        done = run("--input", session, "--out", str(out), "--date", "20191230", *args,
+                   *core_arguments())
         if done.returncode != code:
             failures.append((name, f"exit {done.returncode}, not {code}: {done.stderr}"))
         if not out.is_file():
