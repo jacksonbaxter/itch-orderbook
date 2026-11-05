@@ -466,6 +466,44 @@
       "third_party": {
         "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. No published hash for this day is recorded here.",
         "agrees": []
+      },
+      "compressed_bytes": 5597158940,
+      "etag": "\"a80f0e8f5d7d51:0\"",
+      "last_modified": "Fri, 31 Jan 2020 05:18:45 GMT",
+      "gz_sha256": "8f5399155242f8d84338c36fdd78a47c0b0aa3df5707829b20c5158c258364c6",
+      "gzip_crc32": "8c1ac398",
+      "gzip_isize": 67148866,
+      "gzip_members": 1,
+      "unpacked_bytes": 12952050754,
+      "unpacked_sha256": "a324b2cc6daa0992e411d021b1f714cbc614dc5d1d3f2828b19b79d3f9fbe75b",
+      "messages": 423285709,
+      "per_type_counts": {
+        "A": 184735355,
+        "C": 139474,
+        "D": 180285101,
+        "E": 8415610,
+        "F": 1875350,
+        "H": 8921,
+        "I": 4025192,
+        "J": 5,
+        "K": 2,
+        "L": 216802,
+        "P": 1779727,
+        "Q": 17835,
+        "R": 8916,
+        "S": 6,
+        "U": 36777372,
+        "V": 1,
+        "X": 4990972,
+        "Y": 9068
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 72300000039817,
+        "offset": 12952050740
       }
     },
     "01302019_BX": {
