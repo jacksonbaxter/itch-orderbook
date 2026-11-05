@@ -29,7 +29,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PREDICTIONS = "results/predictions.md"
 RUN_LOG = "results/run_log.md"
-RESULT_PATTERNS = ("bench_*.md", "chase_*.md", "backtest_*.md", "mm_*.md")
+RESULT_PATTERNS = ("bench_*.md", "chase_*.md", "backtest_*.md", "mm_*.md", "spsc_*.md")
 BLOCK = re.compile(r"^## (P-\d{4}): .*?(?=^## |\Z)", re.MULTILINE | re.DOTALL)
 FIELD = re.compile(r"^- (prediction|run_id): (.*)$", re.MULTILINE)
 

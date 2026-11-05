@@ -33,6 +33,15 @@ latency-pass figure in the summary, each latency section saying it was not measu
 every latency target not measured in this run. A file with no `passes` field predates it
 and ran every pass.
 
+An SPSC file, one with a `suite` field (scripts/spsc_driver.py), has no counter table and
+no single percentile column. It is held to its suite's fields, the element and capacity
+every queue shared, a summary with each median inside its min and max, every latency cell
+at or above the floor or written `below floor`, a burst replayed at the day's own pace, the
+book agreement of a pipeline file, the macOS note that unpinned cross-core latency is weak
+evidence, and a row for each of its suite's comparisons in SPSC_COMPARISONS: the ratio of
+the summary's medians as shown, the bar, and the verdict in the fixed words, consistent with
+both. Every SPSC bar was set on x86, so a macOS file may only say the host differs.
+
 Each violation prints as `check_results: FAIL <code> <file>: <detail>`.
 
 Exit codes: 0 every file passed, 1 at least one failed, 2 bad usage.
@@ -80,6 +89,70 @@ MAC_HOST = "macOS (M4 Max)"
 # Fields macOS has no way to read, so any value other than unavailable is made up.
 MAC_UNREADABLE = ("governor", "frequency", "turbo", "isolation", "rdpmc")
 PENDING = "pending: stamp with scripts/stamp_load.py"
+SPSC_SUITES = ("queues", "ablation", "pipeline")
+SPSC_FIELDS = ("suite", "element", "capacity", "cache_line", "peer_core", "peer_pinning")
+SPSC_PIPELINE_FIELDS = ("design", "input", "warmup_messages", "timed_messages")
+SPSC_PER_PASS = ("warmup_messages", "timed_messages")
+RTT_UNIT = "ns a round trip"
+RATE_UNIT = "M items/s"
+PIPELINE_RATIO = "Pipelined time over single-threaded time"
+SPSC_PERCENTILES = ("p50", "p90", "p99", "p99.9", "p99.99", "max")
+SPSC_MAC_NOTE = ("is not a pinned host.", "Unpinned cross-core latency on the Mac is weak evidence")
+_T1_HOST = "Ryzen 7 5825U, Linux, pinned"
+_T2_HOST = "i7-9700 under WSL2"
+_T3_HOST = "Ryzen 9 5950X, Linux, pinned"
+_COMPARISON_QUEUES = "the comparison queues were not built (-DITCH_COMPARISON_QUEUES=ON)"
+
+
+def _rtt(queue):
+    return f"{queue}, rtt, {RTT_UNIT}"
+
+
+def _rate(variant):
+    return f"{variant}, saturated, {RATE_UNIT}"
+
+
+# Every comparison an SPSC file reports, keyed by target and the words in its row: the
+# suite that runs it, the summary rows it divides (num over den) or the one it reads
+# (value), the side of the bar that meets it, the bar, BENCHMARKS.md's host for it, and
+# why a run may lack it. T-SPSC-2's pairs in Frasch's own order come first: cached against
+# uncached with %, then the mask against % with cached indices (LC-7).
+SPSC_COMPARISONS = {
+    ("T-SPSC-1", "boost rtt / project rtt"): {
+        "suite": "queues", "num": _rtt("boost"), "den": _rtt("project"), "op": ">=",
+        "bar": 1.16, "host": _T1_HOST, "missing": _COMPARISON_QUEUES},
+    ("T-SPSC-1", "project rtt / moodycamel rtt"): {
+        "suite": "queues", "num": _rtt("project"), "den": _rtt("moodycamel"), "op": "<=",
+        "bar": 1.00, "host": _T1_HOST, "missing": _COMPARISON_QUEUES},
+    ("T-SPSC-1", "project rtt / rigtorp rtt"): {
+        "suite": "queues", "num": _rtt("project"), "den": _rtt("rigtorp"), "op": "<=",
+        "bar": 1.00, "host": _T1_HOST, "missing": _COMPARISON_QUEUES},
+    ("T-SPSC-2", "cached over uncached, with %: modulo / uncached-modulo"): {
+        "suite": "ablation", "num": _rate("modulo"), "den": _rate("uncached-modulo"),
+        "op": ">=", "bar": 3.9, "host": _T2_HOST, "missing": "no such variant ran"},
+    ("T-SPSC-2", "cached over uncached, with the mask: shipped / uncached"): {
+        "suite": "ablation", "num": _rate("shipped"), "den": _rate("uncached"),
+        "op": ">=", "bar": 3.9, "host": _T2_HOST, "missing": "no such variant ran"},
+    ("T-SPSC-2", "mask over %, cached: shipped / modulo"): {
+        "suite": "ablation", "num": _rate("shipped"), "den": _rate("modulo"),
+        "op": ">=", "bar": 4.2, "host": _T2_HOST, "missing": "no such variant ran"},
+    ("T-SPSC-2", "mask over %, uncached: uncached / uncached-modulo"): {
+        "suite": "ablation", "num": _rate("uncached"), "den": _rate("uncached-modulo"),
+        "op": ">=", "bar": 4.2, "host": _T2_HOST, "missing": "no such variant ran"},
+    ("T-SPSC-3", "pipelined time / single-threaded time"): {
+        "suite": "pipeline", "value": PIPELINE_RATIO, "op": "<=", "bar": 1.31,
+        "host": _T3_HOST, "missing": "no pipelined pass ran"},
+}
+
+
+def comparison_value(spec, medians):
+    """The comparison's ratio from the summary's medians by label, or None if one is absent."""
+    if "value" in spec:
+        return medians.get(spec["value"])
+    num, den = medians.get(spec["num"]), medians.get(spec["den"])
+    if num is None or den is None or den == 0:
+        return None
+    return num / den
 
 HOME_PATH = re.compile(r"/(?:Users|home)/[A-Za-z0-9._-]+/|[A-Za-z]:\\Users\\[A-Za-z0-9._-]+")
 ADDRESS = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
@@ -114,8 +187,10 @@ def number(text):
     return float(match.group(0).replace(",", "")) if match else None
 
 
-def check_fields(fields):
+def check_fields(fields, skipped=()):
     for name in REQUIRED_FIELDS:
+        if name in skipped:
+            continue
         if name not in fields:
             yield "header-field-missing", name
         elif not fields[name].strip():
@@ -506,6 +581,105 @@ def check_backtest(text, fields):
     yield from check_backtest_target(text, fields)
 
 
+def is_spsc_file(fields):
+    return "suite" in fields
+
+
+def spsc_medians(text):
+    """The summary's medians as shown, by label, for the rows that parse."""
+    medians = {}
+    for cells in table_rows(text, "Summary"):
+        if len(cells) == 5 and cells[0] != "Figure" and number(cells[1]) is not None:
+            medians[cells[0]] = number(cells[1])
+    return medians
+
+
+def check_spsc_summary(text):
+    rows = [cells for cells in table_rows(text, "Summary") if cells[0] != "Figure"]
+    if not rows:
+        yield "summary-figure-missing", "no figure in the Summary"
+    for cells in rows:
+        figures = [number(cell) for cell in cells[1:4]] if len(cells) == 5 else None
+        if figures is None or None in figures:
+            yield "summary-figure-missing", cells[0]
+        elif not figures[1] <= figures[0] <= figures[2]:
+            yield "summary-inconsistent", (f"{cells[0]}: median {cells[1]} outside {cells[2]} "
+                                           f"to {cells[3]}")
+
+
+def check_spsc_latency(text, fields):
+    floor = number(fields.get("floor", ""))
+    rows = [cells for cells in table_rows(text, "Latency") if cells[0] != "Queue"]
+    if not rows:
+        yield "latency-table-missing", "no latency row"
+    for cells in rows:
+        if len(cells) != len(SPSC_PERCENTILES) + 4:
+            yield "latency-value-malformed", f"{cells[0]} has {len(cells)} cells"
+            continue
+        for name, value in zip(SPSC_PERCENTILES, cells[2:2 + len(SPSC_PERCENTILES)]):
+            yield from check_value(f"{cells[0]} {cells[1]} {name}", value, floor)
+
+
+def check_spsc_targets(text, fields, suite):
+    host = fields.get("host")
+    medians = spsc_medians(text)
+    rows = {(cells[0], cells[1]): cells for cells in table_rows(text, "Targets")
+            if len(cells) >= 2}
+    for key, spec in SPSC_COMPARISONS.items():
+        if spec["suite"] != suite:
+            continue
+        cells = rows.get(key)
+        if cells is None:
+            yield "target-missing", f"{key[0]}: {key[1]}"
+            continue
+        if len(cells) != 6:
+            yield "target-verdict-invalid", f"{key[0]} has {len(cells)} cells, not 6"
+            continue
+        verdict = cells[5]
+        value = comparison_value(spec, medians)
+        holds = None if value is None else (
+            value >= spec["bar"] if spec["op"] == ">=" else value <= spec["bar"])
+        if not (verdict == "met" or verdict.startswith(VERDICTS[1:])):
+            yield "target-verdict-invalid", f"{key[0]} {key[1]}: {verdict!r}"
+        elif value is None:
+            if not verdict.startswith(VERDICTS[4]):
+                yield "target-verdict-wrong", f"{key[0]} {key[1]}: no figure, yet {verdict!r}"
+        elif number(cells[3]) is None or abs(number(cells[3]) - value) > 0.0051:
+            yield "target-verdict-wrong", (f"{key[0]} {key[1]}: {cells[3]!r} is not "
+                                           f"{value:.2f}, the summary's ratio")
+        elif host == MAC_HOST and not verdict.startswith(VERDICTS[2]):
+            yield "target-host-blurred", f"{key[0]} {key[1]} is {verdict.split(':')[0]} on macOS"
+        elif host == MAC_HOST and ("which it would meet" in verdict) != holds:
+            yield "target-verdict-wrong", (f"{key[0]} {key[1]}: {value:.2f} against "
+                                           f"{spec['op']} {spec['bar']}, yet {verdict!r}")
+        elif host != MAC_HOST and (verdict != "met" if holds else
+                                   not verdict.startswith(VERDICTS[1])):
+            yield "target-verdict-wrong", (f"{key[0]} {key[1]} is {verdict.split(':')[0]} at "
+                                           f"{value:.2f} against {spec['op']} {spec['bar']}")
+
+
+def check_spsc(text, fields):
+    suite = fields.get("suite", "")
+    if suite not in SPSC_SUITES:
+        yield "suite-unknown", suite
+        return
+    for name in SPSC_FIELDS + (SPSC_PIPELINE_FIELDS if suite == "pipeline" else ("burst",)):
+        if name not in fields:
+            yield "header-field-missing", name
+    if suite != "pipeline" and not re.search(r", speedup 1$", fields.get("burst", "")):
+        yield "burst-hurried", f"the burst was not replayed at the day's pace: {fields.get('burst')!r}"
+    if fields.get("host") == MAC_HOST and not all(note in text for note in SPSC_MAC_NOTE):
+        yield "host-note-missing", ("a macOS file without the note that it is unpinned and "
+                                    "that cross-core latency there is weak evidence")
+    yield from check_spsc_summary(text)
+    if suite == "pipeline":
+        if "left the book" not in (section(text, "Book agreement") or ""):
+            yield "book-agreement-missing", "no statement that every pass left the same book"
+    else:
+        yield from check_spsc_latency(text, fields)
+    yield from check_spsc_targets(text, fields, suite)
+
+
 def check_book(text, fields):
     latency = ((check_no_latency(text),) if throughput_only(fields) else
                (check_book_latency(text, fields), check_operations(text, fields)))
@@ -521,12 +695,16 @@ def check_text(text):
     if not fields:
         return [("header-missing", "no Header section")]
     violations = []
-    for found in (check_fields(fields), check_host(fields), check_pin(fields),
+    skipped = SPSC_PER_PASS if is_spsc_file(fields) and fields["suite"] != "pipeline" else ()
+    for found in (check_fields(fields, skipped), check_host(fields), check_pin(fields),
                   check_residency(fields), check_warmup(fields), check_statistics(text),
                   check_load(fields), check_machine(text), check_private(text, fields)):
         violations.extend(found)
     if is_backtest_file(fields):
         violations.extend(check_backtest(text, fields))
+        return violations
+    if is_spsc_file(fields):
+        violations.extend(check_spsc(text, fields))
         return violations
     violations.extend(check_percentiles(text, fields))
     violations.extend(check_counters(text))

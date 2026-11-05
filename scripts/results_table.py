@@ -290,6 +290,25 @@ def backtest_row(name, text):
             target[2].strip(), f"`{commit}`", source(name))
 
 
+def spsc_rows(name, text):
+    """An SPSC file: one row for each comparison in its targets table."""
+    host = header_field(text, "host", name)
+    pinning = find(r"^- pinning: (.*?)(?::|$)", text, name)[1]
+    commit = header_commit(text, name)
+    section = find(r"^## Targets\n((?s:.*?))(?=^## |\Z)", text, name)[1]
+    rows = []
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != 6 or not re.fullmatch(r"T-SPSC-\d", cells[0]):
+            continue
+        target, comparison, bar, measured, _, verdict = cells
+        rows.append((target, comparison, day_of(name), host, pinning, measured, bar,
+                     verdict.split(":")[0], f"`{commit}`", source(name)))
+    if not rows:
+        raise TableError(f"results/{name}: no SPSC target row")
+    return rows
+
+
 def run_rows(text):
     rows = []
     for line in text.splitlines():
@@ -315,6 +334,7 @@ def generate(root):
     throughput = []
     books = []
     backtests = []
+    spsc = []
     pnl = []
     for path in sorted((root / "results").glob("*.md")):
         name = path.name
@@ -338,6 +358,9 @@ def generate(root):
             rows = []
         elif name.startswith("backtest_"):
             backtests.append(backtest_row(name, text))
+            rows = []
+        elif name.startswith("spsc_"):
+            spsc += spsc_rows(name, text)
             rows = []
         elif name.startswith("mm_pnl_"):
             pnl += pnl_rows(name, text)
@@ -375,6 +398,14 @@ def generate(root):
         lines += markdown_table(("Workload", "Target", "Day", "Host", "Pinning",
                                  "Median messages/s", "CV", "Engine events/s", "Verdict",
                                  "Commit", "File"), backtests)
+    if spsc:
+        lines += ["", "The SPSC ring. Each row is one comparison from a results file's targets "
+                      "table: a ratio of two of its medians, or for T-SPSC-3 the median of paired "
+                      "ratios, against BENCHMARKS.md's bar. Every bar was set on x86, so a macOS "
+                      "row says the host differs, and an unpinned Mac's cross-core figures are "
+                      "weak evidence.", ""]
+        lines += markdown_table(("Target", "Comparison", "Day", "Host", "Pinning", "Measured",
+                                 "Bar", "Verdict", "Commit", "File"), spsc)
     if pnl:
         lines += ["", "The market maker on its report day, 12302019, a late-December session, "
                       "with every parameter chosen on 10302019, an FOMC day. One symbol-day. No "
