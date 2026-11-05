@@ -25,6 +25,8 @@ itch_add_test(test_trade_checks test_trade_checks.cpp)
 itch_add_test(test_backtest test_backtest.cpp)
 itch_add_test(test_fees test_fees.cpp)
 itch_add_test(test_backtest_validity test_backtest_validity.cpp)
+itch_add_test(test_attribution test_attribution.cpp)
+itch_add_test(test_market_maker test_market_maker.cpp)
 # A strategy that always sets a wake costs one event per wake period of simulated time, so a
 # broken decoder's far-apart timestamps make these run for hours. A timeout makes that a
 # failure. The slowest, test_backtest_validity under TSan, takes about 10 s.

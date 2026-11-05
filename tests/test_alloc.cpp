@@ -30,6 +30,9 @@
 #include "itch/book.hpp"
 #include "itch/heap_ager.hpp"
 #include "itch/map_book.hpp"
+#include "itch/mm/marks.hpp"
+#include "itch/mm/session.hpp"
+#include "itch/mm/strategy.hpp"
 #include "itch/reader.hpp"
 #include "oracle/alloc_counter.hpp"
 #include "oracle/reference_book.hpp"
@@ -193,6 +196,56 @@ TEST(Allocation, TheBacktesterAllocatesNothingAfterConstruction) {
   EXPECT_GT(made.cancels, 1000U);
   // More deliveries than one ring holds, so each ring wrapped.
   EXPECT_GT(stats.deliveries, 100U * config.queue_capacity);
+}
+
+// The market maker on the same market, with both models and the mark recorder: the replay,
+// the strategy's quoting and fill log, and the path, all after construction. The attribution
+// itself runs after the session and is not on this path.
+TEST(Allocation, TheMarketMakerAllocatesNothingAfterConstruction) {
+  const auto messages = itch::backtest::synthetic::RandomMarket{20191231}.generate(200'000);
+  const std::vector<std::byte> stream = itch::backtest::synthetic::frame(messages);
+  itch::backtest::Config config;
+  config.date = 20191230;
+  config.symbols = {itch::backtest::synthetic::kSymbol};
+  config.latency = {.market_data = 3'000, .order_entry = 2'000, .response = 2'500, .compute = 500};
+  config.exchange_capacity = {.orders = 1U << 17U,
+                              .levels = 1024,
+                              .index_pages = 64,
+                              .index_bits = 18,
+                              .level_slots = 1U << 14U};
+  config.view_capacity = config.exchange_capacity;
+  config.max_orders = 64;
+  config.queue_capacity = 1024;
+  const itch::mm::ModelParameters parameters{.gamma = 0.1, .sigma = 5.0, .k = 1.5, .a = 140.0};
+  const itch::mm::QuoterConfig quoting{.symbol = itch::backtest::synthetic::kSymbol,
+                                       .lot = 100,
+                                       .tick = 100,
+                                       .max_lots = 5,
+                                       .start = 0,
+                                       .stop = 1'000'000'000,
+                                       .max_fills = 1U << 16U};
+  const auto check = [&](const auto& model, std::string_view name) {
+    itch::backtest::Engine<> engine{config};
+    itch::mm::Quoter maker{quoting, model};
+    itch::mm::MarkRecorder marks{itch::backtest::synthetic::kSymbol, 1U << 20U};
+    reset_alloc_counts();
+    const std::uint64_t fed = itch::mm::replay(engine, stream, maker, marks);
+    const AllocCounts counts = read_alloc_counts();
+    std::println(
+        "market maker, {}: {} messages, {} fills, {} sends, {} replaces, {} cancels, {} "
+        "mark points, {} allocations",
+        name, fed, maker.counts().fills, maker.counts().sends, maker.counts().replaces,
+        maker.counts().cancels, marks.points().size(), counts.total());
+    EXPECT_EQ(counts.total(), 0U) << "allocation in the market maker's replay, " << name;
+    EXPECT_EQ(fed, messages.size());
+    EXPECT_EQ(engine.stats().overflows, 0U);
+    EXPECT_EQ(marks.overflows(), 0U);
+    EXPECT_EQ(maker.counts().fill_overflows, 0U);
+    EXPECT_GT(maker.counts().fills, 1000U) << name;
+    EXPECT_GT(maker.counts().replaces, 1000U) << name;
+  };
+  check(itch::mm::AsModel{parameters, 1'000'000'000}, "Avellaneda-Stoikov");
+  check(itch::mm::GlftModel{parameters, 5}, "GLFT");
 }
 
 TEST(Allocation, TheControlBookIsSeenAllocating) {
