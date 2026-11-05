@@ -36,6 +36,8 @@ itch_add_test(test_bench_replay test_bench_replay.cpp)
 target_include_directories(test_bench_platform PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 target_include_directories(test_bench_replay PRIVATE "${PROJECT_SOURCE_DIR}/bench"
   "${PROJECT_SOURCE_DIR}/tools")
+itch_add_test(test_book_variants test_book_variants.cpp)
+target_include_directories(test_book_variants PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 
 if(ITCH_BUILD_BENCH)
   add_test(NAME test_bench_cli
@@ -51,8 +53,12 @@ if(ITCH_BUILD_BENCH)
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_counts_cli.py"
             "$<TARGET_FILE:bench_counts>" "${CMAKE_CURRENT_BINARY_DIR}/bench_counts_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
+  add_test(NAME test_bench_variants_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_variants_cli.py"
+            "$<TARGET_FILE:bench_variants>" "${CMAKE_CURRENT_BINARY_DIR}/bench_variants_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
   set_tests_properties(test_bench_cli test_bench_backtest_cli test_bench_counts_cli
-    PROPERTIES LABELS unit)
+    test_bench_variants_cli PROPERTIES LABELS unit)
 endif()
 
 if(ITCH_BUILD_TOOLS)

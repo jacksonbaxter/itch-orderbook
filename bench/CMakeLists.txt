@@ -24,6 +24,10 @@ add_executable(bench_counts bench_counts.cpp)
 target_link_libraries(bench_counts PRIVATE itch_bench_support)
 itch_apply_options(bench_counts)
 
+add_executable(bench_variants bench_variants.cpp)
+target_link_libraries(bench_variants PRIVATE itch_bench_support)
+itch_apply_options(bench_variants)
+
 add_executable(bench_chase bench_chase.cpp)
 target_link_libraries(bench_chase PRIVATE itch_bench_support)
 itch_apply_options(bench_chase)
