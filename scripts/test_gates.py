@@ -8,7 +8,9 @@ pieces here, so that this file does not trip the gates itself.
 """
 
 import contextlib
+import getpass
 import io
+import os
 import shutil
 import sys
 import tempfile
@@ -38,6 +40,7 @@ CLEAN_FILES = {
     "tests/test.cpp": "int clean_test() { return 0; }\n",
     "scripts/tool.py": "print('clean')\n",
     "NOTES.md": "Notes.\n",
+    "results/run.md": "Host: debian.\n",
     ".github/workflows/ci.yml": f"jobs:\n  a:\n    steps:\n      - uses: {PINNED} # v1.2.3\n",
 }
 
@@ -186,6 +189,27 @@ class Gates(unittest.TestCase):
             with self.subTest(address):
                 self.reset()
                 self.assert_only_gate_fails("private-address", "NOTES.md", f"host {address}\n")
+
+    def test_private_name(self):
+        planted = "some" + "host-name"
+        os.environ[gates.PRIVATE_NAMES_ENV] = planted
+        self.addCleanup(os.environ.pop, gates.PRIVATE_NAMES_ENV, None)
+        for name in ("results/flamegraph_x.svg", "results/run.md"):
+            with self.subTest(name=name):
+                self.reset()
+                self.assert_only_gate_fails("private-name", name,
+                                            f"<title>main ({planted.upper()})</title>\n")
+        login = getpass.getuser()
+        if len(login) >= 4 and login.lower() not in gates.PUBLIC_NAMES:
+            self.reset()
+            self.assert_only_gate_fails("private-name", "results/run.md", f"by {login}\n")
+
+    def test_a_name_inside_a_longer_word_or_outside_results_is_allowed(self):
+        planted = "some" + "host-name"
+        os.environ[gates.PRIVATE_NAMES_ENV] = planted
+        self.addCleanup(os.environ.pop, gates.PRIVATE_NAMES_ENV, None)
+        self.assert_passes("results/run.md", f"x{planted}y and {planted}_z, host debian\n")
+        self.assert_passes("NOTES.md", f"The flamegraph names {planted} nowhere.\n")
 
     def test_public_numbers_are_allowed(self):
         self.assert_passes("NOTES.md", "version 1.18.0, ratio 100.5, address 8.8.8.8\n")

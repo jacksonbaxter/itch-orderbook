@@ -1,5 +1,7 @@
 {
   "area": "gates",
+  "tree": ["CMakeLists.txt", "CMakePresets.json", ".clang-tidy", ".github", "cmake", "include",
+           "src", "tests", "tools", "fuzz", "bench", "scripts", "results"],
   "faults": [
     {
       "id": "gates-wire-pointer-cast",
@@ -174,6 +176,31 @@
       ],
       "expect": {
         "signature": "gates: FAIL toolchain-path cmake/ItchTidy\\.cmake:\\d+",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-private-name",
+      "breaks": "A results file names the machine it was made on",
+      "check": "gates.py private-name",
+      "inputs": [
+        {
+          "file": "results/chase_debian.md",
+          "op": "replace_text",
+          "old": "Host: **debian**.",
+          "new": "Host: **planted-host**."
+        }
+      ],
+      "command": [
+        "env",
+        "ITCH_PRIVATE_NAMES=planted-host",
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL private-name results/chase_debian\\.md:\\d+",
         "exit": 1
       }
     }

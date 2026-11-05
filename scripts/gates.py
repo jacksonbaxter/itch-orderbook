@@ -16,7 +16,10 @@ Exit codes: 0 every gate passed, 1 at least one failed, 2 bad usage.
 from __future__ import annotations
 
 import argparse
+import getpass
+import os
 import re
+import socket
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,6 +66,11 @@ PREPROCESSOR_CONDITION = re.compile(r"^\s*#\s*(?:if|ifdef|ifndef|elif|elifdef|el
 ABORTING_CALL = re.compile(
     r"\bassert\s*\(|\bthrow\b|\babort\s*\(|\b__builtin_trap\b|\bstd::terminate\b"
     r"|\bstd::get\s*<|\.value\s*\(\s*\)|\bstd::unreachable\b")
+
+# Names that may appear in results: the host labels, and CI's login. Anything else that names
+# this machine or its user is private, and so is every name in ITCH_PRIVATE_NAMES.
+PUBLIC_NAMES = {"debian", "runner", "localhost", "root", "user"}
+PRIVATE_NAMES_ENV = "ITCH_PRIVATE_NAMES"
 
 # scripts/test_fetch_data.py asserts that the data scripts do not name the held vendor,
 # so it has to name it.
@@ -161,6 +169,31 @@ def held_vendor(root, files):
     return scan_lines(HELD_VENDOR, "held vendor named: {}")(root, kept)
 
 
+def private_names():
+    """The login and host names of the machine running the gates, and any listed in the
+    environment, each at least four characters and not a public label."""
+    names = {getpass.getuser()}
+    host = socket.gethostname()
+    names |= {host, host.split(".")[0]}
+    names |= {name.strip() for name in os.environ.get(PRIVATE_NAMES_ENV, "").split(",")}
+    return sorted(name for name in names
+                  if len(name) >= 4 and name.lower() not in PUBLIC_NAMES)
+
+
+def private_name(root, files):
+    """A results file, flamegraphs included, that names this machine or its user."""
+    names = private_names()
+    if not names:
+        return []
+    pattern = re.compile(r"(?<![\w-])(?:" + "|".join(re.escape(name) for name in names)
+                         + r")(?![\w-])", re.IGNORECASE)
+    return scan_lines(pattern, "private name: {}")(root, files)
+
+
+def results_files(root):
+    return list(walk(root, "results"))
+
+
 def preprocessor_condition(root, files):
     return scan_lines(PREPROCESSOR_CONDITION, "conditional compilation: {}")(root, files)
 
@@ -215,6 +248,8 @@ def gates():
              scan_lines(HOME_PATH, "home path: {}"), lambda root: list(walk(root))),
         Gate("private-address", "no private or tailnet IP address",
              scan_lines(PRIVATE_ADDRESS, "private address: {}"), lambda root: list(walk(root))),
+        Gate("private-name", "no result or flamegraph names this machine or its user",
+             private_name, results_files),
         Gate("held-vendor", "the vendor held in NOTES.md appears in no code, script or result",
              held_vendor, lambda root: list(walk(root))),
         Gate("no-conditional-compilation", "no hooks or test-only #if in parser code",
