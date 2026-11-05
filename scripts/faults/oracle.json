@@ -2985,6 +2985,26 @@
       "expect": {
         "signature": "FAIL: test_an_arm_is_held_to_the_hard_checks_on_its_own"
       }
+    },
+    {
+      "id": "oracle-report-comparison-every-day",
+      "breaks": "12302019's published figures are set beside every day's counts",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    if day == COMPARISON_DAY:\n",
+          "new": "    if True:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_published_figures_are_shown_on_their_own_day_only"
+      }
     }
   ]
 }
