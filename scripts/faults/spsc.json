@@ -1,0 +1,413 @@
+{
+  "area": "spsc",
+  "faults": [
+    {
+      "id": "spsc-publish-relaxed",
+      "breaks": "The producer publishes its index with relaxed, so the slot's write need not be seen before the index",
+      "check": "ThreadSanitizer on test_spsc's two threads, no recovery",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "kPublish = std::memory_order_release;",
+          "new": "kPublish = std::memory_order_relaxed;"
+        }
+      ],
+      "build": {
+        "preset": "tsan",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "tsan",
+        "-R",
+        "^test_spsc$"
+      ],
+      "expect": {
+        "signature": "ThreadSanitizer: data race"
+      }
+    },
+    {
+      "id": "spsc-reclaim-relaxed",
+      "breaks": "The producer reads the consumer's index with relaxed, so it may write over a slot still being read",
+      "check": "ThreadSanitizer on test_spsc's two threads, no recovery",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "kReclaim = std::memory_order_acquire;",
+          "new": "kReclaim = std::memory_order_relaxed;"
+        }
+      ],
+      "build": {
+        "preset": "tsan",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "tsan",
+        "-R",
+        "^test_spsc$"
+      ],
+      "expect": {
+        "signature": "ThreadSanitizer: data race"
+      }
+    },
+    {
+      "id": "spsc-mask-off-by-one",
+      "breaks": "The mask is one short of capacity - 1, so two indices a slot apart share a slot",
+      "check": "test_spsc KeepsOrderInEveryConfiguration",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": ".mask = slots_for(capacity) - 1}",
+          "new": ".mask = slots_for(capacity) - 2}"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_spsc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SpscRing\\.KeepsOrderInEveryConfiguration"
+      }
+    },
+    {
+      "id": "spsc-stress-mask-off-by-one",
+      "breaks": "The mask is one short of capacity - 1, so two indices a slot apart share a slot",
+      "check": "spsc_stress, without TSan, by order and content",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": ".mask = slots_for(capacity) - 1}",
+          "new": ".mask = slots_for(capacity) - 2}"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "spsc_stress"
+        ]
+      },
+      "command": [
+        "{build}/tests/spsc_stress",
+        "--rounds",
+        "2",
+        "--messages",
+        "20000"
+      ],
+      "expect": {
+        "signature": "spsc_stress: FAIL",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-cached-head-refreshed-wrong",
+      "breaks": "The producer refreshes its copy of the consumer's index from its own tail, so it sees a full ring as empty",
+      "check": "test_spsc StopsAtFullAndEmpty",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "producer_.cached_head = consumer_.head.load(Ordering::kReclaim);",
+          "new": "producer_.cached_head = tail;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_spsc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SpscRing\\.StopsAtFullAndEmpty"
+      }
+    },
+    {
+      "id": "spsc-cached-tail-never-refreshed",
+      "breaks": "The consumer reads its stale copy of the producer's index where it should reload it",
+      "check": "test_spsc KeepsOrderInEveryConfiguration",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "consumer_.cached_tail = producer_.tail.load(Ordering::kObserve);\n        ready = consumer_.cached_tail - head;",
+          "new": "ready = consumer_.cached_tail - head;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_spsc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SpscRing\\.KeepsOrderInEveryConfiguration"
+      }
+    },
+    {
+      "id": "spsc-batch-publishes-one",
+      "breaks": "A batch push publishes one slot however many it wrote",
+      "check": "test_spsc KeepsOrderInEveryConfiguration",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "producer_.tail.store(tail + count, Ordering::kPublish);",
+          "new": "producer_.tail.store(tail + 1, Ordering::kPublish);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_spsc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SpscRing\\.KeepsOrderInEveryConfiguration"
+      }
+    },
+    {
+      "id": "spsc-padding-constant",
+      "breaks": "The ring pads to 64 on Apple silicon and to 128 on x86-64, the other target's line",
+      "check": "test_spsc's static_assert against the compiler's target",
+      "mutations": [
+        {
+          "file": "cmake/ItchCacheLine.cmake",
+          "old": "  set(ITCH_CACHE_LINE 128)\nelseif(itch_target_arch MATCHES \"^(x86_64|AMD64|amd64)$\")\n  set(ITCH_CACHE_LINE 64)",
+          "new": "  set(ITCH_CACHE_LINE 64)\nelseif(itch_target_arch MATCHES \"^(x86_64|AMD64|amd64)$\")\n  set(ITCH_CACHE_LINE 128)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": []
+      },
+      "command": [
+        "cmake",
+        "--build",
+        "--preset",
+        "release",
+        "--parallel",
+        "3",
+        "--target",
+        "test_spsc"
+      ],
+      "expect": {
+        "signature": "(Apple silicon moves 128-byte lines|x86-64 moves 64-byte lines)"
+      }
+    },
+    {
+      "id": "spsc-shipped-unpadded",
+      "breaks": "The shipped ring pads each side to 8 bytes, so both indices share a line",
+      "check": "test_spsc PadsEachSideToItsOwnLine",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "  std::size_t padding = kCacheLine;\n",
+          "new": "  std::size_t padding = alignof(std::uint64_t);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_spsc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SpscRing\\.PadsEachSideToItsOwnLine"
+      }
+    },
+    {
+      "id": "spsc-pipeline-last-batch-lost",
+      "breaks": "The parser never pushes its last partial batch",
+      "check": "test_pipeline LeavesTheSingleThreadedBook, by the book's hash",
+      "mutations": [
+        {
+          "file": "bench/pipeline.hpp",
+          "old": "    flush();\n    total_.store(ops_, std::memory_order_release);",
+          "new": "    total_.store(ops_, std::memory_order_release);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_pipeline"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_pipeline"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Pipeline\\.LeavesTheSingleThreadedBook"
+      }
+    },
+    {
+      "id": "spsc-bench-ignores-queue-filter",
+      "breaks": "bench_spsc runs every queue it has whatever --queue asked for",
+      "check": "test_bench_spsc_cli",
+      "mutations": [
+        {
+          "file": "bench/bench_spsc.cpp",
+          "old": "        options.queues.empty() || std::ranges::find(options.queues, name) != options.queues.end();",
+          "new": "        !options.queues.empty() || std::ranges::find(options.queues, name) != options.queues.end();"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_spsc",
+          "bench_pipeline"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_bench_spsc_cli$"
+      ],
+      "expect": {
+        "signature": "bench spsc cli: FAIL one queue: --queue mutex ran another"
+      }
+    },
+    {
+      "id": "spsc-results-burst-pace",
+      "breaks": "check_results takes an SPSC file whose burst ran faster than the day",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if suite != \"pipeline\" and not re.search(r\", speedup 1$\", fields.get(\"burst\", \"\")):",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_hurried_burst"
+      }
+    },
+    {
+      "id": "spsc-results-mac-note",
+      "breaks": "check_results takes a macOS SPSC file without the note that its cross-core figures are weak evidence",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if fields.get(\"host\") == MAC_HOST and not all(note in text for note in SPSC_MAC_NOTE):",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_mac_file_without_its_note"
+      }
+    },
+    {
+      "id": "spsc-results-floor",
+      "breaks": "check_results reads no latency cell of an SPSC file against the floor",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "            yield from check_value(f\"{cells[0]} {cells[1]} {name}\", value, floor)",
+          "new": "            pass"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_latency_cell_under_the_floor"
+      }
+    },
+    {
+      "id": "spsc-results-mac-side",
+      "breaks": "check_results takes a macOS verdict that names the wrong side of the bar",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        elif host == MAC_HOST and (\"which it would meet\" in verdict) != holds:",
+          "new": "        elif False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_mac_verdict_that_says_the_wrong_side"
+      }
+    },
+    {
+      "id": "spsc-driver-wrong-items",
+      "breaks": "spsc_driver takes a record with items moved wrong",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "        if row[\"errors\"] != 0:",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_wrong_item_is_refused"
+      }
+    },
+    {
+      "id": "spsc-predictions-skip-spsc-results",
+      "breaks": "An SPSC results file is not held to a prediction",
+      "check": "test_check_predictions.py test_an_spsc_result_naming_no_prediction",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "\"mm_*.md\", \"spsc_*.md\")",
+          "new": "\"mm_*.md\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_spsc_result_naming_no_prediction",
+        "exit": 1
+      }
+    }
+  ]
+}

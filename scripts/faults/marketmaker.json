@@ -1348,8 +1348,8 @@
       "mutations": [
         {
           "file": "scripts/check_predictions.py",
-          "old": "\"backtest_*.md\", \"mm_*.md\")",
-          "new": "\"backtest_*.md\")"
+          "old": "\"mm_*.md\", \"spsc_*.md\")",
+          "new": "\"spsc_*.md\")"
         }
       ],
       "command": [
