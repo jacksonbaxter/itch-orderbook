@@ -803,3 +803,47 @@ The old rule was not conservative on these. With `ahead` at zero, a late add exe
 **P-0102 against what ran.** Held: the extract's 5,425,845 messages, 4 fewer than queuetruth's; the rate, 7.80 M inside 4 to 12 M and near the 7 M expected, so met; CV under 5%; the extract in 1.84 s, inside 1 to 10; identical counts and hash; 0 queue anomalies; 100,000 placed with none skipped, each cancelled once; 131,519 fills, at least 10,000; peak RSS 8.67 GiB, inside 8.5 to 10.
 
 **Left open.** T-BT-1 on `debian` (TASKS.md). The 4 messages between the extract and queuetruth's count are not traced; its count was taken from its results page, not reproduced.
+
+## P-0015: every book design on `debian` with the day in memory, 2026-11-04
+
+**Three attempts, one published.** All from e0f9bb8 as `debian_sync.sh` exported it, through `measure.sh taskset -c 4` and the same run script; the run log has a row for each.
+
+- 11:31 UTC: refused at repetition 1, `hash-linked`. `pswpout` moved by 1 page by the end of that process and 2 over the whole attempt (37,084 to 37,086). In the 35 minutes before it, with nothing of this project running, it had not moved, so the movement is this run's and the swap rule stays strict.
+- 02:31 UTC the next day: stopped by hand 15 s into the first timed process, nothing measured. The run script was started with `&` from the host's login shell, zsh, whose `BG_NICE` option runs background jobs at nice 5, and the first attempt ran at nice 0. This is the same slip as P-0010's first attempt. Starting it through `bash -c '... &'` gives nice 0. The run script writes its nice level on its first status line, so check that line before the run gets far. Over this short start, `pswpout` moved by 1 page (41,296 to 41,297) while the day was read back into the page cache and the driver began, which again shows that page-cache churn alone moves it on this host.
+- 02:33 to 05:01 UTC: published. `pswpout` stayed at 41,297 from start to end. In the 886 samples taken every 10 s, `MemAvailable` never fell below 4.60 GiB (4,820,972 kB). `machine_check` passed before and after, and every page of the day was resident. Each design saw 0 migrations off core 4. Every counter was measured at running ratio 1.0000, and `rdpmc` agreed with `read()`.
+
+**The swap history.** Two quiet baselines show `pswpout` flat with nothing of this project running: 35 minutes before the first attempt, and 20 minutes before the second (02:10 to 02:30 UTC, 41,296 throughout, `MemAvailable` 14.81 to 14.99 GB). Between the first attempt's end (37,086) and the second baseline (41,296), the host swapped out 4,210 pages while nothing of this project ran. What it was is not known: the host runs its own services, and other projects' sessions use it too. The refusals so far were P-0012 (1 page), P-0014 (1,222, while the cache refilled before any copy) and this prediction's first attempt (2 pages). The swap check counts every process on the host, so a refusal is still the cheap outcome.
+
+**Results**, medians of 3 repetitions. The counter columns are per message, from the untimed process, whose fenced reads add their own cycles.
+
+| Design | Messages/s | CV | Over `map-fresh` | Over `map-aged` | Mean service ns | Book MiB | Peak RSS GiB | Cycles | Instructions | `branch-misses` | `cache-misses` (L2) | `r0843:u` (DRAM fills, a floor) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `paged-flat` | 5,145,430 | 3.16% | 2.54× | 2.81× | 194.35 | 662.8 | 9.59 | 1,141.1 | 581.8 | 1.99 | 5.53 | 1.97 |
+| `hash-flat` | 4,635,731 | 1.49% | 2.30× | 2.53× | 215.72 | 225.5 | 9.17 | 1,316.7 | 566.4 | 2.52 | 6.08 | 2.81 |
+| `hash-linked` | 2,560,055 | 5.99% | 1.26× | 1.40× | 390.62 | 211.0 | 9.15 | 1,952.3 | 553.4 | 2.24 | 9.70 | 4.65 |
+| `paged-linked` | 2,542,188 | 1.85% | 1.25× | 1.39× | 393.36 | 648.3 | 9.58 | 1,764.3 | 570.1 | 1.80 | 9.04 | 3.75 |
+| `map-fresh` | 2,028,642 | 0.78% | – | 1.11× | 492.94 | 294.0 | 7.98 | 2,272.8 | 695.4 | 3.22 | 14.25 | 5.29 |
+| `map-aged` | 1,832,255 | 0.17% | 0.90× | – | 545.78 | 393.0 | 8.08 | 2,271.8 | 683.5 | 3.29 | 13.77 | 5.71 |
+
+`hash-linked`'s CV comes from one slow repetition: its first ran 2.31 M against 2.56 M and 2.57 M for the other two.
+
+**The winner in memory.** `paged-flat` still wins with the day in memory, 11% ahead of `hash-flat`, so the default arm stands on both hosts and in both modes. The two linked arms tie: 0.7% apart at the median, inside `hash-linked`'s CV. In memory without the top, `paged-flat` runs 2% faster than P-0013's mapped run with the top tracked (5.04 M).
+
+**Targets.** T-BOOK-1 now has a `debian` figure, and every arm misses it: `paged-flat` runs 5.15 M messages/s against 16.4 M, a gap of 11.25 M, and `paged-linked` misses by 13.86 M. The bar was set on a Ryzen 7 9700X, and the host is the reason, as for T-BOOK-2. T-BOOK-3 is met on every design. T-LAT-1, 2, 4 and 5 are missed on every fast arm, as in the mapped runs. T-LAT-3's mean is met on three fast arms and missed on `paged-linked` by 0.36 ns (393.36). Its p99.9 is missed on all four fast arms, by 722.00 ns on `paged-flat`. T-DESIGN-1 is missed by every arm. The best is `paged-flat` at 2.54× over `map-fresh` (2.45 to 2.65 by repetition) and 2.81× over `map-aged`, against a bar of 4.0×.
+
+**Why T-DESIGN-1 misses here, as far as the run measured it.** On the Mac, in the same mode, `paged-flat` is 3.79× `map-fresh` and 4.08× `map-aged`. The counters on `debian` show where the map book's time goes. It runs 695 instructions a message against `paged-flat`'s 582, only 1.20 times as many. It makes 5.29 DRAM demand fills a message against 1.97 (2.68×), 14.25 L2 misses against 5.53 (2.58×), and 3.22 branch misses against 1.99. So the map book is slower here because it waits on memory more, not because it does more work. The two hosts differ in how much each design slows down: `paged-flat` runs 4.25 times slower on `debian` than on the Mac (21.87 M to 5.15 M), and `map-fresh` 2.85 times slower (5.77 M to 2.03 M). The ratio falls from 3.79 to 2.54 by that factor, 1.49 (4.25 over 2.85). Why the fast book loses more on this host than the map book does is not measured, because the Mac counts no misses. The `debian` side is consistent with the fast book's own two or so DRAM fills a message, at the 123 to 127 ns round trip the chase measured, making up most of its 194 ns. That puts a floor under its time that the map book's extra misses are measured against.
+
+**P-0015 against what ran.**
+- Held: the fit (`pswpout` still, `MemAvailable` above 3.5 GiB, every repetition complete, every page resident); `paged-flat` the winner and the map designs last, `map-fresh` ahead of `map-aged`; T-BOOK-1 missed, the best by more than 10 M; both linked arms under 2.5× on both map designs; T-BOOK-3 met, each fast arm's book memory equal to P-0013's and the map books at 0.29 and 0.38 GiB, inside their ranges; `paged-flat`'s p50, p99 and p99.9 (140.1, 840.9, 1,472.0 ns) inside their ranges; T-LAT-3's p99.9 missed on every fast arm; every counter at 1.0000 with `rdpmc` agreeing; `r0843:u` within 20% of P-0013 on every fast arm (1.97, 2.81, 3.75, 4.65), fewer on each flat arm than on the linked arm with its index; `cache-misses` 2.1 to 2.8 times `r0843:u` on every design; `r0843:u` and `branch-misses` a message higher on each map design than on every fast arm; peak RSS 9.15 to 9.59 GiB on the fast arms and 7.98 and 8.08 GiB on the map designs.
+- Not held:
+  - T-DESIGN-1 was predicted near 4.1× and came in at 2.54×. `hash-flat` was predicted near 3.5× and came in at 2.30×.
+  - Throughput: `paged-flat` 5.15 M against 5.3 to 6.1 M; `hash-flat`, `paged-linked` and `hash-linked` below the figures expected for them (4.64, 2.54 and 2.56 M against about 4.9, 2.95 and 2.7 M); the map designs faster than predicted, `map-fresh` 2.03 M against 1.1 to 1.9 M and `map-aged` 1.83 M against 1.0 to 1.8 M.
+  - The linked arms' order, which was predicted the other way.
+  - CV under 2%: `paged-flat` came in at 3.16% and `hash-linked` at 5.99%.
+  - T-LAT-3's mean on `paged-linked`.
+  - The map designs' instructions at 2.5 times `paged-flat`'s: they ran 1.20 times.
+- In short, the map book is faster on this host than predicted, while the fast arms came in slightly slower.
+
+**P-0014's fast-arm predictions, checked against this run, not as a second result.** Held: the fit; `paged-flat` the winner; T-BOOK-1 missed by more than 10 M; T-BOOK-3; the counters, including `paged-linked`'s `r0843:u` within 20% of `hash-linked`'s (3.75 against 4.65, 19% fewer) and `paged-flat`'s inside 1.5 to 4; peak RSS. Not held: each arm at 1.05 to 1.20 times its P-0011 median, which only `hash-flat` reached (1.09; `paged-flat` 1.01, `hash-linked` 1.04, `paged-linked` 0.93); `paged-flat` inside 5.3 to 6.1 M; the order of the linked arms; CV under 2%.
+
+**Left open.** T-BOOK-4, which needs day 01302019. Why the fast book slows down more than the map book on Zen 1, which would need miss counts on the Mac to settle.
