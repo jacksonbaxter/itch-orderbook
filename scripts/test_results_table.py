@@ -86,6 +86,19 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| **FAIL** | odd-lot columns wrong on BRK.A, equal on 5766 of 5767", row)
         self.assertRegex(row, r"shares equal on ([\d,]+) of \1\b")
 
+    def test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol(self):
+        self.edit(TRADES, "| T-TRADE-3 | **PASS** | 0 |", "| T-TRADE-3 | **FAIL** | 2 |")
+        self.edit(TRADES, "## Per message type\n",
+                  "- equal_shares 5766 of 5767 symbols\n"
+                  "- equal_prints 5766 of 5767 symbols\n"
+                  "- `t3_trade_shares message=1 locate=1 symbol=PLAB feed 200, MIDAS 100`\n"
+                  "- `t3_trades message=1 locate=1 symbol=PLAB feed 2, MIDAS 1`\n\n"
+                  "## Per message type\n")
+        row = self.row("T-TRADE-3", "10302019")
+        self.assertIn("| **FAIL** | trade_shares wrong on PLAB, trades wrong on PLAB; "
+                      "equal_shares 5766 of 5767, equal_prints 5766 of 5767;", row)
+        self.assertNotIn("odd-lot", row)
+
     def test_a_late_day_says_its_odd_lots_were_not_compared(self):
         self.edit(TRADES, "## Results\n", "## Results\n\nThe odd-lot columns were not compared.\n")
         self.assertIn("odd-lot columns not compared", self.row("T-TRADE-3", "10302019"))

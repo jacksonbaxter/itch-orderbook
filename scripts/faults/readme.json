@@ -348,6 +348,26 @@
       "expect": {
         "signature": "FAIL: test_t_oracle_2_gets_one_row_from_the_sum_of_the_sessions"
       }
+    },
+    {
+      "id": "readme-t3-failure-read-as-odd-lots",
+      "breaks": "Every T-TRADE-3 failure is described as an odd-lot one, so a share or print mismatch cannot be shown",
+      "check": "test_results_table.py test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            detail = t3_failure_detail(text, name)\n",
+          "new": "            detail = odd_lot_detail(text, name)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol"
+      }
     }
   ]
 }
