@@ -1,0 +1,751 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1600" height="398" onload="init(evt)" viewBox="0 0 1600 398" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1600.0" height="398.0" fill="url(#background)"  />
+<text id="title" x="800.00" y="24" >the book replay, paged-flat on debian, 12302019, cycles:u at 999 Hz</text>
+<text id="subtitle" x="800.00" y="48" >user frames only</text>
+<text id="details" x="10.00" y="381" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1490.00" y="24" >Search</text>
+<text id="ignorecase" x="1574.00" y="24" >ic</text>
+<text id="matched" x="1490.00" y="381" > </text>
+<g id="frames">
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (22 samples, 0.02%)</title><rect x="544.3" y="93" width="0.3" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="547.30" y="103.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::apply (54 samples, 0.05%)</title><rect x="781.2" y="269" width="0.8" height="15.0" fill="rgb(240,150,39)" rx="2" ry="2" />
+<text  x="784.18" y="279.5" ></text>
+</g>
+<g >
+<title>itch::FlatLevels::open&lt;itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level(itch::LevelId const&amp;, itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::LevelWrite const&amp;)::{lambda(unsigned int)#1}&gt; (741 samples, 0.71%)</title><rect x="715.8" y="77" width="11.1" height="15.0" fill="rgb(246,150,45)" rx="2" ry="2" />
+<text  x="718.79" y="87.5" ></text>
+</g>
+<g >
+<title>clock_gettime (95 samples, 0.09%)</title><rect x="779.8" y="269" width="1.4" height="15.0" fill="rgb(236,102,34)" rx="2" ry="2" />
+<text  x="782.75" y="279.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (2,499 samples, 2.38%)</title><rect x="1195.8" y="221" width="37.6" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="1198.79" y="231.5" >itc..</text>
+</g>
+<g >
+<title>itch::PagedIndex&lt;8u&gt;::insert (479 samples, 0.46%)</title><rect x="748.7" y="109" width="7.2" height="15.0" fill="rgb(236,150,34)" rx="2" ry="2" />
+<text  x="751.66" y="119.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (2,110 samples, 2.01%)</title><rect x="1290.7" y="205" width="31.7" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="1293.68" y="215.5" >it..</text>
+</g>
+<g >
+<title>itch::PagedIndex&lt;8u&gt;::insert (110 samples, 0.10%)</title><rect x="546.7" y="93" width="1.6" height="15.0" fill="rgb(236,150,34)" rx="2" ry="2" />
+<text  x="549.66" y="103.5" ></text>
+</g>
+<g >
+<title>main (105,066 samples, 99.99%)</title><rect x="10.2" y="301" width="1579.8" height="15.0" fill="rgb(247,83,46)" rx="2" ry="2" />
+<text  x="13.15" y="311.5" >main</text>
+</g>
+<g >
+<title>benchmark::RunSpecifiedBenchmarks (51,161 samples, 48.69%)</title><rect x="10.5" y="253" width="769.3" height="15.0" fill="rgb(233,149,31)" rx="2" ry="2" />
+<text  x="13.47" y="263.5" >benchmark::RunSpecifiedBenchmarks</text>
+</g>
+<g >
+<title>itch::PagedIndex&lt;8u&gt;::erase (1,357 samples, 1.29%)</title><rect x="728.3" y="109" width="20.4" height="15.0" fill="rgb(247,150,46)" rx="2" ry="2" />
+<text  x="731.25" y="119.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::apply (47,922 samples, 45.61%)</title><rect x="35.3" y="125" width="720.6" height="15.0" fill="rgb(240,150,39)" rx="2" ry="2" />
+<text  x="38.28" y="135.5" >itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::apply</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (2,672 samples, 2.54%)</title><rect x="381.4" y="93" width="40.2" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="384.42" y="103.5" >itc..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::apply (47,717 samples, 45.41%)</title><rect x="847.7" y="253" width="717.5" height="15.0" fill="rgb(240,150,39)" rx="2" ry="2" />
+<text  x="850.75" y="263.5" >itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::apply</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (5,170 samples, 4.92%)</title><rect x="649.2" y="93" width="77.7" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="652.19" y="103.5" >itch::Fa..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (23 samples, 0.02%)</title><rect x="1357.0" y="221" width="0.3" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="1359.96" y="231.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::remove_order (19 samples, 0.02%)</title><rect x="1587.9" y="253" width="0.3" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="1590.89" y="263.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::replace_order (31 samples, 0.03%)</title><rect x="1588.2" y="253" width="0.4" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="1591.18" y="263.5" ></text>
+</g>
+<g >
+<title>benchmark::RunSpecifiedBenchmarks (51,161 samples, 48.69%)</title><rect x="10.5" y="269" width="769.3" height="15.0" fill="rgb(233,149,31)" rx="2" ry="2" />
+<text  x="13.47" y="279.5" >benchmark::RunSpecifiedBenchmarks</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (131 samples, 0.12%)</title><rect x="773.3" y="93" width="1.9" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="776.26" y="103.5" ></text>
+</g>
+<g >
+<title>itch::PagedIndex&lt;8u&gt;::erase (135 samples, 0.13%)</title><rect x="544.6" y="93" width="2.1" height="15.0" fill="rgb(247,150,46)" rx="2" ry="2" />
+<text  x="547.63" y="103.5" ></text>
+</g>
+<g >
+<title>itch::PagedIndex&lt;8u&gt;::erase (142 samples, 0.14%)</title><rect x="1357.3" y="221" width="2.1" height="15.0" fill="rgb(247,150,46)" rx="2" ry="2" />
+<text  x="1360.31" y="231.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::apply (57 samples, 0.05%)</title><rect x="10.5" y="141" width="0.8" height="15.0" fill="rgb(240,150,39)" rx="2" ry="2" />
+<text  x="13.47" y="151.5" ></text>
+</g>
+<g >
+<title>std::__1::__function::__func&lt;(anonymous namespace)::run(int, char**)::$_0::operator()&lt;itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;() const::{lambda()#1}, std::__1::unique_ptr&lt;itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;, std::__1::default_delete&lt;itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt; &gt; &gt; ()&gt;::operator()[abi:nqe230104] (75 samples, 0.07%)</title><rect x="778.6" y="141" width="1.2" height="15.0" fill="rgb(240,146,39)" rx="2" ry="2" />
+<text  x="781.63" y="151.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::rest_order (11,881 samples, 11.31%)</title><rect x="548.3" y="109" width="178.7" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="551.31" y="119.5" >itch::FastBook&lt;itch::No..</text>
+</g>
+<g >
+<title>[ld-linux-x86-64.so.2] (7 samples, 0.01%)</title><rect x="10.0" y="317" width="0.2" height="15.0" fill="rgb(236,163,34)" rx="2" ry="2" />
+<text  x="13.05" y="327.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::replace_order (21 samples, 0.02%)</title><rect x="778.1" y="125" width="0.3" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="781.11" y="135.5" ></text>
+</g>
+<g >
+<title>itch::FlatLevels::open&lt;itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level(itch::LevelId const&amp;, itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::LevelWrite const&amp;)::{lambda(unsigned int)#1}&gt; (754 samples, 0.72%)</title><rect x="532.9" y="61" width="11.4" height="15.0" fill="rgb(246,150,45)" rx="2" ry="2" />
+<text  x="535.91" y="71.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (106 samples, 0.10%)</title><rect x="1583.2" y="221" width="1.6" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="1586.19" y="231.5" ></text>
+</g>
+<g >
+<title>bench_replay (105,077 samples, 100.00%)</title><rect x="10.0" y="333" width="1580.0" height="15.0" fill="rgb(243,149,42)" rx="2" ry="2" />
+<text  x="13.00" y="343.5" >bench_replay</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (2,127 samples, 2.02%)</title><rect x="479.4" y="77" width="32.0" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="482.44" y="87.5" >it..</text>
+</g>
+<g >
+<title>[libc.so.6] (69 samples, 0.07%)</title><rect x="1588.9" y="237" width="1.1" height="15.0" fill="rgb(231,147,29)" rx="2" ry="2" />
+<text  x="1591.95" y="247.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::rest_order (14 samples, 0.01%)</title><rect x="1588.6" y="253" width="0.3" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="1591.65" y="263.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::replace_order (8,506 samples, 8.10%)</title><rect x="1233.4" y="237" width="127.9" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="1236.36" y="247.5" >itch::FastBook&lt;i..</text>
+</g>
+<g >
+<title>itch::FlatLevels::open&lt;itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level(itch::LevelId const&amp;, itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::LevelWrite const&amp;)::{lambda(unsigned int)#1}&gt; (803 samples, 0.76%)</title><rect x="1344.9" y="189" width="12.1" height="15.0" fill="rgb(246,150,45)" rx="2" ry="2" />
+<text  x="1347.89" y="199.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::remove_order (22 samples, 0.02%)</title><rect x="777.8" y="125" width="0.3" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="780.78" y="135.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::deduct (1,458 samples, 1.39%)</title><rect x="755.9" y="125" width="21.9" height="15.0" fill="rgb(238,150,36)" rx="2" ry="2" />
+<text  x="758.86" y="135.5" >i..</text>
+</g>
+<g >
+<title>__vdso_clock_gettime (94 samples, 0.09%)</title><rect x="779.8" y="253" width="1.4" height="15.0" fill="rgb(236,122,34)" rx="2" ry="2" />
+<text  x="782.77" y="263.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (86 samples, 0.08%)</title><rect x="727.0" y="109" width="1.3" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="729.96" y="119.5" ></text>
+</g>
+<g >
+<title>benchmark::internal::BenchmarkRunner::DoNIterations (51,161 samples, 48.69%)</title><rect x="10.5" y="221" width="769.3" height="15.0" fill="rgb(244,149,43)" rx="2" ry="2" />
+<text  x="13.47" y="231.5" >benchmark::internal::BenchmarkRunner::DoNIterations</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::rest_order (11,596 samples, 11.04%)</title><rect x="1361.3" y="237" width="174.3" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="1364.26" y="247.5" >itch::FastBook&lt;itch::N..</text>
+</g>
+<g >
+<title>itch::PagedIndex&lt;8u&gt;::insert (121 samples, 0.12%)</title><rect x="1359.4" y="221" width="1.9" height="15.0" fill="rgb(236,150,34)" rx="2" ry="2" />
+<text  x="1362.44" y="231.5" ></text>
+</g>
+<g >
+<title>(anonymous namespace)::run_design&lt;itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;, (anonymous namespace)::run(int, char**)::$_0::operator()&lt;itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;() const::{lambda()#1}&gt; (105,066 samples, 99.99%)</title><rect x="10.2" y="285" width="1579.8" height="15.0" fill="rgb(246,178,45)" rx="2" ry="2" />
+<text  x="13.15" y="295.5" >(anonymous namespace)::run_design&lt;itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;, (anonymous namespace)::run(int, char**)::$_0::operator()&lt;itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;() const::{l..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::remove_order (3,679 samples, 3.50%)</title><rect x="366.3" y="109" width="55.3" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="369.28" y="119.5" >itch:..</text>
+</g>
+<g >
+<title>itch::PagedIndex&lt;8u&gt;::insert (466 samples, 0.44%)</title><rect x="1558.2" y="237" width="7.0" height="15.0" fill="rgb(236,150,34)" rx="2" ry="2" />
+<text  x="1561.24" y="247.5" ></text>
+</g>
+<g >
+<title>[libc.so.6] (71 samples, 0.07%)</title><rect x="778.7" y="109" width="1.1" height="15.0" fill="rgb(231,147,29)" rx="2" ry="2" />
+<text  x="781.69" y="119.5" ></text>
+</g>
+<g >
+<title>all (105,077 samples, 100%)</title><rect x="10.0" y="349" width="1580.0" height="15.0" fill="rgb(255,230,55)" rx="2" ry="2" />
+<text  x="13.00" y="359.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::remove_order (2,306 samples, 2.19%)</title><rect x="476.8" y="93" width="34.6" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="479.75" y="103.5" >it..</text>
+</g>
+<g >
+<title>[libc.so.6] (105,066 samples, 99.99%)</title><rect x="10.2" y="317" width="1579.8" height="15.0" fill="rgb(231,147,29)" rx="2" ry="2" />
+<text  x="13.15" y="327.5" >[libc.so.6]</text>
+</g>
+<g >
+<title>itch::PagedIndex&lt;8u&gt;::erase (1,429 samples, 1.36%)</title><rect x="1536.8" y="237" width="21.4" height="15.0" fill="rgb(247,150,46)" rx="2" ry="2" />
+<text  x="1539.76" y="247.5" >i..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::remove_order (3,493 samples, 3.32%)</title><rect x="1180.8" y="237" width="52.6" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="1183.84" y="247.5" >itch:..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::rest_order (2,298 samples, 2.19%)</title><rect x="1322.4" y="221" width="34.6" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="1325.41" y="231.5" >it..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::remove_order (165 samples, 0.16%)</title><rect x="1582.3" y="237" width="2.5" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="1585.30" y="247.5" ></text>
+</g>
+<g >
+<title>itch::bench::ReplaySession&lt;(anonymous namespace)::ReplayInput, itch::bench::PlatformClock, itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt; &gt;::input_resident (24 samples, 0.02%)</title><rect x="11.4" y="141" width="0.3" height="15.0" fill="rgb(241,150,39)" rx="2" ry="2" />
+<text  x="14.35" y="151.5" ></text>
+</g>
+<g >
+<title>itch::bench::throughput_pass&lt;itch::bench::PlatformClock, itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;, itch::bench::NoTopTracking&gt; (51,002 samples, 48.54%)</title><rect x="11.7" y="141" width="766.9" height="15.0" fill="rgb(245,150,44)" rx="2" ry="2" />
+<text  x="14.73" y="151.5" >itch::bench::throughput_pass&lt;itch::bench::PlatformClock, itch::FastBook&lt;itch::NoWriteObserver, itch::Paged..</text>
+</g>
+<g >
+<title>benchmark::internal::(anonymous namespace)::RunInThread (51,161 samples, 48.69%)</title><rect x="10.5" y="189" width="769.3" height="15.0" fill="rgb(241,149,40)" rx="2" ry="2" />
+<text  x="13.47" y="199.5" >benchmark::internal::(anonymous namespace)::RunInThread</text>
+</g>
+<g >
+<title>(anonymous namespace)::run_throughput&lt;itch::bench::ReplaySession&lt;(anonymous namespace)::ReplayInput, itch::bench::PlatformClock, itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt; &gt; &gt; (51,161 samples, 48.69%)</title><rect x="10.5" y="157" width="769.3" height="15.0" fill="rgb(239,178,37)" rx="2" ry="2" />
+<text  x="13.47" y="167.5" >(anonymous namespace)::run_throughput&lt;itch::bench::ReplaySession&lt;(anonymous namespace)::ReplayInput, itch:..</text>
+</g>
+<g >
+<title>itch::PagedIndex&lt;8u&gt;::erase (190 samples, 0.18%)</title><rect x="1585.0" y="237" width="2.9" height="15.0" fill="rgb(247,150,46)" rx="2" ry="2" />
+<text  x="1588.04" y="247.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::remove_order (2,284 samples, 2.17%)</title><rect x="1288.1" y="221" width="34.3" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="1291.07" y="231.5" >it..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::remove_order (185 samples, 0.18%)</title><rect x="772.4" y="109" width="2.8" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="775.45" y="119.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (17 samples, 0.02%)</title><rect x="1584.8" y="237" width="0.2" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="1587.78" y="247.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (5,288 samples, 5.03%)</title><rect x="1456.1" y="221" width="79.5" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="1459.10" y="231.5" >itch::Fas..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (1,220 samples, 1.16%)</title><rect x="1338.6" y="205" width="18.4" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="1341.62" y="215.5" ></text>
+</g>
+<g >
+<title>benchmark::internal::(anonymous namespace)::ThreadRunnerDefault::RunThreads (51,161 samples, 48.69%)</title><rect x="10.5" y="205" width="769.3" height="15.0" fill="rgb(244,149,43)" rx="2" ry="2" />
+<text  x="13.47" y="215.5" >benchmark::internal::(anonymous namespace)::ThreadRunnerDefault::RunThreads</text>
+</g>
+<g >
+<title>itch::FlatLevels::open&lt;itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level(itch::LevelId const&amp;, itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::LevelWrite const&amp;)::{lambda(unsigned int)#1}&gt; (724 samples, 0.69%)</title><rect x="1524.7" y="205" width="10.9" height="15.0" fill="rgb(246,150,45)" rx="2" ry="2" />
+<text  x="1527.73" y="215.5" ></text>
+</g>
+<g >
+<title>benchmark::internal::BenchmarkInstance::Run (51,161 samples, 48.69%)</title><rect x="10.5" y="173" width="769.3" height="15.0" fill="rgb(240,149,38)" rx="2" ry="2" />
+<text  x="13.47" y="183.5" >benchmark::internal::BenchmarkInstance::Run</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::FastBook (71 samples, 0.07%)</title><rect x="778.7" y="125" width="1.1" height="15.0" fill="rgb(239,150,38)" rx="2" ry="2" />
+<text  x="781.69" y="135.5" ></text>
+</g>
+<g >
+<title>benchmark::internal::BenchmarkRunner::DoOneRepetition (51,161 samples, 48.69%)</title><rect x="10.5" y="237" width="769.3" height="15.0" fill="rgb(247,149,46)" rx="2" ry="2" />
+<text  x="13.47" y="247.5" >benchmark::internal::BenchmarkRunner::DoOneRepetition</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::rest_order (9 samples, 0.01%)</title><rect x="778.4" y="125" width="0.2" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="781.43" y="135.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::replace_order (8,427 samples, 8.02%)</title><rect x="421.6" y="109" width="126.7" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="424.60" y="119.5" >itch::FastBook&lt;..</text>
+</g>
+<g >
+<title>itch::PagedIndex&lt;8u&gt;::erase (165 samples, 0.16%)</title><rect x="775.3" y="109" width="2.5" height="15.0" fill="rgb(247,150,46)" rx="2" ry="2" />
+<text  x="778.30" y="119.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::deduct (1,506 samples, 1.43%)</title><rect x="1565.2" y="253" width="22.7" height="15.0" fill="rgb(238,150,36)" rx="2" ry="2" />
+<text  x="1568.25" y="263.5" >i..</text>
+</g>
+<g >
+<title>itch::bench::throughput_pass&lt;itch::bench::PlatformClock, itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;, itch::bench::NoTopTracking&gt; (50,780 samples, 48.33%)</title><rect x="825.3" y="269" width="763.6" height="15.0" fill="rgb(245,150,44)" rx="2" ry="2" />
+<text  x="828.33" y="279.5" >itch::bench::throughput_pass&lt;itch::bench::PlatformClock, itch::FastBook&lt;itch::NoWriteObserver, itch::Page..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::FastBook (69 samples, 0.07%)</title><rect x="1588.9" y="253" width="1.1" height="15.0" fill="rgb(239,150,38)" rx="2" ry="2" />
+<text  x="1591.95" y="263.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (1,143 samples, 1.09%)</title><rect x="527.1" y="77" width="17.2" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="530.06" y="87.5" ></text>
+</g>
+<g >
+<title>itch::bench::count_mix (2,873 samples, 2.73%)</title><rect x="782.1" y="269" width="43.2" height="15.0" fill="rgb(247,150,46)" rx="2" ry="2" />
+<text  x="785.13" y="279.5" >itch..</text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::rest_order (2,186 samples, 2.08%)</title><rect x="511.4" y="93" width="32.9" height="15.0" fill="rgb(243,150,41)" rx="2" ry="2" />
+<text  x="514.43" y="103.5" >it..</text>
+</g>
+<g >
+<title>std::__1::__function::__func&lt;(anonymous namespace)::run(int, char**)::$_0::operator()&lt;itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;() const::{lambda()#1}, std::__1::unique_ptr&lt;itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;, std::__1::default_delete&lt;itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt; &gt; &gt; ()&gt;::operator()[abi:nqe230104] (73 samples, 0.07%)</title><rect x="1588.9" y="269" width="1.1" height="15.0" fill="rgb(240,146,39)" rx="2" ry="2" />
+<text  x="1591.89" y="279.5" ></text>
+</g>
+<g >
+<title>itch::FastBook&lt;itch::NoWriteObserver, itch::PagedIndex&lt;8u&gt;, itch::FlatLevels&gt;::write_level (75 samples, 0.07%)</title><rect x="1535.6" y="237" width="1.2" height="15.0" fill="rgb(231,150,29)" rx="2" ry="2" />
+<text  x="1538.63" y="247.5" ></text>
+</g>
+</g>
+</svg>

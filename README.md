@@ -79,6 +79,8 @@ Book designs. Each row is one design's results file, with its ratio over each ma
 | `map-aged` | ram | not tracked | 12302019 | macOS (M4 Max) | not pinned | 5,353,839 | 1.27% | 189.79 | 410.1 | 0.93× | – | `9934df5c3b7a` | [results/bench_book_map-aged_ram_mac_12302019.md](results/bench_book_map-aged_ram_mac_12302019.md) |
 | `map-fresh` | ram | not tracked | 12302019 | debian | pinned to core 4 | 2,028,642 | 0.78% | 500.89 | 294.0 | – | 1.11× | `e0f9bb8101a2` | [results/bench_book_map-fresh_ram_debian_12302019.md](results/bench_book_map-fresh_ram_debian_12302019.md) |
 | `map-fresh` | ram | not tracked | 12302019 | macOS (M4 Max) | not pinned | 5,772,425 | 0.65% | 176.03 | 260.8 | – | 1.08× | `9934df5c3b7a` | [results/bench_book_map-fresh_ram_mac_12302019.md](results/bench_book_map-fresh_ram_mac_12302019.md) |
+| `paged-flat` | mapped | not tracked | 12302019 | debian | pinned to core 4 | 5,370,409 | 0.35% | 189.21 | 662.8 | – | – | `5a16936a14e8` | [results/bench_book_paged-flat_mapped_fpbuild_debian_12302019.md](results/bench_book_paged-flat_mapped_fpbuild_debian_12302019.md) |
+| `paged-flat` | mapped | not tracked | 12302019 | debian | pinned to core 4 | 5,505,524 | 0.18% | 184.57 | 662.8 | – | – | `5a16936a14e8` | [results/bench_book_paged-flat_mapped_normalbuild_debian_12302019.md](results/bench_book_paged-flat_mapped_normalbuild_debian_12302019.md) |
 | `paged-flat` | mapped | tracked | 12302019 | debian | pinned to core 4 | 5,041,776 | 0.21% | 201.54 | 662.8 | – | – | `2810183f1d95` | [results/bench_book_paged-flat_mapped_top_counters_debian_12302019.md](results/bench_book_paged-flat_mapped_top_counters_debian_12302019.md) |
 | `paged-flat` | mapped | tracked | 12302019 | debian | pinned to core 4 | 5,092,461 | 0.06% | 199.54 | 662.8 | – | – | `bfdd4bb117a7` | [results/bench_book_paged-flat_mapped_top_debian_12302019.md](results/bench_book_paged-flat_mapped_top_debian_12302019.md) |
 | `paged-flat` | mapped | tracked | 12302019 | macOS (M4 Max) | not pinned | 19,335,339 | 1.41% | 52.55 | 662.8 | – | – | `f3fe97a93cea` | [results/bench_book_paged-flat_mapped_top_mac_12302019.md](results/bench_book_paged-flat_mapped_top_mac_12302019.md) |
@@ -102,6 +104,9 @@ Profiles and counter tables. A flamegraph shows where the samples fell, not a ra
 | What | Host | Summary | Commit | File |
 |---|---|---|---|---|
 | The Zen 1 counter table on debian | debian | of 37 tried, 27 counts, 1 counts zero, 7 not supported, 2 refused | `5a16936a14e8` | [results/counters_zen1_events_debian.md](results/counters_zen1_events_debian.md) |
+| Flamegraph: the backtester, quoting on debian, 12302019 | debian | 119,933 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 38.53% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_backtest-quoting_debian_12302019.md](results/flamegraph_backtest-quoting_debian_12302019.md) |
+| Flamegraph: the map baseline, map-fresh on debian, 12302019 | debian | 243,786 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::rest_order` at 22.63% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_map-fresh_debian_12302019.md](results/flamegraph_map-fresh_debian_12302019.md) |
+| Flamegraph: the book replay, paged-flat on debian, 12302019 | debian | 105,077 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 42.14% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md) |
 | Flamegraph: book replay, paged-flat on macOS (M4 Max), 12302019 | macOS (M4 Max) | 19,118 samples, wall-clock stacks every 1 ms, the hottest frame `itch::FastBook<…>::apply` at 38.24% self | `5a16936a14e8` | [results/profile_paged-flat_mac_12302019.md](results/profile_paged-flat_mac_12302019.md) |
 
 Every benchmark run, failed ones included, from [results/run_log.md](results/run_log.md).
@@ -131,6 +136,11 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0019-20261105T073137Z` | `P-0019` | `5a16936a14e8` | Linux | `published` |
 | `P-0019-20261105T073614Z` | `P-0019` | `5a16936a14e8` | Linux | `published` |
 | `P-0016-20261105T071857Z` | `P-0016` | `5a16936a14e8` | Linux | `published` |
+| `P-0018-20261105T080854Z` | `P-0018` | `5a16936a14e8` | Linux | `published` |
+| `P-0018-20261105T081041Z` | `P-0018` | `5a16936a14e8` | Linux | `published` |
+| `P-0018-20261105T081446Z` | `P-0018` | `5a16936a14e8` | Linux | `published` |
+| `P-0017-20261105T074512Z` | `P-0017` | `5a16936a14e8` | Linux | `published` |
+| `P-0017-20261105T075659Z` | `P-0017` | `5a16936a14e8` | Linux | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.

@@ -2,6 +2,7 @@
 """Turns sampled stacks into a flamegraph and its results file, with nothing private in either.
 
     flame_report.py fold-sample --sample SAMPLE.txt --out STACKS.folded
+    perf script -i perf.data | flame_report.py fold-perf --out STACKS.folded
     flame_report.py render --folded STACKS.folded --flamegraph flamegraph.pl \\
         --record RUN.json --source perf|sample --workload NAME --day DAY --command TEXT \\
         --prediction P-NNNN|none [--run-id ID --run-log results/run_log.md] --notes NOTES.md \\
@@ -10,8 +11,11 @@
     flame_report.py --check FILE...
 
 fold-sample reads the call graph of macOS's /usr/bin/sample and writes FlameGraph's folded
-form, one line per stack with its samples, each frame's self count at its leaf. render scrubs
-the stacks of home paths, addresses and the names of this machine and its user, has
+form, one line per stack with its samples, each frame's self count at its leaf. fold-perf
+does the same from `perf script`, one count a sample, names whole: FlameGraph's own
+stackcollapse-perf.pl cuts a name at its first parenthesis, which splits
+`(anonymous namespace)` templates, and weights each sample by its period. render scrubs
+the stacks of home paths, IP addresses and the names of this machine and its user, has
 FlameGraph's flamegraph.pl draw them with fixed colours, and writes the results file beside
 the SVG: where the samples came from, the hottest frames, the perf annotate excerpt for the
 hottest function on Linux, what the graph cannot show, and on Linux the frame-pointer
@@ -32,6 +36,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 from collections import Counter
@@ -48,7 +53,6 @@ SVG_TOTAL = re.compile(r"<title>all \(([0-9,]+) samples, 100%\)</title>")
 MD_SAMPLES = re.compile(r"^- samples: ([0-9,]+)$", re.MULTILINE)
 THROUGHPUT = re.compile(r"^\| Throughput, messages/s \| ([0-9,]+) \| ([0-9,]+) \| ([0-9,]+) "
                         r"\| ([0-9.]+)% \|$", re.MULTILINE)
-HEX_ADDRESS = re.compile(r"\b0x[0-9a-f]{6,}\b|\[[0-9a-f]{8,}\]")
 FRAME_POINTER = ("-fno-omit-frame-pointer", "-mno-omit-leaf-frame-pointer")
 TOP_FRAMES = 15
 
@@ -86,8 +90,7 @@ class ReportError(ValueError):
 
 def private_patterns():
     names = gates.private_names()
-    patterns = [(gates.HOME_PATH, "<home>/"), (gates.PRIVATE_ADDRESS, "<address>"),
-                (HEX_ADDRESS, "")]
+    patterns = [(gates.HOME_PATH, "<home>/"), (gates.PRIVATE_ADDRESS, "<address>")]
     if names:
         patterns.append((re.compile(r"(?<![\w-])(?:" + "|".join(map(re.escape, names))
                                     + r")(?![\w-])", re.IGNORECASE), "<host>"))
@@ -95,7 +98,8 @@ def private_patterns():
 
 
 def scrub(text):
-    """The text with every home path, address and private name taken out."""
+    """The text with every home path, IP address and private name taken out. Code addresses
+    and constants stay: they say nothing about the machine or its user."""
     for pattern, replacement in private_patterns():
         text = pattern.sub(replacement, text)
     return text
@@ -103,8 +107,7 @@ def scrub(text):
 
 def private_found(text):
     """The first private thing in text, or None."""
-    patterns = private_patterns()[:2] + private_patterns()[3:]
-    for pattern, _ in patterns:
+    for pattern, _ in private_patterns():
         match = pattern.search(text)
         if match:
             return match.group(0)
@@ -177,6 +180,78 @@ def fold_sample(text):
     pop_to(0)
     if not stacks:
         raise ReportError("an empty call graph")
+    return stacks
+
+
+PERF_FRAME = re.compile(r"^\s+[0-9a-f]+\s+(?P<sym>.*?)\s+\((?P<dso>[^()]*)\)\s*$")
+
+
+def strip_offset(symbol):
+    return re.sub(r"\+0x[0-9a-f]+$", "", symbol)
+
+
+def drop_return_type(name):
+    """perf prints a template function with its return type first; the frame is the rest."""
+    depth = 0
+    for index in range(len(name) - 1, -1, -1):
+        char = name[index]
+        depth += {">": 1, "<": -1, ")": 1, "(": -1}.get(char, 0)
+        if char == " " and depth == 0 and not name[:index].endswith("operator"):
+            return name[index + 1:]
+    return name
+
+
+def demangle(symbols):
+    """{symbol: demangled} for the names perf left mangled, through llvm-cxxfilt or c++filt
+    from PATH; a name neither can read is kept as it is."""
+    mangled = sorted(symbol for symbol in symbols if symbol.startswith("_Z"))
+    tool = shutil.which("llvm-cxxfilt") or shutil.which("c++filt")
+    if not mangled or tool is None:
+        return {}
+    done = subprocess.run([tool], input="\n".join(mangled) + "\n", capture_output=True,
+                          text=True, check=False)
+    names = done.stdout.splitlines()
+    if done.returncode != 0 or len(names) != len(mangled):
+        return {}
+    return dict(zip(mangled, names))
+
+
+def fold_perf(lines):
+    """FlameGraph's folded stacks from `perf script` output, one count a sample, as
+    {stack: samples}. A frame perf could not name is named by its object file, and one it
+    left mangled is demangled here."""
+    samples = Counter()
+    comm, frames = None, []
+
+    def close():
+        if comm is not None and frames:
+            samples[(comm, *reversed(frames))] += 1
+
+    for line in lines:
+        line = line.rstrip("\n")
+        if not line.strip():
+            close()
+            comm, frames = None, []
+        elif not line[0].isspace():
+            close()
+            comm, frames = line.split()[0], []
+        else:
+            match = PERF_FRAME.match(line)
+            if match is None:
+                continue
+            symbol = strip_offset(match.group("sym"))
+            if symbol in ("[unknown]", ""):
+                symbol = f"[{Path(match.group('dso')).name or 'unknown'}]"
+            frames.append(symbol)
+    close()
+    if not samples:
+        raise ReportError("no stacks in the perf script output")
+    names = demangle({frame for stack in samples for frame in stack})
+    stacks = Counter()
+    for stack, count in samples.items():
+        tidy = [stack[0]] + [drop_return_type(shorten(names.get(frame, frame)))
+                             for frame in stack[1:]]
+        stacks[";".join(tidy)] += count
     return stacks
 
 
@@ -413,6 +488,8 @@ def main(argv=None):
     fold = sub.add_parser("fold-sample")
     fold.add_argument("--sample", type=Path, required=True)
     fold.add_argument("--out", type=Path, required=True)
+    perf = sub.add_parser("fold-perf", help="perf script output on standard input")
+    perf.add_argument("--out", type=Path, required=True)
     draw = sub.add_parser("render")
     draw.add_argument("--folded", type=Path, required=True)
     draw.add_argument("--flamegraph", type=Path, required=True)
@@ -433,6 +510,11 @@ def main(argv=None):
     draw.add_argument("--frame-pointer", type=Path)
     args = parser.parse_args(argv)
     try:
+        if args.mode == "fold-perf":
+            stacks = fold_perf(sys.stdin)
+            args.out.write_text("\n".join(fold_lines(stacks)) + "\n", encoding="utf-8")
+            print(f"flame_report: folded {sum(stacks.values()):,} samples, {len(stacks)} stacks")
+            return 0
         if args.mode == "fold-sample":
             stacks = fold_sample(args.sample.read_text(encoding="utf-8", errors="replace"))
             args.out.write_text("\n".join(fold_lines(stacks)) + "\n", encoding="utf-8")

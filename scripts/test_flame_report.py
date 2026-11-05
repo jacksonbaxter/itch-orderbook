@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -106,6 +107,30 @@ class FlameReport(unittest.TestCase):
         self.assertEqual(stacks[path], 10)
         self.assertEqual(stacks["Thread_1;start;main;itch::count_mix"], 10)
         self.assertEqual(sum(stacks.values()), 100)
+
+    def test_perf_script_folds_one_count_a_sample_with_whole_names(self):
+        home = "/" + "home" + "/someone/build/bench_replay"
+        text = (
+            "bench_replay  1 2.0:     500 cycles:u: \n"
+            "\t    55b4 int (anonymous namespace)::run<a::B<int>, (anonymous namespace)::f(int)"
+            "::$_0>((anonymous namespace)::Options const&)+0x1db (" + home + ")\n"
+            "\t    55b5 main+0x847 (" + home + ")\n"
+            "\t    7fc2 [unknown] (/usr/lib/libc.so.6)\n\n"
+            "bench_replay  1 2.1:     900 cycles:u: \n"
+            "\t    55b5 main+0x84 (" + home + ")\n"
+            "\t    7fc2 [unknown] (/usr/lib/libc.so.6)\n\n")
+        stacks = flame_report.fold_perf(text.splitlines(keepends=True))
+        self.assertEqual(stacks["bench_replay;[libc.so.6];main;(anonymous namespace)::run<a::B<"
+                                "int>, (anonymous namespace)::f(int)::$_0>"], 1)
+        self.assertEqual(stacks["bench_replay;[libc.so.6];main"], 1)
+        self.assertEqual(sum(stacks.values()), 2)
+
+    @unittest.skipUnless(shutil.which("llvm-cxxfilt") or shutil.which("c++filt"),
+                         "no demangler on PATH")
+    def test_a_name_perf_left_mangled_is_demangled(self):
+        text = "bench_backtest  1 2.0:  5 cycles:u: \n\t    55b4 _ZN4itch3runEv+0x1 (/x/b)\n\n"
+        self.assertEqual(dict(flame_report.fold_perf(text.splitlines(keepends=True))),
+                         {"bench_backtest;itch::run": 1})
 
     def test_names_lose_their_parameters_and_keep_their_templates(self):
         self.assertEqual(flame_report.shorten("a::f<int>(std::span<int>) const"), "a::f<int>")
