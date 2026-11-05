@@ -235,6 +235,17 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn("Book memory, MiB is 'n/a', not a figure", output)
 
+    def test_t_oracle_2_gets_one_row_from_the_sum_of_the_sessions(self):
+        import oracle_sessions  # noqa: PLC0415
+
+        path = self.root / "results" / oracle_sessions.OUT
+        path.write_text(oracle_sessions.generate(self.root), encoding="utf-8")
+        row = self.row("T-ORACLE-2", "every session")
+        self.assertIn("| **FAIL** | 0 divergences in ", row)
+        self.assertIn("; the gap: ", row)
+        self.edit(f"results/{oracle_sessions.OUT}", "Verdict: **FAIL**", "Verdict: **PASS**")
+        self.assertIn("| PASS | 0 divergences in ", self.row("T-ORACLE-2", "every session"))
+
     def test_a_backtest_file_gets_a_row_of_its_own(self):
         sys.path.insert(0, str(REPO_ROOT / "scripts"))
         import test_backtest_results  # noqa: E402, PLC0415

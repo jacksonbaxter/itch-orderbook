@@ -138,6 +138,14 @@ def oracle_rows(name, text):
     ]
 
 
+def sessions_row(name, text):
+    """T-ORACLE-2, from scripts/oracle_sessions.py's sum of every session's oracle file."""
+    verdict = find(r"^Verdict: \*\*(\w+)\*\*, (.*)\.$", text, name)
+    commits = find(r"^- Commits: (.*)$", text, name)[1]
+    return ("T-ORACLE-2", "every session", header_host(text, name), SHOWN[verdict[1]], verdict[2],
+            ", ".join(f"`{commit}`" for commit in commits.split(", ")), source(name))
+
+
 def odd_lot_detail(text, name):
     symbols = sorted(set(re.findall(r"^- `t3_odd_lots .*symbol=(\S+)", text, re.MULTILINE)))
     equal, total = find(r"^- equal_odd_lots (\d+) of (\d+) symbols", text, name).groups()
@@ -349,7 +357,9 @@ def generate(root):
         if name in NOT_RESULTS:
             continue
         text = path.read_text(encoding="utf-8")
-        if name.startswith("oracle_"):
+        if name == "oracle_sessions.md":
+            rows = [sessions_row(name, text)]
+        elif name.startswith("oracle_"):
             rows = oracle_rows(name, text)
         elif name.startswith("trades_"):
             rows = trades_rows(name, text)

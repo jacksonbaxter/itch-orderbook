@@ -308,6 +308,46 @@
       "expect": {
         "signature": "(?:FAIL|ERROR): test_a_market_maker_run_dropped_from_a_table_is_refused"
       }
+    },
+    {
+      "id": "readme-sessions-file-read-as-a-day",
+      "breaks": "T-ORACLE-2's sum of the sessions is read as one day's oracle file, so it gets no row and the table is refused",
+      "check": "test_results_table.py test_t_oracle_2_gets_one_row_from_the_sum_of_the_sessions",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        if name == \"oracle_sessions.md\":\n            rows = [sessions_row(name, text)]\n        elif name.startswith(\"oracle_\"):\n",
+          "new": "        if name.startswith(\"oracle_\"):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_oracle_2_gets_one_row_from_the_sum_of_the_sessions"
+      }
+    },
+    {
+      "id": "readme-sessions-verdict-fixed",
+      "breaks": "The T-ORACLE-2 row shows one verdict whatever the sessions file says",
+      "check": "test_results_table.py test_t_oracle_2_gets_one_row_from_the_sum_of_the_sessions",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "header_host(text, name), SHOWN[verdict[1]], verdict[2],",
+          "new": "header_host(text, name), SHOWN[\"FAIL\"], verdict[2],"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_oracle_2_gets_one_row_from_the_sum_of_the_sessions"
+      }
     }
   ]
 }
