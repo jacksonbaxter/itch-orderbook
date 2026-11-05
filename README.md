@@ -108,6 +108,8 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 | Flamegraph: the backtester, quoting on debian, 12302019 | debian | 119,933 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 38.53% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_backtest-quoting_debian_12302019.md](results/flamegraph_backtest-quoting_debian_12302019.md) |
 | Flamegraph: the map baseline, map-fresh on debian, 12302019 | debian | 243,786 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::rest_order` at 22.63% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_map-fresh_debian_12302019.md](results/flamegraph_map-fresh_debian_12302019.md) |
 | Flamegraph: the book replay, paged-flat on debian, 12302019 | debian | 105,077 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 42.14% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md) |
+| The order lookup apart from the level work, debian, 12302019 | debian | paged-flat lookup 30.71 ns, 17.3% of the pass; hash-flat lookup 32.50 ns, 15.3% of the pass | `54e5dc3b4938` | [results/lookup_debian_12302019.md](results/lookup_debian_12302019.md) |
+| E8: prefetch look-ahead on the book build, debian, 12302019 | debian | best look-ahead D=16 at +16.41% over D=0; E8 not refuted | `54e5dc3b4938` | [results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md) |
 | Flamegraph: book replay, paged-flat on macOS (M4 Max), 12302019 | macOS (M4 Max) | 19,118 samples, wall-clock stacks every 1 ms, the hottest frame `itch::FastBook<…>::apply` at 38.24% self | `5a16936a14e8` | [results/profile_paged-flat_mac_12302019.md](results/profile_paged-flat_mac_12302019.md) |
 
 The market maker on its report day, 12302019, a late-December session, with every parameter chosen on 10302019, an FOMC day. One symbol-day. No edge is claimed. 2 symbols on one day: each is its own symbol-day. The file gives S gross, fees, the markout curve and how Q-off and L-off each change the PnL. Dollars at the base fee tier; a replayed feed cannot react, so market impact is absent.
@@ -164,6 +166,18 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0201-20261105T053845Z` | `P-0201` | `abfb37c88eb0` | Darwin | `published` |
 | `P-0201-20261105T053946Z` | `P-0201` | `9fee6ab0cb7b` | Darwin | `published` |
 | `P-0202-20261105T080745Z` | `P-0202` | `0999cb43a604` | Darwin | `published` |
+| `P-0020-20261105T142440Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
+| `P-0020-20261105T142543Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
+| `P-0020-20261105T142704Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
+| `P-0020-20261105T142807Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
+| `P-0020-20261105T142928Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
+| `P-0020-20261105T143302Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
+| `P-0021-20261105T143424Z` | `P-0021` | `54e5dc3b4938` | Darwin | `withdrawn` |
+| `P-0021-20261105T143454Z` | `P-0021` | `54e5dc3b4938` | Darwin | `stopped by hand` |
+| `P-0020-20261105T171158Z` | `P-0020` | `54e5dc3b4938` | Linux | `withdrawn` |
+| `P-0020-20261105T171616Z` | `P-0020` | `54e5dc3b4938` | Linux | `withdrawn` |
+| `P-0020-20261105T172111Z` | `P-0020` | `54e5dc3b4938` | Linux | `published` |
+| `P-0021-20261105T174823Z` | `P-0021` | `54e5dc3b4938` | Linux | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
