@@ -64,6 +64,12 @@ ABORTING_CALL = re.compile(
     r"\bassert\s*\(|\bthrow\b|\babort\s*\(|\b__builtin_trap\b|\bstd::terminate\b"
     r"|\bstd::get\s*<|\.value\s*\(\s*\)|\bstd::unreachable\b")
 
+# T-MM-1: the attribution is computed from fills and marks alone. Neither it nor any header
+# it includes may include the ledger or name it in code.
+LEDGER_FREE = ("include/itch/mm/attribution.hpp",)
+QUOTED_INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"]+)"', re.MULTILINE)
+LEDGER_NAME = re.compile(r"\bLedger\b|\bledger\w*")
+
 # scripts/test_fetch_data.py asserts that the data scripts do not name the held vendor,
 # so it has to name it.
 HELD_VENDOR_EXEMPT = {"scripts/test_fetch_data.py"}
@@ -183,6 +189,34 @@ def toolchain_path(root, files):
         root, build_files)
 
 
+def ledger_free_files(root):
+    """The attribution header and every repository header it includes, transitively."""
+    found = []
+    pending = [root / name for name in LEDGER_FREE]
+    while pending:
+        path = pending.pop()
+        if path in found or not path.is_file():
+            continue
+        found.append(path)
+        for name in QUOTED_INCLUDE.findall(read_text(path) or ""):
+            pending.append(root / "include" / name)
+    return found
+
+
+def reads_ledger(root, files):
+    violations = []
+    for path in files:
+        text = read_text(path) or ""
+        for match in QUOTED_INCLUDE.finditer(text):
+            if "ledger" in match[1].lower():
+                violations.append((path, line_of(text, match.start()),
+                                   f"includes {match[1]}"))
+        code = code_only(text)
+        for match in LEDGER_NAME.finditer(code):
+            violations.append((path, line_of(code, match.start()), f"names {match[0]}"))
+    return violations
+
+
 def workflow_files(root):
     return sorted((root / ".github" / "workflows").glob("*.yml"))
 
@@ -223,6 +257,9 @@ def gates():
              aborting_call, lambda root: cxx_files(root, PRODUCTION_CODE + REFERENCE_PARSERS)),
         Gate("toolchain-path", "no hardcoded toolchain path in build files or scripts",
              toolchain_path, lambda root: list(walk(root))),
+        Gate("attribution-without-ledger",
+             "the attribution and the headers it includes never include or name the ledger",
+             reads_ledger, ledger_free_files),
         Gate("pinned-actions", "every action is pinned to a 40-hex SHA, with its tag in a comment",
              unpinned_action, workflow_files),
     )
