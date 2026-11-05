@@ -18,7 +18,7 @@ Built:
 
 Not built: SIMD, the market maker and the demo. The oracle and trade rows below are the real book's. The harness-proof rows are the Phase 2 stub's, and say so. The book-design rows are from macOS, which cannot pin a thread, so none of them is a pinned figure and none stands for a Linux one, and from `debian`, pinned to core 4, where only the mapped runs with the top tracked are published, the second with hardware counters: every run with the day in memory there was refused, the last after the kernel swapped out one page, or never got the host. The default arm is the paged index with flat levels, the fastest on both hosts.
 
-The GitHub Actions workflow in `.github/workflows/ci.yml` builds the release preset and runs every unit test on x86-64 Linux with GCC and Clang, arm64 Linux with GCC and arm64 macOS with Clang, and builds the parser with Emscripten. The sanitizers, clang-tidy and the fault matrix run in `scripts/check.sh`, not in CI. [NOTES.md](NOTES.md) says what the first runs on GitHub found.
+The GitHub Actions workflow in `.github/workflows/ci.yml` builds the release preset and runs every unit test on x86-64 Linux with GCC and Clang, arm64 Linux with GCC and arm64 macOS with Clang, and builds the parser and the demo's engine with Emscripten. The sanitizers, clang-tidy and the fault matrix run in `scripts/check.sh`, not in CI. [NOTES.md](NOTES.md) says what the first runs on GitHub found.
 
 ## Results
 
@@ -197,6 +197,19 @@ python3 scripts/fetch_data.py --ref all          # CrossStats and MIDAS
 scripts/check_real_day.sh                        # the checks that need a real day
 scripts/check_real_day.sh --arms all             # the same, on every arm of the fast book
 ```
+
+## Run the demo
+
+`docs/` holds a static page that replays one symbol's extract on the same `FastBook` as the native build, compiled with `em++ -O3 -msimd128` into a fixed 1 GiB memory, and animates its depth and trades. The extract and the engine are made locally into `docs/local/`, which is gitignored, so no market data is committed. The page is not deployed anywhere. <!-- figures: not measured -->
+
+```sh
+cmake --preset release && cmake --build --preset release --target itch_extract
+python3 scripts/demo.py extract --day data/12302019.NASDAQ_ITCH50 --symbol AAPL
+python3 scripts/demo.py build      # needs EMSDK set
+python3 scripts/demo.py serve      # then open http://127.0.0.1:8000/
+```
+
+The server sends the cross-origin isolation headers, so the browser's clock is clamped to 5 µs in Chrome rather than 100 µs, and `file://` cannot load the engine. The page shows messages/sec from whole batches only and no per-message latency, and says why. <!-- figures: not measured -->
 
 ## Check everything
 
