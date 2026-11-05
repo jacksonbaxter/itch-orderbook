@@ -362,9 +362,9 @@ class Engine {
       : latency_{config.latency_off
                      ? Latency{.market_data = 0, .order_entry = 0, .response = 0, .compute = 0}
                      : config.latency},
-        model_{config.queue},
         symbols_{config.symbols},
         cancel_at_close_{config.cancel_at_market_close},
+        model_{config.queue},
         schedule_{find_fee_schedule(config.date)},
         book_{config.exchange_capacity},
         view_{config.view_capacity},
@@ -937,17 +937,11 @@ class Engine {
       std::uint32_t next = kNoIndex;
       for (std::uint32_t slot = levels_[level].front; slot != kNoIndex; slot = next) {
         next = orders_[slot].newer;
-        SimOrder& sim = orders_[slot];
         if (at_price && model_ != QueueModel::exact) {
-          const std::uint64_t reaching = take_from_front(sim, shares);
-          const auto take = static_cast<std::uint32_t>(
-              std::min<std::uint64_t>(std::min(sim.remaining, budget), reaching));
-          if (fills && reached && take != 0) {
-            budget -= take;
-            fill(slot, take, sim.price, Liquidity::maker, time);
-          }
+          budget -= fill_from_front(slot, shares, budget, fills && reached, time);
           continue;
         }
+        SimOrder& sim = orders_[slot];
         if (at_price && sim.arrival > real.arrival) {
           sim.ahead -= std::min<std::uint64_t>(sim.ahead, shares);
           continue;
@@ -990,6 +984,21 @@ class Engine {
         case QueueModel::proportional: remove_in_proportion(sim, shares, real.level_shares); break;
       }
     }
+  }
+
+  // Under Q-off, an execution of `shares` at S's price: what was ahead goes first, and what
+  // reaches S fills it, if `fills`, up to the execution's budget. Returns the shares filled.
+  std::uint32_t fill_from_front(std::uint32_t slot, std::uint32_t shares, std::uint32_t budget,
+                                bool fills, Nanos time) noexcept {
+    SimOrder& sim = orders_[slot];
+    const std::uint64_t reaching = take_from_front(sim, shares);
+    const auto take = static_cast<std::uint32_t>(
+        std::min<std::uint64_t>(std::min(sim.remaining, budget), reaching));
+    if (!fills || take == 0) {
+      return 0;
+    }
+    fill(slot, take, sim.price, Liquidity::maker, time);
+    return take;
   }
 
   // Under Q-off, an execution of `shares` at S's price: what was ahead goes first, and the
@@ -1368,9 +1377,9 @@ class Engine {
   }
 
   Latency latency_;
-  QueueModel model_;
   std::vector<Stock> symbols_;
   bool cancel_at_close_;
+  QueueModel model_;
   const FeeSchedule* schedule_;
 
   Book book_;

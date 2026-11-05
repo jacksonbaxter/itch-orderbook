@@ -42,3 +42,8 @@ itch_apply_options(itch_calibrate)
 add_executable(itch_select itch_select.cpp)
 target_link_libraries(itch_select PRIVATE itch_parser)
 itch_apply_options(itch_select)
+
+add_executable(itch_mm itch_mm.cpp "${PROJECT_SOURCE_DIR}/tests/oracle/alloc_counter.cpp")
+target_include_directories(itch_mm PRIVATE "${PROJECT_SOURCE_DIR}/tests")
+target_link_libraries(itch_mm PRIVATE itch_parser)
+itch_apply_options(itch_mm)

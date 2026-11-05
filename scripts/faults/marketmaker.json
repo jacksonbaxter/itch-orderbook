@@ -1085,6 +1085,93 @@
       }
     },
     {
+      "id": "mm-cli-latency-off-dropped",
+      "breaks": "itch_mm never passes --latency-off to the engine, so the L-off runs are Base runs",
+      "check": "test_mm_cli.py",
+      "mutations": [
+        {
+          "file": "tools/itch_mm.cpp",
+          "old": "  config.latency_off = options.latency_off;",
+          "new": "  config.latency_off = false;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_mm"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_mm_cli.py",
+        "{build}/tools/itch_mm",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "mm cli: FAIL"
+      }
+    },
+    {
+      "id": "mm-cli-queue-dropped",
+      "breaks": "itch_mm never passes --queue to the engine, so the Q-off runs are Base runs",
+      "check": "test_mm_cli.py",
+      "mutations": [
+        {
+          "file": "tools/itch_mm.cpp",
+          "old": "  config.queue = options.queue;",
+          "new": "  config.queue = QueueModel::exact;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_mm"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_mm_cli.py",
+        "{build}/tools/itch_mm",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "mm cli: FAIL"
+      }
+    },
+    {
+      "id": "mm-cli-window-before-the-path",
+      "breaks": "itch_mm opens the PnL window at --start even when the mark path starts later, so there is no m(t0)",
+      "check": "test_mm_cli.py",
+      "mutations": [
+        {
+          "file": "tools/itch_mm.cpp",
+          "old": ".open = std::max(options.start, first_mark),",
+          "new": ".open = options.start + (first_mark * 0),"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_mm"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_mm_cli.py",
+        "{build}/tools/itch_mm",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "mm cli: FAIL"
+      }
+    },
+    {
       "id": "mm-as-tables-figure-edited",
       "breaks": "A measured spread in results/mm_as_tables.md is typed over",
       "check": "as_tables_report.py check",
