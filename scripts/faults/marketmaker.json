@@ -1689,6 +1689,54 @@
       "expect": {
         "signature": "FAIL: test_a_tool_that_fails_is_logged_and_refused"
       }
+    },
+    {
+      "id": "mm-pnl-figure-edited",
+      "breaks": "A figure in results/mm_pnl_12302019.md is typed over",
+      "check": "mm_report.py check",
+      "mutations": [
+        {
+          "file": "results/mm_pnl_12302019.md",
+          "old": "| AS Base | +14.83 | -1.07 | +15.90 |",
+          "new": "| AS Base | +14.83 | -1.07 | +15.91 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/mm_report.py",
+        "check",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "mm_report: FAIL differs-from-output mm_pnl_12302019\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-pnl-ledger-edited",
+      "breaks": "A run's ledger total in results/mm_pnl_12302019.md is typed over",
+      "check": "mm_report.py check",
+      "mutations": [
+        {
+          "file": "results/mm_pnl_12302019.md",
+          "old": "ledger_total -25958775400000\n",
+          "new": "ledger_total -25958775400001\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/mm_report.py",
+        "check",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "mm_report: FAIL total-not-ledger AMD, AS Base",
+        "exit": 1
+      }
     }
   ]
 }

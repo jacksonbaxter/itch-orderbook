@@ -378,10 +378,10 @@ def generate(root):
     if pnl:
         lines += ["", "The market maker on its report day, 12302019, a late-December session, "
                       "with every parameter chosen on 10302019, an FOMC day. One symbol-day. No "
-                      "edge is claimed. Each symbol is its own symbol-day, and the file gives S "
-                      "gross, fees, the markout curve and how Q-off and L-off each change the "
-                      "PnL. Dollars at the base fee tier; a replayed feed cannot react, so market "
-                      "impact is absent.", ""]
+                      f"edge is claimed. {len({row[0] for row in pnl})} symbols on one day: each "
+                      "is its own symbol-day. The file gives S gross, fees, the markout curve and "
+                      "how Q-off and L-off each change the PnL. Dollars at the base fee tier; a "
+                      "replayed feed cannot react, so market impact is absent.", ""]
         lines += markdown_table(("Symbol", "Run", "Fills", "Shares", "S, $", "A, $", "I, $",
                                  "Total, $", "Total, ticks a share", "File"), pnl)
     lines += ["", "Every benchmark run, failed ones included, from "

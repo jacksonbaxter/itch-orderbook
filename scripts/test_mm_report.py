@@ -152,6 +152,18 @@ class Render(unittest.TestCase):
         self.assertIn("| 10,194,993,152 | 9.49 | 16.60 |", self.text)
 
 
+    def test_a_switch_that_moves_nothing_says_so(self):
+        same = outputs()
+        same[("AMD", "AS both off, conservative")] = same[("AMD", "AS L-off")].replace(
+            "queue exact", "queue conservative")
+        text = report.render(EVALUATION, same, HEADER)
+        self.assertIn("- Q-off conservative, latency off (AS L-off to AS both off, conservative): "
+                      "the total moves by $0.00, from -$102.94 to -$102.94; none of S, A and I "
+                      "moves.", text)
+        self.assertIn("- L-off, exact queue (AS Base to AS L-off): the total moves by -$4.44, "
+                      "from -$98.50 to -$102.94; of S, A and I, A moves most.", text)
+
+
 class Refuse(unittest.TestCase):
     def test_a_figure_typed_over_in_the_body(self):
         text = report.render(EVALUATION, outputs(), HEADER)
@@ -236,6 +248,20 @@ class Refuse(unittest.TestCase):
             report.parse_output("mm symbol AMD\nattribution refused: no mark at the open\n")
 
 
+class RenderAgain(unittest.TestCase):
+    def test_render_mends_a_typed_over_body_from_the_file_alone(self):
+        scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.addCleanup(scratch.cleanup)
+        path = Path(scratch.name) / "mm_pnl.md"
+        good = report.render(EVALUATION, outputs(), HEADER)
+        path.write_text(good.replace("| AS Base | +300.00 |", "| AS Base | +301.00 |", 1),
+                        encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = report.main(["render", str(path)])
+        self.assertEqual(code, 0)
+        self.assertEqual(path.read_text(encoding="utf-8"), good)
+
+
 class TimeLines(unittest.TestCase):
     def test_the_wall_time_and_peak_are_kept(self):
         stderr = ("heavy.sh: start\n       16.60 real        16.09 user         0.50 sys\n"
@@ -280,6 +306,7 @@ class Run(unittest.TestCase):
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name).resolve()
         shutil.copytree(REPO_ROOT / "results", self.root / "results")
+        (self.root / OUT).unlink(missing_ok=True)  # Each test's run writes its own.
         (self.root / "scripts").mkdir()
         for name in ("mm_evaluation.json", "check_predictions.py", "oracle_report.py"):
             shutil.copy(REPO_ROOT / "scripts" / name, self.root / "scripts" / name)

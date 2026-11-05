@@ -4,6 +4,7 @@
     mm_report.py run --tool TOOL --data FILE --raw-dir DIR --prediction P-NNNN
                      [--wrap CMD]... [--time PATH] [--out FILE] [--root DIR]
     mm_report.py check [FILE] [--root DIR]
+    mm_report.py render [FILE] [--root DIR]
 
 `run` takes every parameter from scripts/mm_evaluation.json, which was committed before
 anything ran on the report day, and runs itch_mm once for each symbol and each run named
@@ -27,6 +28,9 @@ each with ==, never a tolerance:
   - the header names a prediction, a run and the raw folder, and the body says what one day
     can and cannot show: the fixed sentences, both days' labels, the fee tier, no return and
     no Sharpe.
+
+`render` writes the body again from the file's own header and tool output, for a change to
+how the figures are shown, and then checks the file.
 
 Each violation prints as `mm_report: FAIL <code> <where>: <detail>`.
 
@@ -331,9 +335,13 @@ def difference(after, before):
 
 
 def largest_change(change):
+    """Which of S, A and I moved most, in words, or that none moved."""
     key = max(("spread_capture", "adverse_selection", "inventory"),
               key=lambda name: abs(change[name]))
-    return {"spread_capture": "S", "adverse_selection": "A", "inventory": "I"}[key]
+    if change[key] == 0:
+        return "none of S, A and I moves"
+    letter = {"spread_capture": "S", "adverse_selection": "A", "inventory": "I"}[key]
+    return f"of S, A and I, {letter} moves most"
 
 
 def render_switches(evaluation, runs):
@@ -360,9 +368,9 @@ def render_switches(evaluation, runs):
                 f"{ticks(after['total'], after['shares'])} |")
             statements.append(
                 f"- {label} ({before_name} to {after_name}): the total moves by "
-                f"{money(change['total'])}, from {money(before['total'])} to "
-                f"{money(after['total'])}; of S, A and I, {largest_change(change)} moves "
-                "most.")
+                f"{'+' if change['total'] > 0 else ''}{money(change['total'])}, from "
+                f"{money(before['total'])} to {money(after['total'])}; "
+                f"{largest_change(change)}.")
         lines += ["", *statements, ""]
     return lines
 
@@ -671,6 +679,28 @@ def command_run(args):
     return 1 if violations else 0
 
 
+def command_render(args):
+    """Renders the file again from its own header and tool output, as `run` would have."""
+    root = args.root.resolve()
+    evaluation = load_evaluation(root)
+    path = Path(args.file) if args.file else root / default_out(evaluation)
+    try:
+        text = path.read_text(encoding="utf-8")
+        if BODY_START not in text or RAW_START not in text:
+            raise ReportError(f"no '{BODY_START}' or no '{RAW_START}'")
+        header = text[:text.index(BODY_START)].rstrip("\n").split("\n")
+        fresh = render(evaluation, raw_blocks(text), header)
+    except (ReportError, OSError, ValueError, KeyError) as error:
+        print(f"mm_report: FAIL unusable {path.name}: {error}")
+        return 2
+    path.write_text(fresh, encoding="utf-8")
+    violations = check_text(fresh, evaluation, path.name)
+    for code, where, detail in violations:
+        print(f"mm_report: FAIL {code} {where}: {detail}")
+    print(f"mm_report: rendered {path.name}")
+    return 1 if violations else 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -683,11 +713,13 @@ def main(argv=None):
     run.add_argument("--time", default="/usr/bin/time")
     run.add_argument("--out")
     run.add_argument("--root", type=Path, default=REPO_ROOT)
-    check = commands.add_parser("check")
-    check.add_argument("file", nargs="?")
-    check.add_argument("--root", type=Path, default=REPO_ROOT)
+    for name in ("check", "render"):
+        command = commands.add_parser(name)
+        command.add_argument("file", nargs="?")
+        command.add_argument("--root", type=Path, default=REPO_ROOT)
     args = parser.parse_args(argv)
-    return command_run(args) if args.command == "run" else command_check(args)
+    return {"run": command_run, "check": command_check, "render": command_render}[
+        args.command](args)
 
 
 if __name__ == "__main__":

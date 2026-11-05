@@ -254,6 +254,23 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("results_table: FAIL results/mm_as_tables.md: 2 average spreads, not 3",
                       output)
 
+    def test_the_market_maker_shows_every_run_of_its_report_day(self):
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        rows = [line for line in output.splitlines() if line.startswith(("| AMD | ", "| BYND | "))]
+        self.assertEqual(len(rows), 14, output)
+        self.assertIn("One symbol-day. No edge is claimed. 2 symbols on one day", output)
+
+    def test_a_market_maker_run_dropped_from_a_table_is_refused(self):
+        name = "results/mm_pnl_12302019.md"
+        text = (self.root / name).read_text(encoding="utf-8")
+        row = next(line for line in text.splitlines() if line.startswith("| GLFT Base | +"))
+        self.edit(name, row + "\n", "")
+        code, output = self.run_table()
+        self.assertEqual(code, 1)
+        self.assertIn("results_table: FAIL results/mm_pnl_12302019.md: AMD's tables do not have "
+                      "one row a run", output)
+
     def test_no_stray_markup_in_generated_cells(self):
         _, output = self.run_table()
         for line in output.splitlines():

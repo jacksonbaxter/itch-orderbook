@@ -265,6 +265,49 @@
       "expect": {
         "signature": "FAIL: test_a_backtest_file_gets_a_row_of_its_own"
       }
+    },
+    {
+      "id": "readme-mm-pnl-table-dropped",
+      "breaks": "The market maker's report-day table is left out of the README",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if pnl:\n        lines += [\"\", \"The market maker on its report day",
+          "new": "    if not pnl:\n        lines += [\"\", \"The market maker on its report day"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-mm-pnl-row-count-unchecked",
+      "breaks": "A market maker run missing from one of its tables still gets a row",
+      "check": "test_results_table.py",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        if not counts or len(counts) != len(amounts) or len(counts) != len(per_share):\n",
+          "new": "        if not counts:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "(?:FAIL|ERROR): test_a_market_maker_run_dropped_from_a_table_is_refused"
+      }
     }
   ]
 }
