@@ -171,7 +171,9 @@ def check_page(browser, docs, summary, failures):
                           ("a depth row", r'<td class="bid">\d+\.\d+</td>'),
                           ("a tape row", r'<td class="side-[BS]">\d+\.\d+</td>'),
                           ("the native digest", rf'{summary["digest"]}, the same as the native'),
-                          ("the Linux numbers", r'id="linux-numbers"><dl')):
+                          ("the Linux numbers", r'id="linux-numbers"><dl'),
+                          ("the macOS numbers or their absence",
+                           r'id="wasm-numbers">(?:<dl|<p class="missing">)')):
         if re.search(pattern, dom) is None:
             failures.append(f"page playing: no {name} in the DOM")
     if re.search(r'<section id="setup"[^>]*hidden', dom) is None:

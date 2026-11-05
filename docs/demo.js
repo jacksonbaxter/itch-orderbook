@@ -350,7 +350,7 @@ function showNumbers(numbers) {
       <dt>Extract</dt><dd>${wasm.extract}</dd>
       <dt>Native</dt><dd>${wasm.native_messages_per_s} messages/s</dd>
       <dt>WebAssembly</dt><dd>${wasm.wasm_messages_per_s} messages/s</dd>
-      <dt>Native over WebAssembly</dt><dd>${wasm.ratio}, against ${wasm.bar}</dd>
+      <dt>WebAssembly's time over native's</dt><dd>${wasm.ratio}, against ${wasm.bar}</dd>
       <dt>Verdict</dt><dd class="verdict">${wasm.verdict}</dd>
       <dt>Commit</dt><dd>${wasm.commit}</dd>
       <dt>Source</dt><dd>${wasm.file}</dd></dl>`;
