@@ -179,6 +179,22 @@ def chase_rows(name, text):
                         commit, name)]
 
 
+def mm_rows(name, text):
+    """T-MM-2: the average spread against the paper's at two decimals, and the other columns."""
+    verdict = find(r"^\*\*Verdict: (\w+)\*\*", text, name)[1]
+    spreads = re.findall(r"^\| [\d.]+ \| ([\d.]+) \| ([\d.]+) \| [\d.]+ \| (?:matches|does not "
+                         r"match) \|$", text, re.MULTILINE)
+    if len(spreads) != 3:
+        raise TableError(f"results/{name}: {len(spreads)} average spreads, not 3")
+    matched = find(r"^- Average spread: (\d+ of \d+) match", text, name)[1]
+    columns = find(r"^- Other columns: (\d+ of \d+) within", text, name)[1]
+    detail = (f"average spread {', '.join(measured for _, measured in spreads)} against the "
+              f"paper's {', '.join(paper for paper, _ in spreads)}: {matched} match at two "
+              f"decimals; other columns {columns} within 2 standard errors")
+    return [verdict_row("T-MM-2", "none", header_host(text, name), verdict, detail,
+                        header_commit(text, name), name)]
+
+
 def fault_row(name, text):
     result = find(r"^- Result: (.*)$", text, name)[1]
     controls = find(r"^- Controls: (.*)$", text, name)[1]
@@ -299,6 +315,8 @@ def generate(root):
         elif name.startswith("backtest_"):
             backtests.append(backtest_row(name, text))
             rows = []
+        elif name.startswith("mm_"):
+            rows = mm_rows(name, text)
         else:
             raise TableError(f"results/{name}: this script has no reader for it")
         marked = len(VERDICT_MARK.findall(text))

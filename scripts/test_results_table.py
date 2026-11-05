@@ -242,6 +242,18 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn(f"results_table: FAIL results/{name}", output)
 
+    def test_t_mm_2_shows_each_spread_and_its_verdict(self):
+        row = self.row("T-MM-2", "none")
+        self.assertIn("| **FAIL** | average spread 1.4918, 1.3490, 3.0317 against the paper's "
+                      "1.49, 1.35, 3.02: 2 of 3 match at two decimals;", row)
+        self.edit("results/mm_as_tables.md", "**Verdict: FAIL**", "**Verdict: PASS**")
+        self.assertIn("| PASS |", self.row("T-MM-2", "none"))
+        self.edit("results/mm_as_tables.md", "| 0.01 | 1.35 | 1.3490 |", "| 0.01 | 1.35 | x |")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL results/mm_as_tables.md: 2 average spreads, not 3",
+                      output)
+
     def test_no_stray_markup_in_generated_cells(self):
         _, output = self.run_table()
         for line in output.splitlines():
