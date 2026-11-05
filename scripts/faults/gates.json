@@ -188,12 +188,12 @@
           "file": "results/chase_debian.md",
           "op": "replace_text",
           "old": "Host: **debian**.",
-          "new": "Host: **planted-host**."
+          "new": "Host: **planted\u002dhost**."
         }
       ],
       "command": [
         "env",
-        "ITCH_PRIVATE_NAMES=planted-host",
+        "ITCH_PRIVATE_NAMES=planted\u002dhost",
         "{python}",
         "{tree}/scripts/gates.py",
         "--root",

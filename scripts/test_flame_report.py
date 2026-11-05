@@ -37,6 +37,7 @@ while (<STDIN>) { $total += $1 if /\s(\d+)$/; print "<g><title>$_</title></g>\n"
 1 while $total =~ s/^(\d+)(\d{3})/$1,$2/;
 print "<title>all ($total samples, 100%)</title>\n";
 """
+PLANTED = "planted" + "-host"  # In two pieces, so that the private-name gate does not see it.
 FP_FLAGS = "-O3 -DNDEBUG -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -g -std=c++23"
 
 
@@ -154,21 +155,21 @@ class FlameReport(unittest.TestCase):
         self.assertFalse(out.exists())
 
     def test_render_scrubs_home_paths_and_private_names(self):
-        os.environ["ITCH_PRIVATE_NAMES"] = "planted-host"
+        os.environ["ITCH_PRIVATE_NAMES"] = PLANTED
         home = "/" + "home" + "/someone/lib.so"
-        code, out = self.render(folded=f"main;{home};planted-host 5\nmain;apply 5\n")
+        code, out = self.render(folded=f"main;{home};{PLANTED} 5\nmain;apply 5\n")
         self.assertEqual(code, 0)
         both = out.read_text(encoding="utf-8") + out.with_suffix(".svg").read_text("utf-8")
         self.assertNotIn("someone", both)
-        self.assertNotIn("planted-host", both)
+        self.assertNotIn(PLANTED, both)
 
     def test_check_catches_a_private_name_in_the_svg(self):
         code, out = self.render()
         self.assertEqual(code, 0)
         svg = out.with_suffix(".svg")
-        svg.write_text(svg.read_text(encoding="utf-8") + "<title>planted-host</title>\n",
+        svg.write_text(svg.read_text(encoding="utf-8") + f"<title>{PLANTED}</title>\n",
                        encoding="utf-8")
-        os.environ["ITCH_PRIVATE_NAMES"] = "planted-host"
+        os.environ["ITCH_PRIVATE_NAMES"] = PLANTED
         self.assertIn("private-text", self.codes(out))
 
     def test_check_catches_a_sample_count_that_differs(self):

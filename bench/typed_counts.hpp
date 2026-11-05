@@ -37,8 +37,7 @@ inline constexpr std::uint8_t kNoMessageSlot = 0;
 // allocates. The rows are the slots, so one span touches one row of a few words.
 class TypeTally {
  public:
-  explicit TypeTally(std::size_t events)
-      : events_{events}, sums_(kTypeSlots * events, 0) {}
+  explicit TypeTally(std::size_t events) : events_{events}, sums_(kTypeSlots * events, 0) {}
 
   // One span: each event's reading now less its reading at the span's start.
   void add(std::uint8_t slot, std::span<const std::uint64_t> now,
