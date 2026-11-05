@@ -3615,6 +3615,48 @@
         "signature": "FAIL: test_check_catches_a_debian_graph_without_its_build_or_delta",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-flame-report-perf-names-cut",
+      "breaks": "fold-perf cuts a name at its first parenthesis, as stackcollapse-perf.pl does",
+      "check": "test_flame_report.py test_perf_script_folds_one_count_a_sample_with_whole_names",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "            frames.append(symbol)\n",
+          "new": "            frames.append(symbol.split(\"(\")[0])\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_perf_script_folds_one_count_a_sample_with_whole_names",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-mangled-kept",
+      "breaks": "fold-perf leaves the names perf could not demangle mangled",
+      "check": "test_flame_report.py test_a_name_perf_left_mangled_is_demangled",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    names = demangle({frame for stack in samples for frame in stack})",
+          "new": "    names = {}"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_name_perf_left_mangled_is_demangled",
+        "exit": 1
+      }
     }
   ]
 }

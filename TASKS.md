@@ -195,13 +195,13 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [ ] Report: S gross, fees, A, I, total, in dollars, per share and in ticks. Markout curve. No return, no Sharpe. Fixed sentence: "One symbol-day. No edge is claimed."
 
 ### Counters and flamegraphs
-- [ ] `perf` on `debian`, `:u` events. Publish which counters are real hardware events on Zen 1, with what each counts.
+- [x] `perf` on `debian`, `:u` events. Publish which counters are real hardware events on Zen 1, with what each counts. P-0016, results/counters_zen1_events_debian.md.
 - [x] Confirm `cache-misses` against AMD's documentation: it counts L2 misses. Any write-up must call it that.
-- [ ] DRAM fills per message with `r0843:u`, by message type, once `bench_chase` validates it (T-PERF-1).
-- [ ] Branch misses per message, reported with no target (T-PERF-2).
-- [ ] Separate frame-pointer build, with its throughput delta published.
-- [ ] `perf record -g --user-callchains -e cycles:u`, then FlameGraph, for each hot path. User-space only at `perf_event_paranoid=2`: kernel stacks are a listed gap, and no system setting is changed. `perf annotate` beside it.
-- [ ] Mac: Apple tooling without sudo where it works, labelled macOS. Xcode is absent, so `xctrace` is unavailable now. It does not replace the `perf` data.
+- [x] DRAM fills per message with `r0843:u`, a floor on DRAM demand fills, by message type, once `bench_chase` validates it (T-PERF-1). P-0019: 2.002 per book message on `paged-flat`, FAIL against 0.623, with the cost of counting beside it.
+- [x] Branch misses per message, reported with no target (T-PERF-2). P-0019: 2.102, over the 2.04 floor.
+- [x] Separate frame-pointer build, with its throughput delta published. P-0017: 0.9755 times the normal build.
+- [x] `perf record -g --user-callchains -e cycles:u`, then FlameGraph, for each hot path. User-space only at `perf_event_paranoid=2`: kernel stacks are a listed gap, and no system setting is changed. `perf annotate` beside it.
+- [x] Mac: Apple tooling without sudo where it works, labelled macOS. Xcode is absent, so `xctrace` is unavailable now. It does not replace the `perf` data.
 
 ### Browser demo
 - [ ] Replay engine with `em++`, `-O3 -msimd128`. Fixed initial memory.
