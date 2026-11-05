@@ -193,6 +193,15 @@ def main():
     if len(depths) != 3:
         failures.append(("AAA", f"whole-tick depths are not open on a one-tick spread: {depths}"))
 
+    # On a 1.5 s clock CCC's samples are 100, 200, 300, halted (4.5 s, the halt's own
+    # nanosecond), 100, 0: changes of 0.5, 0.5 and -0.5 ticks, Δ̄ = 1/6, (1/3)·Σ(Δ - Δ̄)² = 2/9,
+    # σ_clock = sqrt((2/9)/1.5) = 0.384900. Without the mean taken out it would be 0.408248.
+    slow = sections(run(good, "--symbols", "CCC", "--interval-ms", "1000",
+                        "--sample-ms", "1500").stdout)
+    for line in ("sigma_clock_changes 3", "sigma_clock 0.384900"):
+        if line not in slow.get("CCC", []):
+            failures.append(("CCC at 1.5 s", f"no line {line!r}"))
+
     capped = sections(run(good, "--symbols", "AAA", *timing, "--max-depth-ticks", "1").stdout)
     for line in ("depth 0.5 exposure 8 hits 8 lambda 0.500000",
                  "fit none, fewer than two depths with a hit"):
