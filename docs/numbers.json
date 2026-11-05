@@ -1,0 +1,37 @@
+{
+  "generated_by": "scripts/demo.py numbers",
+  "linux": {
+    "file": "results/bench_book_paged-flat_ram_debian_12302019.md",
+    "host": "debian",
+    "cpu": "AMD Ryzen Embedded V1605B with Radeon Vega Gfx",
+    "kernel": "Linux 6.12.115+deb13.1-amd64",
+    "compiler": "Clang 23.1.4 (https://github.com/llvm/llvm-project 7a941dfb2877a0b8cf30323fefa85ad019e0b0f5)",
+    "flags": "-O3 -DNDEBUG -std=c++23",
+    "commit": "e0f9bb8101a2 (exported by debian_sync.sh)",
+    "dataset": "12302019.NASDAQ_ITCH50",
+    "pinning": "pinned to core 4: pthread_setaffinity_np returned 0, read back [4]",
+    "design": "paged-flat",
+    "prediction": "P-0015",
+    "run_id": "P-0015-20261105T023320Z",
+    "throughput_messages_per_s": "5,145,430",
+    "throughput_cv": "3.16%",
+    "latency": {
+      "p50": {
+        "median_ns": "140.1",
+        "status": "resolved"
+      },
+      "p99": {
+        "median_ns": "840.9",
+        "status": "resolved"
+      },
+      "p99.9": {
+        "median_ns": "1472.0",
+        "status": "resolved"
+      }
+    },
+    "book_memory_mib": "662.8"
+  },
+  "wasm_macos": {
+    "missing": "no results/wasm_replay_mac_*.md yet: T-WASM-1 has not run"
+  }
+}

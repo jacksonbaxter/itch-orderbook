@@ -1,0 +1,114 @@
+/* A dark page with square corners and flat fills. scripts/gates.py's demo-style gates hold it
+   and the page to the project's styling rules. */
+:root {
+  --page: #11151a;
+  --panel: #181d24;
+  --line: #2c343f;
+  --text: #dde3ea;
+  --muted: #9aa6b4;
+  --bid: #3fb68b;
+  --ask: #e0794a;
+  --cross: #a3adb9;
+  --warn: #f0c24b;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0 auto;
+  max-width: 1200px;
+  padding: 24px;
+  background: var(--page);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+h1, h2 { font-weight: 600; line-height: 1.25; }
+h1 { font-size: 26px; margin: 0 0 8px; }
+h2 { font-size: 17px; margin: 0 0 12px; }
+
+code, pre, td, dd { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+pre {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 12px;
+  overflow-x: auto;
+}
+
+a { color: #8cb8e8; }
+
+header p, footer p { color: var(--muted); max-width: 820px; }
+
+main {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+main .panel { margin-bottom: 0; }
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0 0 12px;
+}
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+button, select {
+  background: #222a33;
+  color: var(--text);
+  border: 1px solid #44505e;
+  border-radius: 2px;
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--text); }
+button:disabled { opacity: 0.5; cursor: default; }
+
+.note, .sources { color: var(--muted); font-size: 13px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { color: var(--muted); font-weight: 500; text-align: right; padding: 2px 6px; }
+td { text-align: right; padding: 2px 6px; border-top: 1px solid var(--line); }
+td.bid { color: var(--bid); }
+td.ask { color: var(--ask); }
+td.bar { position: relative; }
+td.bar span { position: absolute; top: 3px; bottom: 3px; opacity: 0.25; }
+td.bar.bid span { right: 0; background: var(--bid); }
+td.bar.ask span { left: 0; background: var(--ask); }
+td.bar b { position: relative; font-weight: 400; }
+
+.side-B { color: var(--bid); }
+.side-S { color: var(--ask); }
+.side-cross { color: var(--cross); }
+
+#trade-chart {
+  width: 100%;
+  height: 200px;
+  background: var(--page);
+  border: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+
+.missing { color: var(--warn); }
+.verdict { font-weight: 600; }
+.match { color: var(--bid); }
+.differs { color: var(--warn); }
+
+@media (max-width: 860px) {
+  main { grid-template-columns: 1fr; }
+}

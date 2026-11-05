@@ -40,6 +40,16 @@ if(EMSCRIPTEN)
     "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPU32,HEAPF64,UTF8ToString")
   set_target_properties(itch_demo PROPERTIES SUFFIX ".mjs")
   itch_apply_options(itch_demo)
+  # What built the engine, for engine.json and T-WASM-1's results header.
+  string(TOUPPER "${CMAKE_BUILD_TYPE}" itch_demo_build_type)
+  string(STRIP "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${itch_demo_build_type}} -std=c++23 -msimd128"
+    itch_demo_flags)
+  list(JOIN itch_demo_memory " " itch_demo_memory_text)
+  file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/itch_demo_build.json" CONTENT
+"{\"compiler\": \"em++, Emscripten ${EMSCRIPTEN_VERSION}, ${CMAKE_CXX_COMPILER_ID} \
+${CMAKE_CXX_COMPILER_VERSION}\", \"flags\": \"${itch_demo_flags}; linked with \
+${itch_demo_memory_text}\"}
+")
 
   # The engine on the hand-built extract, in node, held to the native test's digest.
   add_executable(itch_demo_smoke demo_smoke.cpp demo_engine.cpp)

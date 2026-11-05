@@ -45,7 +45,17 @@ CLEAN_FILES = {
     "NOTES.md": "Notes.\n",
     "results/run.md": "Host: debian.\n",
     ".github/workflows/ci.yml": f"jobs:\n  a:\n    steps:\n      - uses: {PINNED} # v1.2.3\n",
+    "docs/index.html": ("<!doctype html><html><body><h1>Replay <code>09:30</code></h1>\n"
+                        "<p>At 09:30:00, 0.01 of a share, 10 of 12 levels.</p>\n"
+                        '<button style="border-radius: 2px">Play</button></body></html>\n'),
+    "docs/demo.css": (":root { --page: #11151a; }\nbody { background: var(--page); }\n"
+                      "button { border-radius: 3px; background: #ffffff; }\n"),
+    "docs/demo.js": ('const pad = (v) => String(v).padStart(2, "0");\n'
+                     'ctx.fillStyle = "#11151a";\nel.innerHTML = `<h2>Trades</h2>`;\n'),
 }
+
+GRADIENT = "linear" + "-gradient"
+ITALIC = "ita" + "lic"
 
 
 class Gates(unittest.TestCase):
@@ -271,6 +281,72 @@ class Gates(unittest.TestCase):
         code, output = self.run_gates()
         self.assertEqual(code, 1, output)
         self.assertIn("FAIL attribution-without-ledger: scanned no files", output)
+
+    def test_demo_background(self):
+        self.assert_only_gate_fails("demo-background", "docs/demo.css",
+                                    ":root { --page: #fdf6e3; }\nbody { background: var(--page); }\n")
+        self.reset()
+        self.assert_only_gate_fails("demo-background", "docs/demo.css",
+                                    "body { background-color: ivory; }\n")
+        self.reset()
+        self.assert_only_gate_fails("demo-background", "docs/index.html",
+                                    '<body style="background: #f5f5f0">x</body>\n')
+        self.reset()
+        self.assert_only_gate_fails("demo-background", "docs/demo.js",
+                                    'document.body.style.background = "rgb(250, 246, 236)";\n')
+
+    def test_white_and_dark_backgrounds_are_allowed(self):
+        self.assert_passes("docs/demo.css", "body { background: #fff; color: #fafafa; }\n"
+                                            "div { background: #1d2127; }\n")
+
+    def test_demo_italic_heading(self):
+        self.assert_only_gate_fails("demo-italic-heading", "docs/index.html",
+                                    "<h1>The <em>fast</em> book</h1>\n")
+        self.reset()
+        self.assert_only_gate_fails("demo-italic-heading", "docs/demo.css",
+                                    f"h2 span {{ font-style: {ITALIC}; }}\n")
+        self.reset()
+        self.assert_only_gate_fails("demo-italic-heading", "docs/demo.js",
+                                    "el.innerHTML = `<h2>Depth, <i>live</i></h2>`;\n")
+
+    def test_demo_numbered_label(self):
+        self.assert_only_gate_fails("demo-numbered-label", "docs/index.html",
+                                    "<h2>01 / Replay</h2><h2>02 / Depth</h2>\n")
+        self.reset()
+        self.assert_only_gate_fails("demo-numbered-label", "docs/demo.css",
+                                    'h2::before { content: "03"; }\n')
+        self.reset()
+        self.assert_only_gate_fails("demo-numbered-label", "docs/demo.css",
+                                    "ol { list-style: decimal-leading-zero; }\n")
+
+    def test_demo_pill_button(self):
+        self.assert_only_gate_fails("demo-pill-button", "docs/demo.css",
+                                    "button { border-radius: 999px; }\n")
+        self.reset()
+        self.assert_only_gate_fails("demo-pill-button", "docs/index.html",
+                                    '<button style="border-radius: 50%">Go</button>\n')
+        self.reset()
+        self.assert_only_gate_fails("demo-pill-button", "docs/demo.js",
+                                    'button.style.borderRadius = "1.5rem";\n')
+
+    def test_demo_gradient(self):
+        self.assert_only_gate_fails("demo-gradient", "docs/demo.css",
+                                    f"header {{ background-image: {GRADIENT}(#000, #333); }}\n")
+        self.reset()
+        self.assert_only_gate_fails("demo-gradient", "docs/demo.js",
+                                    "const g = ctx.create" + "LinearGradient(0, 0, 0, 9);\n")
+
+    def test_the_demo_page_is_required(self):
+        for name in ("docs/index.html", "docs/demo.css", "docs/demo.js"):
+            (self.root / name).unlink()
+        code, output = self.run_gates()
+        self.assertEqual(code, 1, output)
+        self.assertIn("FAIL demo-gradient: scanned no files", output)
+
+    def test_the_demo_local_folder_is_not_scanned(self):
+        self.plant({"docs/local/itch_demo.mjs": f"x = '{GRADIENT}(';\n{HOME}\n"})
+        code, output = self.run_gates()
+        self.assertEqual(code, 0, output)
 
     def test_a_gate_that_scans_nothing_fails(self):
         scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
