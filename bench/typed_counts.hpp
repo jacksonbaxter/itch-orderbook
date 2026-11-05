@@ -38,7 +38,7 @@ inline constexpr std::uint8_t kNoMessageSlot = 0;
 class TypeTally {
  public:
   explicit TypeTally(std::size_t events)
-      : events_{events}, sums_(kTypeSlots * events, 0), spans_{} {}
+      : events_{events}, sums_(kTypeSlots * events, 0) {}
 
   // One span: each event's reading now less its reading at the span's start.
   void add(std::uint8_t slot, std::span<const std::uint64_t> now,
@@ -67,7 +67,7 @@ class TypeTally {
  private:
   std::size_t events_;
   std::vector<std::uint64_t> sums_;
-  std::array<std::uint64_t, kTypeSlots> spans_;
+  std::array<std::uint64_t, kTypeSlots> spans_{};
 };
 
 struct TypedPass {
@@ -122,7 +122,7 @@ template <class Group, class Book>
     std::swap(now, start);
     ++pass.frames;
   }
-  pass.last = start;
+  pass.last = std::move(start);
   return pass;
 }
 

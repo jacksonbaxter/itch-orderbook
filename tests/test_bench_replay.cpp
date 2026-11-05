@@ -633,7 +633,7 @@ TEST(BenchReplay, CountsPassCountsWhatItCouldNotRead) {
 // Counters that follow the trace's clock: each read costs `read_cost` of its own, and the
 // second event counts twice what the first does, so that a span's two figures differ.
 struct TraceGroup {
-  Trace* trace;
+  Trace* trace = nullptr;
   std::uint64_t read_cost = 0;
   bool works = true;
   [[nodiscard]] static std::size_t event_count() { return 2; }

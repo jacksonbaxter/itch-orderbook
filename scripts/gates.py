@@ -191,7 +191,12 @@ def private_name(root, files):
 
 
 def results_files(root):
-    return list(walk(root, "results"))
+    """Every results file, and every file that is not prose elsewhere: a name in code or a
+    script would reach a result. Prose outside results/ may name the project's public
+    GitHub account, which shares the login name."""
+    kept = set(walk(root, "results"))
+    kept |= {path for path in walk(root) if path.suffix not in PROSE}
+    return sorted(kept)
 
 
 def preprocessor_condition(root, files):
@@ -248,7 +253,7 @@ def gates():
              scan_lines(HOME_PATH, "home path: {}"), lambda root: list(walk(root))),
         Gate("private-address", "no private or tailnet IP address",
              scan_lines(PRIVATE_ADDRESS, "private address: {}"), lambda root: list(walk(root))),
-        Gate("private-name", "no result or flamegraph names this machine or its user",
+        Gate("private-name", "no result, flamegraph, code or script names this machine or its user",
              private_name, results_files),
         Gate("held-vendor", "the vendor held in NOTES.md appears in no code, script or result",
              held_vendor, lambda root: list(walk(root))),
