@@ -132,10 +132,28 @@ def args_for(prediction="P-0301"):
     return argparse.Namespace(prediction=prediction)
 
 
-def rendered(records):
+# Three quiet repetitions and one withdrawn, as the driver records them on macOS.
+SAMPLED = {"every": 2.0,
+           "published": [("2026-10-31T10:00:02Z", "2026-10-31T10:00:04Z",
+                          "published: 2 samples, the longest gap 2 s, no other process above "
+                          "20% CPU")] * 3,
+           "withdrawn": [("2026-10-31T10:00:05Z", "2026-10-31T10:00:06Z",
+                          "the CPU sampler saw launchd at 25.0% CPU at 2026-10-31T10:00:05Z")]}
+CROSS_CORE = ("agree: core 6's clock minus core 4's within [-120, 140] ticks, [-60.1, 70.1] ns, "
+              "over 1000000 started on each core; the fastest round trip 260 ticks, 130.2 ns; "
+              "0 of 2000000 trips read a later stamp below an earlier one")
+
+
+def rendered(records, sampled=None, cross_core=None):
+    host = records[0]["header"]["host"]
+    if sampled is None and host == check_results.MAC_HOST:
+        sampled = SAMPLED
+    if cross_core is None and host == "debian" and records[0]["suite"] != "pipeline":
+        cross_core = CROSS_CORE
     text = spsc_driver.render(records, args_for(), "P-0301-x", "2026-10-31T10:00:01Z",
                               "2026-10-31T10:00:09Z", MACHINE,
-                              "python3 -B scripts/spsc_driver.py")
+                              "python3 -B scripts/spsc_driver.py", sampled=sampled,
+                              cross_core=cross_core)
     return stamp_load.stamp(text, STDERR)
 
 
@@ -209,6 +227,22 @@ class Files(unittest.TestCase):
             QUEUES_FILE, "Unpinned cross-core latency on the Mac is weak evidence", "x")))
         self.assertIn("host-note-missing", codes(replace(
             PIPELINE_FILE, "is not a pinned host.", "x")))
+
+    def test_a_mac_file_without_the_sampler_rule(self):
+        self.assertIn("- interference: sampled every 2 s by the driver", QUEUES_FILE)
+        self.assertIn("| withdrawn 1 |", QUEUES_FILE)
+        unsampled = spsc_driver.render([record("queues")] * 3, args_for(), "P-0301-x",
+                                       "2026-10-31T10:00:01Z", "2026-10-31T10:00:09Z", MACHINE,
+                                       "python3 -B scripts/spsc_driver.py")
+        self.assertIn("sampler-rule-unsaid", codes(stamp_load.stamp(unsampled, STDERR)))
+        self.assertIn("sampler-rule-unsaid", codes(replace(
+            ABLATION_FILE, check_results.SPSC_SAMPLER_RULE, "The sampler ran.")))
+
+    def test_a_repetition_the_sampler_did_not_show_quiet(self):
+        line = re.search(r"^\| repetition 2 \|.*$", PIPELINE_FILE, re.MULTILINE).group(0)
+        self.assertIn("sampler-not-quiet", codes(replace(
+            PIPELINE_FILE, line, line.replace("published: ", "withdrawn: "))))
+        self.assertIn("sampler-not-quiet", codes(replace(PIPELINE_FILE, line + "\n", "")))
 
     def test_a_latency_cell_under_the_floor(self):
         line = re.search(r"^\| project \| burst \|.*$", QUEUES_FILE, re.MULTILINE).group(0)
@@ -287,6 +321,17 @@ class Debian(unittest.TestCase):
         self.assertIn("target-verdict-wrong", codes(replace(
             fast, line, line.replace("| met |", "| missed: 1.20× against ≤ 1.31× |"))))
 
+    def test_one_way_latencies_need_the_two_clocks_checked(self):
+        records = [record("queues", s, DEBIAN_HEADER) for s in (1.0, 0.98, 1.03)]
+        text = rendered(records)
+        self.assertIn("- cross_core_timer: agree: ", text)
+        self.assertNotIn("Sampler", text)
+        self.assertEqual(check_results.check_text(text), [])
+        self.assertIn("cross-core-timer-unchecked", codes(replace(
+            text, "- cross_core_timer: agree: ", "- cross_core_timer: disagree: ")))
+        unchecked = re.sub(r"(?m)^- cross_core_timer: .*\n", "", text)
+        self.assertIn("cross-core-timer-unchecked", codes(unchecked))
+
     def test_a_target_whose_queue_did_not_run(self):
         records = [record("queues", s, DEBIAN_HEADER) for s in (1.0, 0.98, 1.03)]
         for one in records:
@@ -353,6 +398,37 @@ class Driver(unittest.TestCase):
         line = target_row(PIPELINE_FILE, "pipelined time / single-threaded time")
         self.assertIn("| 1.20× |", line)
 
+    def test_a_span_is_judged_on_the_samples_around_it(self):
+        lines = ["2026-10-31T10:00:00Z sample", "2026-10-31T10:00:02Z sample",
+                 "2026-10-31T10:00:02Z FOREIGN 30.0 /usr/bin/other_job",
+                 "2026-10-31T10:00:04Z sample", "2026-10-31T10:00:10Z sample",
+                 "2026-10-31T10:00:12Z sample"]
+        self.assertIsNone(spsc_driver.span_unquiet(lines, "2026-10-31T10:00:03Z",
+                                                   "2026-10-31T10:00:04Z"))
+        self.assertIn("saw other_job at 30.0% CPU", spsc_driver.span_unquiet(
+            lines, "2026-10-31T10:00:01Z", "2026-10-31T10:00:03Z") or "")
+        self.assertIn("went 6 s without a sample", spsc_driver.span_unquiet(
+            lines, "2026-10-31T10:00:05Z", "2026-10-31T10:00:11Z") or "")
+        self.assertIn("did not cover", spsc_driver.span_unquiet(
+            lines, "2026-10-31T10:00:11Z", "2026-10-31T10:00:13Z") or "")
+
+    def test_clocks_that_disagree_refuse_the_run(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            probe = Path(directory) / "probe.sh"
+            for verdict, code in (("disagree: the offset is bounded away from 0", 1),
+                                  ("agree: the bound holds 0", 1)):
+                probe.write_text(
+                    "#!/bin/sh\necho 'cross_core_offset: [100, 140] ticks'\n"
+                    "echo 'cross_core_trips: 10 started on each core'\n"
+                    "echo 'cross_core_fastest_round_trip: 40 ticks'\n"
+                    "echo 'cross_core_backwards: 20 of 20'\n"
+                    f"echo 'cross_core_verdict: {verdict}'\nexit {code}\n", encoding="utf-8")
+                probe.chmod(0o755)
+                args = argparse.Namespace(peer_core=6, core=4, probe=probe)
+                with self.assertRaisesRegex(spsc_driver.Refused, verdict.split(":")[0]):
+                    spsc_driver.cross_core_check(args)
+        self.assertIsNone(spsc_driver.cross_core_check(argparse.Namespace(peer_core=None)))
+
     def test_two_repetitions_are_not_enough(self):
         with self.assertRaises(SystemExit):
             spsc_driver.parse_args(["--suite", "queues", "--bench", "b", "--probe", "p",
@@ -362,16 +438,27 @@ class Driver(unittest.TestCase):
 
 @unittest.skipUnless(platform.system() == "Darwin", "machine_check enforces pinning on Linux")
 class EndToEnd(unittest.TestCase):
-    def run_driver(self, root, fake_record, code=0):
+    def run_driver(self, root, fake_record, code=0, busy_first=False):
+        """The driver on a fake bench. The sampler reads a fake ps, which shows another
+        process at 50% CPU while `busy` exists; with busy_first, the first repetition makes
+        it for a second."""
         (root / "results").mkdir()
         (root / "results" / "predictions.md").write_text("## P-0301: x\n\nIt runs.\n",
                                                          encoding="utf-8")
+        busy = ""
+        if busy_first:
+            busy = (f"if [ ! -f '{root}/once' ]; then touch '{root}/once' '{root}/busy'; "
+                    f"sleep 1; rm '{root}/busy'; fi\n")
         bench = root / "bench.sh"
         bench.write_text(
             "#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = --out ] && out=$2; shift; done\n"
-            f"cat > \"$out\" <<'JSON'\n{json.dumps(fake_record)}\nJSON\nexit {code}\n",
+            f"{busy}cat > \"$out\" <<'JSON'\n{json.dumps(fake_record)}\nJSON\nexit {code}\n",
             encoding="utf-8")
         bench.chmod(0o755)
+        ps = root / "ps.sh"
+        ps.write_text(f"#!/bin/sh\n[ -f '{root}/busy' ] && echo '99999 1 50.0 /usr/bin/other_job'\n"
+                      "exit 0\n", encoding="utf-8")
+        ps.chmod(0o755)
         out = root / "results" / "spsc_x_mac_12302019.md"
         machine = FIXTURES / "machine_check"
         result = subprocess.run(
@@ -380,7 +467,8 @@ class EndToEnd(unittest.TestCase):
              "--probe", str(machine / "fake_probe.sh"), "--input", str(machine / "input.bin"),
              "--prediction", "P-0301", "--raw-dir", str(root / "raw"), "--out", str(out),
              "--allow-dirty", "--predictions-root", str(root),
-             "--run-log", str(root / "results" / "run_log.md")],
+             "--run-log", str(root / "results" / "run_log.md"), "--ps", str(ps),
+             "--sample-every", "0.2"],
             capture_output=True, text=True, timeout=120, check=False)
         return result, out, (root / "results" / "run_log.md").read_text(encoding="utf-8")
 
@@ -394,6 +482,25 @@ class EndToEnd(unittest.TestCase):
                 self.assertEqual({code for code, _ in check_results.check_text(text)},
                                  {"load-not-stamped"})
                 self.assertIn("| published |", log)
+
+    def test_a_repetition_beside_another_busy_process_is_withdrawn_and_rerun(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            fake = record("queues")
+            fake["header"]["residency"] = "1 of 1 pages resident"
+            result, out, log = self.run_driver(Path(directory), fake, busy_first=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("withdrawn: queues, repetition 1 on the Mac, exit 0; the CPU sampler "
+                          "saw other_job at 50.0% CPU", log)
+            self.assertIn("| published |", log)
+            text = out.read_text(encoding="utf-8")
+            self.assertEqual(codes(text), {"load-not-stamped"})
+            self.assertIn("; 1 withdrawn under the rule", text)
+            self.assertRegex(text, r"\| withdrawn 1 \| .* \| withdrawn: the CPU sampler saw "
+                                   r"other_job at 50.0% CPU")
+            raw = Path(directory) / "raw"
+            self.assertTrue((raw / "queues-repetition-1-withdrawn-1.json").is_file())
+            self.assertIn("FOREIGN 50.0 /usr/bin/other_job",
+                          (raw / "sampler.txt").read_text(encoding="utf-8"))
 
     def test_a_bench_that_refuses_refuses_the_run(self):
         refused = record("queues")

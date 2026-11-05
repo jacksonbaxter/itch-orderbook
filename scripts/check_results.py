@@ -40,7 +40,10 @@ at or above the floor or written `below floor`, a burst replayed at the day's ow
 book agreement of a pipeline file, the macOS note that unpinned cross-core latency is weak
 evidence, and a row for each of its suite's comparisons in SPSC_COMPARISONS: the ratio of
 the summary's medians as shown, the bar, and the verdict in the fixed words, consistent with
-both. Every SPSC bar was set on x86, so a macOS file may only say the host differs.
+both. Every SPSC bar was set on x86, so a macOS file may only say the host differs. A macOS
+SPSC file also says the Mac's sampler rule was applied, in its interference field and its
+Sampler section, with a quiet span for each published repetition; a debian one with one-way
+latencies says the two cores' clocks were checked and agree.
 
 Each violation prints as `check_results: FAIL <code> <file>: <detail>`.
 
@@ -98,6 +101,15 @@ RATE_UNIT = "M items/s"
 PIPELINE_RATIO = "Pipelined time over single-threaded time"
 SPSC_PERCENTILES = ("p50", "p90", "p99", "p99.9", "p99.99", "max")
 SPSC_MAC_NOTE = ("is not a pinned host.", "Unpinned cross-core latency on the Mac is weak evidence")
+SPSC_SAMPLER_RULE = (
+    "The Mac's sampler rule was applied: a CPU sampler ran beside every repetition from before "
+    "it started to after it ended, and a repetition is published only if the sampler covered "
+    "its whole span with no gap over 5 s and saw no other process above 20% CPU in it. A "
+    "repetition that failed the rule was withdrawn, with its own row in results/run_log.md, "
+    "and run again; none was withdrawn for its numbers.")
+SPSC_INTERFERENCE = re.compile(r"sampled every [\d.]+ s by the driver over each repetition's "
+                               r"whole span; no other process above 20% CPU in any published "
+                               r"repetition; \d+ withdrawn under the rule")
 _T1_HOST = "Ryzen 7 5825U, Linux, pinned"
 _T2_HOST = "i7-9700 under WSL2"
 _T3_HOST = "Ryzen 9 5950X, Linux, pinned"
@@ -143,6 +155,12 @@ SPSC_COMPARISONS = {
         "suite": "pipeline", "value": PIPELINE_RATIO, "op": "<=", "bar": 1.31,
         "host": _T3_HOST, "missing": "no pipelined pass ran"},
 }
+
+
+def spsc_interference(every):
+    """The start of a macOS SPSC file's interference field, as spsc_driver.py writes it."""
+    return (f"sampled every {every:g} s by the driver over each repetition's whole span; no "
+            "other process above 20% CPU in any published repetition")
 
 
 def comparison_value(spec, medians):
@@ -658,6 +676,20 @@ def check_spsc_targets(text, fields, suite):
                                            f"{value:.2f} against {spec['op']} {spec['bar']}")
 
 
+def check_spsc_sampler(text, fields):
+    """The Mac's sampler rule: said, and a quiet span for every published repetition."""
+    if not SPSC_INTERFERENCE.fullmatch(fields.get("interference", "")) or \
+            SPSC_SAMPLER_RULE not in text:
+        yield "sampler-rule-unsaid", repr(fields.get("interference"))
+        return
+    published = [cells for cells in table_rows(text, "Sampler")
+                 if len(cells) == 4 and cells[0].startswith("repetition ")]
+    quiet = [cells for cells in published if cells[3].startswith("published: ")]
+    if len(quiet) != len(published) or str(len(quiet)) != fields.get("repetitions"):
+        yield "sampler-not-quiet", (f"{len(quiet)} quiet spans of {len(published)} for "
+                                    f"{fields.get('repetitions')} repetitions")
+
+
 def check_spsc(text, fields):
     suite = fields.get("suite", "")
     if suite not in SPSC_SUITES:
@@ -671,6 +703,12 @@ def check_spsc(text, fields):
     if fields.get("host") == MAC_HOST and not all(note in text for note in SPSC_MAC_NOTE):
         yield "host-note-missing", ("a macOS file without the note that it is unpinned and "
                                     "that cross-core latency there is weak evidence")
+    if fields.get("host") == MAC_HOST:
+        yield from check_spsc_sampler(text, fields)
+    if fields.get("host") == "debian" and suite != "pipeline" and \
+            not fields.get("cross_core_timer", "").startswith("agree: "):
+        yield "cross-core-timer-unchecked", ("a one-way latency on two cores with no check "
+                                             "that their clocks agree")
     yield from check_spsc_summary(text)
     if suite == "pipeline":
         agreement = section(text, "Book agreement") or ""

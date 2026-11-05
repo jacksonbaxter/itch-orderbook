@@ -521,6 +521,201 @@
         "signature": "^FAIL: test_an_spsc_result_naming_no_prediction",
         "exit": 1
       }
+    },
+    {
+      "id": "spsc-driver-sampler-ignored",
+      "breaks": "spsc_driver judges no span against the sampler, so a Mac repetition beside another busy process is published",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end)",
+          "new": "    return None"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_span_is_judged_on_the_samples_around_it"
+      }
+    },
+    {
+      "id": "spsc-driver-unquiet-published",
+      "breaks": "spsc_driver publishes a Mac repetition the sampler saw beside another busy process",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "            if why:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_repetition_beside_another_busy_process_is_withdrawn_and_rerun"
+      }
+    },
+    {
+      "id": "spsc-driver-cross-core-ignored",
+      "breaks": "spsc_driver runs one-way latencies on two cores whose clocks disagree",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    if result.returncode != 0 or not verdict.startswith(\"agree\"):",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_clocks_that_disagree_refuse_the_run"
+      }
+    },
+    {
+      "id": "spsc-results-sampler-unchecked",
+      "breaks": "check_results takes a macOS SPSC file that does not say the sampler rule was applied",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if fields.get(\"host\") == MAC_HOST:\n        yield from check_spsc_sampler(text, fields)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_mac_file_without_the_sampler_rule"
+      }
+    },
+    {
+      "id": "spsc-results-sampler-span-unchecked",
+      "breaks": "check_results takes a macOS SPSC file with a repetition the sampler did not show quiet",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if len(quiet) != len(published) or str(len(quiet)) != fields.get(\"repetitions\"):",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_repetition_the_sampler_did_not_show_quiet"
+      }
+    },
+    {
+      "id": "spsc-results-cross-core-unchecked",
+      "breaks": "check_results takes a debian one-way latency with no check of the two cores' clocks",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "            not fields.get(\"cross_core_timer\", \"\").startswith(\"agree: \"):",
+          "new": "            False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_one_way_latencies_need_the_two_clocks_checked"
+      }
+    },
+    {
+      "id": "spsc-cross-core-bound-wrong-end",
+      "breaks": "The cross-core bound's low end uses the trip's start, so it no longer bounds the offset",
+      "check": "test_bench_platform TheBoundHoldsTheTrueOffset",
+      "mutations": [
+        {
+          "file": "bench/platform/cross_core.hpp",
+          "old": "bound.low = std::max(bound.low, signed_difference(trip.reply, trip.back));",
+          "new": "bound.low = std::max(bound.low, signed_difference(trip.reply, trip.start));"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_bench_platform",
+        "--gtest_filter=BenchCrossCore.*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchCrossCore\\.TheBoundHoldsTheTrueOffset"
+      }
+    },
+    {
+      "id": "spsc-cross-core-combine-sign",
+      "breaks": "Trips started on the peer are combined without changing sides, so the bound is wrong",
+      "check": "test_bench_platform TripsFromBothSidesNarrowTheBound",
+      "mutations": [
+        {
+          "file": "bench/platform/cross_core.hpp",
+          "old": ".low = std::max(a_started.low, -b_started.high),",
+          "new": ".low = std::max(a_started.low, b_started.low),"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_bench_platform",
+        "--gtest_filter=BenchCrossCore.*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchCrossCore\\.TripsFromBothSidesNarrowTheBound"
+      }
+    },
+    {
+      "id": "spsc-cross-core-zero-always",
+      "breaks": "Any bound is taken to hold 0, so an offset larger than a trip passes",
+      "check": "test_bench_platform AnOffsetLargerThanATripIsBoundedAwayFromZero",
+      "mutations": [
+        {
+          "file": "bench/platform/cross_core.hpp",
+          "old": "return low <= 0 && 0 <= high;",
+          "new": "return low <= high;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_bench_platform",
+        "--gtest_filter=BenchCrossCore.*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchCrossCore\\.AnOffsetLargerThanATripIsBoundedAwayFromZero"
+      }
     }
   ]
 }

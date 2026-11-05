@@ -3,8 +3,8 @@
 
     spsc_driver.py --suite queues|ablation|pipeline --bench BENCH --probe BENCH_PROBE \\
         --input FILE --prediction P-NNNN --raw-dir DIR --out results/spsc_NAME.md \\
-        [--repetitions N] [--core N] [--peer-core N] [--sibling N] [--wrapped-by TEXT] \\
-        [--allow-dirty] [--bench-arg ARG]...
+        [--repetitions N] [--core N] [--peer-core N] [--sibling N] [--peer-sibling N] \\
+        [--quiet-before S] [--wrapped-by TEXT] [--allow-dirty] [--bench-arg ARG]...
 
 queues and ablation run bench_spsc (T-SPSC-1 with the comparison, T-SPSC-2); pipeline runs
 bench_pipeline (T-SPSC-3). On a reported run this is measure.sh's direct child, as
@@ -22,6 +22,24 @@ CV beside it. A latency cell is the median of the repetitions' figures, a figure
 the timer's floor counting as below every other, and is written `below floor` when that
 median is under it.
 
+On macOS, where other work shares the machine and does not always wait for measure.sh, the
+Mac's sampler rule applies to every repetition. A CPU sampler runs beside the whole run,
+every 2 s a `sample` line and a `FOREIGN` line for each process above 20% CPU that is not
+this driver, a process under it or the measure.sh and /usr/bin/time above it (the sampler
+of scripts/wasm_bench.py). A repetition is published only if the sampler covered its whole
+span with no gap over 5 s and saw no foreign process in it. Otherwise it is withdrawn: its
+raw files are set aside, it gets its own row in the run log saying why, and it runs again,
+until --repetitions are published or more than --most-withdrawn are withdrawn, which
+refuses the run. With --quiet-before S, each repetition first waits until the sampler has
+seen S seconds with no foreign process, for at most --quiet-wait S. The sampler's lines go
+to <raw-dir>/sampler.txt and every span and its outcome into the results file.
+
+With --peer-core on Linux, machine_check.sh runs once on each core, pinned to it by
+taskset, the second with --peer-sibling as the idle sibling; and before any repetition
+`bench_probe --cross-core` checks that the two cores' clocks agree, since a one-way latency
+subtracts one core's stamp from the other's. The run is refused if they do not, and the
+bound goes into the header.
+
 Each target is compared as a ratio, computed from the summary's medians, with the bar
 beside it. Every SPSC bar was set on x86, so a macOS file gives each the verdict `host
 differs` with the ratio and the bar in words; on debian the verdict is met or missed.
@@ -37,19 +55,23 @@ signal N.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
+import platform
 import shlex
 import signal
 import statistics
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
+import wasm_bench  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
 Refused = bench_driver.Refused
@@ -61,6 +83,8 @@ MODES = ("single", "pipelined", "decoded")
 # close, and full here.
 CHECKPOINT_OPS = 131_000_000
 MODE_NAMES = {"single": "Single-threaded", "pipelined": "Pipelined", "decoded": "Decoded"}
+MOST_WITHDRAWN = 40
+QUIET_WAIT_S = 4 * 3600
 
 SUITES = {
     "queues": {
@@ -106,6 +130,158 @@ SUITES = {
             "book is empty again at the close. `bench/pipeline.hpp`."),
     },
 }
+
+
+# the Mac's sampler rule
+
+def processes(ps):
+    """(pid, parent pid, %CPU, command) for every process, as ps gives them."""
+    listed = subprocess.run([ps, "-Ao", "pid=,ppid=,pcpu=,args="], capture_output=True,
+                            text=True, check=True).stdout
+    rows = []
+    for line in listed.splitlines():
+        words = line.split(None, 3)
+        if len(words) >= 3:
+            rows.append((int(words[0]), int(words[1]), float(words[2]),
+                         words[3] if len(words) == 4 else ""))
+    return rows
+
+
+class Sampler(wasm_bench.Sampler):
+    """wasm_bench.py's sampler, reading the process table through `ps`, every `every` s."""
+
+    def __init__(self, path, ps, every):
+        super().__init__(path)
+        self.ps = ps
+        self.every = every
+
+    def sample(self):
+        try:
+            lines = wasm_bench.sample_lines(processes(self.ps), os.getpid(),
+                                            bench_driver.utc_now())
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            lines = [f"{bench_driver.utc_now()} failed {error!r}"]
+        self.lines += lines
+        with open(self.path, "a", encoding="utf-8") as out:
+            out.write("".join(line + "\n" for line in lines))
+
+    def loop(self):
+        while not self.done.wait(self.every):
+            self.sample()
+
+    def sample_stamps(self):
+        return [wasm_bench.at(line.split()[0]) for line in list(self.lines)
+                if line.split()[1:2] == ["sample"]]
+
+    def wait_past(self, stamp):
+        """Until a sample at or after `stamp`, so that the sampler covers a span's end."""
+        give_up = time.monotonic() + 3 * self.every + wasm_bench.LONGEST_GAP_S
+        while time.monotonic() < give_up:
+            stamps = self.sample_stamps()
+            if stamps and stamps[-1] >= wasm_bench.at(stamp):
+                return
+            time.sleep(min(self.every, 0.5))
+
+
+def stamp_of(moment):
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def span_lines(lines, begin, end):
+    """The sampler's lines from its last sample at or before begin to its first at or after
+    end: the span and the samples either side of it, which is what the rule judges."""
+    stamps = [wasm_bench.at(line.split()[0]) for line in lines
+              if line.split()[1:2] == ["sample"]]
+    before = [t for t in stamps if t <= wasm_bench.at(begin)]
+    after = [t for t in stamps if t >= wasm_bench.at(end)]
+    if not before or not after:
+        return []
+    low, high = max(before), min(after)
+    return [line for line in lines if low <= wasm_bench.at(line.split()[0]) <= high]
+
+
+def span_unquiet(lines, begin, end):
+    """Why the sampler does not show the span quiet, or None."""
+    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end)
+
+
+def span_summary(lines, begin, end):
+    stamps = [wasm_bench.at(line.split()[0]) for line in span_lines(lines, begin, end)
+              if line.split()[1:2] == ["sample"]]
+    gap = max((b - a).total_seconds() for a, b in zip(stamps, stamps[1:])) if len(stamps) > 1 \
+        else 0
+    return (f"published: {len(stamps)} samples, the longest gap {gap:g} s, no other process "
+            f"above {wasm_bench.FOREIGN_CPU:g}% CPU")
+
+
+def wait_for_quiet(sampler, seconds, most):
+    """Until the sampler has seen `seconds` with no foreign process, for at most `most` s."""
+    if sampler is None or seconds <= 0:
+        return
+    bench_driver.set_stage("waiting for the Mac to be quiet")
+    give_up = time.monotonic() + most
+    while True:
+        stamps = sampler.sample_stamps()
+        if stamps:
+            end = stamps[-1]
+            begin = end - datetime.timedelta(seconds=seconds)
+            if stamps[0] <= begin and span_unquiet(list(sampler.lines), stamp_of(begin),
+                                                   stamp_of(end)) is None:
+                return
+        if time.monotonic() > give_up:
+            raise Refused("waiting for the Mac to be quiet",
+                          f"the sampler never saw {seconds:g} s with no other process above "
+                          f"{wasm_bench.FOREIGN_CPU:g}% CPU in {most:g} s")
+        time.sleep(sampler.every)
+
+
+def set_aside(args, index, count):
+    """Keeps a withdrawn repetition's raw files under a name of their own."""
+    for suffix in (".json", ".log"):
+        path = args.raw_dir / f"{args.suite}-repetition-{index}{suffix}"
+        if path.is_file():
+            path.rename(args.raw_dir / f"{args.suite}-repetition-{index}-withdrawn-{count}{suffix}")
+
+
+# the two cores on Linux
+
+def machine_checks(args):
+    """machine_check.sh's output: once, or with a peer core on Linux, once on each core,
+    pinned to it, each with its own idle sibling."""
+    if args.peer_core is None or platform.system() != "Linux":
+        return bench_driver.machine_check(args)
+    outputs = []
+    for core, sibling in ((args.core, args.sibling), (args.peer_core, args.peer_sibling)):
+        command = ["taskset", "-c", str(core), "bash",
+                   str(REPO_ROOT / "scripts" / "machine_check.sh"), "--input", str(args.input),
+                   "--probe", str(args.probe), "--core", str(core)]
+        if sibling is not None:
+            command += ["--sibling", str(sibling)]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise Refused("machine_check", f"core {core}: " + (
+                result.stdout.strip().splitlines()[-1] if result.stdout.strip()
+                else f"exited {result.returncode}"))
+        outputs.append(f"core {core}, under taskset -c {core}:\n{result.stdout.strip()}")
+    return "\n\n".join(outputs)
+
+
+def cross_core_check(args):
+    """bench_probe --cross-core's lines, refusing a run whose two cores' clocks disagree."""
+    if args.peer_core is None:
+        return None
+    bench_driver.set_stage("checking the two cores' clocks")
+    command = [str(args.probe), "--cross-core", str(args.peer_core)]
+    if args.core is not None:
+        command += ["--core", str(args.core)]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    lines = dict(line.split(": ", 1) for line in result.stdout.splitlines() if ": " in line)
+    verdict = lines.get("cross_core_verdict", f"no verdict, exit {result.returncode}")
+    if result.returncode != 0 or not verdict.startswith("agree"):
+        raise Refused("cross-core timer", verdict)
+    return (f"{verdict.split(':')[0]}: {lines['cross_core_offset']}, over "
+            f"{lines['cross_core_trips']}; the fastest round trip "
+            f"{lines['cross_core_fastest_round_trip']}; {lines['cross_core_backwards']}")
 
 
 def run_process(args, index, commit, digest):
@@ -339,7 +515,7 @@ def target_rows(records, medians):
     return rows
 
 
-def header_lines(records, args, run_id, started, finished):
+def header_lines(records, args, run_id, started, finished, sampled=None, cross_core=None):
     first = records[0]
     header = dict(first["header"])
     lines = [f"- {name}: {header[name]}" for name in bench_driver.HEADER_ORDER if name in header]
@@ -362,7 +538,13 @@ def header_lines(records, args, run_id, started, finished):
                  "items requested of every queue"),
               f"- cache_line: {first['cache_line']} bytes, the ring's padding constant",
               f"- peer_core: {peer if peer >= 0 else 'none requested'}",
-              f"- peer_pinning: {' / '.join(sorted(pins))}",
+              f"- peer_pinning: {' / '.join(sorted(pins))}"]
+    if cross_core is not None:
+        lines.append(f"- cross_core_timer: {cross_core}")
+    if sampled is not None:
+        lines.append(f"- interference: {check_results.spsc_interference(sampled['every'])}; "
+                     f"{len(sampled['withdrawn'])} withdrawn under the rule")
+    lines += [
               f"- measure_load_start: {check_results.PENDING}",
               f"- measure_load_end: {check_results.PENDING}",
               *bench_driver.peak_lines(records),
@@ -464,7 +646,19 @@ def pipeline_sections(records):
     return lines + [""]
 
 
-def render(records, args, run_id, started, finished, machine_output, command):
+def sampler_sections(sampled):
+    """Every repetition's span and what the sampler rule made of it, withdrawn ones too."""
+    lines = ["## Sampler", "", check_results.SPSC_SAMPLER_RULE, "",
+             "| Process | Started | Finished | Outcome |", "|---|---|---|---|"]
+    for index, (begin, end, said) in enumerate(sampled["published"], start=1):
+        lines.append(f"| repetition {index} | {begin} | {end} | {said} |")
+    for index, (begin, end, why) in enumerate(sampled["withdrawn"], start=1):
+        lines.append(f"| withdrawn {index} | {begin} | {end} | withdrawn: {why} |")
+    return lines + [""]
+
+
+def render(records, args, run_id, started, finished, machine_output, command, sampled=None,
+           cross_core=None):
     first = records[0]
     suite = first["suite"]
     host = first["header"]["host"]
@@ -475,7 +669,7 @@ def render(records, args, run_id, started, finished, machine_output, command):
              "Do not edit by hand.", ""]
     lines += host_lines(records)
     lines += [describe(records), "", "## Header", ""]
-    lines += header_lines(records, args, run_id, started, finished)
+    lines += header_lines(records, args, run_id, started, finished, sampled, cross_core)
     lines += ["", "## Summary", "",
               f"Each repetition is a fresh process. {len(records)} repetitions. "
               + ("Each runs every mode once untimed, as a warm-up, then every mode once timed; "
@@ -522,6 +716,8 @@ def render(records, args, run_id, started, finished, machine_output, command):
     lines += repetition_rows(records)
     if bench_driver.swap_watch is not None:
         lines += ["", bench_driver.swap_watch.line()]
+    if sampled is not None:
+        lines += [""] + sampler_sections(sampled)[:-1]
     lines += ["", "## machine_check output", "", "```", machine_output, "```", "",
               "## Commands", "", "```", command, "```", ""]
     return "\n".join(lines)
@@ -551,7 +747,25 @@ def relative_command(args):
     return f"{args.wrapped_by} {text}" if args.wrapped_by else text
 
 
-def run(args, run_id, started, commit):
+def withdraw(args, index, begin, end, why, sampled, commit):
+    """One repetition the sampler rule does not publish: its raw files set aside, its own row
+    in the run log, and its span in the results file."""
+    sampled["withdrawn"].append((begin, end, why))
+    count = len(sampled["withdrawn"])
+    set_aside(args, index, count)
+    bench_driver.append_log(
+        args.run_log, f"{args.prediction}-{begin.replace(':', '').replace('-', '')}",
+        args.prediction, commit,
+        f"withdrawn: {args.suite}, repetition {index} on the Mac, exit 0; {why}, inside its "
+        f"span, so the sampler rule does not publish it; nothing from it is published, and it "
+        f"is rerun under {args.prediction}; the row was written by the driver")
+    print(f"spsc_driver: repetition {index} withdrawn: {why}", file=sys.stderr)
+    if count > args.most_withdrawn:
+        raise Refused(f"repetition {index}", f"{count} repetitions withdrawn under the sampler "
+                                             f"rule, over the {args.most_withdrawn} allowed")
+
+
+def run(args, run_id, started, commit, sampler):
     bench_driver.swap_watch = bench_driver.SwapWatch(args.vmstat)
     bench_driver.set_stage("hashing the input")
     digest = bench_driver.hash_and_fault_in(args.input)
@@ -562,16 +776,33 @@ def run(args, run_id, started, commit):
     if code.returncode != 0:
         raise Refused("prediction", code.stdout.strip())
     bench_driver.set_stage("machine_check")
-    machine_output = bench_driver.machine_check(args)
+    machine_output = machine_checks(args)
+    cross_core = cross_core_check(args)
     records = []
-    for index in range(1, args.repetitions + 1):
+    sampled = None if sampler is None else {
+        "every": sampler.every, "published": [], "withdrawn": []}
+    while len(records) < args.repetitions:
+        index = len(records) + 1
+        wait_for_quiet(sampler, args.quiet_before, args.quiet_wait)
+        begin = bench_driver.utc_now()
         record = run_process(args, index, commit, digest)
         validate_run(record, args.suite)
+        if sampler is not None:
+            # The end is stamped a second late, so that the span covers all of the process.
+            time.sleep(1)
+            end = bench_driver.utc_now()
+            sampler.wait_past(end)
+            lines = list(sampler.lines)
+            why = span_unquiet(lines, begin, end)
+            if why:
+                withdraw(args, index, begin, end, why, sampled, commit)
+                continue
+            sampled["published"].append((begin, end, span_summary(lines, begin, end)))
         records.append(record)
     validate_together(records)
     bench_driver.set_stage("rendering the results file")
     text = render(records, args, run_id, started, bench_driver.utc_now(), machine_output,
-                  relative_command(args))
+                  relative_command(args), sampled=sampled, cross_core=cross_core)
     violations = [found for found in check_results.check_text(text)
                   if found[0] != "load-not-stamped"]
     if violations:
@@ -596,6 +827,15 @@ def parse_args(argv):
     parser.add_argument("--core", type=int)
     parser.add_argument("--peer-core", type=int)
     parser.add_argument("--sibling", type=int)
+    parser.add_argument("--peer-sibling", type=int,
+                        help="Linux: the peer core's SMT sibling, which must be idle")
+    parser.add_argument("--quiet-before", type=float, default=0.0, metavar="S",
+                        help="macOS: wait for S seconds with no other busy process before each "
+                             "repetition")
+    parser.add_argument("--quiet-wait", type=float, default=QUIET_WAIT_S, metavar="S",
+                        help="macOS: refuse after waiting S seconds for quiet")
+    parser.add_argument("--most-withdrawn", type=int, default=MOST_WITHDRAWN,
+                        help="macOS: refuse after more repetitions than this are withdrawn")
     parser.add_argument("--checkpoint-ops", type=int, default=CHECKPOINT_OPS,
                         help="pipeline: hash the book after this many ops it acts on")
     parser.add_argument("--wrapped-by", help="what the run was started under, for the record")
@@ -605,6 +845,9 @@ def parse_args(argv):
     parser.add_argument("--run-log", type=Path, default=REPO_ROOT / "results" / "run_log.md",
                         help=argparse.SUPPRESS)
     parser.add_argument("--vmstat", type=Path, default=Path("/proc/vmstat"),
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--ps", default="ps", help=argparse.SUPPRESS)
+    parser.add_argument("--sample-every", type=float, default=wasm_bench.SAMPLE_EVERY_S,
                         help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.repetitions < 3:
@@ -617,12 +860,16 @@ def main(argv=None):
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)
     args.raw_dir.mkdir(parents=True, exist_ok=True)
+    sampler = None
+    if platform.system() == "Darwin":
+        sampler = Sampler(args.raw_dir / "sampler.txt", args.ps, args.sample_every)
+        sampler.start()
     started = bench_driver.utc_now()
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
     commit = "unknown"
     try:
         commit = bench_driver.git_commit(REPO_ROOT, args.allow_dirty)
-        written = run(args, run_id, started, commit)
+        written = run(args, run_id, started, commit, sampler)
     except Stopped as stop:
         bench_driver.stop_child()
         name = signal.Signals(stop.signum).name
@@ -643,6 +890,9 @@ def main(argv=None):
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
                                 f"failed: {error!r}")
         return 1
+    finally:
+        if sampler is not None:
+            sampler.done.set()
     bench_driver.hold_signals()
     bench_driver.append_log(args.run_log, run_id, args.prediction, commit, "published")
     print(f"spsc_driver: wrote {written}, load lines pending. Now run scripts/stamp_load.py.",

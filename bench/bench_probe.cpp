@@ -3,6 +3,11 @@
 //
 //     bench_probe [--core N]
 //     bench_probe --check FILE [--core N]    only the lines scripts/machine_check.sh reads
+//     bench_probe --cross-core PEER [--core N] [--trips N]
+//                                            whether the two cores' clocks agree
+//                                            (platform/cross_core.hpp); exits 1 if not,
+//                                            or if either thread could not be pinned
+//                                            where pinning is required
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -18,6 +23,7 @@
 #include "mapped_file.hpp"
 #include "platform/affinity.hpp"
 #include "platform/counters.hpp"
+#include "platform/cross_core.hpp"
 #include "platform/memory.hpp"
 #include "platform/sysinfo.hpp"
 #include "platform/timer.hpp"
@@ -28,8 +34,16 @@ using namespace itch::bench;
 
 struct Options {
   int core = -1;
+  int cross_core = -1;
+  std::size_t trips = 1'000'000;
   std::string check_file;
 };
+
+template <class Number>
+bool parse_number(std::string_view value, Number& out) {
+  const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), out);
+  return error == std::errc{} && end == value.data() + value.size();
+}
 
 bool parse(std::span<char*> args, Options& options) {
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -39,9 +53,15 @@ bool parse(std::span<char*> args, Options& options) {
     }
     const std::string_view value{args[++i]};
     if (arg == "--core") {
-      const auto [end, error] =
-          std::from_chars(value.data(), value.data() + value.size(), options.core);
-      if (error != std::errc{} || end != value.data() + value.size()) {
+      if (!parse_number(value, options.core)) {
+        return false;
+      }
+    } else if (arg == "--cross-core") {
+      if (!parse_number(value, options.cross_core) || options.cross_core < 0) {
+        return false;
+      }
+    } else if (arg == "--trips") {
+      if (!parse_number(value, options.trips) || options.trips == 0) {
         return false;
       }
     } else if (arg == "--check") {
@@ -69,6 +89,49 @@ int run_check(const Options& options) {
   return timer.quantum_ticks == 0 ? 1 : 0;
 }
 
+int run_cross_core(const Options& options) {
+  const TimerInfo timer = measure_timer();
+  std::vector<CrossCoreTrip> buffer(options.trips);
+  const CrossCoreRun run = check_cross_core(options.core, options.cross_core, buffer);
+  const OffsetBound bound = combine(run.self_started, run.peer_started);
+  const auto ns = [&](std::int64_t ticks) { return timer.ticks_to_ns(static_cast<double>(ticks)); };
+  const bool pinned = run.self_pin.pinned && run.peer_pin.pinned;
+  std::println("cross_core_timer: {}", describe_rate(timer));
+  std::println("cross_core_pinning: this thread {}; the peer {}", pinning_field(run.self_pin),
+               pinning_field(run.peer_pin));
+  std::println("cross_core_trips: {} started on each core", options.trips);
+  std::println(
+      "cross_core_offset: core {}'s clock minus core {}'s within [{}, {}] ticks, "
+      "[{:.1f}, {:.1f}] ns",
+      options.cross_core, options.core, bound.low, bound.high, ns(bound.low), ns(bound.high));
+  std::println("cross_core_started_here: [{}, {}] ticks; started on the peer: [{}, {}] ticks",
+               run.self_started.low, run.self_started.high, -run.peer_started.high,
+               -run.peer_started.low);
+  std::println("cross_core_fastest_round_trip: {} ticks, {:.1f} ns", bound.fastest_round_trip,
+               ns(static_cast<std::int64_t>(bound.fastest_round_trip)));
+  std::println("cross_core_backwards: {} of {} trips read a later stamp below an earlier one",
+               bound.backwards, 2 * options.trips);
+  if (kPinningRequired && !pinned) {
+    std::println("cross_core_verdict: unpinned: the two threads were not both pinned");
+    return 1;
+  }
+  if (!bound.consistent()) {
+    std::println(
+        "cross_core_verdict: disagree: no single offset fits every trip, so a clock "
+        "went backwards between the cores");
+    return 1;
+  }
+  if (!bound.holds_zero()) {
+    std::println("cross_core_verdict: disagree: the offset is bounded away from 0");
+    return 1;
+  }
+  std::println(
+      "cross_core_verdict: agree: the bound holds 0, {:.1f} ns wide, and every "
+      "one-way latency between these cores carries at most that much error from the clocks",
+      ns(bound.high - bound.low));
+  return 0;
+}
+
 void spin_for_counters() {
   volatile std::uint64_t sink = 0;
   for (std::uint64_t i = 0; i < 2'000'000; ++i) {
@@ -79,11 +142,15 @@ void spin_for_counters() {
 int run(int argc, char** argv) {
   Options options;
   if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
-    std::println(stderr, "usage: bench_probe [--core N] [--check FILE]");
+    std::println(stderr,
+                 "usage: bench_probe [--core N] [--check FILE] [--cross-core PEER [--trips N]]");
     return 2;
   }
   if (!options.check_file.empty()) {
     return run_check(options);
+  }
+  if (options.cross_core >= 0) {
+    return run_cross_core(options);
   }
 
   const SysSource source = live_source();

@@ -18,6 +18,7 @@
 #include "chase.hpp"
 #include "platform/affinity.hpp"
 #include "platform/counters.hpp"
+#include "platform/cross_core.hpp"
 #include "platform/memory.hpp"
 #include "platform/sysinfo.hpp"
 #include "platform/timer.hpp"
@@ -319,6 +320,57 @@ TEST(BenchAffinity, MigrationsAreCountedBetweenSamples) {
   EXPECT_EQ(tracker.migrations(), 2U);
   EXPECT_EQ(tracker.first_core(), 3);
   EXPECT_EQ(tracker.last_core(), 3);
+}
+
+// A peer clock 30 ticks ahead of this one, and a one-way trip of 100 ticks each way.
+TEST(BenchCrossCore, TheBoundHoldsTheTrueOffset) {
+  const std::array<CrossCoreTrip, 2> trips{
+      {{.start = 1000, .reply = 1130, .back = 1200}, {.start = 5000, .reply = 5180, .back = 5300}}};
+  const OffsetBound bound = bound_offset(trips);
+  EXPECT_EQ(bound.low, -70);
+  EXPECT_EQ(bound.high, 130);
+  EXPECT_TRUE(bound.consistent());
+  EXPECT_TRUE(bound.holds_zero());
+  EXPECT_EQ(bound.fastest_round_trip, 200U);
+  EXPECT_EQ(bound.backwards, 0U);
+}
+
+TEST(BenchCrossCore, TripsFromBothSidesNarrowTheBound) {
+  // Started here: the peer is 30 ahead. Started on the peer: this clock is 30 behind it.
+  const std::array<CrossCoreTrip, 1> here{{{.start = 1000, .reply = 1130, .back = 1200}}};
+  const std::array<CrossCoreTrip, 1> there{{{.start = 2030, .reply = 2070, .back = 2230}}};
+  const OffsetBound bound = combine(bound_offset(here), bound_offset(there));
+  EXPECT_EQ(bound.low, -40);
+  EXPECT_EQ(bound.high, 130);
+  EXPECT_TRUE(bound.holds_zero());
+}
+
+TEST(BenchCrossCore, AnOffsetLargerThanATripIsBoundedAwayFromZero) {
+  // The peer's clock is 1000 ahead, and a trip takes 200.
+  const std::array<CrossCoreTrip, 1> trips{{{.start = 1000, .reply = 2100, .back = 1200}}};
+  const OffsetBound bound = bound_offset(trips);
+  EXPECT_TRUE(bound.consistent());
+  EXPECT_FALSE(bound.holds_zero());
+  EXPECT_EQ(bound.low, 900);
+  EXPECT_EQ(bound.backwards, 1U);
+}
+
+TEST(BenchCrossCore, NoOffsetFitsAClockThatWentBackwards) {
+  // The first trip puts the offset at or above 100, the second at or below -100.
+  const std::array<CrossCoreTrip, 2> trips{
+      {{.start = 1000, .reply = 1300, .back = 1200}, {.start = 5000, .reply = 4900, .back = 5100}}};
+  const OffsetBound bound = bound_offset(trips);
+  EXPECT_FALSE(bound.consistent());
+  EXPECT_EQ(bound.backwards, 2U);
+}
+
+TEST(BenchCrossCore, TheLiveClocksAgreeAcrossTwoThreads) {
+  std::vector<CrossCoreTrip> buffer(1'000);
+  const CrossCoreRun run = check_cross_core(-1, -1, buffer);
+  const OffsetBound bound = combine(run.self_started, run.peer_started);
+  EXPECT_TRUE(bound.consistent());
+  EXPECT_TRUE(bound.holds_zero());
+  EXPECT_FALSE(run.self_pin.pinned);
 }
 
 class Mapping {
