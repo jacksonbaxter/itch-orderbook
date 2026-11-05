@@ -376,6 +376,92 @@ class Stamp(unittest.TestCase):
             self.assertEqual(results.read_text(encoding="utf-8"), PENDING)
 
 
+def after_the_rule(text):
+    """The fixture moved to 2026-11-05, the day the sampler rule began."""
+    return text.replace("2026-10-31T10:00:", "2026-11-05T10:00:")
+
+
+def sampler_log(first=-6, last=16, gap_at=None, foreign_at=None):
+    """A sampler's log a line every 2 s, in seconds from 10:00:00 on 2026-11-05."""
+    lines = []
+    for second in range(first, last + 1, 2):
+        if gap_at is not None and gap_at <= second < gap_at + 6:
+            continue
+        stamp = (f"2026-11-05T09:59:{60 + second:02d}Z" if second < 0
+                 else f"2026-11-05T10:00:{second:02d}Z")
+        lines.append(f"{stamp} sample")
+        if second == foreign_at:
+            lines.append(f"{stamp} FOREIGN 98.0 some-other-build -j8")
+    return "\n".join(lines) + "\n"
+
+
+class Sampler(unittest.TestCase):
+    pending = after_the_rule(PENDING)
+    stderr = after_the_rule(STDERR)
+
+    def test_a_quiet_sampler_is_stamped_and_passes(self):
+        stamped = stamp_load.stamp(self.pending, self.stderr, sampler_log())
+        self.assertIn("- sampler: quiet: the sampler rule was applied: 6 lines from "
+                      "2026-11-05T10:00:00Z to 2026-11-05T10:00:10Z", stamped)
+        self.assertEqual(check_results.check_text(stamped), [])
+
+    def test_a_mac_run_after_the_rule_needs_the_sampler(self):
+        with self.assertRaisesRegex(ValueError, "needs the CPU sampler's log"):
+            stamp_load.stamp(self.pending, self.stderr)
+
+    def test_a_mac_run_before_the_rule_does_not(self):
+        self.assertNotIn("- sampler:", stamp_load.stamp(PENDING, STDERR))
+
+    def test_a_gap_in_the_run_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "the sampler stopped for 8 s"):
+            stamp_load.stamp(self.pending, self.stderr, sampler_log(gap_at=4))
+
+    def test_a_gap_outside_the_run_is_not(self):
+        stamp_load.stamp(self.pending, self.stderr, sampler_log(first=-20, gap_at=-14))
+
+    def test_a_sampler_that_started_late_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "did not run over the whole run"):
+            stamp_load.stamp(self.pending, self.stderr, sampler_log(first=2))
+
+    def test_a_sampler_that_stopped_early_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "did not run over the whole run"):
+            stamp_load.stamp(self.pending, self.stderr, sampler_log(last=8))
+
+    def test_a_foreign_process_in_the_run_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "1 other busy processes"):
+            stamp_load.stamp(self.pending, self.stderr, sampler_log(foreign_at=6))
+
+    def test_a_foreign_process_outside_the_run_is_not(self):
+        stamp_load.stamp(self.pending, self.stderr, sampler_log(foreign_at=-4))
+
+    def test_an_unreadable_line_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "cannot read"):
+            stamp_load.stamp(self.pending, self.stderr, sampler_log() + "garbage\n")
+
+    def test_a_refused_sampler_leaves_the_file_alone(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            results, stderr, sampler = (Path(directory) / name for name in ("r.md", "e", "s"))
+            results.write_text(self.pending, encoding="utf-8")
+            stderr.write_text(self.stderr, encoding="utf-8")
+            sampler.write_text(sampler_log(foreign_at=6), encoding="utf-8")
+            with contextlib.redirect_stderr(io.StringIO()):
+                code = stamp_load.main(["--results", str(results), "--stderr", str(stderr),
+                                        "--sampler", str(sampler)])
+            self.assertEqual(code, 1)
+            self.assertEqual(results.read_text(encoding="utf-8"), self.pending)
+
+    def test_check_results_requires_the_line_after_the_rule(self):
+        stamped = stamp_load.stamp(self.pending, self.stderr, sampler_log())
+        dropped = "\n".join(line for line in stamped.splitlines()
+                            if not line.startswith("- sampler:"))
+        self.assertIn("sampler-missing", codes(dropped))
+        self.assertIn("sampler-not-quiet", codes(stamped.replace("- sampler: quiet:",
+                                                                 "- sampler: noisy:")))
+
+    def test_check_results_leaves_earlier_mac_files_alone(self):
+        self.assertEqual(check_results.check_text(stamp_load.stamp(PENDING, STDERR)), [])
+
+
 def record(rate=100.0, ratio=1.5):
     return {
         "header": {},

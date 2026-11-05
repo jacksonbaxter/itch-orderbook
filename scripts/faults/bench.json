@@ -1096,6 +1096,106 @@
       }
     },
     {
+      "id": "bench-sampler-gap-ignored",
+      "breaks": "stamp_load.py stamps a macOS run with the sampler stopped during it",
+      "check": "test_bench_results.py, the sampler rule",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    if max(gaps, default=0) > SAMPLE_GAP:\n",
+          "new": "    if max(gaps, default=0) > 10 * SAMPLE_GAP:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_gap_in_the_run_is_refused"
+      }
+    },
+    {
+      "id": "bench-sampler-foreign-ignored",
+      "breaks": "stamp_load.py stamps a macOS run while another process was busy in it",
+      "check": "test_bench_results.py, the sampler rule",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    inside = [line for time, line in foreign if start <= time <= end]\n",
+          "new": "    inside = [line for time, line in foreign if start < time < start]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_foreign_process_in_the_run_is_refused"
+      }
+    },
+    {
+      "id": "bench-sampler-late-start-ignored",
+      "breaks": "stamp_load.py takes a sampler that began after the run did",
+      "check": "test_bench_results.py, the sampler rule",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    if not before or not after:\n",
+          "new": "    if not after:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "test_a_sampler_that_started_late_is_refused"
+      }
+    },
+    {
+      "id": "bench-sampler-optional-on-mac",
+      "breaks": "stamp_load.py stamps a macOS run from the rule's day with no sampler at all",
+      "check": "test_bench_results.py, the sampler rule",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    elif check_results.needs_sampler(fields):\n",
+          "new": "    elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_mac_run_after_the_rule_needs_the_sampler"
+      }
+    },
+    {
+      "id": "bench-sampler-line-not-required",
+      "breaks": "check_results.py passes a macOS file from the rule's day with no sampler line",
+      "check": "check_results.py, sampler-missing",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        yield \"sampler-missing\", \"a macOS run from 2026-11-05 on has no sampler line\"\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_results_requires_the_line_after_the_rule"
+      }
+    },
+    {
       "id": "bench-driver-best-of",
       "breaks": "The driver reports the best repetition as its median",
       "check": "test_bench_results.py spread",
