@@ -106,11 +106,14 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 |---|---|---|---|---|
 | The Zen 1 counter table on debian | debian | of 37 tried, 27 counts, 1 counts zero, 7 not supported, 2 refused | `5a16936a14e8` | [results/counters_zen1_events_debian.md](results/counters_zen1_events_debian.md) |
 | E7: dispatch form, debian, 12302019 | debian | fastest form threaded; branch misses a message spread 0.0702 across the book forms; E7 not refuted | `54e5dc3b4938` | [results/dispatch_debian_12302019.md](results/dispatch_debian_12302019.md) |
+| E7: dispatch form, mac, 12302019 | macOS (M4 Max) | fastest form threaded; E7 not judged on this host, no branch-miss counter | `fde07d41bf28` | [results/dispatch_mac_12302019.md](results/dispatch_mac_12302019.md) |
 | Flamegraph: the backtester, quoting on debian, 12302019 | debian | 119,933 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 38.53% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_backtest-quoting_debian_12302019.md](results/flamegraph_backtest-quoting_debian_12302019.md) |
 | Flamegraph: the map baseline, map-fresh on debian, 12302019 | debian | 243,786 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::rest_order` at 22.63% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_map-fresh_debian_12302019.md](results/flamegraph_map-fresh_debian_12302019.md) |
 | Flamegraph: the book replay, paged-flat on debian, 12302019 | debian | 105,077 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 42.14% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md) |
 | The order lookup apart from the level work, debian, 12302019 | debian | paged-flat lookup 30.71 ns, 17.3% of the pass; hash-flat lookup 32.50 ns, 15.3% of the pass | `54e5dc3b4938` | [results/lookup_debian_12302019.md](results/lookup_debian_12302019.md) |
+| The order lookup apart from the level work, mac, 12302019 | macOS (M4 Max) | paged-flat lookup 8.95 ns, 19.6% of the pass; hash-flat lookup 5.03 ns, 9.1% of the pass | `fde07d41bf28` | [results/lookup_mac_12302019.md](results/lookup_mac_12302019.md) |
 | E8: prefetch look-ahead on the book build, debian, 12302019 | debian | best look-ahead D=16 at +16.41% over D=0; E8 not refuted | `54e5dc3b4938` | [results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md) |
+| E8: prefetch look-ahead on the book build, mac, 12302019 | macOS (M4 Max) | best look-ahead D=4 at -18.01% over D=0; E8 refuted (under 10% at every D) | `fde07d41bf28` | [results/prefetch_mac_12302019.md](results/prefetch_mac_12302019.md) |
 | Flamegraph: book replay, paged-flat on macOS (M4 Max), 12302019 | macOS (M4 Max) | 19,118 samples, wall-clock stacks every 1 ms, the hottest frame `itch::FastBook<…>::apply` at 38.24% self | `5a16936a14e8` | [results/profile_paged-flat_mac_12302019.md](results/profile_paged-flat_mac_12302019.md) |
 
 The market maker on its report day, 12302019, a late-December session, with every parameter chosen on 10302019, an FOMC day. One symbol-day. No edge is claimed. 2 symbols on one day: each is its own symbol-day. The file gives S gross, fees, the markout curve and how Q-off and L-off each change the PnL. Dollars at the base fee tier; a replayed feed cannot react, so market impact is absent.
@@ -180,6 +183,48 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0020-20261105T172111Z` | `P-0020` | `54e5dc3b4938` | Linux | `published` |
 | `P-0021-20261105T174823Z` | `P-0021` | `54e5dc3b4938` | Linux | `published` |
 | `P-0022-20261105T181819Z` | `P-0022` | `54e5dc3b4938` | Linux | `published` |
+| `P-0020-20261105T151435Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0020-20261105T151539Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0020-20261105T151805Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0020-20261105T152031Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T152222Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T152406Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T152442Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T152519Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T152843Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T153054Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0022-20261105T153236Z` | `P-0022` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0022-20261105T153304Z` | `P-0022` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0022-20261105T153606Z` | `P-0022` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0020-20261105T153653Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0020-20261105T153802Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0020-20261105T153930Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0020-20261105T154610Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0020-20261105T154736Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T154936Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T155015Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T155056Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T155138Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T155501Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T155541Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T155624Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T155708Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T155743Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T155823Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T155906Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T155951Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T160026Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T160106Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T160149Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T160229Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0020-20261105T202719Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T203253Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T203635Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T203829Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0021-20261105T204826Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
+| `P-0020-20261105T151701Z` | `P-0020` | `fde07d41bf28` | Darwin | `published` |
+| `P-0021-20261105T152154Z` | `P-0021` | `fde07d41bf28` | Darwin | `published` |
+| `P-0022-20261105T153208Z` | `P-0022` | `fde07d41bf28` | Darwin | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
