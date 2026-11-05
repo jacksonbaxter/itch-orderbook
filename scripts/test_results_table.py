@@ -292,10 +292,17 @@ class ResultsTable(unittest.TestCase):
                       "one row a run", output)
 
     def test_no_stray_markup_in_generated_cells(self):
+        # Every target row has its table's cells, no more: a stray | in a cell adds one.
         _, output = self.run_table()
+        header = None
         for line in output.splitlines():
+            if not line.startswith("|"):
+                header = None
+                continue
+            header = header or line
             if line.startswith("| T-"):
-                self.assertEqual(len(re.findall(r" \| ", line)), 6, line)
+                self.assertEqual(len(re.findall(r" \| ", line)),
+                                 len(re.findall(r" \| ", header)), line)
 
 
 if __name__ == "__main__":
