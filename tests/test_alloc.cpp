@@ -227,17 +227,20 @@ TEST(Allocation, TheRingAndThePipelineAllocateNothingAfterConstruction) {
   EXPECT_EQ(by_ring.total(), 0U) << "allocation in the ring";
   EXPECT_GT(moved, 100U * ring.capacity());
 
+  // The checkpoint's hash walk, mid-stream, runs inside the counted span too.
+  constexpr std::uint64_t kCheckpointOp = 100'000;
   const std::vector<std::byte> stream = build_stream();
   itch::FastBook<> book{kCapacity};
   itch::bench::OpRing ops{64};
-  const itch::bench::ReplayCounts counts =
-      itch::bench::replay_pipelined(stream, book, ops, -1, [] { reset_alloc_counts(); });
+  const itch::bench::ReplayCounts counts = itch::bench::replay_pipelined(
+      stream, book, ops, -1, [] { reset_alloc_counts(); }, kCheckpointOp);
   const AllocCounts by_pipeline = read_alloc_counts();
   std::println("pipeline: {} messages, {} ops, {} full waits, {} allocations", counts.messages,
                counts.ops, counts.full_waits, by_pipeline.total());
   EXPECT_EQ(by_pipeline.total(), 0U) << "allocation in the pipelined replay";
   EXPECT_EQ(counts.of(itch::ApplyStatus::applied), counts.ops);
   EXPECT_GT(counts.ops, 100U * ops.capacity()) << "the ring did not wrap";
+  EXPECT_TRUE(counts.checkpoint_reached) << "the checkpoint's hash walk was not counted";
 }
 
 TEST(Allocation, TheControlBookIsSeenAllocating) {
