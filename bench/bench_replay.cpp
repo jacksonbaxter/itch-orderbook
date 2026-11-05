@@ -508,6 +508,24 @@ PassTotals warm_with_fast_book(std::span<const std::byte> bytes) {
   return throughput_pass(bytes, *book, clock);
 }
 
+// The timed passes through Google Benchmark: the throughput pass, then the latency pass
+// unless the process was asked for throughput alone.
+template <class Session>
+void run_timed_passes(Session& session, const TimerInfo& timer, SampleBuffer& samples,
+                      bool latency) {
+  benchmark::RegisterBenchmark("replay/throughput", run_throughput<Session>, &session, &timer)
+      ->UseManualTime()
+      ->Iterations(1)
+      ->Unit(benchmark::kMillisecond);
+  if (latency) {
+    benchmark::RegisterBenchmark("replay/latency", run_latency<Session>, &session, &timer, &samples)
+        ->UseManualTime()
+        ->Iterations(1)
+        ->Unit(benchmark::kMillisecond);
+  }
+  benchmark::RunSpecifiedBenchmarks();
+}
+
 // One process's run of one design, from the warm-up to the record.
 template <class Book, class MakeBook>
 int run_design(const Options& options, const OwnedInput& owned, const MakeBook& make_book) {
@@ -548,18 +566,7 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
                              : std::span<std::byte>{}};
 
   if (timed) {
-    benchmark::RegisterBenchmark("replay/throughput", run_throughput<Session>, &session, &timer)
-        ->UseManualTime()
-        ->Iterations(1)
-        ->Unit(benchmark::kMillisecond);
-    if (latency) {
-      benchmark::RegisterBenchmark("replay/latency", run_latency<Session>, &session, &timer,
-                                   &samples)
-          ->UseManualTime()
-          ->Iterations(1)
-          ->Unit(benchmark::kMillisecond);
-    }
-    benchmark::RunSpecifiedBenchmarks();
+    run_timed_passes(session, timer, samples, latency);
   }
   benchmark::Shutdown();
   migrations.sample();
