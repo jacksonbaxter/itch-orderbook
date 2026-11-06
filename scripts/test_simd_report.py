@@ -166,7 +166,7 @@ class SimdReportTest(unittest.TestCase):
         text, summary = self.render("field", records)
         self.assertIn("- Width 2: `neon-w2` and `scalar-w2` tie on cycles", text)
         self.assertIn("- Width 8: `neon-w8` beats `scalar-w8`", text)
-        self.assertEqual(summary, "E1 refuted: a vector kernel beat scalar at some width")
+        self.assertTrue(summary.endswith("8 bytes neon-w8 beats scalar-w8; E1 refuted"), summary)
         self.assertEqual(self.violations(text, "field"), [])
 
     def test_e4_parse_by_type_and_the_ten_percent_bar(self):

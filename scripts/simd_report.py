@@ -16,7 +16,8 @@ passes that compute the same thing (one mode of one width, watchlist or experime
 kernel or form) disagree in what they folded or how many items they took; on a host label
 that does not match the file name; on a load line that is not measure.sh's; on a macOS file
 that does not say the sampler rule was applied; on a debian file not pinned to core 4 under
-the performance governor, or without a passing machine check before and after; on a figure without its instruction set; and
+the performance governor, or without a passing machine check before and after; on a figure
+without its instruction set; and
 on anything private.
 
 How a winner is called, written into the predictions before the runs: on a figure where lower
@@ -367,7 +368,8 @@ def results_section(experiment, rows, events, runs):
         for name in names:
             f = figures[name]
             base = baseline(experiment, name)
-            out.append(f"| `{name}` | {isa_of(experiment, kernel_of(experiment, name))} | {f['reps']} "
+            isa = isa_of(experiment, kernel_of(experiment, name))
+            out.append(f"| `{name}` | {isa} | {f['reps']} "
                        f"| {f['items']:,} | {fmt(f['work_ns']['median'])} "
                        f"| {fmt(f['walk_ns']['median'])} | {fmt(f['ns']['median'])} "
                        f"| {fmt(f['ns']['min'])} | {fmt(f['ns']['max'])} | "
@@ -386,7 +388,8 @@ def results_section(experiment, rows, events, runs):
         for name in names:
             f = figures[name]
             base = baseline(experiment, name)
-            out.append(f"| `{name}` | {isa_of(experiment, kernel_of(experiment, name))} | {f['reps']} "
+            isa = isa_of(experiment, kernel_of(experiment, name))
+            out.append(f"| `{name}` | {isa} | {f['reps']} "
                        f"| {f['items']:,} | {fmt(f['ns']['median'])} | {fmt(f['ns']['min'])} "
                        f"| {fmt(f['ns']['max'])} | "
                        + "".join(f"{fmt(f[event]['median'])} | " for event in events)
@@ -435,6 +438,7 @@ def finding(experiment, figures, events, runs):
         return ", ".join(parts) + f" {per}"
 
     if experiment == "field":
+        calls = []
         for width in (2, 4, 6, 8):
             base = f"scalar-w{width}"
             for kernel in vector:
@@ -444,13 +448,13 @@ def finding(experiment, figures, events, runs):
                 said = call(name, figures[name][metric], base, figures[base][metric], unit)
                 lines.append(f"- Width {width}: {said}; " + explain(name, base, "a field") + ".")
                 verdicts.append(beats(figures[name][metric], figures[base][metric]))
+                calls.append(f"{width} bytes " + said.split(" on ")[0].replace("`", ""))
         refuted = any(verdicts)
         lines.append("- E1's kill criterion, refuted if a vector kernel takes fewer cycles a "
                      "field than scalar at a width: " + ("**refuted**." if refuted else
                                                          "**not refuted**: scalar wins or "
                                                          "ties at every width."))
-        summary = ("E1 " + ("refuted: a vector kernel beat scalar at some width"
-                            if refuted else "not refuted: scalar wins or ties at every width"))
+        summary = ", ".join(calls) + "; E1 " + ("refuted" if refuted else "not refuted")
         return lines, summary
     if experiment in ("decode", "consume", "batch", "e11", "parse", "book"):
         per = {"decode": "an Add Order", "consume": "an op", "batch": "an Add Order",
@@ -508,7 +512,12 @@ def finding(experiment, figures, events, runs):
             criterion = ("E4 end to end has no kill criterion of its own: the book's share of "
                          "the message is the context for the parse's.")
         lines.append(f"- {criterion}")
-        summary = "; ".join(said for _, said, _, _, _ in said_all).replace("`", "")
+        word = SHORT.get(compare, "ns")
+        summary = "; ".join(
+            said.split(";")[0].replace("`", "")
+            + f" ({kernel} {figures[kernel][compare]['median']:.2f} against scalar "
+            f"{figures['scalar'][compare]['median']:.2f} {word} {per})"
+            for kernel, said, _, _, _ in said_all)
         if refuted is not None:
             summary += f"; {SIMD_ID[experiment]} " + ("refuted" if refuted else "not refuted")
         return lines, summary
@@ -527,7 +536,7 @@ def finding(experiment, figures, events, runs):
                    + ("tie" if same else "differ") + f"; E6 {'refuted' if same else 'not refuted'}")
         return lines, summary
     if experiment == "filter":
-        won = []
+        won, sizes = [], []
         for n in sorted({int(name.rsplit("-n", 1)[1]) for name in figures}):
             bitset = f"bitset-n{n}"
             for kernel in ["scalar", *vector]:
@@ -538,12 +547,14 @@ def finding(experiment, figures, events, runs):
                              + explain(name, bitset, "an Add Order") + ".")
                 if kernel != "scalar":
                     won.append(beats(figures[name][metric], figures[bitset][metric]))
+                    sizes.append(f"{n} stocks bitset {figures[bitset][metric]['median']:.2f} "
+                                 f"against {kernel} compare {figures[name][metric]['median']:.2f}")
         refuted = any(won)
         lines.append("- E9's kill criterion, refuted if a vector compare beats the bitset at a "
                      "watchlist size used: " + ("**refuted**." if refuted else
                                                "**not refuted**."))
-        summary = "E9 " + ("refuted: a vector compare beat the bitset" if refuted else
-                           "not refuted: the bitset wins or ties at every watchlist size")
+        summary = (", ".join(sizes) + f" {unit} an Add Order; E9 "
+                   + ("refuted" if refuted else "not refuted"))
         return lines, summary
     for name in STAMPS[1:]:
         said = call(name, figures[name][metric], "exact", figures["exact"][metric],

@@ -40,7 +40,7 @@ Host: **macOS (M4 Max)**. Numbers from the two hosts are never mixed.
 - run_finished: 2026-11-06T03:22:58Z
 - interference: the sampler rule was applied: a CPU sampler line every 2 s over the whole run; a process is published only if the sampler covered its whole span, from measure.sh's start line to its end line, with no gap over 5 s and no other process above 20% CPU; any other was withdrawn, logged and rerun
 - unavailable: branch misses, cache misses and SIMD-pipe events: unavailable, the harness reads only fixed cycles and instructions through thread_selfcounts on macOS, and no Apple event name is assumed
-- summary: neon beats scalar; E3 not refuted
+- summary: neon beats scalar (neon 10.56 against scalar 11.67 cycles an op); E3 not refuted
 
 ## What was run
 
