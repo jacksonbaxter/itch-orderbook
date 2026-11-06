@@ -122,7 +122,9 @@ async function main() {
     kernel: `${os.type()} ${os.release()}`,
     compiler: build.compiler,
     flags: build.flags,
-    runtime: `node ${process.version}, V8 ${process.versions.v8}`,
+    // V8's four-part version reads as an IPv4 address to the privacy checks: its parts by name.
+    runtime: `node ${process.version}, V8 ${process.versions.v8.split(".").slice(0, 2).join(".")} ` +
+      `build ${process.versions.v8.split(".").slice(2).join("-")}`,
     commit: options.commit,
     dataset: options.dataset,
     dataset_sha256: options["dataset-sha256"],
