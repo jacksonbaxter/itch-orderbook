@@ -128,7 +128,7 @@ template <class K, bool Work>
     ++t.items;
     if constexpr (Work) {
       const BookOp op = K::book_op(m, static_cast<char>(type));
-      const std::uint64_t slot = (op.reference * 0x9E3779B97F4A7C15ULL) >> 48U;
+      const auto slot = static_cast<std::size_t>((op.reference * 0x9E3779B97F4A7C15ULL) >> 48U);
       t.fold += (slots[slot] += op.shares);
       highest = op.price > highest ? op.price : highest;
       t.fold += op.locate + op.new_reference + static_cast<unsigned char>(op.side) +

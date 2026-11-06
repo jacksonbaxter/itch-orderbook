@@ -24,6 +24,8 @@ if(EMSCRIPTEN)
   add_executable(itch_wasm_kernels_smoke wasm_kernels_smoke.cpp)
   target_include_directories(itch_wasm_kernels_smoke PRIVATE "${PROJECT_SOURCE_DIR}/tests")
   target_link_libraries(itch_wasm_kernels_smoke PRIVATE itch_parser)
+  # The churn stream and both kernels' ops outgrow the default 16 MiB.
+  target_link_options(itch_wasm_kernels_smoke PRIVATE -sALLOW_MEMORY_GROWTH=1)
   itch_apply_options(itch_wasm_kernels_smoke)
   add_test(NAME itch_wasm_kernels_smoke COMMAND itch_wasm_kernels_smoke)
 
