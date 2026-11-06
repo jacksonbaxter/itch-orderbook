@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -54,6 +55,18 @@ class SimdDriverTest(unittest.TestCase):
         self.assertEqual(simd_driver.span_of(f"{START}\nnoise\n{END}\n"),
                          ("2026-11-05T09:00:00Z", "2026-11-05T09:00:10Z"))
         self.assertIsNone(simd_driver.span_of(f"{START}\nnoise\n"))
+
+    def setUp(self):
+        simd_driver.SAMPLE_WAIT_S = 0
+
+    def test_it_waits_for_the_sample_after_the_end(self):
+        lines = samples()[:-2]
+        self.assertIn("did not cover", self.judged(sampler=Sampler(list(lines))))
+        simd_driver.SAMPLE_WAIT_S = 5
+        timer = threading.Timer(1.0, lambda: lines.append("2026-11-05T09:00:12Z sample"))
+        timer.start()
+        self.assertIsNone(self.judged(sampler=Sampler(lines)))
+        timer.join()
 
     def judged(self, code=0, err=None, sampler=None, record=True):
         with tempfile.TemporaryDirectory() as scratch:

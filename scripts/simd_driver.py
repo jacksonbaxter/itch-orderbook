@@ -61,6 +61,7 @@ REPO_ROOT = bench_driver.REPO_ROOT
 AUDIT = REPO_ROOT / "scripts" / "simd_asm_audit.py"
 MOST_WITHDRAWN = 12
 RETRY_BUSY_S = 60
+SAMPLE_WAIT_S = 15
 MEASURE_LINE = re.compile(r"^measure\.sh: (start|end) .*\bat=(\S+)")
 EXPERIMENTS = ("field", "decode", "consume", "parse", "book", "batch", "framing", "filter",
                "timestamp", "e11", "asm")
@@ -163,8 +164,22 @@ def judge(args, stem, code, sampler):
     if span is None:
         return "measure.sh's start or end line is missing"
     if sampler is not None:
+        wait_for_sample(sampler, span[1])
         return wasm_bench.unquiet(sampler.lines, *span)
     return None
+
+
+def wait_for_sample(sampler, finished):
+    """Waits, at most SAMPLE_WAIT_S, for the sampler's first sample at or after the process's
+    end, without which no span is covered: the process has just exited, and the sampler
+    samples every 2 s."""
+    deadline = time.monotonic() + SAMPLE_WAIT_S
+    end = wasm_bench.at(finished)
+    while time.monotonic() < deadline:
+        if any(line.split()[1:2] == ["sample"] and wasm_bench.at(line.split()[0]) >= end
+               for line in list(sampler.lines)):
+            return
+        time.sleep(0.5)
 
 
 def run(args, run_id, commit):

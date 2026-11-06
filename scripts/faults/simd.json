@@ -353,6 +353,27 @@
         "signature": "^FAIL: test_a_process_is_withdrawn_unless_sampled_quiet",
         "exit": 1
       }
+    },
+    {
+      "id": "simd-driver-judges-before-the-last-sample",
+      "breaks": "The driver judges a process before the sampler has sampled after its end, so no span is ever covered",
+      "check": "test_simd_driver.py test_it_waits_for_the_sample_after_the_end",
+      "mutations": [
+        {
+          "file": "scripts/simd_driver.py",
+          "old": "        wait_for_sample(sampler, span[1])\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_it_waits_for_the_sample_after_the_end",
+        "exit": 1
+      }
     }
   ]
 }
