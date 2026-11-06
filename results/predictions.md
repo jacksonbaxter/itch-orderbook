@@ -353,3 +353,9 @@ included.
 - Experiment: `bench_kernels --experiment framing --form F`, F in length, byte, table and constant, scalar only (no kernel), as P-0601 otherwise: a warm-up and two timed walks, each adding every frame's type byte; no walk pass to subtract, the figure is ns, cycles and instructions a message.
 - Prediction: `length`, `byte` and `table` within 15% of each other, each between 0.5 and 2 ns a message, the frame-to-frame load chain setting the pace; `constant`, the switch on the type, slower than `length` by the rule, from mispredicted branches on the type. E6 not refuted (the two dependence forms differ).
 - Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0607: E9, the watchlist filter, compare against bitset, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment filter`, watchlists of the 8 and the 64 stocks with the most Add Orders in the day; `--form compare` on `scalar` and `neon` (each Add Order's 8-byte stock against every listed one; NEON four compares of two keys an 8 keys) and `--form bitset` (the order's locate in a bitset filled from the day's Stock Directory messages), as P-0601 otherwise. (work − walk) over the Add Orders.
+- Prediction: the bitset beats both compares at 64 stocks, and beats or ties them at 8; NEON's compare beats scalar's at 64. Every form finds the same matches. E9 not refuted.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
