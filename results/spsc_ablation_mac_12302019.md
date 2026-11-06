@@ -15,16 +15,16 @@ The project ring of `include/itch/spsc.hpp` in every configuration `bench_spsc -
 - kernel: Darwin 27.2.0
 - compiler: Clang 23.1.4 (https://github.com/llvm/llvm-project 7a941dfb2877a0b8cf30323fefa85ad019e0b0f5)
 - flags: -O3 -DNDEBUG -std=c++23
-- commit: f870418ad388 (clean)
+- commit: 0550a6017ece (clean)
 - dataset: 12302019.NASDAQ_ITCH50
 - dataset_sha256: 5d81c2e14a0f748b29c674b6a342796932702034b4dd341e39e9a9ec5bac610f
 - timer: mach_absolute_time, calibrated 24.000 MHz, nominal 24.000 MHz
 - quantum: 1 ticks, 41.667 ns
-- pair: 0.147 ticks, 6.121 ns, not subtracted from a one-way latency: its two reads are on two cores
+- pair: 0.059 ticks, 2.471 ns, not subtracted from a one-way latency: its two reads are on two cores
 - floor: 166.667 ns
 - pinning: not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0
-- migrations: 1 seen in 2 samples, core 11 to core 5
-- core: unpinned, last ran on core 5
+- migrations: 1 seen in 2 samples, core 7 to core 10
+- core: unpinned, last ran on core 10
 - governor: unavailable: macOS has no cpufreq governor
 - frequency: unavailable: macOS exposes no core frequency on Apple silicon
 - turbo: unavailable: macOS exposes no boost control
@@ -41,15 +41,16 @@ The project ring of `include/itch/spsc.hpp` in every configuration `bench_spsc -
 - cache_line: 128 bytes, the ring's padding constant
 - peer_core: none requested
 - peer_pinning: not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0
-- measure_load_start: measure.sh: start load1=3.81 host=macOS (M4 Max) at=2026-11-05T11:58:02Z
-- measure_load_end: measure.sh: end load1=5.50 exit=0 at=2026-11-05T12:00:17Z
-- peak_rss: 7.71 GiB, the largest process in the run
-- peak_footprint: 0.02 GiB, of the driver alone: time sees its direct child
+- interference: sampled every 2 s by the driver over each repetition's whole span; no other process above 20% CPU in any published repetition; 0 withdrawn under the rule
+- measure_load_start: measure.sh: start load1=2.40 host=macOS (M4 Max) at=2026-11-06T02:48:47Z
+- measure_load_end: measure.sh: end load1=2.48 exit=0 at=2026-11-06T02:52:42Z
+- peak_rss: 7.72 GiB, the largest process in the run
+- peak_footprint: 0.03 GiB, of the driver alone: time sees its direct child
 - prediction: P-0302
-- run_id: P-0302-20261105T115802Z
+- run_id: P-0302-20261106T024847Z
 - repetitions: 3
-- run_started: 2026-11-05T11:58:02Z
-- run_finished: 2026-11-05T12:00:17Z
+- run_started: 2026-11-06T02:48:47Z
+- run_finished: 2026-11-06T02:52:42Z
 
 ## Summary
 
@@ -57,29 +58,29 @@ Each repetition is a fresh process. 3 repetitions. Each runs every row once, in 
 
 | Figure | Median | Min | Max | CV |
 |---|---|---|---|---|
-| shipped, rtt, ns a round trip | 86.16 | 82.57 | 99.89 | 10.21% |
-| shipped, saturated, M items/s | 24.82 | 19.74 | 24.91 | 12.78% |
-| shipped, burst, mean one-way ns | 71.06 | 70.86 | 73.10 | 1.73% |
-| uncached, rtt, ns a round trip | 162.2 | 159.2 | 163.1 | 1.26% |
-| uncached, saturated, M items/s | 25.49 | 25.13 | 25.82 | 1.36% |
-| uncached, burst, mean one-way ns | 95.97 | 95.80 | 102.4 | 3.83% |
-| modulo, rtt, ns a round trip | 84.91 | 84.65 | 98.03 | 8.57% |
-| modulo, saturated, M items/s | 24.70 | 12.59 | 24.76 | 33.90% |
-| modulo, burst, mean one-way ns | 78.75 | 76.84 | 171.9 | 49.78% |
-| uncached-modulo, rtt, ns a round trip | 162.4 | 161.7 | 165.0 | 1.05% |
-| uncached-modulo, saturated, M items/s | 25.83 | 18.69 | 26.58 | 18.38% |
-| uncached-modulo, burst, mean one-way ns | 103.1 | 95.76 | 158.0 | 28.59% |
-| padding-8, rtt, ns a round trip | 153.6 | 151.2 | 395.8 | 60.17% |
-| padding-8, saturated, M items/s | 105.0 | 27.90 | 130.0 | 60.73% |
-| padding-8, burst, mean one-way ns | 166.7 | 100.2 | 355.8 | 63.87% |
-| padding-64, rtt, ns a round trip | 85.39 | 85.25 | 85.66 | 0.24% |
-| padding-64, saturated, M items/s | 24.98 | 24.95 | 53.61 | 47.91% |
-| padding-64, burst, mean one-way ns | 72.07 | 71.53 | 166.9 | 53.07% |
-| padding-256, rtt, ns a round trip | 91.17 | 89.38 | 91.18 | 1.14% |
-| padding-256, saturated, M items/s | 24.66 | 15.88 | 24.90 | 23.56% |
-| padding-256, burst, mean one-way ns | 88.99 | 76.33 | 171.5 | 46.05% |
-| batch-publish, saturated-batch-32, M items/s | 1,354 | 1,333 | 1,882 | 20.43% |
-| publish-each, saturated-batch-32, M items/s | 336.0 | 314.4 | 342.2 | 4.40% |
+| shipped, rtt, ns a round trip | 77.63 | 76.35 | 79.03 | 1.72% |
+| shipped, saturated, M items/s | 27.61 | 27.52 | 27.78 | 0.48% |
+| shipped, burst, mean one-way ns | 65.01 | 61.64 | 68.56 | 5.32% |
+| uncached, rtt, ns a round trip | 143.2 | 142.6 | 145.2 | 0.95% |
+| uncached, saturated, M items/s | 28.15 | 27.80 | 28.89 | 1.97% |
+| uncached, burst, mean one-way ns | 86.43 | 84.66 | 89.23 | 2.65% |
+| modulo, rtt, ns a round trip | 78.30 | 76.36 | 78.52 | 1.53% |
+| modulo, saturated, M items/s | 27.49 | 27.36 | 27.54 | 0.34% |
+| modulo, burst, mean one-way ns | 68.67 | 65.03 | 134.3 | 43.62% |
+| uncached-modulo, rtt, ns a round trip | 145.4 | 144.2 | 145.6 | 0.55% |
+| uncached-modulo, saturated, M items/s | 28.84 | 28.68 | 29.11 | 0.76% |
+| uncached-modulo, burst, mean one-way ns | 90.33 | 89.21 | 95.78 | 3.83% |
+| padding-8, rtt, ns a round trip | 141.1 | 138.1 | 182.7 | 16.21% |
+| padding-8, saturated, M items/s | 151.8 | 35.65 | 157.4 | 59.80% |
+| padding-8, burst, mean one-way ns | 151.9 | 96.13 | 160.5 | 25.67% |
+| padding-64, rtt, ns a round trip | 77.79 | 72.87 | 83.12 | 6.58% |
+| padding-64, saturated, M items/s | 27.65 | 27.62 | 27.67 | 0.10% |
+| padding-64, burst, mean one-way ns | 66.51 | 63.62 | 70.08 | 4.85% |
+| padding-256, rtt, ns a round trip | 80.99 | 80.87 | 81.48 | 0.40% |
+| padding-256, saturated, M items/s | 27.48 | 27.38 | 27.49 | 0.21% |
+| padding-256, burst, mean one-way ns | 71.53 | 62.47 | 85.16 | 15.64% |
+| batch-publish, saturated-batch-32, M items/s | 1,501 | 1,501 | 1,504 | 0.11% |
+| publish-each, saturated-batch-32, M items/s | 287.2 | 266.2 | 308.5 | 7.37% |
 
 ## Latency
 
@@ -87,13 +88,13 @@ One-way, from the sender's clock read to the receiver's, in ns, each cell the me
 
 | Queue | Protocol | p50 | p90 | p99 | p99.9 | p99.99 | max | Late sends | Samples |
 |---|---|---|---|---|---|---|---|---|---|
-| modulo | burst | below floor | below floor | below floor | 2,625.0 | 10,958.4 | 27,333.4 | 185,890 | 729,611 |
-| padding-256 | burst | below floor | below floor | 208.3 | 2,333.3 | 10,750.0 | 27,875.1 | 187,493 | 729,611 |
-| padding-64 | burst | below floor | below floor | below floor | 541.7 | 9,041.6 | 17,666.7 | 186,863 | 729,611 |
-| padding-8 | burst | below floor | 375.0 | 875.0 | 2,583.3 | 7,916.7 | 18,791.7 | 191,516 | 729,611 |
-| shipped | burst | below floor | below floor | below floor | 416.7 | 10,333.3 | 20,791.5 | 185,098 | 729,611 |
-| uncached | burst | below floor | below floor | 208.3 | 583.3 | 9,375.0 | 18,791.5 | 194,021 | 729,611 |
-| uncached-modulo | burst | below floor | below floor | 208.3 | 916.7 | 8,124.9 | 19,416.7 | 194,201 | 729,611 |
+| modulo | burst | below floor | below floor | below floor | 1,833.3 | 10,958.3 | 28,583.4 | 183,575 | 729,611 |
+| padding-256 | burst | below floor | below floor | below floor | 3,750.0 | 15,541.7 | 36,041.7 | 184,701 | 729,611 |
+| padding-64 | burst | below floor | below floor | below floor | 3,208.3 | 12,916.7 | 34,583.4 | 184,301 | 729,611 |
+| padding-8 | burst | below floor | 333.3 | 791.7 | 2,875.0 | 11,250.0 | 32,708.4 | 190,493 | 729,611 |
+| shipped | burst | below floor | below floor | below floor | 3,083.3 | 13,208.4 | 30,125.1 | 182,471 | 729,611 |
+| uncached | burst | below floor | below floor | below floor | 1,500.0 | 12,958.4 | 18,208.4 | 193,481 | 729,611 |
+| uncached-modulo | burst | below floor | below floor | below floor | 1,375.0 | 10,583.4 | 25,208.3 | 193,669 | 729,611 |
 
 ## Targets
 
@@ -101,10 +102,10 @@ Each ratio is of the summary's medians above. Every bar is BENCHMARKS.md's.
 
 | Target | Comparison | Bar | Measured | Host | Verdict |
 |---|---|---|---|---|---|
-| T-SPSC-2 | cached over uncached, with %: modulo / uncached-modulo | ≥ 3.90× | 0.96× | macOS (M4 Max), not pinned; the bar's: i7-9700 under WSL2 | host differs: 0.96× on this Mac against a bar set on i7-9700 under WSL2, which it would miss |
-| T-SPSC-2 | cached over uncached, with the mask: shipped / uncached | ≥ 3.90× | 0.97× | macOS (M4 Max), not pinned; the bar's: i7-9700 under WSL2 | host differs: 0.97× on this Mac against a bar set on i7-9700 under WSL2, which it would miss |
+| T-SPSC-2 | cached over uncached, with %: modulo / uncached-modulo | ≥ 3.90× | 0.95× | macOS (M4 Max), not pinned; the bar's: i7-9700 under WSL2 | host differs: 0.95× on this Mac against a bar set on i7-9700 under WSL2, which it would miss |
+| T-SPSC-2 | cached over uncached, with the mask: shipped / uncached | ≥ 3.90× | 0.98× | macOS (M4 Max), not pinned; the bar's: i7-9700 under WSL2 | host differs: 0.98× on this Mac against a bar set on i7-9700 under WSL2, which it would miss |
 | T-SPSC-2 | mask over %, cached: shipped / modulo | ≥ 4.20× | 1.00× | macOS (M4 Max), not pinned; the bar's: i7-9700 under WSL2 | host differs: 1.00× on this Mac against a bar set on i7-9700 under WSL2, which it would miss |
-| T-SPSC-2 | mask over %, uncached: uncached / uncached-modulo | ≥ 4.20× | 0.99× | macOS (M4 Max), not pinned; the bar's: i7-9700 under WSL2 | host differs: 0.99× on this Mac against a bar set on i7-9700 under WSL2, which it would miss |
+| T-SPSC-2 | mask over %, uncached: uncached / uncached-modulo | ≥ 4.20× | 0.98× | macOS (M4 Max), not pinned; the bar's: i7-9700 under WSL2 | host differs: 0.98× on this Mac against a bar set on i7-9700 under WSL2, which it would miss |
 
 ## Repetitions
 
@@ -112,77 +113,87 @@ Each row's figure as in the summary, and the core each thread last ran on.
 
 | Repetition | Queue | Protocol | Figure | This thread's core | Peer's core |
 |---|---|---|---|---|---|
-| 1 | shipped | rtt | 86.16 | 13 | 10 |
-| 1 | shipped | saturated | 24.91 | 13 | 14 |
-| 1 | shipped | burst | 70.86 | 6 | 4 |
-| 1 | uncached | rtt | 159.2 | 9 | 4 |
-| 1 | uncached | saturated | 25.13 | 10 | 11 |
-| 1 | uncached | burst | 102.4 | 8 | 7 |
-| 1 | modulo | rtt | 84.91 | 8 | 7 |
-| 1 | modulo | saturated | 24.70 | 9 | 7 |
-| 1 | modulo | burst | 76.84 | 13 | 14 |
-| 1 | uncached-modulo | rtt | 162.4 | 12 | 10 |
-| 1 | uncached-modulo | saturated | 26.58 | 11 | 12 |
-| 1 | uncached-modulo | burst | 95.76 | 9 | 7 |
-| 1 | padding-8 | rtt | 151.2 | 5 | 7 |
-| 1 | padding-8 | saturated | 130.0 | 9 | 7 |
-| 1 | padding-8 | burst | 166.7 | 13 | 12 |
-| 1 | padding-64 | rtt | 85.66 | 10 | 12 |
-| 1 | padding-64 | saturated | 24.98 | 15 | 14 |
-| 1 | padding-64 | burst | 71.53 | 14 | 10 |
-| 1 | padding-256 | rtt | 89.38 | 5 | 4 |
-| 1 | padding-256 | saturated | 24.90 | 11 | 10 |
-| 1 | padding-256 | burst | 88.99 | 4 | 5 |
-| 1 | batch-publish | saturated-batch-32 | 1,354 | 5 | 9 |
-| 1 | publish-each | saturated-batch-32 | 342.2 | 11 | 4 |
-| 2 | uncached | rtt | 163.1 | 12 | 11 |
-| 2 | uncached | saturated | 25.82 | 8 | 4 |
-| 2 | uncached | burst | 95.97 | 13 | 12 |
-| 2 | modulo | rtt | 84.65 | 13 | 10 |
-| 2 | modulo | saturated | 24.76 | 14 | 13 |
-| 2 | modulo | burst | 78.75 | 5 | 4 |
-| 2 | uncached-modulo | rtt | 161.7 | 7 | 9 |
-| 2 | uncached-modulo | saturated | 25.83 | 12 | 13 |
-| 2 | uncached-modulo | burst | 103.1 | 4 | 6 |
-| 2 | padding-8 | rtt | 153.6 | 7 | 8 |
-| 2 | padding-8 | saturated | 27.90 | 4 | 6 |
-| 2 | padding-8 | burst | 100.2 | 15 | 14 |
-| 2 | padding-64 | rtt | 85.39 | 15 | 14 |
-| 2 | padding-64 | saturated | 24.95 | 13 | 15 |
-| 2 | padding-64 | burst | 72.07 | 13 | 15 |
-| 2 | padding-256 | rtt | 91.17 | 11 | 12 |
-| 2 | padding-256 | saturated | 24.66 | 13 | 14 |
-| 2 | padding-256 | burst | 76.33 | 5 | 4 |
-| 2 | shipped | rtt | 82.57 | 5 | 9 |
-| 2 | shipped | saturated | 24.82 | 6 | 5 |
-| 2 | shipped | burst | 71.06 | 10 | 14 |
-| 2 | publish-each | saturated-batch-32 | 314.4 | 15 | 8 |
-| 2 | batch-publish | saturated-batch-32 | 1,882 | 6 | 10 |
-| 3 | modulo | rtt | 98.03 | 11 | 10 |
-| 3 | modulo | saturated | 12.59 | 13 | 11 |
-| 3 | modulo | burst | 171.9 | 5 | 10 |
-| 3 | uncached-modulo | rtt | 165.0 | 9 | 6 |
-| 3 | uncached-modulo | saturated | 18.69 | 7 | 14 |
-| 3 | uncached-modulo | burst | 158.0 | 13 | 6 |
-| 3 | padding-8 | rtt | 395.8 | 7 | 6 |
-| 3 | padding-8 | saturated | 105.0 | 5 | 7 |
-| 3 | padding-8 | burst | 355.8 | 8 | 6 |
-| 3 | padding-64 | rtt | 85.25 | 8 | 6 |
-| 3 | padding-64 | saturated | 53.61 | 4 | 11 |
-| 3 | padding-64 | burst | 166.9 | 12 | 10 |
-| 3 | padding-256 | rtt | 91.18 | 12 | 10 |
-| 3 | padding-256 | saturated | 15.88 | 12 | 7 |
-| 3 | padding-256 | burst | 171.5 | 13 | 4 |
-| 3 | shipped | rtt | 99.89 | 11 | 15 |
-| 3 | shipped | saturated | 19.74 | 7 | 9 |
-| 3 | shipped | burst | 73.10 | 11 | 14 |
-| 3 | uncached | rtt | 162.2 | 12 | 14 |
-| 3 | uncached | saturated | 25.49 | 5 | 9 |
-| 3 | uncached | burst | 95.80 | 11 | 12 |
-| 3 | batch-publish | saturated-batch-32 | 1,333 | 11 | 12 |
-| 3 | publish-each | saturated-batch-32 | 336.0 | 11 | 14 |
+| 1 | shipped | rtt | 79.03 | 9 | 6 |
+| 1 | shipped | saturated | 27.52 | 13 | 15 |
+| 1 | shipped | burst | 65.01 | 7 | 9 |
+| 1 | uncached | rtt | 142.6 | 5 | 4 |
+| 1 | uncached | saturated | 28.15 | 13 | 10 |
+| 1 | uncached | burst | 86.43 | 9 | 4 |
+| 1 | modulo | rtt | 78.52 | 7 | 8 |
+| 1 | modulo | saturated | 27.36 | 15 | 12 |
+| 1 | modulo | burst | 65.03 | 9 | 7 |
+| 1 | uncached-modulo | rtt | 144.2 | 6 | 5 |
+| 1 | uncached-modulo | saturated | 28.84 | 11 | 12 |
+| 1 | uncached-modulo | burst | 90.33 | 7 | 9 |
+| 1 | padding-8 | rtt | 182.7 | 7 | 9 |
+| 1 | padding-8 | saturated | 151.8 | 6 | 9 |
+| 1 | padding-8 | burst | 151.9 | 15 | 13 |
+| 1 | padding-64 | rtt | 83.12 | 14 | 12 |
+| 1 | padding-64 | saturated | 27.62 | 6 | 5 |
+| 1 | padding-64 | burst | 70.08 | 12 | 13 |
+| 1 | padding-256 | rtt | 81.48 | 12 | 13 |
+| 1 | padding-256 | saturated | 27.49 | 9 | 8 |
+| 1 | padding-256 | burst | 62.47 | 11 | 10 |
+| 1 | batch-publish | saturated-batch-32 | 1,501 | 14 | 13 |
+| 1 | publish-each | saturated-batch-32 | 266.2 | 10 | 14 |
+| 2 | uncached | rtt | 143.2 | 10 | 14 |
+| 2 | uncached | saturated | 28.89 | 10 | 11 |
+| 2 | uncached | burst | 84.66 | 13 | 10 |
+| 2 | modulo | rtt | 76.36 | 15 | 10 |
+| 2 | modulo | saturated | 27.49 | 11 | 10 |
+| 2 | modulo | burst | 134.3 | 10 | 12 |
+| 2 | uncached-modulo | rtt | 145.4 | 15 | 12 |
+| 2 | uncached-modulo | saturated | 28.68 | 9 | 5 |
+| 2 | uncached-modulo | burst | 95.78 | 13 | 14 |
+| 2 | padding-8 | rtt | 138.1 | 12 | 14 |
+| 2 | padding-8 | saturated | 157.4 | 11 | 10 |
+| 2 | padding-8 | burst | 160.5 | 6 | 8 |
+| 2 | padding-64 | rtt | 77.79 | 5 | 9 |
+| 2 | padding-64 | saturated | 27.65 | 12 | 14 |
+| 2 | padding-64 | burst | 63.62 | 4 | 8 |
+| 2 | padding-256 | rtt | 80.99 | 9 | 6 |
+| 2 | padding-256 | saturated | 27.48 | 14 | 11 |
+| 2 | padding-256 | burst | 71.53 | 7 | 9 |
+| 2 | shipped | rtt | 76.35 | 7 | 4 |
+| 2 | shipped | saturated | 27.61 | 15 | 12 |
+| 2 | shipped | burst | 61.64 | 5 | 8 |
+| 2 | publish-each | saturated-batch-32 | 287.2 | 5 | 7 |
+| 2 | batch-publish | saturated-batch-32 | 1,504 | 4 | 7 |
+| 3 | modulo | rtt | 78.30 | 14 | 11 |
+| 3 | modulo | saturated | 27.54 | 8 | 6 |
+| 3 | modulo | burst | 68.67 | 13 | 11 |
+| 3 | uncached-modulo | rtt | 145.6 | 14 | 12 |
+| 3 | uncached-modulo | saturated | 29.11 | 7 | 5 |
+| 3 | uncached-modulo | burst | 89.21 | 11 | 14 |
+| 3 | padding-8 | rtt | 141.1 | 13 | 15 |
+| 3 | padding-8 | saturated | 35.65 | 4 | 9 |
+| 3 | padding-8 | burst | 96.13 | 10 | 14 |
+| 3 | padding-64 | rtt | 72.87 | 10 | 14 |
+| 3 | padding-64 | saturated | 27.67 | 9 | 8 |
+| 3 | padding-64 | burst | 66.51 | 13 | 15 |
+| 3 | padding-256 | rtt | 80.87 | 13 | 11 |
+| 3 | padding-256 | saturated | 27.38 | 7 | 8 |
+| 3 | padding-256 | burst | 85.16 | 14 | 15 |
+| 3 | shipped | rtt | 77.63 | 15 | 12 |
+| 3 | shipped | saturated | 27.78 | 8 | 9 |
+| 3 | shipped | burst | 68.56 | 13 | 15 |
+| 3 | uncached | rtt | 145.2 | 10 | 11 |
+| 3 | uncached | saturated | 27.80 | 5 | 6 |
+| 3 | uncached | burst | 89.23 | 12 | 13 |
+| 3 | batch-publish | saturated-batch-32 | 1,501 | 14 | 15 |
+| 3 | publish-each | saturated-batch-32 | 308.5 | 13 | 12 |
 
 Swap-outs are not read on this host: it has no /proc/vmstat.
+
+## Sampler
+
+The Mac's sampler rule was applied: a CPU sampler ran beside every repetition from before it started to after it ended, and a repetition is published only if the sampler covered its whole span with no gap over 5 s and saw no other process above 20% CPU in it. A repetition that failed the rule was withdrawn, with its own row in results/run_log.md, and run again; none was withdrawn for its numbers.
+
+| Process | Started | Finished | Outcome |
+|---|---|---|---|
+| repetition 1 | 2026-11-06T02:50:35Z | 2026-11-06T02:51:14Z | published: 21 samples, the longest gap 3 s, no other process above 20% CPU |
+| repetition 2 | 2026-11-06T02:51:18Z | 2026-11-06T02:51:57Z | published: 21 samples, the longest gap 3 s, no other process above 20% CPU |
+| repetition 3 | 2026-11-06T02:52:01Z | 2026-11-06T02:52:42Z | published: 22 samples, the longest gap 2 s, no other process above 20% CPU |
 
 ## machine_check output
 
@@ -195,7 +206,7 @@ machine_check: record governor: cannot be enforced: macOS has no cpufreq governo
 machine_check: record turbo: cannot be enforced: macOS exposes no boost control
 machine_check: record isolation: cannot be enforced: macOS has no isolated cores
 machine_check: record sibling-idle: cannot be enforced: this CPU has no SMT sibling, other cores stay in use
-machine_check: record load: { 3.67 5.01 6.35 }
+machine_check: record load: { 2.28 1.79 1.74 }
 machine_check: passed
 ```
 

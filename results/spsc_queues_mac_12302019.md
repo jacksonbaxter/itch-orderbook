@@ -15,15 +15,15 @@ Every queue of `bench/spsc_queues.hpp` by the four protocols of `bench/spsc_prot
 - kernel: Darwin 27.2.0
 - compiler: Clang 23.1.4 (https://github.com/llvm/llvm-project 7a941dfb2877a0b8cf30323fefa85ad019e0b0f5)
 - flags: -O3 -DNDEBUG -std=c++23
-- commit: f870418ad388 (clean)
+- commit: 0550a6017ece (clean)
 - dataset: 12302019.NASDAQ_ITCH50
 - dataset_sha256: 5d81c2e14a0f748b29c674b6a342796932702034b4dd341e39e9a9ec5bac610f
 - timer: mach_absolute_time, calibrated 24.000 MHz, nominal 24.000 MHz
 - quantum: 1 ticks, 41.667 ns
-- pair: 0.121 ticks, 5.059 ns, not subtracted from a one-way latency: its two reads are on two cores
+- pair: 0.059 ticks, 2.451 ns, not subtracted from a one-way latency: its two reads are on two cores
 - floor: 166.667 ns
 - pinning: not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0
-- migrations: 1 seen in 2 samples, core 13 to core 15
+- migrations: 1 seen in 2 samples, core 12 to core 15
 - core: unpinned, last ran on core 15
 - governor: unavailable: macOS has no cpufreq governor
 - frequency: unavailable: macOS exposes no core frequency on Apple silicon
@@ -41,15 +41,16 @@ Every queue of `bench/spsc_queues.hpp` by the four protocols of `bench/spsc_prot
 - cache_line: 128 bytes, the ring's padding constant
 - peer_core: none requested
 - peer_pinning: not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0
-- measure_load_start: measure.sh: start load1=3.17 host=macOS (M4 Max) at=2026-11-05T11:53:39Z
-- measure_load_end: measure.sh: end load1=6.16 exit=0 at=2026-11-05T11:57:22Z
-- peak_rss: 7.71 GiB, the largest process in the run
-- peak_footprint: 0.02 GiB, of the driver alone: time sees its direct child
+- interference: sampled every 2 s by the driver over each repetition's whole span; no other process above 20% CPU in any published repetition; 22 withdrawn under the rule
+- measure_load_start: measure.sh: start load1=1.51 host=macOS (M4 Max) at=2026-11-06T01:24:23Z
+- measure_load_end: measure.sh: end load1=2.40 exit=0 at=2026-11-06T02:48:47Z
+- peak_rss: 7.72 GiB, the largest process in the run
+- peak_footprint: 0.03 GiB, of the driver alone: time sees its direct child
 - prediction: P-0301
-- run_id: P-0301-20261105T115340Z
+- run_id: P-0301-20261106T012423Z
 - repetitions: 3
-- run_started: 2026-11-05T11:53:40Z
-- run_finished: 2026-11-05T11:57:22Z
+- run_started: 2026-11-06T01:24:23Z
+- run_finished: 2026-11-06T02:48:47Z
 
 ## Summary
 
@@ -57,46 +58,46 @@ Each repetition is a fresh process. 3 repetitions. Each runs every row once, in 
 
 | Figure | Median | Min | Max | CV |
 |---|---|---|---|---|
-| project, rtt, ns a round trip | 88.98 | 84.33 | 231.9 | 62.11% |
-| project, saturated, M items/s | 24.33 | 15.71 | 24.51 | 23.37% |
-| project, paced-1000ns, mean one-way ns | 85.97 | 85.37 | 86.83 | 0.85% |
-| project, paced-10000ns, mean one-way ns | 165.5 | 94.68 | 175.3 | 30.31% |
-| project, burst, mean one-way ns | 105.3 | 76.33 | 140.8 | 30.04% |
-| rigtorp, rtt, ns a round trip | 93.02 | 92.05 | 111.6 | 11.12% |
-| rigtorp, saturated, M items/s | 13.93 | 13.52 | 24.25 | 35.28% |
-| rigtorp, paced-1000ns, mean one-way ns | 86.12 | 84.97 | 173.6 | 44.26% |
-| rigtorp, paced-10000ns, mean one-way ns | 107.5 | 87.39 | 166.2 | 34.01% |
-| rigtorp, burst, mean one-way ns | 119.8 | 77.10 | 156.6 | 33.75% |
-| boost, rtt, ns a round trip | 174.2 | 163.9 | 519.7 | 70.84% |
-| boost, saturated, M items/s | 21.01 | 20.64 | 24.87 | 10.56% |
-| boost, paced-1000ns, mean one-way ns | 95.16 | 86.14 | 142.7 | 28.13% |
-| boost, paced-10000ns, mean one-way ns | 240.4 | 86.24 | 324.3 | 55.65% |
-| boost, burst, mean one-way ns | 137.5 | 95.18 | 210.2 | 39.42% |
-| moodycamel, rtt, ns a round trip | 162.3 | 159.8 | 163.7 | 1.22% |
-| moodycamel, saturated, M items/s | 739.3 | 534.7 | 763.2 | 18.50% |
-| moodycamel, paced-1000ns, mean one-way ns | 91.68 | 84.78 | 171.0 | 41.36% |
-| moodycamel, paced-10000ns, mean one-way ns | 189.5 | 90.85 | 232.1 | 42.41% |
-| moodycamel, burst, mean one-way ns | 129.6 | 101.8 | 208.8 | 37.81% |
-| folly, rtt, ns a round trip | 87.08 | 84.87 | 196.5 | 51.96% |
-| folly, saturated, M items/s | 17.40 | 15.70 | 25.15 | 25.95% |
-| folly, paced-1000ns, mean one-way ns | 87.53 | 85.01 | 200.9 | 53.17% |
-| folly, paced-10000ns, mean one-way ns | 142.6 | 85.10 | 175.7 | 34.09% |
-| folly, burst, mean one-way ns | 137.6 | 71.91 | 221.0 | 52.08% |
-| atomic_queue, rtt, ns a round trip | 245.9 | 158.6 | 410.4 | 47.07% |
-| atomic_queue, saturated, M items/s | 19.14 | 18.37 | 24.69 | 16.64% |
-| atomic_queue, paced-1000ns, mean one-way ns | 88.22 | 86.83 | 158.7 | 36.96% |
-| atomic_queue, paced-10000ns, mean one-way ns | 312.3 | 93.84 | 530.5 | 69.93% |
-| atomic_queue, burst, mean one-way ns | 167.5 | 115.2 | 291.4 | 47.27% |
-| xenium_vyukov, rtt, ns a round trip | 159.2 | 159.1 | 164.4 | 1.91% |
-| xenium_vyukov, saturated, M items/s | 22.86 | 21.38 | 23.89 | 5.54% |
-| xenium_vyukov, paced-1000ns, mean one-way ns | 92.94 | 84.36 | 131.1 | 24.21% |
-| xenium_vyukov, paced-10000ns, mean one-way ns | 199.6 | 90.62 | 307.2 | 54.37% |
-| xenium_vyukov, burst, mean one-way ns | 155.0 | 153.6 | 280.1 | 36.99% |
-| mutex, rtt, ns a round trip | 433.5 | 258.6 | 1,108 | 74.78% |
-| mutex, saturated, M items/s | 61.14 | 42.01 | 77.70 | 29.62% |
-| mutex, paced-1000ns, mean one-way ns | 524.2 | 225.8 | 1,808 | 98.60% |
-| mutex, paced-10000ns, mean one-way ns | 662.4 | 258.1 | 2,051 | 94.94% |
-| mutex, burst, mean one-way ns | 1,622 | 1,211 | 2,170 | 28.85% |
+| project, rtt, ns a round trip | 75.60 | 74.77 | 80.07 | 3.71% |
+| project, saturated, M items/s | 27.53 | 27.46 | 27.64 | 0.33% |
+| project, paced-1000ns, mean one-way ns | 50.53 | 46.35 | 61.74 | 15.06% |
+| project, paced-10000ns, mean one-way ns | 57.02 | 55.30 | 59.39 | 3.58% |
+| project, burst, mean one-way ns | 66.04 | 65.33 | 70.50 | 4.17% |
+| rigtorp, rtt, ns a round trip | 82.98 | 82.16 | 83.14 | 0.63% |
+| rigtorp, saturated, M items/s | 27.42 | 27.25 | 27.48 | 0.43% |
+| rigtorp, paced-1000ns, mean one-way ns | 78.16 | 77.85 | 81.95 | 2.88% |
+| rigtorp, paced-10000ns, mean one-way ns | 86.20 | 84.32 | 88.18 | 2.24% |
+| rigtorp, burst, mean one-way ns | 68.98 | 65.57 | 69.47 | 3.12% |
+| boost, rtt, ns a round trip | 144.3 | 143.8 | 146.0 | 0.81% |
+| boost, saturated, M items/s | 27.10 | 27.10 | 27.46 | 0.76% |
+| boost, paced-1000ns, mean one-way ns | 87.19 | 85.61 | 87.27 | 1.08% |
+| boost, paced-10000ns, mean one-way ns | 88.46 | 86.88 | 91.38 | 2.57% |
+| boost, burst, mean one-way ns | 89.81 | 86.67 | 91.47 | 2.73% |
+| moodycamel, rtt, ns a round trip | 142.9 | 141.8 | 149.3 | 2.78% |
+| moodycamel, saturated, M items/s | 685.8 | 592.5 | 788.6 | 14.23% |
+| moodycamel, paced-1000ns, mean one-way ns | 85.78 | 85.33 | 86.84 | 0.90% |
+| moodycamel, paced-10000ns, mean one-way ns | 87.41 | 87.25 | 92.22 | 3.17% |
+| moodycamel, burst, mean one-way ns | 97.91 | 95.20 | 98.35 | 1.75% |
+| folly, rtt, ns a round trip | 77.73 | 76.01 | 78.65 | 1.73% |
+| folly, saturated, M items/s | 27.63 | 27.59 | 27.78 | 0.36% |
+| folly, paced-1000ns, mean one-way ns | 67.94 | 65.09 | 71.13 | 4.44% |
+| folly, paced-10000ns, mean one-way ns | 62.55 | 61.75 | 64.07 | 1.87% |
+| folly, burst, mean one-way ns | 67.21 | 62.57 | 67.33 | 4.14% |
+| atomic_queue, rtt, ns a round trip | 142.8 | 141.8 | 142.9 | 0.46% |
+| atomic_queue, saturated, M items/s | 28.47 | 27.75 | 31.00 | 5.87% |
+| atomic_queue, paced-1000ns, mean one-way ns | 83.45 | 81.07 | 84.97 | 2.36% |
+| atomic_queue, paced-10000ns, mean one-way ns | 90.26 | 87.48 | 92.54 | 2.81% |
+| atomic_queue, burst, mean one-way ns | 99.97 | 98.68 | 106.9 | 4.32% |
+| xenium_vyukov, rtt, ns a round trip | 141.0 | 141.0 | 141.5 | 0.22% |
+| xenium_vyukov, saturated, M items/s | 26.02 | 25.99 | 26.41 | 0.90% |
+| xenium_vyukov, paced-1000ns, mean one-way ns | 90.37 | 85.79 | 93.93 | 4.53% |
+| xenium_vyukov, paced-10000ns, mean one-way ns | 90.73 | 87.60 | 92.27 | 2.64% |
+| xenium_vyukov, burst, mean one-way ns | 145.1 | 143.6 | 149.6 | 2.14% |
+| mutex, rtt, ns a round trip | 454.3 | 239.9 | 769.0 | 54.57% |
+| mutex, saturated, M items/s | 67.18 | 35.90 | 85.79 | 40.04% |
+| mutex, paced-1000ns, mean one-way ns | 164.4 | 160.9 | 518.6 | 73.06% |
+| mutex, paced-10000ns, mean one-way ns | 220.5 | 169.8 | 575.1 | 68.62% |
+| mutex, burst, mean one-way ns | 1,133 | 700.6 | 1,553 | 37.75% |
 
 ## Latency
 
@@ -104,30 +105,30 @@ One-way, from the sender's clock read to the receiver's, in ns, each cell the me
 
 | Queue | Protocol | p50 | p90 | p99 | p99.9 | p99.99 | max | Late sends | Samples |
 |---|---|---|---|---|---|---|---|---|---|
-| atomic_queue | burst | below floor | 333.3 | 541.7 | 2,625.0 | 12,416.7 | 20,458.4 | 197,213 | 729,611 |
-| boost | burst | below floor | 333.3 | 375.0 | 1,000.0 | 10,791.7 | 25,458.3 | 194,976 | 729,611 |
-| folly | burst | below floor | 250.0 | 291.7 | 1,041.7 | 7,208.3 | 20,958.4 | 195,214 | 729,611 |
-| moodycamel | burst | below floor | 250.0 | 416.7 | 958.3 | 7,791.7 | 17,875.0 | 193,997 | 729,611 |
-| mutex | burst | 375.0 | 4,416.7 | 9,500.0 | 16,375.0 | 39,083.4 | 72,125.2 | 209,856 | 729,611 |
-| project | burst | below floor | 208.3 | 291.7 | 458.3 | 8,166.7 | 18,250.0 | 187,127 | 729,611 |
-| rigtorp | burst | below floor | 208.3 | 291.7 | 708.3 | 8,375.0 | 17,875.0 | 187,553 | 729,611 |
-| xenium_vyukov | burst | below floor | 291.7 | 750.0 | 2,708.3 | 10,583.4 | 20,208.4 | 191,926 | 729,611 |
-| atomic_queue | paced-10000ns | 291.7 | 333.3 | 333.3 | 1,500.0 | 10,750.0 | 27,291.7 | 30 | 200,000 |
-| atomic_queue | paced-1000ns | below floor | below floor | below floor | 250.0 | 4,583.3 | 11,583.4 | 134 | 200,000 |
-| boost | paced-10000ns | 333.3 | 333.3 | 333.3 | 458.3 | 5,875.0 | 22,041.7 | 6 | 200,000 |
-| boost | paced-1000ns | below floor | below floor | 333.3 | 333.3 | 4,875.0 | 11,750.0 | 87 | 200,000 |
-| folly | paced-10000ns | below floor | 250.0 | 458.3 | 1,208.3 | 10,125.0 | 16,083.3 | 12 | 200,000 |
-| folly | paced-1000ns | below floor | below floor | below floor | 458.3 | 4,875.0 | 15,750.0 | 307 | 200,000 |
-| moodycamel | paced-10000ns | below floor | 333.3 | 375.0 | 916.7 | 8,375.0 | 16,708.4 | 20 | 200,000 |
-| moodycamel | paced-1000ns | below floor | below floor | below floor | 3,458.3 | 7,458.3 | 10,000.0 | 265 | 200,000 |
-| mutex | paced-10000ns | below floor | 2,291.7 | 5,291.7 | 13,500.0 | 30,333.4 | 59,958.5 | 24 | 200,000 |
-| mutex | paced-1000ns | below floor | 1,458.3 | 3,875.0 | 9,958.3 | 32,250.1 | 49,916.8 | 1,542 | 200,000 |
-| project | paced-10000ns | below floor | 250.0 | 291.7 | 583.3 | 9,666.7 | 19,875.0 | 22 | 200,000 |
-| project | paced-1000ns | below floor | below floor | below floor | 208.3 | 5,166.7 | 14,125.0 | 152 | 200,000 |
-| rigtorp | paced-10000ns | below floor | 250.0 | 291.7 | 375.0 | 9,500.0 | 29,500.1 | 23 | 200,000 |
-| rigtorp | paced-1000ns | below floor | below floor | below floor | 208.3 | 4,250.0 | 11,375.0 | 111 | 200,000 |
-| xenium_vyukov | paced-10000ns | below floor | below floor | 333.3 | 1,708.3 | 13,583.4 | 34,041.7 | 30 | 200,000 |
-| xenium_vyukov | paced-1000ns | below floor | below floor | 333.3 | 375.0 | 7,166.7 | 16,541.7 | 205 | 200,000 |
+| atomic_queue | burst | below floor | below floor | 375.0 | 2,750.0 | 13,083.4 | 38,958.4 | 192,920 | 729,611 |
+| boost | burst | below floor | below floor | below floor | 2,583.3 | 12,750.0 | 21,125.0 | 193,579 | 729,611 |
+| folly | burst | below floor | below floor | below floor | 3,000.0 | 12,833.4 | 26,541.7 | 186,095 | 729,611 |
+| moodycamel | burst | below floor | below floor | below floor | 625.0 | 10,500.0 | 25,500.1 | 192,264 | 729,611 |
+| mutex | burst | below floor | 3,208.3 | 8,333.4 | 14,291.7 | 37,041.7 | 55,083.4 | 206,502 | 729,611 |
+| project | burst | below floor | below floor | below floor | 3,583.3 | 13,333.4 | 31,041.7 | 184,062 | 729,611 |
+| rigtorp | burst | below floor | below floor | below floor | 2,250.0 | 12,041.7 | 36,416.7 | 184,968 | 729,611 |
+| xenium_vyukov | burst | below floor | 291.7 | 750.0 | 1,208.3 | 8,083.4 | 25,500.1 | 191,721 | 729,611 |
+| atomic_queue | paced-10000ns | below floor | below floor | 291.7 | 3,333.3 | 13,333.4 | 29,083.4 | 22 | 200,000 |
+| atomic_queue | paced-1000ns | below floor | below floor | below floor | 583.3 | 7,958.3 | 15,750.0 | 167 | 200,000 |
+| boost | paced-10000ns | below floor | below floor | below floor | 1,083.3 | 12,125.0 | 24,458.4 | 33 | 200,000 |
+| boost | paced-1000ns | below floor | below floor | below floor | 791.7 | 9,958.4 | 19,291.7 | 218 | 200,000 |
+| folly | paced-10000ns | below floor | below floor | below floor | 1,125.0 | 12,500.0 | 26,083.4 | 25 | 200,000 |
+| folly | paced-1000ns | below floor | below floor | below floor | 291.7 | 7,000.0 | 14,250.0 | 167 | 200,000 |
+| moodycamel | paced-10000ns | below floor | below floor | below floor | 291.7 | 8,750.0 | 32,875.1 | 49 | 200,000 |
+| moodycamel | paced-1000ns | below floor | below floor | below floor | 208.3 | 4,208.3 | 14,083.4 | 211 | 200,000 |
+| mutex | paced-10000ns | below floor | 208.3 | 3,250.0 | 10,041.7 | 25,500.1 | 51,125.1 | 50 | 200,000 |
+| mutex | paced-1000ns | below floor | below floor | 333.3 | 7,041.7 | 33,708.4 | 44,000.1 | 662 | 200,000 |
+| project | paced-10000ns | below floor | below floor | below floor | 2,375.0 | 12,666.7 | 21,750.0 | 27 | 200,000 |
+| project | paced-1000ns | below floor | below floor | below floor | 208.3 | 5,416.7 | 15,625.0 | 450 | 200,000 |
+| rigtorp | paced-10000ns | below floor | below floor | below floor | 3,041.7 | 15,875.0 | 32,500.1 | 38 | 200,000 |
+| rigtorp | paced-1000ns | below floor | below floor | below floor | 333.3 | 6,916.7 | 14,250.0 | 326 | 200,000 |
+| xenium_vyukov | paced-10000ns | below floor | below floor | below floor | 2,625.0 | 12,750.0 | 32,708.4 | 29 | 200,000 |
+| xenium_vyukov | paced-1000ns | below floor | below floor | below floor | 2,541.7 | 10,083.4 | 18,708.4 | 153 | 200,000 |
 
 ## Targets
 
@@ -135,9 +136,9 @@ Each ratio is of the summary's medians above. Every bar is BENCHMARKS.md's.
 
 | Target | Comparison | Bar | Measured | Host | Verdict |
 |---|---|---|---|---|---|
-| T-SPSC-1 | boost rtt / project rtt | ≥ 1.16× | 1.96× | macOS (M4 Max), not pinned; the bar's: Ryzen 7 5825U, Linux, pinned | host differs: 1.96× on this Mac against a bar set on Ryzen 7 5825U, Linux, pinned, which it would meet |
-| T-SPSC-1 | project rtt / moodycamel rtt | ≤ 1.00× | 0.55× | macOS (M4 Max), not pinned; the bar's: Ryzen 7 5825U, Linux, pinned | host differs: 0.55× on this Mac against a bar set on Ryzen 7 5825U, Linux, pinned, which it would meet |
-| T-SPSC-1 | project rtt / rigtorp rtt | ≤ 1.00× | 0.96× | macOS (M4 Max), not pinned; the bar's: Ryzen 7 5825U, Linux, pinned | host differs: 0.96× on this Mac against a bar set on Ryzen 7 5825U, Linux, pinned, which it would meet |
+| T-SPSC-1 | boost rtt / project rtt | ≥ 1.16× | 1.91× | macOS (M4 Max), not pinned; the bar's: Ryzen 7 5825U, Linux, pinned | host differs: 1.91× on this Mac against a bar set on Ryzen 7 5825U, Linux, pinned, which it would meet |
+| T-SPSC-1 | project rtt / moodycamel rtt | ≤ 1.00× | 0.53× | macOS (M4 Max), not pinned; the bar's: Ryzen 7 5825U, Linux, pinned | host differs: 0.53× on this Mac against a bar set on Ryzen 7 5825U, Linux, pinned, which it would meet |
+| T-SPSC-1 | project rtt / rigtorp rtt | ≤ 1.00× | 0.91× | macOS (M4 Max), not pinned; the bar's: Ryzen 7 5825U, Linux, pinned | host differs: 0.91× on this Mac against a bar set on Ryzen 7 5825U, Linux, pinned, which it would meet |
 
 ## Repetitions
 
@@ -145,128 +146,160 @@ Each row's figure as in the summary, and the core each thread last ran on.
 
 | Repetition | Queue | Protocol | Figure | This thread's core | Peer's core |
 |---|---|---|---|---|---|
-| 1 | project | rtt | 84.33 | 6 | 4 |
-| 1 | project | saturated | 24.33 | 10 | 12 |
-| 1 | project | paced-1000ns | 86.83 | 13 | 10 |
-| 1 | project | paced-10000ns | 165.5 | 14 | 8 |
-| 1 | project | burst | 140.8 | 14 | 4 |
-| 1 | rigtorp | rtt | 111.6 | 15 | 12 |
-| 1 | rigtorp | saturated | 13.93 | 15 | 13 |
-| 1 | rigtorp | paced-1000ns | 173.6 | 13 | 15 |
-| 1 | rigtorp | paced-10000ns | 166.2 | 12 | 14 |
-| 1 | rigtorp | burst | 156.6 | 12 | 14 |
-| 1 | boost | rtt | 163.9 | 12 | 13 |
-| 1 | boost | saturated | 24.87 | 12 | 11 |
-| 1 | boost | paced-1000ns | 86.14 | 15 | 13 |
-| 1 | boost | paced-10000ns | 86.24 | 6 | 4 |
-| 1 | boost | burst | 95.18 | 15 | 11 |
-| 1 | moodycamel | rtt | 159.8 | 15 | 14 |
-| 1 | moodycamel | saturated | 739.3 | 10 | 11 |
-| 1 | moodycamel | paced-1000ns | 91.68 | 15 | 14 |
-| 1 | moodycamel | paced-10000ns | 90.85 | 9 | 6 |
-| 1 | moodycamel | burst | 101.8 | 13 | 14 |
-| 1 | folly | rtt | 87.08 | 12 | 14 |
-| 1 | folly | saturated | 25.15 | 14 | 10 |
-| 1 | folly | paced-1000ns | 85.01 | 13 | 11 |
-| 1 | folly | paced-10000ns | 85.10 | 7 | 9 |
-| 1 | folly | burst | 71.91 | 11 | 12 |
-| 1 | atomic_queue | rtt | 158.6 | 15 | 14 |
-| 1 | atomic_queue | saturated | 24.69 | 11 | 13 |
-| 1 | atomic_queue | paced-1000ns | 86.83 | 15 | 13 |
-| 1 | atomic_queue | paced-10000ns | 93.84 | 5 | 6 |
-| 1 | atomic_queue | burst | 115.2 | 4 | 9 |
-| 1 | xenium_vyukov | rtt | 159.1 | 6 | 5 |
-| 1 | xenium_vyukov | saturated | 23.89 | 6 | 5 |
-| 1 | xenium_vyukov | paced-1000ns | 84.36 | 7 | 9 |
-| 1 | xenium_vyukov | paced-10000ns | 90.62 | 11 | 10 |
-| 1 | xenium_vyukov | burst | 155.0 | 8 | 7 |
-| 1 | mutex | rtt | 258.6 | 6 | 8 |
-| 1 | mutex | saturated | 61.14 | 14 | 15 |
-| 1 | mutex | paced-1000ns | 225.8 | 15 | 13 |
-| 1 | mutex | paced-10000ns | 258.1 | 7 | 5 |
-| 1 | mutex | burst | 1,211 | 15 | 11 |
-| 2 | rigtorp | rtt | 92.05 | 12 | 13 |
-| 2 | rigtorp | saturated | 13.52 | 4 | 6 |
-| 2 | rigtorp | paced-1000ns | 86.12 | 4 | 6 |
-| 2 | rigtorp | paced-10000ns | 107.5 | 6 | 5 |
-| 2 | rigtorp | burst | 119.8 | 7 | 10 |
-| 2 | boost | rtt | 174.2 | 8 | 4 |
-| 2 | boost | saturated | 20.64 | 5 | 9 |
-| 2 | boost | paced-1000ns | 95.16 | 10 | 7 |
-| 2 | boost | paced-10000ns | 240.4 | 7 | 10 |
-| 2 | boost | burst | 210.2 | 6 | 5 |
-| 2 | moodycamel | rtt | 163.7 | 6 | 5 |
-| 2 | moodycamel | saturated | 763.2 | 6 | 5 |
-| 2 | moodycamel | paced-1000ns | 84.78 | 6 | 5 |
-| 2 | moodycamel | paced-10000ns | 189.5 | 11 | 15 |
-| 2 | moodycamel | burst | 129.6 | 4 | 9 |
-| 2 | folly | rtt | 84.87 | 4 | 9 |
-| 2 | folly | saturated | 15.70 | 10 | 11 |
-| 2 | folly | paced-1000ns | 200.9 | 5 | 6 |
-| 2 | folly | paced-10000ns | 175.7 | 4 | 12 |
-| 2 | folly | burst | 221.0 | 12 | 7 |
-| 2 | atomic_queue | rtt | 410.4 | 10 | 8 |
-| 2 | atomic_queue | saturated | 18.37 | 6 | 8 |
-| 2 | atomic_queue | paced-1000ns | 88.22 | 6 | 8 |
-| 2 | atomic_queue | paced-10000ns | 312.3 | 5 | 15 |
-| 2 | atomic_queue | burst | 167.5 | 7 | 5 |
-| 2 | xenium_vyukov | rtt | 164.4 | 7 | 5 |
-| 2 | xenium_vyukov | saturated | 21.38 | 8 | 7 |
-| 2 | xenium_vyukov | paced-1000ns | 131.1 | 10 | 15 |
-| 2 | xenium_vyukov | paced-10000ns | 199.6 | 6 | 8 |
-| 2 | xenium_vyukov | burst | 280.1 | 10 | 9 |
-| 2 | mutex | rtt | 433.5 | 14 | 13 |
-| 2 | mutex | saturated | 42.01 | 4 | 12 |
-| 2 | mutex | paced-1000ns | 1,808 | 15 | 4 |
-| 2 | mutex | paced-10000ns | 2,051 | 15 | 5 |
-| 2 | mutex | burst | 2,170 | 13 | 8 |
-| 2 | project | rtt | 231.9 | 10 | 8 |
-| 2 | project | saturated | 15.71 | 11 | 15 |
-| 2 | project | paced-1000ns | 85.37 | 15 | 10 |
-| 2 | project | paced-10000ns | 175.3 | 7 | 4 |
-| 2 | project | burst | 105.3 | 15 | 8 |
-| 3 | boost | rtt | 519.7 | 7 | 11 |
-| 3 | boost | saturated | 21.01 | 6 | 9 |
-| 3 | boost | paced-1000ns | 142.7 | 4 | 15 |
-| 3 | boost | paced-10000ns | 324.3 | 10 | 6 |
-| 3 | boost | burst | 137.5 | 13 | 6 |
-| 3 | moodycamel | rtt | 162.3 | 5 | 6 |
-| 3 | moodycamel | saturated | 534.7 | 10 | 13 |
-| 3 | moodycamel | paced-1000ns | 171.0 | 13 | 6 |
-| 3 | moodycamel | paced-10000ns | 232.1 | 12 | 15 |
-| 3 | moodycamel | burst | 208.8 | 6 | 10 |
-| 3 | folly | rtt | 196.5 | 13 | 11 |
-| 3 | folly | saturated | 17.40 | 11 | 15 |
-| 3 | folly | paced-1000ns | 87.53 | 4 | 5 |
-| 3 | folly | paced-10000ns | 142.6 | 11 | 9 |
-| 3 | folly | burst | 137.6 | 14 | 13 |
-| 3 | atomic_queue | rtt | 245.9 | 5 | 7 |
-| 3 | atomic_queue | saturated | 19.14 | 8 | 5 |
-| 3 | atomic_queue | paced-1000ns | 158.7 | 6 | 9 |
-| 3 | atomic_queue | paced-10000ns | 530.5 | 8 | 11 |
-| 3 | atomic_queue | burst | 291.4 | 15 | 13 |
-| 3 | xenium_vyukov | rtt | 159.2 | 15 | 13 |
-| 3 | xenium_vyukov | saturated | 22.86 | 7 | 8 |
-| 3 | xenium_vyukov | paced-1000ns | 92.94 | 5 | 10 |
-| 3 | xenium_vyukov | paced-10000ns | 307.2 | 10 | 11 |
-| 3 | xenium_vyukov | burst | 153.6 | 7 | 4 |
-| 3 | mutex | rtt | 1,108 | 15 | 14 |
-| 3 | mutex | saturated | 77.70 | 4 | 9 |
-| 3 | mutex | paced-1000ns | 524.2 | 7 | 8 |
-| 3 | mutex | paced-10000ns | 662.4 | 12 | 13 |
-| 3 | mutex | burst | 1,622 | 5 | 4 |
-| 3 | project | rtt | 88.98 | 9 | 6 |
-| 3 | project | saturated | 24.51 | 13 | 15 |
-| 3 | project | paced-1000ns | 85.97 | 13 | 11 |
-| 3 | project | paced-10000ns | 94.68 | 7 | 4 |
-| 3 | project | burst | 76.33 | 15 | 10 |
-| 3 | rigtorp | rtt | 93.02 | 15 | 10 |
-| 3 | rigtorp | saturated | 24.25 | 11 | 10 |
-| 3 | rigtorp | paced-1000ns | 84.97 | 14 | 10 |
-| 3 | rigtorp | paced-10000ns | 87.39 | 6 | 4 |
-| 3 | rigtorp | burst | 77.10 | 14 | 15 |
+| 1 | project | rtt | 75.60 | 13 | 15 |
+| 1 | project | saturated | 27.64 | 6 | 5 |
+| 1 | project | paced-1000ns | 46.35 | 7 | 4 |
+| 1 | project | paced-10000ns | 57.02 | 10 | 11 |
+| 1 | project | burst | 65.33 | 6 | 9 |
+| 1 | rigtorp | rtt | 82.98 | 9 | 8 |
+| 1 | rigtorp | saturated | 27.25 | 15 | 14 |
+| 1 | rigtorp | paced-1000ns | 77.85 | 10 | 11 |
+| 1 | rigtorp | paced-10000ns | 86.20 | 8 | 5 |
+| 1 | rigtorp | burst | 65.57 | 11 | 12 |
+| 1 | boost | rtt | 143.8 | 11 | 13 |
+| 1 | boost | saturated | 27.10 | 4 | 6 |
+| 1 | boost | paced-1000ns | 87.27 | 8 | 9 |
+| 1 | boost | paced-10000ns | 91.38 | 11 | 14 |
+| 1 | boost | burst | 89.81 | 9 | 8 |
+| 1 | moodycamel | rtt | 142.9 | 5 | 7 |
+| 1 | moodycamel | saturated | 685.8 | 6 | 7 |
+| 1 | moodycamel | paced-1000ns | 85.78 | 9 | 8 |
+| 1 | moodycamel | paced-10000ns | 87.41 | 12 | 10 |
+| 1 | moodycamel | burst | 97.91 | 11 | 12 |
+| 1 | folly | rtt | 77.73 | 13 | 14 |
+| 1 | folly | saturated | 27.59 | 11 | 10 |
+| 1 | folly | paced-1000ns | 67.94 | 15 | 14 |
+| 1 | folly | paced-10000ns | 62.55 | 13 | 10 |
+| 1 | folly | burst | 67.33 | 8 | 7 |
+| 1 | atomic_queue | rtt | 141.8 | 7 | 9 |
+| 1 | atomic_queue | saturated | 27.75 | 11 | 13 |
+| 1 | atomic_queue | paced-1000ns | 81.07 | 15 | 10 |
+| 1 | atomic_queue | paced-10000ns | 92.54 | 9 | 8 |
+| 1 | atomic_queue | burst | 106.9 | 15 | 13 |
+| 1 | xenium_vyukov | rtt | 141.0 | 11 | 13 |
+| 1 | xenium_vyukov | saturated | 26.02 | 4 | 7 |
+| 1 | xenium_vyukov | paced-1000ns | 90.37 | 6 | 9 |
+| 1 | xenium_vyukov | paced-10000ns | 92.27 | 12 | 13 |
+| 1 | xenium_vyukov | burst | 149.6 | 6 | 7 |
+| 1 | mutex | rtt | 239.9 | 9 | 4 |
+| 1 | mutex | saturated | 67.18 | 9 | 7 |
+| 1 | mutex | paced-1000ns | 160.9 | 4 | 9 |
+| 1 | mutex | paced-10000ns | 220.5 | 12 | 11 |
+| 1 | mutex | burst | 1,133 | 15 | 12 |
+| 2 | rigtorp | rtt | 82.16 | 13 | 12 |
+| 2 | rigtorp | saturated | 27.48 | 6 | 8 |
+| 2 | rigtorp | paced-1000ns | 81.95 | 8 | 4 |
+| 2 | rigtorp | paced-10000ns | 84.32 | 15 | 11 |
+| 2 | rigtorp | burst | 68.98 | 8 | 5 |
+| 2 | boost | rtt | 144.3 | 5 | 4 |
+| 2 | boost | saturated | 27.10 | 13 | 14 |
+| 2 | boost | paced-1000ns | 85.61 | 10 | 15 |
+| 2 | boost | paced-10000ns | 88.46 | 5 | 6 |
+| 2 | boost | burst | 91.47 | 10 | 11 |
+| 2 | moodycamel | rtt | 141.8 | 14 | 13 |
+| 2 | moodycamel | saturated | 592.5 | 15 | 13 |
+| 2 | moodycamel | paced-1000ns | 85.33 | 12 | 11 |
+| 2 | moodycamel | paced-10000ns | 87.25 | 6 | 5 |
+| 2 | moodycamel | burst | 95.20 | 9 | 6 |
+| 2 | folly | rtt | 78.65 | 9 | 8 |
+| 2 | folly | saturated | 27.78 | 8 | 7 |
+| 2 | folly | paced-1000ns | 65.09 | 4 | 7 |
+| 2 | folly | paced-10000ns | 61.75 | 10 | 11 |
+| 2 | folly | burst | 67.21 | 14 | 12 |
+| 2 | atomic_queue | rtt | 142.9 | 13 | 15 |
+| 2 | atomic_queue | saturated | 28.47 | 6 | 7 |
+| 2 | atomic_queue | paced-1000ns | 83.45 | 10 | 11 |
+| 2 | atomic_queue | paced-10000ns | 87.48 | 11 | 10 |
+| 2 | atomic_queue | burst | 98.68 | 9 | 5 |
+| 2 | xenium_vyukov | rtt | 141.5 | 6 | 4 |
+| 2 | xenium_vyukov | saturated | 26.41 | 12 | 11 |
+| 2 | xenium_vyukov | paced-1000ns | 85.79 | 10 | 15 |
+| 2 | xenium_vyukov | paced-10000ns | 87.60 | 8 | 7 |
+| 2 | xenium_vyukov | burst | 143.6 | 11 | 12 |
+| 2 | mutex | rtt | 454.3 | 15 | 14 |
+| 2 | mutex | saturated | 35.90 | 4 | 5 |
+| 2 | mutex | paced-1000ns | 164.4 | 4 | 5 |
+| 2 | mutex | paced-10000ns | 169.8 | 13 | 11 |
+| 2 | mutex | burst | 700.6 | 13 | 15 |
+| 2 | project | rtt | 80.07 | 13 | 15 |
+| 2 | project | saturated | 27.46 | 12 | 13 |
+| 2 | project | paced-1000ns | 50.53 | 14 | 15 |
+| 2 | project | paced-10000ns | 55.30 | 14 | 15 |
+| 2 | project | burst | 66.04 | 8 | 5 |
+| 3 | boost | rtt | 146.0 | 15 | 11 |
+| 3 | boost | saturated | 27.46 | 6 | 9 |
+| 3 | boost | paced-1000ns | 87.19 | 11 | 10 |
+| 3 | boost | paced-10000ns | 86.88 | 15 | 11 |
+| 3 | boost | burst | 86.67 | 7 | 9 |
+| 3 | moodycamel | rtt | 149.3 | 6 | 8 |
+| 3 | moodycamel | saturated | 788.6 | 5 | 8 |
+| 3 | moodycamel | paced-1000ns | 86.84 | 7 | 9 |
+| 3 | moodycamel | paced-10000ns | 92.22 | 11 | 10 |
+| 3 | moodycamel | burst | 98.35 | 9 | 6 |
+| 3 | folly | rtt | 76.01 | 8 | 7 |
+| 3 | folly | saturated | 27.63 | 15 | 11 |
+| 3 | folly | paced-1000ns | 71.13 | 14 | 10 |
+| 3 | folly | paced-10000ns | 64.07 | 5 | 9 |
+| 3 | folly | burst | 62.57 | 9 | 6 |
+| 3 | atomic_queue | rtt | 142.8 | 7 | 4 |
+| 3 | atomic_queue | saturated | 31.00 | 6 | 9 |
+| 3 | atomic_queue | paced-1000ns | 84.97 | 9 | 8 |
+| 3 | atomic_queue | paced-10000ns | 90.26 | 5 | 6 |
+| 3 | atomic_queue | burst | 99.97 | 11 | 13 |
+| 3 | xenium_vyukov | rtt | 141.0 | 14 | 15 |
+| 3 | xenium_vyukov | saturated | 25.99 | 9 | 4 |
+| 3 | xenium_vyukov | paced-1000ns | 93.93 | 10 | 11 |
+| 3 | xenium_vyukov | paced-10000ns | 90.73 | 10 | 14 |
+| 3 | xenium_vyukov | burst | 145.1 | 5 | 7 |
+| 3 | mutex | rtt | 769.0 | 7 | 6 |
+| 3 | mutex | saturated | 85.79 | 9 | 4 |
+| 3 | mutex | paced-1000ns | 518.6 | 6 | 9 |
+| 3 | mutex | paced-10000ns | 575.1 | 15 | 13 |
+| 3 | mutex | burst | 1,553 | 4 | 8 |
+| 3 | project | rtt | 74.77 | 4 | 8 |
+| 3 | project | saturated | 27.53 | 15 | 13 |
+| 3 | project | paced-1000ns | 61.74 | 14 | 11 |
+| 3 | project | paced-10000ns | 59.39 | 8 | 9 |
+| 3 | project | burst | 70.50 | 13 | 15 |
+| 3 | rigtorp | rtt | 83.14 | 10 | 12 |
+| 3 | rigtorp | saturated | 27.42 | 7 | 4 |
+| 3 | rigtorp | paced-1000ns | 78.16 | 8 | 9 |
+| 3 | rigtorp | paced-10000ns | 88.18 | 10 | 14 |
+| 3 | rigtorp | burst | 69.47 | 12 | 10 |
 
 Swap-outs are not read on this host: it has no /proc/vmstat.
+
+## Sampler
+
+The Mac's sampler rule was applied: a CPU sampler ran beside every repetition from before it started to after it ended, and a repetition is published only if the sampler covered its whole span with no gap over 5 s and saw no other process above 20% CPU in it. A repetition that failed the rule was withdrawn, with its own row in results/run_log.md, and run again; none was withdrawn for its numbers.
+
+| Process | Started | Finished | Outcome |
+|---|---|---|---|
+| repetition 1 | 2026-11-06T02:26:15Z | 2026-11-06T02:27:16Z | published: 31 samples, the longest gap 3 s, no other process above 20% CPU |
+| repetition 2 | 2026-11-06T02:46:38Z | 2026-11-06T02:47:41Z | published: 32 samples, the longest gap 3 s, no other process above 20% CPU |
+| repetition 3 | 2026-11-06T02:47:45Z | 2026-11-06T02:48:46Z | published: 31 samples, the longest gap 3 s, no other process above 20% CPU |
+| withdrawn 1 | 2026-11-06T01:40:54Z | 2026-11-06T01:41:55Z | withdrawn: the CPU sampler saw plugin-container at 44.8% CPU at 2026-11-06T01:41:10Z |
+| withdrawn 2 | 2026-11-06T01:44:04Z | 2026-11-06T01:45:04Z | withdrawn: the CPU sampler saw launchd at 22.6% CPU at 2026-11-06T01:44:28Z |
+| withdrawn 3 | 2026-11-06T01:48:22Z | 2026-11-06T01:49:23Z | withdrawn: the CPU sampler saw launchd at 45.4% CPU at 2026-11-06T01:48:28Z |
+| withdrawn 4 | 2026-11-06T01:52:58Z | 2026-11-06T01:53:59Z | withdrawn: the CPU sampler saw mediaanalysisd at 120.3% CPU at 2026-11-06T01:53:07Z |
+| withdrawn 5 | 2026-11-06T01:55:41Z | 2026-11-06T01:56:42Z | withdrawn: the CPU sampler saw launchd at 39.6% CPU at 2026-11-06T01:55:58Z |
+| withdrawn 6 | 2026-11-06T01:57:05Z | 2026-11-06T01:58:06Z | withdrawn: the CPU sampler saw plugin-container at 24.7% CPU at 2026-11-06T01:57:46Z |
+| withdrawn 7 | 2026-11-06T01:59:05Z | 2026-11-06T02:00:07Z | withdrawn: the CPU sampler saw corespotlightd at 173.8% CPU at 2026-11-06T02:00:01Z |
+| withdrawn 8 | 2026-11-06T02:02:15Z | 2026-11-06T02:03:16Z | withdrawn: the CPU sampler saw launchd at 24.6% CPU at 2026-11-06T02:02:28Z |
+| withdrawn 9 | 2026-11-06T02:08:35Z | 2026-11-06T02:09:36Z | withdrawn: the CPU sampler saw launchd at 34.3% CPU at 2026-11-06T02:08:58Z |
+| withdrawn 10 | 2026-11-06T02:12:02Z | 2026-11-06T02:13:03Z | withdrawn: the CPU sampler saw mdworker_shared at 24.5% CPU at 2026-11-06T02:12:25Z |
+| withdrawn 11 | 2026-11-06T02:14:13Z | 2026-11-06T02:15:14Z | withdrawn: the CPU sampler saw mdworker_shared at 23.7% CPU at 2026-11-06T02:14:38Z |
+| withdrawn 12 | 2026-11-06T02:16:05Z | 2026-11-06T02:17:07Z | withdrawn: the CPU sampler saw launchd at 48.1% CPU at 2026-11-06T02:16:28Z |
+| withdrawn 13 | 2026-11-06T02:17:35Z | 2026-11-06T02:18:36Z | withdrawn: the CPU sampler saw launchd at 26.1% CPU at 2026-11-06T02:18:28Z |
+| withdrawn 14 | 2026-11-06T02:19:36Z | 2026-11-06T02:20:37Z | withdrawn: the CPU sampler saw mdworker_shared at 21.5% CPU at 2026-11-06T02:19:38Z |
+| withdrawn 15 | 2026-11-06T02:21:05Z | 2026-11-06T02:22:07Z | withdrawn: the CPU sampler saw launchd at 44.8% CPU at 2026-11-06T02:21:28Z |
+| withdrawn 16 | 2026-11-06T02:22:35Z | 2026-11-06T02:23:37Z | withdrawn: the CPU sampler saw launchd at 22.4% CPU at 2026-11-06T02:23:28Z |
+| withdrawn 17 | 2026-11-06T02:27:20Z | 2026-11-06T02:28:23Z | withdrawn: the CPU sampler saw launchd at 33.4% CPU at 2026-11-06T02:27:28Z |
+| withdrawn 18 | 2026-11-06T02:28:33Z | 2026-11-06T02:29:36Z | withdrawn: the CPU sampler saw launchd at 40.1% CPU at 2026-11-06T02:29:28Z |
+| withdrawn 19 | 2026-11-06T02:33:14Z | 2026-11-06T02:34:17Z | withdrawn: the CPU sampler saw launchd at 22.4% CPU at 2026-11-06T02:33:29Z |
+| withdrawn 20 | 2026-11-06T02:34:33Z | 2026-11-06T02:35:36Z | withdrawn: the CPU sampler saw launchd at 21.1% CPU at 2026-11-06T02:35:29Z |
+| withdrawn 21 | 2026-11-06T02:37:34Z | 2026-11-06T02:38:35Z | withdrawn: the CPU sampler saw launchd at 21.0% CPU at 2026-11-06T02:37:58Z |
+| withdrawn 22 | 2026-11-06T02:42:24Z | 2026-11-06T02:43:26Z | withdrawn: the CPU sampler saw launchd at 47.3% CPU at 2026-11-06T02:42:58Z |
 
 ## machine_check output
 
@@ -279,7 +312,7 @@ machine_check: record governor: cannot be enforced: macOS has no cpufreq governo
 machine_check: record turbo: cannot be enforced: macOS exposes no boost control
 machine_check: record isolation: cannot be enforced: macOS has no isolated cores
 machine_check: record sibling-idle: cannot be enforced: this CPU has no SMT sibling, other cores stay in use
-machine_check: record load: { 2.97 4.51 6.60 }
+machine_check: record load: { 1.43 2.39 2.22 }
 machine_check: passed
 ```
 

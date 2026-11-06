@@ -15,16 +15,16 @@ The whole day three ways on the `paged-flat` book, the shipped arm, each on a fr
 - kernel: Darwin 27.2.0
 - compiler: Clang 23.1.4 (https://github.com/llvm/llvm-project 7a941dfb2877a0b8cf30323fefa85ad019e0b0f5)
 - flags: -O3 -DNDEBUG -std=c++23
-- commit: bb83ed30c6a6 (clean)
+- commit: 0550a6017ece (clean)
 - dataset: 12302019.NASDAQ_ITCH50
 - dataset_sha256: 5d81c2e14a0f748b29c674b6a342796932702034b4dd341e39e9a9ec5bac610f
 - timer: mach_absolute_time, calibrated 24.000 MHz, nominal 24.000 MHz
 - quantum: 1 ticks, 41.667 ns
-- pair: 0.061 ticks, 2.558 ns, not subtracted: one span covers the day
+- pair: 0.075 ticks, 3.107 ns, not subtracted: one span covers the day
 - floor: 166.667 ns
 - pinning: not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0
-- migrations: 5 seen in 7 samples, core 4 to core 7
-- core: unpinned, last ran on core 7
+- migrations: 5 seen in 7 samples, core 12 to core 11
+- core: unpinned, last ran on core 11
 - governor: unavailable: macOS has no cpufreq governor
 - frequency: unavailable: macOS exposes no core frequency on Apple silicon
 - turbo: unavailable: macOS exposes no boost control
@@ -44,15 +44,16 @@ The whole day three ways on the `paged-flat` book, the shipped arm, each on a fr
 - cache_line: 128 bytes, the ring's padding constant
 - peer_core: none requested
 - peer_pinning: not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0
-- measure_load_start: measure.sh: start load1=1.64 host=macOS (M4 Max) at=2026-11-05T13:23:46Z
-- measure_load_end: measure.sh: end load1=1.95 exit=0 at=2026-11-05T13:27:46Z
+- interference: sampled every 2 s by the driver over each repetition's whole span; no other process above 20% CPU in any published repetition; 3 withdrawn under the rule
+- measure_load_start: measure.sh: start load1=2.48 host=macOS (M4 Max) at=2026-11-06T02:52:42Z
+- measure_load_end: measure.sh: end load1=1.27 exit=0 at=2026-11-06T03:10:01Z
 - peak_rss: 8.34 GiB, the largest process in the run
-- peak_footprint: 0.02 GiB, of the driver alone: time sees its direct child
+- peak_footprint: 0.03 GiB, of the driver alone: time sees its direct child
 - prediction: P-0304
-- run_id: P-0304-20261105T132346Z
+- run_id: P-0304-20261106T025242Z
 - repetitions: 3
-- run_started: 2026-11-05T13:23:46Z
-- run_finished: 2026-11-05T13:27:46Z
+- run_started: 2026-11-06T02:52:42Z
+- run_finished: 2026-11-06T03:10:01Z
 
 ## Summary
 
@@ -60,18 +61,18 @@ Each repetition is a fresh process. 3 repetitions. Each runs every mode once unt
 
 | Figure | Median | Min | Max | CV |
 |---|---|---|---|---|
-| Single-threaded replay, s | 12.69 | 12.63 | 12.72 | 0.38% |
-| Single-threaded replay, messages/s | 21,173,349 | 21,120,321 | 21,278,321 | 0.38% |
-| Pipelined replay, s | 12.47 | 12.46 | 12.48 | 0.06% |
-| Pipelined replay, messages/s | 21,548,161 | 21,536,638 | 21,561,463 | 0.06% |
-| Decoded replay, s | 13.23 | 13.17 | 13.23 | 0.25% |
-| Decoded replay, messages/s | 20,317,583 | 20,316,760 | 20,405,943 | 0.25% |
-| Pipelined time over single-threaded time | 0.983 | 0.980 | 0.987 | 0.34% |
-| Decoded time over single-threaded time | 1.042 | 1.035 | 1.047 | 0.59% |
+| Single-threaded replay, s | 12.54 | 12.21 | 12.61 | 1.71% |
+| Single-threaded replay, messages/s | 21,435,776 | 21,313,330 | 22,009,342 | 1.72% |
+| Pipelined replay, s | 12.38 | 12.16 | 12.45 | 1.21% |
+| Pipelined replay, messages/s | 21,712,321 | 21,594,272 | 22,101,267 | 1.22% |
+| Decoded replay, s | 12.96 | 12.86 | 13.11 | 0.99% |
+| Decoded replay, messages/s | 20,728,496 | 20,495,917 | 20,903,748 | 0.99% |
+| Pipelined time over single-threaded time | 0.993 | 0.982 | 0.996 | 0.75% |
+| Decoded time over single-threaded time | 1.040 | 1.034 | 1.053 | 0.92% |
 
 ## Book agreement
 
-Every pass of every repetition, warm-up and timed, left the book `9e3779b97f4a7c15`, by the oracle's canonical hash of every side, level and order (`tests/oracle/canonical.hpp`), and the driver refuses a run where one differs. At the close it held 0 orders on 0 levels. At the checkpoint, just after op 131,000,000 of those the book acts on, every pass held the book `92e373870f5f9e5e`, 1,769,801 orders on 749,484 levels, hashed on the book's thread in 33.9 ms that the timed span leaves out; the driver refuses a run where one differs there too, or where that book is empty. The single-threaded replay walked 268,744,780 messages, and `apply()` returned applied 263,241,937, no_book_effect 5,502,843; the pipeline handed the book 263,241,937 of them, every one it acts on, and each status but no_book_effect came out the same.
+Every pass of every repetition, warm-up and timed, left the book `9e3779b97f4a7c15`, by the oracle's canonical hash of every side, level and order (`tests/oracle/canonical.hpp`), and the driver refuses a run where one differs. At the close it held 0 orders on 0 levels. At the checkpoint, just after op 131,000,000 of those the book acts on, every pass held the book `92e373870f5f9e5e`, 1,769,801 orders on 749,484 levels, hashed on the book's thread in 34.2 ms that the timed span leaves out; the driver refuses a run where one differs there too, or where that book is empty. The single-threaded replay walked 268,744,780 messages, and `apply()` returned applied 263,241,937, no_book_effect 5,502,843; the pipeline handed the book 263,241,937 of them, every one it acts on, and each status but no_book_effect came out the same.
 
 ## Handover
 
@@ -79,9 +80,9 @@ How often each side of the ring found it in the way, counted once per failed try
 
 | Repetition | Full waits | Empty waits | Parser pinning |
 |---|---|---|---|
-| 1 | 6,897,955,863 | 257,100 | not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0 |
-| 2 | 6,868,149,778 | 264,866 | not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0 |
-| 3 | 6,873,283,436 | 234,571 | not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0 |
+| 1 | 6,969,884,859 | 251,100 | not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0 |
+| 2 | 6,925,465,024 | 283,166 | not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0 |
+| 3 | 6,926,281,764 | 263,564 | not pinned: thread_policy_set returned code 46, pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE) returned 0 |
 
 ## Targets
 
@@ -89,23 +90,36 @@ Each ratio is of the summary's medians above, the pipelined one a median of pair
 
 | Target | Comparison | Bar | Measured | Host | Verdict |
 |---|---|---|---|---|---|
-| T-SPSC-3 | pipelined time / single-threaded time | ≤ 1.31× | 0.98× | macOS (M4 Max), not pinned; the bar's: Ryzen 9 5950X, Linux, pinned | host differs: 0.98× on this Mac against a bar set on Ryzen 9 5950X, Linux, pinned, which it would meet |
+| T-SPSC-3 | pipelined time / single-threaded time | ≤ 1.31× | 0.99× | macOS (M4 Max), not pinned; the bar's: Ryzen 9 5950X, Linux, pinned | host differs: 0.99× on this Mac against a bar set on Ryzen 9 5950X, Linux, pinned, which it would meet |
 
 ## Repetitions
 
 | Repetition | Mode | Timed pass s | Messages | Ops | Full waits | Empty waits | Checkpoint hash | Book hash | Peak RSS GiB |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | single | 12.630 | 268,744,780 | 268,744,780 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
-| 1 | pipelined | 12.464 | 268,744,780 | 263,241,937 | 6,897,955,863 | 257,100 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
-| 1 | decoded | 13.227 | 268,744,780 | 263,241,937 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
-| 2 | pipelined | 12.478 | 268,744,780 | 263,241,937 | 6,868,149,778 | 264,866 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
-| 2 | decoded | 13.228 | 268,744,780 | 263,241,937 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
-| 2 | single | 12.693 | 268,744,780 | 268,744,780 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
-| 3 | decoded | 13.170 | 268,744,780 | 263,241,937 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
-| 3 | single | 12.724 | 268,744,780 | 268,744,780 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
-| 3 | pipelined | 12.472 | 268,744,780 | 263,241,937 | 6,873,283,436 | 234,571 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
+| 1 | single | 12.210 | 268,744,780 | 268,744,780 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
+| 1 | pipelined | 12.160 | 268,744,780 | 263,241,937 | 6,969,884,859 | 251,100 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
+| 1 | decoded | 12.856 | 268,744,780 | 263,241,937 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
+| 2 | pipelined | 12.378 | 268,744,780 | 263,241,937 | 6,925,465,024 | 283,166 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
+| 2 | decoded | 13.112 | 268,744,780 | 263,241,937 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
+| 2 | single | 12.609 | 268,744,780 | 268,744,780 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
+| 3 | decoded | 12.965 | 268,744,780 | 263,241,937 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
+| 3 | single | 12.537 | 268,744,780 | 268,744,780 | 0 | 0 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
+| 3 | pipelined | 12.445 | 268,744,780 | 263,241,937 | 6,926,281,764 | 263,564 | 92e373870f5f9e5e | 9e3779b97f4a7c15 | 8.34 |
 
 Swap-outs are not read on this host: it has no /proc/vmstat.
+
+## Sampler
+
+The Mac's sampler rule was applied: a CPU sampler ran beside every repetition from before it started to after it ended, and a repetition is published only if the sampler covered its whole span with no gap over 5 s and saw no other process above 20% CPU in it. A repetition that failed the rule was withdrawn, with its own row in results/run_log.md, and run again; none was withdrawn for its numbers.
+
+| Process | Started | Finished | Outcome |
+|---|---|---|---|
+| repetition 1 | 2026-11-06T02:58:04Z | 2026-11-06T02:59:21Z | published: 39 samples, the longest gap 3 s, no other process above 20% CPU |
+| repetition 2 | 2026-11-06T03:01:34Z | 2026-11-06T03:02:53Z | published: 40 samples, the longest gap 3 s, no other process above 20% CPU |
+| repetition 3 | 2026-11-06T03:08:42Z | 2026-11-06T03:10:00Z | published: 40 samples, the longest gap 3 s, no other process above 20% CPU |
+| withdrawn 1 | 2026-11-06T02:59:25Z | 2026-11-06T03:00:44Z | withdrawn: the CPU sampler saw launchd at 26.5% CPU at 2026-11-06T03:00:28Z |
+| withdrawn 2 | 2026-11-06T03:02:57Z | 2026-11-06T03:04:17Z | withdrawn: the CPU sampler saw mediaanalysisd at 90.2% CPU at 2026-11-06T03:03:28Z |
+| withdrawn 3 | 2026-11-06T03:05:41Z | 2026-11-06T03:07:00Z | withdrawn: the CPU sampler saw launchd at 30.7% CPU at 2026-11-06T03:06:58Z |
 
 ## machine_check output
 
@@ -118,7 +132,7 @@ machine_check: record governor: cannot be enforced: macOS has no cpufreq governo
 machine_check: record turbo: cannot be enforced: macOS exposes no boost control
 machine_check: record isolation: cannot be enforced: macOS has no isolated cores
 machine_check: record sibling-idle: cannot be enforced: this CPU has no SMT sibling, other cores stay in use
-machine_check: record load: { 1.59 2.31 2.80 }
+machine_check: record load: { 2.48 2.16 1.90 }
 machine_check: passed
 ```
 
