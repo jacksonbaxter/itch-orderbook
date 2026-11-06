@@ -126,3 +126,10 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0604-20261106T032300Z | P-0604 | e3346335bed9 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule, after 1 withdrawn and rerun; for scripts/simd_report.py |
 | P-0603-20261106T032148Z_report | P-0603 | 86df0a80e649 (clean) | Darwin | published: neon beats scalar; E3 not refuted |
 | P-0604-20261106T032300Z_report | P-0604 | e3346335bed9 (clean) | Darwin | published: neon beats scalar; E4 not refuted |
+| P-0605-20261106T032513Z_neon-3 | P-0605 | 3139854b4611 (clean) | Darwin | withdrawn: batch, neon, repetition 3: the CPU sampler saw com.apple.Safari.SafeBrowsing.Service at 33.3% CPU at 2026-11-06T03:26:10Z; nothing from it is published, and it is rerun under P-0605 |
+| P-0605-20261106T032513Z | P-0605 | 3139854b4611 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule, after 1 withdrawn and rerun; for scripts/simd_report.py |
+| P-0606-20261106T032625Z_constant-3 | P-0606 | 8621cf047934 (clean) | Darwin | withdrawn: framing, constant, repetition 3: the CPU sampler saw corespotlightd at 98.2% CPU at 2026-11-06T03:27:24Z; nothing from it is published, and it is rerun under P-0606 |
+| P-0606-20261106T032625Z_length-3 | P-0606 | 8621cf047934 (clean) | Darwin | withdrawn: framing, length, repetition 3: the CPU sampler saw corespotlightd at 98.2% CPU at 2026-11-06T03:27:24Z; nothing from it is published, and it is rerun under P-0606 |
+| P-0606-20261106T032625Z | P-0606 | 8621cf047934 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule, after 2 withdrawn and rerun; for scripts/simd_report.py |
+| P-0605-20261106T032513Z_report | P-0605 | 3139854b4611 (clean) | Darwin | published: scalar beats neon; E5 not refuted |
+| P-0606-20261106T032625Z_report | P-0606 | 8621cf047934 (clean) | Darwin | published: fastest walk byte; length against constant differ; E6 not refuted |
