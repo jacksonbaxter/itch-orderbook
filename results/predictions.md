@@ -335,3 +335,9 @@ included.
 - Experiment: `bench_kernels --experiment consume` on `scalar` and `neon`, as P-0601 otherwise: every op's `BookOp` decoded, its reference hashed to one of 65,536 slots, its shares added there and its price compared with the highest; (work − walk) over the ops.
 - Prediction: a tie, or scalar wins; NEON's gain under 10% if it wins (simd.md, SIMD-25: moving the fields from vector to general registers costs what the shuffle saved). E3 not refuted.
 - Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0604: E4, the parser on each kernel, whole and by op type, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment parse` on `scalar` and `neon`, as P-0601 otherwise: walk, all, A, F, E, C, X, D, U, all, walk. `all` is `parse_ops()` on the kernel, every op folded by a sink; a type's pass decodes only that type on the kernel.
+- Prediction: the whole parse differs by under 5% between the kernels, a tie by the rule; E4 not refuted (refuted only by NEON 10% or more faster). By type, Order Delete (`D`, reference and locate only) shows less difference between the kernels than Add Order (`A`), in ns an op.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
