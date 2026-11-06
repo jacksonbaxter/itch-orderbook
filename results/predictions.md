@@ -329,3 +329,9 @@ included.
 - What was seen before this was written: E12's compile (P-0610), clang 23 -O3 arm64: scalar `add_fields` 26 instructions, 8 loads and 6 REVs; NEON's 11, 3 window loads and 2 constant loads, 2 TBLs and one store pair. The fixture and the verify run as in P-0601.
 - Prediction: NEON beats scalar, by under the 2.33× the instruction-table floor gives (simd.md, SIMD-24): scalar's cycles an Add Order over NEON's between 1.1 and 2.33. NEON's instructions an Add Order under scalar's. E2 not refuted.
 - Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0603: E3, every op decoded and consumed in integer registers, scalar against NEON, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment consume` on `scalar` and `neon`, as P-0601 otherwise: every op's `BookOp` decoded, its reference hashed to one of 65,536 slots, its shares added there and its price compared with the highest; (work − walk) over the ops.
+- Prediction: a tie, or scalar wins; NEON's gain under 10% if it wins (simd.md, SIMD-25: moving the fields from vector to general registers costs what the shuffle saved). E3 not refuted.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
