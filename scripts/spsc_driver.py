@@ -31,7 +31,8 @@ span with no gap over 5 s and saw no foreign process in it. Otherwise it is with
 raw files are set aside, it gets its own row in the run log saying why, and it runs again,
 until --repetitions are published or more than --most-withdrawn are withdrawn, which
 refuses the run. With --quiet-before S, each repetition first waits until the sampler has
-seen S seconds with no foreign process, for at most --quiet-wait S. The sampler's lines go
+seen S seconds with no foreign process, for at most --quiet-wait S, and the input is read
+again, since a long wait can see the day leave the page cache. The sampler's lines go
 to <raw-dir>/sampler.txt and every span and its outcome into the results file.
 
 With --peer-core on Linux, machine_check.sh runs once on each core, pinned to it by
@@ -784,6 +785,12 @@ def run(args, run_id, started, commit, sampler):
     while len(records) < args.repetitions:
         index = len(records) + 1
         wait_for_quiet(sampler, args.quiet_before, args.quiet_wait)
+        if sampler is not None:
+            # A wait for quiet, or a repetition withdrawn, can outlast the page cache's hold
+            # on the day: the first run under the rule found 3% of it resident after 45 min.
+            bench_driver.set_stage("reading the input again")
+            if bench_driver.hash_and_fault_in(args.input) != digest:
+                raise Refused("input", "the input changed during the run")
         begin = bench_driver.utc_now()
         record = run_process(args, index, commit, digest)
         validate_run(record, args.suite)
