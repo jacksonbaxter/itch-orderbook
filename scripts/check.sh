@@ -109,6 +109,9 @@ stage_bench() {
     python_test scripts/test_counts_report.py &&
     python_test scripts/test_flame_report.py &&
     python_test scripts/test_variants_report.py &&
+    python_test scripts/test_simd_report.py &&
+    python_test scripts/test_simd_driver.py &&
+    python_test scripts/test_simd_asm_audit.py &&
     python_test scripts/test_zen1_events.py &&
     python_test scripts/gate_numbers.py &&
     python_test scripts/check_predictions.py || return 1
@@ -134,6 +137,13 @@ stage_bench() {
   for variants in results/lookup_*.md results/prefetch_*.md results/dispatch_*.md; do
     [ -f "$variants" ] || continue
     python_test scripts/variants_report.py --check "$variants" || return 1
+  done
+  for simd in results/simd_*.md; do
+    [ -f "$simd" ] || continue
+    case $simd in
+      results/simd_asm_*) python_test scripts/simd_asm_audit.py --check "$simd" || return 1 ;;
+      *) python_test scripts/simd_report.py --check "$simd" || return 1 ;;
+    esac
   done
   build_preset release && ctest --preset release -R '^test_bench'
 }
