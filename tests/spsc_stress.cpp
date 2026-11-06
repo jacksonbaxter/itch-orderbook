@@ -127,7 +127,7 @@ void run_round(const Options& options, std::uint64_t index, Tally& tally) {
       if (next % 2 == 0) {
         Item item;
         item.fill(next);
-        next += ring->try_push(item) ? 1 : 0;
+        next += ring->try_push(item) ? 1U : 0U;
         continue;
       }
       const auto want =

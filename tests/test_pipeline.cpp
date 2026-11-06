@@ -99,7 +99,7 @@ TEST(Pipeline, DecodedOpTakesTheSamePathAsThePayload) {
   itch::FrameReader reader{stream};
   for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status) && acted < at;
        frame = reader.next()) {
-    acted += book.apply(frame.payload) != ApplyStatus::no_book_effect ? 1 : 0;
+    acted += book.apply(frame.payload) != ApplyStatus::no_book_effect ? 1U : 0U;
   }
   EXPECT_EQ(acted, at);
   return book_hash(book);

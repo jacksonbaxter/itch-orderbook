@@ -263,7 +263,7 @@ void expect_handover(std::uint64_t items) {
     std::uint64_t next = 0;
     while (next < items && !abandon.load(std::memory_order_relaxed)) {
       if (next % 2 == 0) {
-        next += ring.try_push(Stamped::of(next)) ? 1 : 0;
+        next += ring.try_push(Stamped::of(next)) ? 1U : 0U;
         continue;
       }
       const std::size_t want = static_cast<std::size_t>(std::min<std::uint64_t>(5, items - next));
@@ -302,7 +302,7 @@ void expect_word_handover(std::uint64_t items) {
     std::uint64_t next = 0;
     while (next < items && !abandon.load(std::memory_order_relaxed)) {
       if (next % 2 == 0) {
-        next += ring.try_push(next) ? 1 : 0;
+        next += ring.try_push(next) ? 1U : 0U;
         continue;
       }
       const std::size_t want = static_cast<std::size_t>(std::min<std::uint64_t>(5, items - next));
