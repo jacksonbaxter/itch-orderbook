@@ -118,3 +118,5 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0601-20261106T031646Z_scalar-w2-1 | P-0601 | 07c1bb1bab05 (clean) | Darwin | withdrawn: field, scalar-w2, repetition 1: the CPU sampler saw plugin-container at 35.9% CPU at 2026-11-06T03:16:50Z; nothing from it is published, and it is rerun under P-0601 |
 | P-0601-20261106T031646Z | P-0601 | 07c1bb1bab05 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule, after 1 withdrawn and rerun; for scripts/simd_report.py |
 | P-0601-20261106T031646Z_report | P-0601 | 07c1bb1bab05 (clean) | Darwin | published: E1 refuted: a vector kernel beat scalar at some width |
+| P-0602-20261106T032041Z | P-0602 | ecee4a126b42 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule; for scripts/simd_report.py |
+| P-0602-20261106T032041Z_report | P-0602 | ecee4a126b42 (clean) | Darwin | published: neon beats scalar; E2 not refuted |
