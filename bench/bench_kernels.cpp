@@ -622,6 +622,14 @@ void judge(Record& record) {
   }
 }
 
+// The kernel's kOverread, asked through itch::kernels::run() like any other work.
+struct OverreadOf {
+  template <class K>
+  std::size_t operator()() const {
+    return K::kOverread;
+  }
+};
+
 int list_kernels() {
   for (const KernelId id : itch::kernels::kAllKernels) {
     const auto selected = itch::kernels::select_kernel(to_string(id));
@@ -687,12 +695,7 @@ int run_experiment(const Options& options) {
                   .record = record,
                   .watchlist = watchlist ? &*watchlist : nullptr};
     itch::kernels::run(*kernel, passes);
-    struct Overread {
-      template <class K>
-      std::size_t operator()() const {
-        return K::kOverread;
-      }
-    } ask;
+    OverreadOf ask;
     overread = itch::kernels::run(*kernel, ask);
   }
   migrations.sample();
