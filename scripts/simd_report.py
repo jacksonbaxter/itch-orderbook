@@ -146,6 +146,13 @@ CAVEATS = {
 - **Under a tenth of a cycle.** The field costs both kernels less than 0.1 cycle an op beyond
   the walk: the out-of-order core hides it behind the frame walk. The rule calls a winner
   wherever the repetitions do not overlap, however small the gap.""",
+    "parse": """\
+- **The one-type passes do not add up to the whole.** Each tests every message's type against
+  one letter and branches, a different loop from `parse_ops()`, so a type's figure is that
+  type's decode where it sits in that loop. On NEON every type's pass costs more than on scalar,
+  and yet the whole parse costs less: the whole is the figure E4 judges.
+- **The rare types are noise.** F, C and X are 1.5 million, 100 thousand and 2.8 million ops in
+  a pass of a second or so; their ranges cross zero or each other.""",
     "default": """\
 - **The Mac's counters are cycles and instructions only**, user and kernel together; branch
   misses, cache misses and SIMD-pipe use are not read here.

@@ -172,6 +172,12 @@ One row a timed pass, in the order run. Each counter is the pass's whole count; 
 
 ## What this does not show
 
+- **The one-type passes do not add up to the whole.** Each tests every message's type against
+  one letter and branches, a different loop from `parse_ops()`, so a type's figure is that
+  type's decode where it sits in that loop. On NEON every type's pass costs more than on scalar,
+  and yet the whole parse costs less: the whole is the figure E4 judges.
+- **The rare types are noise.** F, C and X are 1.5 million, 100 thousand and 2.8 million ops in
+  a pass of a second or so; their ranges cross zero or each other.
 - **The Mac's counters are cycles and instructions only**, user and kernel together; branch
   misses, cache misses and SIMD-pipe use are not read here.
 - **Not pinned.** macOS cannot pin a thread; the sampler rule keeps other work out of every
