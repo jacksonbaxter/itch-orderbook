@@ -365,3 +365,9 @@ included.
 - Experiment: `bench_kernels --experiment timestamp --form F`, F in exact (6 bytes into a zeroed 8, one swap: what the parser ships), split (a 4-byte and a 2-byte read, merged), overread (8 bytes, swapped, shifted down 16) and underread (8 bytes from the tracking number, swapped, masked), scalar only, as P-0601 otherwise; every message's timestamp. (work − walk) over the messages.
 - Prediction: every form within 0.3 ns a message of `exact`; `split` and `overread` tie by the rule, so E13 is refuted (simd.md expected the over-read to win by a small margin). Every form gives the same timestamps.
 - Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0609: E11, Add Order decode in WebAssembly, scalar against SIMD128, in node, on macOS, 12302019
+
+- Experiment: `node scripts/simd_wasm_e11.mjs` on the Emscripten release build's `itch_e11` module (`em++ -O3 -msimd128`, a fixed 128 MiB memory), `--kernel scalar` (`std::byteswap`, which core WebAssembly has no instruction for) and `--kernel wasm` (constant `i8x16.shuffle`), through `scripts/simd_driver.py --experiment e11` under `measure.sh` and `/usr/bin/time -l`, 3 repetitions in fresh processes, under the sampler rule. The day is copied into a 64 MiB window a piece at a time; walk, work, work, walk, each timed with `performance.now()` around every piece's pass and summed. Wall clock only.
+- Prediction: SIMD128 beats scalar, by between 1.2 and 3 times in ns an Add Order: the opposite sign to native NEON's in E3 and E4, and the reason the scalar byte swap has no instruction here (E12's wasm32 listing shows shifts and ORs). E11 not refuted.
+- Prediction, memory: peak RSS between 0.2 and 0.6 GiB.
