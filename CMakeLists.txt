@@ -27,6 +27,7 @@ include(ItchOptions)
 include(ItchTidy)
 include(ItchDependencies)
 include(ItchCacheLine)
+include(ItchKernels)
 
 enable_testing()
 
