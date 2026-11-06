@@ -61,7 +61,7 @@ inline constexpr std::array<std::uint8_t, kWindow> kReverse16{1, 0, 3,  2,  5,  
 
 template <const Gather& G, std::size_t W>
 [[gnu::target("avx2")]] [[nodiscard]] inline __m256i part(const std::byte* m,
-                                                         __m256i acc) noexcept {
+                                                          __m256i acc) noexcept {
   if constexpr (W < G.windows && (G.uses(0, W) || G.uses(1, W))) {
     const __m256i both = _mm256_broadcastsi128_si256(load16(m + G.anchor[W]));
     return _mm256_or_si256(acc, _mm256_shuffle_epi8(both, load32(kIndex<G, W>.data())));
@@ -106,7 +106,7 @@ struct Kernel {
   }
 
   [[gnu::target("avx2")]] [[nodiscard]] static BookOp book_op(const std::byte* m,
-                                                             char type) noexcept {
+                                                              char type) noexcept {
     switch (type) {
       case AddOrder::kType: return detail::op<kAddOp>(m);
       case AddOrderAttributed::kType: return detail::op<kAddAttributedOp>(m);
@@ -129,8 +129,8 @@ struct Kernel {
       std::memcpy(&price[i], m[i] + 32, sizeof(std::uint32_t));
       std::memcpy(&locate[i], m[i] + 1, sizeof(std::uint16_t));
     }
-    const __m256i ref =
-        _mm256_shuffle_epi8(detail::load32(reference.data()), detail::load32(detail::kReverse64.data()));
+    const __m256i ref = _mm256_shuffle_epi8(detail::load32(reference.data()),
+                                            detail::load32(detail::kReverse64.data()));
     const __m128i r32 = detail::load16(detail::kReverse32.data());
     const __m128i s = _mm_shuffle_epi8(detail::load16(shares.data()), r32);
     const __m128i p = _mm_shuffle_epi8(detail::load16(price.data()), r32);
@@ -143,8 +143,8 @@ struct Kernel {
   }
 
   [[gnu::target("avx2")]] [[nodiscard]] static bool any_equal(std::uint64_t key,
-                                                             const std::uint64_t* list,
-                                                             std::size_t n) noexcept {
+                                                              const std::uint64_t* list,
+                                                              std::size_t n) noexcept {
     const __m256i k = _mm256_set1_epi64x(static_cast<long long>(key));
     __m256i hits = _mm256_setzero_si256();
     for (std::size_t i = 0; i < n; i += 8) {

@@ -80,7 +80,8 @@ int random_messages() {
 
 int streams() {
   int failures = 0;
-  for (const auto& stream : {itch::fixtures::all_messages_stream(), itch::testing::build_stream()}) {
+  for (const auto& stream :
+       {itch::fixtures::all_messages_stream(), itch::testing::build_stream()}) {
     Ops got;
     Ops want;
     const auto simd = itch::kernels::parse_ops<Simd>(stream, got);

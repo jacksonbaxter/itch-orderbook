@@ -79,8 +79,7 @@ template <class Work>
 }
 
 template <class Work>
-[[gnu::target("avx512f,avx512bw,avx512vl,avx512vbmi")]] decltype(auto) run_avx512vbmi(
-    Work& work) {
+[[gnu::target("avx512f,avx512bw,avx512vl,avx512vbmi")]] decltype(auto) run_avx512vbmi(Work& work) {
   return work.template operator()<avx512vbmi::Kernel>();
 }
 

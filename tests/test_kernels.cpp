@@ -17,6 +17,7 @@
 #include <format>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <random>
 #include <span>
 #include <string>
@@ -136,7 +137,7 @@ struct AddFieldsMatch {
 struct FieldsMatch {
   std::span<const std::byte> bytes;
   template <class K, std::size_t W>
-  [[gnu::always_inline]] std::string width() const {
+  [[nodiscard, gnu::always_inline]] std::string width() const {
     for (std::size_t at = 0; at + 8 <= bytes.size(); ++at) {
       const std::uint64_t got = K::template field<W>(bytes.data() + at);
       const std::uint64_t want = Scalar::field<W>(bytes.data() + at);
@@ -157,10 +158,9 @@ struct BatchMatch {
   template <class K>
   [[gnu::always_inline]] std::string operator()() const {
     for (std::size_t i = 0; i + 4 <= kCases; i += 4) {
-      const std::array<const std::byte*, 4> m{slots.data() + (i * kSlot),
-                                              slots.data() + ((i + 1) * kSlot),
-                                              slots.data() + ((i + 2) * kSlot),
-                                              slots.data() + ((i + 3) * kSlot)};
+      const std::array<const std::byte*, 4> m{
+          slots.data() + (i * kSlot), slots.data() + ((i + 1) * kSlot),
+          slots.data() + ((i + 2) * kSlot), slots.data() + ((i + 3) * kSlot)};
       AddBatch got;
       AddBatch want;
       K::batch4(m.data(), got);
@@ -177,6 +177,8 @@ struct BatchMatch {
 struct AnyEqualMatch {
   template <class K>
   [[gnu::always_inline]] std::string operator()() const {
+    // The same keys every run.
+    // NOLINTNEXTLINE(cert-msc32-c,cert-msc51-cpp,bugprone-random-generator-seed)
     std::mt19937_64 rng{42};
     for (const std::size_t n : {8U, 16U, 64U}) {
       std::vector<std::uint64_t> list(n);
@@ -230,10 +232,10 @@ struct GuardedWalk {
 class KernelTest : public ::testing::TestWithParam<KernelId> {};
 
 // The kernel under test, or a skip that says why it cannot run here.
-#define SELECT_OR_SKIP(kernel)                                       \
+#define SELECT_OR_SKIP(kernel)                                             \
   const auto kernel = itch::kernels::select_kernel(to_string(GetParam())); \
-  if (!(kernel)) {                                                   \
-    GTEST_SKIP() << (kernel).error();                                \
+  if (!(kernel)) {                                                         \
+    GTEST_SKIP() << (kernel).error();                                      \
   }
 
 TEST_P(KernelTest, BookOpsMatchScalarOnRandomBytes) {
@@ -291,7 +293,7 @@ TEST_P(KernelTest, ParserMatchesScalarOnEveryFixtureStream) {
 
 TEST_P(KernelTest, FinalFrameOfEveryOpTypeStaysInsideTheMappedRange) {
   SELECT_OR_SKIP(kernel);
-  itch::testing::GuardedRegion region{1 << 16};
+  itch::testing::GuardedRegion region{std::size_t{1} << 16U};
   for (const auto& message : itch::fixtures::all_messages()) {
     if (!itch::kernels::is_op_type(static_cast<char>(message[0]))) {
       continue;
@@ -349,13 +351,14 @@ TEST(Kernels, ScalarBookOpsAreTheShippedDecoders) {
     const Bytes slots = random_messages(type, seed++);
     for (std::size_t i = 0; i < kCases; ++i) {
       const std::span<const std::byte> m{slots.data() + (i * kSlot), itch::message_length(type)};
-      ASSERT_EQ(Scalar::book_op(m.data(), type), *itch::decode_book_op(m)) << type << " " << i;
+      const std::optional<itch::BookOp> kernel{Scalar::book_op(m.data(), type)};
+      ASSERT_EQ(kernel, itch::decode_book_op(m)) << type << " " << i;
     }
   }
 }
 
 TEST(Kernels, MessagesNearTheEndGoToTheScalarKernel) {
-  itch::testing::GuardedRegion region{1 << 16};
+  itch::testing::GuardedRegion region{std::size_t{1} << 16U};
   // Every type eight times, then the op types, the shortest last, so that the last few ops
   // end within kOverread bytes of the guard.
   Bytes stream;

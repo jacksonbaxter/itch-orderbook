@@ -44,7 +44,17 @@ struct Totals {
 // E1: where each width's field is read. All four lie inside the first 19 bytes, the length of
 // the shortest op type, with 8 bytes readable from each, as a vector kernel may read.
 template <std::size_t W>
-inline constexpr std::size_t kFieldAt = W == 2 ? 1 : W == 6 ? 5 : 11;
+consteval std::size_t field_at() {
+  if (W == 2) {
+    return 1;
+  }
+  if (W == 6) {
+    return 5;
+  }
+  return 11;
+}
+template <std::size_t W>
+inline constexpr std::size_t kFieldAt = field_at<W>();
 static_assert(kFieldAt<2> + 8 <= 19 && kFieldAt<4> + 8 <= 19 && kFieldAt<6> + 8 <= 19 &&
               kFieldAt<8> + 8 <= 19);
 
@@ -76,8 +86,8 @@ template <class K, std::size_t W, bool Work>
 inline constexpr std::size_t kRing = 64;
 
 template <class K, bool Work>
-[[gnu::always_inline]] inline Totals decode_pass(std::span<const std::byte> bytes,
-                                                 std::array<kernels::AddFields, kRing>& ring) noexcept {
+[[gnu::always_inline]] inline Totals decode_pass(
+    std::span<const std::byte> bytes, std::array<kernels::AddFields, kRing>& ring) noexcept {
   FrameReader reader{bytes};
   Totals t;
   for (Frame f = reader.next(); !is_terminal(f.status); f = reader.next()) {
@@ -114,6 +124,8 @@ template <class K, bool Work>
                                                   std::span<std::uint32_t, kSlots> slots) noexcept {
   FrameReader reader{bytes};
   Totals t;
+  // Written only when Work is true; clang-tidy judges the walk's instantiation alone.
+  // NOLINTNEXTLINE(misc-const-correctness)
   Price4 highest = 0;
   for (Frame f = reader.next(); !is_terminal(f.status); f = reader.next()) {
     if (f.status != FrameStatus::message) {
@@ -165,6 +177,8 @@ template <class K>
                                                     char only) noexcept {
   FrameReader reader{bytes};
   Totals t;
+  // sink(op) adds to sink.fold; clang-tidy misses the call through the dependent K.
+  // NOLINTNEXTLINE(misc-const-correctness)
   FoldSink sink;
   for (Frame f = reader.next(); !is_terminal(f.status); f = reader.next()) {
     if (f.status != FrameStatus::message) {
@@ -229,7 +243,11 @@ template <class K, bool Work>
   FrameReader reader{bytes};
   Totals t;
   std::array<const std::byte*, 4> pending{};
+  // Written only when Work is true; clang-tidy judges the walk's instantiation alone.
+  // NOLINTNEXTLINE(misc-const-correctness)
   std::size_t held = 0;
+  // Written only when Work is true; clang-tidy judges the walk's instantiation alone.
+  // NOLINTNEXTLINE(misc-const-correctness)
   kernels::AddBatch batch;
   for (Frame f = reader.next(); !is_terminal(f.status); f = reader.next()) {
     if (f.status != FrameStatus::message) {
@@ -266,11 +284,11 @@ template <class K, bool Work>
 
 // E5's other half, untimed: how long runs of one type are. Buckets 1, 2, 3, 4 to 7, 8 to 15,
 // 16 to 31, 32 and up.
-inline constexpr std::array<std::string_view, 7> kRunBuckets{"1",    "2",     "3",    "4-7",
+inline constexpr std::array<std::string_view, 7> kRunBuckets{"1",    "2",     "3",  "4-7",
                                                              "8-15", "16-31", "32+"};
 
 struct RunLengths {
-  std::array<std::uint64_t, kRunBuckets.size()> any_type{};  // Messages, by the run they sit in.
+  std::array<std::uint64_t, kRunBuckets.size()> any_type{};   // Messages, by the run they sit in.
   std::array<std::uint64_t, kRunBuckets.size()> add_order{};  // Add Orders, likewise.
 };
 
@@ -279,7 +297,8 @@ struct RunLengths {
     return static_cast<std::size_t>(length - 1);
   }
   std::size_t bucket = 3;
-  for (std::uint64_t top = 7; length > top && bucket + 1 < kRunBuckets.size(); top = (top * 2) + 1) {
+  for (std::uint64_t top = 7; length > top && bucket + 1 < kRunBuckets.size();
+       top = (top * 2) + 1) {
     ++bucket;
   }
   return bucket;
@@ -329,7 +348,8 @@ struct FramingTotals {
 };
 
 template <Framing Form>
-[[gnu::always_inline]] inline FramingTotals framing_pass(std::span<const std::byte> bytes) noexcept {
+[[gnu::always_inline]] inline FramingTotals framing_pass(
+    std::span<const std::byte> bytes) noexcept {
   const std::byte* p = bytes.data();
   const std::byte* const end = bytes.data() + bytes.size();
   Totals t;
@@ -450,7 +470,8 @@ template <Stamp Form, bool Work>
     } else if constexpr (Form == Stamp::exact) {
       t.fold += read_be48(m + 5);
     } else if constexpr (Form == Stamp::split) {
-      t.fold += (std::uint64_t{read_be<std::uint32_t>(m + 5)} << 16U) | read_be<std::uint16_t>(m + 9);
+      t.fold +=
+          (std::uint64_t{read_be<std::uint32_t>(m + 5)} << 16U) | read_be<std::uint16_t>(m + 9);
     } else if constexpr (Form == Stamp::overread) {
       t.fold += end - (m + 5) >= 8 ? read_be<std::uint64_t>(m + 5) >> 16U : read_be48(m + 5);
     } else {
@@ -489,10 +510,14 @@ template <class K>
         v.mismatches += K::add_fields(m) == Scalar::add_fields(m) ? 0U : 1U;
       }
     }
-    v.mismatches += K::template field<2>(m + kFieldAt<2>) == Scalar::field<2>(m + kFieldAt<2>) ? 0U : 1U;
-    v.mismatches += K::template field<4>(m + kFieldAt<4>) == Scalar::field<4>(m + kFieldAt<4>) ? 0U : 1U;
-    v.mismatches += K::template field<6>(m + kFieldAt<6>) == Scalar::field<6>(m + kFieldAt<6>) ? 0U : 1U;
-    v.mismatches += K::template field<8>(m + kFieldAt<8>) == Scalar::field<8>(m + kFieldAt<8>) ? 0U : 1U;
+    v.mismatches +=
+        K::template field<2>(m + kFieldAt<2>) == Scalar::field<2>(m + kFieldAt<2>) ? 0U : 1U;
+    v.mismatches +=
+        K::template field<4>(m + kFieldAt<4>) == Scalar::field<4>(m + kFieldAt<4>) ? 0U : 1U;
+    v.mismatches +=
+        K::template field<6>(m + kFieldAt<6>) == Scalar::field<6>(m + kFieldAt<6>) ? 0U : 1U;
+    v.mismatches +=
+        K::template field<8>(m + kFieldAt<8>) == Scalar::field<8>(m + kFieldAt<8>) ? 0U : 1U;
   }
   return v;
 }

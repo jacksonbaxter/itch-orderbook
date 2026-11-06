@@ -155,7 +155,8 @@ struct Options {
   int core = -1;
   unsigned width = 0;
   std::size_t watchlist = 0;
-  std::optional<Experiment> experiment;
+  Experiment experiment = Experiment::field;
+  bool has_experiment = false;
   itch::BookCapacity capacity;
   bool list = false;
 };
@@ -191,9 +192,10 @@ bool parse_option(std::string_view arg, std::string_view value, Options& options
     for (const auto& [name, e] : kExperiments) {
       if (value == name) {
         options.experiment = e;
+        options.has_experiment = true;
       }
     }
-    return options.experiment.has_value();
+    return options.has_experiment;
   } else {
     return false;
   }
@@ -211,7 +213,7 @@ bool parse(std::span<char*> args, Options& options) {
     }
   }
   return args.size() % 2 == 0 && !options.input.empty() && !options.out.empty() &&
-         options.experiment.has_value();
+         options.has_experiment;
 }
 
 bool one_of(std::string_view value, std::span<const std::string_view> allowed) {
@@ -220,7 +222,7 @@ bool one_of(std::string_view value, std::span<const std::string_view> allowed) {
 
 // Why this variant cannot run, before anything is mapped, or nothing.
 std::optional<std::string> bad_variant(const Options& options, KernelId kernel) {
-  const Experiment e = *options.experiment;
+  const Experiment e = options.experiment;
   const bool takes_form =
       e == Experiment::framing || e == Experiment::filter || e == Experiment::timestamp;
   if (takes_form != !options.form.empty()) {
@@ -294,7 +296,7 @@ void fault_in(std::span<const std::byte> bytes) {
 class Clock {
  public:
   Clock(std::span<const std::byte> bytes, CounterGroup& group, Record& record)
-      : bytes_{bytes}, group_{group}, record_{record} {}
+      : bytes_{bytes}, group_{&group}, record_{&record} {}
 
   [[nodiscard]] bool begin(std::string mode) {
     pass_ = TimedPass{};
@@ -303,32 +305,32 @@ class Clock {
     const Residency before = resident(bytes_);
     pass_.residency_before = before.describe();
     if (!before.complete()) {
-      record_.refusals.push_back("input not resident before a timed pass: " + before.describe());
+      record_->refusals.push_back("input not resident before a timed pass: " + before.describe());
       return false;
     }
-    group_.start();
+    group_->start();
     started_ = ticks_start();
     return true;
   }
 
   void end(const kx::Totals& totals) {
     const std::uint64_t stopped = ticks_stop();
-    group_.stop();
+    group_->stop();
     pass_.ticks = stopped - started_;
-    pass_.counters = group_.statuses();
+    pass_.counters = group_->statuses();
     pass_.totals = totals;
     const Residency after = resident(bytes_);
     pass_.residency_after = after.describe();
     if (!after.complete()) {
-      record_.refusals.push_back("input left memory during a timed pass: " + after.describe());
+      record_->refusals.push_back("input left memory during a timed pass: " + after.describe());
     }
-    record_.passes.push_back(std::move(pass_));
+    record_->passes.push_back(std::move(pass_));
   }
 
  private:
   std::span<const std::byte> bytes_;
-  CounterGroup& group_;
-  Record& record_;
+  CounterGroup* group_;
+  Record* record_;
   TimedPass pass_;
   std::uint64_t started_ = 0;
 };
@@ -336,19 +338,19 @@ class Clock {
 // Each experiment's passes on kernel K, run by itch::kernels::run() inside K's target region.
 // operator() is always_inline so that the loops it inlines land in that region.
 struct Passes {
-  const Options& options;
+  const Options* options;
   std::span<const std::byte> bytes;
-  Clock& clock;
-  Record& record;
+  Clock* clock;
+  Record* record;
   const kx::Watchlist* watchlist = nullptr;
 
   template <class K, bool Work>
   [[gnu::always_inline]] kx::Totals one(std::array<itch::kernels::AddFields, kx::kRing>& ring,
                                         std::span<std::uint32_t, kx::kSlots> slots,
                                         std::span<std::uint8_t> bits) const noexcept {
-    switch (*options.experiment) {
+    switch (options->experiment) {
       case Experiment::field:
-        switch (options.width) {
+        switch (options->width) {
           case 2: return kx::field_pass<K, 2, Work>(bytes);
           case 4: return kx::field_pass<K, 4, Work>(bytes);
           case 6: return kx::field_pass<K, 6, Work>(bytes);
@@ -358,17 +360,17 @@ struct Passes {
       case Experiment::consume: return kx::consume_pass<K, Work>(bytes, slots);
       case Experiment::batch: return kx::batch_pass<K, Work>(bytes);
       case Experiment::filter:
-        return options.form == "compare"
+        return options->form == "compare"
                    ? kx::filter_pass<K, kx::Filter::compare, Work>(bytes, *watchlist, bits)
                    : kx::filter_pass<K, kx::Filter::bitset, Work>(bytes, *watchlist, bits);
       case Experiment::timestamp:
-        if (options.form == "exact") {
+        if (options->form == "exact") {
           return kx::timestamp_pass<kx::Stamp::exact, Work>(bytes);
         }
-        if (options.form == "split") {
+        if (options->form == "split") {
           return kx::timestamp_pass<kx::Stamp::split, Work>(bytes);
         }
-        if (options.form == "overread") {
+        if (options->form == "overread") {
           return kx::timestamp_pass<kx::Stamp::overread, Work>(bytes);
         }
         return kx::timestamp_pass<kx::Stamp::underread, Work>(bytes);
@@ -377,84 +379,102 @@ struct Passes {
   }
 
   template <class K>
-  [[gnu::always_inline]] kx::FramingTotals framing() const noexcept {
-    if (options.form == "length") {
+  [[nodiscard, gnu::always_inline]] kx::FramingTotals framing() const noexcept {
+    if (options->form == "length") {
       return kx::framing_pass<kx::Framing::length>(bytes);
     }
-    if (options.form == "byte") {
+    if (options->form == "byte") {
       return kx::framing_pass<kx::Framing::byte>(bytes);
     }
-    if (options.form == "table") {
+    if (options->form == "table") {
       return kx::framing_pass<kx::Framing::table>(bytes);
     }
     return kx::framing_pass<kx::Framing::constant>(bytes);
   }
 
+  // E4 end to end: one warm-up on a book of its own, then one timed pass on a fresh one.
+  template <class K>
+  [[gnu::always_inline]] void book_passes() const {
+    using Book = itch::FastBook<>;
+    {
+      const auto warm = std::make_unique<Book>(options->capacity);
+      record->warmup_messages = kx::book_pass<K>(bytes, *warm).messages;
+    }
+    const auto fresh = std::make_unique<Book>(options->capacity);
+    if (clock->begin("work")) {
+      clock->end(kx::book_pass<K>(bytes, *fresh));
+    }
+    record->live_orders = fresh->live_orders();
+    record->live_levels = fresh->live_levels();
+  }
+
+  // E6: a warm-up and two timed walks.
+  template <class K>
+  [[gnu::always_inline]] void framing_passes() const {
+    record->warmup_messages = framing<K>().totals.messages;
+    for (int i = 0; i < 2; ++i) {
+      if (clock->begin("work")) {
+        const kx::FramingTotals f = framing<K>();
+        record->framing_stopped_at = f.stopped_at;
+        clock->end(f.totals);
+      }
+    }
+  }
+
+  // E4: walk, all, A, F, E, C, X, D, U, all, walk.
+  template <class K>
+  [[gnu::always_inline]] void parse_passes() const {
+    record->warmup_messages = kx::parse_pass<K>(bytes).messages;
+    const auto by_type = [this](std::string mode, char only) {
+      if (clock->begin(std::move(mode))) {
+        clock->end(kx::parse_one_type<K>(bytes, only));
+      }
+    };
+    by_type("walk", 0);
+    if (clock->begin("all")) {
+      clock->end(kx::parse_pass<K>(bytes));
+    }
+    for (const char type : itch::kernels::kOpTypes) {
+      by_type(std::string{type}, type);
+    }
+    if (clock->begin("all")) {
+      clock->end(kx::parse_pass<K>(bytes));
+    }
+    by_type("walk", 0);
+  }
+
   template <class K>
   [[gnu::always_inline]] void operator()() const {
-    const Experiment e = *options.experiment;
+    const Experiment e = options->experiment;
     if (e == Experiment::verify) {
       const kx::VerifyTotals v = kx::verify_pass<K>(bytes);
-      record.compared = v.compared;
-      record.mismatches = v.mismatches;
+      record->compared = v.compared;
+      record->mismatches = v.mismatches;
       return;
     }
     if (e == Experiment::book) {
-      using Book = itch::FastBook<>;
-      {
-        const auto warm = std::make_unique<Book>(options.capacity);
-        record.warmup_messages = kx::book_pass<K>(bytes, *warm).messages;
-      }
-      const auto book = std::make_unique<Book>(options.capacity);
-      if (clock.begin("work")) {
-        clock.end(kx::book_pass<K>(bytes, *book));
-      }
-      record.live_orders = book->live_orders();
-      record.live_levels = book->live_levels();
+      book_passes<K>();
       return;
     }
     if (e == Experiment::framing) {
-      record.warmup_messages = framing<K>().totals.messages;
-      for (int i = 0; i < 2; ++i) {
-        if (clock.begin("work")) {
-          const kx::FramingTotals f = framing<K>();
-          record.framing_stopped_at = f.stopped_at;
-          clock.end(f.totals);
-        }
-      }
+      framing_passes<K>();
       return;
     }
     if (e == Experiment::parse) {
-      record.warmup_messages = kx::parse_pass<K>(bytes).messages;
-      const auto by_type = [this](std::string mode, char only) {
-        if (clock.begin(std::move(mode))) {
-          clock.end(kx::parse_one_type<K>(bytes, only));
-        }
-      };
-      by_type("walk", 0);
-      if (clock.begin("all")) {
-        clock.end(kx::parse_pass<K>(bytes));
-      }
-      for (const char type : itch::kernels::kOpTypes) {
-        by_type(std::string{type}, type);
-      }
-      if (clock.begin("all")) {
-        clock.end(kx::parse_pass<K>(bytes));
-      }
-      by_type("walk", 0);
+      parse_passes<K>();
       return;
     }
     // walk, work, work, walk: a drift over the process falls on both alike.
     auto ring = std::make_unique<std::array<itch::kernels::AddFields, kx::kRing>>();
     auto slots = std::make_unique<std::array<std::uint32_t, kx::kSlots>>();
     std::vector<std::uint8_t> bits(std::size_t{1} << 16U);
-    record.warmup_messages = one<K, true>(*ring, *slots, bits).messages;
+    record->warmup_messages = one<K, true>(*ring, *slots, bits).messages;
     for (const bool work : {false, true, true, false}) {
       ring->fill({});
       slots->fill(0);
       std::ranges::fill(bits, std::uint8_t{0});
-      if (clock.begin(work ? "work" : "walk")) {
-        clock.end(work ? one<K, true>(*ring, *slots, bits) : one<K, false>(*ring, *slots, bits));
+      if (clock->begin(work ? "work" : "walk")) {
+        clock->end(work ? one<K, true>(*ring, *slots, bits) : one<K, false>(*ring, *slots, bits));
       }
     }
   }
@@ -483,7 +503,8 @@ kx::Watchlist most_active(std::span<const std::byte> bytes, std::size_t n) {
   for (std::size_t i = 0; i < order.size(); ++i) {
     order[i] = i;
   }
-  std::ranges::stable_sort(order, [&adds](std::size_t a, std::size_t b) { return adds[a] > adds[b]; });
+  std::ranges::stable_sort(order,
+                           [&adds](std::size_t a, std::size_t b) { return adds[a] > adds[b]; });
   kx::Watchlist list;
   for (const std::size_t locate : order) {
     if (list.keys.size() == n || adds[locate] == 0) {
@@ -532,11 +553,10 @@ std::string record_json(const std::vector<HeaderField>& header, const Options& o
       "  \"variant\": {{\"experiment\": {}, \"simd\": {}, \"kernel\": {}, \"isa\": {}, "
       "\"from_auto\": {}, \"arch\": {}, \"overread\": {}, \"width\": {}, \"form\": {}, "
       "\"watchlist\": {}, \"watchlist_listed\": {}}},\n",
-      json_string(experiment_name(*options.experiment)),
-      json_string(simd_id(*options.experiment)), json_string(to_string(kernel.id())),
-      json_string(isa_of(kernel.id())), kernel.from_auto() ? "true" : "false",
-      json_string(itch::kernels::kArch), overread, options.width, json_string(options.form),
-      options.watchlist, record.watchlist_listed);
+      json_string(experiment_name(options.experiment)), json_string(simd_id(options.experiment)),
+      json_string(to_string(kernel.id())), json_string(isa_of(kernel.id())),
+      kernel.from_auto() ? "true" : "false", json_string(itch::kernels::kArch), overread,
+      options.width, json_string(options.form), options.watchlist, record.watchlist_listed);
   out += std::format(R"(  "mix": {{"messages": {}, "book_messages": {}}},)", record.mix.messages,
                      record.mix.book_messages);
   out += std::format("\n  \"warmup_messages\": {},\n", record.warmup_messages);
@@ -580,9 +600,9 @@ std::string record_json(const std::vector<HeaderField>& header, const Options& o
 }
 
 std::string describe_variant(const Options& options, itch::kernels::Selected kernel) {
-  std::string text = std::format("{} ({}), kernel {}, {}", experiment_name(*options.experiment),
-                                 simd_id(*options.experiment), to_string(kernel.id()),
-                                 isa_of(kernel.id()));
+  std::string text =
+      std::format("{} ({}), kernel {}, {}", experiment_name(options.experiment),
+                  simd_id(options.experiment), to_string(kernel.id()), isa_of(kernel.id()));
   if (options.width != 0) {
     text += std::format(", width {}", options.width);
   }
@@ -611,14 +631,16 @@ void judge(Record& record) {
     for (std::size_t j = i + 1; j < record.passes.size(); ++j) {
       const TimedPass& a = record.passes[i];
       const TimedPass& b = record.passes[j];
-      if (a.mode == b.mode && (a.totals.fold != b.totals.fold || a.totals.items != b.totals.items)) {
+      if (a.mode == b.mode &&
+          (a.totals.fold != b.totals.fold || a.totals.items != b.totals.items)) {
         record.refusals.push_back(std::format("two {} passes disagree", a.mode));
       }
     }
   }
   if (record.mismatches != 0) {
-    record.refusals.push_back(std::format("the kernel differed from the scalar kernel {} times in {}",
-                                          record.mismatches, record.compared));
+    record.refusals.push_back(
+        std::format("the kernel differed from the scalar kernel {} times in {}", record.mismatches,
+                    record.compared));
   }
 }
 
@@ -673,11 +695,11 @@ int run_experiment(const Options& options) {
   }
   fault_in(bytes);
   record.mix = count_mix(bytes);
-  if (*options.experiment == Experiment::batch) {
+  if (options.experiment == Experiment::batch) {
     record.runs = kx::run_lengths(bytes);
   }
   std::optional<kx::Watchlist> watchlist;
-  if (*options.experiment == Experiment::filter) {
+  if (options.experiment == Experiment::filter) {
     watchlist = most_active(bytes, options.watchlist);
     record.watchlist_listed = watchlist->listed;
     if (watchlist->listed != options.watchlist) {
@@ -689,10 +711,10 @@ int run_experiment(const Options& options) {
   Clock clock{bytes, group, record};
   std::size_t overread = 0;
   if (record.refusals.empty()) {
-    Passes passes{.options = options,
+    Passes passes{.options = &options,
                   .bytes = bytes,
-                  .clock = clock,
-                  .record = record,
+                  .clock = &clock,
+                  .record = &record,
                   .watchlist = watchlist ? &*watchlist : nullptr};
     itch::kernels::run(*kernel, passes);
     OverreadOf ask;
@@ -700,7 +722,7 @@ int run_experiment(const Options& options) {
   }
   migrations.sample();
   judge(record);
-  if (*options.experiment == Experiment::framing && !record.passes.empty() &&
+  if (options.experiment == Experiment::framing && !record.passes.empty() &&
       record.framing_stopped_at != bytes.size()) {
     record.refusals.push_back(std::format("the {} walk stopped at byte {} of {}", options.form,
                                           record.framing_stopped_at, bytes.size()));

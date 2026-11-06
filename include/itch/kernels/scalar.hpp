@@ -62,8 +62,8 @@ struct Kernel {
   // The fields decode_book_op() takes, read where messages.hpp reads them, without its
   // length check: the parser has made that check before it calls a kernel.
   [[nodiscard]] static BookOp book_op(const std::byte* m, char type) noexcept {
-    const std::uint16_t locate = read_be<std::uint16_t>(m + 1);
-    const std::uint64_t reference = read_be<std::uint64_t>(m + 11);
+    const auto locate = read_be<std::uint16_t>(m + 1);
+    const auto reference = read_be<std::uint64_t>(m + 11);
     switch (type) {
       case AddOrder::kType:
       case AddOrderAttributed::kType:

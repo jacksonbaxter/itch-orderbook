@@ -34,7 +34,7 @@
       "mutations": [
         {
           "file": "include/itch/kernels/select.hpp",
-          "old": "  if (!built(*id)) {\n    return std::unexpected(std::format(\"kernel {} is not built: this is an {} build, with {}\",\n                                       name, kArch, built_names()));\n  }\n",
+          "old": "  if (!built(*id)) {\n    return std::unexpected(std::format(\"kernel {} is not built: this is an {} build, with {}\", name,\n                                       kArch, built_names()));\n  }\n",
           "new": "  if (!built(*id)) {\n    return Selected{KernelId::scalar, false};\n  }\n"
         }
       ],
@@ -142,7 +142,7 @@
       "mutations": [
         {
           "file": "include/itch/kernels/select.hpp",
-          "old": "  if (!built(*id)) {\n    return std::unexpected(std::format(\"kernel {} is not built: this is an {} build, with {}\",\n                                       name, kArch, built_names()));\n  }\n",
+          "old": "  if (!built(*id)) {\n    return std::unexpected(std::format(\"kernel {} is not built: this is an {} build, with {}\", name,\n                                       kArch, built_names()));\n  }\n",
           "new": "  if (!built(*id)) {\n    return Selected{KernelId::scalar, false};\n  }\n"
         }
       ],
@@ -373,6 +373,77 @@
       "expect": {
         "signature": "^FAIL: test_it_waits_for_the_sample_after_the_end",
         "exit": 1
+      }
+    },
+    {
+      "id": "simd-predictions-skip-simd-results",
+      "breaks": "check_predictions leaves simd_*.md results unread, so a SIMD result could name no prediction",
+      "check": "test_check_predictions test_a_simd_result_naming_no_prediction",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "\"wasm_*.md\", \"simd_*.md\")",
+          "new": "\"wasm_*.md\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_simd_result_naming_no_prediction",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-asm-audit-counts-unchecked",
+      "breaks": "simd_asm_audit --check stops holding the table's counts to the listings",
+      "check": "test_simd_asm_audit.py test_the_published_file_passes_and_tampering_is_caught",
+      "mutations": [
+        {
+          "file": "scripts/simd_asm_audit.py",
+          "old": "                if any(listed[key][k] != counts[k] for k in COUNTS):\n",
+          "new": "                if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_asm_audit.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_published_file_passes_and_tampering_is_caught",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-wasm-batch-price-not-reversed",
+      "breaks": "The SIMD128 kernel's batch4 leaves the prices in wire order",
+      "check": "itch_wasm_kernels_smoke in node, through the wasm preset",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/wasm.hpp",
+          "old": "detail::reverse32(wasm_v128_load(price.data()))",
+          "new": "wasm_v128_load(price.data())"
+        }
+      ],
+      "build": {
+        "preset": "wasm",
+        "targets": [
+          "itch_wasm_smoke",
+          "itch_wasm_kernels_smoke",
+          "itch_demo_smoke"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "wasm"
+      ],
+      "expect": {
+        "signature": "wasm kernels smoke: [1-9][0-9]* mismatches on random messages"
       }
     }
   ]

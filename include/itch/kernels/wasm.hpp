@@ -31,13 +31,12 @@ template <const Gather& G, std::size_t H, std::size_t W>
 inline constexpr std::array<std::uint8_t, kWindow> kIndex = window_index(G, H, W, kWindow);
 
 template <const Gather& G, std::size_t H, std::size_t W>
-[[nodiscard]] inline v128_t part(const std::array<v128_t, kMostWindows>& win,
-                                 v128_t acc) noexcept {
+[[nodiscard]] inline v128_t part(const std::array<v128_t, kMostWindows>& win, v128_t acc) noexcept {
   if constexpr (W < G.windows && G.uses(H, W)) {
     constexpr auto& i = kIndex<G, H, W>;
-    const v128_t picked = wasm_i8x16_shuffle(win[W], wasm_i64x2_const(0, 0), i[0], i[1], i[2],
-                                             i[3], i[4], i[5], i[6], i[7], i[8], i[9], i[10],
-                                             i[11], i[12], i[13], i[14], i[15]);
+    const v128_t picked =
+        wasm_i8x16_shuffle(win[W], wasm_i64x2_const(0, 0), i[0], i[1], i[2], i[3], i[4], i[5], i[6],
+                           i[7], i[8], i[9], i[10], i[11], i[12], i[13], i[14], i[15]);
     return wasm_v128_or(acc, picked);
   } else {
     return acc;

@@ -96,7 +96,7 @@ struct Kernel {
   }
 
   [[gnu::target("ssse3")]] [[nodiscard]] static BookOp book_op(const std::byte* m,
-                                                              char type) noexcept {
+                                                               char type) noexcept {
     switch (type) {
       case AddOrder::kType: return detail::op<kAddOp>(m);
       case AddOrderAttributed::kType: return detail::op<kAddAttributedOp>(m);
@@ -137,8 +137,8 @@ struct Kernel {
   // PCMPEQD, then each 32-bit result ANDed with its neighbour, so a lane is all ones only when
   // both halves of the key matched.
   [[gnu::target("ssse3")]] [[nodiscard]] static bool any_equal(std::uint64_t key,
-                                                              const std::uint64_t* list,
-                                                              std::size_t n) noexcept {
+                                                               const std::uint64_t* list,
+                                                               std::size_t n) noexcept {
     const __m128i k = _mm_set1_epi64x(static_cast<long long>(key));
     __m128i hits = _mm_setzero_si128();
     for (std::size_t i = 0; i < n; i += 2) {

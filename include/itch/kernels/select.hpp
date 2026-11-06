@@ -1,6 +1,7 @@
 // --kernel=NAME: the kernel itself, the widest one here for auto, or the reason it cannot run.
 #pragma once
 
+#include <algorithm>
 #include <expected>
 #include <format>
 #include <string>
@@ -12,12 +13,7 @@
 namespace itch::kernels {
 
 [[nodiscard]] inline bool built(KernelId id) noexcept {
-  for (const KernelId b : kBuilt) {
-    if (b == id) {
-      return true;
-    }
-  }
-  return false;
+  return std::ranges::any_of(kBuilt, [id](KernelId b) { return b == id; });
 }
 
 [[nodiscard]] inline std::string built_names() {
@@ -40,13 +36,12 @@ namespace itch::kernels {
         name));
   }
   if (!built(*id)) {
-    return std::unexpected(std::format("kernel {} is not built: this is an {} build, with {}",
-                                       name, kArch, built_names()));
+    return std::unexpected(std::format("kernel {} is not built: this is an {} build, with {}", name,
+                                       kArch, built_names()));
   }
   if (const std::optional<std::string> lacks = cpu_lacks(*id)) {
-    return std::unexpected(
-        std::format("kernel {} cannot run here: this CPU lacks {} (__builtin_cpu_supports)", name,
-                    *lacks));
+    return std::unexpected(std::format(
+        "kernel {} cannot run here: this CPU lacks {} (__builtin_cpu_supports)", name, *lacks));
   }
   return Selected{*id, false};
 }

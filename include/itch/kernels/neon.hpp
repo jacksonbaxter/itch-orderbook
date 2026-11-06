@@ -36,6 +36,11 @@ namespace detail {
   return v;
 }
 
+// clang-tidy 23 reports every use of a reference template parameter such as G as "redundant
+// parentheses around expression", where the source has none; the check is off until the end
+// of the plan code.
+// NOLINTBEGIN(readability-redundant-parentheses)
+
 // Output half H of plan G: which windows it reads, in the order TBL takes them, and the index
 // of each of its bytes into those windows laid end to end.
 template <const Gather& G, std::size_t H>
@@ -76,8 +81,8 @@ template <const Gather& G, std::size_t H>
   } else if constexpr (p.count == 2) {
     return vqtbl2q_u8(uint8x16x2_t{{win[p.windows[0]], win[p.windows[1]]}}, index);
   } else {
-    return vqtbl3q_u8(
-        uint8x16x3_t{{win[p.windows[0]], win[p.windows[1]], win[p.windows[2]]}}, index);
+    return vqtbl3q_u8(uint8x16x3_t{{win[p.windows[0]], win[p.windows[1]], win[p.windows[2]]}},
+                      index);
   }
 }
 
@@ -103,6 +108,8 @@ template <const Gather& G>
   out.kind = static_cast<BookOpKind>(G.kind);
   return out;
 }
+
+// NOLINTEND(readability-redundant-parentheses)
 
 }  // namespace detail
 
@@ -162,10 +169,10 @@ struct Kernel {
     const uint64x2_t k = vdupq_n_u64(key);
     uint64x2_t hits = vdupq_n_u64(0);
     for (std::size_t i = 0; i < n; i += 8) {
-      const uint64x2_t a = vorrq_u64(vceqq_u64(vld1q_u64(list + i), k),
-                                     vceqq_u64(vld1q_u64(list + i + 2), k));
-      const uint64x2_t b = vorrq_u64(vceqq_u64(vld1q_u64(list + i + 4), k),
-                                     vceqq_u64(vld1q_u64(list + i + 6), k));
+      const uint64x2_t a =
+          vorrq_u64(vceqq_u64(vld1q_u64(list + i), k), vceqq_u64(vld1q_u64(list + i + 2), k));
+      const uint64x2_t b =
+          vorrq_u64(vceqq_u64(vld1q_u64(list + i + 4), k), vceqq_u64(vld1q_u64(list + i + 6), k));
       hits = vorrq_u64(hits, vorrq_u64(a, b));
     }
     return vmaxvq_u32(vreinterpretq_u32_u64(hits)) != 0;

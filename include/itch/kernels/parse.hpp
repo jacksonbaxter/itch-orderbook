@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <utility>
 
 #include "itch/book_op.hpp"
 #include "itch/kernels/layout.hpp"
@@ -39,8 +40,9 @@ inline constexpr std::array<bool, 256> kIsOpType = [] {
 }();
 
 template <class Kernel, class Sink>
-[[gnu::always_inline]] inline ParseTotals parse_ops(std::span<const std::byte> bytes,
-                                                    Sink& sink) noexcept {
+[[gnu::always_inline]] inline ParseTotals parse_ops(
+    std::span<const std::byte> bytes,
+    Sink& sink) noexcept(noexcept(sink(std::declval<const BookOp&>()))) {
   FrameReader reader{bytes};
   ParseTotals totals;
   const std::byte* const end = bytes.data() + bytes.size();

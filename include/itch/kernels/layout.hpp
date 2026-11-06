@@ -13,6 +13,7 @@
 // message either. Nothing here reads a byte; it only plans.
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -62,14 +63,14 @@ struct Field {
 };
 
 struct Gather {
-  std::uint8_t length = 0;                // The message's length.
+  std::uint8_t length = 0;                   // The message's length.
   std::array<std::uint8_t, kRecord> from{};  // Wire byte of each output byte, or kZero.
   std::uint8_t windows = 0;
   std::array<std::uint8_t, kMostWindows> anchor{};  // First wire byte of each window.
   // The window each output byte comes from, and its place in that window, or kZero.
   std::array<std::uint8_t, kRecord> window{};
   std::array<std::uint8_t, kRecord> lane{};
-  std::uint8_t kind = 0;  // A BookOpKind, or 0 for AddFields.
+  std::uint8_t kind = 0;         // A BookOpKind, or 0 for AddFields.
   std::uint8_t kind_at = kZero;  // The output byte the kind goes in, or kZero for none.
 
   // Whether output half h (bytes 16h to 16h + 15) takes any byte from window w.
@@ -88,8 +89,7 @@ struct Gather {
 // window does not fill (0x80 makes PSHUFB write a zero; 16 points WebAssembly's two-input
 // shuffle at a zero vector).
 [[nodiscard]] constexpr std::array<std::uint8_t, kWindow> window_index(const Gather& g,
-                                                                       std::size_t h,
-                                                                       std::size_t w,
+                                                                       std::size_t h, std::size_t w,
                                                                        std::uint8_t none) noexcept {
   std::array<std::uint8_t, kWindow> index{};
   for (std::size_t i = 0; i < kWindow; ++i) {
@@ -127,7 +127,7 @@ template <std::size_t N>
       g.anchor[g.windows] = static_cast<std::uint8_t>(f.at < last ? f.at : last);
       ++g.windows;
     }
-    const std::uint8_t w = static_cast<std::uint8_t>(g.windows - 1);
+    const auto w = static_cast<std::uint8_t>(g.windows - 1);
     for (std::uint8_t k = 0; k < f.width; ++k) {
       // Big-endian on the wire, little-endian out: the last wire byte comes first.
       const auto wire = static_cast<std::uint8_t>(f.width == 1 ? f.at : f.at + f.width - 1 - k);
@@ -158,14 +158,16 @@ inline constexpr Field kLocate{.at = 1, .width = 2, .to = kOpLocate};
 inline constexpr Field kReference{.at = 11, .width = 8, .to = kOpReference};
 
 inline constexpr Gather kAddOp =
-    plan(36, std::array{kLocate, kReference, Field{.at = 19, .width = 1, .to = kOpSide},
-                        Field{.at = 20, .width = 4, .to = kOpShares},
-                        Field{.at = 32, .width = 4, .to = kOpPrice}},
+    plan(36,
+         std::array{kLocate, kReference, Field{.at = 19, .width = 1, .to = kOpSide},
+                    Field{.at = 20, .width = 4, .to = kOpShares},
+                    Field{.at = 32, .width = 4, .to = kOpPrice}},
          kind_byte(BookOpKind::add), kOpKind);
 inline constexpr Gather kAddAttributedOp =
-    plan(40, std::array{kLocate, kReference, Field{.at = 19, .width = 1, .to = kOpSide},
-                        Field{.at = 20, .width = 4, .to = kOpShares},
-                        Field{.at = 32, .width = 4, .to = kOpPrice}},
+    plan(40,
+         std::array{kLocate, kReference, Field{.at = 19, .width = 1, .to = kOpSide},
+                    Field{.at = 20, .width = 4, .to = kOpShares},
+                    Field{.at = 32, .width = 4, .to = kOpPrice}},
          kind_byte(BookOpKind::add), kOpKind);
 inline constexpr Gather kExecutedOp =
     plan(31, std::array{kLocate, kReference, Field{.at = 19, .width = 4, .to = kOpShares}},
@@ -179,9 +181,10 @@ inline constexpr Gather kCancelOp =
 inline constexpr Gather kDeleteOp =
     plan(19, std::array{kLocate, kReference}, kind_byte(BookOpKind::erase), kOpKind);
 inline constexpr Gather kReplaceOp =
-    plan(35, std::array{kLocate, kReference, Field{.at = 19, .width = 8, .to = kOpNewReference},
-                        Field{.at = 27, .width = 4, .to = kOpShares},
-                        Field{.at = 31, .width = 4, .to = kOpPrice}},
+    plan(35,
+         std::array{kLocate, kReference, Field{.at = 19, .width = 8, .to = kOpNewReference},
+                    Field{.at = 27, .width = 4, .to = kOpShares},
+                    Field{.at = 31, .width = 4, .to = kOpPrice}},
          kind_byte(BookOpKind::replace), kOpKind);
 
 inline constexpr Gather kAddFields =
@@ -202,12 +205,7 @@ inline constexpr std::array kOpTypes{AddOrder::kType,      AddOrderAttributed::k
                                      OrderReplace::kType};
 
 [[nodiscard]] constexpr bool is_op_type(char type) noexcept {
-  for (const char t : kOpTypes) {
-    if (t == type) {
-      return true;
-    }
-  }
-  return false;
+  return std::ranges::any_of(kOpTypes, [type](char t) { return t == type; });
 }
 
 // The plan for each op type, so a kernel can switch on the type byte once and then run a
