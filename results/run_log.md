@@ -120,3 +120,9 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0601-20261106T031646Z_report | P-0601 | 07c1bb1bab05 (clean) | Darwin | published: E1 refuted: a vector kernel beat scalar at some width |
 | P-0602-20261106T032041Z | P-0602 | ecee4a126b42 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule; for scripts/simd_report.py |
 | P-0602-20261106T032041Z_report | P-0602 | ecee4a126b42 (clean) | Darwin | published: neon beats scalar; E2 not refuted |
+| P-0603-20261106T032148Z_scalar-3 | P-0603 | 86df0a80e649 (clean) | Darwin | withdrawn: consume, scalar, repetition 3: the CPU sampler saw launchd at 20.4% CPU at 2026-11-06T03:22:29Z; nothing from it is published, and it is rerun under P-0603 |
+| P-0603-20261106T032148Z | P-0603 | 86df0a80e649 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule, after 1 withdrawn and rerun; for scripts/simd_report.py |
+| P-0604-20261106T032300Z_neon-1 | P-0604 | e3346335bed9 (clean) | Darwin | withdrawn: parse, neon, repetition 1: the CPU sampler saw launchd at 23.7% CPU at 2026-11-06T03:23:28Z; nothing from it is published, and it is rerun under P-0604 |
+| P-0604-20261106T032300Z | P-0604 | e3346335bed9 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule, after 1 withdrawn and rerun; for scripts/simd_report.py |
+| P-0603-20261106T032148Z_report | P-0603 | 86df0a80e649 (clean) | Darwin | published: neon beats scalar; E3 not refuted |
+| P-0604-20261106T032300Z_report | P-0604 | e3346335bed9 (clean) | Darwin | published: neon beats scalar; E4 not refuted |
