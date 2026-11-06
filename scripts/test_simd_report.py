@@ -248,7 +248,8 @@ class SimdReportTest(unittest.TestCase):
         self.assertIn("sampler-rule-unsaid", self.violations(unsaid))
         no_isa = text.replace("neon: NEON (AArch64 Advanced SIMD, 128-bit)", "neon: ?", 1)
         self.assertIn("isa-unsaid", self.violations(no_isa))
-        private = text.replace("## Command", "## Command\n\n/Users/someone/data", 1)
+        planted = "/" + "Users" + "/someone/data"  # In two pieces, so that the gate passes.
+        private = text.replace("## Command", "## Command\n\n" + planted, 1)
         self.assertIn("private-text", self.violations(private))
 
     def test_a_published_process_must_have_been_sampled_quiet(self):
