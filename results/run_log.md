@@ -147,3 +147,8 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0608-20261106T033249Z | P-0608 | 3903f15d62ec (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule, after 2 withdrawn and rerun; for scripts/simd_report.py |
 | P-0607-20261106T032808Z_report | P-0607 | 6102fabfd16f (clean) | Darwin | published: E9 not refuted: the bitset wins or ties at every watchlist size |
 | P-0608-20261106T033249Z_report | P-0608 | 3903f15d62ec (clean) | Darwin | published: fewest cycles a message: underread; split against overread differ; E13 not refuted |
+| P-0609-20261106T033507Z | P-0609 | f7bf6842c202 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule; for scripts/simd_report.py |
+| P-0609-20261106T033507Z_report | P-0609 | f7bf684 (clean) | Darwin | not published: every process was quiet, but the records name V8 13.6 by its four dotted parts, which simd_report.py refuses as an address; simd_wasm_e11.mjs now writes the version as major.minor and build, and P-0609 is rerun |
+| P-0609-20261106T033637Z_scalar-3 | P-0609 | 2c4136ec2116 (clean) | Darwin | withdrawn: e11, scalar, repetition 3: the CPU sampler saw launchd at 24.0% CPU at 2026-11-06T03:37:28Z; nothing from it is published, and it is rerun under P-0609 |
+| P-0609-20261106T033637Z | P-0609 | 2c4136ec2116 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule, after 1 withdrawn and rerun; for scripts/simd_report.py |
+| P-0609-20261106T033637Z_report | P-0609 | 2c4136ec2116 (clean) | Darwin | published: wasm beats scalar; E11 not refuted |

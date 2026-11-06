@@ -67,6 +67,15 @@ ISA = {"scalar": "scalar: general-purpose registers, REV or BSWAP",
        "avx2": "AVX2 (256-bit)",
        "avx512vbmi": "AVX-512 VBMI (512-bit)",
        "wasm": "WebAssembly SIMD128"}
+E11_SCALAR = ("scalar wasm32: shifts and ORs, since core WebAssembly has no byte-reverse "
+              "instruction")
+
+
+def isa_of(experiment, kernel):
+    """The instruction set a figure used: the record's, but for E11's scalar, which runs no REV."""
+    return E11_SCALAR if experiment == "e11" and kernel == "scalar" else ISA[kernel]
+
+
 SIMD_ID = {"field": "E1", "decode": "E2", "consume": "E3", "parse": "E4", "book": "E4",
            "batch": "E5", "framing": "E6", "filter": "E9", "timestamp": "E13", "e11": "E11"}
 TITLES = {"field": "E1: one field, scalar against vector, by width",
@@ -351,7 +360,7 @@ def results_section(experiment, rows, events, runs):
         for name in names:
             f = figures[name]
             base = baseline(experiment, name)
-            out.append(f"| `{name}` | {ISA[kernel_of(experiment, name)]} | {f['reps']} "
+            out.append(f"| `{name}` | {isa_of(experiment, kernel_of(experiment, name))} | {f['reps']} "
                        f"| {f['items']:,} | {fmt(f['work_ns']['median'])} "
                        f"| {fmt(f['walk_ns']['median'])} | {fmt(f['ns']['median'])} "
                        f"| {fmt(f['ns']['min'])} | {fmt(f['ns']['max'])} | "
@@ -370,7 +379,7 @@ def results_section(experiment, rows, events, runs):
         for name in names:
             f = figures[name]
             base = baseline(experiment, name)
-            out.append(f"| `{name}` | {ISA[kernel_of(experiment, name)]} | {f['reps']} "
+            out.append(f"| `{name}` | {isa_of(experiment, kernel_of(experiment, name))} | {f['reps']} "
                        f"| {f['items']:,} | {fmt(f['ns']['median'])} | {fmt(f['ns']['min'])} "
                        f"| {fmt(f['ns']['max'])} | "
                        + "".join(f"{fmt(f[event]['median'])} | " for event in events)
@@ -383,7 +392,7 @@ def results_section(experiment, rows, events, runs):
         for t in OP_TYPES:
             for name in names:
                 one = figures[name]["types"][t]
-                out.append(f"| {t} | `{name}` | {ISA[kernel_of(experiment, name)]} "
+                out.append(f"| {t} | `{name}` | {isa_of(experiment, kernel_of(experiment, name))} "
                            f"| {one['items']:,} | {fmt(one['ns']['median'])} "
                            f"| {fmt(one['ns']['min'])} | {fmt(one['ns']['max'])} |"
                            + "".join(f" {fmt(one[event]['median'])} |" for event in events))
@@ -702,7 +711,7 @@ def render(manifest, records, stderrs, sampler):
     out += [f"- {name}: {value}" for name, value in header.items() if name not in skip]
     out += [f"- experiment: {experiment}", f"- simd: {SIMD_ID[experiment]}",
             f"- prediction: {manifest['prediction']}", f"- run_id: {manifest['run_id']}",
-            "- instruction_sets: " + "; ".join(f"{k}: {ISA[k]}" for k in kernels),
+            "- instruction_sets: " + "; ".join(f"{k}: {isa_of(experiment, k)}" for k in kernels),
             f"- arch: {records[0]['variant']['arch']}",
             f"- processes: {len(records)} published, {len(withdrawn)} withdrawn",
             f"- messages: {records[0]['mix']['messages']:,}",
@@ -805,7 +814,7 @@ def check_published(text, name=None):
             return found + [("table-missing", "no timed pass in the table")]
         kernels = sorted({kernel_of(experiment, row["variant"]) for row in rows},
                          key=list(ISA).index)
-        isa = "; ".join(f"{k}: {ISA[k]}" for k in kernels)
+        isa = "; ".join(f"{k}: {isa_of(experiment, k)}" for k in kernels)
         if fields.get("instruction_sets") != isa:
             found.append(("isa-unsaid", f"{fields.get('instruction_sets')!r} against {isa!r}"))
         results, lines, summary = computed_sections(experiment, rows, events, parse_runs(text))
