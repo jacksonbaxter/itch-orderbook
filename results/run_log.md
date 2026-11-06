@@ -152,3 +152,5 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0609-20261106T033637Z_scalar-3 | P-0609 | 2c4136ec2116 (clean) | Darwin | withdrawn: e11, scalar, repetition 3: the CPU sampler saw launchd at 24.0% CPU at 2026-11-06T03:37:28Z; nothing from it is published, and it is rerun under P-0609 |
 | P-0609-20261106T033637Z | P-0609 | 2c4136ec2116 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule, after 1 withdrawn and rerun; for scripts/simd_report.py |
 | P-0609-20261106T033637Z_report | P-0609 | 2c4136ec2116 (clean) | Darwin | published: wasm beats scalar; E11 not refuted |
+| P-0610-20261106T033824Z | P-0610 | 28f5fd6d0014 (clean) | Darwin | recorded: every variant's repetitions published under the sampler rule; for scripts/simd_report.py |
+| P-0610-20261106T033824Z_report | P-0610 | 28f5fd6d0014 (clean) | Darwin | published: scalar add_fields merged or vectorised in 2 of 24 configurations; SLP off changes 2 scalar functions; E12 not refuted |
