@@ -341,3 +341,9 @@ included.
 - Experiment: `bench_kernels --experiment parse` on `scalar` and `neon`, as P-0601 otherwise: walk, all, A, F, E, C, X, D, U, all, walk. `all` is `parse_ops()` on the kernel, every op folded by a sink; a type's pass decodes only that type on the kernel.
 - Prediction: the whole parse differs by under 5% between the kernels, a tie by the rule; E4 not refuted (refuted only by NEON 10% or more faster). By type, Order Delete (`D`, reference and locate only) shows less difference between the kernels than Add Order (`A`), in ns an op.
 - Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0605: E5, Add Orders four at a time, and the day's run lengths, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment batch` on `scalar` and `neon`, as P-0601 otherwise: where four Add Orders come in a row, the kernel's `batch4` decodes them into one array a field (NEON: the four wire values side by side, one REV for each field); the rest one at a time on scalar code, the same for both. (work − walk) over the Add Orders. The day's run lengths, untimed: every message by the length of the run of one type it sits in, every Add Order by its run of Add Orders.
+- Prediction: a tie or a NEON loss; E5 not refuted. Between 10% and 50% of the day's Add Orders sit in runs of four or more Add Orders.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
