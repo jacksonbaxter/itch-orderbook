@@ -322,3 +322,10 @@ included.
 - What was seen before this was written: `bench_kernels` on the 3,330-message oracle fixture, every experiment, both kernels, giving the same folds; the whole day's `verify` on NEON, untimed, 263,241,937 ops compared with scalar and no mismatch, peak RSS 7.69 GiB; and E12's compile of `bench/asm` (P-0610): clang 23 turns NEON's `field<6>` (8-byte vector load, REV64, lane move, shift) into the scalar `ldr x`, `rev`, `lsr`, three instructions, where scalar's exact 6-byte read is two loads, an ORR, REV and LSR. So at widths 2, 4 and 8 the two kernels should compile to the same scalar code, and at 6 NEON's is the 8-byte over-read. No timing of the day.
 - Prediction: a tie at every width by cycles a field, the two kernels' code being the same scalar code at 2, 4 and 8, and one load against two at 6, which the loop hides; E1 not refuted. If NEON beats scalar at width 6, that is the over-read beating the exact read, not a vector unit, and the file will say so. The field costs both kernels under 1 ns an op over the walk.
 - Prediction, memory: peak RSS between 7.6 and 8.2 GiB, the mapped day counted.
+
+## P-0602: E2, Add Order decode into a 32-byte record, scalar against NEON, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment decode` on `scalar` and `neon`, as P-0601 otherwise: every Add Order decoded into a ring of 64 records, no consumer; walk, work, work, walk; (work − walk) over the Add Orders.
+- What was seen before this was written: E12's compile (P-0610), clang 23 -O3 arm64: scalar `add_fields` 26 instructions, 8 loads and 6 REVs; NEON's 11, 3 window loads and 2 constant loads, 2 TBLs and one store pair. The fixture and the verify run as in P-0601.
+- Prediction: NEON beats scalar, by under the 2.33× the instruction-table floor gives (simd.md, SIMD-24): scalar's cycles an Add Order over NEON's between 1.1 and 2.33. NEON's instructions an Add Order under scalar's. E2 not refuted.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
