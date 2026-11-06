@@ -127,14 +127,14 @@ The SPSC ring. Each row is one comparison from a results file's targets table: a
 
 | Target | Comparison | Day | Host | Pinning | Measured | Bar | Verdict | Commit | File |
 |---|---|---|---|---|---|---|---|---|---|
-| T-SPSC-2 | cached over uncached, with %: modulo / uncached-modulo | 12302019 | macOS (M4 Max) | not pinned | 0.96× | ≥ 3.90× | host differs | `f870418ad388` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
-| T-SPSC-2 | cached over uncached, with the mask: shipped / uncached | 12302019 | macOS (M4 Max) | not pinned | 0.97× | ≥ 3.90× | host differs | `f870418ad388` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
-| T-SPSC-2 | mask over %, cached: shipped / modulo | 12302019 | macOS (M4 Max) | not pinned | 1.00× | ≥ 4.20× | host differs | `f870418ad388` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
-| T-SPSC-2 | mask over %, uncached: uncached / uncached-modulo | 12302019 | macOS (M4 Max) | not pinned | 0.99× | ≥ 4.20× | host differs | `f870418ad388` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
-| T-SPSC-3 | pipelined time / single-threaded time | 12302019 | macOS (M4 Max) | not pinned | 0.98× | ≤ 1.31× | host differs | `bb83ed30c6a6` | [results/spsc_pipeline_mac_12302019.md](results/spsc_pipeline_mac_12302019.md) |
-| T-SPSC-1 | boost rtt / project rtt | 12302019 | macOS (M4 Max) | not pinned | 1.96× | ≥ 1.16× | host differs | `f870418ad388` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
-| T-SPSC-1 | project rtt / moodycamel rtt | 12302019 | macOS (M4 Max) | not pinned | 0.55× | ≤ 1.00× | host differs | `f870418ad388` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
-| T-SPSC-1 | project rtt / rigtorp rtt | 12302019 | macOS (M4 Max) | not pinned | 0.96× | ≤ 1.00× | host differs | `f870418ad388` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
+| T-SPSC-2 | cached over uncached, with %: modulo / uncached-modulo | 12302019 | macOS (M4 Max) | not pinned | 0.95× | ≥ 3.90× | host differs | `0550a6017ece` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
+| T-SPSC-2 | cached over uncached, with the mask: shipped / uncached | 12302019 | macOS (M4 Max) | not pinned | 0.98× | ≥ 3.90× | host differs | `0550a6017ece` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
+| T-SPSC-2 | mask over %, cached: shipped / modulo | 12302019 | macOS (M4 Max) | not pinned | 1.00× | ≥ 4.20× | host differs | `0550a6017ece` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
+| T-SPSC-2 | mask over %, uncached: uncached / uncached-modulo | 12302019 | macOS (M4 Max) | not pinned | 0.98× | ≥ 4.20× | host differs | `0550a6017ece` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
+| T-SPSC-3 | pipelined time / single-threaded time | 12302019 | macOS (M4 Max) | not pinned | 0.99× | ≤ 1.31× | host differs | `0550a6017ece` | [results/spsc_pipeline_mac_12302019.md](results/spsc_pipeline_mac_12302019.md) |
+| T-SPSC-1 | boost rtt / project rtt | 12302019 | macOS (M4 Max) | not pinned | 1.91× | ≥ 1.16× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
+| T-SPSC-1 | project rtt / moodycamel rtt | 12302019 | macOS (M4 Max) | not pinned | 0.53× | ≤ 1.00× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
+| T-SPSC-1 | project rtt / rigtorp rtt | 12302019 | macOS (M4 Max) | not pinned | 0.91× | ≤ 1.00× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
 
 The market maker on its report day, 12302019, a late-December session, with every parameter chosen on 10302019, an FOMC day. One symbol-day. No edge is claimed. 2 symbols on one day: each is its own symbol-day. The file gives S gross, fees, the markout curve and how Q-off and L-off each change the PnL. Dollars at the base fee tier; a replayed feed cannot react, so market impact is absent.
 
@@ -259,6 +259,37 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0301-20261105T115340Z` | `P-0301` | `f870418ad388` | Darwin | `withdrawn` |
 | `P-0302-20261105T115802Z` | `P-0302` | `f870418ad388` | Darwin | `withdrawn` |
 | `P-0304-20261105T132346Z` | `P-0304` | `bb83ed30c6a6` | Darwin | `withdrawn` |
+| `P-0301-20261106T004328Z` | `P-0301` | `675befb3ad78` | Darwin | `withdrawn` |
+| `P-0301-20261105T235714Z` | `P-0301` | `675befb3ad78` | Darwin | `refused at results` |
+| `P-0302-20261106T004853Z` | `P-0302` | `675befb3ad78` | Darwin | `stopped by SIGTERM at waiting for the Mac to be quiet; nothing from it is published; the row was written by the driver as it stopped` |
+| `P-0301-20261106T014054Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T014404Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T014822Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T015258Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T015541Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T015705Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T015905Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T020215Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T020835Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T021202Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T021413Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T021605Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T021735Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T021936Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T022105Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T022235Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T022720Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T022833Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T023314Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T023433Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T023734Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T024224Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0301-20261106T012423Z` | `P-0301` | `0550a6017ece` | Darwin | `published` |
+| `P-0302-20261106T024847Z` | `P-0302` | `0550a6017ece` | Darwin | `published` |
+| `P-0304-20261106T025925Z` | `P-0304` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0304-20261106T030257Z` | `P-0304` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0304-20261106T030541Z` | `P-0304` | `0550a6017ece` | Darwin | `withdrawn` |
+| `P-0304-20261106T025242Z` | `P-0304` | `0550a6017ece` | Darwin | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
