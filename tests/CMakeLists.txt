@@ -104,8 +104,12 @@ if(ITCH_BUILD_BENCH)
             "$<TARGET_FILE:bench_spsc>" "$<TARGET_FILE:bench_pipeline>"
             "${CMAKE_CURRENT_BINARY_DIR}/bench_spsc_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
+  add_test(NAME test_bench_kernels_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_kernels_cli.py"
+            "$<TARGET_FILE:bench_kernels>" "${CMAKE_CURRENT_BINARY_DIR}/bench_kernels_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
   set_tests_properties(test_bench_cli test_bench_backtest_cli test_bench_counts_cli
-    test_bench_variants_cli test_bench_spsc_cli PROPERTIES LABELS unit)
+    test_bench_variants_cli test_bench_spsc_cli test_bench_kernels_cli PROPERTIES LABELS unit)
 endif()
 
 if(ITCH_BUILD_TOOLS)
