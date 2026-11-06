@@ -347,3 +347,9 @@ included.
 - Experiment: `bench_kernels --experiment batch` on `scalar` and `neon`, as P-0601 otherwise: where four Add Orders come in a row, the kernel's `batch4` decodes them into one array a field (NEON: the four wire values side by side, one REV for each field); the rest one at a time on scalar code, the same for both. (work − walk) over the Add Orders. The day's run lengths, untimed: every message by the length of the run of one type it sits in, every Add Order by its run of Add Orders.
 - Prediction: a tie or a NEON loss; E5 not refuted. Between 10% and 50% of the day's Add Orders sit in runs of four or more Add Orders.
 - Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0606: E6, the frame walk alone, four ways, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment framing --form F`, F in length, byte, table and constant, scalar only (no kernel), as P-0601 otherwise: a warm-up and two timed walks, each adding every frame's type byte; no walk pass to subtract, the figure is ns, cycles and instructions a message.
+- Prediction: `length`, `byte` and `table` within 15% of each other, each between 0.5 and 2 ns a message, the frame-to-frame load chain setting the pace; `constant`, the switch on the type, slower than `length` by the rule, from mispredicted branches on the type. E6 not refuted (the two dependence forms differ).
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
