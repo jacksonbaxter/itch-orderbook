@@ -61,12 +61,16 @@ class SimdDriverTest(unittest.TestCase):
 
     def test_it_waits_for_the_sample_after_the_end(self):
         lines = samples()[:-2]
-        self.assertIn("did not cover", self.judged(sampler=Sampler(list(lines))))
+        self.assertIn("did not cover", self.reason(sampler=Sampler(list(lines))))
         simd_driver.SAMPLE_WAIT_S = 5
         timer = threading.Timer(1.0, lambda: lines.append("2026-11-05T09:00:12Z sample"))
         timer.start()
         self.assertIsNone(self.judged(sampler=Sampler(lines)))
         timer.join()
+
+    def reason(self, **kwargs):
+        """judged()'s reason as text, so that a process wrongly kept fails an assertIn."""
+        return str(self.judged(**kwargs))
 
     def judged(self, code=0, err=None, sampler=None, record=True):
         with tempfile.TemporaryDirectory() as scratch:
@@ -80,10 +84,10 @@ class SimdDriverTest(unittest.TestCase):
     def test_a_process_is_withdrawn_unless_sampled_quiet(self):
         self.assertIsNone(self.judged(sampler=Sampler(samples())))
         self.assertIn("mds_stores at 31.0% CPU",
-                      self.judged(sampler=Sampler(samples(foreign_at=4))))
-        self.assertIn("without a sample", self.judged(sampler=Sampler(samples(gap=True))))
-        self.assertIn("did not cover", self.judged(sampler=Sampler(samples()[3:])))
-        self.assertIn("start or end line", self.judged(err=f"{START}\n",
+                      self.reason(sampler=Sampler(samples(foreign_at=4))))
+        self.assertIn("without a sample", self.reason(sampler=Sampler(samples(gap=True))))
+        self.assertIn("did not cover", self.reason(sampler=Sampler(samples()[3:])))
+        self.assertIn("start or end line", self.reason(err=f"{START}\n",
                                                        sampler=Sampler(samples())))
 
     def test_a_failed_or_recordless_process_is_withdrawn(self):
