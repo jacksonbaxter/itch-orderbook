@@ -359,3 +359,9 @@ included.
 - Experiment: `bench_kernels --experiment filter`, watchlists of the 8 and the 64 stocks with the most Add Orders in the day; `--form compare` on `scalar` and `neon` (each Add Order's 8-byte stock against every listed one; NEON four compares of two keys an 8 keys) and `--form bitset` (the order's locate in a bitset filled from the day's Stock Directory messages), as P-0601 otherwise. (work − walk) over the Add Orders.
 - Prediction: the bitset beats both compares at 64 stocks, and beats or ties them at 8; NEON's compare beats scalar's at 64. Every form finds the same matches. E9 not refuted.
 - Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0608: E13, the 6-byte timestamp, four ways, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment timestamp --form F`, F in exact (6 bytes into a zeroed 8, one swap: what the parser ships), split (a 4-byte and a 2-byte read, merged), overread (8 bytes, swapped, shifted down 16) and underread (8 bytes from the tracking number, swapped, masked), scalar only, as P-0601 otherwise; every message's timestamp. (work − walk) over the messages.
+- Prediction: every form within 0.3 ns a message of `exact`; `split` and `overread` tie by the rule, so E13 is refuted (simd.md expected the over-read to win by a small margin). Every form gives the same timestamps.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
