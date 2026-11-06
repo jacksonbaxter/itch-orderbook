@@ -128,6 +128,15 @@ CAVEATS = {
 - **A copy, not a mapping.** The day is copied into a 64 MiB window of the module's memory a
   piece at a time, and each piece's walk and decode passes are timed, summed over the day.
 - **One engine.** V8 as this Node ships it; another engine, or Chrome's, may differ.""",
+    "field": """\
+- **The NEON field is scalar code.** Clang folds `field<W>`'s 8-byte vector load, REV64 and lane
+  move into a general-register load, REV and shift (`results/simd_asm_mac.md`, E12). At widths
+  2, 4 and 8 the two kernels' instructions are the same; at 6 NEON's is the 8-byte over-read
+  where scalar reads 4 and 2 bytes. So no figure here is a vector unit's: a call between the
+  kernels is the over-read against the exact read at 6, and code placement at the other widths.
+- **Under a tenth of a cycle.** The field costs both kernels less than 0.1 cycle an op beyond
+  the walk: the out-of-order core hides it behind the frame walk. The rule calls a winner
+  wherever the repetitions do not overlap, however small the gap.""",
     "default": """\
 - **The Mac's counters are cycles and instructions only**, user and kernel together; branch
   misses, cache misses and SIMD-pipe use are not read here.
@@ -729,6 +738,7 @@ def render(manifest, records, stderrs, sampler):
     else:
         out += ["None."]
     out += ["", "## What this does not show", "",
+            *([CAVEATS[experiment]] if experiment in CAVEATS and experiment != "e11" else []),
             CAVEATS["e11" if experiment == "e11" else "default"]]
     if host == DEBIAN:
         checks = [manifest.get("machine_check_before"), manifest.get("machine_check_after")]
