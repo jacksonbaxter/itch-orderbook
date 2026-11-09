@@ -127,11 +127,18 @@ The SPSC ring. Each row is one comparison from a results file's targets table: a
 
 | Target | Comparison | Day | Host | Pinning | Measured | Bar | Verdict | Commit | File |
 |---|---|---|---|---|---|---|---|---|---|
+| T-SPSC-2 | cached over uncached, with %: modulo / uncached-modulo | 12302019 | debian | pinned to core 4 | 0.89× | ≥ 3.90× | missed | `675befb3ad78` | [results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md) |
+| T-SPSC-2 | cached over uncached, with the mask: shipped / uncached | 12302019 | debian | pinned to core 4 | 1.20× | ≥ 3.90× | missed | `675befb3ad78` | [results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md) |
+| T-SPSC-2 | mask over %, cached: shipped / modulo | 12302019 | debian | pinned to core 4 | 1.60× | ≥ 4.20× | missed | `675befb3ad78` | [results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md) |
+| T-SPSC-2 | mask over %, uncached: uncached / uncached-modulo | 12302019 | debian | pinned to core 4 | 1.19× | ≥ 4.20× | missed | `675befb3ad78` | [results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md) |
 | T-SPSC-2 | cached over uncached, with %: modulo / uncached-modulo | 12302019 | macOS (M4 Max) | not pinned | 0.95× | ≥ 3.90× | host differs | `0550a6017ece` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
 | T-SPSC-2 | cached over uncached, with the mask: shipped / uncached | 12302019 | macOS (M4 Max) | not pinned | 0.98× | ≥ 3.90× | host differs | `0550a6017ece` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
 | T-SPSC-2 | mask over %, cached: shipped / modulo | 12302019 | macOS (M4 Max) | not pinned | 1.00× | ≥ 4.20× | host differs | `0550a6017ece` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
 | T-SPSC-2 | mask over %, uncached: uncached / uncached-modulo | 12302019 | macOS (M4 Max) | not pinned | 0.98× | ≥ 4.20× | host differs | `0550a6017ece` | [results/spsc_ablation_mac_12302019.md](results/spsc_ablation_mac_12302019.md) |
 | T-SPSC-3 | pipelined time / single-threaded time | 12302019 | macOS (M4 Max) | not pinned | 0.99× | ≤ 1.31× | host differs | `0550a6017ece` | [results/spsc_pipeline_mac_12302019.md](results/spsc_pipeline_mac_12302019.md) |
+| T-SPSC-1 | boost rtt / project rtt | 12302019 | debian | pinned to core 4 | 1.15× | ≥ 1.16× | missed | `675befb3ad78` | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
+| T-SPSC-1 | project rtt / moodycamel rtt | 12302019 | debian | pinned to core 4 | 1.35× | ≤ 1.00× | missed | `675befb3ad78` | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
+| T-SPSC-1 | project rtt / rigtorp rtt | 12302019 | debian | pinned to core 4 | 1.16× | ≤ 1.00× | missed | `675befb3ad78` | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
 | T-SPSC-1 | boost rtt / project rtt | 12302019 | macOS (M4 Max) | not pinned | 1.91× | ≥ 1.16× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
 | T-SPSC-1 | project rtt / moodycamel rtt | 12302019 | macOS (M4 Max) | not pinned | 0.53× | ≤ 1.00× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
 | T-SPSC-1 | project rtt / rigtorp rtt | 12302019 | macOS (M4 Max) | not pinned | 0.91× | ≤ 1.00× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
@@ -293,6 +300,10 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0305-20261106T014006Z` | `P-0305` | `675befb3ad78` | Linux | `published` |
 | `P-0305-20261106T014007Z` | `P-0305` | `675befb3ad78` | Linux | `published` |
 | `P-0305-20261106T014008Z` | `P-0305` | `675befb3ad78` | Linux | `published` |
+| `P-0306-20261106T075203Z` | `P-0306` | `675befb3ad78` | Linux | `published` |
+| `P-0307-20261106T075615Z` | `P-0307` | `675befb3ad78` | Linux | `published` |
+| `P-0308-20261106T080410Z` | `P-0308` | `675befb3ad78` | Linux | `published` |
+| `P-0308-20261106T080410Z` | `P-0308` | `675befb3ad78` | Linux | `withdrawn` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
