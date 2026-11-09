@@ -142,3 +142,4 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0307-20261106T075615Z | P-0307 | 675befb3ad78 (exported by debian_sync.sh) | Linux | published |
 | P-0308-20261106T080410Z | P-0308 | 675befb3ad78 (exported by debian_sync.sh) | Linux | published |
 | P-0308-20261106T080410Z | P-0308 | 675befb3ad78 (exported by debian_sync.sh) | Linux | withdrawn: T-SPSC-3 on debian, all three repetitions, exit 0, the run whose earlier row says published; the machine_check run around it on core 4 and on core 6 at 07:58 UTC, six minutes before the run, refused both cores, cpu5 and cpu7 each 100% busy over 1 s, and the run went ahead without that check passing; the driver's own checks at 08:04 found both siblings idle, but the rule is a passing check before the run, so nothing from it is published, and it is rerun under P-0308; the row was typed |
+| P-0308-20261109T231118Z | P-0308 | 8b5f06b896b3 (exported by debian_sync.sh) | Linux | published |
