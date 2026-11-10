@@ -108,8 +108,9 @@ namespace detail {
   const double rate = seconds > 0.0 ? static_cast<double>(pass->messages) / seconds : 0.0;
   return std::format(
       R"({{"messages": {}, "seconds": {:.6f}, "messages_per_s": {:.1f}, "top_changes": {}, )"
-      R"("pauses": {}}})",
-      pass->messages, seconds, rate, pass->top_changes, pass->pauses);
+      R"("pauses": {}, "faults": {}}})",
+      pass->messages, seconds, rate, pass->top_changes, pass->pauses,
+      pass->faults ? std::format("{}", *pass->faults) : std::string{"null"});
 }
 
 [[nodiscard]] inline std::string percentiles_json(const std::vector<Percentile>& percentiles) {
@@ -165,8 +166,9 @@ namespace detail {
   }
   out += "\n  },\n";
   const SessionReport& session = record.session;
-  out += std::format(R"(  "warmup": {{"messages": {}, "book": {}}},)", session.warmup_messages,
-                     json_string(session.warmup_book));
+  out += std::format(R"(  "warmup": {{"messages": {}, "book": {}, "code_messages": {}}},)",
+                     session.warmup_messages, json_string(session.warmup_book),
+                     session.code_warmup_messages);
   out += std::format("\n  \"mix\": {},\n", detail::mix_json(session.mix));
   out += std::format("  \"throughput\": {},\n", detail::pass_json(session.throughput, timer));
   out += std::format("  \"latency_pass\": {},\n", detail::pass_json(session.latency, timer));

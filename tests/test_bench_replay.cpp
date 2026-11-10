@@ -5,6 +5,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <memory>
 #include <optional>
 #include <span>
@@ -47,7 +48,7 @@ struct Trace {
 };
 
 struct FakeClock {
-  Trace* trace;
+  Trace* trace{};
   [[nodiscard]] std::uint64_t start() const {
     trace->events += 's';
     return trace->now;
@@ -55,6 +56,20 @@ struct FakeClock {
   [[nodiscard]] std::uint64_t stop() const {
     trace->events += 't';
     return trace->now;
+  }
+};
+
+// A clock that also counts page faults: each read is an 'f' on the trace, and each apply
+// takes `per_apply` faults, so that a pass's count is the applies between its two reads.
+struct FaultingClock : FakeClock {
+  std::uint64_t* count{};
+  bool fails = false;
+  [[nodiscard]] std::optional<std::uint64_t> faults() const {
+    trace->events += 'f';
+    if (fails) {
+      return std::nullopt;
+    }
+    return *count;
   }
 };
 
@@ -216,6 +231,34 @@ TEST(BenchReplay, AWarmUpWithAnotherBookBuildsNoneOfThisDesign) {
   EXPECT_EQ(rig.session.report().warmup_book, "other");
   ASSERT_TRUE(rig.session.timed_throughput());
   EXPECT_EQ(rig.books, 1);
+}
+
+// Both passes' code runs on a book of its own over the leading operations, and nothing of
+// it reaches a timed figure.
+TEST(BenchReplay, TheCodeWarmUpRunsBothPassesOnBooksOfTheirOwn) {
+  Rig rig;
+  rig.input.bytes_ = frames({add(1, 'B', 100, 10), add(2, 'S', 50, 12), remove(1), remove(2)});
+  rig.session.warm_up();
+  rig.session.warm_code(2);
+  EXPECT_EQ(rig.books, 3);  // The warm-up's and one for each pass.
+  EXPECT_EQ(rig.session.report().code_warmup_messages, 2U);
+  // The warm-up, then the throughput pass and the latency pass over two messages.
+  EXPECT_EQ(rig.trace.events,
+            "saaaat"
+            "saat"
+            "ssatsatt");
+  ASSERT_TRUE(rig.session.timed_throughput());
+  EXPECT_EQ(rig.session.report().throughput->messages, 4U);
+}
+
+TEST(BenchReplay, TheLeadingOperationsEndOnTheLastOneAsked) {
+  const std::vector<std::byte> input =
+      frames({add(1, 'B', 100, 10), add(2, 'S', 50, 12), remove(1), remove(2)});
+  EXPECT_EQ(count_mix(leading_operations(input, 3)).messages, 3U);
+  EXPECT_EQ(count_mix(leading_operations(input, 1)).messages, 1U);
+  EXPECT_EQ(leading_operations(input, 9).size(), input.size());
+  const std::vector<std::byte> quiet = system_events(5);
+  EXPECT_EQ(leading_operations(quiet, 1).size(), quiet.size());
 }
 
 TEST(BenchReplay, NothingIsTimedBeforeTheWarmUp) {
@@ -540,9 +583,75 @@ TEST(BenchReplay, EveryDesignSeesTheSameMovesOfTheTop) {
 
 TEST(BenchReplay, ADesignNameMustBeOneOfTheDesigns) {
   for (const char* name : {"", "hash", "map", "hash-", "-linked", "paged-hash", "map-old",
-                           "identity", "chained-linked-flat", "paged-flat-scan", "paged-scan16"}) {
+                           "identity", "chained-linked-flat", "paged-flat-scan", "paged-scan16",
+                           "alloc-", "alloc-pool", "alloc-malloc", "alloc-hash-linked"}) {
     EXPECT_FALSE(parse_design(name).has_value()) << name;
   }
+}
+
+// T-ARENA-1: every allocator arm by name, and each one's node book gives the same moves of
+// the top as every other design does.
+TEST(BenchReplay, EveryAllocatorArmIsADesignAndSeesTheSameMovesOfTheTop) {
+  const std::vector<std::byte> input = frames(
+      {add(1, 'B', 100, 10), add(2, 'S', 50, 12), add(3, 'B', 70, 11), cancel(3, 70), remove(1)});
+  PlatformClock clock;
+  for (const itch::tools::AllocArm arm : itch::tools::kAllocArms) {
+    const std::string name = std::format("alloc-{}", to_string(arm));
+    const std::optional<Design> design = parse_design(name);
+    ASSERT_TRUE(design.has_value()) << name;
+    EXPECT_EQ(design->kind, DesignKind::alloc);
+    EXPECT_EQ(design->allocator, arm);
+    EXPECT_EQ(design_name(*design), name);
+    TopTracker tracker;
+    const std::uint64_t moves = itch::tools::with_alloc_arm(
+        arm,
+        [&]<class Book> {
+          Book book{{.orders = 16, .levels = 16, .pages = itch::PageRequest::base}};
+          return throughput_pass(input, book, clock, tracker).top_changes;
+        },
+        [] { return std::uint64_t{5}; });
+    EXPECT_EQ(moves, 5U) << name;
+  }
+}
+
+TEST(BenchReplay, EachTimedPassCountsItsFaultsOutsideItsClock) {
+  const std::vector<std::byte> input = frames({add(1, 'B', 100, 10), remove(1)});
+  Trace trace;
+  std::uint64_t faults = 7;
+  FaultingClock clock{{&trace}, &faults};
+  struct FaultingBook {
+    FakeBook book;
+    std::uint64_t* faults{};
+    [[nodiscard]] ApplyStatus apply(std::span<const std::byte> payload) const {
+      *faults += 3;
+      return book.apply(payload);
+    }
+  };
+  FaultingBook book{.book = {.trace = &trace}, .faults = &faults};
+  const PassTotals throughput = throughput_pass(input, book, clock);
+  ASSERT_TRUE(throughput.faults.has_value());
+  EXPECT_EQ(*throughput.faults, 6U);
+  EXPECT_EQ(trace.events, "fsaatf");
+  trace.events.clear();
+  FakeSink sink{.trace = &trace, .pushed = {}, .ops = {}};
+  const PassTotals latency = latency_pass(input, book, clock, sink);
+  ASSERT_TRUE(latency.faults.has_value());
+  EXPECT_EQ(*latency.faults, 6U);
+  EXPECT_TRUE(trace.events.starts_with("fs")) << trace.events;
+  EXPECT_TRUE(trace.events.ends_with("tf")) << trace.events;
+}
+
+TEST(BenchReplay, AFaultCountThatCannotBeReadIsNoCount) {
+  const std::vector<std::byte> input = frames({add(1, 'B', 100, 10)});
+  Trace trace;
+  std::uint64_t faults = 0;
+  FaultingClock clock{{&trace}, &faults, true};
+  FakeBook book{.trace = &trace};
+  EXPECT_FALSE(throughput_pass(input, book, clock).faults.has_value());
+  FakeClock plain{&trace};
+  EXPECT_FALSE(throughput_pass(input, book, plain).faults.has_value());
+  EXPECT_FALSE(faults_between(5, 4).has_value());
+  EXPECT_EQ(faults_between(4, 9), std::optional<std::uint64_t>{5});
 }
 
 TEST(BenchReplay, MemoryHighWaterKeepsThePeakOverTheBaseline) {

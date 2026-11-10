@@ -15,6 +15,7 @@ option(ITCH_BUILD_BENCH "Build the benchmarks" ON)
 option(ITCH_FUZZ "Link the fuzz targets with libFuzzer instead of the corpus replay runner" OFF)
 option(ITCH_TIDY "Run clang-tidy on our targets while compiling" OFF)
 option(ITCH_COMPARISON_QUEUES "Fetch the third-party queues T-SPSC-1 compares against" OFF)
+option(ITCH_MIMALLOC "Fetch mimalloc for the node book's mimalloc arm (T-ARENA-1)" OFF)
 set(ITCH_SANITIZE "" CACHE STRING "Sanitizers, comma separated, for example address,undefined")
 # A negative control for the SPSC ring's tests and spsc_stress, never for a release:
 # tests/support/spsc_ordering.hpp weakens the named order to relaxed in those builds.
@@ -34,6 +35,9 @@ enable_testing()
 itch_require_liburing()
 if(ITCH_COMPARISON_QUEUES)
   itch_require_comparison_queues()
+endif()
+if(ITCH_MIMALLOC)
+  itch_require_mimalloc()
 endif()
 
 add_subdirectory(src)

@@ -19,6 +19,15 @@
 //     book event. The throughput pass times it with the book. The latency span stays
 //     apply() alone.
 //
+// A clock that can count page faults (CountsFaults) is read for them just before each timed
+// pass starts and just after it stops, so that each pass carries the faults it took. The
+// span is the whole pass, an ageing book's stops included.
+//
+// A design may also warm the code of its own timed passes (warm_code): each pass, untimed,
+// on a fresh book of the design, over the stream up to its first few thousand book
+// operations. A pass that runs code no earlier pass ran faults the pages of its own
+// instructions in, which is not what a fault count of the pass is after (T-ARENA-1).
+//
 // Residency is asked last, after everything the pass allocates, because allocating can
 // push file pages out: on debian 155 pages of a day went between the warm-up and the first
 // pass, with the sample arena allocated in between. It is asked again when the pass ends,
@@ -26,6 +35,7 @@
 #pragma once
 
 #include <array>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -52,6 +62,7 @@ struct PassTotals {
   std::uint64_t rejected = 0;     // apply() refused the message. A clean day has none.
   std::uint64_t top_changes = 0;  // Messages after which a tracked top of book moved.
   std::uint64_t pauses = 0;       // Times the clock stopped for an ageing step.
+  std::optional<std::uint64_t> faults = std::nullopt;  // Page faults, when the clock counts them.
 };
 
 [[nodiscard]] constexpr bool is_rejection(ApplyStatus status) noexcept {
@@ -175,13 +186,39 @@ class TopTracker {
 struct PlatformClock {
   [[nodiscard]] static std::uint64_t start() noexcept { return ticks_start(); }
   [[nodiscard]] static std::uint64_t stop() noexcept { return ticks_stop(); }
+  [[nodiscard]] static std::optional<std::uint64_t> faults() noexcept { return page_faults(); }
 };
+
+// A clock that says how many page faults the process has taken.
+template <class Clock>
+concept CountsFaults = requires(Clock& clock) {
+  { clock.faults() } -> std::same_as<std::optional<std::uint64_t>>;
+};
+
+template <class Clock>
+[[nodiscard]] std::optional<std::uint64_t> faults_now(Clock& clock) {
+  if constexpr (CountsFaults<Clock>) {
+    return clock.faults();
+  } else {
+    return std::nullopt;
+  }
+}
+
+// The faults between two reads, or nothing if either read failed.
+[[nodiscard]] inline std::optional<std::uint64_t> faults_between(
+    std::optional<std::uint64_t> before, std::optional<std::uint64_t> after) noexcept {
+  if (!before || !after || *after < *before) {
+    return std::nullopt;
+  }
+  return *after - *before;
+}
 
 template <class Clock, class Book, class Tracker>
 [[nodiscard]] PassTotals throughput_pass(std::span<const std::byte> input, Book& book, Clock& clock,
                                          Tracker& tracker) {
   FrameReader reader{input};
   PassTotals totals;
+  const std::optional<std::uint64_t> faults_before = faults_now(clock);
   std::uint64_t started = clock.start();
   for (Frame frame = reader.next(); !is_terminal(frame.status); frame = reader.next()) {
     if (frame.status == FrameStatus::message) {
@@ -204,6 +241,7 @@ template <class Clock, class Book, class Tracker>
     }
   }
   totals.ticks += clock.stop() - started;
+  totals.faults = faults_between(faults_before, faults_now(clock));
   return totals;
 }
 
@@ -222,6 +260,7 @@ template <class Clock, class Book, class Sink, class Tracker>
                                       Sink& sink, Tracker& tracker) {
   FrameReader reader{input};
   PassTotals totals;
+  const std::optional<std::uint64_t> faults_before = faults_now(clock);
   const std::uint64_t started = clock.start();
   for (Frame frame = reader.next(); !is_terminal(frame.status); frame = reader.next()) {
     if (frame.status != FrameStatus::message) {
@@ -247,6 +286,7 @@ template <class Clock, class Book, class Sink, class Tracker>
     }
   }
   totals.ticks = clock.stop() - started;
+  totals.faults = faults_between(faults_before, faults_now(clock));
   return totals;
 }
 
@@ -311,11 +351,28 @@ struct Percentile {
   return {.percentile = percentile, .value_ns = timer.ticks_to_ns(ticks)};
 }
 
+// The input up to and including its `operations`th message the book acts on: the warm-up
+// of a pass's code, which needs every path of apply() and few nodes.
+[[nodiscard]] inline std::span<const std::byte> leading_operations(
+    std::span<const std::byte> input, std::uint64_t operations) noexcept {
+  FrameReader reader{input};
+  std::uint64_t seen = 0;
+  for (Frame frame = reader.next(); !is_terminal(frame.status); frame = reader.next()) {
+    if (frame.status == FrameStatus::message && op_class(frame.payload) != OpClass::other &&
+        ++seen == operations) {
+      return input.first(
+          static_cast<std::size_t>(frame.payload.data() + frame.payload.size() - input.data()));
+    }
+  }
+  return input;
+}
+
 struct SessionReport {
   bool warmed = false;
   std::uint64_t warmup_messages = 0;  // Proof the warm-up ran. Published nowhere else.
   std::uint64_t warmup_ticks = 0;
   std::string warmup_book = "this design";  // What the warm-up pass ran on.
+  std::uint64_t code_warmup_messages = 0;   // Of each pass's code warm-up, when it ran one.
   MessageMix mix;                           // Counted by the warm-up, outside its timing.
   std::optional<PassTotals> throughput;
   std::optional<PassTotals> latency;
@@ -365,6 +422,30 @@ class ReplaySession {
     report_.warmup_messages = pass.messages;
     report_.warmup_ticks = pass.ticks;
     report_.mix = count_mix(input_->bytes());
+  }
+
+  // Both timed passes, untimed and on books of their own, over the input up to its
+  // `operations`th book operation, so that their code is warm before either is timed.
+  void warm_code(std::uint64_t operations) {
+    const std::span<const std::byte> prefix = leading_operations(input_->bytes(), operations);
+    const MessageMix mix = count_mix(prefix);
+    std::vector<std::byte> memory(mix.messages * SampleBuffer::kBytesPerSample);
+    SampleBuffer samples{std::span<std::byte>{memory}};
+    std::optional<TopTracker> tracker;
+    if (track_top_) {
+      tracker.emplace();
+    }
+    {
+      const std::unique_ptr<Book> book = make_book_();
+      static_cast<void>(tracker ? throughput_pass(prefix, *book, *clock_, *tracker)
+                                : throughput_pass(prefix, *book, *clock_));
+    }
+    {
+      const std::unique_ptr<Book> book = make_book_();
+      static_cast<void>(tracker ? latency_pass(prefix, *book, *clock_, samples, *tracker)
+                                : latency_pass(prefix, *book, *clock_, samples));
+    }
+    report_.code_warmup_messages = mix.messages;
   }
 
   // The warm-up of a process with no timed pass: the input faulted in and counted, and no

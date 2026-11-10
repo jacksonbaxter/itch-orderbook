@@ -14,6 +14,10 @@
 // shown reaching its own counter, so a broken counter fails here instead of passing the
 // fast book. The map book, the T-DESIGN-1 baseline, allocates by design, and the heap ager
 // that its aged run uses is shown making the calls it says it makes, from its seed alone.
+// The node book of T-ARENA-1 on a pool arm allocates nothing after construction either,
+// and on every other arm is seen allocating: malloc once for each node, std::pmr's
+// resources a chunk at a time, and mimalloc not through the global new at all, which is
+// why itch_alloc counts mimalloc's calls by the book.
 #include <gtest/gtest.h>
 
 #include <array>
@@ -26,6 +30,7 @@
 #include <span>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "backtest/joiner.hpp"
@@ -39,6 +44,8 @@
 #include "itch/mm/marks.hpp"
 #include "itch/mm/session.hpp"
 #include "itch/mm/strategy.hpp"
+#include "itch/node_arms.hpp"
+#include "itch/node_book.hpp"
 #include "itch/reader.hpp"
 #include "itch/spsc.hpp"
 #include "oracle/alloc_counter.hpp"
@@ -47,6 +54,9 @@
 #include "pipeline.hpp"
 #include "support/churn.hpp"
 #include "support/fixtures.hpp"
+#ifdef ITCH_HAVE_MIMALLOC
+#include "itch/mimalloc_arm.hpp"
+#endif
 
 namespace {
 
@@ -321,6 +331,55 @@ TEST(Allocation, TheMapBookAllocatesOnTheHotPath) {
   std::println("map book: {} messages, {} allocations", messages, counts.total());
   EXPECT_EQ(refused, 0U);
   EXPECT_GT(counts.total(), messages / 4) << "the map book made almost no allocation";
+}
+
+// The churn stream through a node book on one arm, counted from straight after
+// construction. Returns the global new's calls and the book's nodes made.
+template <class Arm>
+std::pair<std::uint64_t, std::uint64_t> node_book_counts(std::string_view name) {
+  SCOPED_TRACE(name);
+  const std::vector<std::byte> stream = build_stream();
+  itch::NodeBook<Arm> book{
+      {.orders = 2048, .levels = 2048, .pages = itch::PageRequest::huge_if_offered}};
+  std::uint64_t refused = 0;
+  reset_alloc_counts();
+  const std::uint64_t messages =
+      replay(stream, [&book, &refused](std::span<const std::byte> payload) {
+        const itch::ApplyStatus status = book.apply(payload);
+        refused +=
+            status == itch::ApplyStatus::applied || status == itch::ApplyStatus::no_book_effect
+                ? 0U
+                : 1U;
+      });
+  const AllocCounts counts = read_alloc_counts();
+  std::println("node book, {}: {} messages, {} refused, {} allocations, {} nodes made", name,
+               messages, refused, counts.total(), book.nodes_made());
+  EXPECT_EQ(refused, 0U) << "the stream did not exercise the book";
+  EXPECT_GT(messages, 200000U);
+  EXPECT_GT(book.nodes_made(), messages / 4);
+  return {counts.total(), book.nodes_made()};
+}
+
+TEST(Allocation, TheNodeBookOnAPoolAllocatesNothingAfterConstruction) {
+  EXPECT_EQ(node_book_counts<itch::PoolIndexArm>("pool-index").first, 0U);
+  EXPECT_EQ(node_book_counts<itch::PoolPointerArm>("pool-pointer").first, 0U);
+  EXPECT_EQ(node_book_counts<itch::PoolFifoArm>("pool-fifo").first, 0U);
+}
+
+TEST(Allocation, TheNodeBookOnAHeapIsSeenAllocating) {
+  const auto [malloc_calls, malloc_nodes] = node_book_counts<itch::MallocArm>("malloc");
+  EXPECT_EQ(malloc_calls, malloc_nodes) << "malloc's arm takes one call for each node";
+  const auto [pool_calls, pool_nodes] = node_book_counts<itch::PmrPoolArm>("pmr-pool");
+  EXPECT_GT(pool_calls, 0U);
+  EXPECT_LT(pool_calls, pool_nodes) << "a pool resource takes its upstream a chunk at a time";
+  const auto [mono_calls, mono_nodes] = node_book_counts<itch::PmrMonotonicArm>("pmr-monotonic");
+  EXPECT_GT(mono_calls, 0U);
+  EXPECT_LT(mono_calls, mono_nodes);
+#ifdef ITCH_HAVE_MIMALLOC
+  const auto [mi_calls, mi_nodes] = node_book_counts<itch::MimallocArm>("mimalloc");
+  EXPECT_EQ(mi_calls, 0U) << "mi_new reached the global new's counter";
+  EXPECT_GT(mi_nodes, 0U);
+#endif
 }
 
 TEST(HeapAgeing, WarmUpLeavesHalfItsBlocksAsBallast) {

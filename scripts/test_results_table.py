@@ -292,6 +292,32 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn(f"results_table: FAIL results/{name}", output)
 
+    def test_an_alloc_file_gets_a_row_for_each_arm_and_its_fault_check(self):
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        import test_alloc_results  # noqa: E402, PLC0415
+
+        name = "alloc_arms_fixture_12302019.md"
+        path = self.root / "results" / name
+        path.write_text(test_alloc_results.GOOD, encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        rows = [line for line in output.splitlines()
+                if line.startswith("| ") and f"(results/{name})" in line]
+        self.assertEqual([row.split(" | ")[0][2:] for row in rows],
+                         list(test_alloc_results.ARMS), output)
+        self.assertIn("| malloc-fresh | 12302019 | macOS (M4 Max) | not pinned |", rows[0])
+        self.assertIn("| – |", rows[0])
+        for row in rows:
+            arm = row.split(" | ")[0][2:]
+            judged = "zero" if arm in test_alloc_results.POOLS else "not judged: a heap arm"
+            self.assertIn(f"| {judged} |", row)
+        self.assertIn("it read: PASS: no page fault", output)
+        path.write_text(re.sub(r"(?m)^\| pool-fifo \| all \|.*\n", "", test_alloc_results.GOOD),
+                        encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL results/{name}: pool-fifo has no latency", output)
+
     def test_an_spsc_file_gets_a_row_for_each_comparison(self):
         sys.path.insert(0, str(REPO_ROOT / "scripts"))
         import test_spsc_results  # noqa: E402, PLC0415

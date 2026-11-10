@@ -5,9 +5,9 @@
 
 results/predictions.md holds one `## P-NNNN: title` block per experiment. Every
 results/bench_*.md, chase_*.md, backtest_*.md, counters_*.md, flamegraph_*.md, mm_*.md,
-lookup_*.md, prefetch_*.md, dispatch_*.md, spsc_*.md, wasm_*.md and simd_*.md names one in
-its header, and so does results/oracle_sessions.md, which sums other results files and is no
-run, so it has no row in the run log.
+lookup_*.md, prefetch_*.md, dispatch_*.md, spsc_*.md, wasm_*.md, simd_*.md and alloc_*.md
+names one in its header, and so does results/oracle_sessions.md, which sums other results
+files and is no run, so it has no row in the run log.
 With git history to read, the block must be committed, its commit must come before the
 result's, and its text must be what that commit wrote: a prediction is never edited. results/run_log.md gets a row for every run,
 failed ones included, and only ever grows.
@@ -32,7 +32,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PREDICTIONS = "results/predictions.md"
 RUN_LOG = "results/run_log.md"
-RESULT_PATTERNS = ("bench_*.md", "chase_*.md", "backtest_*.md", "counters_*.md",
+RESULT_PATTERNS = ("alloc_*.md", "bench_*.md", "chase_*.md", "backtest_*.md", "counters_*.md",
                    "flamegraph_*.md", "mm_*.md", "lookup_*.md", "prefetch_*.md", "dispatch_*.md",
                    "spsc_*.md", "wasm_*.md", "simd_*.md", "layout_*.md", "structure_*.md",
                    "window_*.md")

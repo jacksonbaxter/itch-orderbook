@@ -1690,3 +1690,74 @@ By type alone, the same processes: `A` 1.34, `D` 2.59, `E` 2.28, `U` 3.17, withi
 **The default stays `paged-flat`.** It is the fastest arm on both hosts, so no layout arm earns the change, and no comment in the code moves.
 
 **The `debian` sessions.** All from 3150885, exported by `debian_sync.sh`, built through `heavy.sh`, launched from a non-interactive bash at nice 0 (a first launch from the login shell ran at nice 5 and was stopped within seconds, before its build). `perf_event_paranoid` read 2 before every process and at every session's start and end. The layout and structure runs: uptime 86,772.78 s at the layout's start (04:08:27 local) and 96,163.22 s at the structure's end (06:44:58), no reboot; pswpout 599,147 to 599,210, the 63 pages moving while `machine_check.sh` waited 36 minutes for another project's lock, never inside a process. The counts runs: uptime 96,163.25 s at their start and 102,820.41 s at the first session's end; pswpout moved from 599,210 to 943,127 over that session, with the other projects' work, and the top-ups record it each second against each process. What went wrong with the rules: the build ran from about 03:24 to 03:48 local, inside the 03:30 to 04:30 window, and the session read the day's sha256 at 03:48, since the session script guarded its measured steps against the window and not its build.
+
+## The pool allocator and T-ARENA-1's allocator arms, 2026-11-09
+
+**Why a book of its own.** T-ARENA-1 asks for one book with only the allocator changed. Neither existing book can be that book. `FastBook<>` keeps orders and levels in arrays sized up front and links them by 32-bit index, so it has no allocator to change: a malloc arm would need new node types, new links and a new layout as well. `MapBook` allocates on every add, but through `std::map`, `std::list` and `std::unordered_map`. Their node types, bucket arrays and links belong to the standard library, so a pool could not hand out their nodes by index, and the index's own growth would move with the arm. itch-book's pooled-against-inline comparison is the trap BENCHMARKS.md names, LC-45: it changed the index along with the allocator, so its difference is not an allocator's.
+
+`include/itch/node_book.hpp` is a new book built so that the allocator is the only thing that changes. It follows the fast book's linked-levels arm, written over handles:
+- a hash index from reference to order, open-addressed, 16-byte slots, sized from the capacity, at most half full, never growing;
+- a table of each (locate, side)'s best level;
+- each side's levels linked best-first and searched from the best;
+- each level's orders on an intrusive FIFO, oldest first.
+
+An add takes one order node, plus a level node when its price opens a level. A full execution, a delete or a replace gives the order back, and gives the level back when it empties.
+
+The arm is a policy. It supplies a handle type and a heap with `make`, `drop`, `at` and `null`. The arms are `include/itch/node_arms.hpp` and `include/itch/mimalloc_arm.hpp`. The index, the side table, the search, every write and the capacity rule are one code path for every arm: an add past 2,408,448 live orders, or a level past 983,040, is refused as capacity exhausted on every arm. The index and the side table come from `std::vector` in every arm, never from the arm. The index slot keeps the reference beside the handle and is 16 bytes whatever the handle is, so the index is the same size on every arm and a probe never reads an order.
+
+So what differs between two arms is only:
+- where a node's storage comes from;
+- what a link to it is: 4 bytes for the pool by index, 8 for every other arm.
+
+The pointer arms all share one layout (Order 40 bytes, Level 56). The index arms are 24 and 40. The pool by index against the pool by pointer is exactly the link-width comparison (LC-56). The pool by pointer against malloc, mimalloc and the two pmr resources is the same node and the same links, with only the allocator changed. That makes "only the allocator changed" literally true for the five pointer arms. For the index pool, the allocator and the link width change together, and the file says so.
+
+`itch_map_compare --allocator ARM` holds every arm to the map book, message by message, over the whole day, and `itch_alloc --allocator ARM` counts its allocations. The fixture tests run all eight arms through both, with the book hashed after every message.
+
+**The pool.** `include/itch/node_pool.hpp`:
+- a fixed pool of one node type, with a LIFO free list (or a FIFO one, for the FIFO arm) threaded through the free nodes themselves;
+- 32-bit slot numbers for the index arm, addresses for the pointer arm;
+- every node it will ever hand out mapped and touched in the constructor, so nothing after construction allocates or faults.
+
+It is sized from the counted peak. The peaks are 1,924,078 live orders and 784,060 live levels on 12302019, and 1,824,830 and 747,780 on 10302019. The pool takes the larger day's peak, adds a quarter, and rounds up to 4,096.
+
+Its memory comes from `include/itch/page_map.hpp`, which asks for one of four page requests: `base`, `huge-if-offered` (the default), `transparent` or `explicit`. It records the page size obtained, from what the kernel says afterwards, never from what was asked. A pool whose pages were refused has no room, and its book refuses every add rather than run on memory that is not there (`NodeBook.APoolBookWithNoPagesRefusesEveryAdd`).
+
+**Pages on this Mac.** `mmap` with `VM_FLAGS_SUPERPAGE_SIZE_2MB` is refused with errno 22 (`EINVAL`) on the M4 Max. The SDK calls the flag unsupported on current hardware. So `huge-if-offered` falls back to base pages, 16,384 bytes, and the file records the refusal for every book. `explicit` exits with "nothing mapped". No 2 MiB page is claimed anywhere on this host. macOS has no call that reports the page size backing a mapping, so a superpage mapping it ever accepted would be recorded as unverified rather than as 2 MiB.
+
+**The arms.**
+- `malloc-fresh`: the system allocator.
+- `malloc-aged`: the system allocator on a heap HeapAger ages, as `map-aged` does.
+- `mimalloc`: v3.5.3, pinned by commit and SHA-256 through FetchContent, called as `mi_new` and `mi_free`.
+- `pmr-pool`: `std::pmr::unsynchronized_pool_resource`.
+- `pmr-monotonic`: `std::pmr::monotonic_buffer_resource`, which never reuses a node.
+- `pool-index`, `pool-pointer` and `pool-fifo`: the pools.
+
+`tests/oracle/alloc_counter.cpp` counts only the global `operator new`, so it cannot see mimalloc. `itch_alloc` therefore reports mimalloc's calls from the book, one per node made. A pool arm passes `itch_alloc` only on zero allocations. A heap arm reports its calls per message instead of failing (`verdict T-ARENA-1-ALLOC REPORT`), and fails only if a counted heap arm made no call, which would mean the counter missed it. In `test_alloc`, on the churn stream of 200,018 messages and 75,753 nodes, a malloc arm's calls equal the nodes made, `pmr-pool` makes 10 and `pmr-monotonic` 11.
+
+**The fault check, and the code warm-up.** `bench_replay`'s `alloc-ARM` designs read `getrusage`'s minor and major faults just before each timed pass's clock starts and just after it stops. A pool arm must read zero in both passes, and that check can fail: `alloc_driver.py` writes FAIL into the header, and `check_results.py` refuses a file whose fault check does not match its figures.
+
+The first fixture runs failed it: one fault in a pool arm's latency pass. That was an instruction page. The latency pass's sampling code had never run before its timed span, so the first sample faulted its code in. Before each timed pass, an alloc design now runs that pass's own code, untimed, on a fresh book of its own arm, over the day up to its 10,000th book operation. For a heap arm this means its heap has seen those two books' nodes before the throughput pass, and the design's description says so.
+
+**Running it.** `scripts/alloc_driver.py` runs every arm in each repetition, in a fresh timed process and a fresh untimed one, rotating the order by one each repetition. It applies the Mac's sampler rule to every timed process. It then runs `itch_alloc` and `itch_map_compare` once per arm on the day, and refuses the run if the arms made different numbers of nodes or ended on different hashes. `check_results.py` holds the file to its rules. `scripts/faults/alloc.json` has 22 faults, and each is caught.
+
+**The first try (P-0701-20261110T031311Z).** It was stopped by SIGTERM after 90 minutes, and its rows are in the run log. Two timed processes were published, both of malloc-fresh's first repetition. Then malloc-aged's first repetition was withdrawn ten times running, beside a browser's processes (`zen` and `plugin-container`, up to 71.7% CPU), `launchd`, `fseventsd`, `mediaanalysisd`, `duetexpertd` and `CoreRoutineHelperService`, each just over 20%. Its timed process lasts about three minutes (warm-up, code warm-up, a 42 s throughput pass and a 52 s latency pass), and almost every three-minute span held a spike. The run held the measure lock and mac-hold while the main tree's check waited behind it. The rule itself was left alone. The driver now ends a run once one timed process has been withdrawn three times running (`--most-in-a-row`, a fault for it). The next try comes at least 30 minutes later, once no check and no measurement holds the Mac.
+
+**Tries 2 to 5, capped (2026-11-10, 06:32 to 10:24 UTC, at 105084d and 827bcbf).** Each try waited for no check lock and no measure lock, took mac-hold, and waited 60 quiet seconds. Each ended at its very first timed process, malloc-fresh's first repetition, which was withdrawn three times running. The spikes behind the withdrawals:
+- `launchd`, 20% to 48% CPU, about every 90 s at times;
+- the browser's `zen` and `plugin-container`, up to 62%;
+- Spotlight (`mds`, `mds_stores`, `corespotlightd`, `mdworker_shared`) and `mediaanalysisd`, up to 110%;
+- `fseventsd`, `airportd` and `eligibilityd`;
+- a `restic` backup at 173%;
+- another session's `claude`;
+- once, another project's coverage tests at 100%, which do not wait for this project's mac-hold.
+
+A timed process lasts about 2.5 minutes: the day read into RAM, the warm-up pass, the code warm-up, then the 35 s throughput pass and the 45 to 66 s latency pass. On this Mac, tonight, almost no 2.5-minute span was free of a process above 20%. A run needs 24 such spans. So T-ARENA-1 has no published number on the Mac yet. The rule and its threshold stand, and no figure from a withdrawn process is used anywhere. Every try has its rows in the run log. The withdrawn processes' raw records are kept, not published.
+
+**What remains for `debian`.** The page-size crossing is a later main-tree piece, and the harness is ready for it. On `debian` it is one `alloc_driver.py` run for each page request, each pinned as the other `debian` runs are: `measure.sh taskset -c 4 python3 -B scripts/alloc_driver.py ... --pages base|transparent|explicit --core 4 --sibling 5`, under a prediction of its own.
+- `base` turns transparent hugepages off for the pool with `madvise(MADV_NOHUGEPAGE)`.
+- `transparent` asks for them with `madvise(MADV_HUGEPAGE)` and refuses to fall back.
+- `explicit` maps from the reserved pool with `MAP_HUGETLB`, and needs `vm.nr_hugepages` set beforehand by the user. That is a root step, outside this project. At the default capacity one book's pools take 55.1 MiB of orders and 37.5 MiB of levels on the index arms, or 91.9 and 52.5 MiB on the pointer arms. That is 73 pages of 2 MiB for a pointer book (46 and 27) once each pool is rounded up. Reserving 160 leaves room for two books at once.
+
+The obtained size comes from the `AnonHugePages` and `KernelPageSize` lines of `/proc/self/smaps` for the pool's own mapping. A mapping the kernel merged with a neighbour is recorded as unverified, never as huge. That Linux code (`src/page_map_linux.cpp`) has been reviewed but has not yet been built on Linux: CI builds and tests it once the branch is pushed, and its first real run will be on `debian`. `pmr-monotonic` holds every node the day makes, so it may not fit beside the day in `debian`'s memory, as the arena note above says of a monotonic arena. A `debian` run may have to leave it out, with the reason stated, rather than swap.
+
+**The node pool's fault test under TSan.** The first full `check.sh` after merging `jb-build` failed its tsan stage on one test: `NodePool.EveryNodeIsFaultedInBeforeTheFirstIsTaken` counted 285 page faults while writing every node of a 4 MiB pool, where the release and ASan builds count 0. The faults are ThreadSanitizer's, not the pool's. A probe built with `-fsanitize=thread` mapped 4 MiB, touched one byte a page as the pool does, and then wrote all of it. The instrumented write faulted 298 times, a second instrumented pass 0. An uninstrumented write (`no_sanitize("thread")`) faulted 0 times, and the instrumented pass after it 256, one for each 16 KiB page. So the app's pages were resident, and each fault was the shadow TSan maps on the first write to a page. The process's fault count cannot tell the two apart. In the tsan build the test now prints its count and skips the zero check. Everywhere else it asserts 0 as before, and its fault, `alloc-pages-not-prefaulted`, runs on the release build.

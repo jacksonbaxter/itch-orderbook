@@ -1,0 +1,540 @@
+{
+ "area": "alloc",
+ "faults": [
+  {
+   "id": "alloc-pool-lifo-loses-the-freed-node",
+   "breaks": "The LIFO pool never puts a node given back on its free list",
+   "check": "test_node_book NodePool.LifoGivesTheNodeFreedLastFirst",
+   "mutations": [
+    {
+     "file": "include/itch/node_pool.hpp",
+     "old": "      set_link(node, head_);\n      head_ = node;\n",
+     "new": "      set_link(node, head_);\n"
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "test_node_book"
+    ]
+   },
+   "command": [
+    "{build}/tests/test_node_book",
+    "--gtest_filter=NodePool.*"
+   ],
+   "expect": {
+    "signature": "\\[  FAILED  \\] NodePool\\.LifoGivesTheNodeFreedLastFirst"
+   }
+  },
+  {
+   "id": "alloc-pool-fifo-reuses-newest",
+   "breaks": "The FIFO pool puts a node given back at the head, so it reuses the newest as LIFO does",
+   "check": "test_node_book NodePool.FifoGivesTheNodeFreedFirstFirst",
+   "mutations": [
+    {
+     "file": "include/itch/node_pool.hpp",
+     "old": "      set_link(node, kNull);\n      if (tail_ == kNull) {\n        head_ = node;\n      } else {\n        set_link(tail_, node);\n      }\n      tail_ = node;\n",
+     "new": "      set_link(node, head_);\n      tail_ = head_ == kNull ? node : tail_;\n      head_ = node;\n"
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "test_node_book"
+    ]
+   },
+   "command": [
+    "{build}/tests/test_node_book",
+    "--gtest_filter=NodePool.*"
+   ],
+   "expect": {
+    "signature": "\\[  FAILED  \\] NodePool\\.FifoGivesTheNodeFreedFirstFirst"
+   }
+  },
+  {
+   "id": "alloc-pages-not-prefaulted",
+   "breaks": "The base-page mapping on macOS hands its pages over untouched",
+   "check": "test_node_book NodePool.EveryNodeIsFaultedInBeforeTheFirstIsTaken",
+   "mutations": [
+    {
+     "file": "src/page_map_darwin.cpp",
+     "old": "  touch(data_, wanted, report_.base_page);\n",
+     "new": ""
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "test_node_book"
+    ]
+   },
+   "command": [
+    "{build}/tests/test_node_book",
+    "--gtest_filter=NodePool.*"
+   ],
+   "expect": {
+    "signature": "\\[  FAILED  \\] NodePool\\.EveryNodeIsFaultedInBeforeTheFirstIsTaken"
+   }
+  },
+  {
+   "id": "alloc-pages-claims-a-superpage",
+   "breaks": "macOS's fallback to base pages records them as 2 MiB pages",
+   "check": "test_node_book PageMapping.OnMacOSASuperpageRefusalIsRecorded",
+   "mutations": [
+    {
+     "file": "src/page_map_darwin.cpp",
+     "old": "  report_.bytes = wanted;\n  report_.verified = true;\n",
+     "new": "  report_.bytes = wanted;\n  report_.huge_bytes = request == PageRequest::base ? 0 : wanted;\n  report_.verified = true;\n"
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "test_node_book"
+    ]
+   },
+   "command": [
+    "{build}/tests/test_node_book",
+    "--gtest_filter=PageMapping.*"
+   ],
+   "expect": {
+    "signature": "\\[  FAILED  \\] PageMapping\\.(OnMacOSASuperpageRefusalIsRecorded|AHugeRequestClaimsOnlyWhatTheKernelSays)"
+   }
+  },
+  {
+   "id": "alloc-pool-book-runs-without-pages",
+   "breaks": "A pool book whose pages were refused keeps its capacity",
+   "check": "test_node_book NodeBook.APoolBookWithNoPagesRefusesEveryAdd",
+   "mutations": [
+    {
+     "file": "include/itch/node_book.hpp",
+     "old": "        capacity_.orders = 0;\n        capacity_.levels = 0;\n",
+     "new": ""
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "test_node_book"
+    ]
+   },
+   "command": [
+    "{build}/tests/test_node_book",
+    "--gtest_filter=NodeBook.APoolBookWithNoPagesRefusesEveryAdd"
+   ],
+   "expect": {
+    "signature": "book\\.capacity\\(\\)\\.orders"
+   }
+  },
+  {
+   "id": "alloc-node-book-fifo-reversed",
+   "breaks": "The node book puts each new order at the front of its level",
+   "check": "itch_map_compare --allocator pool-index, the periodic whole-book hash",
+   "mutations": [
+    {
+     "file": "include/itch/node_book.hpp",
+     "old": "                        .older = host.back,\n                        .newer = kNoOrder};\n    if (host.back == kNoOrder) {\n      host.front = made;\n    } else {\n      order(host.back).newer = made;\n    }\n    host.back = made;\n",
+     "new": "                        .older = kNoOrder,\n                        .newer = host.front};\n    if (host.front == kNoOrder) {\n      host.back = made;\n    } else {\n      order(host.front).older = made;\n    }\n    host.front = made;\n"
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "itch_map_compare"
+    ]
+   },
+   "command": [
+    "{build}/tools/itch_map_compare",
+    "{tree}/tests/fixtures/oracle/session.itch",
+    "--max-orders",
+    "4096",
+    "--max-levels",
+    "4096",
+    "--allocator",
+    "pool-index",
+    "--hash-every",
+    "100"
+   ],
+   "expect": {
+    "signature": "NODE_DIVERGENCE kind=hash message=\\d+ "
+   }
+  },
+  {
+   "id": "alloc-node-book-execute-skips-level-total",
+   "breaks": "A partial execute or cancel leaves the node book's level total as it was",
+   "check": "itch_map_compare --allocator malloc-fresh, top of book after every message",
+   "mutations": [
+    {
+     "file": "include/itch/node_book.hpp",
+     "old": "      resting.shares -= shares;\n      host.aggregate_shares -= shares;\n",
+     "new": "      resting.shares -= shares;\n"
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "itch_map_compare"
+    ]
+   },
+   "command": [
+    "{build}/tools/itch_map_compare",
+    "{tree}/tests/fixtures/oracle/session.itch",
+    "--max-orders",
+    "4096",
+    "--max-levels",
+    "4096",
+    "--allocator",
+    "malloc-fresh"
+   ],
+   "expect": {
+    "signature": "NODE_DIVERGENCE kind=top message=\\d+ type=[ECX] "
+   }
+  },
+  {
+   "id": "alloc-pool-arm-allocates",
+   "breaks": "The pool arm takes a block from the heap for each node it hands out",
+   "check": "itch_alloc --allocator pool-index",
+   "mutations": [
+    {
+     "file": "include/itch/node_arms.hpp",
+     "old": "      return pool<T>().take();\n",
+     "new": "      ::operator delete(::operator new(sizeof(T)));\n      return pool<T>().take();\n"
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "itch_alloc"
+    ]
+   },
+   "command": [
+    "{build}/tools/itch_alloc",
+    "{tree}/tests/fixtures/oracle/session.itch",
+    "--max-orders",
+    "4096",
+    "--max-levels",
+    "4096",
+    "--allocator",
+    "pool-index"
+   ],
+   "expect": {
+    "signature": "verdict T-ARENA-1-ALLOC FAIL arm=pool-index book=\\d+",
+    "exit": 1
+   }
+  },
+  {
+   "id": "alloc-ager-calls-not-taken-off",
+   "breaks": "itch_alloc charges the aged heap's ballast to the malloc arm",
+   "check": "test_oracle_cli, itch_alloc --allocator malloc-aged",
+   "mutations": [
+    {
+     "file": "tools/itch_alloc.cpp",
+     "old": "  const std::uint64_t book_calls = counted >= ager_calls ? counted - ager_calls : 0;\n",
+     "new": "  const std::uint64_t book_calls = counted;\n"
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "itch_oracle",
+     "itch_alloc"
+    ]
+   },
+   "command": [
+    "{python}",
+    "-B",
+    "{tree}/tests/test_oracle_cli.py",
+    "{build}/tools/itch_oracle",
+    "{build}/oracle_cli_fault",
+    "{tree}/tests/fixtures/oracle",
+    "{build}/tools/itch_alloc"
+   ],
+   "expect": {
+    "signature": "oracle cli: FAIL alloc malloc-aged: \\d+ calls for \\d+ nodes",
+    "exit": 1
+   }
+  },
+  {
+   "id": "alloc-arm-aged-runs-fresh",
+   "breaks": "--allocator malloc-aged runs the malloc arm on a heap no ager touched",
+   "check": "test_map_compare_cli, the node book on each allocator arm",
+   "mutations": [
+    {
+     "file": "tools/alloc_arms.hpp",
+     "old": "    case AllocArm::malloc_aged: return run.template operator()<AgedNodeBook<MallocArm>>();\n",
+     "new": "    case AllocArm::malloc_aged: return run.template operator()<NodeBook<MallocArm>>();\n"
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "itch_map_compare"
+    ]
+   },
+   "command": [
+    "{python}",
+    "-B",
+    "{tree}/tests/test_map_compare_cli.py",
+    "{build}/tools/itch_map_compare",
+    "{build}/map_compare_cli_fault",
+    "{tree}/tests/fixtures/oracle",
+    "{tree}/tests/fixtures/trades"
+   ],
+   "expect": {
+    "signature": "map compare cli: FAIL \\S+ node malloc-aged: ager_allocations None",
+    "exit": 1
+   }
+  },
+  {
+   "id": "alloc-bench-faults-never-read",
+   "breaks": "A timed pass records no page-fault count",
+   "check": "test_bench_replay BenchReplay.EachTimedPassCountsItsFaultsOutsideItsClock",
+   "mutations": [
+    {
+     "file": "bench/replay.hpp",
+     "old": "  totals.ticks += clock.stop() - started;\n  totals.faults = faults_between(faults_before, faults_now(clock));\n",
+     "new": "  totals.ticks += clock.stop() - started;\n"
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "test_bench_replay"
+    ]
+   },
+   "command": [
+    "{build}/tests/test_bench_replay",
+    "--gtest_filter=BenchReplay.*Fault*"
+   ],
+   "expect": {
+    "signature": "\\[  FAILED  \\] BenchReplay\\.EachTimedPassCountsItsFaultsOutsideItsClock"
+   }
+  },
+  {
+   "id": "alloc-bench-code-warm-skipped",
+   "breaks": "The code warm-up of an allocator design runs no pass",
+   "check": "test_bench_replay BenchReplay.TheCodeWarmUpRunsBothPassesOnBooksOfTheirOwn",
+   "mutations": [
+    {
+     "file": "bench/replay.hpp",
+     "old": "      static_cast<void>(tracker ? latency_pass(prefix, *book, *clock_, samples, *tracker)\n                                : latency_pass(prefix, *book, *clock_, samples));\n",
+     "new": ""
+    }
+   ],
+   "build": {
+    "preset": "release",
+    "targets": [
+     "test_bench_replay"
+    ]
+   },
+   "command": [
+    "{build}/tests/test_bench_replay",
+    "--gtest_filter=BenchReplay.TheCodeWarmUp*"
+   ],
+   "expect": {
+    "signature": "\\[  FAILED  \\] BenchReplay\\.TheCodeWarmUpRunsBothPassesOnBooksOfTheirOwn"
+   }
+  },
+  {
+   "id": "alloc-results-faults-unjudged",
+   "breaks": "check_results takes an allocator file whose pool arm faulted and is called zero",
+   "check": "test_alloc_results",
+   "mutations": [
+    {
+     "file": "scripts/check_results.py",
+     "old": "    yield from check_alloc_faults(text, fields, arms)\n",
+     "new": ""
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_pool_arm_that_faults_fails_the_check_and_says_so"
+   }
+  },
+  {
+   "id": "alloc-results-pool-allocation-unchecked",
+   "breaks": "check_results takes a pool arm that allocated",
+   "check": "test_alloc_results",
+   "mutations": [
+    {
+     "file": "scripts/check_results.py",
+     "old": "        elif arm in ALLOC_POOLS and (cells[2] != \"0\" or cells[6] != \"PASS\"):\n",
+     "new": "        elif False:\n"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_pool_arm_that_allocated"
+   }
+  },
+  {
+   "id": "alloc-results-book-disagreement-unchecked",
+   "breaks": "check_results takes an arm whose book disagreed with the fast book's",
+   "check": "test_alloc_results",
+   "mutations": [
+    {
+     "file": "scripts/check_results.py",
+     "old": "        elif cells[1] != \"PASS\" or cells[5] != \"0\":\n",
+     "new": "        elif False:\n"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_book_that_disagreed"
+   }
+  },
+  {
+   "id": "alloc-results-floor",
+   "breaks": "check_results takes an allocator latency cell under the timer's floor",
+   "check": "test_alloc_results",
+   "mutations": [
+    {
+     "file": "scripts/check_results.py",
+     "old": "        for percentile, value in zip((\"p50\", \"p99\", \"p99.9\"), cells[2:5]):\n            yield from check_value(f\"{cells[0]} {cells[1]} {percentile}\", value, floor)\n",
+     "new": "        pass\n"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_latency_cell_under_the_floor"
+   }
+  },
+  {
+   "id": "alloc-results-sampler-unchecked",
+   "breaks": "check_results takes a macOS allocator file that does not say the sampler rule was applied",
+   "check": "test_alloc_results",
+   "mutations": [
+    {
+     "file": "scripts/check_results.py",
+     "old": "        yield from check_alloc_sampler(text, fields, arms)\n",
+     "new": ""
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_mac_file_without_the_sampler_rule"
+   }
+  },
+  {
+   "id": "alloc-driver-unquiet-published",
+   "breaks": "alloc_driver publishes a timed process the sampler saw beside another busy process",
+   "check": "test_alloc_results",
+   "mutations": [
+    {
+     "file": "scripts/alloc_driver.py",
+     "old": "        if why:\n",
+     "new": "        if False:\n"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_timed_process_beside_another_busy_process_is_withdrawn_and_rerun"
+   }
+  },
+  {
+   "id": "alloc-driver-holds-a-busy-mac",
+   "breaks": "alloc_driver reruns a timed process however many times running it is withdrawn, holding the Mac while it stays busy",
+   "check": "test_alloc_results",
+   "mutations": [
+    {
+     "file": "scripts/alloc_driver.py",
+     "old": "            if in_a_row >= args.most_in_a_row:\n",
+     "new": "            if False:\n"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_process_withdrawn_three_times_running_ends_the_run"
+   }
+  },
+  {
+   "id": "alloc-driver-fault-check-always-passes",
+   "breaks": "alloc_driver's fault check passes whatever the pool arms faulted",
+   "check": "test_alloc_results",
+   "mutations": [
+    {
+     "file": "scripts/alloc_driver.py",
+     "old": "    if faulted:\n        return f\"FAIL: page faults in the timed passes of {', '.join(faulted)}\"\n",
+     "new": ""
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_pool_arm_that_faults_fails_the_check_and_says_so"
+   }
+  },
+  {
+   "id": "alloc-driver-unread-faults-taken",
+   "breaks": "alloc_driver takes a pool arm's record that read no page faults",
+   "check": "test_alloc_results",
+   "mutations": [
+    {
+     "file": "scripts/alloc_driver.py",
+     "old": "        if arm in POOLS and record[name].get(\"faults\") is None:\n",
+     "new": "        if False:\n"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_pool_record_with_no_fault_count_is_refused"
+   }
+  },
+  {
+   "id": "alloc-predictions-skip-alloc-results",
+   "breaks": "An allocator results file is not held to a prediction",
+   "check": "test_check_predictions.py test_an_alloc_result_naming_no_prediction",
+   "mutations": [
+    {
+     "file": "scripts/check_predictions.py",
+     "old": "(\"alloc_*.md\", \"bench_*.md\"",
+     "new": "(\"bench_*.md\""
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "{tree}/scripts/test_check_predictions.py"
+   ],
+   "expect": {
+    "signature": "^FAIL: test_an_alloc_result_naming_no_prediction",
+    "exit": 1
+   }
+  }
+ ]
+}

@@ -52,6 +52,12 @@ add_executable(itch_extract itch_extract.cpp)
 target_link_libraries(itch_extract PRIVATE itch_demo_engine)
 itch_apply_options(itch_extract)
 
+# T-ARENA-1's mimalloc arm, in the tools that run the node book, when the build fetched it.
+if(TARGET itch::mimalloc)
+  target_link_libraries(itch_alloc PRIVATE itch::mimalloc)
+  target_link_libraries(itch_map_compare PRIVATE itch::mimalloc)
+endif()
+
 add_executable(itch_window itch_window.cpp)
 target_link_libraries(itch_window PRIVATE itch_parser)
 itch_apply_options(itch_window)

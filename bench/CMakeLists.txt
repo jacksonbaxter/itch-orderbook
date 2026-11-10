@@ -55,6 +55,11 @@ add_executable(bench_demo bench_demo.cpp)
 target_link_libraries(bench_demo PRIVATE itch_bench_support)
 itch_apply_options(bench_demo)
 
+# T-ARENA-1's mimalloc arm in bench_replay, when the build fetched it.
+if(TARGET itch::mimalloc)
+  target_link_libraries(bench_replay PRIVATE itch::mimalloc)
+endif()
+
 # The SIMD experiments: every kernel this build has, chosen with --kernel, from one binary.
 add_executable(bench_kernels bench_kernels.cpp)
 target_link_libraries(bench_kernels PRIVATE itch_bench_support)

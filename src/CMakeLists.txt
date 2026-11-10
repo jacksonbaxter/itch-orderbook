@@ -1,4 +1,13 @@
-add_library(itch_parser STATIC parser.cpp)
+# The page mapping under the node pool (include/itch/page_map.hpp), one file for each OS,
+# chosen here because parser code holds no conditional compilation (scripts/gates.py).
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(itch_page_map page_map_linux.cpp)
+elseif(APPLE)
+  set(itch_page_map page_map_darwin.cpp)
+else()
+  set(itch_page_map page_map_posix.cpp)
+endif()
+add_library(itch_parser STATIC parser.cpp page_map.cpp ${itch_page_map})
 target_include_directories(itch_parser PUBLIC "${PROJECT_SOURCE_DIR}/include")
 itch_add_kernels(itch_parser)
 if(ITCH_CACHE_LINE)

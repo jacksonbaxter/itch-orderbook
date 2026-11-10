@@ -315,4 +315,15 @@ inline std::optional<Arena> Arena::make(std::size_t bytes, PageHint hint_wanted,
 #endif
 }
 
+// Page faults this process has taken so far, minor and major together, or nothing when the
+// kernel would not say. Read on each side of a timed pass, so that a pass that faults any
+// page in is on the record (T-ARENA-1).
+[[nodiscard]] inline std::optional<std::uint64_t> page_faults() noexcept {
+  rusage usage{};
+  if (::getrusage(RUSAGE_SELF, &usage) != 0) {
+    return std::nullopt;
+  }
+  return static_cast<std::uint64_t>(usage.ru_minflt) + static_cast<std::uint64_t>(usage.ru_majflt);
+}
+
 }  // namespace itch::bench
