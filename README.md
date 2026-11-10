@@ -225,6 +225,7 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 | E4: the parser by kernel, whole and by op type, mac, 12302019 | macOS (M4 Max) | neon beats scalar (neon 17.57 against scalar 18.79 cycles a message); E4 not refuted | `e3346335bed9` | [results/simd_parse_mac_12302019.md](results/simd_parse_mac_12302019.md) |
 | E13: the 6-byte timestamp, four ways, debian, 12302019 | debian | fewest cycles a message: underread; split against overread tie; E13 refuted | `bd81414b46e7` | [results/simd_timestamp_debian_12302019.md](results/simd_timestamp_debian_12302019.md) |
 | E13: the 6-byte timestamp, four ways, mac, 12302019 | macOS (M4 Max) | fewest cycles a message: underread; split against overread differ; E13 not refuted | `3903f15d62ec` | [results/simd_timestamp_mac_12302019.md](results/simd_timestamp_mac_12302019.md) |
+| Where the DRAM demand fills fall, by structure, debian, 12302019 | debian | largest single structure level record at 22.7% of the floor on DRAM demand fills; no structure reaches the 40% rule, no bottleneck claimed | `31508858939c` | [results/structure_debian_12302019.md](results/structure_debian_12302019.md) |
 | carteret's window width against overflow, on this book, 12302019 | macOS (M4 Max); the counts are the same on any host, since nothing is timed | adds outside a window of 256 ticks 8.337%, of 2,048 1.493% (carteret 4.90% and 1.03%); sub-cent 0.468%; add searches past 1 or fewer better levels 57.10%, past 16 or more 10.79% | `3188ffdea6a6` | [results/window_12302019.md](results/window_12302019.md) |
 
 The SPSC ring. Each row is one comparison from a results file's targets table: a ratio of two of its medians, or for T-SPSC-3 the median of paired ratios, against BENCHMARKS.md's bar. Every bar was set on x86, so a macOS row says the host differs, and an unpinned Mac's cross-core figures are weak evidence.
@@ -481,6 +482,7 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0023-20261110T120749Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
 | `P-0023-20261110T120908Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
 | `P-0023-20261110T121707Z` | `P-0023` | `31508858939c` | Linux | `published` |
+| `P-0026-20261110T125013Z` | `P-0026` | `31508858939c` | Linux | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
