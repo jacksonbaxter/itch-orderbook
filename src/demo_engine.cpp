@@ -34,9 +34,7 @@ Engine& engine() {
 }
 
 // The replay, or nullptr before the first load.
-Replay* live() {
-  return engine().replay.get();
-}
+Replay* live() { return engine().replay.get(); }
 
 double count(std::uint64_t value) { return static_cast<double>(value); }
 

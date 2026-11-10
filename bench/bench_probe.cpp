@@ -95,7 +95,6 @@ int run_cross_core(const Options& options) {
   const CrossCoreRun run = check_cross_core(options.core, options.cross_core, buffer);
   const OffsetBound bound = combine(run.self_started, run.peer_started);
   const auto ns = [&](std::int64_t ticks) { return timer.ticks_to_ns(static_cast<double>(ticks)); };
-  const bool pinned = run.self_pin.pinned && run.peer_pin.pinned;
   std::println("cross_core_timer: {}", describe_rate(timer));
   std::println("cross_core_pinning: this thread {}; the peer {}", pinning_field(run.self_pin),
                pinning_field(run.peer_pin));
@@ -111,7 +110,7 @@ int run_cross_core(const Options& options) {
                ns(static_cast<std::int64_t>(bound.fastest_round_trip)));
   std::println("cross_core_backwards: {} of {} trips read a later stamp below an earlier one",
                bound.backwards, 2 * options.trips);
-  if (kPinningRequired && !pinned) {
+  if (kPinningRequired && !(run.self_pin.pinned && run.peer_pin.pinned)) {
     std::println("cross_core_verdict: unpinned: the two threads were not both pinned");
     return 1;
   }
