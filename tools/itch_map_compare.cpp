@@ -97,6 +97,33 @@ struct Options {
   return true;
 }
 
+enum class Taken : std::uint8_t { yes, bad_value, not_this };
+
+// --heap, --allocator and --pages: which book is compared, and on what memory.
+[[nodiscard]] Taken take_book_option(std::string_view arg, std::string_view value,
+                                     Options& options) {
+  if (arg == "--heap") {
+    if (value != "fresh" && value != "aged") {
+      return Taken::bad_value;
+    }
+    options.aged = value == "aged";
+    return Taken::yes;
+  }
+  if (arg == "--allocator") {
+    options.allocator = itch::tools::parse_alloc_arm(value);
+    return options.allocator ? Taken::yes : Taken::bad_value;
+  }
+  if (arg == "--pages") {
+    const std::optional<itch::PageRequest> pages = itch::parse_page_request(value);
+    if (!pages) {
+      return Taken::bad_value;
+    }
+    options.node_capacity.pages = *pages;
+    return Taken::yes;
+  }
+  return Taken::not_this;
+}
+
 [[nodiscard]] std::optional<Options> parse_options(std::span<const char* const> args) {
   Options options;
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -113,27 +140,10 @@ struct Options {
     }
     ++i;
     const std::string_view value = args[i];
-    if (arg == "--heap") {
-      if (value != "fresh" && value != "aged") {
-        return std::nullopt;
-      }
-      options.aged = value == "aged";
-      continue;
-    }
-    if (arg == "--allocator") {
-      options.allocator = itch::tools::parse_alloc_arm(value);
-      if (!options.allocator) {
-        return std::nullopt;
-      }
-      continue;
-    }
-    if (arg == "--pages") {
-      const std::optional<itch::PageRequest> pages = itch::parse_page_request(value);
-      if (!pages) {
-        return std::nullopt;
-      }
-      options.node_capacity.pages = *pages;
-      continue;
+    switch (take_book_option(arg, value, options)) {
+      case Taken::yes: continue;
+      case Taken::bad_value: return std::nullopt;
+      case Taken::not_this: break;
     }
     switch (itch::tools::parse_arm_option(arg, value, options.arm, options.capacity)) {
       case itch::tools::ArmOption::taken: continue;

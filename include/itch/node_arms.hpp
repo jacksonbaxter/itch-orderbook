@@ -55,7 +55,8 @@ struct MallocArm {
 
     template <class T>
     [[nodiscard]] T* make() {
-      return ::new (::operator new(sizeof(T))) T;
+      // The book owns the node until it hands it to drop().
+      return ::new (::operator new(sizeof(T))) T;  // NOLINT(cppcoreguidelines-owning-memory)
     }
     template <class T>
     void drop(T* node) noexcept {
@@ -79,6 +80,8 @@ class PmrHeap : public PointerHandles {
 
   template <class T>
   [[nodiscard]] T* make() {
+    // The book owns the node until it hands it to drop().
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     return ::new (resource_->allocate(sizeof(T), alignof(T))) T;
   }
   template <class T>
@@ -109,10 +112,16 @@ struct PmrMonotonicArm {
 };
 
 template <HandleKind Kind, FreeOrder Free>
+[[nodiscard]] consteval std::string_view pool_arm_name() noexcept {
+  if (Kind == HandleKind::pointer) {
+    return "pool-pointer";
+  }
+  return Free == FreeOrder::fifo ? "pool-fifo" : "pool-index";
+}
+
+template <HandleKind Kind, FreeOrder Free>
 struct PoolArm {
-  static constexpr std::string_view kName = Kind == HandleKind::pointer ? "pool-pointer"
-                                            : Free == FreeOrder::fifo   ? "pool-fifo"
-                                                                        : "pool-index";
+  static constexpr std::string_view kName = pool_arm_name<Kind, Free>();
   template <class T>
   using Handle = PoolHandle<T, Kind>;
 
@@ -141,7 +150,7 @@ struct PoolArm {
     }
     template <class T>
     [[nodiscard]] static constexpr Handle<T> null() noexcept {
-      return kNullHandle<T, Kind>;
+      return NullHandle<T, Kind>::kValue;
     }
 
     // Both pools ask for the same pages. The orders' pool is the larger, so its record

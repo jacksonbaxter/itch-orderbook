@@ -350,8 +350,8 @@
       "mutations": [
         {
           "file": "tools/itch_map_compare.cpp",
-          "old": "      options.aged = value == \"aged\";\n",
-          "new": "      options.aged = false;\n"
+          "old": "    options.aged = value == \"aged\";\n",
+          "new": "    options.aged = false;\n"
         }
       ],
       "build": {

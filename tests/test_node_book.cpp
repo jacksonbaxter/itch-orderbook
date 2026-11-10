@@ -13,6 +13,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -53,12 +54,13 @@ struct Probe {
 std::uint64_t faults_now() {
   rusage usage{};
   ::getrusage(RUSAGE_SELF, &usage);
-  return static_cast<std::uint64_t>(usage.ru_minflt + usage.ru_majflt);
+  return static_cast<std::uint64_t>(usage.ru_minflt) + static_cast<std::uint64_t>(usage.ru_majflt);
 }
 
 TEST(NodePool, LifoGivesTheNodeFreedLastFirst) {
   itch::NodePool<Probe, itch::HandleKind::index, itch::FreeOrder::lifo> pool{
       8, itch::PageRequest::base};
+  ASSERT_TRUE(pool.has_room()) << pool.pages().describe();
   const std::uint32_t a = pool.take();
   const std::uint32_t b = pool.take();
   const std::uint32_t c = pool.take();
@@ -77,6 +79,7 @@ TEST(NodePool, LifoGivesTheNodeFreedLastFirst) {
 TEST(NodePool, FifoGivesTheNodeFreedFirstFirst) {
   itch::NodePool<Probe, itch::HandleKind::index, itch::FreeOrder::fifo> pool{
       8, itch::PageRequest::base};
+  ASSERT_TRUE(pool.has_room()) << pool.pages().describe();
   const std::uint32_t a = pool.take();
   const std::uint32_t b = pool.take();
   const std::uint32_t c = pool.take();
@@ -97,8 +100,9 @@ TEST(NodePool, PointerHandlesAreAddressesInThePool) {
   static_assert(sizeof(decltype(pool)::Handle) == 8);
   static_assert(
       sizeof(itch::NodePool<Probe, itch::HandleKind::index, itch::FreeOrder::lifo>::Handle) == 4);
+  ASSERT_TRUE(pool.has_room()) << pool.pages().describe();
   Probe* a = pool.take();
-  Probe* b = pool.take();
+  const Probe* b = pool.take();
   EXPECT_EQ(b - a, 1);
   a->value = 11;
   EXPECT_EQ(&pool.at(a), a);
@@ -212,7 +216,7 @@ TEST(PageMapping, OnMacOSASuperpageRefusalIsRecorded) {
 
 // A pool whose pages could not be had has no room at all.
 TEST(NodePool, APoolWithNoPagesHasNoRoom) {
-  itch::NodePool<Probe, itch::HandleKind::index, itch::FreeOrder::lifo> pool{
+  const itch::NodePool<Probe, itch::HandleKind::index, itch::FreeOrder::lifo> pool{
       16, itch::PageRequest::transparent};
   EXPECT_FALSE(pool.pages().mapped);
   EXPECT_FALSE(pool.has_room());
@@ -271,7 +275,7 @@ std::vector<std::uint64_t> node_words(const Book& book, std::uint16_t locate) {
 std::vector<std::uint64_t> reference_words(const itch::oracle::ReferenceBook& book,
                                            std::uint16_t locate) {
   itch::oracle::WordList words;
-  const std::uint16_t locates[] = {locate};
+  const std::array<std::uint16_t, 1> locates{locate};
   itch::oracle::emit_reference(book, std::span<const std::uint16_t>{locates}, words);
   return words.words();
 }

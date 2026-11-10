@@ -59,10 +59,10 @@ namespace itch::bench {
 struct PassTotals {
   std::uint64_t messages = 0;
   std::uint64_t ticks = 0;
-  std::uint64_t rejected = 0;             // apply() refused the message. A clean day has none.
-  std::uint64_t top_changes = 0;          // Messages after which a tracked top of book moved.
-  std::uint64_t pauses = 0;               // Times the clock stopped for an ageing step.
-  std::optional<std::uint64_t> faults{};  // Page faults in the pass, when the clock counts them.
+  std::uint64_t rejected = 0;     // apply() refused the message. A clean day has none.
+  std::uint64_t top_changes = 0;  // Messages after which a tracked top of book moved.
+  std::uint64_t pauses = 0;       // Times the clock stopped for an ageing step.
+  std::optional<std::uint64_t> faults = std::nullopt;  // Page faults, when the clock counts them.
 };
 
 [[nodiscard]] constexpr bool is_rejection(ApplyStatus status) noexcept {
@@ -196,7 +196,7 @@ concept CountsFaults = requires(Clock& clock) {
 };
 
 template <class Clock>
-[[nodiscard]] std::optional<std::uint64_t> faults_now(Clock& clock) noexcept {
+[[nodiscard]] std::optional<std::uint64_t> faults_now(Clock& clock) {
   if constexpr (CountsFaults<Clock>) {
     return clock.faults();
   } else {

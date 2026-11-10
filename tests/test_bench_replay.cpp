@@ -46,7 +46,7 @@ struct Trace {
 };
 
 struct FakeClock {
-  Trace* trace;
+  Trace* trace{};
   [[nodiscard]] std::uint64_t start() const {
     trace->events += 's';
     return trace->now;
@@ -60,7 +60,7 @@ struct FakeClock {
 // A clock that also counts page faults: each read is an 'f' on the trace, and each apply
 // takes `per_apply` faults, so that a pass's count is the applies between its two reads.
 struct FaultingClock : FakeClock {
-  std::uint64_t* count;
+  std::uint64_t* count{};
   bool fails = false;
   [[nodiscard]] std::optional<std::uint64_t> faults() const {
     trace->events += 'f';
@@ -615,14 +615,15 @@ TEST(BenchReplay, EachTimedPassCountsItsFaultsOutsideItsClock) {
   Trace trace;
   std::uint64_t faults = 7;
   FaultingClock clock{{&trace}, &faults};
-  struct FaultingBook : FakeBook {
-    std::uint64_t* faults;
+  struct FaultingBook {
+    FakeBook book;
+    std::uint64_t* faults{};
     [[nodiscard]] ApplyStatus apply(std::span<const std::byte> payload) const {
       *faults += 3;
-      return FakeBook::apply(payload);
+      return book.apply(payload);
     }
   };
-  FaultingBook book{{.trace = &trace}, &faults};
+  FaultingBook book{.book = {.trace = &trace}, .faults = &faults};
   const PassTotals throughput = throughput_pass(input, book, clock);
   ASSERT_TRUE(throughput.faults.has_value());
   EXPECT_EQ(*throughput.faults, 6U);

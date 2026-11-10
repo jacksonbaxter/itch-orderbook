@@ -65,6 +65,44 @@ struct Options {
   return value;
 }
 
+enum class Taken : std::uint8_t { yes, bad_value, not_this };
+
+// --allocator and --pages, the node book's options.
+[[nodiscard]] Taken take_node_option(std::string_view arg, const char* value, Options& options) {
+  if (arg == "--allocator") {
+    options.allocator = itch::tools::parse_alloc_arm(value);
+    return options.allocator ? Taken::yes : Taken::bad_value;
+  }
+  if (arg == "--pages") {
+    const std::optional<itch::PageRequest> pages = itch::parse_page_request(value);
+    if (!pages) {
+      return Taken::bad_value;
+    }
+    options.node_capacity.pages = *pages;
+    return Taken::yes;
+  }
+  return Taken::not_this;
+}
+
+// The options that take a number. --max-orders and --max-levels size both books.
+[[nodiscard]] bool take_number_option(std::string_view arg, std::uint64_t number,
+                                      Options& options) {
+  if (arg == "--warmup") {
+    options.warmup = number;
+  } else if (arg == "--prefetch") {
+    options.prefetch = number;
+  } else if (arg == "--max-orders") {
+    options.capacity.orders = static_cast<std::uint32_t>(number);
+    options.node_capacity.orders = options.capacity.orders;
+  } else if (arg == "--max-levels") {
+    options.capacity.levels = static_cast<std::uint32_t>(number);
+    options.node_capacity.levels = options.capacity.levels;
+  } else {
+    return false;
+  }
+  return true;
+}
+
 [[nodiscard]] std::optional<Options> parse_options(std::span<const char* const> args) {
   Options options;
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -80,20 +118,10 @@ struct Options {
       return std::nullopt;
     }
     ++i;
-    if (arg == "--allocator") {
-      options.allocator = itch::tools::parse_alloc_arm(args[i]);
-      if (!options.allocator) {
-        return std::nullopt;
-      }
-      continue;
-    }
-    if (arg == "--pages") {
-      const std::optional<itch::PageRequest> pages = itch::parse_page_request(args[i]);
-      if (!pages) {
-        return std::nullopt;
-      }
-      options.node_capacity.pages = *pages;
-      continue;
+    switch (take_node_option(arg, args[i], options)) {
+      case Taken::yes: continue;
+      case Taken::bad_value: return std::nullopt;
+      case Taken::not_this: break;
     }
     switch (itch::tools::parse_arm_option(arg, args[i], options.arm, options.capacity)) {
       case itch::tools::ArmOption::taken: continue;
@@ -101,20 +129,7 @@ struct Options {
       case itch::tools::ArmOption::not_an_arm_option: break;
     }
     const auto number = parse_number(args[i]);
-    if (!number) {
-      return std::nullopt;
-    }
-    if (arg == "--warmup") {
-      options.warmup = *number;
-    } else if (arg == "--prefetch") {
-      options.prefetch = *number;
-    } else if (arg == "--max-orders") {
-      options.capacity.orders = static_cast<std::uint32_t>(*number);
-      options.node_capacity.orders = options.capacity.orders;
-    } else if (arg == "--max-levels") {
-      options.capacity.levels = static_cast<std::uint32_t>(*number);
-      options.node_capacity.levels = options.capacity.levels;
-    } else {
+    if (!number || !take_number_option(arg, *number, options)) {
       return std::nullopt;
     }
   }
@@ -208,15 +223,31 @@ int run(const Options& options) {
   return fast_clean && control_seen && ran ? 0 : 1;
 }
 
+template <class Node>
+void print_node_pages(const Node& node) {
+  if (const itch::PageReport* pages = node.heap().pages(); pages != nullptr) {
+    std::println("node_pages {}", pages->describe());
+  } else {
+    std::println("node_pages none: this arm takes its nodes from a heap");
+  }
+}
+
+// A pool arm passes or fails on its allocations; a heap arm is reported, unless it failed.
+[[nodiscard]] std::string_view arm_verdict(bool pass, bool pool) {
+  if (!pass) {
+    return "FAIL";
+  }
+  return pool ? "PASS" : "REPORT";
+}
+
 // The node book on one allocator arm, then the control, and the verdict for that arm.
 template <class Book>
-int run_node(const Options& options) {
+int run_node(const Options& options, itch::tools::AllocArm arm) {
   const auto file = itch::tools::MappedFile::open(options.path);
   if (!file) {
     std::println(stderr, "itch_alloc: cannot read {}", options.path);
     return 2;
   }
-  const itch::tools::AllocArm arm = *options.allocator;
   const bool pool = itch::tools::is_pool_arm(arm);
   std::println("node_allocator {}", to_string(arm));
   std::println("node_capacity orders {} levels {}", options.node_capacity.orders,
@@ -225,11 +256,7 @@ int run_node(const Options& options) {
 
   Book book{options.node_capacity};
   const auto& node = itch::tools::node_book_of(book);
-  if (const itch::PageReport* pages = node.heap().pages(); pages != nullptr) {
-    std::println("node_pages {}", pages->describe());
-  } else {
-    std::println("node_pages none: this arm takes its nodes from a heap");
-  }
+  print_node_pages(node);
   std::uint64_t ager_before = 0;
   if constexpr (requires { book.ager(); }) {
     ager_before = book.ager().allocations();
@@ -289,10 +316,7 @@ int run_node(const Options& options) {
     std::println("itch_alloc: FAIL a heap arm the counter sees made no allocation");
     pass = false;
   }
-  std::println("verdict T-ARENA-1-ALLOC {} arm={} book={} control={}",
-               !pass  ? "FAIL"
-               : pool ? "PASS"
-                      : "REPORT",
+  std::println("verdict T-ARENA-1-ALLOC {} arm={} book={} control={}", arm_verdict(pass, pool),
                to_string(arm), arm_calls, control_pass.allocations.total());
   return pass ? 0 : 1;
 }
@@ -312,8 +336,9 @@ int main(int argc, const char* const* argv) {
       return 2;
     }
     if (options->allocator) {
+      const itch::tools::AllocArm arm = *options->allocator;
       return itch::tools::with_alloc_arm(
-          *options->allocator, [&options]<class Book> { return run_node<Book>(*options); },
+          arm, [&options, arm]<class Book> { return run_node<Book>(*options, arm); },
           [] {
             std::println(stderr, "itch_alloc: this build has no mimalloc (ITCH_MIMALLOC off)");
             return 2;

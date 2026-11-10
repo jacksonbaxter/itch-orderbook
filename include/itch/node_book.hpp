@@ -343,7 +343,7 @@ class NodeBook {
     if (!exists) {
       at_level = open_level(id, place);
     }
-    const Handle<Order> made = heap_.template make<Order>();
+    const auto made = heap_.template make<Order>();
     ++made_;
     ++live_orders_;
     peak_orders_ = peak_orders_ < live_orders_ ? live_orders_ : peak_orders_;
@@ -366,7 +366,7 @@ class NodeBook {
   }
 
   [[nodiscard]] Handle<Level> open_level(const LevelId& id, const Place& place) {
-    const Handle<Level> made = heap_.template make<Level>();
+    const auto made = heap_.template make<Level>();
     ++made_;
     ++live_levels_;
     peak_levels_ = peak_levels_ < live_levels_ ? live_levels_ : peak_levels_;

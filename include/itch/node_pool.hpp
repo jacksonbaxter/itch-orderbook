@@ -23,6 +23,8 @@
 // A pool whose mapping failed has no room, and its report says why.
 #pragma once
 
+#include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -40,21 +42,23 @@ enum class FreeOrder : std::uint8_t { lifo, fifo };
 template <class T, HandleKind Kind>
 using PoolHandle = std::conditional_t<Kind == HandleKind::index, std::uint32_t, T*>;
 
+// The handle of no node: kNoIndex, or the null pointer.
 template <class T, HandleKind Kind>
-inline constexpr PoolHandle<T, Kind> kNullHandle = [] {
-  if constexpr (Kind == HandleKind::index) {
-    return kNoIndex;
-  } else {
-    T* const none = nullptr;
-    return none;
-  }
-}();
+struct NullHandle;
+template <class T>
+struct NullHandle<T, HandleKind::index> {
+  static constexpr std::uint32_t kValue = kNoIndex;
+};
+template <class T>
+struct NullHandle<T, HandleKind::pointer> {
+  static constexpr T* kValue = nullptr;
+};
 
 template <class T, HandleKind Kind, FreeOrder Order>
 class NodePool {
  public:
   using Handle = PoolHandle<T, Kind>;
-  static constexpr Handle kNull = kNullHandle<T, Kind>;
+  static constexpr Handle kNull = NullHandle<T, Kind>::kValue;
 
   static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>,
                 "a free node's bytes are overwritten with a link");
@@ -136,13 +140,18 @@ class NodePool {
 
   static constexpr std::size_t kLinkBytes = sizeof(Handle);
 
+  using LinkBytes = std::array<std::byte, kLinkBytes>;
+
   [[nodiscard]] Handle link_of(Handle node) const noexcept {
-    Handle next{};
-    std::memcpy(&next, &at(node), kLinkBytes);
-    return next;
+    LinkBytes next{};
+    std::memcpy(next.data(), &at(node), kLinkBytes);
+    return std::bit_cast<Handle>(next);
   }
 
-  void set_link(Handle node, Handle next) noexcept { std::memcpy(&at(node), &next, kLinkBytes); }
+  void set_link(Handle node, Handle next) noexcept {
+    const auto bytes = std::bit_cast<LinkBytes>(next);
+    std::memcpy(&at(node), bytes.data(), kLinkBytes);
+  }
 
   PageMapping mapping_;
   T* nodes_;

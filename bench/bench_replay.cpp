@@ -569,6 +569,38 @@ void run_timed_passes(Session& session, const TimerInfo& timer, SampleBuffer& sa
   benchmark::RunSpecifiedBenchmarks();
 }
 
+// An allocator design's header fields: what each book's pools obtained, when it has pools,
+// and the node capacity every arm shares.
+void add_alloc_fields(RunRecord& record, const Options& options,
+                      const std::vector<std::string>* pages) {
+  if (pages != nullptr) {
+    std::string obtained = pages->empty() ? std::string{"no pool built"} : std::string{};
+    for (std::size_t i = 0; i < pages->size(); ++i) {
+      obtained += std::format("{}book {}: {}", i == 0 ? "" : " | ", i + 1, (*pages)[i]);
+    }
+    record.header.emplace_back("pool_pages", scrub_private(obtained));
+  }
+  if (options.design.kind == DesignKind::alloc) {
+    record.header.emplace_back("node_capacity",
+                               std::format("{} orders and {} levels", options.node_capacity.orders,
+                                           options.node_capacity.levels));
+  }
+}
+
+// The warm-up before the timed passes: the day on the warm-up's book, and for an allocator
+// design each timed pass's own code; or, with no timed pass, the day's pages alone.
+template <class Session>
+void warm_session(Session& session, const Options& options, bool timed) {
+  if (!timed) {
+    session.warm_up_without_book();
+    return;
+  }
+  session.warm_up();
+  if (options.design.kind == DesignKind::alloc) {
+    session.warm_code(kCodeWarmOperations);
+  }
+}
+
 // One process's run of one design, from the warm-up to the record.
 template <class Book, class MakeBook>
 int run_design(const Options& options, const OwnedInput& owned, const MakeBook& make_book,
@@ -593,14 +625,7 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
   if constexpr (!std::is_constructible_v<Book, itch::BookCapacity>) {
     session.warm_with("hash-linked", warm_with_fast_book);
   }
-  if (timed) {
-    session.warm_up();
-    if (options.design.kind == DesignKind::alloc) {
-      session.warm_code(kCodeWarmOperations);
-    }
-  } else {
-    session.warm_up_without_book();
-  }
+  warm_session(session, options, timed);
   migrations.sample();
 
   const std::uint64_t messages = session.report().warmup_messages;
@@ -665,18 +690,7 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
                           : unavailable("no sample arena in a process with no latency pass"),
        .residency = session.report().residency});
   record.header.emplace_back("design", scrub_private(describe_design(options)));
-  if (pages != nullptr) {
-    std::string obtained = pages->empty() ? std::string{"no pool built"} : std::string{};
-    for (std::size_t i = 0; i < pages->size(); ++i) {
-      obtained += std::format("{}book {}: {}", i == 0 ? "" : " | ", i + 1, (*pages)[i]);
-    }
-    record.header.emplace_back("pool_pages", scrub_private(obtained));
-  }
-  if (options.design.kind == DesignKind::alloc) {
-    record.header.emplace_back("node_capacity",
-                               std::format("{} orders and {} levels", options.node_capacity.orders,
-                                           options.node_capacity.levels));
-  }
+  add_alloc_fields(record, options, pages);
   record.header.emplace_back("input", scrub_private(owned.describe()));
   record.header.emplace_back(
       "top_of_book",

@@ -27,7 +27,8 @@ struct MimallocArm {
 
     template <class T>
     [[nodiscard]] T* make() {
-      return ::new (mi_new(sizeof(T))) T;
+      // The book owns the node until it hands it to drop().
+      return ::new (mi_new(sizeof(T))) T;  // NOLINT(cppcoreguidelines-owning-memory)
     }
     template <class T>
     void drop(T* node) noexcept {
