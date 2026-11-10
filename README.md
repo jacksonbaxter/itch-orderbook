@@ -203,15 +203,25 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 | E8: prefetch look-ahead on the book build, debian, 12302019 | debian | best look-ahead D=16 at +16.41% over D=0; E8 not refuted | `54e5dc3b4938` | [results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md) |
 | E8: prefetch look-ahead on the book build, mac, 12302019 | macOS (M4 Max) | best look-ahead D=4 at -18.01% over D=0; E8 refuted (under 10% at every D) | `fde07d41bf28` | [results/prefetch_mac_12302019.md](results/prefetch_mac_12302019.md) |
 | Flamegraph: book replay, paged-flat on macOS (M4 Max), 12302019 | macOS (M4 Max) | 19,118 samples, wall-clock stacks every 1 ms, the hottest frame `itch::FastBook<…>::apply` at 38.24% self | `5a16936a14e8` | [results/profile_paged-flat_mac_12302019.md](results/profile_paged-flat_mac_12302019.md) |
+| E12: the kernels' decode as each compiler emits it, debian | debian | scalar add_fields merged or vectorised in 4 of 8 configurations; SLP off changes 0 scalar functions; E12 not refuted | `688cf8c229dc` | [results/simd_asm_debian.md](results/simd_asm_debian.md) |
 | E12: the kernels' decode as each compiler emits it, mac | macOS (M4 Max) | scalar add_fields merged or vectorised in 2 of 24 configurations; SLP off changes 2 scalar functions; E12 not refuted | `28f5fd6d0014` | [results/simd_asm_mac.md](results/simd_asm_mac.md) |
+| E5: Add Orders four at a time, and the day's run lengths, debian, 12302019 | debian | scalar beats ssse3 (ssse3 3.58 against scalar 1.03 cycles an Add Order); scalar beats avx2 (avx2 2.35 against scalar 1.03 cycles an Add Order); avx2 beats ssse3; E5 not refuted | `bd81414b46e7` | [results/simd_batch_debian_12302019.md](results/simd_batch_debian_12302019.md) |
 | E5: Add Orders four at a time, and the day's run lengths, mac, 12302019 | macOS (M4 Max) | scalar beats neon (neon 3.99 against scalar 3.68 cycles an Add Order); E5 not refuted | `3139854b4611` | [results/simd_batch_mac_12302019.md](results/simd_batch_mac_12302019.md) |
+| E4 end to end: the parser by kernel feeding the book, debian, 12302019 | debian | ssse3 and scalar tie on cycles a message (ssse3 671.13 against scalar 669.85 cycles a message); scalar beats avx2 (avx2 677.99 against scalar 669.85 cycles a message); ssse3 beats avx2 | `bd81414b46e7` | [results/simd_book_debian_12302019.md](results/simd_book_debian_12302019.md) |
+| E3: every op decoded and consumed in integer registers, debian, 12302019 | debian | scalar beats ssse3 (ssse3 35.74 against scalar 23.53 cycles an op); scalar beats avx2 (avx2 41.67 against scalar 23.53 cycles an op); ssse3 beats avx2; E3 not refuted | `bd81414b46e7` | [results/simd_consume_debian_12302019.md](results/simd_consume_debian_12302019.md) |
 | E3: every op decoded and consumed in integer registers, mac, 12302019 | macOS (M4 Max) | neon beats scalar (neon 10.56 against scalar 11.67 cycles an op); E3 not refuted | `86df0a80e649` | [results/simd_consume_mac_12302019.md](results/simd_consume_mac_12302019.md) |
+| E2: Add Order decode into a 32-byte record, no consumer, debian, 12302019 | debian | ssse3 beats scalar (ssse3 0.80 against scalar 9.94 cycles an Add Order); avx2 beats scalar (avx2 1.78 against scalar 9.94 cycles an Add Order); ssse3 beats avx2; E2 not refuted | `bd81414b46e7` | [results/simd_decode_debian_12302019.md](results/simd_decode_debian_12302019.md) |
 | E2: Add Order decode into a 32-byte record, no consumer, mac, 12302019 | macOS (M4 Max) | neon beats scalar (neon 1.01 against scalar 1.97 cycles an Add Order); E2 not refuted | `ecee4a126b42` | [results/simd_decode_mac_12302019.md](results/simd_decode_mac_12302019.md) |
 | E11: Add Order decode in WebAssembly, scalar against SIMD128, in node, mac, 12302019 | macOS (M4 Max) | wasm beats scalar (wasm 1.11 against scalar 2.31 ns an Add Order); E11 not refuted | `2c4136ec2116` | [results/simd_e11_mac_12302019.md](results/simd_e11_mac_12302019.md) |
+| E1: one field, scalar against vector, by width, debian, 12302019 | debian | 2 bytes ssse3-w2 beats scalar-w2, 2 bytes avx2-w2 and scalar-w2 tie, 4 bytes scalar-w4 beats ssse3-w4, 4 bytes scalar-w4 beats avx2-w4, 6 bytes ssse3-w6 beats scalar-w6, 6 bytes avx2-w6 and scalar-w6 tie, 8 bytes ssse3-w8 beats scalar-w8, 8 bytes avx2-w8 beats scalar-w8; E1 refuted | `bd81414b46e7` | [results/simd_field_debian_12302019.md](results/simd_field_debian_12302019.md) |
 | E1: one field, scalar against vector, by width, mac, 12302019 | macOS (M4 Max) | 2 bytes neon-w2 and scalar-w2 tie, 4 bytes scalar-w4 beats neon-w4, 6 bytes neon-w6 beats scalar-w6, 8 bytes neon-w8 beats scalar-w8; E1 refuted | `07c1bb1bab05` | [results/simd_field_mac_12302019.md](results/simd_field_mac_12302019.md) |
+| E9: the watchlist filter, compare against bitset, debian, 12302019 | debian | 8 stocks bitset -1.24 against ssse3 compare 5.44, 8 stocks bitset -1.24 against avx2 compare 2.41, 64 stocks bitset -1.30 against ssse3 compare 47.30, 64 stocks bitset -1.30 against avx2 compare 15.52 cycles an Add Order; E9 not refuted | `bd81414b46e7` | [results/simd_filter_debian_12302019.md](results/simd_filter_debian_12302019.md) |
 | E9: the watchlist filter, compare against bitset, mac, 12302019 | macOS (M4 Max) | 8 stocks bitset 1.00 against neon compare 2.23, 64 stocks bitset 1.00 against neon compare 12.11 cycles an Add Order; E9 not refuted | `6102fabfd16f` | [results/simd_filter_mac_12302019.md](results/simd_filter_mac_12302019.md) |
+| E6: the frame walk alone, four ways, debian, 12302019 | debian | fastest walk byte; length against constant differ; E6 not refuted | `bd81414b46e7` | [results/simd_framing_debian_12302019.md](results/simd_framing_debian_12302019.md) |
 | E6: the frame walk alone, four ways, mac, 12302019 | macOS (M4 Max) | fastest walk byte; length against constant differ; E6 not refuted | `8621cf047934` | [results/simd_framing_mac_12302019.md](results/simd_framing_mac_12302019.md) |
+| E4: the parser by kernel, whole and by op type, debian, 12302019 | debian | scalar beats ssse3 (ssse3 46.28 against scalar 35.10 cycles a message); scalar beats avx2 (avx2 48.10 against scalar 35.10 cycles a message); ssse3 beats avx2; E4 not refuted | `bd81414b46e7` | [results/simd_parse_debian_12302019.md](results/simd_parse_debian_12302019.md) |
 | E4: the parser by kernel, whole and by op type, mac, 12302019 | macOS (M4 Max) | neon beats scalar (neon 17.57 against scalar 18.79 cycles a message); E4 not refuted | `e3346335bed9` | [results/simd_parse_mac_12302019.md](results/simd_parse_mac_12302019.md) |
+| E13: the 6-byte timestamp, four ways, debian, 12302019 | debian | fewest cycles a message: underread; split against overread tie; E13 refuted | `bd81414b46e7` | [results/simd_timestamp_debian_12302019.md](results/simd_timestamp_debian_12302019.md) |
 | E13: the 6-byte timestamp, four ways, mac, 12302019 | macOS (M4 Max) | fewest cycles a message: underread; split against overread differ; E13 not refuted | `3903f15d62ec` | [results/simd_timestamp_mac_12302019.md](results/simd_timestamp_mac_12302019.md) |
 
 The SPSC ring. Each row is one comparison from a results file's targets table: a ratio of two of its medians, or for T-SPSC-3 the median of paired ratios, against BENCHMARKS.md's bar. Every bar was set on x86, so a macOS row says the host differs, and an unpinned Mac's cross-core figures are weak evidence.
@@ -423,6 +433,26 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0609-20261106T033637Z_report` | `P-0609` | `2c4136ec2116` | Darwin | `published` |
 | `P-0610-20261106T033824Z` | `P-0610` | `28f5fd6d0014` | Darwin | `recorded` |
 | `P-0610-20261106T033824Z_report` | `P-0610` | `28f5fd6d0014` | Darwin | `published` |
+| `P-0612-20261110T064838Z` | `P-0612` | `bd81414b46e7` | Linux | `recorded` |
+| `P-0613-20261110T065110Z` | `P-0613` | `bd81414b46e7` | Linux | `recorded` |
+| `P-0614-20261110T065415Z` | `P-0614` | `bd81414b46e7` | Linux | `recorded` |
+| `P-0611-20261110T065836Z` | `P-0611` | `bd81414b46e7` | Linux | `recorded` |
+| `P-0616-20261110T070549Z` | `P-0616` | `bd81414b46e7` | Linux | `recorded` |
+| `P-0617-20261110T070839Z` | `P-0617` | `bd81414b46e7` | Linux | `recorded` |
+| `P-0619-20261110T071013Z` | `P-0619` | `bd81414b46e7` | Linux | `recorded` |
+| `P-0618-20261110T071236Z` | `P-0618` | `bd81414b46e7` | Linux | `recorded` |
+| `P-0615-20261110T072015Z` | `P-0615` | `bd81414b46e7` | Linux | `recorded` |
+| `P-0620-20261110T073631Z` | `P-0620` | `688cf8c229dc` | Linux | `recorded` |
+| `P-0611-20261110T065836Z_report` | `P-0611` | `bd81414b46e7` | Linux | `published` |
+| `P-0612-20261110T064838Z_report` | `P-0612` | `bd81414b46e7` | Linux | `published` |
+| `P-0613-20261110T065110Z_report` | `P-0613` | `bd81414b46e7` | Linux | `published` |
+| `P-0614-20261110T065415Z_report` | `P-0614` | `bd81414b46e7` | Linux | `published` |
+| `P-0615-20261110T072015Z_report` | `P-0615` | `bd81414b46e7` | Linux | `published` |
+| `P-0616-20261110T070549Z_report` | `P-0616` | `bd81414b46e7` | Linux | `published` |
+| `P-0617-20261110T070839Z_report` | `P-0617` | `bd81414b46e7` | Linux | `published` |
+| `P-0618-20261110T071236Z_report` | `P-0618` | `bd81414b46e7` | Linux | `published` |
+| `P-0619-20261110T071013Z_report` | `P-0619` | `bd81414b46e7` | Linux | `published` |
+| `P-0620-20261110T073631Z_report` | `P-0620` | `688cf8c229dc` | Linux | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
