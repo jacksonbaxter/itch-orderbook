@@ -1190,6 +1190,8 @@ T-INV-2 strict, crossed and locked observations, then those with the market open
 
 **Fixed on the way.** `oracle_report.py` set carteret's and Ironbook's 12302019 figures beside every day's counts; they are now shown on 12302019 only, and 10302019's file was regenerated from its raw logs. `check_real_day.sh` failed under macOS bash 3.2 with `--arms default` (an empty array under `set -u`). `results_table.py` read every T-TRADE-3 failure as an odd-lot one and refused the file, and labelled a BX day's rows with the date alone. `trades_report.py` takes MIDAS's quarter from the day and the venue's rows from the manifest.
 
+**At the merge into `jb-build`, 2026-11-10.** `results/oracle_sessions.md` now names P-0501, and `check_predictions.py` holds it to that prediction's history: committed before the file and never edited. It is a sum of other results files and no run, so it needs no run-log row. Each day's `oracle_*.md` and `trades_*.md` still names no prediction: 12302019's and 10302019's were written before predictions were kept, and none of them is a driver's run.
+
 ## T-BOOK-4 on 01302019, 2026-11-05
 
 P-0502, `bench_replay` through `bench_driver.py` with the day in memory, `paged-flat`, under `measure.sh /usr/bin/time -l`, `mac-hold` held and a CPU sampler beside it. Every attempt so far was withdrawn under the sampler rule, each with its run-log row: the first for a backup at up to 165% CPU (and it was stopped by hand, `measure.sh` first, so the driver ran some seconds after the measure lock was freed); the second and third for a browser, another project's Python, Spotlight and macOS daemons above 20%. Later attempts wait until the sampler's test has shown the Mac quiet for 120 s running and are spaced 20 minutes apart.

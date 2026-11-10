@@ -48,6 +48,9 @@ CARTERET = {
     "10302019.NASDAQ_ITCH50": 290_025_046,
     "01302020.NASDAQ_ITCH50": 419_034_639,
 }
+# The prediction this sum was made under, before the eight sessions past the two reference
+# days were fetched: scripts/check_predictions.py holds the file to its history.
+PREDICTION = "P-0501"
 
 
 class SessionError(Exception):
@@ -146,6 +149,7 @@ def render(found):
         "table.",
         f"- Commits: {', '.join(commits) or 'none'}",
         f"- Host: {', '.join(hosts) or 'none'}. Mac numbers stay labelled macOS.",
+        f"- prediction: {PREDICTION}",
         "",
         f"Verdict: **{'PASS' if met else 'FAIL'}**, {detail}.",
         "",

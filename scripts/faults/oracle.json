@@ -3127,6 +3127,27 @@
       }
     },
     {
+      "id": "oracle-sessions-prediction-unchecked",
+      "breaks": "check_predictions passes a T-ORACLE-2 file that names no prediction, or one committed after it",
+      "check": "test_check_predictions.py, prediction-missing on results/oracle_sessions.md",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "SUMMED = (\"oracle_sessions.md\",)\n",
+          "new": "SUMMED = ()\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_oracle_sessions_naming_no_prediction",
+        "exit": 1
+      }
+    },
+    {
       "id": "oracle-report-comparison-every-day",
       "breaks": "12302019's published figures are set beside every day's counts",
       "check": "test_oracle_report.py",
