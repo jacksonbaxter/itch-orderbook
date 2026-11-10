@@ -1221,6 +1221,17 @@ The first fixture runs failed it: one fault in a pool arm's latency pass. That w
 
 **The first try (P-0701-20261110T031311Z).** It was stopped by SIGTERM after 90 minutes, and its rows are in the run log. Two timed processes were published, both of malloc-fresh's first repetition. Then malloc-aged's first repetition was withdrawn ten times running, beside a browser's processes (`zen` and `plugin-container`, up to 71.7% CPU), `launchd`, `fseventsd`, `mediaanalysisd`, `duetexpertd` and `CoreRoutineHelperService`, each just over 20%. Its timed process lasts about three minutes (warm-up, code warm-up, a 42 s throughput pass and a 52 s latency pass), and almost every three-minute span held a spike. The run held the measure lock and mac-hold while the main tree's check waited behind it. The rule itself was left alone. The driver now ends a run once one timed process has been withdrawn three times running (`--most-in-a-row`, a fault for it). The next try comes at least 30 minutes later, once no check and no measurement holds the Mac.
 
+**Tries 2 to 5, capped (2026-11-10, 06:32 to 10:24 UTC, at 105084d and 827bcbf).** Each try waited for no check lock and no measure lock, took mac-hold, and waited 60 quiet seconds. Each ended at its very first timed process, malloc-fresh's first repetition, which was withdrawn three times running. The spikes behind the withdrawals:
+- `launchd`, 20% to 48% CPU, about every 90 s at times;
+- the browser's `zen` and `plugin-container`, up to 62%;
+- Spotlight (`mds`, `mds_stores`, `corespotlightd`, `mdworker_shared`) and `mediaanalysisd`, up to 110%;
+- `fseventsd`, `airportd` and `eligibilityd`;
+- a `restic` backup at 173%;
+- another session's `claude`;
+- once, another project's coverage tests at 100%, which do not wait for this project's mac-hold.
+
+A timed process lasts about 2.5 minutes: the day read into RAM, the warm-up pass, the code warm-up, then the 35 s throughput pass and the 45 to 66 s latency pass. On this Mac, tonight, almost no 2.5-minute span was free of a process above 20%. A run needs 24 such spans. So T-ARENA-1 has no published number on the Mac yet. The rule and its threshold stand, and no figure from a withdrawn process is used anywhere. Every try has its rows in the run log. The withdrawn processes' raw records are kept, not published.
+
 **What remains for `debian`.** The page-size crossing is a later main-tree piece, and the harness is ready for it. On `debian` it is one `alloc_driver.py` run for each page request, each pinned as the other `debian` runs are: `measure.sh taskset -c 4 python3 -B scripts/alloc_driver.py ... --pages base|transparent|explicit --core 4 --sibling 5`, under a prediction of its own.
 - `base` turns transparent hugepages off for the pool with `madvise(MADV_NOHUGEPAGE)`.
 - `transparent` asks for them with `madvise(MADV_HUGEPAGE)` and refuses to fall back.
