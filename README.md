@@ -198,6 +198,7 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 | Flamegraph: the backtester, quoting on debian, 12302019 | debian | 119,933 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 38.53% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_backtest-quoting_debian_12302019.md](results/flamegraph_backtest-quoting_debian_12302019.md) |
 | Flamegraph: the map baseline, map-fresh on debian, 12302019 | debian | 243,786 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::rest_order` at 22.63% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_map-fresh_debian_12302019.md](results/flamegraph_map-fresh_debian_12302019.md) |
 | Flamegraph: the book replay, paged-flat on debian, 12302019 | debian | 105,077 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 42.14% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md) |
+| carteret's layout experiments on this book, mac, 12302019 | macOS (M4 Max) | hash policy +3.12% (identity-flat over hash-flat); open addressing against chaining +7.36% (chained-flat over hash-flat); search window of 16 -1.13% (paged-flat-scan16 over paged-flat); search window of 0 -13.95% (paged-flat-bisect over paged-flat) | `efdfc96d2b6b` | [results/layout_mac_12302019.md](results/layout_mac_12302019.md) |
 | The order lookup apart from the level work, debian, 12302019 | debian | paged-flat lookup 30.71 ns, 17.3% of the pass; hash-flat lookup 32.50 ns, 15.3% of the pass | `54e5dc3b4938` | [results/lookup_debian_12302019.md](results/lookup_debian_12302019.md) |
 | The order lookup apart from the level work, mac, 12302019 | macOS (M4 Max) | paged-flat lookup 8.95 ns, 19.6% of the pass; hash-flat lookup 5.03 ns, 9.1% of the pass | `fde07d41bf28` | [results/lookup_mac_12302019.md](results/lookup_mac_12302019.md) |
 | E8: prefetch look-ahead on the book build, debian, 12302019 | debian | best look-ahead D=16 at +16.41% over D=0; E8 not refuted | `54e5dc3b4938` | [results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md) |
@@ -223,6 +224,7 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 | E4: the parser by kernel, whole and by op type, mac, 12302019 | macOS (M4 Max) | neon beats scalar (neon 17.57 against scalar 18.79 cycles a message); E4 not refuted | `e3346335bed9` | [results/simd_parse_mac_12302019.md](results/simd_parse_mac_12302019.md) |
 | E13: the 6-byte timestamp, four ways, debian, 12302019 | debian | fewest cycles a message: underread; split against overread tie; E13 refuted | `bd81414b46e7` | [results/simd_timestamp_debian_12302019.md](results/simd_timestamp_debian_12302019.md) |
 | E13: the 6-byte timestamp, four ways, mac, 12302019 | macOS (M4 Max) | fewest cycles a message: underread; split against overread differ; E13 not refuted | `3903f15d62ec` | [results/simd_timestamp_mac_12302019.md](results/simd_timestamp_mac_12302019.md) |
+| carteret's window width against overflow, on this book, 12302019 | macOS (M4 Max); the counts are the same on any host, since nothing is timed | adds outside a window of 256 ticks 8.337%, of 2,048 1.493% (carteret 4.90% and 1.03%); sub-cent 0.468%; add searches past 1 or fewer better levels 57.10%, past 16 or more 10.79% | `3188ffdea6a6` | [results/window_12302019.md](results/window_12302019.md) |
 
 The SPSC ring. Each row is one comparison from a results file's targets table: a ratio of two of its medians, or for T-SPSC-3 the median of paired ratios, against BENCHMARKS.md's bar. Every bar was set on x86, so a macOS row says the host differs, and an unpinned Mac's cross-core figures are weak evidence.
 
@@ -453,6 +455,30 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0618-20261110T071236Z_report` | `P-0618` | `bd81414b46e7` | Linux | `published` |
 | `P-0619-20261110T071013Z_report` | `P-0619` | `bd81414b46e7` | Linux | `published` |
 | `P-0620-20261110T073631Z_report` | `P-0620` | `688cf8c229dc` | Linux | `published` |
+| `P-0023-20261110T103318Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `published` |
+| `P-0023-20261110T103426Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T103553Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T103626Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T103733Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T104040Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T104111Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T104208Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T104346Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T104504Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T104539Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T104615Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T105456Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T105535Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T105610Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T105649Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T105730Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T120044Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T120132Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T120435Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T120602Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T120701Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T120749Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
+| `P-0023-20261110T120908Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
