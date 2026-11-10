@@ -1,5 +1,6 @@
 add_library(itch_parser STATIC parser.cpp)
 target_include_directories(itch_parser PUBLIC "${PROJECT_SOURCE_DIR}/include")
+itch_add_kernels(itch_parser)
 if(ITCH_CACHE_LINE)
   target_compile_definitions(itch_parser PUBLIC "ITCH_CACHE_LINE=${ITCH_CACHE_LINE}")
 endif()
@@ -18,6 +19,15 @@ if(EMSCRIPTEN)
   target_link_libraries(itch_wasm_smoke PRIVATE itch_parser)
   itch_apply_options(itch_wasm_smoke)
   add_test(NAME itch_wasm_smoke COMMAND itch_wasm_smoke)
+
+  # The SIMD128 kernel against the scalar kernel, in node.
+  add_executable(itch_wasm_kernels_smoke wasm_kernels_smoke.cpp)
+  target_include_directories(itch_wasm_kernels_smoke PRIVATE "${PROJECT_SOURCE_DIR}/tests")
+  target_link_libraries(itch_wasm_kernels_smoke PRIVATE itch_parser)
+  # The churn stream and both kernels' ops outgrow the default 16 MiB.
+  target_link_options(itch_wasm_kernels_smoke PRIVATE -sALLOW_MEMORY_GROWTH=1)
+  itch_apply_options(itch_wasm_kernels_smoke)
+  add_test(NAME itch_wasm_kernels_smoke COMMAND itch_wasm_kernels_smoke)
 
   # The page's engine, an ES module with its .wasm beside it: -O3 from the Release build,
   # 128-bit SIMD, and a linear memory of kEngineMemoryBytes (demo_engine.hpp) that never

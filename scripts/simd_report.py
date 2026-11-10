@@ -1,0 +1,895 @@
+#!/usr/bin/env python3
+"""Writes the results of one SIMD experiment (simd.md) from a run of scripts/simd_driver.py.
+
+    simd_report.py --run-dir DIR --out results/simd_EXPERIMENT_HOST_DAY.md [--run-log FILE]
+    simd_report.py --check FILE
+
+DIR is the driver's run directory: manifest.json, each process's STEM.json record and the
+STEM.err that measure.sh and /usr/bin/time -l wrote around it, and on macOS sampler.txt. Only
+the processes the manifest marks published are read, and each is held to the sampler again: a
+published process must have had the sampler over its whole span, with no gap over 5 s and no
+other process above 20% CPU. The withdrawn ones are listed with the reason the driver gave.
+
+Every figure comes from the file's own table of every timed pass, so --check rebuilds the
+results and the finding from that table and fails on any difference. It also fails when two
+passes that compute the same thing (one mode of one width, watchlist or experiment, on any
+kernel or form) disagree in what they folded or how many items they took; on a host label
+that does not match the file name; on a load line that is not measure.sh's; on a macOS file
+that does not say the sampler rule was applied; on a debian file not pinned to core 4 under
+the performance governor, or without a passing machine check before and after; on a figure
+without its instruction set; and
+on anything private.
+
+How a winner is called, written into the predictions before the runs: on a figure where lower
+is better, A beats B when A's median over the repetitions is below B's and A's largest
+repetition is below B's smallest. Otherwise neither beats the other, which is a tie.
+
+Each violation prints as `simd_report: FAIL <code>: <detail>`.
+
+Exit codes: 0 written, or --check found nothing, 1 --check found something, 2 bad usage or
+unusable input, a refused record among them.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import statistics
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import check_results  # noqa: E402
+import stamp_load  # noqa: E402
+import wasm_bench  # noqa: E402
+
+DEBIAN = "debian"
+MAC = "macOS (M4 Max)"
+HOST_FILE = {DEBIAN: "debian", MAC: "mac"}
+L2 = "cache-misses (L2 misses on Zen 1)"
+FILLS = "r0843:u (a floor on DRAM demand fills)"
+EVENTS = {
+    DEBIAN: ("cycles", "instructions", "branch-misses", L2, FILLS),
+    MAC: ("cycles (thread_selfcounts, user+kernel)",
+          "instructions (thread_selfcounts, user+kernel)"),
+}
+SHORT = {"cycles": "cycles", "instructions": "instructions", "branch-misses": "branch misses",
+         L2: "`cache-misses`, L2 misses", FILLS: "`r0843:u`, floor on DRAM demand fills",
+         "cycles (thread_selfcounts, user+kernel)": "cycles",
+         "instructions (thread_selfcounts, user+kernel)": "instructions"}
+UNAVAILABLE = {MAC: "branch misses, cache misses and SIMD-pipe events: unavailable, the "
+                    "harness reads only fixed cycles and instructions through "
+                    "thread_selfcounts on macOS, and no Apple event name is assumed"}
+ISA = {"scalar": "scalar: general-purpose registers, REV or BSWAP",
+       "neon": "NEON (AArch64 Advanced SIMD, 128-bit)",
+       "ssse3": "SSSE3 (128-bit)",
+       "avx2": "AVX2 (256-bit)",
+       "avx512vbmi": "AVX-512 VBMI (512-bit)",
+       "wasm": "WebAssembly SIMD128"}
+E11_SCALAR = ("scalar wasm32: shifts and ORs, since core WebAssembly has no byte-reverse "
+              "instruction")
+
+
+def isa_of(experiment, kernel):
+    """The instruction set a figure used: the record's, but for E11's scalar, which runs no REV."""
+    return E11_SCALAR if experiment == "e11" and kernel == "scalar" else ISA[kernel]
+
+
+SIMD_ID = {"field": "E1", "decode": "E2", "consume": "E3", "parse": "E4", "book": "E4",
+           "batch": "E5", "framing": "E6", "filter": "E9", "timestamp": "E13", "e11": "E11"}
+TITLES = {"field": "E1: one field, scalar against vector, by width",
+          "decode": "E2: Add Order decode into a 32-byte record, no consumer",
+          "consume": "E3: every op decoded and consumed in integer registers",
+          "parse": "E4: the parser by kernel, whole and by op type",
+          "book": "E4 end to end: the parser by kernel feeding the book",
+          "batch": "E5: Add Orders four at a time, and the day's run lengths",
+          "framing": "E6: the frame walk alone, four ways",
+          "filter": "E9: the watchlist filter, compare against bitset",
+          "timestamp": "E13: the 6-byte timestamp, four ways",
+          "e11": "E11: Add Order decode in WebAssembly, scalar against SIMD128, in node"}
+PAIRED = ("field", "decode", "consume", "batch", "filter", "timestamp", "e11")
+OP_TYPES = ("A", "F", "E", "C", "X", "D", "U")
+FRAMING = ("length", "byte", "table", "constant")
+STAMPS = ("exact", "split", "overread", "underread")
+E3_GAIN = 0.10
+E4_GAIN = 0.10
+INTERFERENCE = ("the sampler rule was applied: a CPU sampler line every 2 s over the whole "
+                "run; a process is published only if the sampler covered its whole span, "
+                "from measure.sh's start line to its end line, with no gap over 5 s and no "
+                "other process above 20% CPU; any other was withdrawn, logged and rerun")
+FILE_NAME = re.compile(r"^simd_([a-z0-9]+)_(debian|mac)_(\d{8})\.md$")
+NUMBER = r"-?[0-9][0-9,]*(?:\.[0-9]+)?"
+
+METHOD = {
+    "paired": """\
+Each process maps the day, reads every page and finds every page resident, runs one untimed
+warm-up of the work pass, then four timed passes in the order walk, work, work, walk
+(`bench/kernel_experiments.hpp`). The walk is the same loop with the same frame walk and type
+test, the measured operation replaced by adding the type byte the walk has loaded already.
+The work passes less the walk passes, over the items the operation applies to, is the
+operation's cost where it sits in a real loop: an item's figure, not a message's. On a vector
+kernel the whole pass, loop and kernel, is compiled inside the kernel's target region
+(`itch::kernels::run`).""",
+    "parse": """\
+Each process maps the day, reads every page and finds every page resident, runs one untimed
+parse, then eleven timed passes: walk, all, A, F, E, C, X, D, U, all, walk. `all` is the parser
+(`itch::kernels::parse_ops`) on the kernel, every op handed to a sink that folds it; within
+`kOverread` bytes of the end it takes the scalar kernel. Each one-type pass decodes only that
+type's messages on the kernel and walks the rest; the walk decodes none. A type's figure is
+its pass less the walk, over its ops.""",
+    "book": """\
+Each process maps the day, reads every page and finds every page resident, then runs the parser
+on the kernel feeding `FastBook<>`, the shipped `paged-flat` arm, once untimed and once timed,
+each on a fresh book. The book is the same on every kernel; only the decode differs.""",
+    "framing": """\
+Each process maps the day, reads every page and finds every page resident, walks it once
+untimed, then twice timed. The walk adds every frame's type byte and counts frames, finding
+each frame's length one of four ways: `length`, the wire's 2-byte length (a data dependency
+from one frame to the next); `byte`, its low byte alone; `table`, a 256-entry table by type;
+`constant`, a switch on the type with each case's constant length (a control dependency).
+Each pass is a message's figure; there is no walk to subtract.""",
+}
+
+CAVEATS = {
+    "e11": """\
+- **Wall clock only.** Node exposes no counters; `performance.now()` around each whole pass.
+- **A copy, not a mapping.** The day is copied into a 64 MiB window of the module's memory a
+  piece at a time, and each piece's walk and decode passes are timed, summed over the day.
+- **One engine.** V8 as this Node ships it; another engine, or Chrome's, may differ.""",
+    "field": """\
+- **The NEON field is scalar code.** Clang folds `field<W>`'s 8-byte vector load, REV64 and lane
+  move into a general-register load, REV and shift (`results/simd_asm_mac.md`, E12). At widths
+  2, 4 and 8 the two kernels' instructions are the same; at 6 NEON's is the 8-byte over-read
+  where scalar reads 4 and 2 bytes. So no figure here is a vector unit's: a call between the
+  kernels is the over-read against the exact read at 6, and code placement at the other widths.
+- **Under a tenth of a cycle.** The field costs both kernels less than 0.1 cycle an op beyond
+  the walk: the out-of-order core hides it behind the frame walk. The rule calls a winner
+  wherever the repetitions do not overlap, however small the gap.""",
+    "parse": """\
+- **The one-type passes do not add up to the whole.** Each tests every message's type against
+  one letter and branches, a different loop from `parse_ops()`, so a type's figure is that
+  type's decode where it sits in that loop. On NEON every type's pass costs more than on scalar,
+  and yet the whole parse costs less: the whole is the figure E4 judges.
+- **The rare types are noise.** F, C and X are 1.5 million, 100 thousand and 2.8 million ops in
+  a pass of a second or so; their ranges cross zero or each other.""",
+    "default": """\
+- **The Mac's counters are cycles and instructions only**, user and kernel together; branch
+  misses, cache misses and SIMD-pipe use are not read here.
+- **Not pinned.** macOS cannot pin a thread; the sampler rule keeps other work out of every
+  published process, not the scheduler.
+- **One day, one host.** The x86 kernels run on debian later, from the same binary and the
+  same commands (NOTES.md).""",
+}
+
+
+class ReportError(Exception):
+    """The input cannot become a results file."""
+
+
+def kernel_of(experiment, name):
+    if experiment == "field":
+        return name.rsplit("-w", 1)[0]
+    if experiment == "filter":
+        return name.split("-")[1] if name.startswith("compare-") else "scalar"
+    if experiment in ("framing", "timestamp"):
+        return "scalar"
+    return name
+
+
+def baseline(experiment, name):
+    if experiment == "field":
+        return "scalar-" + name.rsplit("-", 1)[1]
+    if experiment == "filter":
+        return "compare-scalar-" + name.rsplit("-", 1)[1]
+    if experiment == "framing":
+        return "length"
+    if experiment == "timestamp":
+        return "exact"
+    return "scalar"
+
+
+def same_answer(experiment, name):
+    """Variants in one group compute the same thing, mode by mode."""
+    if experiment in ("field", "filter"):
+        return name.rsplit("-", 1)[1]
+    return ""
+
+
+def order_key(experiment, name):
+    kernels = list(ISA)
+    if experiment == "field":
+        return (int(name.rsplit("-w", 1)[1]), kernels.index(kernel_of(experiment, name)))
+    if experiment == "filter":
+        return (int(name.rsplit("-n", 1)[1]), name.startswith("bitset"),
+                kernels.index(kernel_of(experiment, name)))
+    if experiment == "framing":
+        return (FRAMING.index(name),)
+    if experiment == "timestamp":
+        return (STAMPS.index(name),)
+    return (kernels.index(name),)
+
+
+def events_of(host, experiment):
+    return () if experiment == "e11" else EVENTS[host]
+
+
+def median(values):
+    return statistics.median(values)
+
+
+def stat(values):
+    return {"median": median(values), "min": min(values), "max": max(values)}
+
+
+def beats(a, b):
+    """Lower is better: a's median under b's, and a's largest repetition under b's smallest."""
+    return a["median"] < b["median"] and a["max"] < b["min"]
+
+
+def call(a_name, a, b_name, b, unit):
+    if beats(a, b):
+        return f"`{a_name}` beats `{b_name}`"
+    if beats(b, a):
+        return f"`{b_name}` beats `{a_name}`"
+    return f"`{a_name}` and `{b_name}` tie on {unit}"
+
+
+def fmt(value, places=3):
+    return f"{value:,.{places}f}"
+
+
+def rows_of(records, experiment, events):
+    """Every timed pass, in the order run, as the file's table holds it."""
+    rows = []
+    for record in records:
+        name, repetition = record["_variant"], record["_repetition"]
+        for one in record["passes"]:
+            values = {item["name"]: item for item in one["counters"]}
+            counts = []
+            for event in events:
+                item = values.get(event)
+                if item is None or item["state"] != "measured":
+                    raise ReportError(f"{name}: {event} was not measured: {item}")
+                counts.append(int(item["value"]))
+            rows.append({"variant": name, "repetition": repetition, "mode": one["mode"],
+                         "messages": one["messages"], "items": one["items"],
+                         "seconds": round(one["seconds"], 6), "fold": one["fold"],
+                         "counts": counts})
+    return rows
+
+
+def grouped(rows):
+    out = {}
+    for row in rows:
+        out.setdefault(row["variant"], {}).setdefault(row["repetition"], []).append(row)
+    return out
+
+
+def mean_of(passes, mode, events):
+    chosen = [one for one in passes if one["mode"] == mode]
+    if not chosen:
+        raise ReportError(f"a repetition with no {mode} pass")
+    return {"seconds": statistics.mean(one["seconds"] for one in chosen),
+            "counts": [statistics.mean(one["counts"][i] for one in chosen)
+                       for i in range(len(events))],
+            "items": chosen[0]["items"], "messages": chosen[0]["messages"]}
+
+
+def less_walk(passes, mode, events):
+    """The mode's passes less the walk passes, an item: (ns, [each event])."""
+    work = mean_of(passes, mode, events)
+    walk = mean_of(passes, "walk", events)
+    items = work["items"]
+    if items == 0:
+        raise ReportError(f"a {mode} pass with no items")
+    return ((work["seconds"] - walk["seconds"]) * 1e9 / items,
+            [(w - k) / items for w, k in zip(work["counts"], walk["counts"])])
+
+
+def figures_of(experiment, rows, events):
+    """Per variant (and per op type for parse): stats over the repetitions."""
+    figures = {}
+    for name, reps in grouped(rows).items():
+        per = {"ns": [], "work_ns": [], "walk_ns": [], "items": None, "reps": len(reps)}
+        per.update({event: [] for event in events})
+        types = {t: {"ns": [], **{event: [] for event in events}} for t in OP_TYPES}
+        for passes in reps.values():
+            messages = passes[0]["messages"]
+            if experiment in PAIRED:
+                ns, counts = less_walk(passes, "work", events)
+                per["work_ns"].append(mean_of(passes, "work", events)["seconds"] * 1e9 / messages)
+                per["walk_ns"].append(mean_of(passes, "walk", events)["seconds"] * 1e9 / messages)
+                per["items"] = mean_of(passes, "work", events)["items"]
+            else:
+                mode = "all" if experiment == "parse" else "work"
+                whole = mean_of(passes, mode, events)
+                ns = whole["seconds"] * 1e9 / messages
+                counts = [value / messages for value in whole["counts"]]
+                per["items"] = whole["items"]
+            per["ns"].append(ns)
+            for event, value in zip(events, counts):
+                per[event].append(value)
+            if experiment == "parse":
+                for t in OP_TYPES:
+                    t_ns, t_counts = less_walk(passes, t, events)
+                    types[t]["ns"].append(t_ns)
+                    for event, value in zip(events, t_counts):
+                        types[t][event].append(value)
+                    types[t]["items"] = mean_of(passes, t, events)["items"]
+        figure = {key: stat(value) for key, value in per.items()
+                  if isinstance(value, list) and value}
+        figure["items"] = per["items"]
+        figure["reps"] = per["reps"]
+        if experiment == "parse":
+            figure["types"] = {t: {**{k: stat(v) for k, v in one.items() if isinstance(v, list)},
+                                   "items": one["items"]} for t, one in types.items()}
+        figures[name] = figure
+    return figures
+
+
+def check_agreement(experiment, rows):
+    """Passes of one mode in one group fold the same and take the same items, every kernel."""
+    seen = {}
+    for row in rows:
+        key = (same_answer(experiment, row["variant"]), row["mode"])
+        if experiment == "filter" and row["mode"] == "work":
+            key = (key[0], "matches")
+        value = (row["fold"], row["items"], row["messages"])
+        first = seen.setdefault(key, (value, row))
+        if first[0] != value:
+            raise ReportError(f"`{row['variant']}` repetition {row['repetition']}'s "
+                              f"{row['mode']} pass folded {value} where `{first[1]['variant']}` "
+                              f"folded {first[0]}")
+
+
+def ratio_cell(base, figure):
+    if figure["ns"]["median"] <= 0 or base is None or base["ns"]["median"] <= 0:
+        return "n/a"
+    return f"{base['ns']['median'] / figure['ns']['median']:.3f}"
+
+
+def results_section(experiment, rows, events, runs):
+    check_agreement(experiment, rows)
+    figures = figures_of(experiment, rows, events)
+    names = sorted(figures, key=lambda n: order_key(experiment, n))
+    heads = [SHORT[event] for event in events]
+    if experiment in PAIRED:
+        unit = "an Add Order" if experiment in ("decode", "batch", "e11") else "an item"
+        out = ["Medians over the repetitions. The operation is the work passes less the walk "
+               f"passes, {unit}; the counter columns are the same difference. Speed-up is the "
+               "baseline's operation over this one's (above 1, this one is faster). n/a where "
+               "a median operation is not above zero.", "",
+               "| Variant | Instruction set | Repetitions | Items a pass | Work pass, ns a "
+               "message | Walk pass, ns a message | Operation, ns an item | Min | Max | "
+               + "".join(f"{head} an item | " for head in heads) + "Baseline | Speed-up |",
+               "|---|---|---|---|---|---|---|---|---|" + "---|" * len(heads) + "---|---|"]
+        for name in names:
+            f = figures[name]
+            base = baseline(experiment, name)
+            isa = isa_of(experiment, kernel_of(experiment, name))
+            out.append(f"| `{name}` | {isa} | {f['reps']} "
+                       f"| {f['items']:,} | {fmt(f['work_ns']['median'])} "
+                       f"| {fmt(f['walk_ns']['median'])} | {fmt(f['ns']['median'])} "
+                       f"| {fmt(f['ns']['min'])} | {fmt(f['ns']['max'])} | "
+                       + "".join(f"{fmt(f[event]['median'])} | " for event in events)
+                       + f"`{base}` | {ratio_cell(figures.get(base), f)} |")
+    else:
+        what = {"parse": "the `all` passes", "book": "the timed pass",
+                "framing": "the work passes"}[experiment]
+        out = [f"Medians over the repetitions, of {what}, a message; the counter columns are "
+               "each event over the same passes, a message. Speed-up is the baseline's over "
+               "this one's.", "",
+               "| Variant | Instruction set | Repetitions | Items a pass | ns a message | Min | "
+               "Max | " + "".join(f"{head} a message | " for head in heads)
+               + "Baseline | Speed-up |",
+               "|---|---|---|---|---|---|---|" + "---|" * len(heads) + "---|---|"]
+        for name in names:
+            f = figures[name]
+            base = baseline(experiment, name)
+            isa = isa_of(experiment, kernel_of(experiment, name))
+            out.append(f"| `{name}` | {isa} | {f['reps']} "
+                       f"| {f['items']:,} | {fmt(f['ns']['median'])} | {fmt(f['ns']['min'])} "
+                       f"| {fmt(f['ns']['max'])} | "
+                       + "".join(f"{fmt(f[event]['median'])} | " for event in events)
+                       + f"`{base}` | {ratio_cell(figures.get(base), f)} |")
+    if experiment == "parse":
+        out += ["", "By op type: each type's pass less the walk, an op of that type.", "",
+                "| Type | Variant | Instruction set | Ops | ns an op | Min | Max |"
+                + "".join(f" {head} an op |" for head in heads),
+                "|---|---|---|---|---|---|---|" + "---|" * len(heads)]
+        for t in OP_TYPES:
+            for name in names:
+                one = figures[name]["types"][t]
+                out.append(f"| {t} | `{name}` | {isa_of(experiment, kernel_of(experiment, name))} "
+                           f"| {one['items']:,} | {fmt(one['ns']['median'])} "
+                           f"| {fmt(one['ns']['min'])} | {fmt(one['ns']['max'])} |"
+                           + "".join(f" {fmt(one[event]['median'])} |" for event in events))
+    if experiment == "batch" and runs is not None:
+        out += ["", "Run lengths: every message of the day by the length of the run of one "
+                "type it sits in, and every Add Order by the length of its run of Add Orders.",
+                "", "| Run length | Messages | Share | Add Orders | Share |",
+                "|---|---|---|---|---|"]
+        total_any, total_add = sum(runs["any_type"]), sum(runs["add_order"])
+        for bucket, any_type, add in zip(runs["buckets"], runs["any_type"], runs["add_order"]):
+            out.append(f"| {bucket} | {any_type:,} | {any_type / total_any * 100:.2f}% "
+                       f"| {add:,} | {add / total_add * 100:.2f}% |")
+    return out, figures
+
+
+def cycles_or_ns(events):
+    return events[0] if events else "ns"
+
+
+def finding(experiment, figures, events, runs):
+    """The finding, worked from the figures alone, and a one-line summary of it."""
+    metric = cycles_or_ns(events)
+    unit = SHORT.get(metric, "ns")
+    vector = sorted({kernel_of(experiment, n) for n in figures} - {"scalar"},
+                    key=list(ISA).index)
+    lines, verdicts = [], []
+
+    def explain(a, b, per):
+        parts = [f"`{a}` {fmt(figures[a]['ns']['median'])} ns"]
+        parts += [f"{fmt(figures[a][e]['median'])} {SHORT[e]}" for e in events]
+        parts += [f"against `{b}` {fmt(figures[b]['ns']['median'])} ns"]
+        parts += [f"{fmt(figures[b][e]['median'])} {SHORT[e]}" for e in events]
+        return ", ".join(parts) + f" {per}"
+
+    if experiment == "field":
+        calls = []
+        for width in (2, 4, 6, 8):
+            base = f"scalar-w{width}"
+            for kernel in vector:
+                name = f"{kernel}-w{width}"
+                if name not in figures or base not in figures:
+                    continue
+                said = call(name, figures[name][metric], base, figures[base][metric], unit)
+                lines.append(f"- Width {width}: {said}; " + explain(name, base, "a field") + ".")
+                verdicts.append(beats(figures[name][metric], figures[base][metric]))
+                calls.append(f"{width} bytes " + said.split(" on ")[0].replace("`", ""))
+        refuted = any(verdicts)
+        lines.append("- E1's kill criterion, refuted if a vector kernel takes fewer cycles a "
+                     "field than scalar at a width: " + ("**refuted**." if refuted else
+                                                         "**not refuted**: scalar wins or "
+                                                         "ties at every width."))
+        summary = ", ".join(calls) + "; E1 " + ("refuted" if refuted else "not refuted")
+        return lines, summary
+    if experiment in ("decode", "consume", "batch", "e11", "parse", "book"):
+        per = {"decode": "an Add Order", "consume": "an op", "batch": "an Add Order",
+               "e11": "an Add Order", "parse": "a message", "book": "a message"}[experiment]
+        compare = metric if experiment != "e11" else "ns"
+        said_all = []
+        for kernel in vector:
+            a, b = figures[kernel], figures["scalar"]
+            said = call(kernel, a[compare], "scalar", b[compare],
+                        SHORT.get(compare, "ns") + " " + per)
+            over = a[compare]["median"] / b[compare]["median"] \
+                if b[compare]["median"] > 0 else float("nan")
+            gain = 1 - over
+            lines.append(f"- {said}; " + explain(kernel, "scalar", per)
+                         + f"; `{kernel}` takes {over:.3f} times scalar's "
+                         f"{SHORT.get(compare, 'ns')}.")
+            said_all.append((kernel, said, gain, beats(a[compare], b[compare]),
+                             beats(b[compare], a[compare])))
+        if experiment == "parse":
+            for t in OP_TYPES:
+                cells = [f"`{name}` {fmt(figures[name]['types'][t]['ns']['median'])} ns, "
+                         + ", ".join(f"{fmt(figures[name]['types'][t][e]['median'])} {SHORT[e]}"
+                                     for e in events)
+                         for name in ["scalar", *vector]]
+                lines.append(f"- {t}, an op: " + "; ".join(cells) + ".")
+        if experiment == "decode":
+            refuted = any(lost for _, _, _, _, lost in said_all)
+            criterion = ("E2's kill criterion, refuted if scalar beats the vector kernel: "
+                         + ("**refuted**." if refuted else "**not refuted**."))
+        elif experiment == "consume":
+            refuted = any(won and gain >= E3_GAIN for _, _, gain, won, _ in said_all)
+            criterion = ("E3's kill criterion, refuted if the vector kernel keeps a gain of 10% "
+                         "or more with the consumer attached: "
+                         + ("**refuted**." if refuted else "**not refuted**."))
+        elif experiment == "parse":
+            refuted = any(won and gain >= E4_GAIN for _, _, gain, won, _ in said_all)
+            criterion = ("E4's kill criterion, refuted if the vector kernel parses 10% or more "
+                         "faster over the repetitions: "
+                         + ("**refuted**." if refuted else "**not refuted**."))
+        elif experiment == "batch":
+            refuted = any(won for _, _, _, won, _ in said_all)
+            criterion = ("E5's kill criterion, refuted if the vector batch clearly wins at the "
+                         "run lengths of the day: " + ("**refuted**." if refuted else
+                                                       "**not refuted**."))
+            if runs is not None:
+                long_runs = sum(runs["add_order"][3:]) / sum(runs["add_order"])
+                lines.append(f"- {long_runs * 100:.2f}% of the day's Add Orders sit in runs of "
+                             "4 or more Add Orders.")
+        elif experiment == "e11":
+            refuted = not any(won for _, _, _, won, _ in said_all)
+            criterion = ("E11's kill criterion, refuted if scalar is equal or better: "
+                         + ("**refuted**." if refuted else "**not refuted**: SIMD128 wins."))
+        else:
+            refuted = None
+            criterion = ("E4 end to end has no kill criterion of its own: the book's share of "
+                         "the message is the context for the parse's.")
+        lines.append(f"- {criterion}")
+        word = SHORT.get(compare, "ns")
+        summary = "; ".join(
+            said.split(";")[0].replace("`", "")
+            + f" ({kernel} {figures[kernel][compare]['median']:.2f} against scalar "
+            f"{figures['scalar'][compare]['median']:.2f} {word} {per})"
+            for kernel, said, _, _, _ in said_all)
+        if refuted is not None:
+            summary += f"; {SIMD_ID[experiment]} " + ("refuted" if refuted else "not refuted")
+        return lines, summary
+    if experiment == "framing":
+        for name in FRAMING[1:]:
+            said = call(name, figures[name][metric], "length", figures["length"][metric],
+                        unit + " a message")
+            lines.append(f"- {said}; " + explain(name, "length", "a message") + ".")
+        same = not beats(figures["constant"][metric], figures["length"][metric]) and \
+            not beats(figures["length"][metric], figures["constant"][metric])
+        lines.append("- E6's kill criterion, refuted if the data-dependent walk (`length`) and "
+                     "the control-dependent one (`constant`) do not differ: "
+                     + ("**refuted**: they tie." if same else "**not refuted**: they differ."))
+        fastest = min(figures, key=lambda n: figures[n][metric]["median"])
+        summary = (f"fastest walk {fastest}; length against constant "
+                   + ("tie" if same else "differ") + f"; E6 {'refuted' if same else 'not refuted'}")
+        return lines, summary
+    if experiment == "filter":
+        won, sizes = [], []
+        for n in sorted({int(name.rsplit("-n", 1)[1]) for name in figures}):
+            bitset = f"bitset-n{n}"
+            for kernel in ["scalar", *vector]:
+                name = f"compare-{kernel}-n{n}"
+                said = call(name, figures[name][metric], bitset, figures[bitset][metric],
+                            unit + " an Add Order")
+                lines.append(f"- Watchlist {n}: {said}; "
+                             + explain(name, bitset, "an Add Order") + ".")
+                if kernel != "scalar":
+                    won.append(beats(figures[name][metric], figures[bitset][metric]))
+                    sizes.append(f"{n} stocks bitset {figures[bitset][metric]['median']:.2f} "
+                                 f"against {kernel} compare {figures[name][metric]['median']:.2f}")
+        refuted = any(won)
+        lines.append("- E9's kill criterion, refuted if a vector compare beats the bitset at a "
+                     "watchlist size used: " + ("**refuted**." if refuted else
+                                               "**not refuted**."))
+        summary = (", ".join(sizes) + f" {unit} an Add Order; E9 "
+                   + ("refuted" if refuted else "not refuted"))
+        return lines, summary
+    for name in STAMPS[1:]:
+        said = call(name, figures[name][metric], "exact", figures["exact"][metric],
+                    unit + " a message")
+        lines.append(f"- {said}; " + explain(name, "exact", "a message") + ".")
+    same = not beats(figures["overread"][metric], figures["split"][metric]) and \
+        not beats(figures["split"][metric], figures["overread"][metric])
+    lines.append("- E13's kill criterion, refuted if the 4+2 merge (`split`) equals the "
+                 "over-read: " + ("**refuted**: they tie." if same else "**not refuted**."))
+    fastest = min(figures, key=lambda n: figures[n][metric]["median"])
+    summary = (f"fewest {unit} a message: {fastest}; split against overread "
+               + ("tie" if same else "differ") + f"; E13 {'refuted' if same else 'not refuted'}")
+    return lines, summary
+
+
+def pass_table(rows, events):
+    heads = [SHORT[event] for event in events]
+    out = ["| Variant | Repetition | Pass | Messages | Items | Seconds | Fold |"
+           + "".join(f" {head} |" for head in heads),
+           "|---|---|---|---|---|---|---|" + "---|" * len(heads)]
+    for row in rows:
+        out.append(f"| `{row['variant']}` | {row['repetition']} | {row['mode']} "
+                   f"| {row['messages']:,} | {row['items']:,} | {row['seconds']:.6f} "
+                   f"| {row['fold']} |" + "".join(f" {count:,} |" for count in row["counts"]))
+    return out
+
+
+PASS_ROW = re.compile(r"^\| `([^`]+)` \| (\d+) \| ([A-Za-z]+) \| ([0-9,]+) \| ([0-9,]+) \| "
+                      r"([0-9.]+) \| (\d+) \|(.*)$")
+RUN_ROW = re.compile(r"^\| ([0-9+-]+) \| ([0-9,]+) \| [0-9.]+% \| ([0-9,]+) \| [0-9.]+% \|$")
+
+
+def parse_pass_table(text, events):
+    rows = []
+    for line in (check_results.section(text, "Every timed pass") or "").splitlines():
+        match = PASS_ROW.match(line)
+        if match is None:
+            continue
+        rest = match.group(8).strip()
+        cells = [cell.strip() for cell in rest.split("|") if cell.strip()] if rest else []
+        if len(cells) != len(events):
+            raise ReportError(f"a row of {len(cells)} counts, wanted {len(events)}")
+        rows.append({"variant": match.group(1), "repetition": int(match.group(2)),
+                     "mode": match.group(3), "messages": int(match.group(4).replace(",", "")),
+                     "items": int(match.group(5).replace(",", "")),
+                     "seconds": float(match.group(6)), "fold": int(match.group(7)),
+                     "counts": [int(cell.replace(",", "")) for cell in cells]})
+    return rows
+
+
+def parse_runs(text):
+    found = [RUN_ROW.match(line) for line in (check_results.section(text, "Results") or "")
+             .splitlines()]
+    found = [match for match in found if match]
+    if not found:
+        return None
+    return {"buckets": [m.group(1) for m in found],
+            "any_type": [int(m.group(2).replace(",", "")) for m in found],
+            "add_order": [int(m.group(3).replace(",", "")) for m in found]}
+
+
+def computed_sections(experiment, rows, events, runs):
+    results, figures = results_section(experiment, rows, events, runs)
+    lines, summary = finding(experiment, figures, events, runs)
+    return results, lines, summary
+
+
+def load_lines(stderr_text, host):
+    start = stamp_load.one_line(stamp_load.START, stderr_text, "start")
+    end = stamp_load.one_line(stamp_load.END, stderr_text, "end")
+    return tuple(stamp_load.HOST.sub(f"host={host}", line) for line in (start, end))
+
+
+def timestamp(line):
+    match = check_results.TIMESTAMP.search(line)
+    if match is None:
+        raise ReportError(f"no timestamp in {line!r}")
+    return match.group(1)
+
+
+def judge(records, experiment):
+    for record in records:
+        if record["refusals"]:
+            raise ReportError(f"a refused record: {record['refusals']}")
+        if record["header"]["host"] == DEBIAN and not record.get("pinned"):
+            raise ReportError(f"`{record['_variant']}` was not pinned on debian")
+        variant = record["variant"]
+        wanted = "e11" if experiment == "e11" else experiment
+        if variant["experiment"] != wanted:
+            raise ReportError(f"a {variant['experiment']} record in a {experiment} report")
+        if variant["kernel"] != kernel_of(experiment, record["_variant"]) or \
+                variant["isa"] != ISA[variant["kernel"]]:
+            raise ReportError(f"`{record['_variant']}` ran {variant['kernel']} "
+                              f"({variant['isa']})")
+        if variant.get("from_auto"):
+            raise ReportError(f"`{record['_variant']}` took its kernel from auto")
+        for one in record["passes"]:
+            if one["messages"] != record["mix"]["messages"]:
+                raise ReportError("a pass that did not walk the whole day")
+    for field in ("host", "cpu", "compiler", "flags", "commit", "dataset", "dataset_sha256"):
+        values = {record["header"].get(field) for record in records}
+        if len(values) != 1:
+            raise ReportError(f"the records differ in {field}: {sorted(map(str, values))}")
+
+
+def peak_rss(records, stderrs):
+    rusage = max(record.get("peak_rss_bytes", 0) for record in records) / 1024 ** 3
+    timed = [int(match.group(1)) for text in stderrs
+             for match in stamp_load.MAX_RSS.finditer(text)]
+    line = f"{rusage:.2f} GiB, getrusage of the measured process, largest process"
+    if timed:
+        line += f"; {max(timed) / 1024 ** 3:.2f} GiB, /usr/bin/time -l, largest process"
+    return line
+
+
+def read_run(run_dir):
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    records, stderrs = [], []
+    for entry in manifest["processes"]:
+        if not entry["published"]:
+            continue
+        record = json.loads((run_dir / f"{entry['stem']}.json").read_text(encoding="utf-8"))
+        record["_variant"] = entry["variant"]
+        record["_repetition"] = sum(1 for r in records if r["_variant"] == entry["variant"]) + 1
+        records.append(record)
+        stderrs.append((run_dir / f"{entry['stem']}.err").read_text(encoding="utf-8",
+                                                                       errors="replace"))
+    if not records:
+        raise ReportError("the run published no process")
+    for name in manifest["variants"]:
+        count = sum(1 for r in records if r["_variant"] == name)
+        if count != manifest["repetitions"]:
+            raise ReportError(f"`{name}` has {count} published repetitions, not "
+                              f"{manifest['repetitions']}")
+    sampler = None
+    if manifest.get("sampler"):
+        sampler = (run_dir / manifest["sampler"]).read_text(encoding="utf-8")
+    return manifest, records, stderrs, sampler
+
+
+def render(manifest, records, stderrs, sampler):
+    experiment = manifest["experiment"]
+    judge(records, experiment)
+    header = records[0]["header"]
+    host = header["host"]
+    if host not in EVENTS:
+        raise ReportError(f"no events known for host {host!r}")
+    events = events_of(host, experiment)
+    lines = [load_lines(text, host) for text in stderrs]
+    if host == MAC:
+        if sampler is None:
+            raise ReportError("a macOS run needs the CPU sampler's log")
+        sampled = sampler.splitlines()
+        for start, end in lines:
+            why = wasm_bench.unquiet(sampled, timestamp(start), timestamp(end))
+            if why is not None:
+                raise ReportError(f"a published process is not quiet: {why} ({start!r})")
+    rows = rows_of(records, experiment, events)
+    runs = records[0].get("runs")
+    if runs is not None and any(record.get("runs") != runs for record in records):
+        raise ReportError("the records differ in the day's run lengths")
+    results, found, summary = computed_sections(experiment, rows, events, runs)
+    day = header.get("dataset", "").split(".", 1)[0]
+    withdrawn = [entry for entry in manifest["processes"] if not entry["published"]]
+    kernels = sorted({kernel_of(experiment, record["_variant"]) for record in records},
+                     key=list(ISA).index)
+    skip = ("design", "page_size", "rdpmc", "counters", "migrations", "residency", "core")
+    out = [f"# {TITLES[experiment]}, {HOST_FILE[host]}, {day}", "",
+           "Generated by `scripts/simd_report.py` from raw records that are not committed. "
+           "Do not edit by hand.", "",
+           f"Host: **{host}**. Numbers from the two hosts are never mixed.", "", "## Header", ""]
+    out += [f"- {name}: {value}" for name, value in header.items() if name not in skip]
+    out += [f"- experiment: {experiment}", f"- simd: {SIMD_ID[experiment]}",
+            f"- prediction: {manifest['prediction']}", f"- run_id: {manifest['run_id']}",
+            "- instruction_sets: " + "; ".join(f"{k}: {isa_of(experiment, k)}" for k in kernels),
+            f"- arch: {records[0]['variant']['arch']}",
+            f"- processes: {len(records)} published, {len(withdrawn)} withdrawn",
+            f"- messages: {records[0]['mix']['messages']:,}",
+            f"- peak_rss: {peak_rss(records, stderrs)}",
+            f"- measure_load_start: {lines[0][0]}", f"- measure_load_end: {lines[-1][1]}",
+            f"- run_started: {timestamp(lines[0][0])}",
+            f"- run_finished: {timestamp(lines[-1][1])}"]
+    if host == MAC:
+        out.append(f"- interference: {INTERFERENCE}")
+    if host in UNAVAILABLE and events:
+        out.append(f"- unavailable: {UNAVAILABLE[host]}")
+    out += [f"- summary: {summary}", "", "## What was run", "",
+            METHOD.get(experiment, METHOD["paired"]), ""]
+    if events:
+        out += ["Counted on this host, over each whole timed pass: "
+                + ", ".join(SHORT[event] for event in events)
+                + (", user and kernel together (thread_selfcounts)." if host == MAC else "."),
+                ""]
+    out += ["## Results", ""]
+    out += results
+    out += ["", "## Finding", ""]
+    out += found
+    out += ["", "## Every timed pass", "",
+            "One row a timed pass, in the order run. Each counter is the pass's whole count; "
+            "the fold is what the pass computed, and passes of one mode that compute the same "
+            "thing agree in it on every kernel. Every figure above is worked from these rows.",
+            ""]
+    out += pass_table(rows, events)
+    out += ["", "## Withdrawn processes", ""]
+    if withdrawn:
+        out += [f"- `{entry['variant']}`, repetition {entry['repetition']}: {entry['why']}"
+                for entry in withdrawn]
+    else:
+        out += ["None."]
+    out += ["", "## What this does not show", "",
+            *([CAVEATS[experiment]] if experiment in CAVEATS and experiment != "e11" else []),
+            CAVEATS["e11" if experiment == "e11" else "default"]]
+    if host == DEBIAN:
+        checks = [manifest.get("machine_check_before"), manifest.get("machine_check_after")]
+        if not all(isinstance(text, str) for text in checks):
+            raise ReportError("a debian run needs the machine check before and after")
+        out += ["", "## machine_check output", "", "Before the first process and after the last.",
+                "", "```"]
+        out += [text.strip() for text in checks]
+        out += ["```"]
+    out += ["", "## measure.sh load lines", "", "```"]
+    out += [line for pair in lines for line in pair]
+    out += ["```", "", "## Command", "", "```", command_line(experiment, host, day), "```", ""]
+    return "\n".join(out), summary
+
+
+def command_line(experiment, host, day):
+    if experiment == "e11":
+        return ("measure.sh /usr/bin/time -l node scripts/simd_wasm_e11.mjs --module "
+                f"build/wasm/bench/wasm/itch_e11.mjs --input <raw>/{day}.NASDAQ_ITCH50 "
+                "--kernel scalar|wasm --commit <commit> --out <raw>/VARIANT-N.json")
+    prefix = "measure.sh" if host == DEBIAN else "measure.sh /usr/bin/time -l"
+    core = " --core 4" if host == DEBIAN else ""
+    return (f"{prefix} build/release/bench/bench_kernels --input <raw>/{day}.NASDAQ_ITCH50 "
+            f"--experiment {experiment} --kernel K [--width W] [--form F] [--watchlist N]{core} "
+            "--commit <commit> --out <raw>/VARIANT-N.json  (scripts/simd_driver.py)")
+
+
+def check_published(text, name=None):
+    """What is wrong with a published file, read alone, as (code, detail) pairs."""
+    fields = check_results.parse_header(text)
+    if not fields:
+        return [("header-missing", "no Header section")]
+    found = []
+    host = fields.get("host")
+    experiment = fields.get("experiment")
+    if host not in EVENTS or experiment not in TITLES:
+        return [("host-label", f"{host!r}, experiment {experiment!r}")]
+    if name is not None:
+        match = FILE_NAME.match(name)
+        if match is None or match.group(1) != experiment or match.group(2) != HOST_FILE[host]:
+            found.append(("host-label", f"{name} holds {experiment} on {host}"))
+    if fields.get("simd") != SIMD_ID[experiment]:
+        found.append(("simd-id", repr(fields.get("simd"))))
+    if not re.match(r"^[0-9a-f]{12} ", fields.get("commit", "")):
+        found.append(("commit-missing", repr(fields.get("commit"))))
+    found += list(check_results.check_load(fields))
+    found += list(check_results.check_private(text, fields))
+    if host == MAC and fields.get("interference") != INTERFERENCE:
+        found.append(("sampler-rule-unsaid", repr(fields.get("interference"))))
+    if host == MAC and fields.get("pinning", "").startswith("pinned"):
+        found.append(("pin-claimed", "macOS cannot pin"))
+    if host == DEBIAN:
+        if not re.match(r"pinned to core 4: .*read back \[4\]$", fields.get("pinning", "")):
+            found.append(("pin-failed", fields.get("pinning", "no field")))
+        if fields.get("governor") != "performance":
+            found.append(("governor", fields.get("governor", "no field")))
+        output = check_results.section(text, "machine_check output") or ""
+        if output.count("machine_check: passed") != 2 or "machine_check: FAIL" in output:
+            found.append(("machine-check-failed", "wanted a passing check before and after"))
+    events = events_of(host, experiment)
+    try:
+        rows = parse_pass_table(text, events)
+        if not rows:
+            return found + [("table-missing", "no timed pass in the table")]
+        kernels = sorted({kernel_of(experiment, row["variant"]) for row in rows},
+                         key=list(ISA).index)
+        isa = "; ".join(f"{k}: {isa_of(experiment, k)}" for k in kernels)
+        if fields.get("instruction_sets") != isa:
+            found.append(("isa-unsaid", f"{fields.get('instruction_sets')!r} against {isa!r}"))
+        results, lines, summary = computed_sections(experiment, rows, events, parse_runs(text))
+    except (ReportError, KeyError, ValueError, ZeroDivisionError, IndexError,
+            statistics.StatisticsError) as error:
+        return found + [("table-unusable", repr(error))]
+    if check_results.section(text, "Results") != "\n" + "\n".join(results) + "\n\n":
+        found.append(("results-differ", "the results are not what the table of passes gives"))
+    if check_results.section(text, "Finding") != "\n" + "\n".join(lines) + "\n\n":
+        found.append(("finding-differs", "the finding is not what the table of passes gives"))
+    if fields.get("summary") != summary:
+        found.append(("summary-differs", f"{fields.get('summary')!r} against {summary!r}"))
+    return found
+
+
+def report_violations(violations):
+    for code, detail in violations:
+        print(f"simd_report: FAIL {code}: {detail}")
+    return 1 if violations else 0
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--run-dir", type=Path)
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--run-log", type=Path)
+    parser.add_argument("--check", type=Path)
+    args = parser.parse_args(argv)
+    if args.check is None and (args.run_dir is None or args.out is None):
+        parser.error("wanted --check FILE, or --run-dir and --out")
+    try:
+        if args.check is not None:
+            violations = check_published(args.check.read_text(encoding="utf-8"),
+                                         args.check.name)
+            if violations:
+                return report_violations(violations)
+            print(f"simd_report: ok {args.check.name}")
+            return 0
+        manifest, records, stderrs, sampler = read_run(args.run_dir)
+        text, summary = render(manifest, records, stderrs, sampler)
+        violations = check_published(text, args.out.name)
+        if violations:
+            return report_violations(violations)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(text, encoding="utf-8")
+        if args.run_log:
+            commit = check_results.parse_header(text)["commit"]
+            with open(args.run_log, "a", encoding="utf-8") as log:
+                log.write(f"| {manifest['run_id']}_report | {manifest['prediction']} | {commit} "
+                          f"| {manifest['host_os']} | published: {summary} |\n")
+        print(f"simd_report: wrote {args.out.name}")
+        return 0
+    except (ReportError, OSError, ValueError, KeyError, IndexError, TypeError,
+            ZeroDivisionError) as error:
+        print(f"simd_report: unusable input: {error!r}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

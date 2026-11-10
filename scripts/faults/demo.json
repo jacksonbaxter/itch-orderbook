@@ -260,8 +260,8 @@
       "mutations": [
         {
           "file": "scripts/check_predictions.py",
-          "old": "\"spsc_*.md\", \"wasm_*.md\")",
-          "new": "\"spsc_*.md\")"
+          "old": "\"spsc_*.md\", \"wasm_*.md\", ",
+          "new": "\"spsc_*.md\", "
         }
       ],
       "command": [

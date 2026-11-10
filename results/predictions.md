@@ -376,3 +376,66 @@ included.
 - Prediction, throughput: between 17.5 and 22.5 M messages/s, most likely near 20 M, so T-BOOK-4 met with at least 3 M messages/s to spare: 01302019 has 37% more messages and a larger live book than 12302019, so a little more of each message misses the cache. Mean service time between 44 and 57 ns a message. CV under 2%.
 - Prediction, latency: p99 291.7 ns and p99.9 583.3 ns, each within one 41.667 ns quantum; p50 and p90 below the floor.
 - Prediction, memory: book memory between 600 and 950 MiB; peak RSS between 11.8 and 13.5 GiB, the day in RAM counted.
+
+## P-0601: E1, one big-endian field, scalar against NEON, by width, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment field --width W` for W in 2, 4, 6 and 8, on `--kernel scalar` (memcpy and `std::byteswap`: one load and REV, with a shift for 2 and 6 bytes) and `--kernel neon` (one 8-byte load into a D register, REV64, a move to a general register and a shift), from the release build, through `scripts/simd_driver.py` under `measure.sh` and `/usr/bin/time -l`, 3 repetitions in fresh processes, their order turned each repetition, on `macOS (M4 Max)`, unpinned, under the sampler rule (a process with another above 20% CPU or a sampler gap over 5 s is withdrawn with its own run-log row and rerun). Each process maps the whole of `12302019.NASDAQ_ITCH50`, reads it resident, then walk, work, work, walk; the field is read from every op message (A, F, E, C, X, D, U) at a fixed offset inside its first 19 bytes. The figure is (work − walk) over the ops, in ns and in cycles and instructions (thread_selfcounts, user and kernel). Instruction set of every figure: scalar AArch64 base, NEON 128-bit.
+- How a winner is called (simd_report.py, for every SIMD prediction here): lower is better; A beats B when A's median over the repetitions is below B's and A's largest repetition is below B's smallest; otherwise a tie.
+- What was seen before this was written: `bench_kernels` on the 3,330-message oracle fixture, every experiment, both kernels, giving the same folds; the whole day's `verify` on NEON, untimed, 263,241,937 ops compared with scalar and no mismatch, peak RSS 7.69 GiB; and E12's compile of `bench/asm` (P-0610): clang 23 turns NEON's `field<6>` (8-byte vector load, REV64, lane move, shift) into the scalar `ldr x`, `rev`, `lsr`, three instructions, where scalar's exact 6-byte read is two loads, an ORR, REV and LSR. So at widths 2, 4 and 8 the two kernels should compile to the same scalar code, and at 6 NEON's is the 8-byte over-read. No timing of the day.
+- Prediction: a tie at every width by cycles a field, the two kernels' code being the same scalar code at 2, 4 and 8, and one load against two at 6, which the loop hides; E1 not refuted. If NEON beats scalar at width 6, that is the over-read beating the exact read, not a vector unit, and the file will say so. The field costs both kernels under 1 ns an op over the walk.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB, the mapped day counted.
+
+## P-0602: E2, Add Order decode into a 32-byte record, scalar against NEON, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment decode` on `scalar` and `neon`, as P-0601 otherwise: every Add Order decoded into a ring of 64 records, no consumer; walk, work, work, walk; (work − walk) over the Add Orders.
+- What was seen before this was written: E12's compile (P-0610), clang 23 -O3 arm64: scalar `add_fields` 26 instructions, 8 loads and 6 REVs; NEON's 11, 3 window loads and 2 constant loads, 2 TBLs and one store pair. The fixture and the verify run as in P-0601.
+- Prediction: NEON beats scalar, by under the 2.33× the instruction-table floor gives (simd.md, SIMD-24): scalar's cycles an Add Order over NEON's between 1.1 and 2.33. NEON's instructions an Add Order under scalar's. E2 not refuted.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0603: E3, every op decoded and consumed in integer registers, scalar against NEON, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment consume` on `scalar` and `neon`, as P-0601 otherwise: every op's `BookOp` decoded, its reference hashed to one of 65,536 slots, its shares added there and its price compared with the highest; (work − walk) over the ops.
+- Prediction: a tie, or scalar wins; NEON's gain under 10% if it wins (simd.md, SIMD-25: moving the fields from vector to general registers costs what the shuffle saved). E3 not refuted.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0604: E4, the parser on each kernel, whole and by op type, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment parse` on `scalar` and `neon`, as P-0601 otherwise: walk, all, A, F, E, C, X, D, U, all, walk. `all` is `parse_ops()` on the kernel, every op folded by a sink; a type's pass decodes only that type on the kernel.
+- Prediction: the whole parse differs by under 5% between the kernels, a tie by the rule; E4 not refuted (refuted only by NEON 10% or more faster). By type, Order Delete (`D`, reference and locate only) shows less difference between the kernels than Add Order (`A`), in ns an op.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0605: E5, Add Orders four at a time, and the day's run lengths, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment batch` on `scalar` and `neon`, as P-0601 otherwise: where four Add Orders come in a row, the kernel's `batch4` decodes them into one array a field (NEON: the four wire values side by side, one REV for each field); the rest one at a time on scalar code, the same for both. (work − walk) over the Add Orders. The day's run lengths, untimed: every message by the length of the run of one type it sits in, every Add Order by its run of Add Orders.
+- Prediction: a tie or a NEON loss; E5 not refuted. Between 10% and 50% of the day's Add Orders sit in runs of four or more Add Orders.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0606: E6, the frame walk alone, four ways, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment framing --form F`, F in length, byte, table and constant, scalar only (no kernel), as P-0601 otherwise: a warm-up and two timed walks, each adding every frame's type byte; no walk pass to subtract, the figure is ns, cycles and instructions a message.
+- Prediction: `length`, `byte` and `table` within 15% of each other, each between 0.5 and 2 ns a message, the frame-to-frame load chain setting the pace; `constant`, the switch on the type, slower than `length` by the rule, from mispredicted branches on the type. E6 not refuted (the two dependence forms differ).
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0607: E9, the watchlist filter, compare against bitset, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment filter`, watchlists of the 8 and the 64 stocks with the most Add Orders in the day; `--form compare` on `scalar` and `neon` (each Add Order's 8-byte stock against every listed one; NEON four compares of two keys an 8 keys) and `--form bitset` (the order's locate in a bitset filled from the day's Stock Directory messages), as P-0601 otherwise. (work − walk) over the Add Orders.
+- Prediction: the bitset beats both compares at 64 stocks, and beats or ties them at 8; NEON's compare beats scalar's at 64. Every form finds the same matches. E9 not refuted.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0608: E13, the 6-byte timestamp, four ways, on macOS, 12302019
+
+- Experiment: `bench_kernels --experiment timestamp --form F`, F in exact (6 bytes into a zeroed 8, one swap: what the parser ships), split (a 4-byte and a 2-byte read, merged), overread (8 bytes, swapped, shifted down 16) and underread (8 bytes from the tracking number, swapped, masked), scalar only, as P-0601 otherwise; every message's timestamp. (work − walk) over the messages.
+- Prediction: every form within 0.3 ns a message of `exact`; `split` and `overread` tie by the rule, so E13 is refuted (simd.md expected the over-read to win by a small margin). Every form gives the same timestamps.
+- Prediction, memory: peak RSS between 7.6 and 8.2 GiB.
+
+## P-0609: E11, Add Order decode in WebAssembly, scalar against SIMD128, in node, on macOS, 12302019
+
+- Experiment: `node scripts/simd_wasm_e11.mjs` on the Emscripten release build's `itch_e11` module (`em++ -O3 -msimd128`, a fixed 128 MiB memory), `--kernel scalar` (`std::byteswap`, which core WebAssembly has no instruction for) and `--kernel wasm` (constant `i8x16.shuffle`), through `scripts/simd_driver.py --experiment e11` under `measure.sh` and `/usr/bin/time -l`, 3 repetitions in fresh processes, under the sampler rule. The day is copied into a 64 MiB window a piece at a time; walk, work, work, walk, each timed with `performance.now()` around every piece's pass and summed. Wall clock only.
+- Prediction: SIMD128 beats scalar, by between 1.2 and 3 times in ns an Add Order: the opposite sign to native NEON's in E3 and E4, and the reason the scalar byte swap has no instruction here (E12's wasm32 listing shows shifts and ORs). E11 not refuted.
+- Prediction, memory: peak RSS between 0.2 and 0.6 GiB.
+
+## P-0610: E12, the kernels' decode as each compiler emits it, on macOS
+
+- Experiment: `scripts/simd_asm_audit.py collect` through `scripts/simd_driver.py --experiment asm --repetitions 1` under `measure.sh`, `/usr/bin/time -l` and the sampler rule: `bench/asm/` compiled with -S by clang 23, Apple clang and em++, scalar at -O2 and -O3 with the SLP vectorizer on and off, for arm64, x86-64 (-march=x86-64, Linux's baseline), x86-64 at clang's macOS default (penryn) and wasm32 (-msimd128); each vector kernel at -O3. GCC: none on this Mac.
+- What was seen before this was written: everything this run will count. `simd_asm_audit.py collect` was run once by hand, outside the driver, to test the tool, and its counts were read: scalar `add_fields` 26 instructions and 8 loads on arm64 under both clangs at every flag set, 30 on x86-64 at -march=x86-64, 27 with 3 on SIMD registers (a MOVD and PSHUFB for locate and tracking number) at the macOS default with the SLP vectorizer on and 30 with it off, 170 on wasm32 with no byte reverse; NEON's `field6` compiled to scalar code. So this is a record, not a test, and is labelled so.
+- Prediction: the same counts again, compiler output being deterministic; E12 not refuted, by the macOS x86-64 default alone; "scalar" therefore means the build's flags, frozen: -O3 with no -march, where no compiler here merges or vectorises it.

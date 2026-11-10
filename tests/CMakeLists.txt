@@ -61,6 +61,26 @@ target_include_directories(test_bench_replay PRIVATE "${PROJECT_SOURCE_DIR}/benc
 itch_add_test(test_book_variants test_book_variants.cpp)
 target_include_directories(test_book_variants PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 
+# The parsing kernels. Each kernel this build has is its own ctest entry, so that one the CPU
+# cannot run shows as skipped, never as passed, and an entry whose filter matches nothing
+# fails. test_kernels runs the rest: selection, the parser's scalar tail, the scalar oracle.
+add_executable(test_kernels test_kernels.cpp)
+target_link_libraries(test_kernels PRIVATE itch_test_support GTest::gtest_main)
+list(JOIN ITCH_KERNELS ", " itch_expected_kernels)
+target_compile_definitions(test_kernels PRIVATE
+  "ITCH_ORACLE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle\""
+  "ITCH_EXPECTED_KERNELS=\"${itch_expected_kernels}\"")
+itch_apply_options(test_kernels)
+add_test(NAME test_kernels COMMAND test_kernels --gtest_filter=Kernels.*)
+set_tests_properties(test_kernels PROPERTIES LABELS unit)
+foreach(kernel ${ITCH_KERNELS})
+  add_test(NAME test_kernels_${kernel}
+    COMMAND test_kernels "--gtest_filter=Built/KernelTest.*/${kernel}")
+  set_tests_properties(test_kernels_${kernel} PROPERTIES LABELS unit
+    SKIP_REGULAR_EXPRESSION "\\[  SKIPPED \\]"
+    FAIL_REGULAR_EXPRESSION "Running 0 tests")
+endforeach()
+
 if(ITCH_BUILD_BENCH)
   add_test(NAME test_bench_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_cli.py"
@@ -84,8 +104,12 @@ if(ITCH_BUILD_BENCH)
             "$<TARGET_FILE:bench_spsc>" "$<TARGET_FILE:bench_pipeline>"
             "${CMAKE_CURRENT_BINARY_DIR}/bench_spsc_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
+  add_test(NAME test_bench_kernels_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_kernels_cli.py"
+            "$<TARGET_FILE:bench_kernels>" "${CMAKE_CURRENT_BINARY_DIR}/bench_kernels_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
   set_tests_properties(test_bench_cli test_bench_backtest_cli test_bench_counts_cli
-    test_bench_variants_cli test_bench_spsc_cli PROPERTIES LABELS unit)
+    test_bench_variants_cli test_bench_spsc_cli test_bench_kernels_cli PROPERTIES LABELS unit)
 endif()
 
 if(ITCH_BUILD_TOOLS)

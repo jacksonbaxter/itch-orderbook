@@ -100,15 +100,22 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [x] Handle what the spec omits: Market Category `M` (DS-64), test symbols (DS-65), round lots other than 100 (DS-66), zero-share and zero-price `Q` (DS-69), `X` after system event `E` (DS-71). Counted on both days by `itch_census`. `M` and post-`E` `X` occur on neither, so fixtures alone exercise them. See NOTES.md, 2026-11-02.
 
 ### SIMD (both architectures, same CMake, no code change)
-- [ ] One kernel header per ISA in `include/itch/kernels/`: `scalar`, `neon`, `ssse3`, `avx2`, `avx512vbmi`, `wasm`, each in its own namespace. Tests compare every kernel with `scalar` on random and real bytes.
-- [ ] arm64: compile-time only, NEON guaranteed, no dispatch code.
-- [ ] x86-64: whole hot loop inside a `target` region, selected once at start with `__builtin_cpu_supports`. No `-march=native` in the default build.
-- [ ] `--kernel={scalar,neon,ssse3,avx2,avx512vbmi,wasm,auto}`: all comparisons in one binary on one dataset. An unsupported kernel exits with an error, never a silent fallback.
-- [ ] Kernels declare `kOverread`. The parser takes the scalar path near the end of the mapped range.
-- [ ] WASM kernel uses `wasm_simd128.h` directly. It has no byte-reverse in core, so the sign of the result may flip (E11).
-- [ ] Experiments E1 to E9, E11 to E13 from `simd.md`. Record the instruction set of every number. NEON and AVX2 are different experiments.
-- [ ] E10 needs a Skylake-family part. Zen 1 cannot show it. Report as not measured.
-- [ ] Say which wins, and explain with counters. A tie or a SIMD loss is the finding.
+- [ ] One kernel header per ISA in `include/itch/kernels/`: `scalar`, `neon`, `ssse3`, `avx2`, `avx512vbmi`, `wasm`, each in its own namespace. Tests compare every kernel with `scalar` on random and real bytes. Built, with every header and `tests/test_kernels.cpp` (one ctest entry for each kernel; a kernel the CPU lacks shows as skipped). `scalar` and `neon` pass on the Mac, and `wasm` passes against scalar in node (`itch_wasm_kernels_smoke`). Left: the x86 entries have never run, since there is no Rosetta and no GCC on the Mac. They run first in CI's two x86-64 Linux jobs, and on `debian`, where `avx512vbmi` is always skipped (NOTES.md, "SIMD parsing kernels").
+- [x] arm64: compile-time only, NEON guaranteed, no dispatch code. CMake's arch directory (`include/itch/kernels/arch/arm64/`) names scalar and NEON, and there is no `#if` and no runtime check.
+- [ ] x86-64: whole hot loop inside a `target` region, selected once at start with `__builtin_cpu_supports`. No `-march=native` in the default build. Built: each kernel's `run()` sits under `[[gnu::target]]` with the work `always_inline`, and clang's x86-64 output shows the loop inlined with no call. Left: it has never run (see above).
+- [x] `--kernel={scalar,neon,ssse3,avx2,avx512vbmi,wasm,auto}`: all comparisons in one binary on one dataset. An unsupported kernel exits with an error, never a silent fallback. `bench_kernels` exits 2 with the reason (unknown, not built, or what the CPU lacks), writes no record, and has `--list-kernels`; `tests/test_bench_kernels_cli.py` checks it.
+- [x] Kernels declare `kOverread`. The parser takes the scalar path near the end of the mapped range. Every kernel declares 0 except AVX-512 VBMI, which declares 45. `parse_ops()` hands a message within `kOverread` of the end to scalar and counts it, and a guard-page test covers each op type as the last frame.
+- [x] WASM kernel uses `wasm_simd128.h` directly. It has no byte-reverse in core, so the sign of the result may flip (E11). E11 (P-0609): SIMD128 is 2.08 times scalar in node. The sign matches native E2, and is flipped against native's Add Order inside the parse loop (`results/simd_e11_mac_12302019.md`).
+- [ ] Experiments E1 to E9, E11 to E13 from `simd.md`. Record the instruction set of every number. NEON and AVX2 are different experiments. Done on the Mac: E1 to E6, E9, E12 and E13, NEON against scalar, and E11 in node (P-0601 to P-0610, `results/simd_*_mac*.md`). E7 and E8 were done earlier. Left: the x86 kernels (SSSE3, AVX2) on `debian`, and E12's GCC column. The commands are in NOTES.md.
+- [x] E10 needs a Skylake-family part. Zen 1 cannot show it. Report as not measured. Reported as not measured in NOTES.md, "SIMD parsing kernels".
+- [ ] Say which wins, and explain with counters. A tie or a SIMD loss is the finding. On the Mac:
+  - NEON wins a decode into memory (E2, 1.94 times).
+  - The gain shrinks to 7.6% in integer registers (E3) and 6.6% for the whole parser (E4), while NEON is slower on every op type alone.
+  - Scalar wins the four-wide batch (E5). The bitset beats any compare (E9).
+  - With cycles, instructions and E12's listings, NOTES.md has the explanation.
+  - The default stays scalar.
+
+  Left: the x86 answer, on `debian`, with branch and cache counters.
 
 ### Book
 - [x] Order lookup: hash and paged direct index, measured apart from level search. References fit 32 bits on observed days, which is not a guarantee (DS-72). Both indexes are measured as arms on both hosts with each level arm held fixed: the paged index is 1.11 and 1.19 times the hash on `debian`, 1.15 and 1.24 on the Mac. Done: the lookup's own cost where it sits, a check pass against the real index less an answer pass from a recorded script (P-0020): the paged index 30.71 ns and the hash 32.50 ns a lookup on `debian`, 8.95 and 5.03 ns on the Mac (`results/lookup_{debian,mac}_12302019.md`).

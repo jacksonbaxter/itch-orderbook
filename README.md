@@ -17,7 +17,7 @@ Built:
 - The core of an event-driven backtester: simulated orders queued among the real ones by their order references, with latencies, a share ledger and per-fill fees, checked on 48 hand-worked scenarios and for lookahead. It has no market impact, by construction, and nothing about its speed is measured yet.
 - A browser demo in `docs/`: the same `FastBook` compiled to WebAssembly, replaying one symbol's extract that a script cuts locally, and T-WASM-1's harness, which times it against native on the Mac in Chrome for Testing.
 
-Not built: SIMD and the market maker. The oracle and trade rows below are the real book's. The harness-proof rows are the Phase 2 stub's, and say so. The book-design rows are from macOS, which cannot pin a thread, so none of them is a pinned figure and none stands for a Linux one, and from `debian`, pinned to core 4, where only the mapped runs with the top tracked are published, the second with hardware counters: every run with the day in memory there was refused, the last after the kernel swapped out one page, or never got the host. The default arm is the paged index with flat levels, the fastest on both hosts.
+Not built: the market maker. The SIMD kernel rows are the Mac's (NEON and, in node, WebAssembly SIMD128, each against scalar); the x86-64 kernels and their tests are built by x86-64 builds, CI's two x86-64 jobs among them, and their runs on `debian` are still to come. The oracle and trade rows below are the real book's. The harness-proof rows are the Phase 2 stub's, and say so. The book-design rows are from macOS, which cannot pin a thread, so none of them is a pinned figure and none stands for a Linux one, and from `debian`, pinned to core 4, where only the mapped runs with the top tracked are published, the second with hardware counters: every run with the day in memory there was refused, the last after the kernel swapped out one page, or never got the host. The default arm is the paged index with flat levels, the fastest on both hosts.
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` builds the release preset and runs every unit test on x86-64 Linux with GCC and Clang, arm64 Linux with GCC and arm64 macOS with Clang, and builds the parser and the demo's engine with Emscripten. The sanitizers, clang-tidy and the fault matrix run in `scripts/check.sh`, not in CI. [NOTES.md](NOTES.md) says what the first runs on GitHub found.
 
@@ -203,6 +203,16 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 | E8: prefetch look-ahead on the book build, debian, 12302019 | debian | best look-ahead D=16 at +16.41% over D=0; E8 not refuted | `54e5dc3b4938` | [results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md) |
 | E8: prefetch look-ahead on the book build, mac, 12302019 | macOS (M4 Max) | best look-ahead D=4 at -18.01% over D=0; E8 refuted (under 10% at every D) | `fde07d41bf28` | [results/prefetch_mac_12302019.md](results/prefetch_mac_12302019.md) |
 | Flamegraph: book replay, paged-flat on macOS (M4 Max), 12302019 | macOS (M4 Max) | 19,118 samples, wall-clock stacks every 1 ms, the hottest frame `itch::FastBook<…>::apply` at 38.24% self | `5a16936a14e8` | [results/profile_paged-flat_mac_12302019.md](results/profile_paged-flat_mac_12302019.md) |
+| E12: the kernels' decode as each compiler emits it, mac | macOS (M4 Max) | scalar add_fields merged or vectorised in 2 of 24 configurations; SLP off changes 2 scalar functions; E12 not refuted | `28f5fd6d0014` | [results/simd_asm_mac.md](results/simd_asm_mac.md) |
+| E5: Add Orders four at a time, and the day's run lengths, mac, 12302019 | macOS (M4 Max) | scalar beats neon (neon 3.99 against scalar 3.68 cycles an Add Order); E5 not refuted | `3139854b4611` | [results/simd_batch_mac_12302019.md](results/simd_batch_mac_12302019.md) |
+| E3: every op decoded and consumed in integer registers, mac, 12302019 | macOS (M4 Max) | neon beats scalar (neon 10.56 against scalar 11.67 cycles an op); E3 not refuted | `86df0a80e649` | [results/simd_consume_mac_12302019.md](results/simd_consume_mac_12302019.md) |
+| E2: Add Order decode into a 32-byte record, no consumer, mac, 12302019 | macOS (M4 Max) | neon beats scalar (neon 1.01 against scalar 1.97 cycles an Add Order); E2 not refuted | `ecee4a126b42` | [results/simd_decode_mac_12302019.md](results/simd_decode_mac_12302019.md) |
+| E11: Add Order decode in WebAssembly, scalar against SIMD128, in node, mac, 12302019 | macOS (M4 Max) | wasm beats scalar (wasm 1.11 against scalar 2.31 ns an Add Order); E11 not refuted | `2c4136ec2116` | [results/simd_e11_mac_12302019.md](results/simd_e11_mac_12302019.md) |
+| E1: one field, scalar against vector, by width, mac, 12302019 | macOS (M4 Max) | 2 bytes neon-w2 and scalar-w2 tie, 4 bytes scalar-w4 beats neon-w4, 6 bytes neon-w6 beats scalar-w6, 8 bytes neon-w8 beats scalar-w8; E1 refuted | `07c1bb1bab05` | [results/simd_field_mac_12302019.md](results/simd_field_mac_12302019.md) |
+| E9: the watchlist filter, compare against bitset, mac, 12302019 | macOS (M4 Max) | 8 stocks bitset 1.00 against neon compare 2.23, 64 stocks bitset 1.00 against neon compare 12.11 cycles an Add Order; E9 not refuted | `6102fabfd16f` | [results/simd_filter_mac_12302019.md](results/simd_filter_mac_12302019.md) |
+| E6: the frame walk alone, four ways, mac, 12302019 | macOS (M4 Max) | fastest walk byte; length against constant differ; E6 not refuted | `8621cf047934` | [results/simd_framing_mac_12302019.md](results/simd_framing_mac_12302019.md) |
+| E4: the parser by kernel, whole and by op type, mac, 12302019 | macOS (M4 Max) | neon beats scalar (neon 17.57 against scalar 18.79 cycles a message); E4 not refuted | `e3346335bed9` | [results/simd_parse_mac_12302019.md](results/simd_parse_mac_12302019.md) |
+| E13: the 6-byte timestamp, four ways, mac, 12302019 | macOS (M4 Max) | fewest cycles a message: underread; split against overread differ; E13 not refuted | `3903f15d62ec` | [results/simd_timestamp_mac_12302019.md](results/simd_timestamp_mac_12302019.md) |
 
 The SPSC ring. Each row is one comparison from a results file's targets table: a ratio of two of its medians, or for T-SPSC-3 the median of paired ratios, against BENCHMARKS.md's bar. Every bar was set on x86, so a macOS row says the host differs, and an unpinned Mac's cross-core figures are weak evidence.
 
@@ -390,6 +400,29 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0502-20261105T175851Z` | `P-0502` | `9d5d4db0d16d` | Darwin | `stopped by SIGTERM at repetition 1, paged-flat, timed process; nothing from it is published; the row was written by the driver as it stopped; typed after the driver's words` |
 | `P-0502-20261105T192119Z` | `P-0502` | `15291031b1c5` | Darwin | `withdrawn` |
 | `P-0502-20261105T192630Z` | `P-0502` | `28c31ea79704` | Darwin | `withdrawn` |
+| `P-0601-20261106T031311Z` | `P-0601` | `6588fa1fc1e3` | Darwin | `refused` |
+| `P-0601-20261106T031646Z` | `P-0601` | `07c1bb1bab05` | Darwin | `recorded` |
+| `P-0601-20261106T031646Z_report` | `P-0601` | `07c1bb1bab05` | Darwin | `published` |
+| `P-0602-20261106T032041Z` | `P-0602` | `ecee4a126b42` | Darwin | `recorded` |
+| `P-0602-20261106T032041Z_report` | `P-0602` | `ecee4a126b42` | Darwin | `published` |
+| `P-0603-20261106T032148Z` | `P-0603` | `86df0a80e649` | Darwin | `recorded` |
+| `P-0604-20261106T032300Z` | `P-0604` | `e3346335bed9` | Darwin | `recorded` |
+| `P-0603-20261106T032148Z_report` | `P-0603` | `86df0a80e649` | Darwin | `published` |
+| `P-0604-20261106T032300Z_report` | `P-0604` | `e3346335bed9` | Darwin | `published` |
+| `P-0605-20261106T032513Z` | `P-0605` | `3139854b4611` | Darwin | `recorded` |
+| `P-0606-20261106T032625Z` | `P-0606` | `8621cf047934` | Darwin | `recorded` |
+| `P-0605-20261106T032513Z_report` | `P-0605` | `3139854b4611` | Darwin | `published` |
+| `P-0606-20261106T032625Z_report` | `P-0606` | `8621cf047934` | Darwin | `published` |
+| `P-0607-20261106T032808Z` | `P-0607` | `6102fabfd16f` | Darwin | `recorded` |
+| `P-0608-20261106T033249Z` | `P-0608` | `3903f15d62ec` | Darwin | `recorded` |
+| `P-0607-20261106T032808Z_report` | `P-0607` | `6102fabfd16f` | Darwin | `published` |
+| `P-0608-20261106T033249Z_report` | `P-0608` | `3903f15d62ec` | Darwin | `published` |
+| `P-0609-20261106T033507Z` | `P-0609` | `f7bf6842c202` | Darwin | `recorded` |
+| `P-0609-20261106T033507Z_report` | `P-0609` | `f7bf684` | Darwin | `not published` |
+| `P-0609-20261106T033637Z` | `P-0609` | `2c4136ec2116` | Darwin | `recorded` |
+| `P-0609-20261106T033637Z_report` | `P-0609` | `2c4136ec2116` | Darwin | `published` |
+| `P-0610-20261106T033824Z` | `P-0610` | `28f5fd6d0014` | Darwin | `recorded` |
+| `P-0610-20261106T033824Z_report` | `P-0610` | `28f5fd6d0014` | Darwin | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
