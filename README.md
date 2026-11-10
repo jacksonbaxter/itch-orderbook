@@ -192,6 +192,9 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 
 | What | Host | Summary | Commit | File |
 |---|---|---|---|---|
+| Misses by message type and by the age of the order named, hash-flat on debian, 12302019 | debian | floor on DRAM demand fills a message naming an order: 0.601 under 1 ms old, 4.954 at 1 s and over; 54.5% of those messages name an order 1 s old or more | `31508858939c` | [results/counters_by_age_hash-flat_debian_12302019.md](results/counters_by_age_hash-flat_debian_12302019.md) |
+| Misses by message type and by the age of the order named, identity-flat on debian, 12302019 | debian | floor on DRAM demand fills a message naming an order: 0.461 under 1 ms old, 5.086 at 1 s and over; 54.5% of those messages name an order 1 s old or more | `31508858939c` | [results/counters_by_age_identity-flat_debian_12302019.md](results/counters_by_age_identity-flat_debian_12302019.md) |
+| Misses by message type and by the age of the order named, paged-flat on debian, 12302019 | debian | floor on DRAM demand fills a message naming an order: 0.049 under 1 ms old, 4.373 at 1 s and over; 54.5% of those messages name an order 1 s old or more | `31508858939c` | [results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md) |
 | The Zen 1 counter table on debian | debian | of 37 tried, 27 counts, 1 counts zero, 7 not supported, 2 refused | `5a16936a14e8` | [results/counters_zen1_events_debian.md](results/counters_zen1_events_debian.md) |
 | E7: dispatch form, debian, 12302019 | debian | fastest form threaded; branch misses a message spread 0.0702 across the book forms; E7 not refuted | `54e5dc3b4938` | [results/dispatch_debian_12302019.md](results/dispatch_debian_12302019.md) |
 | E7: dispatch form, mac, 12302019 | macOS (M4 Max) | fastest form threaded; E7 not judged on this host, no branch-miss counter | `fde07d41bf28` | [results/dispatch_mac_12302019.md](results/dispatch_mac_12302019.md) |
@@ -487,6 +490,20 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0023-20261110T160609Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
 | `P-0023-20261110T160729Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
 | `P-0023-20261110T103318Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `published` |
+| `P-0025-20261110T134729Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
+| `P-0025-20261110T151027Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
+| `P-0025-20261110T151358Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
+| `P-0025-20261110T151539Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
+| `P-0025-20261110T151822Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
+| `P-0025-20261110T152213Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
+| `P-0025-20261110T152850Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
+| `P-0025-20261110T154831Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
+| `P-0025-20261110T155201Z` | `P-0025` | `31508858939c` | Linux | `stopped by hand before it ran` |
+| `P-0025-20261110T183655Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
+| `P-0025-20261110T202336Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
+| `P-0025-20261110T134502Z` | `P-0025` | `31508858939c` | Linux | `published` |
+| `P-0025-20261110T153144Z` | `P-0025` | `31508858939c` | Linux | `published` |
+| `P-0025-20261110T154538Z` | `P-0025` | `31508858939c` | Linux | `published` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
