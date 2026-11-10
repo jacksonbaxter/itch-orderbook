@@ -502,6 +502,48 @@
       }
     },
     {
+      "id": "simd-asm-audit-mac-says-debian",
+      "breaks": "The Mac's E12 file says each vector kernel was compiled on debian under each compiler",
+      "check": "test_simd_asm_audit.py test_each_host_gets_its_own_method_and_a_wrong_one_is_caught",
+      "mutations": [
+        {
+          "file": "scripts/simd_asm_audit.py",
+          "old": "    vector = (\"each vector kernel once, at the build's -O3\" if host == MAC else\n",
+          "new": "    vector = (\"each vector kernel once, at the build's -O3\" if False else\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_asm_audit.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_each_host_gets_its_own_method_and_a_wrong_one_is_caught",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-asm-audit-method-unchecked",
+      "breaks": "simd_asm_audit --check stops holding the What was run paragraph to the host's own wording",
+      "check": "test_simd_asm_audit.py test_each_host_gets_its_own_method_and_a_wrong_one_is_caught",
+      "mutations": [
+        {
+          "file": "scripts/simd_asm_audit.py",
+          "old": "    if check_results.section(text, \"What was run\") != \"\\n\" + what_was_run(host) + \"\\n\\n\":\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_asm_audit.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_each_host_gets_its_own_method_and_a_wrong_one_is_caught",
+        "exit": 1
+      }
+    },
+    {
       "id": "simd-asm-audit-linux-gets-mac-targets",
       "breaks": "On debian the E12 audit compiles the Mac's targets, its arm64 configuration in fact the host's x86-64",
       "check": "test_simd_asm_audit.py test_on_linux_each_compiler_targets_x86_64_linux_with_its_vector_kernels",

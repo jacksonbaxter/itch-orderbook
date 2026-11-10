@@ -335,6 +335,20 @@ def configs_from_table(text):
     return list(configs.values())
 
 
+def what_was_run(host):
+    """The method paragraph, in each host's own words: on the Mac each vector kernel is
+    compiled once, by clang; on debian under each compiler, GCC included."""
+    vector = ("each vector kernel once, at the build's -O3" if host == MAC else
+              "each vector kernel at the build's -O3, on debian under each compiler")
+    return ("`bench/asm/` holds one extern \"C\" function an operation for each kernel, the "
+            "kernel inlined into it inside its target region: `add_fields` (an Add Order into "
+            "the 32-byte record of E2), `book_op_add` (an Add Order into the book's op), "
+            "`field6` (E1's 6-byte field) and `batch4` (E5). Each is compiled with -S and its "
+            "instructions counted. The scalar kernel is compiled under every compiler here, at "
+            f"-O2 and -O3, with the SLP vectorizer on and off; {vector}. These are counts of "
+            "compiler output: no clock or counter is read.")
+
+
 def render(manifest, record, stderr, sampler):
     header = record["header"]
     if record["refusals"]:
@@ -363,15 +377,8 @@ def render(manifest, record, stderr, sampler):
            f"- run_finished: {simd_report.timestamp(end)}"]
     if host == MAC:
         out.append(f"- interference: {INTERFERENCE}")
-    out += [f"- summary: {summary}", "", "## What was run", "",
-            "`bench/asm/` holds one extern \"C\" function an operation for each kernel, the "
-            "kernel inlined into it inside its target region: `add_fields` (an Add Order into "
-            "the 32-byte record of E2), `book_op_add` (an Add Order into the book's op), "
-            "`field6` (E1's 6-byte field) and `batch4` (E5). Each is compiled with -S and its "
-            "instructions counted. The scalar kernel is compiled under every compiler here, at "
-            "-O2 and -O3, with the SLP vectorizer on and off; each vector kernel at the build's "
-            "-O3, on debian under each compiler. These are counts of compiler output: no clock or counter is read.",
-            "", "## Results", ""]
+    out += [f"- summary: {summary}", "", "## What was run", "", what_was_run(host), "",
+            "## Results", ""]
     out += table(configs)
     out += ["", "## Finding", ""] + found + ["", "## Listings", ""]
     out += listings(configs)
@@ -399,6 +406,8 @@ def check_published(text, name=None):
     found += list(check_results.check_private(text, fields))
     if host == MAC and fields.get("interference") != INTERFERENCE:
         found.append(("sampler-rule-unsaid", repr(fields.get("interference"))))
+    if check_results.section(text, "What was run") != "\n" + what_was_run(host) + "\n\n":
+        found.append(("method-differs", f"What was run is not {host}'s own wording"))
     configs = configs_from_table(text)
     if not configs:
         return found + [("table-missing", "no counts in the table")]

@@ -162,6 +162,16 @@ class SimdAsmAuditTest(unittest.TestCase):
         unsaid = text.replace("- interference: the sampler rule", "- interference: no", 1)
         self.assertIn("sampler-rule-unsaid", self.violations(unsaid))
 
+    def test_each_host_gets_its_own_method_and_a_wrong_one_is_caught(self):
+        mac, _ = self.render(configs(loads_o3=7))
+        self.assertIn("each vector kernel once, at the build's -O3.", mac)
+        self.assertNotIn("on debian", mac)
+        debian_words = "each vector kernel at the build's -O3, on debian under each compiler"
+        self.assertIn(debian_words, simd_asm_audit.what_was_run("debian"))
+        wrong = mac.replace("each vector kernel once, at the build's -O3", debian_words, 1)
+        self.assertIn("method-differs", self.violations(wrong))
+        self.assertNotIn("method-differs", self.violations(mac))
+
     def test_an_unquiet_or_refused_run_is_not_published(self):
         refused = record(configs())
         refused["refusals"] = ["no"]
