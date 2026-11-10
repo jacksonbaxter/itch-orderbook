@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <map>
 #include <optional>
 #include <span>
@@ -364,14 +365,44 @@ TEST(BenchCrossCore, NoOffsetFitsAClockThatWentBackwards) {
   EXPECT_EQ(bound.backwards, 2U);
 }
 
+// On a real machine, any two cores read one clock, so the bound holds zero. In a virtual
+// machine it need not: on 2026-11-10 a GitHub x86-64 runner gave a bound that held together
+// and left zero out, and passed on a rerun on another runner (NOTES.md, "The cross-core test on
+// shared runners"). There the trips still run, and the bound is printed and not judged.
 TEST(BenchCrossCore, TheLiveClocksAgreeAcrossTwoThreads) {
   std::vector<CrossCoreTrip> buffer(1'000);
   const CrossCoreRun run = check_cross_core(-1, -1, buffer);
   const OffsetBound bound = combine(run.self_started, run.peer_started);
-  EXPECT_TRUE(bound.consistent());
-  EXPECT_TRUE(bound.holds_zero());
   EXPECT_FALSE(run.self_pin.pinned);
+  if (under_hypervisor()) {
+    GTEST_SKIP() << "under a hypervisor, whose vCPUs promise no common clock: bound [" << bound.low
+                 << ", " << bound.high << "] ticks, " << bound.backwards
+                 << " trips backwards, fastest round trip " << bound.fastest_round_trip;
+  }
+  EXPECT_TRUE(bound.consistent()) << bound.low << " > " << bound.high;
+  EXPECT_TRUE(bound.holds_zero()) << "[" << bound.low << ", " << bound.high << "]";
 }
+
+#ifdef __aarch64__
+// No arm64 host is taken for a virtual machine, since its clock is one by the architecture.
+TEST(BenchCrossCore, AnArmHostIsNeverSkipped) { EXPECT_FALSE(under_hypervisor()); }
+#endif
+
+#if defined(__linux__) && defined(__x86_64__)
+// The CPUID bit is the one the kernel reads for the `hypervisor` flag in /proc/cpuinfo.
+TEST(BenchCrossCore, TheHypervisorBitIsTheKernelsFlag) {
+  std::ifstream cpuinfo{"/proc/cpuinfo"};
+  std::string line;
+  bool flagged = false;
+  while (std::getline(cpuinfo, line)) {
+    if (line.starts_with("flags")) {
+      flagged = (line + " ").find(" hypervisor ") != std::string::npos;
+      break;
+    }
+  }
+  EXPECT_EQ(under_hypervisor(), flagged);
+}
+#endif
 
 class Mapping {
  public:
