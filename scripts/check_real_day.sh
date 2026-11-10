@@ -64,11 +64,13 @@ for day, entry in json.load(open("scripts/data_manifest.json"))["days"].items():
 '
 }
 
-# The day's file, by the name the manifest gives it.
+# The day's unpacked file, by the name the manifest gives it (scripts/fetch_data.py's
+# unpacked_name).
 day_file() {
   python3 -B -c '
 import json, sys
-print("data/" + json.load(open("scripts/data_manifest.json"))["days"][sys.argv[1]]["name"])
+entry = json.load(open("scripts/data_manifest.json"))["days"][sys.argv[1]]
+print("data/" + entry.get("unpacked_name", entry["name"]))
 ' "$1"
 }
 

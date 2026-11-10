@@ -512,7 +512,7 @@ def whole_day_counts(dataset, sliced):
         return {}
     days = json.loads(MANIFEST.read_text(encoding="utf-8"))["days"]
     for entry in days.values():
-        if entry.get("name") == dataset:
+        if dataset in (entry.get("name"), entry.get("unpacked_name")):
             return entry.get("per_type_counts") or {}
     raise ReportError(f"no pinned day named {dataset!r} in {MANIFEST.name}")
 
@@ -520,7 +520,8 @@ def whole_day_counts(dataset, sliced):
 def day_key(dataset):
     """The day's key in the manifest, MMDDYYYY, by its file's name."""
     days = json.loads(MANIFEST.read_text(encoding="utf-8"))["days"]
-    keys = [key for key, entry in days.items() if entry.get("name") == dataset]
+    keys = [key for key, entry in days.items()
+            if dataset in (entry.get("name"), entry.get("unpacked_name"))]
     return keys[0] if keys else dataset.split(".", 1)[0]
 
 

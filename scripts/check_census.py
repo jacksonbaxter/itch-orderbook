@@ -147,7 +147,7 @@ def compare(census, entry):
 
 def run(args):
     entry = load_day(args.manifest, args.day)
-    path = Path(args.file) if args.file else REPO_ROOT / "data" / entry["name"]
+    path = Path(args.file) if args.file else REPO_ROOT / "data" / entry.get("unpacked_name", entry["name"])
     if sum(entry["per_type_counts"].values()) != entry["messages"]:
         raise CheckError(f"day {args.day}: the manifest's per-type counts do not sum to messages")
 

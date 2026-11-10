@@ -552,12 +552,20 @@ def check_free_space(data_dir, compressed, unpacked):
         raise FetchError(f"{free} bytes free in {data_dir}, {need} needed")
 
 
+def unpacked_name(day):
+    """The unpacked file's name: the manifest's unpacked_name if it gives one, else the name the
+    gzip file has without its .gz. Nasdaq names some days S<MMDDYY>-v50.txt, and macOS types a
+    .txt file as plain text, so Spotlight's text importer reads the whole binary day; such a
+    day is unpacked under a name in the other days' MMDDYYYY.NASDAQ_ITCH50 form instead."""
+    return day.get("unpacked_name", day["name"])
+
+
 def fetch_day(day, data_dir, jobs, transport=curl_range, head=curl_head, sleep=time.sleep,
               chunk_size=CHUNK_SIZE):
     """Fetch and verify one day. Return (measured values, source of the bytes)."""
     name = day["name"]
     gz = data_dir / f"{name}.gz"
-    raw = data_dir / name
+    raw = data_dir / unpacked_name(day)
     gz_tmp = data_dir / f".{name}.gz.tmp"
     raw_tmp = data_dir / f".{name}.unpack.tmp"
     source_path = data_dir / f".{name}.source.json"
@@ -620,7 +628,7 @@ def verify_only(day, data_dir):
     """Recheck what is on disk. Touches no network and writes nothing."""
     name = day["name"]
     gz = data_dir / f"{name}.gz"
-    raw = data_dir / name
+    raw = data_dir / unpacked_name(day)
     for path in (gz, raw):
         if not path.exists():
             raise VerifyError(f"{path} is missing")
@@ -743,7 +751,8 @@ def resolve_dir(value):
 def run_day(key, manifest, args):
     day = manifest["days"][key]
     data_dir = resolve_dir(args.dir)
-    log(f"day {key}: {day['name']} in {data_dir.name}/, mode "
+    log(f"day {key}: {day['name']}, unpacked as {unpacked_name(day)}, in {data_dir.name}/, "
+        f"mode "
         f"{'verify-only' if args.verify_only else 'fetch'}")
     if args.verify_only:
         measured, _ = verify_only(day, data_dir)

@@ -564,6 +564,7 @@
     },
     "06122026": {
       "name": "S061226-v50.txt",
+      "unpacked_name": "06122026.NASDAQ_ITCH50",
       "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/S061226-v50.txt.gz",
       "expected": {
         "compressed_bytes": 17894268560,
