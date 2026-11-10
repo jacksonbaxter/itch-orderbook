@@ -317,7 +317,10 @@ def main(argv=None):
                                 locals().get("commit", "unknown"), f"refused: {error}")
         print(f"simd_driver: refused: {error}", file=sys.stderr)
         return 1
-    outcome = "recorded: every variant's repetitions published under the sampler rule"
+    outcome = ("recorded: every variant's repetitions published under the sampler rule"
+               if platform.system() == "Darwin" else
+               "recorded: every variant's repetitions published, each under measure.sh taskset "
+               "-c 4, the machine checks before and after in the manifest")
     if withdrawn:
         outcome += f", after {withdrawn} withdrawn and rerun"
     bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
