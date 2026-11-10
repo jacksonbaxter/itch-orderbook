@@ -64,6 +64,10 @@ using HashLinked = Arm<itch::HashIndex, itch::LinkedLevels>;
 using HashFlat = Arm<itch::HashIndex, itch::FlatLevels>;
 using PagedLinked = Arm<itch::PagedIndex<>, itch::LinkedLevels>;
 using PagedFlat = Arm<itch::PagedIndex<>, itch::FlatLevels>;
+using IdentityFlat = Arm<itch::IdentityHashIndex, itch::FlatLevels>;
+using ChainedFlat = Arm<itch::ChainedIndex, itch::FlatLevels>;
+using PagedScan16 = Arm<itch::PagedIndex<>, itch::Scan16FlatLevels>;
+using PagedBisect = Arm<itch::PagedIndex<>, itch::BisectFlatLevels>;
 
 // Runs a check once on each arm of the fast book, named in any failure.
 template <class Check>
@@ -76,6 +80,10 @@ void for_each_arm(const Check& check) {
   run.template operator()<itch::HashIndex, itch::FlatLevels>("hash, flat");
   run.template operator()<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked");
   run.template operator()<itch::PagedIndex<>, itch::FlatLevels>("paged, flat");
+  run.template operator()<itch::IdentityHashIndex, itch::FlatLevels>("identity, flat");
+  run.template operator()<itch::ChainedIndex, itch::FlatLevels>("chained, flat");
+  run.template operator()<itch::PagedIndex<>, itch::Scan16FlatLevels>("paged, flat-scan16");
+  run.template operator()<itch::PagedIndex<>, itch::BisectFlatLevels>("paged, flat-bisect");
 }
 
 template <class Book>
@@ -237,9 +245,12 @@ class BookScenario : public ::testing::Test {
 };
 
 // The default arm stays first, so that a failure on it is BookScenario/0.
-using Books = ::testing::Types<FastAdapter<itch::FastBook<>>, FastAdapter<HashLinked>,
-                               FastAdapter<HashFlat>, FastAdapter<PagedLinked>, ReferenceAdapter,
-                               MapAdapter<false>, MapAdapter<true>>;
+// The layout experiments' arms come last, so that the others keep their numbers.
+using Books =
+    ::testing::Types<FastAdapter<itch::FastBook<>>, FastAdapter<HashLinked>, FastAdapter<HashFlat>,
+                     FastAdapter<PagedLinked>, ReferenceAdapter, MapAdapter<false>,
+                     MapAdapter<true>, FastAdapter<IdentityFlat>, FastAdapter<ChainedFlat>,
+                     FastAdapter<PagedScan16>, FastAdapter<PagedBisect>>;
 static_assert(std::is_same_v<itch::FastBook<>, PagedFlat>);
 TYPED_TEST_SUITE(BookScenario, Books);
 
@@ -673,6 +684,75 @@ TEST(FastBook, TheHashIndexKeepsEveryOrderThroughDeletes) {
     ASSERT_EQ(book.apply(wire::erase(1, reference(i))), itch::ApplyStatus::applied);
   }
   EXPECT_EQ(book.live_orders(), 0U);
+}
+
+// The identity hash keeps a reference's low bits, here 7 of them for 128 slots, so
+// references 128 apart share a home and every one below shares one cluster that wraps past
+// the end of the table. The chained index takes the multiply-shift's inverse, as above, so
+// that every reference below hangs on one chain. Each must keep every order through deletes
+// from the middle of its cluster or chain.
+TEST(FastBook, TheIdentityAndChainedIndexesKeepEveryOrderThroughCollisions) {
+  constexpr std::uint64_t kInverse = 0xF1DE83E19937733DULL;
+  constexpr std::uint64_t kLastSlot = 127ULL << 57U;
+  const auto run = [](auto book, const auto& reference) {
+    for (std::uint64_t i = 1; i <= 40; ++i) {
+      ASSERT_EQ(book.apply(wire::add(1, reference(i), 'B', 1, 10)), itch::ApplyStatus::applied);
+    }
+    for (std::uint64_t i = 1; i <= 40; i += 2) {
+      ASSERT_EQ(book.apply(wire::erase(1, reference(i))), itch::ApplyStatus::applied);
+    }
+    for (std::uint64_t i = 1; i <= 40; i += 2) {
+      ASSERT_EQ(book.apply(wire::erase(1, reference(i))), itch::ApplyStatus::unknown_order);
+    }
+    for (std::uint64_t i = 2; i <= 40; i += 2) {
+      ASSERT_EQ(book.apply(wire::execute(1, reference(i), 1)), itch::ApplyStatus::applied);
+    }
+    EXPECT_EQ(book.live_orders(), 0U);
+  };
+  {
+    SCOPED_TRACE("identity");
+    run(Arm<itch::IdentityHashIndex, itch::LinkedLevels>{{.orders = 64, .levels = 64}},
+        [](std::uint64_t i) { return 127 + (128 * i); });
+  }
+  {
+    SCOPED_TRACE("chained");
+    run(Arm<itch::ChainedIndex, itch::LinkedLevels>{{.orders = 64, .levels = 64}},
+        [](std::uint64_t i) { return (kLastSlot + i) * kInverse; });
+  }
+}
+
+// A search that walks only part of the side and binary-searches the rest finds the same
+// place as one that walks it all, for a price at every level, between every two, and past
+// both ends, on a side deep enough that most of it lies beyond the first 16 entries.
+TEST(FastBook, EveryScanFindsThePlaceAWholeWalkFinds) {
+  constexpr std::uint32_t kLevels = 100;
+  constexpr itch::BookCapacity kCapacity{
+      .orders = 512, .levels = 512, .index_pages = 4, .index_bits = 16, .level_slots = 1024};
+  PagedFlat whole{kCapacity};
+  PagedScan16 scan{kCapacity};
+  PagedBisect bisect{kCapacity};
+  for (std::uint32_t i = 0; i < kLevels; ++i) {
+    const std::uint32_t step = (i * 37U) % kLevels;  // Each of 0 to 99 once, out of order.
+    for (const char side : {'B', 'S'}) {
+      const auto message =
+          wire::add(1, (2 * i) + (side == 'B' ? 1U : 2U), side, 1, 1000 + (step * 10));
+      ASSERT_EQ(whole.apply(message), itch::ApplyStatus::applied);
+      ASSERT_EQ(scan.apply(message), itch::ApplyStatus::applied);
+      ASSERT_EQ(bisect.apply(message), itch::ApplyStatus::applied);
+    }
+  }
+  for (const itch::Side side : {itch::Side::bid, itch::Side::ask}) {
+    for (std::uint32_t price = 990; price <= 2010; price += 5) {
+      const itch::LevelId id{.locate = 1, .side = side, .price = price};
+      const auto expected = whole.levels().search(id);
+      const auto by_scan = scan.levels().search(id);
+      const auto by_bisect = bisect.levels().search(id);
+      EXPECT_EQ(by_scan.level, expected.level) << price;
+      EXPECT_EQ(by_scan.position, expected.position) << price;
+      EXPECT_EQ(by_bisect.level, expected.level) << price;
+      EXPECT_EQ(by_bisect.position, expected.position) << price;
+    }
+  }
 }
 
 // DS-72: a reference fits 32 bits on the days seen, and nothing promises it. Past the

@@ -257,6 +257,12 @@ TEST(Lookahead, EveryArmEndsEveryMessageAsWithoutIt) {
   expect_lookahead_changes_nothing<itch::HashIndex, itch::FlatLevels>("hash, flat");
   expect_lookahead_changes_nothing<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked");
   expect_lookahead_changes_nothing<itch::PagedIndex<>, itch::FlatLevels>("paged, flat");
+  expect_lookahead_changes_nothing<itch::IdentityHashIndex, itch::FlatLevels>("identity, flat");
+  expect_lookahead_changes_nothing<itch::ChainedIndex, itch::FlatLevels>("chained, flat");
+  expect_lookahead_changes_nothing<itch::PagedIndex<>, itch::Scan16FlatLevels>(
+      "paged, flat-scan16");
+  expect_lookahead_changes_nothing<itch::PagedIndex<>, itch::BisectFlatLevels>(
+      "paged, flat-bisect");
 }
 
 // A stage asked for on any payload, garbage included, reads within the book and changes

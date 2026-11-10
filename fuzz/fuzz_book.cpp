@@ -369,5 +369,9 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
   run_arm<itch::HashIndex, itch::FlatLevels>(input);
   run_arm<itch::PagedIndex<>, itch::LinkedLevels>(input);
   run_arm<itch::PagedIndex<>, itch::FlatLevels>(input);
+  run_arm<itch::IdentityHashIndex, itch::FlatLevels>(input);
+  run_arm<itch::ChainedIndex, itch::FlatLevels>(input);
+  run_arm<itch::PagedIndex<>, itch::Scan16FlatLevels>(input);
+  run_arm<itch::PagedIndex<>, itch::BisectFlatLevels>(input);
   return 0;
 }

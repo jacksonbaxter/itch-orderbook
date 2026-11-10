@@ -154,7 +154,7 @@ void print_arm_counters(const Book& book) {
     std::println("index_fallback_live_end {}", book.index().fallback_live());
     std::println("index_peak_live_pages {}", book.index().peak_live_pages());
   }
-  if constexpr (std::is_same_v<typename Book::LevelArm, itch::FlatLevels>) {
+  if constexpr (requires { book.levels().relocations(); }) {
     std::println("level_slots_used {}", book.levels().slots_used());
     std::println("level_relocations {}", book.levels().relocations());
   }

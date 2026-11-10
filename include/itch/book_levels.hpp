@@ -266,9 +266,20 @@ static_assert(std::is_trivially_copyable_v<FlatLevel>);
 // block moves to one twice its size, and the old one goes to a free list for its size.
 // A side keeps its block when it empties, so a message that removes a level never
 // leaves the next one short of room.
-class FlatLevels {
+//
+// Scan is how many entries a search reads one by one from the best end before it
+// binary-searches the rest: all of them in FlatLevels, the arm as designed, and fewer in
+// the arms that stand for carteret's window-width experiment (NOTES.md, "carteret's layout
+// experiments on our book"). This book has no window: a level of any price is an entry of
+// the same array, so nothing overflows. What a far price costs here is a longer search, and
+// Scan is how far the search walks before it stops walking. Every Scan finds the same place.
+inline constexpr std::uint32_t kScanAll = 0xFFFFFFFFU;
+
+template <std::uint32_t Scan>
+class ScanFlatLevels {
  public:
   using Level = FlatLevel;
+  static constexpr std::uint32_t kScan = Scan;
 
   // Where a level at a price is, or goes: its position in the side's array.
   struct Place {
@@ -290,7 +301,7 @@ class FlatLevels {
 
   static constexpr std::uint32_t kFirstBlock = 8;
 
-  explicit FlatLevels(const BookCapacity& capacity)
+  explicit ScanFlatLevels(const BookCapacity& capacity)
       : levels_(capacity.levels),
         sides_(kSideCount, Top{.base = 0, .count = 0, .capacity = 0}),
         keys_(capacity.level_slots, 0),
@@ -305,8 +316,12 @@ class FlatLevels {
     const Top& side = sides_[side_key(id.locate, id.side)];
     const std::uint32_t key = key_of(id.side, id.price);
     std::uint32_t at = side.count;
-    while (at != 0 && keys_[side.base + at - 1] > key) {
-      --at;
+    if constexpr (Scan == kScanAll) {
+      while (at != 0 && keys_[side.base + at - 1] > key) {
+        --at;
+      }
+    } else {
+      at = scan_then_bisect(side, key);
     }
     if (at != 0 && keys_[side.base + at - 1] == key) {
       return {.level = slots_[side.base + at - 1], .position = at - 1};
@@ -408,10 +423,34 @@ class FlatLevels {
   [[nodiscard]] std::uint64_t slots_used() const noexcept { return fresh_slot_; }
   [[nodiscard]] std::uint64_t relocations() const noexcept { return relocations_; }
 
-  friend bool operator==(const FlatLevels&, const FlatLevels&) = default;
+  friend bool operator==(const ScanFlatLevels&, const ScanFlatLevels&) = default;
 
  private:
   static constexpr std::size_t kClasses = 32;
+
+  // How many of the side's keys are at or below `key`: the first Scan from the best end one
+  // by one, and, if every one of those is above it, a binary search of the rest.
+  [[nodiscard]] std::uint32_t scan_then_bisect(const Top& side, std::uint32_t key) const noexcept {
+    const std::uint32_t floor = side.count > Scan ? side.count - Scan : 0;
+    std::uint32_t at = side.count;
+    while (at != floor && keys_[side.base + at - 1] > key) {
+      --at;
+    }
+    if (at != floor || floor == 0) {
+      return at;
+    }
+    std::uint32_t low = 0;
+    std::uint32_t high = floor;
+    while (low != high) {
+      const std::uint32_t middle = low + ((high - low) / 2);
+      if (keys_[side.base + middle] > key) {
+        high = middle;
+      } else {
+        low = middle + 1;
+      }
+    }
+    return low;
+  }
 
   [[nodiscard]] static std::uint32_t key_of(Side side, Price4 price) noexcept {
     return side == Side::bid ? price : ~price;
@@ -476,5 +515,11 @@ class FlatLevels {
   std::uint32_t fresh_slot_ = 0;
   std::uint64_t relocations_ = 0;
 };
+
+using FlatLevels = ScanFlatLevels<kScanAll>;
+// One line of keys, 16 of them, one by one, then a binary search.
+using Scan16FlatLevels = ScanFlatLevels<16>;
+// A binary search of the whole side.
+using BisectFlatLevels = ScanFlatLevels<0>;
 
 }  // namespace itch

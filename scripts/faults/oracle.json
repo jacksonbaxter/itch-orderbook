@@ -2750,8 +2750,8 @@
       "mutations": [
         {
           "file": "tools/book_arms.hpp",
-          "old": "    if (arm.levels == LevelsArm::linked) {\n",
-          "new": "    if (arm.levels == LevelsArm::linked || arm.levels == LevelsArm::flat) {\n"
+          "old": "    return run.template operator()<Index, FlatLevels>();\n",
+          "new": "    return run.template operator()<Index, LinkedLevels>();\n"
         }
       ],
       "build": {
@@ -3165,6 +3165,93 @@
       ],
       "expect": {
         "signature": "FAIL: test_published_figures_are_shown_on_their_own_day_only"
+      }
+    },
+    {
+      "id": "oracle-bisect-lower-bound",
+      "breaks": "The flat arm's binary search finds the first key at or above the price, not the first above it",
+      "check": "the touched-level and BBO compares, on the flat-bisect arm",
+      "mutations": [
+        {
+          "file": "include/itch/book_levels.hpp",
+          "old": "      if (keys_[side.base + middle] > key) {\n",
+          "new": "      if (keys_[side.base + middle] >= key) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--levels",
+        "flat-bisect",
+        "--max-slots",
+        "8192"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=[a-z-]+ message=\\d+ type=[A-Z] "
+      }
+    },
+    {
+      "id": "oracle-chained-erase-drops-chain",
+      "breaks": "Erasing an order from a chain drops every order after it in the chain",
+      "check": "test_book FastBook.TheIdentityAndChainedIndexesKeepEveryOrderThroughCollisions",
+      "mutations": [
+        {
+          "file": "include/itch/book_index.hpp",
+          "old": "    *link = next_[*link];\n",
+          "new": "    *link = kNoIndex;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] FastBook\\.TheIdentityAndChainedIndexesKeepEveryOrderThroughCollisions",
+        "exit": 1
+      }
+    },
+    {
+      "id": "oracle-scan-misses-the-floor",
+      "breaks": "The scan of a flat side stops one entry early and hands a found level to the bisect as missing",
+      "check": "test_book FastBook.EveryScanFindsThePlaceAWholeWalkFinds",
+      "mutations": [
+        {
+          "file": "include/itch/book_levels.hpp",
+          "old": "    if (at != floor || floor == 0) {\n",
+          "new": "    if (at != floor + 1 || floor == 0) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_book"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] FastBook\\.EveryScanFindsThePlaceAWholeWalkFinds",
+        "exit": 1
       }
     }
   ]
