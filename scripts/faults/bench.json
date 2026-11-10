@@ -4000,7 +4000,7 @@
       "mutations": [
         {
           "file": "scripts/counts_report.py",
-          "old": "        if age in figures and f\"{fmt(figures[age], 3)} {said}\" not in summary:\n",
+          "old": "        if age in figures and not said_near(summary, said, figures[age]):\n",
           "new": "        if False:\n"
         }
       ],

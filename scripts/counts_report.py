@@ -613,10 +613,18 @@ def check_ages(text):
             figures[cells[0]] = float(cells[2].replace(",", ""))
     summary = fields.get("summary", "")
     for age, said in ((AGES[0], "under 1 ms old"), (AGES[4], "at 1 s and over")):
-        if age in figures and f"{fmt(figures[age], 3)} {said}" not in summary:
+        if age in figures and not said_near(summary, said, figures[age]):
             found.append(("summary-differs", f"{age}: the table gives {figures[age]}, the "
                                              f"summary says {summary!r}"))
     return found
+
+
+def said_near(summary, said, figure):
+    """True if the summary gives `figure` to three places just before `said`. The table's
+    four-place figure and the summary are each rounded from the same median, which with an
+    even number of repetitions is a mean of two, so they may round apart by half a unit."""
+    match = re.search(rf"(\d+\.\d{{3}}) {re.escape(said)}", summary)
+    return match is not None and abs(float(match.group(1)) - figure) <= 0.00055
 
 
 def published_totals(text):

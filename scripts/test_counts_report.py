@@ -134,6 +134,17 @@ class CountsByAge(unittest.TestCase):
         edited = text.replace("3.440 at 1 s and over", "2.440 at 1 s and over", 1)
         self.assertIn("summary-differs", [code for code, _ in counts_report.check_ages(edited)])
 
+    def test_a_summary_rounded_from_the_median_passes_and_one_unit_off_does_not(self):
+        summary = "fills: 0.404 under 1 ms old, 5.039 at 1 s and over"
+        self.assertTrue(counts_report.said_near(summary, "at 1 s and over", 5.0395))
+        self.assertTrue(counts_report.said_near(summary, "under 1 ms old", 0.4035))
+        self.assertFalse(counts_report.said_near(summary, "at 1 s and over", 5.0405))
+        self.assertFalse(counts_report.said_near(summary, "at 1 s and over", 5.0375))
+        self.assertFalse(counts_report.said_near("fills: 5.039", "at 1 s and over", 5.039))
+
+    def test_check_catches_a_name_left_unsaid(self):
+        self.assertIn("summary-differs", [code for code, _ in counts_report.check_ages(edited)])
+
     def test_check_catches_a_name_left_unsaid(self):
         text = self.render([age_record()]) + "\nThe cache-misses fell.\n"
         self.assertIn("name-unsaid", [code for code, _ in counts_report.check_ages(text)])
