@@ -31,16 +31,16 @@ Host: **macOS (M4 Max)**. Numbers from the two hosts are never mixed.
 - experiment: layout
 - prediction: P-0023
 - run_id: P-0023-20261110T103318Z
-- processes: 15
+- processes: 14
 - messages: 268,744,780
-- migrations_all_processes: 15
+- migrations_all_processes: 14
 - peak_rss: 8.34 GiB, getrusage of bench_variants, largest process; 8.34 GiB, /usr/bin/time -l, largest process
 - measure_load_start: measure.sh: start load1=1.69 host=macOS (M4 Max) at=2026-11-10T10:33:18Z
 - measure_load_end: measure.sh: end load1=1.17 exit=0 at=2026-11-10T12:05:59Z
 - run_started: 2026-11-10T10:33:18Z
 - run_finished: 2026-11-10T12:05:59Z
 - interference: sampled every 2 s over each process's whole span; no other process above 20% CPU during any of them (NOTES.md, "The Mac rule for other work")
-- summary: hash policy +3.12% (identity-flat over hash-flat); open addressing against chaining +7.36% (chained-flat over hash-flat); search window of 16 -1.13% (paged-flat-scan16 over paged-flat); search window of 0 -13.95% (paged-flat-bisect over paged-flat)
+- summary: hash policy +3.81% (identity-flat over hash-flat); open addressing against chaining +8.08% (chained-flat over hash-flat); search window of 16 -1.13% (paged-flat-scan16 over paged-flat); search window of 0 -13.95% (paged-flat-bisect over paged-flat)
 
 ## What was run
 
@@ -77,17 +77,17 @@ Medians over the repetitions. Each arm's rate is set against the arm it changes 
 
 | Arm | Repetitions | Median messages/s | Min | Max | CV | ns a message | Against | Over it | cycles, user and kernel, a message | instructions, user and kernel, a message |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `hash-flat` | 3 | 17,399,041 | 17,165,085 | 17,432,692 | 0.84% | 57.47 | `paged-flat` | 0.8073 | 246.2051 | 376.0288 |
-| `identity-flat` | 3 | 17,941,076 | 17,926,019 | 18,188,538 | 0.82% | 55.74 | `hash-flat` | 1.0312 | 234.0716 | 446.5194 |
-| `chained-flat` | 1 | 18,678,923 | 18,678,923 | 18,678,923 | 0.00% | 53.54 | `hash-flat` | 1.0736 | 226.4895 | 366.8940 |
+| `hash-flat` | 2 | 17,282,063 | 17,165,085 | 17,399,041 | 0.96% | 57.87 | `paged-flat` | 0.8019 | 246.1797 | 376.0281 |
+| `identity-flat` | 3 | 17,941,076 | 17,926,019 | 18,188,538 | 0.82% | 55.74 | `hash-flat` | 1.0381 | 234.0716 | 446.5194 |
+| `chained-flat` | 1 | 18,678,923 | 18,678,923 | 18,678,923 | 0.00% | 53.54 | `hash-flat` | 1.0808 | 226.4895 | 366.8940 |
 | `paged-flat` | 3 | 21,552,132 | 21,322,666 | 22,008,219 | 1.61% | 46.40 | n/a | n/a | 198.1631 | 384.4492 |
 | `paged-flat-scan16` | 3 | 21,309,446 | 21,288,209 | 21,312,373 | 0.06% | 46.93 | `paged-flat` | 0.9887 | 199.4987 | 369.6848 |
 | `paged-flat-bisect` | 2 | 18,544,768 | 18,182,504 | 18,907,031 | 2.76% | 53.94 | `paged-flat` | 0.8605 | 233.0252 | 369.4300 |
 
 ## Finding
 
-- Hash policy: `identity-flat` +3.12% against `hash-flat` (17,941,076 against 17,399,041 messages/s); their ranges over the repetitions do not overlap.
-- Open addressing against chaining: `chained-flat` +7.36% against `hash-flat` (18,678,923 against 17,399,041 messages/s); their ranges over the repetitions do not overlap.
+- Hash policy: `identity-flat` +3.81% against `hash-flat` (17,941,076 against 17,282,063 messages/s); their ranges over the repetitions do not overlap.
+- Open addressing against chaining: `chained-flat` +8.08% against `hash-flat` (18,678,923 against 17,282,063 messages/s); their ranges over the repetitions do not overlap.
 - Search window of 16: `paged-flat-scan16` -1.13% against `paged-flat` (21,309,446 against 21,552,132 messages/s); their ranges over the repetitions do not overlap.
 - Search window of 0: `paged-flat-bisect` -13.95% against `paged-flat` (18,544,768 against 21,552,132 messages/s); their ranges over the repetitions do not overlap.
 
@@ -109,7 +109,6 @@ One row a timed pass, in the order run. Each counter is the pass's whole count. 
 | `identity-flat` | 3 | replay | 268,744,780 | 14.775502 | 0 | 62,637,653,268 | 119,999,746,459 |
 | `paged-flat-scan16` | 3 | replay | 268,744,780 | 12.609801 | 0 | 53,668,143,361 | 99,350,855,414 |
 | `chained-flat` | 1 | replay | 268,744,780 | 14.387595 | 0 | 60,867,871,675 | 98,600,836,485 |
-| `hash-flat` | 3 | replay | 268,744,780 | 15.416138 | 0 | 67,438,191,187 | 101,056,146,391 |
 | `paged-flat-bisect` | 2 | replay | 268,744,780 | 14.214013 | 0 | 62,519,740,571 | 99,279,614,207 |
 | `paged-flat` | 3 | replay | 268,744,780 | 12.211110 | 0 | 53,255,299,449 | 103,316,935,316 |
 
@@ -180,8 +179,6 @@ measure.sh: start load1=1.16 host=macOS (M4 Max) at=2026-11-10T10:41:39Z
 measure.sh: end load1=1.18 exit=0 at=2026-11-10T10:42:08Z
 measure.sh: start load1=2.35 host=macOS (M4 Max) at=2026-11-10T10:44:30Z
 measure.sh: end load1=1.99 exit=0 at=2026-11-10T10:45:01Z
-measure.sh: start load1=1.12 host=macOS (M4 Max) at=2026-11-10T12:00:08Z
-measure.sh: end load1=1.19 exit=0 at=2026-11-10T12:00:40Z
 measure.sh: start load1=1.09 host=macOS (M4 Max) at=2026-11-10T12:04:02Z
 measure.sh: end load1=1.11 exit=0 at=2026-11-10T12:04:32Z
 measure.sh: start load1=1.26 host=macOS (M4 Max) at=2026-11-10T12:05:33Z
