@@ -229,8 +229,8 @@
    "mutations": [
     {
      "file": "tools/itch_alloc.cpp",
-     "old": "    ager_calls = options.warmup == 0 ? book.ager().allocations() - ager_before : 0;\n",
-     "new": "    ager_calls = 0;\n"
+     "old": "  const std::uint64_t book_calls = counted >= ager_calls ? counted - ager_calls : 0;\n",
+     "new": "  const std::uint64_t book_calls = counted;\n"
     }
    ],
    "build": {
