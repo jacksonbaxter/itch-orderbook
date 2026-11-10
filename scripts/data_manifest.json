@@ -561,6 +561,43 @@
         "timestamp_ns": 68700000008170,
         "offset": 2422694497
       }
+    },
+    "S061226": {
+      "name": "S061226-v50.txt",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/S061226-v50.txt.gz",
+      "expected": {
+        "compressed_bytes": 17894268560,
+        "unpacked_bytes": 41662444846,
+        "messages": 1304894064,
+        "gzip_isize": 3007739182
+      },
+      "third_party": {
+        "source": "anminfang-tamu/astra-feed-engine docs/trace-manifest-S061226-v50.txt and docs/trace-profile-S061226-v50.txt",
+        "url": "https://github.com/anminfang-tamu/astra-feed-engine/blob/HEAD/docs/trace-manifest-S061226-v50.txt",
+        "gz_sha256": "1f9d35e12120ef37ea22df9f59dc5207fe51b075b6ccf1c9cdfd09fa566dc1d5",
+        "unpacked_sha256": "8aab04f1f6e1287ef73acd7405a5f8487b131a5c6a7ae0f5c8d6d134c2f32238",
+        "per_type_counts": {
+          "A": 450612715,
+          "C": 1090052,
+          "D": 438765434,
+          "E": 19232537,
+          "F": 4908319,
+          "H": 12979,
+          "I": 6044629,
+          "J": 132,
+          "K": 1,
+          "L": 270943,
+          "P": 8596422,
+          "Q": 25686,
+          "R": 12809,
+          "S": 6,
+          "U": 361712117,
+          "V": 1,
+          "X": 13595987,
+          "Y": 13295
+        },
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 and a count by type for this day, read on 2026-10-30 (BENCHMARKS.md, DS-13); the fetch fails on any difference."
+      }
     }
   },
   "references": {
