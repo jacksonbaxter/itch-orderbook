@@ -90,6 +90,21 @@ class SimdDriverTest(unittest.TestCase):
         self.assertIn("start or end line", self.reason(err=f"{START}\n",
                                                        sampler=Sampler(samples())))
 
+    def test_on_linux_every_process_and_check_runs_pinned_under_measure_sh(self):
+        args = argparse.Namespace(measure=Path("/q/bin/measure.sh"), input=Path("/q/day"),
+                                  probe=Path("/q/bench_probe"))
+        self.assertEqual(simd_driver.process_words(args, ["bench_kernels", "--core", "4"],
+                                                   "Linux"),
+                         ["/q/bin/measure.sh", "taskset", "-c", "4", "bench_kernels", "--core",
+                          "4"])
+        self.assertEqual(simd_driver.process_words(args, ["bench_kernels"], "Darwin"),
+                         ["/q/bin/measure.sh", "/usr/bin/time", "-l", "bench_kernels"])
+        words = simd_driver.check_words(args)
+        self.assertEqual(words[:5], ["/q/bin/measure.sh", "taskset", "-c", "4", "bash"])
+        self.assertTrue(words[5].endswith("scripts/machine_check.sh"))
+        self.assertEqual(words[6:], ["--input", "/q/day", "--probe", "/q/bench_probe", "--core",
+                                     "4"])
+
     def test_a_failed_or_recordless_process_is_withdrawn(self):
         self.assertEqual(self.judged(code=3, err=f"{START}\nbench_kernels: refused: two work "
                                                  f"passes disagree\n{END}\n"),

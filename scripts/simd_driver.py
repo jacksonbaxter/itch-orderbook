@@ -14,9 +14,10 @@ build's itch_e11 module; or asm, E12, which runs scripts/simd_asm_audit.py colle
     MEASURE_SH /usr/bin/time -l <bench_kernels or node> ... > STEM.out 2> STEM.err
 
 with its record in STEM.json: MEASURE_SH is the host's measure.sh. On debian there is no
-/usr/bin/time -l, and bench_kernels runs on core 4. The variants of each repetition run one
-after another, in an order turned by one place each repetition, so that a drift over the run
-falls on all of them.
+/usr/bin/time -l, and each process is `MEASURE_SH taskset -c 4 bench_kernels ... --core 4`, the
+benchmark measure.sh's direct child through taskset's exec. The variants of each repetition run
+one after another, in an order turned by one place each repetition, so that a drift over the
+run falls on all of them.
 
 The vector kernels are every kernel `bench_kernels --list-kernels` says runs here other than
 scalar, or the --kernels given: on this Mac neon, on debian ssse3 and avx2. Each kernel's
@@ -28,7 +29,10 @@ line for any process above 20% CPU outside this driver and what it runs. A proce
 only if the sampler covered its whole span, from measure.sh's start line to its end line, with
 no gap over 5 s and no foreign process inside it. Otherwise it is withdrawn, with its own row in
 results/run_log.md giving the reason, and run again as a further repetition, at most
-MOST_WITHDRAWN times in a run. On Linux the machine check runs before and after.
+MOST_WITHDRAWN times in a run. On Linux the machine check runs before and after, itself as
+`MEASURE_SH taskset -c 4 bash scripts/machine_check.sh ...`, so that it reads the pin and the
+governor the processes run under: outside measure.sh the governor is the host's own, and
+machine_check.sh refuses any other than performance.
 
 The run directory, DIR/<run id>/, holds every process's files, the sampler's log and
 manifest.json, which lists every process and what became of it. scripts/simd_report.py
@@ -68,6 +72,7 @@ EXPERIMENTS = ("field", "decode", "consume", "parse", "book", "batch", "framing"
 FORMS = {"framing": ("length", "byte", "table", "constant"),
          "timestamp": ("exact", "split", "overread", "underread")}
 WIDTHS = (2, 4, 6, 8)
+LINUX_PIN = ("taskset", "-c", "4")
 WATCHLISTS = (8, 64)
 
 
@@ -119,6 +124,35 @@ def command(args, name, extra, stem, commit):
             args.dataset_sha256, *extra] + (["--core", "4"] if platform.system() == "Linux" else [])
 
 
+def process_words(args, words, system=None):
+    """The whole command line of one process: under measure.sh, and on Linux pinned to core 4
+    by taskset, on macOS under /usr/bin/time -l."""
+    system = system or platform.system()
+    wrap = ["/usr/bin/time", "-l"] if system == "Darwin" else list(LINUX_PIN)
+    return [str(args.measure), *wrap, *words]
+
+
+def check_words(args):
+    """machine_check.sh on core 4, as measure.sh's child (Linux only)."""
+    return [str(args.measure), *LINUX_PIN, "bash", str(REPO_ROOT / "scripts" / "machine_check.sh"),
+            "--input", str(args.input), "--probe", str(args.probe), "--core", "4"]
+
+
+def machine_check(args):
+    """The machine check's output, retried while measure.sh is busy; Refused if it fails."""
+    while True:
+        result = subprocess.run(check_words(args), capture_output=True, text=True,
+                                stdin=subprocess.DEVNULL, check=False)
+        if result.returncode != 75:
+            break
+        time.sleep(RETRY_BUSY_S)
+    if result.returncode != 0:
+        lines = result.stdout.strip().splitlines()
+        raise Refused("machine_check", lines[-1] if lines else
+                      f"exited {result.returncode}: {result.stderr.strip()[-300:]}")
+    return result.stdout.strip()
+
+
 def span_of(err_text):
     """measure.sh's start and end times for the process, or None if either is missing."""
     found = {}
@@ -140,8 +174,7 @@ def sha256_of(path):
 def run_one(args, run_dir, name, extra, repetition, commit):
     """One process, retried while measure.sh is busy. (stem, exit code)."""
     stem = run_dir / f"{name}-{repetition}"
-    words = [str(args.measure), *(["/usr/bin/time", "-l"] if platform.system() == "Darwin" else []),
-             *command(args, name, extra, stem, commit)]
+    words = process_words(args, command(args, name, extra, stem, commit))
     while True:
         with open(f"{stem}.out", "w", encoding="utf-8") as out, \
                 open(f"{stem}.err", "w", encoding="utf-8") as err:
@@ -199,7 +232,7 @@ def run(args, run_id, commit):
                 "sampler": "sampler.txt" if platform.system() == "Darwin" else None,
                 "started": bench_driver.utc_now()}
     if platform.system() == "Linux":
-        manifest["machine_check_before"] = bench_driver.machine_check(args)
+        manifest["machine_check_before"] = machine_check(args)
     sampler = None
     if platform.system() == "Darwin":
         sampler = wasm_bench.Sampler(run_dir / "sampler.txt")
@@ -241,8 +274,8 @@ def run(args, run_id, commit):
         manifest["finished"] = bench_driver.utc_now()
         if platform.system() == "Linux":
             try:
-                manifest["machine_check_after"] = bench_driver.machine_check(args)
-            except bench_driver.Refused as error:
+                manifest["machine_check_after"] = machine_check(args)
+            except Refused as error:
                 manifest["machine_check_after"] = f"failed: {error}"
         (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n",
                                                 encoding="utf-8")
@@ -265,10 +298,7 @@ def parse_args(argv):
     parser.add_argument("--kernels")
     parser.add_argument("--allow-dirty", action="store_true")
     parser.add_argument("--run-log", type=Path, default=REPO_ROOT / "results" / "run_log.md")
-    args = parser.parse_args(argv)
-    args.core = 4 if platform.system() == "Linux" else None
-    args.sibling = None
-    return args
+    return parser.parse_args(argv)
 
 
 def main(argv=None):

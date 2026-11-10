@@ -376,6 +376,48 @@
       }
     },
     {
+      "id": "simd-driver-linux-unpinned",
+      "breaks": "On Linux the driver runs each process under measure.sh without taskset -c 4",
+      "check": "test_simd_driver.py test_on_linux_every_process_and_check_runs_pinned_under_measure_sh",
+      "mutations": [
+        {
+          "file": "scripts/simd_driver.py",
+          "old": "    wrap = [\"/usr/bin/time\", \"-l\"] if system == \"Darwin\" else list(LINUX_PIN)\n",
+          "new": "    wrap = [\"/usr/bin/time\", \"-l\"] if system == \"Darwin\" else []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_linux_every_process_and_check_runs_pinned_under_measure_sh",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-driver-check-outside-measure",
+      "breaks": "On Linux the driver runs machine_check.sh outside measure.sh, under the host's own governor",
+      "check": "test_simd_driver.py test_on_linux_every_process_and_check_runs_pinned_under_measure_sh",
+      "mutations": [
+        {
+          "file": "scripts/simd_driver.py",
+          "old": "    return [str(args.measure), *LINUX_PIN, \"bash\", str(REPO_ROOT / \"scripts\" / \"machine_check.sh\"),\n",
+          "new": "    return [*LINUX_PIN, \"bash\", str(REPO_ROOT / \"scripts\" / \"machine_check.sh\"),\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_linux_every_process_and_check_runs_pinned_under_measure_sh",
+        "exit": 1
+      }
+    },
+    {
       "id": "simd-predictions-skip-simd-results",
       "breaks": "check_predictions leaves simd_*.md results unread, so a SIMD result could name no prediction",
       "check": "test_check_predictions test_a_simd_result_naming_no_prediction",
