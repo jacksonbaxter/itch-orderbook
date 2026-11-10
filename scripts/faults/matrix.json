@@ -1,0 +1,62 @@
+{
+  "area": "matrix",
+  "tree": [
+    "CMakeLists.txt",
+    "CMakePresets.json",
+    ".clang-tidy",
+    ".github",
+    "cmake",
+    "include",
+    "src",
+    "tests",
+    "tools",
+    "fuzz",
+    "bench",
+    "scripts",
+    "results",
+    "docs",
+    "README.md"
+  ],
+  "faults": [
+    {
+      "id": "matrix-crash-counted",
+      "breaks": "The matrix counts a check that dies by a signal as a detection, signature or not",
+      "check": "scripts/test_fault_matrix.py",
+      "mutations": [
+        {
+          "file": "scripts/fault_matrix.py",
+          "old": "    if code == 0:\n        return UNDETECTED, \"the check passed on the broken tree\"\n",
+          "new": "    if code == 0:\n        return UNDETECTED, \"the check passed on the broken tree\"\n    if code < 0:\n        return DETECTED, \"\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_crash_does_not_count_unless_the_signature_says_so"
+      }
+    },
+    {
+      "id": "matrix-crash-as-timeout",
+      "breaks": "The matrix judges a check that dies by a signal as a timeout",
+      "check": "scripts/test_fault_matrix.py",
+      "mutations": [
+        {
+          "file": "scripts/fault_matrix.py",
+          "old": "    if code is None:\n        return TIMEOUT, f\"no result in {fault.timeout} s\"\n",
+          "new": "    if code is None or code < 0:\n        return TIMEOUT, f\"no result in {fault.timeout} s\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_crash_does_not_count_unless_the_signature_says_so"
+      }
+    }
+  ]
+}

@@ -10,6 +10,7 @@ in it, so that a build failure is a real one and the whole file runs in seconds.
 import contextlib
 import io
 import json
+import signal
 import sys
 import tempfile
 import unittest
@@ -33,7 +34,8 @@ if "hang" in text:
     time.sleep(60)
 if "crash" in text:
     import os
-    os.abort()
+    import signal
+    os.kill(os.getpid(), signal.SIGTERM)
 if "other" in text:
     print("something else went wrong")
     sys.exit(3)
@@ -184,17 +186,22 @@ class Matrix(unittest.TestCase):
         self.assert_verdict(fm.WRONG_SIGNATURE)
 
     def test_a_crash_does_not_count_unless_the_signature_says_so(self):
+        # The child dies by SIGTERM, not os.abort(), which macOS reports as a crash of Python.app
+        # with a dialog. SIGTERM is not the SIGKILL a timeout gets, so the exit column tells the
+        # two apart: a timeout has none.
         crash = [{"file": "payload.txt", "old": "good", "new": "good crash"}]
         self.define(good_fault(mutations=crash))
         self.assertEqual(self.matrix(), 1)
         self.assert_verdict(fm.WRONG_SIGNATURE)
+        self.assertIn(f"| {-signal.SIGTERM} |", self.verdict_row())
 
         (self.root / "check.py").write_text(
-            CHECK.replace('import os\n', 'import os\n    print("planted abort", flush=True)\n'),
+            CHECK.replace('import os\n', 'import os\n    print("planted crash", flush=True)\n'),
             encoding="utf-8")
-        self.define(good_fault(mutations=crash, expect={"signature": "planted abort"}))
+        self.define(good_fault(mutations=crash, expect={"signature": "planted crash"}))
         self.assertEqual(self.matrix(), 0, self.output)
         self.assert_verdict(fm.DETECTED)
+        self.assertIn(f"| {-signal.SIGTERM} |", self.verdict_row())
 
     def test_the_wrong_exit_code_is_not_a_detection(self):
         self.define(good_fault(expect={"signature": "CHECK FAILED", "exit": 2}))
@@ -206,6 +213,7 @@ class Matrix(unittest.TestCase):
                                timeout=1))
         self.assertEqual(self.matrix(), 1)
         self.assert_verdict(fm.TIMEOUT)
+        self.assertIn(f"| {fm.TIMEOUT} |  |", self.verdict_row())
 
     def test_a_mutant_that_does_not_build_is_an_error_and_not_a_detection(self):
         self.define(good_fault(
