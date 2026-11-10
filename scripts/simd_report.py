@@ -164,6 +164,36 @@ CAVEATS = {
 }
 
 
+# On debian the Mac's caveats do not hold: the x86 vector field is vector code, the counters
+# are Zen 1's, and the process is pinned.
+DEBIAN_CAVEATS = {
+    "field": """\
+- **The x86 vector field is vector code.** Unlike NEON on arm64, clang keeps SSSE3's and AVX2's
+  `field<W>` as an 8-byte load into an XMM register, a PSHUFB and a MOVQ back
+  (`results/simd_asm_mac.md`, E12, `field6`); AVX2's is the same 128-bit code, VEX-encoded. At
+  6 bytes the vector kernels read 8 bytes where scalar reads 4 and 2, so a call there is partly
+  the over-read against the exact read.
+- **Small figures.** A field costs a fraction of the loop's cycles; the rule calls a winner
+  wherever the repetitions do not overlap, however small the gap.""",
+    "parse": """\
+- **The one-type passes do not add up to the whole.** Each tests every message's type against
+  one letter and branches, a different loop from `parse_ops()`, so a type's figure is that
+  type's decode where it sits in that loop; the whole is the figure E4 judges.
+- **The rare types are the least sure.** F, C and X are 1.5 million, 100 thousand and 2.8
+  million ops in a pass of a few seconds.""",
+    "default": """\
+- **Pinned, not isolated.** Core 4 under the performance governor, its SMT sibling idle by the
+  machine check, but turbo on and no core isolated, so the clock moves: cycles, not ns, are the
+  figure to compare.
+- **Zen 1's counters.** `cache-misses` counts L2 misses on Zen 1 (PMCx064 umask 0x09,
+  `results/counters_zen1_events_debian.md`), not last-level misses, and `r0843:u` is a floor
+  on DRAM demand fills. No FP-pipe event is read, so that Zen 1 runs a 256-bit operation as two
+  128-bit ones comes from Agner Fog's tables and E12's listings, not from a count.
+- **One day, one host.** AVX2 here and NEON on the Mac are different experiments: no figure
+  here answers a Mac one.""",
+}
+
+
 class ReportError(Exception):
     """The input cannot become a results file."""
 
@@ -418,6 +448,15 @@ def results_section(experiment, rows, events, runs):
     return out, figures
 
 
+def vector_pairs(vector):
+    """Each vector kernel after the first against the first: on x86 AVX2 against SSSE3."""
+    return [(later, vector[0]) for later in vector[1:]]
+
+
+def ratio(a, b):
+    return f"{a['median'] / b['median']:.3f}" if b["median"] > 0 else "n/a"
+
+
 def cycles_or_ns(events):
     return events[0] if events else "ns"
 
@@ -449,6 +488,13 @@ def finding(experiment, figures, events, runs):
                 lines.append(f"- Width {width}: {said}; " + explain(name, base, "a field") + ".")
                 verdicts.append(beats(figures[name][metric], figures[base][metric]))
                 calls.append(f"{width} bytes " + said.split(" on ")[0].replace("`", ""))
+            for later, first in vector_pairs(vector):
+                a, b = f"{later}-w{width}", f"{first}-w{width}"
+                if a in figures and b in figures:
+                    lines.append(f"- Width {width}, the vector kernels: "
+                                 + call(a, figures[a][metric], b, figures[b][metric], unit)
+                                 + f"; `{a}` takes {ratio(figures[a][metric], figures[b][metric])} "
+                                 f"times `{b}`'s {unit}.")
         refuted = any(verdicts)
         lines.append("- E1's kill criterion, refuted if a vector kernel takes fewer cycles a "
                      "field than scalar at a width: " + ("**refuted**." if refuted else
@@ -460,7 +506,7 @@ def finding(experiment, figures, events, runs):
         per = {"decode": "an Add Order", "consume": "an op", "batch": "an Add Order",
                "e11": "an Add Order", "parse": "a message", "book": "a message"}[experiment]
         compare = metric if experiment != "e11" else "ns"
-        said_all = []
+        said_all, pair_said = [], []
         for kernel in vector:
             a, b = figures[kernel], figures["scalar"]
             said = call(kernel, a[compare], "scalar", b[compare],
@@ -473,6 +519,13 @@ def finding(experiment, figures, events, runs):
                          f"{SHORT.get(compare, 'ns')}.")
             said_all.append((kernel, said, gain, beats(a[compare], b[compare]),
                              beats(b[compare], a[compare])))
+        for later, first in vector_pairs(vector):
+            said = call(later, figures[later][compare], first, figures[first][compare],
+                        SHORT.get(compare, "ns") + " " + per)
+            lines.append(f"- The vector kernels: {said}; `{later}` takes "
+                         f"{ratio(figures[later][compare], figures[first][compare])} times "
+                         f"`{first}`'s {SHORT.get(compare, 'ns')}.")
+            pair_said.append(said.replace("`", "").split(" on ")[0])
         if experiment == "parse":
             for t in OP_TYPES:
                 cells = [f"`{name}` {fmt(figures[name]['types'][t]['ns']['median'])} ns, "
@@ -518,6 +571,7 @@ def finding(experiment, figures, events, runs):
             + f" ({kernel} {figures[kernel][compare]['median']:.2f} against scalar "
             f"{figures['scalar'][compare]['median']:.2f} {word} {per})"
             for kernel, said, _, _, _ in said_all)
+        summary += "".join(f"; {said}" for said in pair_said)
         if refuted is not None:
             summary += f"; {SIMD_ID[experiment]} " + ("refuted" if refuted else "not refuted")
         return lines, summary
@@ -549,6 +603,13 @@ def finding(experiment, figures, events, runs):
                     won.append(beats(figures[name][metric], figures[bitset][metric]))
                     sizes.append(f"{n} stocks bitset {figures[bitset][metric]['median']:.2f} "
                                  f"against {kernel} compare {figures[name][metric]['median']:.2f}")
+            for later, first in vector_pairs(vector):
+                a, b = f"compare-{later}-n{n}", f"compare-{first}-n{n}"
+                lines.append(f"- Watchlist {n}, the vector compares: "
+                             + call(a, figures[a][metric], b, figures[b][metric],
+                                    unit + " an Add Order")
+                             + f"; `{a}` takes {ratio(figures[a][metric], figures[b][metric])} "
+                             f"times `{b}`'s {unit}.")
         refuted = any(won)
         lines.append("- E9's kill criterion, refuted if a vector compare beats the bitset at a "
                      "watchlist size used: " + ("**refuted**." if refuted else
@@ -764,9 +825,10 @@ def render(manifest, records, stderrs, sampler):
                 for entry in withdrawn]
     else:
         out += ["None."]
+    caveats = DEBIAN_CAVEATS if host == DEBIAN else CAVEATS
     out += ["", "## What this does not show", "",
-            *([CAVEATS[experiment]] if experiment in CAVEATS and experiment != "e11" else []),
-            CAVEATS["e11" if experiment == "e11" else "default"]]
+            *([caveats[experiment]] if experiment in caveats and experiment != "e11" else []),
+            caveats["e11" if experiment == "e11" else "default"]]
     if host == DEBIAN:
         checks = [manifest.get("machine_check_before"), manifest.get("machine_check_after")]
         if not all(isinstance(text, str) for text in checks):

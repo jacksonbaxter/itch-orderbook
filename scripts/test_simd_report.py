@@ -276,10 +276,11 @@ class SimdReportTest(unittest.TestCase):
         with self.assertRaisesRegex(simd_report.ReportError, "folded"):
             self.render("decode", disagree)
 
-    def test_debian_needs_core_4_the_governor_and_both_machine_checks(self):
+    @staticmethod
+    def debian_records(kernels):
         records = []
         for repetition in (1, 2, 3):
-            for name, work in (("scalar", 0.130), ("avx2", 0.120)):
+            for name, work in kernels:
                 one = paired("decode", name, name, repetition, work + 0.001 * repetition)
                 one["header"].update(host=simd_report.DEBIAN, governor="performance",
                                      pinning="pinned to core 4: pthread_setaffinity_np "
@@ -292,6 +293,25 @@ class SimdReportTest(unittest.TestCase):
                                          "reason": ""}
                                         for event in simd_report.EVENTS[simd_report.DEBIAN]]
                 records.append(one)
+        return records
+
+    def test_on_debian_avx2_is_called_against_ssse3_under_zen_1_s_caveats(self):
+        records = self.debian_records((("scalar", 0.130), ("ssse3", 0.120), ("avx2", 0.1205)))
+        whole = manifest("decode", records)
+        whole.update(sampler=None, machine_check_before="machine_check: passed",
+                     machine_check_after="machine_check: passed")
+        stderrs = [stderr_for(i) for i in range(len(records))]
+        text, summary = simd_report.render(whole, records, stderrs, None)
+        self.assertIn("ssse3 beats scalar", summary)
+        self.assertIn("avx2 and ssse3 tie", summary)
+        self.assertIn("- The vector kernels: `avx2` and `ssse3` tie on cycles an Add Order; "
+                      "`avx2` takes 1.0", text)
+        self.assertIn("Zen 1's counters", text)
+        self.assertNotIn("The Mac's counters", text)
+        self.assertEqual(simd_report.check_published(text, "simd_decode_debian_12302019.md"), [])
+
+    def test_debian_needs_core_4_the_governor_and_both_machine_checks(self):
+        records = self.debian_records((("scalar", 0.130), ("avx2", 0.120)))
         whole = manifest("decode", records)
         whole["sampler"] = None
         stderrs = [stderr_for(i) for i in range(len(records))]

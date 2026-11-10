@@ -334,6 +334,48 @@
       }
     },
     {
+      "id": "simd-report-vector-kernels-not-compared",
+      "breaks": "A debian results file never calls AVX2 against SSSE3, only each against scalar",
+      "check": "test_simd_report.py test_on_debian_avx2_is_called_against_ssse3_under_zen_1_s_caveats",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    return [(later, vector[0]) for later in vector[1:]]\n",
+          "new": "    return []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_debian_avx2_is_called_against_ssse3_under_zen_1_s_caveats",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-mac-caveats-on-debian",
+      "breaks": "A debian results file carries the Mac's caveats: two counters, unpinned, NEON's folded field",
+      "check": "test_simd_report.py test_on_debian_avx2_is_called_against_ssse3_under_zen_1_s_caveats",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    caveats = DEBIAN_CAVEATS if host == DEBIAN else CAVEATS\n",
+          "new": "    caveats = CAVEATS\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_debian_avx2_is_called_against_ssse3_under_zen_1_s_caveats",
+        "exit": 1
+      }
+    },
+    {
       "id": "simd-driver-sampler-ignored",
       "breaks": "The driver publishes a process without asking the sampler",
       "check": "test_simd_driver.py test_a_process_is_withdrawn_unless_sampled_quiet",
