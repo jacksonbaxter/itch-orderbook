@@ -64,7 +64,7 @@ by changing one policy of this book and holding the rest:
   binary-searches the rest of the side; `paged-flat-bisect` binary-searches the whole side;
   `paged-flat`, as shipped, walks until it finds the place. Every one finds the same place
   (`tests/test_book.cpp`). How often a price falls outside carteret's window on this day is
-  counted in `results/layout_window_12302019.md`.
+  counted in `results/window_12302019.md`.
 
 Every arm gives the same answers on every message: each passed the oracle over the whole
 day (NOTES.md).
