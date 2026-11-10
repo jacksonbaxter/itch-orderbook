@@ -460,6 +460,48 @@
       }
     },
     {
+      "id": "simd-asm-audit-linux-gets-mac-targets",
+      "breaks": "On debian the E12 audit compiles the Mac's targets, its arm64 configuration in fact the host's x86-64",
+      "check": "test_simd_asm_audit.py test_on_linux_each_compiler_targets_x86_64_linux_with_its_vector_kernels",
+      "mutations": [
+        {
+          "file": "scripts/simd_asm_audit.py",
+          "old": "    if (system or platform.system()) == \"Linux\":\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_asm_audit.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_linux_each_compiler_targets_x86_64_linux_with_its_vector_kernels",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-asm-audit-linux-no-gcc-vector-kernels",
+      "breaks": "On debian the E12 audit leaves out the vector kernels, so GCC's SSSE3 and AVX2 code is never counted",
+      "check": "test_simd_asm_audit.py test_on_linux_each_compiler_targets_x86_64_linux_with_its_vector_kernels",
+      "mutations": [
+        {
+          "file": "scripts/simd_asm_audit.py",
+          "old": "        out.append((f\"x86 {name} x86-64 -O3\", command, \"x86.cpp\", \"x86-64\", [*FLAGS, \"-O3\"]))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_asm_audit.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_linux_each_compiler_targets_x86_64_linux_with_its_vector_kernels",
+        "exit": 1
+      }
+    },
+    {
       "id": "simd-wasm-batch-price-not-reversed",
       "breaks": "The SIMD128 kernel's batch4 leaves the prices in wire order",
       "check": "itch_wasm_kernels_smoke in node, through the wasm preset",

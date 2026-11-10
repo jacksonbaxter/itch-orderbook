@@ -118,6 +118,27 @@ class SimdAsmAuditTest(unittest.TestCase):
                          {"instructions": 5, "loads": 2, "stores": 1, "byte_reverses": 0,
                           "simd": 2})
 
+    def test_on_linux_each_compiler_targets_x86_64_linux_with_its_vector_kernels(self):
+        found = [("clang", "clang++", "clang 23"), ("gcc", "g++", "g++ 14")]
+        configs = simd_asm_audit.configurations(found, "Linux")
+        names = [c[0] for c in configs]
+        self.assertEqual(names, ["scalar clang x86-64 -O2", "scalar clang x86-64 -O2 no-slp",
+                                 "scalar clang x86-64 -O3", "scalar clang x86-64 -O3 no-slp",
+                                 "x86 clang x86-64 -O3",
+                                 "scalar gcc x86-64 -O2", "scalar gcc x86-64 -O2 no-slp",
+                                 "scalar gcc x86-64 -O3", "scalar gcc x86-64 -O3 no-slp",
+                                 "x86 gcc x86-64 -O3"])
+        for name, command, source, target, flags in configs:
+            self.assertEqual(target, "x86-64")
+            self.assertFalse(any(flag.startswith("--target") for flag in flags), name)
+            if source == "scalar.cpp":
+                self.assertIn("-march=x86-64", flags)
+        self.assertIn("-fno-tree-slp-vectorize", configs[6][4])
+        self.assertIn("-fno-slp-vectorize", configs[1][4])
+        self.assertEqual(configs[9][1:3], ("g++", "x86.cpp"))
+        mac = [c[0] for c in simd_asm_audit.configurations(found[:1], "Darwin")]
+        self.assertIn("scalar clang arm64 -O3", mac)
+
     def test_e12_is_refuted_only_if_nothing_is_merged_or_vectorised(self):
         _, summary = simd_asm_audit.finding(configs())
         self.assertIn("merged or vectorised in 0 of 4", summary)

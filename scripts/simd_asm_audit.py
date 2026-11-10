@@ -10,7 +10,9 @@ this machine that can, for arm64, x86-64 and wasm32, at -O2 and -O3, each with t
 vectorizer on and off (-fno-slp-vectorize); and each vector kernel once, at the build's -O3.
 x86-64 is compiled against the macOS SDK with -march=x86-64, the baseline a Linux build
 without -march gets (SSE2, no SSSE3); x86-64-macos is clang's macOS default, penryn, which
-has SSSE3.
+has SSSE3. On Linux (debian) every compiler targets its own x86-64 Linux at -march=x86-64, and
+the x86 vector kernels are compiled under each compiler there, GCC included; the arm64, macOS
+and wasm32 targets are the Mac's.
 Each function's instructions are counted: all of them, loads, stores, byte reverses (REV,
 REV16, REV32 on arm64; BSWAP, MOVBE and an 8-bit rotate of a 16-bit word on x86-64; core
 WebAssembly has none) and those that use a SIMD register. GCC is used where a real one is on
@@ -92,8 +94,10 @@ def compilers():
     return found, gcc or "unavailable: g++ on this machine is not GCC, and none other is on PATH"
 
 
-def configurations(found):
+def configurations(found, system=None):
     """(name, compiler command, source, target, flags) for every compile."""
+    if (system or platform.system()) == "Linux":
+        return linux_configurations(found)
     out = []
     for name, command, _ in found:
         targets = {"clang": (("arm64", []), ("x86-64", [X86, "-march=x86-64"]),
@@ -119,6 +123,22 @@ def configurations(found):
     if "emscripten" in names:
         out.append(("wasm emscripten wasm32 -O3", "em++", "wasm.cpp", "wasm32",
                     [*FLAGS, "-O3", "-msimd128"]))
+    return out
+
+
+def linux_configurations(found):
+    """On Linux, x86-64 only: each compiler's scalar at -march=x86-64, and its vector kernels."""
+    out = []
+    for name, command, _ in found:
+        if name not in ("clang", "gcc"):
+            continue
+        for opt in ("-O2", "-O3"):
+            for slp in (True, False):
+                off = "-fno-tree-slp-vectorize" if name == "gcc" else "-fno-slp-vectorize"
+                flags = [*FLAGS, opt, "-march=x86-64", *([] if slp else [off])]
+                out.append((f"scalar {name} x86-64 {opt}{'' if slp else ' no-slp'}", command,
+                            "scalar.cpp", "x86-64", flags))
+        out.append((f"x86 {name} x86-64 -O3", command, "x86.cpp", "x86-64", [*FLAGS, "-O3"]))
     return out
 
 
@@ -349,14 +369,15 @@ def render(manifest, record, stderr, sampler):
             "the 32-byte record of E2), `book_op_add` (an Add Order into the book's op), "
             "`field6` (E1's 6-byte field) and `batch4` (E5). Each is compiled with -S and its "
             "instructions counted. The scalar kernel is compiled under every compiler here, at "
-            "-O2 and -O3, with the SLP vectorizer on and off; each vector kernel once, at the "
-            "build's -O3. These are counts of compiler output: no clock or counter is read.",
+            "-O2 and -O3, with the SLP vectorizer on and off; each vector kernel at the build's "
+            "-O3, on debian under each compiler. These are counts of compiler output: no clock or counter is read.",
             "", "## Results", ""]
     out += table(configs)
     out += ["", "## Finding", ""] + found + ["", "## Listings", ""]
     out += listings(configs)
     out += ["## measure.sh load lines", "", "```", start, end, "```", "", "## Command", "",
-            "```", "measure.sh /usr/bin/time -l python3 scripts/simd_asm_audit.py collect --out "
+            "```", ("measure.sh /usr/bin/time -l" if host == MAC else "measure.sh taskset -c 4")
+            + " python3 scripts/simd_asm_audit.py collect --out "
             "<raw>/audit-1.json --commit <commit>  (scripts/simd_driver.py --experiment asm)",
             "```", ""]
     return "\n".join(out), summary
