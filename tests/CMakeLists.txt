@@ -66,6 +66,9 @@ itch_add_test(test_bench_replay test_bench_replay.cpp)
 target_include_directories(test_bench_platform PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 target_include_directories(test_bench_replay PRIVATE "${PROJECT_SOURCE_DIR}/bench"
   "${PROJECT_SOURCE_DIR}/tools")
+if(TARGET itch::mimalloc)
+  target_link_libraries(test_bench_replay PRIVATE itch::mimalloc)
+endif()
 itch_add_test(test_book_variants test_book_variants.cpp)
 target_include_directories(test_book_variants PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 

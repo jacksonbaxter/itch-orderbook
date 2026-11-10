@@ -5,11 +5,15 @@
 //                  [--track-top on|off] [--passes all|timed|throughput|untimed] [--core N]
 //                  [--commit TEXT]
 //                  [--dataset NAME]
-//                  [--dataset-sha256 HEX] [--orders N] [--levels N] [--benchmark_...]
+//                  [--dataset-sha256 HEX] [--orders N] [--levels N]
+//                  [--pages base|huge-if-offered|transparent|explicit] [--benchmark_...]
 //
 // --design      hash-linked, hash-flat, paged-linked or paged-flat for an arm of the fast
-//               book, or map-fresh or map-aged for the map book. The default is the fast
-//               book's default arm. Every design runs the same passes.
+//               book, map-fresh or map-aged for the map book, or alloc-ARM for the node
+//               book on one of T-ARENA-1's allocator arms: malloc-fresh, malloc-aged,
+//               mimalloc, pmr-pool, pmr-monotonic, pool-index, pool-pointer or pool-fifo.
+//               The default is the fast book's default arm. Every design runs the same
+//               passes.
 // --input-mode  ram reads the file into anonymous memory before the warm-up and never maps
 //               it, as itch-book's book_throughput does for T-BOOK-1. mapped, the default,
 //               maps the file read-only, as its replay tool does for T-BOOK-2. Either way
@@ -23,7 +27,12 @@
 //               pass of counters and memory, after a warm-up that builds no book, so that the
 //               memory it is charged for is that one book's. all, the default, runs both in
 //               one process, and its memory figure is marked as not the first book's.
-// --orders, --levels  the fast book's order and level capacity.
+// --orders, --levels  the book's order and level capacity, the fast book's or the node
+//               book's, whose defaults are its own.
+// --pages       the pages a pool arm's nodes are mapped on, huge-if-offered by default
+//               (itch/page_map.hpp). What each pass's pools obtained goes in the header.
+//
+// Each timed pass records the page faults it took, from getrusage on each side of it.
 //
 // One process is one repetition: scripts/bench_driver.py starts a fresh one for each.
 // The record goes to --out whatever happens. Exit codes: 0 publishable, 3 refused, 2 bad
@@ -57,6 +66,8 @@
 #include "designs.hpp"
 #include "itch/book.hpp"
 #include "itch/heap_ager.hpp"
+#include "itch/node_book.hpp"
+#include "itch/page_map.hpp"
 #include "mapped_file.hpp"
 #include "platform/affinity.hpp"
 #include "platform/counters.hpp"
@@ -126,6 +137,7 @@ struct Options {
   std::string dataset_sha256;
   int core = -1;
   itch::BookCapacity capacity;
+  itch::NodeCapacity node_capacity;
   Design design;
   InputMode input_mode = InputMode::mapped;
   bool track_top = false;
@@ -185,10 +197,17 @@ bool parse_option(std::string_view arg, std::string_view value, Options& options
     return parse_number(value, options.core);
   }
   if (arg == "--orders") {
-    return parse_number(value, options.capacity.orders);
+    return parse_number(value, options.capacity.orders) &&
+           parse_number(value, options.node_capacity.orders);
   }
   if (arg == "--levels") {
-    return parse_number(value, options.capacity.levels);
+    return parse_number(value, options.capacity.levels) &&
+           parse_number(value, options.node_capacity.levels);
+  }
+  if (arg == "--pages") {
+    const std::optional<itch::PageRequest> pages = itch::parse_page_request(value);
+    options.node_capacity.pages = pages.value_or(options.node_capacity.pages);
+    return pages.has_value();
   }
   if (arg == "--design") {
     const std::optional<Design> design = parse_design(value);
@@ -324,6 +343,24 @@ std::string describe_design(const Options& options) {
         "{}: MapBook, std::map levels with std::list FIFOs and a std::unordered_map index, on "
         "the process's heap as it comes{}",
         name, kMapWarmUp);
+  }
+  if (design.kind == DesignKind::alloc) {
+    const itch::NodeCapacity& nodes = options.node_capacity;
+    const itch::HeapAgeing ageing;
+    const std::string aged =
+        design.allocator == itch::tools::AllocArm::malloc_aged
+            ? std::format(
+                  ", on a heap aged by HeapAger: seed {:#x}, {} warm blocks, a ring of {}, one "
+                  "step before each A, F and U, outside the timing",
+                  ageing.seed, ageing.warm_blocks, ageing.ring_blocks)
+            : std::string{};
+    return std::format(
+        "{}: NodeBook on the {} arm{}, linked levels and FIFOs of nodes, an open-addressed "
+        "index of 16-byte slots, {} orders and {} levels, pool pages asked as {}; the warm-up "
+        "runs the fast book's hash index with linked levels, so that every arm warms up "
+        "alike and the throughput pass's book is the first to take nodes from its allocator",
+        name, to_string(design.allocator), aged, nodes.orders, nodes.levels,
+        to_string(nodes.pages));
   }
   if (design.kind == DesignKind::map_aged) {
     const itch::HeapAgeing ageing;
@@ -528,7 +565,8 @@ void run_timed_passes(Session& session, const TimerInfo& timer, SampleBuffer& sa
 
 // One process's run of one design, from the warm-up to the record.
 template <class Book, class MakeBook>
-int run_design(const Options& options, const OwnedInput& owned, const MakeBook& make_book) {
+int run_design(const Options& options, const OwnedInput& owned, const MakeBook& make_book,
+               const std::vector<std::string>* pages = nullptr) {
   using Session = ReplaySession<ReplayInput, PlatformClock, Book>;
   const bool timed = options.passes != Passes::untimed;
   const bool latency = options.passes == Passes::all || options.passes == Passes::timed;
@@ -618,6 +656,13 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
                           : unavailable("no sample arena in a process with no latency pass"),
        .residency = session.report().residency});
   record.header.emplace_back("design", scrub_private(describe_design(options)));
+  if (pages != nullptr) {
+    std::string obtained = pages->empty() ? std::string{"no pool built"} : std::string{};
+    for (std::size_t i = 0; i < pages->size(); ++i) {
+      obtained += std::format("{}book {}: {}", i == 0 ? "" : " | ", i + 1, (*pages)[i]);
+    }
+    record.header.emplace_back("pool_pages", scrub_private(obtained));
+  }
   record.header.emplace_back("input", scrub_private(owned.describe()));
   record.header.emplace_back(
       "top_of_book",
@@ -639,6 +684,30 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
   return session.report().publishable() ? 0 : 3;
 }
 
+// The node book on one allocator arm. Every book built, the warm-up's aside, notes what
+// its pools obtained, so that each pass's pages are on the record, not the first one's.
+int run_alloc_design(const Options& options, const OwnedInput& owned) {
+  return itch::tools::with_alloc_arm(
+      options.design.allocator,
+      [&]<class Book> {
+        std::vector<std::string> pages;
+        const auto make = [&options, &pages] {
+          auto book = std::make_unique<Book>(options.node_capacity);
+          const itch::PageReport* report = itch::tools::node_book_of(*book).heap().pages();
+          if (report != nullptr) {
+            pages.push_back(report->describe());
+          }
+          return book;
+        };
+        const bool pool = itch::tools::is_pool_arm(options.design.allocator);
+        return run_design<Book>(options, owned, make, pool ? &pages : nullptr);
+      },
+      [] {
+        std::println(stderr, "bench_replay: this build has no mimalloc (ITCH_MIMALLOC off)");
+        return 2;
+      });
+}
+
 int run(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   Options options;
@@ -648,7 +717,8 @@ int run(int argc, char** argv) {
                  "[--input-mode ram|mapped] [--track-top on|off] "
                  "[--passes all|timed|throughput|untimed] "
                  "[--core N] [--commit TEXT] [--dataset NAME] [--dataset-sha256 HEX] "
-                 "[--orders N] [--levels N]");
+                 "[--orders N] [--levels N] "
+                 "[--pages base|huge-if-offered|transparent|explicit]");
     return 2;
   }
   const std::optional<OwnedInput> owned = OwnedInput::open(options);
@@ -663,6 +733,7 @@ int run(int argc, char** argv) {
     case DesignKind::map_aged:
       return run_design<AgedMapBook>(options, *owned,
                                      [] { return std::make_unique<AgedMapBook>(); });
+    case DesignKind::alloc: return run_alloc_design(options, *owned);
     case DesignKind::fast: break;
   }
   return itch::tools::with_book_arm(options.design.arm, [&]<class Index, class Levels> {

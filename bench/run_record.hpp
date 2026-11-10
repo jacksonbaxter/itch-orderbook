@@ -108,8 +108,9 @@ namespace detail {
   const double rate = seconds > 0.0 ? static_cast<double>(pass->messages) / seconds : 0.0;
   return std::format(
       R"({{"messages": {}, "seconds": {:.6f}, "messages_per_s": {:.1f}, "top_changes": {}, )"
-      R"("pauses": {}}})",
-      pass->messages, seconds, rate, pass->top_changes, pass->pauses);
+      R"("pauses": {}, "faults": {}}})",
+      pass->messages, seconds, rate, pass->top_changes, pass->pauses,
+      pass->faults ? std::format("{}", *pass->faults) : std::string{"null"});
 }
 
 [[nodiscard]] inline std::string percentiles_json(const std::vector<Percentile>& percentiles) {

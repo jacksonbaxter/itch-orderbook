@@ -1,8 +1,9 @@
 // The book designs bench_replay can measure, by name, for --design.
 //
-// The four arms of the fast book, and the map book on a fresh heap or on one HeapAger
-// ages as it goes. Every design runs the same passes over the same input, so that one
-// run can put any of them side by side.
+// The four arms of the fast book, the map book on a fresh heap or on one HeapAger ages as
+// it goes, and the node book on each allocator arm of T-ARENA-1 (tools/alloc_arms.hpp), as
+// alloc-<arm>. Every design runs the same passes over the same input, so that one run can
+// put any of them side by side.
 #pragma once
 
 #include <cstdint>
@@ -12,6 +13,7 @@
 #include <string>
 #include <string_view>
 
+#include "alloc_arms.hpp"
 #include "book_arms.hpp"
 #include "itch/book.hpp"
 #include "itch/heap_ager.hpp"
@@ -19,30 +21,43 @@
 
 namespace itch::bench {
 
-enum class DesignKind : std::uint8_t { fast, map_fresh, map_aged };
+enum class DesignKind : std::uint8_t { fast, map_fresh, map_aged, alloc };
+
+inline constexpr std::string_view kAllocPrefix = "alloc-";
 
 struct Design {
   DesignKind kind = DesignKind::fast;
-  tools::BookArm arm;  // Read only for the fast book.
+  tools::BookArm arm;           // Read only for the fast book.
+  tools::AllocArm allocator{};  // Read only for the node book.
 };
 
 [[nodiscard]] inline std::string design_name(const Design& design) {
   switch (design.kind) {
     case DesignKind::map_fresh: return "map-fresh";
     case DesignKind::map_aged: return "map-aged";
+    case DesignKind::alloc: return std::format("{}{}", kAllocPrefix, to_string(design.allocator));
     case DesignKind::fast: break;
   }
   return std::format("{}-{}", tools::to_string(design.arm.index),
                      tools::to_string(design.arm.levels));
 }
 
-// hash-linked, hash-flat, paged-linked, paged-flat, map-fresh or map-aged.
+// hash-linked, hash-flat, paged-linked, paged-flat, map-fresh, map-aged, or alloc- and an
+// allocator arm.
 [[nodiscard]] inline std::optional<Design> parse_design(std::string_view name) {
   if (name == "map-fresh") {
     return Design{.kind = DesignKind::map_fresh, .arm = {}};
   }
   if (name == "map-aged") {
     return Design{.kind = DesignKind::map_aged, .arm = {}};
+  }
+  if (name.starts_with(kAllocPrefix)) {
+    const std::optional<tools::AllocArm> allocator =
+        tools::parse_alloc_arm(name.substr(kAllocPrefix.size()));
+    if (!allocator) {
+      return std::nullopt;
+    }
+    return Design{.kind = DesignKind::alloc, .arm = {}, .allocator = *allocator};
   }
   const std::size_t dash = name.find('-');
   if (dash == std::string_view::npos) {

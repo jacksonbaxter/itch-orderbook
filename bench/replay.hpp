@@ -19,6 +19,10 @@
 //     book event. The throughput pass times it with the book. The latency span stays
 //     apply() alone.
 //
+// A clock that can count page faults (CountsFaults) is read for them just before each timed
+// pass starts and just after it stops, so that each pass carries the faults it took. The
+// span is the whole pass, an ageing book's stops included.
+//
 // Residency is asked last, after everything the pass allocates, because allocating can
 // push file pages out: on debian 155 pages of a day went between the warm-up and the first
 // pass, with the sample arena allocated in between. It is asked again when the pass ends,
@@ -26,6 +30,7 @@
 #pragma once
 
 #include <array>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -49,9 +54,10 @@ namespace itch::bench {
 struct PassTotals {
   std::uint64_t messages = 0;
   std::uint64_t ticks = 0;
-  std::uint64_t rejected = 0;     // apply() refused the message. A clean day has none.
-  std::uint64_t top_changes = 0;  // Messages after which a tracked top of book moved.
-  std::uint64_t pauses = 0;       // Times the clock stopped for an ageing step.
+  std::uint64_t rejected = 0;             // apply() refused the message. A clean day has none.
+  std::uint64_t top_changes = 0;          // Messages after which a tracked top of book moved.
+  std::uint64_t pauses = 0;               // Times the clock stopped for an ageing step.
+  std::optional<std::uint64_t> faults{};  // Page faults in the pass, when the clock counts them.
 };
 
 [[nodiscard]] constexpr bool is_rejection(ApplyStatus status) noexcept {
@@ -175,13 +181,39 @@ class TopTracker {
 struct PlatformClock {
   [[nodiscard]] static std::uint64_t start() noexcept { return ticks_start(); }
   [[nodiscard]] static std::uint64_t stop() noexcept { return ticks_stop(); }
+  [[nodiscard]] static std::optional<std::uint64_t> faults() noexcept { return page_faults(); }
 };
+
+// A clock that says how many page faults the process has taken.
+template <class Clock>
+concept CountsFaults = requires(Clock& clock) {
+  { clock.faults() } -> std::same_as<std::optional<std::uint64_t>>;
+};
+
+template <class Clock>
+[[nodiscard]] std::optional<std::uint64_t> faults_now(Clock& clock) noexcept {
+  if constexpr (CountsFaults<Clock>) {
+    return clock.faults();
+  } else {
+    return std::nullopt;
+  }
+}
+
+// The faults between two reads, or nothing if either read failed.
+[[nodiscard]] inline std::optional<std::uint64_t> faults_between(
+    std::optional<std::uint64_t> before, std::optional<std::uint64_t> after) noexcept {
+  if (!before || !after || *after < *before) {
+    return std::nullopt;
+  }
+  return *after - *before;
+}
 
 template <class Clock, class Book, class Tracker>
 [[nodiscard]] PassTotals throughput_pass(std::span<const std::byte> input, Book& book, Clock& clock,
                                          Tracker& tracker) {
   FrameReader reader{input};
   PassTotals totals;
+  const std::optional<std::uint64_t> faults_before = faults_now(clock);
   std::uint64_t started = clock.start();
   for (Frame frame = reader.next(); !is_terminal(frame.status); frame = reader.next()) {
     if (frame.status == FrameStatus::message) {
@@ -204,6 +236,7 @@ template <class Clock, class Book, class Tracker>
     }
   }
   totals.ticks += clock.stop() - started;
+  totals.faults = faults_between(faults_before, faults_now(clock));
   return totals;
 }
 
@@ -222,6 +255,7 @@ template <class Clock, class Book, class Sink, class Tracker>
                                       Sink& sink, Tracker& tracker) {
   FrameReader reader{input};
   PassTotals totals;
+  const std::optional<std::uint64_t> faults_before = faults_now(clock);
   const std::uint64_t started = clock.start();
   for (Frame frame = reader.next(); !is_terminal(frame.status); frame = reader.next()) {
     if (frame.status != FrameStatus::message) {
@@ -247,6 +281,7 @@ template <class Clock, class Book, class Sink, class Tracker>
     }
   }
   totals.ticks = clock.stop() - started;
+  totals.faults = faults_between(faults_before, faults_now(clock));
   return totals;
 }
 
