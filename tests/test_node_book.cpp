@@ -51,6 +51,20 @@ struct Probe {
   std::uint64_t pad;
 };
 
+// ThreadSanitizer maps the shadow of a page on the first instrumented write to it, so in the
+// tsan build the process's fault count takes in the shadow's pages as well as the pool's.
+#if defined(__SANITIZE_THREAD__)
+constexpr bool kThreadSanitizer = true;
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+constexpr bool kThreadSanitizer = true;
+#else
+constexpr bool kThreadSanitizer = false;
+#endif
+#else
+constexpr bool kThreadSanitizer = false;
+#endif
+
 std::uint64_t faults_now() {
   rusage usage{};
   ::getrusage(RUSAGE_SELF, &usage);
@@ -123,7 +137,10 @@ TEST(NodePool, ItRefusesPastItsCapacityAndTakesBackAfterAGiveBack) {
   EXPECT_FALSE(pool.has_room());
 }
 
-// Every page is touched in the constructor, so writing every node faults nothing in.
+// Every page is touched in the constructor, so writing every node faults nothing in. Under
+// ThreadSanitizer the first write to each page faults in its shadow, about one fault for each
+// of the pool's 16 KiB pages on this Mac where an uninstrumented write faults none (NOTES.md,
+// "The node pool's fault test under TSan"), so there the count is printed and not judged.
 TEST(NodePool, EveryNodeIsFaultedInBeforeTheFirstIsTaken) {
   constexpr std::uint32_t kNodes = 1U << 18U;  // 4 MiB of nodes.
   itch::NodePool<Probe, itch::HandleKind::index, itch::FreeOrder::lifo> pool{
@@ -134,8 +151,13 @@ TEST(NodePool, EveryNodeIsFaultedInBeforeTheFirstIsTaken) {
   for (std::uint32_t i = 0; i < kNodes; ++i) {
     pool.at(pool.take()).value = i;
   }
-  EXPECT_EQ(faults_now() - before, 0U);
+  const std::uint64_t faulted = faults_now() - before;
   EXPECT_FALSE(pool.has_room());
+  if (kThreadSanitizer) {
+    GTEST_SKIP() << "under ThreadSanitizer, whose shadow faults in on first write: " << faulted
+                 << " faults over " << kNodes << " nodes";
+  }
+  EXPECT_EQ(faulted, 0U);
 }
 
 // The control for the test above: the same writes to fresh pages do fault.
