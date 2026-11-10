@@ -2,7 +2,8 @@
 // diffs them after every message, and checks T-INV-1, T-INV-2 and T-INV-3.
 //
 //     itch_oracle FILE [--hash-every N] [--exhaustive] [--max-orders N] [--max-levels N]
-//                 [--observations FILE] [--index hash|paged] [--levels linked|flat]
+//                 [--observations FILE] [--index hash|paged|identity|chained]
+//                 [--levels linked|flat|flat-scan16|flat-bisect]
 //                 [--max-pages N] [--index-bits N] [--max-slots N] [--prefetch D]
 //
 // --hash-every N  hashes both whole books every N messages. 0 keeps only the final hash.
@@ -285,9 +286,9 @@ int main(int argc, const char* const* argv) {
     if (!options) {
       static_cast<void>(
           std::fputs("usage: itch_oracle FILE [--hash-every N] [--exhaustive] [--max-orders N] "
-                     "[--max-levels N] [--observations FILE] [--index hash|paged] "
-                     "[--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N] "
-                     "[--prefetch D]\n",
+                     "[--max-levels N] [--observations FILE] [--index hash|paged|identity|chained] "
+                     "[--levels linked|flat|flat-scan16|flat-bisect] [--max-pages N] "
+                     "[--index-bits N] [--max-slots N] [--prefetch D]\n",
                      stderr));
       return 2;
     }

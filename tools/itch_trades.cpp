@@ -4,8 +4,9 @@
 //
 //     itch_trades FILE [--date YYYYMMDD] [--crossstats FILE] [--midas FILE]
 //                 [--midas-rows N] [--exchange NAME] [--symbols FILE] [--details N]
-//                 [--max-orders N] [--max-levels N] [--index hash|paged]
-//                 [--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N]
+//                 [--max-orders N] [--max-levels N] [--index hash|paged|identity|chained]
+//                 [--levels linked|flat|flat-scan16|flat-bisect] [--max-pages N]
+//                 [--index-bits N] [--max-slots N]
 //
 // --date        the trading day. Needed with --crossstats or --midas.
 // --crossstats  Nasdaq's cross file for that day. Without it T-TRADE-2 is not run.
@@ -298,8 +299,9 @@ int main(int argc, const char* const* argv) {
           std::fputs("usage: itch_trades FILE [--date YYYYMMDD] [--crossstats FILE] "
                      "[--midas FILE] [--midas-rows N] [--exchange NAME] [--symbols FILE] "
                      "[--details N] "
-                     "[--max-orders N] [--max-levels N] [--index hash|paged] "
-                     "[--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N]\n",
+                     "[--max-orders N] [--max-levels N] [--index hash|paged|identity|chained] "
+                     "[--levels linked|flat|flat-scan16|flat-bisect] [--max-pages N] "
+                     "[--index-bits N] [--max-slots N]\n",
                      stderr));
       return kExitUsage;
     }

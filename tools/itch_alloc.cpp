@@ -2,9 +2,10 @@
 // the end of warm-up and the end of the stream, and a control book replaying the same
 // stream is seen allocating.
 //
-//     itch_alloc FILE [--warmup N] [--max-orders N] [--max-levels N] [--index hash|paged]
-//                [--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N]
-//                [--prefetch D]
+//     itch_alloc FILE [--warmup N] [--max-orders N] [--max-levels N]
+//                [--index hash|paged|identity|chained]
+//                [--levels linked|flat|flat-scan16|flat-bisect] [--max-pages N]
+//                [--index-bits N] [--max-slots N] [--prefetch D]
 //
 // Warm-up is the first N messages, 0 by default, so the count starts at the first
 // message after construction. --index and --levels pick the arm of the fast book, the
@@ -179,7 +180,8 @@ int main(int argc, const char* const* argv) {
     if (!options) {
       static_cast<void>(
           std::fputs("usage: itch_alloc FILE [--warmup N] [--max-orders N] [--max-levels N] "
-                     "[--index hash|paged] [--levels linked|flat] [--max-pages N] "
+                     "[--index hash|paged|identity|chained] "
+                     "[--levels linked|flat|flat-scan16|flat-bisect] [--max-pages N] "
                      "[--index-bits N] [--max-slots N] [--prefetch D]\n",
                      stderr));
       return 2;
