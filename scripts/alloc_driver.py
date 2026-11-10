@@ -445,8 +445,10 @@ def render(runs, checks, args, run_id, started, finished, machine_output, comman
     lines += [f"| {arm} | {records[0]['header']['design']} |" for arm, records in runs.items()]
     lines += ["", "## Summary", "",
               f"Each arm ran in {repetitions} repetitions, each a fresh process: the warm-up, on "
-              "the fast book for every arm, then a throughput pass and a latency pass, each on a "
-              "fresh node book, and a second process for the untimed pass of memory. Every arm "
+              "the fast book for every arm, then each timed pass's code warmed on a node book of "
+              "its own over the day's first book operations, untimed, then a throughput pass and "
+              "a latency pass, each on a fresh node book, and a second process for the untimed "
+              "pass of memory. Every arm "
               "ran in each repetition, one after another, the order turned by one each time. "
               "The day was read into RAM before the warm-up. The service time is the throughput "
               "pass over every message, frame walk included.", "",
@@ -471,8 +473,8 @@ def render(runs, checks, args, run_id, started, finished, machine_output, comman
               "Page faults, minor and major, from getrusage just before each timed pass started "
               "and just after it stopped, one figure per repetition. A pool arm maps and touches "
               "every node before the pass, so it must take none: T-ARENA-1's fault check, "
-              f"`fault_check` in the header. {check_results.FAULTS_HEAP} is a heap arm's, which "
-              "faults by design.", "",
+              f"`fault_check` in the header. A heap arm's check reads `{check_results.FAULTS_HEAP}`: "
+              "it takes its pages from the system as its book grows, so it faults by design.", "",
               "| Arm | Throughput pass | Latency pass | Check |", "|---|---|---|---|"]
     lines += fault_rows(runs)
     lines += ["", "## Pages", "",

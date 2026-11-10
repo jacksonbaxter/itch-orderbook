@@ -350,6 +350,38 @@ def wasm_row(name, text):
             said.split(";")[0], f"`{header_commit(text, name)}`", source(name))
 
 
+def section_rows(text, title, name):
+    """The cells of each row below the head of the table in the file's section of that title."""
+    section = find(rf"^## {re.escape(title)}\n((?s:.*?))(?=^## |\Z)", text, name)[1]
+    rows = [[cell.strip() for cell in line.strip("|").split("|")]
+            for line in section.splitlines() if line.startswith("| ")]
+    return rows[1:]
+
+
+def alloc_rows(name, text):
+    """T-ARENA-1: one row for each allocator arm, its rate, its tails over every operation and
+    what the fault check made of its timed passes."""
+    arms = [arm.strip() for arm in header_field(text, "allocators", name).split(",")]
+    host = header_field(text, "host", name)
+    pinning = find(r"^- pinning: (.*?)(?::|$)", text, name)[1]
+    commit = header_commit(text, name)
+    ratios = {cells[0]: f"{cells[1]}×" for cells in section_rows(text, "Comparison", name)}
+    tails = {cells[0]: (cells[3], cells[4]) for cells in section_rows(text, "Latency", name)
+             if len(cells) == 6 and cells[1] == "all"}
+    faults = {cells[0]: cells[3] for cells in section_rows(text, "Page faults", name)
+              if len(cells) == 4}
+    rows = []
+    for arm in arms:
+        if arm not in tails or arm not in faults:
+            raise TableError(f"results/{name}: {arm} has no latency or page-fault row")
+        rate = summary_median(text, f"{arm}, throughput, messages/s", name)
+        spread = table_row(f"{arm}, throughput, messages/s", text, name)[3]
+        memory = summary_median(text, f"{arm}, book memory, MiB", name)
+        rows.append((arm, day_of(name), host, pinning, rate, spread, ratios.get(arm, "–"),
+                     *tails[arm], faults[arm], memory, f"`{commit}`", source(name)))
+    return rows, header_field(text, "fault_check", name)
+
+
 def run_rows(text):
     rows = []
     for line in text.splitlines():
@@ -379,6 +411,7 @@ def generate(root):
     summaries = []
     spsc = []
     pnl = []
+    arenas = []
     for path in sorted((root / "results").glob("*.md")):
         name = path.name
         if name in NOT_RESULTS:
@@ -412,6 +445,10 @@ def generate(root):
             rows = []
         elif name.startswith("wasm_"):
             browsers.append(wasm_row(name, text))
+            rows = []
+        elif name.startswith("alloc_"):
+            arms, fault_check = alloc_rows(name, text)
+            arenas.append((name, fault_check, arms))
             rows = []
         elif name.startswith("mm_pnl_"):
             pnl += pnl_rows(name, text)
@@ -471,6 +508,15 @@ def generate(root):
                       "weak evidence.", ""]
         lines += markdown_table(("Target", "Comparison", "Day", "Host", "Pinning", "Measured",
                                  "Bar", "Verdict", "Commit", "File"), spsc)
+    for name, fault_check, arms in arenas:
+        lines += ["", f"T-ARENA-1, the node book on each allocator arm, from "
+                      f"[results/{name}](results/{name}). Only the allocator changes between "
+                      "arms. T-ARENA-1 is UNCONFIRMED, so no bar is met or missed; the check is "
+                      "that no timed pass of a pool arm takes a page fault, and it read: "
+                      f"{fault_check}. Tails are over every operation, in ns.", ""]
+        lines += markdown_table(("Arm", "Day", "Host", "Pinning", "Median messages/s", "CV",
+                                 "Over malloc-fresh", "p99", "p99.9", "Page faults, timed passes",
+                                 "Book memory MiB", "Commit", "File"), arms)
     if pnl:
         lines += ["", "The market maker on its report day, 12302019, a late-December session, "
                       "with every parameter chosen on 10302019, an FOMC day. One symbol-day. No "
