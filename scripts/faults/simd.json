@@ -466,8 +466,8 @@
       "mutations": [
         {
           "file": "scripts/check_predictions.py",
-          "old": "\"wasm_*.md\", \"simd_*.md\")",
-          "new": "\"wasm_*.md\")"
+          "old": "\"wasm_*.md\", \"simd_*.md\", \"layout_*.md\"",
+          "new": "\"wasm_*.md\", \"layout_*.md\""
         }
       ],
       "command": [

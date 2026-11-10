@@ -100,6 +100,14 @@ class History(unittest.TestCase):
         (self.results / "simd_fixture.md").write_text("# nothing\n", encoding="utf-8")
         self.assert_fails("prediction-missing")
 
+    def test_a_layout_result_naming_no_prediction(self):
+        self.in_order()
+        for name in ("layout_fixture.md", "structure_fixture.md", "window_fixture.md"):
+            with self.subTest(name=name):
+                (self.results / name).write_text("# nothing\n", encoding="utf-8")
+                self.assert_fails("prediction-missing")
+                (self.results / name).unlink()
+
     def test_the_oracle_sessions_naming_no_prediction(self):
         self.in_order()
         (self.results / "oracle_sessions.md").write_text("# nothing\n", encoding="utf-8")

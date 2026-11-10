@@ -228,8 +228,8 @@ def summary_row(name, text):
     return (title, host, summary, f"`{header_commit(text, name)}`", source(name))
 
 
-SUMMARY_PREFIXES = ("flamegraph_", "profile_", "counters_zen1_", "lookup_", "prefetch_",
-                    "dispatch_", "simd_")
+SUMMARY_PREFIXES = ("flamegraph_", "profile_", "counters_zen1_", "counters_by_age_", "lookup_",
+                    "prefetch_", "dispatch_", "simd_", "layout_", "structure_", "window_")
 
 
 def mm_rows(name, text):

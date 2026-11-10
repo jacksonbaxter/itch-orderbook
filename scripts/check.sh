@@ -112,6 +112,7 @@ stage_bench() {
     python_test scripts/test_counts_report.py &&
     python_test scripts/test_flame_report.py &&
     python_test scripts/test_variants_report.py &&
+    python_test scripts/test_window_report.py &&
     python_test scripts/test_simd_report.py &&
     python_test scripts/test_simd_driver.py &&
     python_test scripts/test_simd_asm_audit.py &&
@@ -126,7 +127,7 @@ stage_bench() {
   if [ -f results/chase_debian.md ]; then
     python_test scripts/chase_report.py --check results/chase_debian.md || return 1
   fi
-  for counts in results/counters_by_type_*.md; do
+  for counts in results/counters_by_type_*.md results/counters_by_age_*.md; do
     [ -f "$counts" ] || continue
     python_test scripts/counts_report.py --check "$counts" || return 1
   done
@@ -137,9 +138,14 @@ stage_bench() {
     [ -f "$graph" ] || continue
     python_test scripts/flame_report.py --check "$graph" || return 1
   done
-  for variants in results/lookup_*.md results/prefetch_*.md results/dispatch_*.md; do
+  for variants in results/lookup_*.md results/prefetch_*.md results/dispatch_*.md \
+    results/layout_*.md results/structure_*.md; do
     [ -f "$variants" ] || continue
     python_test scripts/variants_report.py --check "$variants" || return 1
+  done
+  for window in results/window_*.md; do
+    [ -f "$window" ] || continue
+    python_test scripts/window_report.py --check "$window" || return 1
   done
   for simd in results/simd_*.md; do
     [ -f "$simd" ] || continue

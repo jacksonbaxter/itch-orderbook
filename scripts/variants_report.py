@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Writes the results of the book's hot-loop experiments from bench_variants records.
 
-    variants_report.py --experiment lookup|prefetch|dispatch --record RUN.json... \\
+    variants_report.py --experiment lookup|prefetch|dispatch|layout|structure --record RUN.json... \\
         --load STDERR... --prediction P-NNNN --out results/EXPERIMENT_HOST_DAY.md \\
         [--machine-check BEFORE AFTER] [--host-state START END] [--sampler LOG] \\
         [--run-log results/run_log.md]
@@ -19,6 +19,14 @@ sampler ran over its whole span and saw no other process above 20% CPU in it.
   prefetch  E8: the look-ahead D against D = 0. Refuted if no D gains 10%.
   dispatch  E7: switch, table, threaded and predicate-only. Refuted if the branch misses a
             message are flat across the forms that dispatch, within 0.05 a message.
+  layout    carteret's layout experiments on this book: the identity hash and separate
+            chaining each against the multiply-shift open-addressing hash, and a level search
+            that walks 16 entries or none before it binary-searches against one that walks
+            the whole side.
+  structure where the DRAM demand fills fall: one stage of the look-ahead for one kind of
+            message at a time against none, each stage reading one structure. A structure is
+            named the bottleneck only if taking its stage off the demand path takes 40% or
+            more of the fills with it.
 
 Every figure in the file comes from its own table of every timed pass, so --check rebuilds
 the results and the finding from that table and fails on any difference. It also fails on
@@ -69,6 +77,29 @@ NAME_RULES = ((re.compile(r"cache-misses"), "L2 miss"),
 FORMS = ("switch", "table", "threaded", "predicate")
 BOOK_FORMS = ("switch", "table", "threaded")
 DESIGNS = ("paged-flat", "hash-flat", "paged-linked", "hash-linked")
+LAYOUT_DESIGNS = ("hash-flat", "identity-flat", "chained-flat", "paged-flat", "paged-flat-scan16",
+                  "paged-flat-bisect")
+# Each experiment of the layout run: its arm, and the arm it is set against.
+LAYOUT_PAIRS = (("hash policy", "identity-flat", "hash-flat"),
+                ("open addressing against chaining", "chained-flat", "hash-flat"),
+                ("search window of 16", "paged-flat-scan16", "paged-flat"),
+                ("search window of 0", "paged-flat-bisect", "paged-flat"))
+STRUCTURE_DESIGN = "paged-flat"
+STRUCTURE_DISTANCE = 16
+# Each variant of the structure run, and the structure its one stage reads on paged-flat.
+STRUCTURES = {
+    "D=0": "none: no look-ahead",
+    "named:0": "index directory, for messages that name an order",
+    "named:1": "index slot, for messages that name an order",
+    "named:2": "order record",
+    "named:3": "level record",
+    "added:0": "index directory, for adds",
+    "added:1": "index slot, for adds",
+    "added:2": "side record",
+    "added:3": "level array, its best end",
+    "all:all": "every stage, every kind: E8's look-ahead",
+}
+BOTTLENECK_SHARE = 0.40
 E8_GAIN = 0.10
 E7_FLAT = 0.05
 SAMPLE_GAP = 5  # seconds: the sampler writes a line every 2 s, so a longer gap is a stop
@@ -77,10 +108,12 @@ INTERFERENCE = ("sampled every 2 s over each process's whole span; no other proc
                 "20% CPU during any of them (NOTES.md, \"The Mac rule for other work\")")
 TITLES = {"lookup": "The order lookup apart from the level work",
           "prefetch": "E8: prefetch look-ahead on the book build",
-          "dispatch": "E7: dispatch form"}
+          "dispatch": "E7: dispatch form",
+          "layout": "carteret's layout experiments on this book",
+          "structure": "Where the DRAM demand fills fall, by structure"}
 PASS_ROW = re.compile(r"^\| `([^`]+)` \| (\d+) \| (check|answer|replay) \| ([0-9,]+) \| "
                       r"([0-9.]+) \| ([0-9,]+) \| (.*) \|$")
-FILE_NAME = re.compile(r"^(lookup|prefetch|dispatch)_(debian|mac)_(\d{8})\.md$")
+FILE_NAME = re.compile(r"^(lookup|prefetch|dispatch|layout|structure)_(debian|mac)_(\d{8})\.md$")
 
 METHOD = {
     "lookup": """\
@@ -135,6 +168,55 @@ warm-up pass and one timed pass, each on a fresh book, in one form (`bench/dispa
 
 The first three hand the same messages to the same book and leave it in the same state
 (`tests/test_book_variants.cpp`).""",
+    "layout": """\
+Each process maps the day, reads every page and finds every page resident, then runs a
+warm-up pass and one timed pass, each on a fresh book of one arm, through `FastBook::apply()`
+with no look-ahead. carteret ran three layout experiments on its book; each is repeated here
+by changing one policy of this book and holding the rest:
+
+- **hash policy**: `identity-flat` against `hash-flat`. The same open-addressing table, at
+  most half full, with linear probing and backward-shift deletion; the home slot is the
+  reference's own low bits (`IdentityHashIndex`) in place of the multiply-shift's top bits
+  (`HashIndex`).
+- **open addressing against chaining**: `chained-flat` against `hash-flat`. The same
+  multiply-shift and as many buckets as the table has slots; each bucket holds the first
+  order of a chain, and each order's link to the next sits in an array beside the order
+  pool (`ChainedIndex`).
+- **window width against overflow**: this book has no price window and so no overflow.
+  Every level of a side is an entry of one sorted array, searched from the best end, so a far
+  price costs a longer search, never a second structure. The nearest real experiment is
+  how far the search walks: `paged-flat-scan16` reads 16 entries, one line of keys, and then
+  binary-searches the rest of the side; `paged-flat-bisect` binary-searches the whole side;
+  `paged-flat`, as shipped, walks until it finds the place. Every one finds the same place
+  (`tests/test_book.cpp`). How often a price falls outside carteret's window on this day is
+  counted in `results/layout_window_12302019.md`.
+
+Every arm gives the same answers on every message: each passed the oracle over the whole
+day (NOTES.md).""",
+    "structure": """\
+Each process maps the day, reads every page and finds every page resident, then runs a
+warm-up pass and one timed pass, each on a fresh `paged-flat` book. `D=0` reads frames with
+no look-ahead. Every other variant reads them through `itch::LookaheadReader` 16 frames ahead
+with the book wrapped in `StageFilter` (`bench/stage_filter.hpp`), which passes on one stage
+of `FastBook::prefetch_stage()` for one kind of message and drops every other: `named` is E,
+C, X, D and U, which name a live order, and `added` is A and F. Each stage asks for the line
+of one structure, after the stages before it:
+
+| Stage | For a message that names an order | For an add |
+|---|---|---|
+| 0 | the paged index's directory entry (for U, the new reference's too) | the directory entry of the new reference |
+| 1 | the page slot | the page slot the duplicate check reads |
+| 2 | the order's record | the side's record |
+| 3 | the order's level record | the best end of the side's key array |
+
+A stage that is started early turns the demand load `apply()` would make on that line into
+a hit, or into a software prefetch's fill, which is not a demand fill and is not counted.
+So `D=0`'s fills less one variant's are the demand fills from DRAM that the variant's
+structure takes, as `r0843:u` sees them, a floor on DRAM demand fills. `all:all`
+starts every stage for every kind, E8's look-ahead, and what it leaves is what no stage
+reaches: the FIFO neighbours an add or a removal links, the entries a level's arrival or
+departure shifts, the free lists, the page counts, the input, and any hint that came too
+late or was evicted before its use.""",
 }
 
 CAVEATS = {
@@ -157,6 +239,33 @@ CAVEATS = {
   the absolute count holds the book's own branches too.
 - **The threaded form needs `[[clang::musttail]]`.** On a compiler without it, GCC 14 among
   them, the form is not built and asking for it exits with an error.""",
+    "layout": """\
+- **One day, one host per file.** Each figure is one arm's whole timed pass, parse
+  included, on this day and this host. Which arm wins depends on the caches and the memory
+  system; the two hosts are separate files and never one figure.
+- **Arms of this book, not carteret's book.** carteret's book keeps levels in a price window
+  with a `std::map` beside it and its order records elsewhere; the arms here change one
+  policy of this book. A gap that differs from carteret's is a fact about the two books as
+  much as about the policy.
+- **Counters are the whole pass's.** On debian, `cache-misses` counts L2 misses and
+  `r0843:u` is a floor on DRAM demand fills; neither is a last-level miss count, and no
+  L3 counter is open to a normal user there. On macOS only cycles and instructions are read.""",
+    "structure": """\
+- **A floor of a floor.** `r0843:u`, a floor on DRAM demand fills, never counts a prefetch's.
+  A drop here is the fills a stage's hint took off the demand path; a hint that came too late
+  still leaves a demand fill, so each figure is at most the structure's fills.
+- **Moved, not removed.** Stages 1 to 3 read the lines before them to find their address,
+  as demand loads, 16 frames or fewer ahead; those loads still count, at another message, so
+  the whole pass is the unit, and no figure here is split by message type.
+- **Two structures can share a line.** A page slot or level record that another message's
+  stage already brought in is not counted twice, so the drops need not add up to the drop
+  of `all:all`, and the file says by how much they do not.
+- **L2 misses do not split this way.** `cache-misses` counts the hints' own misses in L2
+  as well as demand misses, so its drop is not a structure's misses, and the file does not
+  attribute it. The column is shown as counted.
+- **No L3 counter.** Nothing here counts last-level misses: the L3 counters are not open to
+  a normal user on this host. A DRAM demand fill is a last-level miss, so the drops are a
+  floor on the last-level misses each structure takes, and not more.""",
 }
 
 
@@ -189,8 +298,12 @@ def timestamp(line):
 
 def variant_of(record, experiment):
     variant = record["variant"]
-    if experiment == "lookup":
+    if experiment in ("lookup", "layout"):
         return variant["design"]
+    if experiment == "structure":
+        if variant["prefetch"] == 0:
+            return "D=0"
+        return f"{variant['kinds']}:{variant['stages']}"
     if experiment == "prefetch":
         return f"D={variant['prefetch']}"
     return variant["dispatch"]
@@ -199,6 +312,10 @@ def variant_of(record, experiment):
 def variant_order(experiment, name):
     if experiment == "lookup":
         return DESIGNS.index(name)
+    if experiment == "layout":
+        return LAYOUT_DESIGNS.index(name)
+    if experiment == "structure":
+        return list(STRUCTURES).index(name)
     if experiment == "prefetch":
         return int(name[2:])
     return FORMS.index(name)
@@ -290,9 +407,61 @@ def lookup_figures(rows, events):
     return figures
 
 
+LAYOUT_BASE = {"identity-flat": "hash-flat", "chained-flat": "hash-flat",
+               "paged-flat-scan16": "paged-flat", "paged-flat-bisect": "paged-flat",
+               "hash-flat": "paged-flat"}
+
+
+def layout_section(names, figures, heads):
+    out = ["Medians over the repetitions. Each arm's rate is set against the arm it changes one "
+           "policy of; `hash-flat` against `paged-flat`, the default. The counter columns are "
+           "each event over the whole timed pass, a message.", "",
+           "| Arm | Repetitions | Median messages/s | Min | Max | CV | ns a message | Against "
+           "| Over it | " + " | ".join(f"{head}, a message" for head in heads) + " |",
+           "|---|---|---|---|---|---|---|---|---|" + "---|" * len(heads)]
+    for name in names:
+        f = figures[name]
+        base = LAYOUT_BASE.get(name)
+        ratio = (f"{f['rate'] / figures[base]['rate']:.4f}" if base in figures else "n/a")
+        out.append(f"| `{name}` | {f['reps']} | {f['rate']:,.0f} | {f['min']:,.0f} "
+                   f"| {f['max']:,.0f} | {f['cv'] * 100:.2f}% | {fmt(f['ns'], 2)} "
+                   f"| {f'`{base}`' if base else 'n/a'} | {ratio} | "
+                   + " | ".join(fmt(v, 4) for v in f["counts"]) + " |")
+    return out
+
+
+def structure_section(names, figures, events, heads):
+    at = events.index(FILLS)
+    base = figures["D=0"]["counts"][at]
+    out = ["Medians over the repetitions. The counter columns are each event over the whole "
+           "timed pass, a message. The last two columns are `D=0`'s `r0843:u`, a floor on DRAM "
+           "demand fills, less the variant's, a message, and that as a share of `D=0`'s.", "",
+           "| Variant | Its one stage reads | Repetitions | Median messages/s | ns a message | "
+           + " | ".join(f"{head}, a message" for head in heads)
+           + " | Taken off the demand path, `r0843:u`, floor on DRAM demand fills | Share |",
+           "|---|---|---|---|---|" + "---|" * len(heads) + "---|---|"]
+    for name in names:
+        f = figures[name]
+        drop = base - f["counts"][at]
+        taken = "n/a" if name == "D=0" else fmt(drop, 4)
+        share = "n/a" if name == "D=0" else f"{drop / base * 100:.1f}%"
+        out.append(f"| `{name}` | {STRUCTURES[name]} | {f['reps']} | {f['rate']:,.0f} "
+                   f"| {fmt(f['ns'], 2)} | " + " | ".join(fmt(v, 4) for v in f["counts"])
+                   + f" | {taken} | {share} |")
+    return out
+
+
 def results_section(experiment, rows, events, host):
     names = sorted({row["variant"] for row in rows}, key=lambda n: variant_order(experiment, n))
     heads = [SHORT[event] for event in events]
+    if experiment == "layout":
+        figures = replay_figures(rows, events)
+        return layout_section(names, figures, heads), figures
+    if experiment == "structure":
+        if FILLS not in events or "D=0" not in names:
+            raise ReportError("the structure run needs r0843:u and a D=0 variant")
+        figures = replay_figures(rows, events)
+        return structure_section(names, figures, events, heads), figures
     if experiment == "lookup":
         figures = lookup_figures(rows, events)
         out = ["Medians over the repetitions. Per lookup and per message are the check passes "
@@ -326,8 +495,77 @@ def results_section(experiment, rows, events, host):
     return out, figures
 
 
+def layout_finding(figures, events):
+    lines, parts = [], []
+    for label, arm, base in LAYOUT_PAIRS:
+        if arm not in figures or base not in figures:
+            continue
+        a, b = figures[arm], figures[base]
+        gain = a["rate"] / b["rate"] - 1
+        apart = a["min"] > b["max"] or a["max"] < b["min"]
+        line = (f"- {label.capitalize()}: `{arm}` {gain * 100:+.2f}% against `{base}` "
+                f"({a['rate']:,.0f} against {b['rate']:,.0f} messages/s); "
+                + ("their ranges over the repetitions do not overlap"
+                   if apart else "their ranges over the repetitions overlap, so the two are "
+                                 "not told apart") + ".")
+        at = events.index("instructions") if "instructions" in events else None
+        if at is not None and FILLS not in events:
+            line += (f" Instructions a message, user and kernel: {fmt(a['counts'][at], 1)} "
+                     f"against {fmt(b['counts'][at], 1)}.")
+        lines.append(line)
+        if FILLS in events:
+            fills, l2 = events.index(FILLS), events.index(L2)
+            branch, instr = events.index("branch-misses"), events.index("instructions")
+            lines.append(f"  - a message: `r0843:u`, a floor on DRAM demand fills, "
+                         f"{fmt(a['counts'][fills], 3)} against {fmt(b['counts'][fills], 3)}; "
+                         f"`cache-misses`, L2 misses, {fmt(a['counts'][l2], 3)} against "
+                         f"{fmt(b['counts'][l2], 3)}; instructions {fmt(a['counts'][instr], 1)} "
+                         f"against {fmt(b['counts'][instr], 1)}; branch misses "
+                         f"{fmt(a['counts'][branch], 3)} against {fmt(b['counts'][branch], 3)}.")
+        parts.append(f"{label} {gain * 100:+.2f}% ({arm} over {base}"
+                     + ("" if apart else ", ranges overlap") + ")")
+    return lines, "; ".join(parts)
+
+
+def structure_finding(figures, events):
+    at = events.index(FILLS)
+    base = figures["D=0"]["counts"][at]
+    singles = {name: base - f["counts"][at] for name, f in figures.items()
+               if name not in ("D=0", "all:all")}
+    lines = [f"- `D=0` makes {fmt(base, 3)} `r0843:u` a message, a floor on DRAM demand fills."]
+    for name, drop in sorted(singles.items(), key=lambda item: -item[1]):
+        lines.append(f"- `{name}`, {STRUCTURES[name]}: {fmt(drop, 3)} a message taken off the "
+                     f"demand path, {drop / base * 100:.1f}% of `D=0`'s.")
+    if "all:all" in figures:
+        left = figures["all:all"]["counts"][at]
+        lines.append(f"- The single stages together take {fmt(sum(singles.values()), 3)} a "
+                     f"message; every stage at once (`all:all`) takes {fmt(base - left, 3)}, "
+                     f"and leaves {fmt(left, 3)}, {left / base * 100:.1f}% of `D=0`'s, on "
+                     "lines no stage reaches or reaches in time.")
+    largest = max(singles, key=singles.get)
+    share = singles[largest] / base
+    if share >= BOTTLENECK_SHARE:
+        lines.append(f"- The rule fixed before the run names a bottleneck only at 40% or more "
+                     f"of the fills: **{STRUCTURES[largest]}** (`{largest}`) takes "
+                     f"{share * 100:.1f}%, so it is the bottleneck by that rule.")
+        verdict = f"bottleneck by the 40% rule: {STRUCTURES[largest]}"
+    else:
+        lines.append(f"- The rule fixed before the run names a bottleneck only at 40% or more "
+                     f"of the fills: no single structure reaches it. The largest, "
+                     f"{STRUCTURES[largest]} (`{largest}`), takes {share * 100:.1f}%, so no "
+                     "bottleneck is claimed.")
+        verdict = "no structure reaches the 40% rule, no bottleneck claimed"
+    summary = (f"largest single structure {STRUCTURES[largest]} at {share * 100:.1f}% of the "
+               f"floor on DRAM demand fills; {verdict}")
+    return lines, summary
+
+
 def finding(experiment, figures, events, host):
     """The finding, worked from the figures alone, and a one-line summary of it."""
+    if experiment == "layout":
+        return layout_finding(figures, events)
+    if experiment == "structure":
+        return structure_finding(figures, events)
     if experiment == "prefetch":
         base = figures["D=0"]["rate"]
         gains = {name: f["rate"] / base - 1 for name, f in figures.items() if name != "D=0"}
@@ -439,6 +677,17 @@ def judge(records, experiment):
             raise ReportError("a look-ahead record with another form")
         if experiment == "dispatch" and record["variant"]["prefetch"] != 0:
             raise ReportError("a dispatch record with look-ahead")
+        if experiment == "layout" and (record["variant"]["prefetch"] != 0
+                                       or record["variant"]["dispatch"] != "switch"):
+            raise ReportError("a layout record with look-ahead or another form")
+        if experiment == "structure":
+            variant = record["variant"]
+            filtered = variant.get("filtered", False)
+            if (variant["design"] != STRUCTURE_DESIGN or variant["dispatch"] != "switch"
+                    or variant["prefetch"] not in (0, STRUCTURE_DISTANCE)
+                    or filtered != (variant["prefetch"] != 0)
+                    or variant_of(record, experiment) not in STRUCTURES):
+                raise ReportError(f"a structure record of another kind: {variant}")
         for one in record["passes"]:
             if one["messages"] != record["mix"]["messages"] or one["rejected"] != 0:
                 raise ReportError("a pass that did not walk the day cleanly")
@@ -526,7 +775,9 @@ def command_line(experiment, host, day):
     core = " --core 4" if host == DEBIAN else ""
     tail = {"lookup": "--pass lookup --design ARM",
             "prefetch": "--design paged-flat --prefetch D",
-            "dispatch": "--design paged-flat --dispatch FORM"}[experiment]
+            "dispatch": "--design paged-flat --dispatch FORM",
+            "layout": "--design ARM",
+            "structure": "--design paged-flat [--prefetch 16 --stages S --kinds K]"}[experiment]
     return (f"{prefix} build/bench/bench_variants --input <raw>/{day}.NASDAQ_ITCH50 {tail}"
             f"{core} --commit <commit> --out <raw>/VARIANT-N.json")
 
