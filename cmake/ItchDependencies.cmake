@@ -87,6 +87,18 @@ if(ITCH_COMPARISON_QUEUES)
     SYSTEM)
 endif()
 
+# mimalloc, for the node book's mimalloc arm (T-ARENA-1): release v3.5.3, its commit
+# d4881d338125e1cb7c47ba4cfb398d6f7c0c8d45. Off unless ITCH_MIMALLOC is on; the release and
+# tidy presets turn it on.
+if(ITCH_MIMALLOC)
+  FetchContent_Declare(mimalloc
+    URL https://github.com/microsoft/mimalloc/archive/d4881d338125e1cb7c47ba4cfb398d6f7c0c8d45.tar.gz
+    URL_HASH SHA256=43857a9e4f26412e970cbe49635d0465c2de6e77a697ce3d4b926a473d1045ca
+    DOWNLOAD_DIR "${ITCH_DOWNLOADS}"
+    DOWNLOAD_NAME mimalloc-v3.5.3.tar.gz
+    SYSTEM)
+endif()
+
 # GoogleTest, as GTest::gtest and GTest::gtest_main. scripts/fault_matrix.py sets
 # ITCH_PREBUILT_DEPS to a preset's build/<preset> directory, so that its many scratch
 # builds link one copy of the same pinned library instead of compiling it again.
@@ -245,4 +257,41 @@ function(itch_require_liburing)
     INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${ITCH_LIBURING_ROOT}/include"
     INTERFACE_INCLUDE_DIRECTORIES "${ITCH_LIBURING_ROOT}/include")
   message(STATUS "liburing: ${major}.${minor}")
+endfunction()
+
+# mimalloc as itch::mimalloc: the static library, with its override of malloc, its macOS
+# interpose and zone, and its architecture flags all off, so that it serves only the arm
+# that calls it and the default build keeps no -march. With ITCH_PREBUILT_DEPS a scratch
+# tree imports the preset's copy instead of fetching one, or goes without the arm if that
+# preset never built it.
+function(itch_require_mimalloc)
+  if(ITCH_PREBUILT_DEPS)
+    file(GLOB itch_mimalloc_library "${ITCH_PREBUILT_DEPS}/_deps/mimalloc-build/libmimalloc*.a")
+    if(NOT itch_mimalloc_library)
+      message(STATUS "mimalloc: off, ${ITCH_PREBUILT_DEPS} holds no build of it")
+      return()
+    endif()
+    list(GET itch_mimalloc_library 0 itch_mimalloc_library)
+    add_library(itch_mimalloc_imported STATIC IMPORTED GLOBAL)
+    set_target_properties(itch_mimalloc_imported PROPERTIES
+      IMPORTED_LOCATION "${itch_mimalloc_library}"
+      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${ITCH_PREBUILT_DEPS}/_deps/mimalloc-src/include"
+      INTERFACE_INCLUDE_DIRECTORIES "${ITCH_PREBUILT_DEPS}/_deps/mimalloc-src/include")
+    set(itch_mimalloc_target itch_mimalloc_imported)
+  else()
+    enable_language(C)
+    foreach(off MI_OVERRIDE MI_OSX_INTERPOSE MI_OSX_ZONE MI_BUILD_SHARED MI_BUILD_OBJECT
+                MI_BUILD_TESTS MI_OPT_ARCH)
+      set(${off} OFF CACHE BOOL "" FORCE)
+    endforeach()
+    set(MI_NO_OPT_ARCH ON CACHE BOOL "" FORCE)
+    set(MI_BUILD_STATIC ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(mimalloc)
+    set(itch_mimalloc_target mimalloc-static)
+  endif()
+  add_library(itch_mimalloc INTERFACE)
+  add_library(itch::mimalloc ALIAS itch_mimalloc)
+  target_link_libraries(itch_mimalloc INTERFACE ${itch_mimalloc_target})
+  target_compile_definitions(itch_mimalloc INTERFACE ITCH_HAVE_MIMALLOC)
+  message(STATUS "mimalloc: v3.5.3")
 endfunction()

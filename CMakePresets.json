@@ -17,7 +17,8 @@
       "displayName": "Optimised build, all checks",
       "inherits": "base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "ITCH_MIMALLOC": "ON"
       }
     },
     {
@@ -64,7 +65,8 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "ITCH_TIDY": "ON"
+        "ITCH_TIDY": "ON",
+        "ITCH_MIMALLOC": "ON"
       }
     },
     {
