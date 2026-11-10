@@ -312,8 +312,8 @@ TEST_P(KernelTest, FinalFrameOfEveryOpTypeStaysInsideTheMappedRange) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Built, KernelTest, ::testing::ValuesIn(itch::kernels::kBuilt),
-                         [](const ::testing::TestParamInfo<KernelId>& info) {
-                           return std::string{to_string(info.param)};
+                         [](const ::testing::TestParamInfo<KernelId>& instance) {
+                           return std::string{to_string(instance.param)};
                          });
 
 // A kernel that reads 64 bytes from every message's first byte, as avx512vbmi does, written

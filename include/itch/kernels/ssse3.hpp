@@ -41,11 +41,14 @@ inline constexpr std::array<std::uint8_t, kWindow> kReverse16{1, 0, 3,  2,  5,  
   return v;
 }
 
+// Each half loads its own windows, as avx2's part() does: the compiler merges the two loads
+// of one window, and GCC drops __m128i's attributes from a std::array of it.
 template <const Gather& G, std::size_t H, std::size_t W>
-[[gnu::target("ssse3")]] [[nodiscard]] inline __m128i part(
-    const std::array<__m128i, kMostWindows>& win, __m128i acc) noexcept {
+[[gnu::target("ssse3")]] [[nodiscard]] inline __m128i part(const std::byte* m,
+                                                           __m128i acc) noexcept {
   if constexpr (W < G.windows && G.uses(H, W)) {
-    return _mm_or_si128(acc, _mm_shuffle_epi8(win[W], load16(kIndex<G, H, W>.data())));
+    return _mm_or_si128(acc,
+                        _mm_shuffle_epi8(load16(m + G.anchor[W]), load16(kIndex<G, H, W>.data())));
   } else {
     return acc;
   }
@@ -53,13 +56,9 @@ template <const Gather& G, std::size_t H, std::size_t W>
 
 template <const Gather& G, class Record>
 [[gnu::target("ssse3")]] [[nodiscard]] inline Record gather(const std::byte* m) noexcept {
-  std::array<__m128i, kMostWindows> win{};
-  for (std::size_t w = 0; w < G.windows; ++w) {
-    win[w] = load16(m + G.anchor[w]);
-  }
   const __m128i zero = _mm_setzero_si128();
-  const __m128i low = part<G, 0, 2>(win, part<G, 0, 1>(win, part<G, 0, 0>(win, zero)));
-  const __m128i high = part<G, 1, 2>(win, part<G, 1, 1>(win, part<G, 1, 0>(win, zero)));
+  const __m128i low = part<G, 0, 2>(m, part<G, 0, 1>(m, part<G, 0, 0>(m, zero)));
+  const __m128i high = part<G, 1, 2>(m, part<G, 1, 1>(m, part<G, 1, 0>(m, zero)));
   std::array<std::byte, kRecord> bytes{};
   std::memcpy(bytes.data(), &low, kWindow);
   std::memcpy(bytes.data() + kWindow, &high, kWindow);

@@ -81,8 +81,10 @@ template <const Gather& G, class Record>
     const std::byte* m) noexcept {
   const __m512i all = _mm512_maskz_permutexvar_epi8(kKeep<G>, load64(kIndex<G>.data()), load64(m));
   const __m256i low = _mm512_castsi512_si256(all);
+  std::array<std::byte, kRecord> bytes{};
+  std::memcpy(bytes.data(), &low, kRecord);
   Record out{};
-  std::memcpy(&out, &low, kRecord);
+  std::memcpy(&out, bytes.data(), kRecord);
   return out;
 }
 

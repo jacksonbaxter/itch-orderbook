@@ -73,8 +73,10 @@ template <const Gather& G, std::size_t W>
 template <const Gather& G, class Record>
 [[gnu::target("avx2")]] [[nodiscard]] inline Record gather(const std::byte* m) noexcept {
   const __m256i all = part<G, 2>(m, part<G, 1>(m, part<G, 0>(m, _mm256_setzero_si256())));
+  std::array<std::byte, kRecord> bytes{};
+  std::memcpy(bytes.data(), &all, kRecord);
   Record out{};
-  std::memcpy(&out, &all, kRecord);
+  std::memcpy(&out, bytes.data(), kRecord);
   return out;
 }
 
