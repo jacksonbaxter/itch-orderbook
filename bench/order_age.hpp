@@ -80,7 +80,8 @@ inline constexpr std::uint8_t kAgeRow = 8;
 }
 
 [[nodiscard]] constexpr std::uint8_t age_slot(std::size_t row, AgeClass age) noexcept {
-  return static_cast<std::uint8_t>(kFirstAgeSlot + (row * kAgeRow) + static_cast<std::size_t>(age));
+  return static_cast<std::uint8_t>(std::size_t{kFirstAgeSlot} + (row * std::size_t{kAgeRow}) +
+                                   static_cast<std::size_t>(age));
 }
 
 // What a slot above the type bytes stands for, or nothing for a type byte's own slot.
@@ -93,8 +94,9 @@ struct NamedSlot {
   if (slot < kFirstAgeSlot) {
     return std::nullopt;
   }
-  const std::size_t row = (slot - kFirstAgeSlot) / kAgeRow;
-  const std::size_t age = (slot - kFirstAgeSlot) % kAgeRow;
+  const std::size_t offset = std::size_t{slot} - std::size_t{kFirstAgeSlot};
+  const std::size_t row = offset / std::size_t{kAgeRow};
+  const std::size_t age = offset % std::size_t{kAgeRow};
   if (row >= kNamingTypes.size() || age >= kAgeClasses) {
     return std::nullopt;
   }
