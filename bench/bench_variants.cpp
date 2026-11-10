@@ -104,7 +104,7 @@ struct Options {
   std::string stages;  // Empty: no filter.
   StageKinds kinds = StageKinds::all;
   bool filtered = false;
-  std::uint32_t block = 0;    // Frames a typed pass reads the clock after. 0: whole passes.
+  std::uint32_t block = 0;     // Frames a typed pass reads the clock after. 0: whole passes.
   std::uint64_t messages = 0;  // Messages of the input to run. 0: all of them.
 };
 
@@ -259,7 +259,7 @@ struct Record {
   MessageMix mix;
   std::uint64_t frames = 0;
   std::array<std::uint64_t, 256> by_type{};  // Messages by type byte.
-  std::uint64_t input_bytes = 0;             // Of the input run: all of it, or its first --messages.
+  std::uint64_t input_bytes = 0;  // Of the input run: all of it, or its first --messages.
   std::uint64_t file_bytes = 0;
   std::uint64_t warmup_messages = 0;
   std::uint64_t script_entries = 0;  // Lookups the recording pass made.
@@ -310,9 +310,8 @@ TimedPass timed(std::span<const std::byte> bytes, CounterGroup& group, Record& r
     record.refusals.push_back(std::format("the book rejected {} messages", pass.rejected));
   }
   if (pass.typed && !pass.typed->tiled()) {
-    record.refusals.push_back(std::format("a {} pass's blocks add up to {} ticks of {}",
-                                          pass.mode, pass.typed->block_ticks(),
-                                          pass.typed->whole()));
+    record.refusals.push_back(std::format("a {} pass's blocks add up to {} ticks of {}", pass.mode,
+                                          pass.typed->block_ticks(), pass.typed->whole()));
   }
   return pass;
 }
@@ -402,11 +401,11 @@ void run_types(const Options& options, std::span<const std::byte> bytes, Counter
   }
   for (const bool by_blocks : {false, true, true, false}) {
     const auto book = std::make_unique<Book>(options.capacity);
-    TimedPass pass = timed(bytes, group, record, by_blocks ? "typed" : "replay",
-                           [&](TimedPass& one) {
-                             return by_blocks ? typed_pass(bytes, *book, options, record, timer, one)
-                                              : switch_pass(bytes, *book);
-                           });
+    TimedPass pass =
+        timed(bytes, group, record, by_blocks ? "typed" : "replay", [&](TimedPass& one) {
+          return by_blocks ? typed_pass(bytes, *book, options, record, timer, one)
+                           : switch_pass(bytes, *book);
+        });
     pass.live_orders = book->live_orders();
     pass.live_levels = book->live_levels();
     record.passes.push_back(std::move(pass));
@@ -500,11 +499,10 @@ std::string typed_json(const TypedTime& typed) {
       typed.frames);
   for (std::size_t i = 0; i < typed.quarters.size(); ++i) {
     const BlockSums& q = typed.quarters[i];
-    out += std::format(
-        R"({}{{"blocks": {}, "ticks": {}, "ticks_squared": {}, "under_floor": {}, )"
-        R"("most_ticks": {}, "counts": {}, "cross": {}, "gram": {}}})",
-        i == 0 ? "" : ", ", q.blocks, q.ticks, q.ticks_squared, q.under_floor, q.most_ticks,
-        list_json(q.counts), list_json(q.cross), list_json(q.gram));
+    out += std::format(R"({}{{"blocks": {}, "ticks": {}, "ticks_squared": {}, "under_floor": {}, )"
+                       R"("most_ticks": {}, "counts": {}, "cross": {}, "gram": {}}})",
+                       i == 0 ? "" : ", ", q.blocks, q.ticks, q.ticks_squared, q.under_floor,
+                       q.most_ticks, list_json(q.counts), list_json(q.cross), list_json(q.gram));
   }
   return out + "]}";
 }
@@ -626,8 +624,7 @@ std::span<const std::byte> first_messages(std::span<const std::byte> bytes,
   }
   itch::FrameReader reader{bytes};
   std::uint64_t seen = 0;
-  for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status);
-       frame = reader.next()) {
+  for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status); frame = reader.next()) {
     seen += frame.status == itch::FrameStatus::message ? 1U : 0U;
     if (seen == messages) {
       return bytes.first(reader.consumed());
@@ -639,8 +636,7 @@ std::span<const std::byte> first_messages(std::span<const std::byte> bytes,
 // Frames and messages by type byte, of the input as run.
 void count_types(std::span<const std::byte> bytes, Record& record) {
   itch::FrameReader reader{bytes};
-  for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status);
-       frame = reader.next()) {
+  for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status); frame = reader.next()) {
     ++record.frames;
     if (frame.status == itch::FrameStatus::message) {
       ++record.by_type[static_cast<std::uint8_t>(itch::read_char(frame.payload.data()))];
