@@ -218,6 +218,17 @@ TEST(NodePool, APoolWithNoPagesHasNoRoom) {
   EXPECT_FALSE(pool.has_room());
   EXPECT_EQ(pool.capacity(), 0U);
 }
+
+// A pool book whose pages were refused refuses every add, and touches no node.
+TEST(NodeBook, APoolBookWithNoPagesRefusesEveryAdd) {
+  itch::NodeBook<itch::PoolIndexArm> book{
+      {.orders = 64, .levels = 64, .pages = itch::PageRequest::transparent}};
+  EXPECT_FALSE(book.heap().ready());
+  EXPECT_EQ(book.capacity().orders, 0U);
+  EXPECT_EQ(book.apply(wire::add(1, 1, 'B', 100, 10)), itch::ApplyStatus::capacity_exhausted);
+  EXPECT_EQ(book.live_orders(), 0U);
+  EXPECT_EQ(book.nodes_made(), 0U);
+}
 #endif
 
 // ---------------------------------------------------------------------------------------

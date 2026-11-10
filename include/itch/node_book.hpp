@@ -32,7 +32,9 @@
 // Order and Level hold only trivial members, and the book writes every field of a node it
 // makes. Every arm has the same capacity: an add past capacity.orders live orders, or a
 // level past capacity.levels, is refused as capacity_exhausted, so that every arm gives
-// the same status for every message.
+// the same status for every message. A heap with ready() says whether it holds what it was
+// sized for. One that does not, a pool whose pages were refused, leaves the book with no
+// room at all, so that every add is refused rather than run on memory that is not there.
 //
 // The arms (node_arms.hpp, and mimalloc_arm.hpp for mimalloc) are system malloc, mimalloc,
 // std::pmr's two resources, and node_pool.hpp's pool by index, by pointer and with a FIFO
@@ -173,7 +175,14 @@ class NodeBook {
       : capacity_{capacity},
         heap_{capacity},
         index_{capacity.orders, kNoOrder},
-        best_(kSideCount, kNoLevel) {}
+        best_(kSideCount, kNoLevel) {
+    if constexpr (requires { heap_.ready(); }) {
+      if (!heap_.ready()) {
+        capacity_.orders = 0;
+        capacity_.levels = 0;
+      }
+    }
+  }
 
   NodeBook(const NodeBook&) = delete;
   NodeBook& operator=(const NodeBook&) = delete;

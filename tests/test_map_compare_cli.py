@@ -5,12 +5,15 @@ Usage: test_map_compare_cli.py <itch_map_compare> <scratch dir> <oracle fixtures
                                <trade fixtures dir>
 
 Every fixture runs on every arm of the fast book against the map book, on a fresh heap and
-on an aged one, with the whole of both books compared after every message. The counts
+on an aged one, with the whole of both books compared after every message. Every fixture
+also runs the node book of T-ARENA-1 on each allocator arm against the fast book, with the
+same checks, and must end on the same book as the map book did. The counts
 named here come from the fixture builders and the frame counts, not from the tool's own
 output. A book that goes wrong is shown failing by the faults in scripts/faults/mapbook.json.
 A failure prints `map compare cli: FAIL <case>: <reason>`.
 """
 
+import platform
 import struct
 import subprocess
 import sys
@@ -23,6 +26,10 @@ AGED = ("--heap", "aged", "--seed", "7", "--warm-blocks", "4096", "--ring-blocks
 # Each message the fixture builder marks as refused: 5 unknown, 1 on another locate, 2 too
 # large, 2 duplicates, 1 bad side and 1 delete of an order already gone.
 DEAD_REFERENCE_REFUSED = 12
+ALLOCATORS = ("malloc-fresh", "malloc-aged", "mimalloc", "pmr-pool", "pmr-monotonic",
+              "pool-index", "pool-pointer", "pool-fifo")
+POOLS = ("pool-index", "pool-pointer", "pool-fifo")
+NO_MIMALLOC = "this build has no mimalloc"
 
 
 def frame_types(data):
@@ -82,6 +89,35 @@ def main():
                 if not heap and "ager_allocations" in values:
                     failures.append(f"{name}: a fresh heap was aged")
                 hashes.add(values.get("last_hash"))
+        for allocator in ALLOCATORS:
+            name = f"{path.name} node {allocator}"
+            done = run(path, *SMALL, "--allocator", allocator, "--hash-every", "1")
+            if done.returncode == 2 and allocator == "mimalloc" and NO_MIMALLOC in done.stderr:
+                continue
+            lines = done.stdout.splitlines()
+            values = dict(line.split(" ", 1) for line in lines if " " in line)
+            if done.returncode != 0:
+                failures.append(f"{name}: exit {done.returncode}")
+            wanted = {
+                "frames": len(types), "messages_compared": len(types),
+                "status_checks": len(types), "top_checks": 2 * len(types),
+                "periodic_hash_checks": len(types), "final_hash_checks": 1,
+                "divergences": 0, "compare_allocator": allocator, "end": "end_of_input",
+            }
+            if path.name == "dead_reference.itch":
+                wanted["refused_alike"] = DEAD_REFERENCE_REFUSED
+            for key, value in wanted.items():
+                if values.get(key) != str(value):
+                    failures.append(f"{name}: {key} {values.get(key)}, wanted {value}")
+            if "verdict NODE-BOOK PASS" not in lines:
+                failures.append(f"{name}: no PASS verdict")
+            if any(line.startswith(("NODE_DIVERGENCE", "MAP_DIVERGENCE")) for line in lines):
+                failures.append(f"{name}: a divergence was printed")
+            if ("node_pages" in values) != (allocator in POOLS):
+                failures.append(f"{name}: node_pages {values.get('node_pages')}")
+            if (allocator == "malloc-aged") != ("ager_allocations" in values):
+                failures.append(f"{name}: ager_allocations {values.get('ager_allocations')}")
+            hashes.add(values.get("last_hash"))
         if len(hashes) != 1:
             failures.append(f"{path.name}: the arms and heaps end on other books: {hashes}")
 
@@ -101,6 +137,10 @@ def main():
 
     for name, args in (("no file", []), ("no such file", [str(scratch / "no-such-file")]),
                        ("bad heap", [str(session), "--heap", "old"]),
+                       ("bad allocator", [str(session), "--allocator", "pool"]),
+                       ("bad pages", [str(session), "--allocator", "pool-index", "--pages", "4k"]),
+                       ("an aged map heap with an allocator",
+                        [str(session), "--allocator", "malloc-fresh", "--heap", "aged"]),
                        ("bad arm", [str(session), "--index", "tree"]),
                        ("bad number", [str(session), "--seed", "x"]),
                        ("unknown flag", [str(session), "--nonsense", "1"])):
@@ -108,11 +148,20 @@ def main():
         if code != 2:
             failures.append(f"usage {name}: exit {code}, wanted 2")
 
+    # A pool whose pages were refused has no room, so the books part at the first add. Apple
+    # silicon refuses every superpage (LC-57), so there an explicit request always is.
+    if sys.platform == "darwin" and platform.machine() == "arm64":
+        done = run(session, *SMALL, "--allocator", "pool-index", "--pages", "explicit")
+        if done.returncode != 1 or "verdict NODE-BOOK FAIL" not in done.stdout or \
+                "nothing mapped" not in done.stdout:
+            failures.append(f"a pool with no pages: exit {done.returncode}")
+
     for failure in failures:
         print(f"map compare cli: FAIL {failure}")
     if failures:
         return 1
-    print(f"map compare cli: ok, {len(fixtures)} fixtures on {len(ARMS)} arms and two heaps")
+    print(f"map compare cli: ok, {len(fixtures)} fixtures on {len(ARMS)} arms and two heaps, "
+          f"and the node book on {len(ALLOCATORS)} allocator arms")
     return 0
 
 

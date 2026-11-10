@@ -19,6 +19,64 @@ ARM_SMALL = SMALL + ("--max-pages", "8", "--index-bits", "16", "--max-slots", "8
 TYPES = "SRHYLVWKJhAFECXDUPQBINO"
 
 
+def alloc_arm_failures(alloc_tool, session, fixtures):
+    """T-ARENA-1's node book on each allocator arm through itch_alloc --allocator.
+
+    A pool arm passes on no allocation at all. A heap arm's verdict is REPORT, with its
+    calls: malloc one for each node made, std::pmr's resources fewer, a chunk at a time, and
+    mimalloc none the counter sees, counted by the book instead. The aged heap's ballast is
+    taken off, so that malloc-aged counts what malloc-fresh does.
+    """
+    failures = []
+    made = set()
+    for arm in ("malloc-fresh", "malloc-aged", "mimalloc", "pmr-pool", "pmr-monotonic",
+                "pool-index", "pool-pointer", "pool-fifo"):
+        done = subprocess.run([alloc_tool, str(session), *SMALL, "--allocator", arm],
+                              capture_output=True, text=True, check=False)
+        if done.returncode == 2 and arm == "mimalloc" and "no mimalloc" in done.stderr:
+            continue
+        values = dict(line.split(" ", 1) for line in done.stdout.splitlines() if " " in line)
+        counted = int(values.get("node_allocations", "-1"))
+        book = int(values.get("node_book_allocations", "-1"))
+        nodes = int(values.get("node_nodes_made", "-1"))
+        made.add(nodes)
+        pool = arm.startswith("pool-")
+        verdict = "PASS" if pool else "REPORT"
+        if done.returncode != 0 or \
+                not values.get("verdict", "").startswith(f"T-ARENA-1-ALLOC {verdict} "):
+            failures.append(f"alloc {arm}: exit {done.returncode}, verdict "
+                            f"{values.get('verdict')}, wanted {verdict}")
+        if values.get("node_refused") != "0" or values.get("node_allocator") != arm:
+            failures.append(f"alloc {arm}: refused {values.get('node_refused')}")
+        if pool and (counted != 0 or "node_pages" not in values):
+            failures.append(f"alloc {arm}: {counted} allocations on a pool")
+        if arm in ("malloc-fresh", "malloc-aged") and book != nodes:
+            failures.append(f"alloc {arm}: {book} calls for {nodes} nodes")
+        if arm == "malloc-aged" and counted != book + int(values.get("node_ager_allocations", 0)):
+            failures.append(f"alloc {arm}: the ager's calls were not taken off")
+        if arm.startswith("pmr-") and not 0 < book < nodes:
+            failures.append(f"alloc {arm}: {book} calls for {nodes} nodes")
+        if arm == "mimalloc" and (counted != 0 or book != nodes):
+            failures.append(f"alloc {arm}: counted {counted}, book {book}, nodes {nodes}")
+    if len(made) != 1 or min(made) <= 0:
+        failures.append(f"alloc: the arms made other numbers of nodes: {made}")
+    # A refused message fails a pool arm as it fails the fast book.
+    done = subprocess.run([alloc_tool, str(fixtures / "dead_reference.itch"), *SMALL,
+                           "--allocator", "pool-index"], capture_output=True, text=True,
+                          check=False)
+    if done.returncode != 1:
+        failures.append(f"alloc pool-index: a refused message exited {done.returncode}, wanted 1")
+    for name, options in (("bad allocator", ("--allocator", "arena")),
+                          ("bad pages", ("--allocator", "pool-index", "--pages", "64k")),
+                          ("look-ahead on the node book",
+                           ("--allocator", "pool-index", "--prefetch", "16"))):
+        done = subprocess.run([alloc_tool, str(session), *options], capture_output=True,
+                              text=True, check=False)
+        if done.returncode != 2:
+            failures.append(f"alloc usage {name}: exit {done.returncode}, wanted 2")
+    return failures
+
+
 def main():
     tool, scratch, fixtures, alloc_tool = sys.argv[1:5]
     scratch = Path(scratch)
@@ -329,6 +387,7 @@ def main():
                           text=True, check=False)
     if done.returncode != 2:
         failures.append(f"alloc: a bad arm exited {done.returncode}, wanted 2")
+    failures += alloc_arm_failures(alloc_tool, session, fixtures)
 
     for failure in failures:
         print(f"oracle cli: FAIL {failure}")
