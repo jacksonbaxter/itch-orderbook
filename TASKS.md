@@ -129,7 +129,7 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [x] T-INV-3, the scope the user approved after seeing the strict result: a book in normal trading may only be crossed if the cross is left over from a halt and has not cleared. Separate from T-INV-2, which stays strict. Done on the Phase 2 stub on both days: `results/oracle_12302019.md` and `results/oracle_10302019.md`, 0 violations on each.
 - [x] Oracle replay on the Mac under `heavy.sh`, all 268,744,780 messages (T-ORACLE-1). Done on the Phase 2 stub: `results/oracle_12302019.md`.
 - [x] Repeat T-ORACLE-1, T-INV-1, T-INV-2, T-INV-3 and T-ALLOC-1 on 12302019 with the real book, once it replaces the stub. Done on both days and all four arms, with T-TRADE-1, 2, 3, 5 and PRINTS: the same verdicts and counts as the stub, T-INV-2 strict still failing.
-- [ ] Repeat the oracle on every session the archive will serve, up to ten, keeping raw output for each (T-ORACLE-2). Check free disk first. State any shortfall as a gap.
+- [x] Repeat the oracle on every session the archive will serve, up to ten, keeping raw output for each (T-ORACLE-2). Check free disk first. State any shortfall as a gap. Done: carteret's ten sessions, 0 divergences in 3,081,392,329 messages, on `paged_flat` for the eight new ones (`results/oracle_sessions.md`, NOTES.md, "T-ORACLE-2 on carteret's ten sessions"). T-TRADE-3 failed on four of the new days and T-TRADE-5 on two, which NOTES.md describes.
 
 ### Trade-print verification
 Hard means any mismatch fails. Each check needs an injected bug that trips it. Check 17 in the evidence table only tests our aggregator, so it must not be cited as an independent result.

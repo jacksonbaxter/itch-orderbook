@@ -3,15 +3,17 @@
 // table. tests/trades/trade_checks.hpp is the check, and this is its command line.
 //
 //     itch_trades FILE [--date YYYYMMDD] [--crossstats FILE] [--midas FILE]
-//                 [--midas-rows N] [--symbols FILE] [--details N]
+//                 [--midas-rows N] [--exchange NAME] [--symbols FILE] [--details N]
 //                 [--max-orders N] [--max-levels N] [--index hash|paged]
 //                 [--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N]
 //
 // --date        the trading day. Needed with --crossstats or --midas.
 // --crossstats  Nasdaq's cross file for that day. Without it T-TRADE-2 is not run.
 // --midas       the SEC MIDAS month holding that day. Without it T-TRADE-3 is not run.
-// --midas-rows  the number of Nasdaq rows that day is pinned at, so that a missing row
-//               cannot pass as a symbol outside MIDAS's universe.
+// --midas-rows  the number of the venue's rows that day is pinned at, so that a missing
+//               row cannot pass as a symbol outside MIDAS's universe.
+// --exchange    how MIDAS names the venue the file is the feed of: Nasdaq, the default,
+//               or Boston for a BX file.
 // --symbols     writes one line per symbol, for the raw log.
 // --details     how many violations of each check are printed in full. All are counted.
 // --index, --levels  the arm of the fast book, the book's default arm if left out, and the
@@ -60,6 +62,7 @@ struct Options {
   const char* crossstats = nullptr;
   const char* midas = nullptr;
   const char* symbols = nullptr;
+  std::string_view exchange = itch::trades::kMidasExchange;
   std::uint32_t date = 0;
   std::optional<std::uint64_t> midas_rows;
   RunConfig config;
@@ -92,6 +95,22 @@ struct Options {
   return true;
 }
 
+// The options that take a path or a name. False if arg is not one of them.
+[[nodiscard]] bool take_text(Options& options, std::string_view arg, const char* value) {
+  if (arg == "--crossstats") {
+    options.crossstats = value;
+  } else if (arg == "--midas") {
+    options.midas = value;
+  } else if (arg == "--symbols") {
+    options.symbols = value;
+  } else if (arg == "--exchange") {
+    options.exchange = value;
+  } else {
+    return false;
+  }
+  return true;
+}
+
 [[nodiscard]] std::optional<Options> parse_options(std::span<const char* const> args) {
   Options options;
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -107,15 +126,12 @@ struct Options {
       return std::nullopt;
     }
     ++i;
-    if (arg == "--crossstats") {
-      options.crossstats = args[i];
-    } else if (arg == "--midas") {
-      options.midas = args[i];
-    } else if (arg == "--symbols") {
-      options.symbols = args[i];
-    } else if (const auto taken = itch::tools::parse_arm_option(arg, args[i], options.arm,
-                                                                options.config.capacity);
-               taken != itch::tools::ArmOption::not_an_arm_option) {
+    if (take_text(options, arg, args[i])) {
+      continue;
+    }
+    if (const auto taken =
+            itch::tools::parse_arm_option(arg, args[i], options.arm, options.config.capacity);
+        taken != itch::tools::ArmOption::not_an_arm_option) {
       if (taken == itch::tools::ArmOption::bad_value) {
         return std::nullopt;
       }
@@ -174,7 +190,7 @@ template <class Run>
     return kExitUsage;
   }
   const auto table = itch::trades::parse_midas(
-      file->bytes(), {.date = options.date, .exchange = itch::trades::kMidasExchange});
+      file->bytes(), {.date = options.date, .exchange = options.exchange});
   if (!table) {
     std::println("reference_error midas {} line={}", to_string(table.error().failure),
                  table.error().line);
@@ -235,6 +251,7 @@ int run_tool(const Options& options) {
   std::println("trades_index {}", to_string(options.arm.index));
   std::println("trades_levels {}", to_string(options.arm.levels));
   std::println("trades_date {}", options.date);
+  std::println("trades_midas_exchange {}", options.exchange);
   std::println("trades_max_orders {}", options.config.capacity.orders);
   std::println("trades_max_levels {}", options.config.capacity.levels);
   std::println("bytes {}", file->bytes().size());
@@ -279,7 +296,8 @@ int main(int argc, const char* const* argv) {
     if (!options) {
       static_cast<void>(
           std::fputs("usage: itch_trades FILE [--date YYYYMMDD] [--crossstats FILE] "
-                     "[--midas FILE] [--midas-rows N] [--symbols FILE] [--details N] "
+                     "[--midas FILE] [--midas-rows N] [--exchange NAME] [--symbols FILE] "
+                     "[--details N] "
                      "[--max-orders N] [--max-levels N] [--index hash|paged] "
                      "[--levels linked|flat] [--max-pages N] [--index-bits N] [--max-slots N]\n",
                      stderr));

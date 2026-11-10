@@ -308,6 +308,86 @@
       "expect": {
         "signature": "(?:FAIL|ERROR): test_a_market_maker_run_dropped_from_a_table_is_refused"
       }
+    },
+    {
+      "id": "readme-sessions-file-read-as-a-day",
+      "breaks": "T-ORACLE-2's sum of the sessions is read as one day's oracle file, so it gets no row and the table is refused",
+      "check": "test_results_table.py test_t_oracle_2_gets_one_row_from_the_sum_of_the_sessions",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        if name == \"oracle_sessions.md\":\n            rows = [sessions_row(name, text)]\n        elif name.startswith(\"oracle_\"):\n",
+          "new": "        if name.startswith(\"oracle_\"):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_oracle_2_gets_one_row_from_the_sum_of_the_sessions"
+      }
+    },
+    {
+      "id": "readme-sessions-verdict-fixed",
+      "breaks": "The T-ORACLE-2 row shows one verdict whatever the sessions file says",
+      "check": "test_results_table.py test_t_oracle_2_gets_one_row_from_the_sum_of_the_sessions",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "header_host(text, name), SHOWN[verdict[1]], verdict[2],",
+          "new": "header_host(text, name), SHOWN[\"FAIL\"], verdict[2],"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_oracle_2_gets_one_row_from_the_sum_of_the_sessions"
+      }
+    },
+    {
+      "id": "readme-t3-failure-read-as-odd-lots",
+      "breaks": "Every T-TRADE-3 failure is described as an odd-lot one, so a share or print mismatch cannot be shown",
+      "check": "test_results_table.py test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            detail = t3_failure_detail(text, name)\n",
+          "new": "            detail = odd_lot_detail(text, name)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol"
+      }
+    },
+    {
+      "id": "readme-venue-suffix-dropped",
+      "breaks": "A BX day's rows are labelled with the date alone, as if they were Nasdaq's day",
+      "check": "test_results_table.py test_a_day_of_another_venue_keeps_its_suffix_and_says_why_t_trade_2_did_not_run",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    return find(r\"(\\d{8}(?:_[A-Z]+)?)\", name, name)[1]",
+          "new": "    return find(r\"(\\d{8})\", name, name)[1]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_day_of_another_venue_keeps_its_suffix_and_says_why_t_trade_2_did_not_run"
+      }
     }
   ]
 }

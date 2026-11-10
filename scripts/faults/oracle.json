@@ -2985,6 +2985,166 @@
       "expect": {
         "signature": "FAIL: test_an_arm_is_held_to_the_hard_checks_on_its_own"
       }
+    },
+    {
+      "id": "oracle-sessions-count-ignored",
+      "breaks": "T-ORACLE-2 passes on the messages alone, with fewer than ten sessions",
+      "check": "test_oracle_sessions.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_sessions.py",
+          "old": "    met = sessions >= SESSIONS and messages >= MESSAGES and divergences == 0\n",
+          "new": "    met = messages >= MESSAGES and divergences == 0\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_sessions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_nine_sessions_over_the_messages_still_fail"
+      }
+    },
+    {
+      "id": "oracle-sessions-sums-uncounted",
+      "breaks": "A session left out still adds its messages to the total",
+      "check": "test_oracle_sessions.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_sessions.py",
+          "old": "    messages = sum(row[\"diffed\"] for row in counted)\n",
+          "new": "    messages = sum(row[\"diffed\"] for row in found)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_sessions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_divergence_fails_and_the_session_is_not_counted"
+      }
+    },
+    {
+      "id": "oracle-sessions-arm-verdicts-ignored",
+      "breaks": "A session counts on its first arm's verdict, whatever the other arms gave",
+      "check": "test_oracle_sessions.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_sessions.py",
+          "old": "        if row[\"verdict\"] != \"PASS\" or row[\"failed_arms\"]:\n",
+          "new": "        if row[\"verdict\"] != \"PASS\":\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_sessions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_arm_that_failed_keeps_the_session_out"
+      }
+    },
+    {
+      "id": "oracle-sessions-part-of-a-day",
+      "breaks": "A session counts though it diffed less than the census pinned",
+      "check": "test_oracle_sessions.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_sessions.py",
+          "old": "        if row[\"diffed\"] != row[\"in_file\"] or row[\"short_arms\"]:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_sessions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_part_of_a_day_keeps_the_session_out"
+      }
+    },
+    {
+      "id": "oracle-sessions-host-ignored",
+      "breaks": "A Linux session counts towards a Mac-only target",
+      "check": "test_oracle_sessions.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_sessions.py",
+          "old": "        if not row[\"host\"].startswith(\"Darwin\"):\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_sessions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_linux_session_keeps_the_session_out"
+      }
+    },
+    {
+      "id": "oracle-sessions-check-ignored",
+      "breaks": "--check passes a results file that differs from a fresh run",
+      "check": "test_oracle_sessions.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_sessions.py",
+          "old": "        if current != text:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_sessions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_passes_on_a_fresh_file_and_fails_on_an_edit"
+      }
+    },
+    {
+      "id": "oracle-sessions-twice",
+      "breaks": "One dataset's two files count as two sessions",
+      "check": "test_oracle_sessions.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_sessions.py",
+          "old": "        if row[\"dataset\"] in by_dataset:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_sessions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_session_counted_twice_is_refused"
+      }
+    },
+    {
+      "id": "oracle-report-comparison-every-day",
+      "breaks": "12302019's published figures are set beside every day's counts",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    if day == COMPARISON_DAY:\n",
+          "new": "    if True:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_published_figures_are_shown_on_their_own_day_only"
+      }
     }
   ]
 }

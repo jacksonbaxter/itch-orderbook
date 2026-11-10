@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Extracts one month's CSV from the pinned MIDAS zip, into the gitignored build tree.
+"""Extracts one month's CSV from its quarter's pinned MIDAS zip, into the gitignored build tree.
 
     python3 -B -I scripts/extract_midas.py --member dec19.csv [--out-dir build/reference]
 
-The zip is checked against the SHA-256 in scripts/data_manifest.json first. The file is
+Each member belongs to one quarter's zip, named in MEMBERS by its key in
+scripts/data_manifest.json. The zip is checked against the SHA-256 there first. The file is
 untrusted data, so run this with -I. Only the member named here is read, and its name
 never reaches a path unless it is one of the names listed in MEMBERS.
 
@@ -23,8 +24,17 @@ import zlib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MANIFEST_KEY = "midas_2019q4"
-MEMBERS = {"oct19.csv", "dec19.csv"}
+# The months of the sessions in the manifest, each with the quarter's zip that holds it.
+MEMBERS = {
+    "jan19.csv": "midas_2019q1",
+    "mar19.csv": "midas_2019q1",
+    "may19.csv": "midas_2019q2",
+    "jul19.csv": "midas_2019q3",
+    "aug19.csv": "midas_2019q3",
+    "oct19.csv": "midas_2019q4",
+    "dec19.csv": "midas_2019q4",
+    "jan20.csv": "midas_2020q1",
+}
 CHUNK = 1 << 20
 
 
@@ -79,10 +89,11 @@ def main(argv=None):
     parser.add_argument("--out-dir", type=Path, default=REPO_ROOT / "build" / "reference")
     args = parser.parse_args(argv)
 
-    reference = json.loads(args.manifest.read_text(encoding="utf-8"))["references"][MANIFEST_KEY]
+    key = MEMBERS[args.member]
+    reference = json.loads(args.manifest.read_text(encoding="utf-8"))["references"][key]
     archive = args.zip or REPO_ROOT / "data" / reference["filename"]
     if not archive.is_file():
-        print(f"midas: no {archive}. Run: python3 scripts/fetch_data.py --ref {MANIFEST_KEY}",
+        print(f"midas: no {archive}. Run: python3 scripts/fetch_data.py --ref {key}",
               file=sys.stderr)
         return 1
     found = sha256_of(archive)

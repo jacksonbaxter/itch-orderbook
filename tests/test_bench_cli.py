@@ -8,6 +8,7 @@ than debian on its measuring core does not, so on Linux that case is skipped and
 fault matrix's fake machine covers the script.
 """
 
+import datetime
 import json
 import os
 import platform
@@ -205,14 +206,26 @@ class Cli(unittest.TestCase):
                          {"load-not-stamped"})
         self.assertIn("published", run_log.read_text(encoding="utf-8"))
         fields = check_results.parse_header(text)
+        # measure.sh's lines bracket the run, and a quiet sampler's lines every 2 s bracket
+        # those, as a macOS run from 2026-11-05 on needs.
+        stamp = "%Y-%m-%dT%H:%M:%SZ"
+        second = datetime.timedelta(seconds=1)
+        opened = datetime.datetime.strptime(fields["run_started"], stamp) - second
+        closed = datetime.datetime.strptime(fields["run_finished"], stamp) + second
         stderr = SCRATCH / "measure.stderr"
         stderr.write_text(
-            "measure.sh: start load1=1.20 host=some-machine at=2000-01-01T00:00:00Z\n"
-            "measure.sh: end load1=1.30 exit=0 at=2999-01-01T00:00:00Z\n", encoding="utf-8")
+            f"measure.sh: start load1=1.20 host=some-machine at={opened.strftime(stamp)}\n"
+            f"measure.sh: end load1=1.30 exit=0 at={closed.strftime(stamp)}\n", encoding="utf-8")
+        sampler = SCRATCH / "sampler.log"
+        tick, lines = opened - 2 * second, []
+        while tick <= closed + 2 * second:
+            lines.append(f"{tick.strftime(stamp)} sample\n")
+            tick += 2 * second
+        sampler.write_text("".join(lines), encoding="utf-8")
         result = subprocess.run(
             [sys.executable, "-B", str(REPO_ROOT / "scripts" / "stamp_load.py"), "--results",
-             str(out), "--stderr", str(stderr)], capture_output=True, text=True, timeout=60,
-            check=False)
+             str(out), "--stderr", str(stderr), "--sampler", str(sampler)], capture_output=True,
+            text=True, timeout=60, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         stamped = out.read_text(encoding="utf-8")
         self.assertNotIn("some-machine", stamped)

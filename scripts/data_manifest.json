@@ -109,6 +109,458 @@
         "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. No published hash for this day is recorded here.",
         "agrees": []
       }
+    },
+    "01302019": {
+      "name": "01302019.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/01302019.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 4764426091,
+        "messages": 368366634
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "8c97b5b13bc451c012c2466fb7e258da134dab29aa47b67fe7b0088c78e870be",
+        "unpacked_sha256": "1d0972ffc25b35902ccc3f9069aae517da56903d5795f872902b8697315f30c3",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": [
+          "gz_sha256",
+          "unpacked_sha256"
+        ]
+      },
+      "compressed_bytes": 4764426091,
+      "etag": "\"29fda95e24b9d41:0\"",
+      "last_modified": "Thu, 31 Jan 2019 05:18:15 GMT",
+      "gz_sha256": "8c97b5b13bc451c012c2466fb7e258da134dab29aa47b67fe7b0088c78e870be",
+      "gzip_crc32": "54a883e9",
+      "gzip_isize": 2655948500,
+      "gzip_members": 1,
+      "unpacked_bytes": 11245883092,
+      "unpacked_sha256": "1d0972ffc25b35902ccc3f9069aae517da56903d5795f872902b8697315f30c3",
+      "messages": 368366634,
+      "per_type_counts": {
+        "A": 162970455,
+        "B": 116,
+        "C": 158886,
+        "D": 158273361,
+        "E": 8096995,
+        "F": 1725898,
+        "H": 8805,
+        "I": 3684511,
+        "J": 62,
+        "L": 193769,
+        "P": 1326184,
+        "Q": 17430,
+        "R": 8714,
+        "S": 6,
+        "U": 27222746,
+        "V": 1,
+        "X": 4669874,
+        "Y": 8821
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 72300000033998,
+        "offset": 11245883078
+      }
+    },
+    "03272019": {
+      "name": "03272019.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/03272019.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 5510131732,
+        "messages": 422264305
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "7997025b9e09dd6c2ecb0bfa48a856197e6e800711ab67367ee0f2ab724b9ba8",
+        "unpacked_sha256": "08339b7ebb453975d4785338472021c1fe2d55a8672659b0301f9e2a0b2b7ec9",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": [
+          "gz_sha256",
+          "unpacked_sha256"
+        ]
+      },
+      "compressed_bytes": 5510131732,
+      "etag": "\"77ed56d293e5d41:0\"",
+      "last_modified": "Thu, 28 Mar 2019 18:26:55 GMT",
+      "gz_sha256": "7997025b9e09dd6c2ecb0bfa48a856197e6e800711ab67367ee0f2ab724b9ba8",
+      "gzip_crc32": "7db34843",
+      "gzip_isize": 4284370389,
+      "gzip_members": 1,
+      "unpacked_bytes": 12874304981,
+      "unpacked_sha256": "08339b7ebb453975d4785338472021c1fe2d55a8672659b0301f9e2a0b2b7ec9",
+      "messages": 422264305,
+      "per_type_counts": {
+        "A": 186296811,
+        "C": 137556,
+        "D": 181953144,
+        "E": 7331047,
+        "F": 1477447,
+        "H": 8780,
+        "I": 3674503,
+        "J": 30,
+        "K": 1,
+        "L": 193290,
+        "P": 1105314,
+        "Q": 17445,
+        "R": 8712,
+        "S": 6,
+        "U": 34555656,
+        "V": 1,
+        "X": 5495709,
+        "Y": 8853
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 72300000033611,
+        "offset": 12874304967
+      }
+    },
+    "05302019": {
+      "name": "05302019.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20PSX%20ITCH/05302019.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 4246501580,
+        "messages": 327006172
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "3f4778eabbc5f8afb113cc178787b156987561fff7590d09388cb44c6564ea1b",
+        "unpacked_sha256": "7fa6d9e74975946727460e7971f735cbf039fb4b7ddca5cb1dc7461347d03508",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": [
+          "gz_sha256",
+          "unpacked_sha256"
+        ]
+      },
+      "compressed_bytes": 4246501580,
+      "etag": "\"3955e17f6717d51:0\"",
+      "last_modified": "Fri, 31 May 2019 04:15:37 GMT",
+      "gz_sha256": "3f4778eabbc5f8afb113cc178787b156987561fff7590d09388cb44c6564ea1b",
+      "gzip_crc32": "fc42f7cd",
+      "gzip_isize": 1417963576,
+      "gzip_members": 1,
+      "unpacked_bytes": 10007898168,
+      "unpacked_sha256": "7fa6d9e74975946727460e7971f735cbf039fb4b7ddca5cb1dc7461347d03508",
+      "messages": 327006172,
+      "per_type_counts": {
+        "A": 144146286,
+        "C": 120275,
+        "D": 140132577,
+        "E": 7218925,
+        "F": 1207474,
+        "H": 8832,
+        "I": 3704017,
+        "J": 18,
+        "K": 1,
+        "L": 204901,
+        "P": 1238971,
+        "Q": 17588,
+        "R": 8795,
+        "S": 6,
+        "U": 26038168,
+        "V": 1,
+        "X": 2950440,
+        "Y": 8897
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 72300000036296,
+        "offset": 10007898154
+      }
+    },
+    "07302019": {
+      "name": "07302019.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/07302019.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 3662140094,
+        "messages": 282229684
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "c65784c48c28735901ae442dc00e215834218a359bc12a139ab4eec209bc2d4a",
+        "unpacked_sha256": "9f8634a048b8195ccdcbe618e5833a759e35e04486d74e36b79176d35172654a",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": [
+          "gz_sha256",
+          "unpacked_sha256"
+        ]
+      },
+      "compressed_bytes": 3662140094,
+      "etag": "\"4a372f9d5647d51:0\"",
+      "last_modified": "Wed, 31 Jul 2019 04:15:40 GMT",
+      "gz_sha256": "c65784c48c28735901ae442dc00e215834218a359bc12a139ab4eec209bc2d4a",
+      "gzip_crc32": "d458a84e",
+      "gzip_isize": 71744821,
+      "gzip_members": 1,
+      "unpacked_bytes": 8661679413,
+      "unpacked_sha256": "9f8634a048b8195ccdcbe618e5833a759e35e04486d74e36b79176d35172654a",
+      "messages": 282229684,
+      "per_type_counts": {
+        "A": 124164371,
+        "C": 135573,
+        "D": 119999061,
+        "E": 7582422,
+        "F": 1296379,
+        "H": 8869,
+        "I": 3723793,
+        "J": 2,
+        "L": 210706,
+        "P": 1461010,
+        "Q": 17700,
+        "R": 8849,
+        "S": 6,
+        "U": 21253951,
+        "V": 1,
+        "X": 2358032,
+        "Y": 8959
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 72300000037782,
+        "offset": 8661679399
+      }
+    },
+    "08302019": {
+      "name": "08302019.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/08302019.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 4075649457,
+        "messages": 310317357
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "2f6639a37487f377851883ed54171f5565f164556c1855a28abc8475ce408b47",
+        "unpacked_sha256": "7c1a7843874882807df840008bca2a45b51a09192562ebf1429c4cdd8a88a7a2",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": [
+          "gz_sha256",
+          "unpacked_sha256"
+        ]
+      },
+      "compressed_bytes": 4075649457,
+      "etag": "\"5c572729b45fd51:0\"",
+      "last_modified": "Sat, 31 Aug 2019 04:25:46 GMT",
+      "gz_sha256": "2f6639a37487f377851883ed54171f5565f164556c1855a28abc8475ce408b47",
+      "gzip_crc32": "d57740f6",
+      "gzip_isize": 911268544,
+      "gzip_members": 1,
+      "unpacked_bytes": 9501203136,
+      "unpacked_sha256": "7c1a7843874882807df840008bca2a45b51a09192562ebf1429c4cdd8a88a7a2",
+      "messages": 310317357,
+      "per_type_counts": {
+        "A": 136528131,
+        "C": 95619,
+        "D": 133168073,
+        "E": 6844298,
+        "F": 1458567,
+        "H": 8849,
+        "I": 3722220,
+        "J": 8,
+        "L": 212660,
+        "P": 1232826,
+        "Q": 17685,
+        "R": 8841,
+        "S": 6,
+        "U": 24401873,
+        "V": 1,
+        "X": 2608749,
+        "Y": 8951
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 72300000037069,
+        "offset": 9501203122
+      }
+    },
+    "10182019": {
+      "name": "S101819-v50.txt",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/S101819-v50.txt.gz",
+      "expected": {
+        "compressed_bytes": 3951201663,
+        "messages": 302347067
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "gz_sha256": "390acb4df5a01d3d8e6c34557858604ac7c655c8edc0a9e312da3c032c5d8da4",
+        "unpacked_sha256": "fa98fcfc3f7375fc2466d9c567e780f3ebc53e831b9f2e2e200cd8574b63a3aa",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": [
+          "gz_sha256",
+          "unpacked_sha256"
+        ]
+      },
+      "compressed_bytes": 3951201663,
+      "etag": "\"808453cb3386d51:0\"",
+      "last_modified": "Sat, 19 Oct 2019 04:15:09 GMT",
+      "gz_sha256": "390acb4df5a01d3d8e6c34557858604ac7c655c8edc0a9e312da3c032c5d8da4",
+      "gzip_crc32": "a8bbf513",
+      "gzip_isize": 681555586,
+      "gzip_members": 1,
+      "unpacked_bytes": 9271490178,
+      "unpacked_sha256": "fa98fcfc3f7375fc2466d9c567e780f3ebc53e831b9f2e2e200cd8574b63a3aa",
+      "messages": 302347067,
+      "per_type_counts": {
+        "A": 132547823,
+        "C": 106494,
+        "D": 128766419,
+        "E": 7003614,
+        "F": 1328373,
+        "H": 8903,
+        "I": 3741431,
+        "J": 6,
+        "K": 1,
+        "L": 214866,
+        "P": 1396841,
+        "Q": 17781,
+        "R": 8887,
+        "S": 6,
+        "U": 24444132,
+        "V": 1,
+        "X": 2752498,
+        "Y": 8991
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 72300000035300,
+        "offset": 9271490164
+      }
+    },
+    "01302020": {
+      "name": "01302020.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/01302020.NASDAQ_ITCH50.gz",
+      "expected": {
+        "compressed_bytes": 5597158940,
+        "messages": 423285709
+      },
+      "third_party": {
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. No published hash for this day is recorded here.",
+        "agrees": []
+      },
+      "compressed_bytes": 5597158940,
+      "etag": "\"a80f0e8f5d7d51:0\"",
+      "last_modified": "Fri, 31 Jan 2020 05:18:45 GMT",
+      "gz_sha256": "8f5399155242f8d84338c36fdd78a47c0b0aa3df5707829b20c5158c258364c6",
+      "gzip_crc32": "8c1ac398",
+      "gzip_isize": 67148866,
+      "gzip_members": 1,
+      "unpacked_bytes": 12952050754,
+      "unpacked_sha256": "a324b2cc6daa0992e411d021b1f714cbc614dc5d1d3f2828b19b79d3f9fbe75b",
+      "messages": 423285709,
+      "per_type_counts": {
+        "A": 184735355,
+        "C": 139474,
+        "D": 180285101,
+        "E": 8415610,
+        "F": 1875350,
+        "H": 8921,
+        "I": 4025192,
+        "J": 5,
+        "K": 2,
+        "L": 216802,
+        "P": 1779727,
+        "Q": 17835,
+        "R": 8916,
+        "S": 6,
+        "U": 36777372,
+        "V": 1,
+        "X": 4990972,
+        "Y": 9068
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 72300000039817,
+        "offset": 12952050740
+      }
+    },
+    "01302019_BX": {
+      "name": "20190130.BX_ITCH_50",
+      "venue": "BX",
+      "midas_exchange": "Boston",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20BX%20ITCH/20190130.BX_ITCH_50.gz",
+      "expected": {
+        "compressed_bytes": 1097205622,
+        "messages": 82841542
+      },
+      "third_party": {
+        "source": "EkanshSingh401/carteret docs/data.md",
+        "commit": "3df0e8757c979731b07a991de4ec7e81e81c8c08",
+        "url": "https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/data.md",
+        "unpacked_sha256": "d670c9dd0e2391a4007fa407668bfaaa9ded346f0804bb5d7b2a6c381bdcadd3",
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the unpacked SHA-256 for this day; the fetch fails on any difference.",
+        "agrees": [
+          "unpacked_sha256"
+        ]
+      },
+      "compressed_bytes": 1097205622,
+      "etag": "\"ad1370cd24b9d41:0\"",
+      "last_modified": "Thu, 31 Jan 2019 05:21:21 GMT",
+      "gz_sha256": "b581ad9a3b2cea24927b54bf977c12484e20c047b0aed2d3fa46deea9fc2812c",
+      "gzip_crc32": "d96b992f",
+      "gzip_isize": 2422694511,
+      "gzip_members": 1,
+      "unpacked_bytes": 2422694511,
+      "unpacked_sha256": "d670c9dd0e2391a4007fa407668bfaaa9ded346f0804bb5d7b2a6c381bdcadd3",
+      "messages": 82841542,
+      "per_type_counts": {
+        "A": 34828527,
+        "B": 3,
+        "C": 6915,
+        "D": 33864580,
+        "E": 1339986,
+        "F": 48596,
+        "H": 8804,
+        "L": 5869,
+        "N": 8301264,
+        "P": 325381,
+        "R": 8713,
+        "S": 6,
+        "U": 3385851,
+        "V": 1,
+        "X": 708225,
+        "Y": 8821
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 68700000008170,
+        "offset": 2422694497
+      }
     }
   },
   "references": {
@@ -129,7 +581,121 @@
       "note": "SEC MIDAS 2019 Q4. sec.gov returns 403 to curl, so this capture is the copy used. Never committed.",
       "nasdaq_rows": {
         "20191230": 5772,
-        "20191030": 5767
+        "20191030": 5767,
+        "20191018": 5772
+      }
+    },
+    "crossstats_20190130": {
+      "url": "ftp://ftp.nasdaqtrader.com/files/crosses/CrossStats20190130.txt",
+      "filename": "CrossStats20190130.txt",
+      "format": "text",
+      "bytes": 217338,
+      "sha256": "58acc20bfa84ff1b504418bdf7d5ef0d77f845811252b34a7bc25179e5751c20",
+      "note": "Nasdaq's per-symbol opening and closing cross file. Never committed."
+    },
+    "crossstats_20190327": {
+      "url": "ftp://ftp.nasdaqtrader.com/files/crosses/CrossStats20190327.txt",
+      "filename": "CrossStats20190327.txt",
+      "format": "text",
+      "bytes": 220742,
+      "sha256": "8e85884bb176cb0f9535f85538d8b2ddd7f003fd5a9a10fa9ace73d84136b606",
+      "note": "Nasdaq's per-symbol opening and closing cross file. Never committed."
+    },
+    "crossstats_20190530": {
+      "url": "ftp://ftp.nasdaqtrader.com/files/crosses/CrossStats20190530.txt",
+      "filename": "CrossStats20190530.txt",
+      "format": "text",
+      "bytes": 217190,
+      "sha256": "dd171a4a9ca90ab59936f9c3dcc7238169cb39f2e1b6ac152a9f4760e8451877",
+      "note": "Nasdaq's per-symbol opening and closing cross file. Never committed."
+    },
+    "crossstats_20190730": {
+      "url": "ftp://ftp.nasdaqtrader.com/files/crosses/CrossStats20190730.txt",
+      "filename": "CrossStats20190730.txt",
+      "format": "text",
+      "bytes": 227624,
+      "sha256": "303b146bb45ff0fc62e5ff873fc3a57a2cdc55434db8d4f79ca3ddd41818097d",
+      "note": "Nasdaq's per-symbol opening and closing cross file. Never committed."
+    },
+    "crossstats_20190830": {
+      "url": "ftp://ftp.nasdaqtrader.com/files/crosses/CrossStats20190830.txt",
+      "filename": "CrossStats20190830.txt",
+      "format": "text",
+      "bytes": 219484,
+      "sha256": "afd60924eacc7593d0dc7e61c18bfdec8cd8e05df70747586eab48eb6a913cbf",
+      "note": "Nasdaq's per-symbol opening and closing cross file. Never committed."
+    },
+    "crossstats_20191018": {
+      "url": "ftp://ftp.nasdaqtrader.com/files/crosses/CrossStats20191018.txt",
+      "filename": "CrossStats20191018.txt",
+      "format": "text",
+      "bytes": 217264,
+      "sha256": "88abc093e60c5cdff629fe02f3c13b52a1c4f22f1263594e88652c7e43297fbd",
+      "note": "Nasdaq's per-symbol opening and closing cross file. Never committed."
+    },
+    "crossstats_20191030": {
+      "url": "ftp://ftp.nasdaqtrader.com/files/crosses/CrossStats20191030.txt",
+      "filename": "CrossStats20191030.txt",
+      "format": "text",
+      "bytes": 235542,
+      "sha256": "e4836a5bd139fee66f4a3b16a1de46c2e1becdcf4b76f937b1db3654c4249772",
+      "note": "Nasdaq's per-symbol opening and closing cross file. Never committed."
+    },
+    "crossstats_20200130": {
+      "url": "ftp://ftp.nasdaqtrader.com/files/crosses/CrossStats20200130.txt",
+      "filename": "CrossStats20200130.txt",
+      "format": "text",
+      "bytes": 232952,
+      "sha256": "e84280939f7495bc9bea3026aa0a1085d6e6465bc42b3425cf7c539a2343215d",
+      "note": "Nasdaq's per-symbol opening and closing cross file. Never committed."
+    },
+    "midas_2019q1": {
+      "url": "https://web.archive.org/web/20190912025618id_/https://www.sec.gov/files/opa/data/market-structure/metrics-individual-security-and-exchange/individual_security_exchange_2019_q1.zip",
+      "filename": "individual_security_exchange_2019_q1.zip",
+      "format": "zip",
+      "bytes": 118017607,
+      "sha256": "e85d0ce9713b69a25ce34b68a21a5fb4e9ab92de1e008183a30bdff73ad384c9",
+      "note": "SEC MIDAS 2019 Q1. sec.gov returns 403 to curl, so this capture is the copy used. Never committed.",
+      "nasdaq_rows": {
+        "20190130": 5681,
+        "20190327": 5665
+      },
+      "boston_rows": {
+        "20190130": 5145
+      }
+    },
+    "midas_2019q2": {
+      "url": "https://web.archive.org/web/20190912025532id_/https://www.sec.gov/files/opa/data/market-structure/metrics-individual-security-and-exchange/individual_security_exchange_2019_q2.zip",
+      "filename": "individual_security_exchange_2019_q2.zip",
+      "format": "zip",
+      "bytes": 122342991,
+      "sha256": "833ae7dd0a6f4e81f28889c623814fd0899d767d97aadd63a159a9fa4e251454",
+      "note": "SEC MIDAS 2019 Q2. sec.gov returns 403 to curl, so this capture is the copy used. Never committed.",
+      "nasdaq_rows": {
+        "20190530": 5712
+      }
+    },
+    "midas_2019q3": {
+      "url": "https://web.archive.org/web/20201021215045id_/https://www.sec.gov/files/opa/data/market-structure/metrics-individual-security-and-exchange/individual_security_exchange_2019_q3.zip",
+      "filename": "individual_security_exchange_2019_q3.zip",
+      "format": "zip",
+      "bytes": 126283883,
+      "sha256": "459b877791f1d65412b81732b7cc9ba9772731a27f5a855ef564a4fe9d020bbe",
+      "note": "SEC MIDAS 2019 Q3. sec.gov returns 403 to curl, so this capture is the copy used. Never committed.",
+      "nasdaq_rows": {
+        "20190730": 5752,
+        "20190830": 5739
+      }
+    },
+    "midas_2020q1": {
+      "url": "https://web.archive.org/web/20201020134844id_/https://www.sec.gov/files/opa/data/market-structure/metrics-individual-security-and-exchange/individual_security_exchange_2020_q1.zip",
+      "filename": "individual_security_exchange_2020_q1.zip",
+      "format": "zip",
+      "bytes": 129915351,
+      "sha256": "b130a067e0f0ebfab026112e1dd5f7fd1f149b154a9397a8feff4fad1daf475a",
+      "note": "SEC MIDAS 2020 Q1. sec.gov returns 403 to curl, so this capture is the copy used. Never committed.",
+      "nasdaq_rows": {
+        "20200130": 5772
       }
     }
   }

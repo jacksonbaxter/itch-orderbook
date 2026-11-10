@@ -7,7 +7,8 @@
 
 The tool's own verdicts are not enough here. A tool that diffed half the day could still
 pass, so this compares its counters with the census pinned in the manifest. The third-
-party figures in COMPARISON are claims to set ours beside, never expected values.
+party figures in COMPARISON are claims to set ours beside, never expected values, and
+were published for COMPARISON_DAY only: another day's file says it has none.
 
 --log and --alloc-log are one arm of the fast book, and the detail of the results file is
 that arm's. Each --arm-log is another arm's pair of logs. Every arm is held to the same hard
@@ -35,7 +36,9 @@ IRONBOOK_TYPES = "AFU"
 # Published on 12302019. Claims to compare with, not expected values. carteret's checks
 # run after book messages, and its include/carteret/reference_book.hpp at commit 3df0e87
 # observes a replace twice: once in add_retained() and again in on(OrderReplace). So a
-# crossed U counts twice in its totals, and those rows use that counting.
+# crossed U counts twice in its totals, and those rows use that counting. They describe
+# that one session, so only its results file sets them beside ours.
+COMPARISON_DAY = "12302019"
 COMPARISON = [
     ("book messages, crossed", "carteret", 8580, "crossed"),
     ("book messages, locked", "carteret", 70, "locked"),
@@ -514,21 +517,23 @@ def render(log, entry, day, alloc, arms):
         [(symbol, count(int(crossed)), count(int(locked)), first, last, count(int(deepest)),
           f"`{states}`")
          for symbol, _, crossed, locked, first, last, deepest, states in log["symbols"]])
-    lines += [
-        "",
-        "### Against published figures",
-        "",
-        "Third-party claims, set beside ours and not used as expected values. carteret "
-        "checks after book messages only, and its source observes a replace twice, so its "
-        f"rows here count a crossed `U` twice. We count {count(book[2])} crossed once per "
-        "message, and the Ironbook rows use its own check: after `A`, `F` and `U`, with "
-        "the market open and the symbol in state `T`.",
-        "",
-    ]
-    lines += format_table(
-        ("Figure", "Source", "Published", "Ours", "Difference"),
-        [(label, source, count(claim), count(ours), f"{ours - claim:+,}")
-         for label, source, claim, ours in comparison_rows(log)])
+    lines += ["", "### Against published figures", ""]
+    if day == COMPARISON_DAY:
+        lines += [
+            "Third-party claims, set beside ours and not used as expected values. carteret "
+            "checks after book messages only, and its source observes a replace twice, so its "
+            f"rows here count a crossed `U` twice. We count {count(book[2])} crossed once per "
+            "message, and the Ironbook rows use its own check: after `A`, `F` and `U`, with "
+            "the market open and the symbol in state `T`.",
+            "",
+        ]
+        lines += format_table(
+            ("Figure", "Source", "Published", "Ours", "Difference"),
+            [(label, source, count(claim), count(ours), f"{ours - claim:+,}")
+             for label, source, claim, ours in comparison_rows(log)])
+    else:
+        lines.append(f"None. The figures this file could set beside ours were published for "
+                     f"{COMPARISON_DAY} only.")
     lines += inv3_section(log)
     if alloc:
         lines += [
