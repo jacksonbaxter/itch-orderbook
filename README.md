@@ -306,6 +306,29 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0308-20261106T080410Z` | `P-0308` | `675befb3ad78` | Linux | `published` |
 | `P-0308-20261106T080410Z` | `P-0308` | `675befb3ad78` | Linux | `withdrawn` |
 | `P-0308-20261109T231118Z` | `P-0308` | `8b5f06b896b3` | Linux | `published` |
+| `P-0701-20261110T031534Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
+| `P-0701-20261110T032355Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
+| `P-0701-20261110T033215Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
+| `P-0701-20261110T033635Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
+| `P-0701-20261110T033853Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
+| `P-0701-20261110T034934Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
+| `P-0701-20261110T040413Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
+| `P-0701-20261110T041729Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
+| `P-0701-20261110T042103Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
+| `P-0701-20261110T042433Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
+| `P-0701-20261110T031311Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `stopped by SIGTERM at waiting for the Mac to be quiet; nothing from it is published; the row was written by the driver as it stopped` |
+| `P-0701-20261110T063624Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
+| `P-0701-20261110T064504Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
+| `P-0701-20261110T064734Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
+| `P-0701-20261110T063344Z` | `P-0701` | `105084de0645` | Darwin | `refused at malloc-fresh, repetition 1` |
+| `P-0701-20261110T072504Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
+| `P-0701-20261110T072734Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
+| `P-0701-20261110T072921Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
+| `P-0701-20261110T071917Z` | `P-0701` | `105084de0645` | Darwin | `refused at malloc-fresh, repetition 1` |
+| `P-0701-20261110T093003Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
+| `P-0701-20261110T093521Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
+| `P-0701-20261110T093735Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
+| `P-0701-20261110T092811Z` | `P-0701` | `105084de0645` | Darwin | `refused at malloc-fresh, repetition 1` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 has no reference file for 10302019.
