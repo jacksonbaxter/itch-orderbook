@@ -93,12 +93,31 @@ struct TypedPass {
   return true;
 }
 
+// A message's slot is its type byte.
+struct ByType {
+  [[nodiscard]] std::uint8_t operator()(std::uint64_t /*frame*/,
+                                        const Frame& frame) const noexcept {
+    return static_cast<std::uint8_t>(read_char(frame.payload.data()));
+  }
+};
+
+// A message's slot is the one given for its frame, by order_age.hpp's age_slots().
+struct GivenSlots {
+  std::span<const std::uint8_t> slots;
+
+  [[nodiscard]] std::uint8_t operator()(std::uint64_t at, const Frame& /*frame*/) const noexcept {
+    return slots[at];
+  }
+};
+
 // The pass. Group gives event_count() and read_fast(span). A design whose heap ages takes
-// its steps inside the spans, so it is not offered here.
-template <class Group, class Book>
+// its steps inside the spans, so it is not offered here. SlotOf gives a message frame's
+// slot from its number among the frames and the frame itself.
+template <class Group, class Book, class SlotOf = ByType>
   requires(!AgesHeap<Book>)
 [[nodiscard]] TypedPass typed_counts_pass(std::span<const std::byte> input, Book& book,
-                                          Group& group, TypeTally& tally) {
+                                          Group& group, TypeTally& tally,
+                                          const SlotOf& slot_of = {}) {
   const std::size_t events = group.event_count();
   TypedPass pass{.first = std::vector<std::uint64_t>(events),
                  .last = std::vector<std::uint64_t>(events),
@@ -113,7 +132,7 @@ template <class Group, class Book>
   for (Frame frame = reader.next(); !is_terminal(frame.status); frame = reader.next()) {
     std::uint8_t slot = kNoMessageSlot;
     if (frame.status == FrameStatus::message) {
-      slot = static_cast<std::uint8_t>(read_char(frame.payload.data()));
+      slot = slot_of(pass.frames, frame);
       pass.rejected += is_rejection(book.apply(frame.payload)) ? 1U : 0U;
     }
     pass.missed += group.read_fast(now) ? 0U : 1U;

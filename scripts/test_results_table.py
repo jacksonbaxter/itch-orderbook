@@ -86,6 +86,32 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| **FAIL** | odd-lot columns wrong on BRK.A, equal on 5766 of 5767", row)
         self.assertRegex(row, r"shares equal on ([\d,]+) of \1\b")
 
+    def test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol(self):
+        self.edit(TRADES, "| T-TRADE-3 | **PASS** | 0 |", "| T-TRADE-3 | **FAIL** | 2 |")
+        self.edit(TRADES, "## Per message type\n",
+                  "- equal_shares 5766 of 5767 symbols\n"
+                  "- equal_prints 5766 of 5767 symbols\n"
+                  "- `t3_trade_shares message=1 locate=1 symbol=PLAB feed 200, MIDAS 100`\n"
+                  "- `t3_trades message=1 locate=1 symbol=PLAB feed 2, MIDAS 1`\n\n"
+                  "## Per message type\n")
+        row = self.row("T-TRADE-3", "10302019")
+        self.assertIn("| **FAIL** | trade_shares wrong on PLAB, trades wrong on PLAB; "
+                      "equal_shares 5766 of 5767, equal_prints 5766 of 5767;", row)
+        self.assertNotIn("odd-lot", row)
+
+    def test_a_day_of_another_venue_keeps_its_suffix_and_says_why_t_trade_2_did_not_run(self):
+        text = (self.root / TRADES).read_text(encoding="utf-8")
+        old = ("T-TRADE-2 is not available on 10302019: no CrossStats file for that day is in hand, "
+               "so ")
+        self.assertEqual(text.count(old), 1)
+        text = text.replace(old, "T-TRADE-2 is not available on 10302019_BX: CrossStats is "
+                                 "Nasdaq's file of its own crosses, and this is a BX feed, so ")
+        (self.root / "results" / "trades_10302019_BX.md").write_text(text, encoding="utf-8")
+        row = self.row("T-TRADE-2", "10302019_BX")
+        self.assertIn("| **NOT AVAILABLE** | CrossStats is Nasdaq's file of its own crosses, and "
+                      "this is a BX feed", row)
+        self.assertIn("(results/trades_10302019_BX.md)", row)
+
     def test_a_late_day_says_its_odd_lots_were_not_compared(self):
         self.edit(TRADES, "## Results\n", "## Results\n\nThe odd-lot columns were not compared.\n")
         self.assertIn("odd-lot columns not compared", self.row("T-TRADE-3", "10302019"))
@@ -234,6 +260,17 @@ class ResultsTable(unittest.TestCase):
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
         self.assertIn("Book memory, MiB is 'n/a', not a figure", output)
+
+    def test_t_oracle_2_gets_one_row_from_the_sum_of_the_sessions(self):
+        import oracle_sessions  # noqa: PLC0415
+
+        path = self.root / "results" / oracle_sessions.OUT
+        path.write_text(oracle_sessions.generate(self.root), encoding="utf-8")
+        if "Verdict: **PASS**" in path.read_text(encoding="utf-8"):  # Shown failing, either way.
+            self.edit(f"results/{oracle_sessions.OUT}", "Verdict: **PASS**", "Verdict: **FAIL**")
+        self.assertIn("| **FAIL** | 0 divergences in ", self.row("T-ORACLE-2", "every session"))
+        self.edit(f"results/{oracle_sessions.OUT}", "Verdict: **FAIL**", "Verdict: **PASS**")
+        self.assertIn("| PASS | 0 divergences in ", self.row("T-ORACLE-2", "every session"))
 
     def test_a_backtest_file_gets_a_row_of_its_own(self):
         sys.path.insert(0, str(REPO_ROOT / "scripts"))

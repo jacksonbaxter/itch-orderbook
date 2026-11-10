@@ -165,6 +165,7 @@
         "preset": "wasm",
         "targets": [
           "itch_wasm_smoke",
+          "itch_wasm_kernels_smoke",
           "itch_demo_smoke"
         ],
         "gtest": false

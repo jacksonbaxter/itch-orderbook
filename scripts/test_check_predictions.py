@@ -100,6 +100,39 @@ class History(unittest.TestCase):
         (self.results / "wasm_fixture.md").write_text("# nothing\n", encoding="utf-8")
         self.assert_fails("prediction-missing")
 
+    def test_a_simd_result_naming_no_prediction(self):
+        self.in_order()
+        (self.results / "simd_fixture.md").write_text("# nothing\n", encoding="utf-8")
+        self.assert_fails("prediction-missing")
+
+    def test_a_layout_result_naming_no_prediction(self):
+        self.in_order()
+        for name in ("layout_fixture.md", "structure_fixture.md", "window_fixture.md"):
+            with self.subTest(name=name):
+                (self.results / name).write_text("# nothing\n", encoding="utf-8")
+                self.assert_fails("prediction-missing")
+                (self.results / name).unlink()
+
+    def test_the_oracle_sessions_naming_no_prediction(self):
+        self.in_order()
+        (self.results / "oracle_sessions.md").write_text("# nothing\n", encoding="utf-8")
+        self.assert_fails("prediction-missing")
+
+    def test_the_oracle_sessions_need_no_run_row(self):
+        self.in_order()
+        (self.results / "oracle_sessions.md").write_text("- prediction: P-0001\n",
+                                                         encoding="utf-8")
+        self.commit("oracle_sessions.md")
+        code, output = check(self.root)
+        self.assertEqual(code, 0, output)
+
+    def test_the_oracle_sessions_before_their_prediction(self):
+        (self.results / "oracle_sessions.md").write_text("- prediction: P-0001\n",
+                                                         encoding="utf-8")
+        self.commit("oracle_sessions.md")
+        self.in_order()
+        self.assert_fails("prediction-after-result")
+
     def test_a_result_naming_an_unknown_prediction(self):
         self.in_order()
         (self.results / "predictions.md").write_text("## P-0002: other\n", encoding="utf-8")

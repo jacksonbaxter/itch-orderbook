@@ -1,9 +1,15 @@
-// The two order lookup arms: reference to the order's slot in the pool.
+// The order lookup arms: reference to the order's slot in the pool.
 //
 // Each is a policy of FastBook, sized in the constructor and never grown. A lookup takes
-// the order pool, because the hash keeps only slots and confirms a key by reading the
+// the order pool, because the hashes keep only slots and confirm a key by reading the
 // order. The book calls insert only for a reference that find did not return, and erase
 // only for one that is live.
+//
+// HashIndex and PagedIndex are the two arms the book was designed with. The other two
+// repeat carteret's layout experiments on this book, each changing one thing against
+// HashIndex: IdentityHashIndex its hash, the reference's own low bits for the multiply-shift
+// (carteret's record 016), and ChainedIndex its collisions, a chain from a head per bucket
+// for linear probing. NOTES.md, "carteret's layout experiments on our book".
 //
 // Each arm also names the dependent loads a lookup makes before it has the order's slot,
 // kPrefetchStages of them, so that a reader running ahead of the book can ask for each in
@@ -24,13 +30,34 @@
 
 namespace itch {
 
-// Open addressing with linear probing, at most half full, keyed by a multiply-shift of
-// the reference. Any 64-bit reference is a key.
-class HashIndex {
- public:
-  explicit HashIndex(const BookCapacity& capacity) : HashIndex(capacity.orders) {}
+// The hash policies: a reference to its home among 2^k slots, given 64 - k and 2^k - 1.
+//
+// MultiplyShift keeps the top k bits of the reference times 2^64 over the golden ratio,
+// which spreads any run of references over the whole table. Identity keeps the reference's
+// own low k bits, so references given out one after another land in slots one after
+// another, and an order added just after another shares its line.
+struct MultiplyShift {
+  [[nodiscard]] static constexpr std::size_t home(std::uint64_t reference, unsigned shift,
+                                                  std::size_t /*mask*/) noexcept {
+    return static_cast<std::size_t>((reference * 0x9E3779B97F4A7C15ULL) >> shift);
+  }
+};
 
-  explicit HashIndex(std::uint32_t orders)
+struct Identity {
+  [[nodiscard]] static constexpr std::size_t home(std::uint64_t reference, unsigned /*shift*/,
+                                                  std::size_t mask) noexcept {
+    return static_cast<std::size_t>(reference) & mask;
+  }
+};
+
+// Open addressing with linear probing, at most half full, keyed by Hash of the reference.
+// Any 64-bit reference is a key.
+template <class Hash>
+class OpenHashIndex {
+ public:
+  explicit OpenHashIndex(const BookCapacity& capacity) : OpenHashIndex(capacity.orders) {}
+
+  explicit OpenHashIndex(std::uint32_t orders)
       : slots_(std::bit_ceil(std::size_t{2} * orders), kNoIndex),
         mask_{slots_.size() - 1},
         shift_{64U - static_cast<unsigned>(std::countr_zero(slots_.size()))} {}
@@ -84,14 +111,84 @@ class HashIndex {
     slots_[hole] = kNoIndex;
   }
 
-  friend bool operator==(const HashIndex&, const HashIndex&) = default;
+  friend bool operator==(const OpenHashIndex&, const OpenHashIndex&) = default;
 
  private:
   [[nodiscard]] std::size_t home_slot(std::uint64_t reference) const noexcept {
-    return static_cast<std::size_t>((reference * 0x9E3779B97F4A7C15ULL) >> shift_);
+    return Hash::home(reference, shift_, mask_);
   }
 
   std::vector<std::uint32_t> slots_;
+  std::size_t mask_;
+  unsigned shift_;
+};
+
+using HashIndex = OpenHashIndex<MultiplyShift>;
+using IdentityHashIndex = OpenHashIndex<Identity>;
+
+// Separate chaining with the multiply-shift hash, as many buckets as HashIndex has slots,
+// so that the experiment changes how collisions are kept and nothing else. A bucket holds
+// the slot of the first order on its chain, and each order's link to the next sits in an
+// array beside the pool, indexed by the order's slot, so that BookOrder stays 24 bytes. A
+// lookup reads its bucket, then each order on the chain to compare its reference, and that
+// order's link to go on. A new order goes at the front of its chain.
+class ChainedIndex {
+ public:
+  explicit ChainedIndex(const BookCapacity& capacity) : ChainedIndex(capacity.orders) {}
+
+  explicit ChainedIndex(std::uint32_t orders)
+      : heads_(std::bit_ceil(std::size_t{2} * orders), kNoIndex),
+        next_(orders, kNoIndex),
+        mask_{heads_.size() - 1},
+        shift_{64U - static_cast<unsigned>(std::countr_zero(heads_.size()))} {}
+
+  // One load before the slot: the bucket's line.
+  static constexpr unsigned kPrefetchStages = 1;
+
+  void prefetch_stage(std::uint64_t reference, unsigned /*stage*/) const noexcept {
+    // measured: E8, see FastBook::prefetch_stage.
+    __builtin_prefetch(&heads_[bucket(reference)]);
+  }
+
+  // The first order on the reference's chain, which is the reference's own unless another
+  // was added there after it.
+  [[nodiscard]] std::uint32_t peek(std::uint64_t reference) const noexcept {
+    return heads_[bucket(reference)];
+  }
+
+  [[nodiscard]] std::uint32_t find(std::uint64_t reference,
+                                   std::span<const BookOrder> orders) const noexcept {
+    std::uint32_t order = heads_[bucket(reference)];
+    while (order != kNoIndex && orders[order].reference != reference) {
+      order = next_[order];
+    }
+    return order;
+  }
+
+  void insert(std::uint64_t reference, std::uint32_t order,
+              std::span<const BookOrder> /*orders*/) noexcept {
+    std::uint32_t& head = heads_[bucket(reference)];
+    next_[order] = head;
+    head = order;
+  }
+
+  void erase(std::uint64_t reference, std::span<const BookOrder> orders) noexcept {
+    std::uint32_t* link = &heads_[bucket(reference)];
+    while (orders[*link].reference != reference) {
+      link = &next_[*link];
+    }
+    *link = next_[*link];
+  }
+
+  friend bool operator==(const ChainedIndex&, const ChainedIndex&) = default;
+
+ private:
+  [[nodiscard]] std::size_t bucket(std::uint64_t reference) const noexcept {
+    return MultiplyShift::home(reference, shift_, mask_);
+  }
+
+  std::vector<std::uint32_t> heads_;  // First order on each bucket's chain.
+  std::vector<std::uint32_t> next_;   // The next order on its chain, by order slot.
   std::size_t mask_;
   unsigned shift_;
 };

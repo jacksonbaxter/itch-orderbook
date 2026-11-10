@@ -57,6 +57,88 @@ def record(scale=1):
         "refusals": []}
 
 
+# Of the E and U messages, how many fall in each age, and fills a message at that age.
+AGE_SPLIT = {"E": {"under 1 ms": (20, 1), "1 s and over": (10, 4)},
+             "D": {"under 1 ms": (180, 2), "1 to 10 ms": (100, 2), "1 s and over": (100, 3)},
+             "U": {"under 1 ms": (30, 2), "100 ms to 1 s": (25, 3), "1 s and over": (15, 6)}}
+
+
+def age_record(scale=1):
+    """A record counted by type and age: E and U split by age, fills set per age, the other
+    events spread as in TYPES, so the slots still tile the pass."""
+    base = record(scale)
+    types = []
+    fills = EVENTS.index("r0843:u (a floor on DRAM demand fills)")
+    for entry in base["types"]:
+        if entry["type"] not in AGE_SPLIT:
+            types.append(entry)
+            continue
+        count, *per = TYPES[entry["type"]]
+        for age, (spans, fill) in AGE_SPLIT[entry["type"]].items():
+            sums = [spans * value * scale for value in per]
+            sums[fills] = spans * fill * scale
+            types.append({"type": entry["type"], "age": age, "spans": spans, "sums": sums})
+    whole = [sum(entry["sums"][i] for entry in types) for i in range(len(EVENTS))]
+    base["types"] = types
+    base["pass"]["whole"] = whole
+    base["pass"]["by_type_total"] = whole
+    base["by"] = "type-age"
+    base["age_frames"] = base["pass"]["frames"]
+    return base
+
+
+class CountsByAge(unittest.TestCase):
+    def render(self, records, plain=None):
+        loads = [f"{START}\n{END}\n"] * len(records)
+        return counts_report.render_ages(records, loads, [CHECK, CHECK], "P-0025", plain,
+                                         [f"{START}\n{END}\n"] * len(plain or []))[0]
+
+    def test_a_clean_report_passes_its_own_check(self):
+        text = self.render([age_record(), age_record()], [record()])
+        self.assertEqual(counts_report.check_ages(text), [])
+        self.assertTrue(counts_report.is_age_file(text))
+        self.assertIn("- summary: floor on DRAM demand fills a message naming an order: "
+                      "1.913 under 1 ms old, 3.440 at 1 s and over", text)
+        self.assertIn("## What the age walk costs", text)
+        self.assertIsNone(counts_report.VERDICT.search(text))
+
+    def test_what_each_counter_can_attribute_is_said(self):
+        text = self.render([age_record()])
+        section = counts_report.check_results.section(text, "What each counter can attribute")
+        self.assertIn("does not say which structure", section)
+        self.assertIn("not a last-level", section)
+
+    def test_a_named_span_with_no_age_is_refused(self):
+        bad = age_record()
+        bad["types"].append({"type": "X", "spans": 0, "sums": [0] * len(EVENTS)})
+        with self.assertRaises(counts_report.ReportError):
+            self.render([bad])
+
+    def test_an_age_walk_that_missed_a_frame_is_refused(self):
+        bad = age_record()
+        bad["age_frames"] -= 1
+        with self.assertRaises(counts_report.ReportError):
+            self.render([bad])
+
+    def test_a_plain_record_among_the_aged_is_refused(self):
+        with self.assertRaises(counts_report.ReportError):
+            self.render([age_record(), record()])
+
+    def test_check_catches_a_slot_edited_after_the_fact(self):
+        text = self.render([age_record()])
+        edited = text.replace("| `U` 1 s and over | ", "| `U` 1 s and over | 1", 1)
+        self.assertIn("not-tiled", [code for code, _ in counts_report.check_ages(edited)])
+
+    def test_check_catches_a_summary_that_differs_from_the_table(self):
+        text = self.render([age_record()])
+        edited = text.replace("3.440 at 1 s and over", "2.440 at 1 s and over", 1)
+        self.assertIn("summary-differs", [code for code, _ in counts_report.check_ages(edited)])
+
+    def test_check_catches_a_name_left_unsaid(self):
+        text = self.render([age_record()]) + "\nThe cache-misses fell.\n"
+        self.assertIn("name-unsaid", [code for code, _ in counts_report.check_ages(text)])
+
+
 class CountsReport(unittest.TestCase):
     def render(self, records):
         return counts_report.render(records, [f"{START}\n{END}\n"] * len(records),

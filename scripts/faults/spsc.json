@@ -623,6 +623,26 @@
       }
     },
     {
+      "id": "spsc-results-sampler-asked-twice",
+      "breaks": "stamp_load and check_results want stamp_load's sampler line from a macOS SPSC file of the rule's day, which the driver sampled itself",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        and not is_spsc_file(fields)\n",
+          "new": "        and True\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_mac_file_from_the_rule_day_keeps_its_own_sampler"
+      }
+    },
+    {
       "id": "spsc-results-cross-core-unchecked",
       "breaks": "check_results takes a debian one-way latency with no check of the two cores' clocks",
       "check": "test_spsc_results",

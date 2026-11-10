@@ -125,10 +125,11 @@ class OracleReport(unittest.TestCase):
         self.alloc = GOOD_ALLOC
 
         self.arms = []
+        self.day_name = "day"
 
     def run_report(self):
         manifest = self.root / "manifest.json"
-        manifest.write_text(json.dumps({"days": {"day": self.day}}), encoding="utf-8")
+        manifest.write_text(json.dumps({"days": {self.day_name: self.day}}), encoding="utf-8")
         log = self.root / "log"
         log.write_text(self.log, encoding="utf-8")
         alloc = self.root / "alloc"
@@ -141,7 +142,7 @@ class OracleReport(unittest.TestCase):
             arm_args += ["--arm-log", str(paths[0]), str(paths[1])]
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-            code = report.main(["--day", "day", "--log", str(log), "--alloc-log", str(alloc),
+            code = report.main(["--day", self.day_name, "--log", str(log), "--alloc-log", str(alloc),
                                 *arm_args, "--manifest", str(manifest), "--out",
                                 str(self.root / "out.md")])
         return code, out.getvalue()
@@ -309,6 +310,18 @@ class OracleReport(unittest.TestCase):
         self.assertEqual(rows["inside 09:30 to 16:00, crossed"][2:], (8372, 4))
         self.assertEqual(rows["not in state T, locked"][2:], (62, 4))
         self.assertEqual(rows["book messages, crossed"][2:], (8580, 12))
+
+    def test_published_figures_are_shown_on_their_own_day_only(self):
+        code, _ = self.run_report()
+        text = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("None. The figures this file could set beside ours were published for "
+                      "12302019 only.", text)
+        self.assertNotIn("| book messages, crossed | carteret |", text)
+        self.day_name = report.COMPARISON_DAY
+        code, _ = self.run_report()
+        text = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("| book messages, crossed | carteret | 8,580 |", text)
+        self.assertNotIn("None. The figures", text)
 
     def test_a_log_with_a_missing_counter_cannot_be_used(self):
         self.log = self.log.replace("bbo_checks 8\n", "")

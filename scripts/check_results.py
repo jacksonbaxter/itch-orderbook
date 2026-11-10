@@ -7,8 +7,8 @@ Reads the file as published, so it holds whatever wrote it to the same rules: ev
 header field present, an unreadable one written as `unavailable: <reason>`, no pin that
 was not read back, no percentile below the timer's floor, no multiplexed counter called
 measured, the warm-up out of the timed counts, the input resident, load lines stamped
-from a real measure.sh run, machine_check's output present and passing, and nothing
-private. scripts/bench_driver.py and scripts/stamp_load.py run the same checks, so that
+from a real measure.sh run, a quiet CPU sampler beside any macOS run from 2026-11-05 on,
+machine_check's output present and passing, and nothing private. scripts/bench_driver.py and scripts/stamp_load.py run the same checks, so that
 a file failing them is never written as finished.
 
 A backtest file, one with a `workload` field (scripts/backtest_driver.py), has no latency
@@ -201,6 +201,8 @@ def comparison_value(spec, medians):
     if num is None or den is None or den == 0:
         return None
     return num / den
+# From this day every macOS run needs a quiet CPU sampler beside it (stamp_load.py).
+SAMPLER_RULE_FROM = "2026-11-05T00:00:00Z"
 
 HOME_PATH = re.compile(r"/(?:Users|home)/[A-Za-z0-9._-]+/|[A-Za-z]:\\Users\\[A-Za-z0-9._-]+")
 ADDRESS = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
@@ -367,6 +369,24 @@ def check_load(fields):
     if opened and closed and (opened.group(1) > started or closed.group(1) < finished):
         yield "load-line-invalid", (f"lines {opened.group(1)} to {closed.group(1)} do not "
                                     f"bracket the run {started} to {finished}")
+
+
+def needs_sampler(fields):
+    """A macOS run from the rule's day on, but for an SPSC file: spsc_driver.py samples each
+    repetition itself, and check_spsc_sampler holds the file to its own Sampler section."""
+    return fields.get("host") == MAC_HOST and fields.get("run_started", "") >= SAMPLER_RULE_FROM \
+        and not is_spsc_file(fields)
+
+
+def check_sampler(fields):
+    """A macOS run from the rule's day on was stamped with a sampler that saw it quiet."""
+    if not needs_sampler(fields) or fields.get("measure_load_start") == PENDING:
+        return
+    value = fields.get("sampler")
+    if value is None:
+        yield "sampler-missing", "a macOS run from 2026-11-05 on has no sampler line"
+    elif not value.startswith("quiet: the sampler rule was applied: "):
+        yield "sampler-not-quiet", value
 
 
 def check_machine(text):
@@ -882,7 +902,8 @@ def check_text(text):
     skipped = SPSC_PER_PASS if is_spsc_file(fields) and fields["suite"] != "pipeline" else ()
     for found in (check_fields(fields, skipped), check_host(fields), check_pin(fields),
                   check_residency(fields), check_warmup(fields), check_statistics(text),
-                  check_load(fields), check_machine(text), check_private(text, fields)):
+                  check_load(fields), check_sampler(fields), check_machine(text),
+                  check_private(text, fields)):
         violations.extend(found)
     if is_backtest_file(fields):
         violations.extend(check_backtest(text, fields))

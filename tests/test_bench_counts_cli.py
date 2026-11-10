@@ -24,6 +24,7 @@ HEADER = ("host", "cpu", "kernel", "compiler", "flags", "commit", "dataset", "da
           "input")
 SESSION_MESSAGES = 3330
 BOOK_TYPES = set("AFECXDUPQ")
+NAMING_TYPES = set("ECXDU")
 
 
 def core_arguments():
@@ -75,8 +76,31 @@ def main():
             check_published(data, failures)
         elif not any("rdpmc" in reason or "counter" in reason for reason in data["refusals"]):
             failures.append(("refusal", f"refused for another reason: {data['refusals']}"))
+    aged = scratch / "counts_by_age.json"
+    aged.unlink(missing_ok=True)
+    done_aged = run("--input", session, "--out", str(aged), "--empty-spans", "1000",
+                    "--by", "type-age", *core_arguments())
+    if done_aged.returncode not in (0, 3) or not aged.is_file():
+        failures.append(("type-age run", f"exit {done_aged.returncode}, record "
+                                         f"{aged.is_file()}: {done_aged.stderr}"))
+    else:
+        data = json.loads(aged.read_text(encoding="utf-8"))
+        if data.get("by") != "type-age":
+            failures.append(("type-age", f"the record says by {data.get('by')!r}"))
+        if done_aged.returncode == 0:
+            check_published(data, failures)
+            if data["age_frames"] != data["pass"]["frames"]:
+                failures.append(("type-age", f"{data['age_frames']} frames given an age, "
+                                             f"{data['pass']['frames']} walked"))
+            unaged = [entry["type"] for entry in data["types"]
+                      if entry["type"] in NAMING_TYPES and "age" not in entry]
+            if unaged or not any("age" in entry for entry in data["types"]):
+                failures.append(("type-age", f"named spans with no age: {unaged}"))
     for name, args in (("map-aged", ("--input", session, "--out", str(out), "--design",
                                      "map-aged")),
+                       ("type-age-map", ("--input", session, "--out", str(out), "--design",
+                                         "map-fresh", "--by", "type-age")),
+                       ("by-nothing", ("--input", session, "--out", str(out), "--by", "age")),
                        ("no-input", ("--out", str(out))),
                        ("zero-empty-spans", ("--input", session, "--out", str(out),
                                              "--empty-spans", "0"))):

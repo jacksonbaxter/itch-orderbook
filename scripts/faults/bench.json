@@ -1096,6 +1096,106 @@
       }
     },
     {
+      "id": "bench-sampler-gap-ignored",
+      "breaks": "stamp_load.py stamps a macOS run with the sampler stopped during it",
+      "check": "test_bench_results.py, the sampler rule",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    if max(gaps, default=0) > SAMPLE_GAP:\n",
+          "new": "    if max(gaps, default=0) > 10 * SAMPLE_GAP:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_gap_in_the_run_is_refused"
+      }
+    },
+    {
+      "id": "bench-sampler-foreign-ignored",
+      "breaks": "stamp_load.py stamps a macOS run while another process was busy in it",
+      "check": "test_bench_results.py, the sampler rule",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    inside = [line for time, line in foreign if start <= time <= end]\n",
+          "new": "    inside = [line for time, line in foreign if start < time < start]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_foreign_process_in_the_run_is_refused"
+      }
+    },
+    {
+      "id": "bench-sampler-late-start-ignored",
+      "breaks": "stamp_load.py takes a sampler that began after the run did",
+      "check": "test_bench_results.py, the sampler rule",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    if not before or not after:\n",
+          "new": "    if not after:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "test_a_sampler_that_started_late_is_refused"
+      }
+    },
+    {
+      "id": "bench-sampler-optional-on-mac",
+      "breaks": "stamp_load.py stamps a macOS run from the rule's day with no sampler at all",
+      "check": "test_bench_results.py, the sampler rule",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    elif check_results.needs_sampler(fields):\n",
+          "new": "    elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_mac_run_after_the_rule_needs_the_sampler"
+      }
+    },
+    {
+      "id": "bench-sampler-line-not-required",
+      "breaks": "check_results.py passes a macOS file from the rule's day with no sampler line",
+      "check": "check_results.py, sampler-missing",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        yield \"sampler-missing\", \"a macOS run from 2026-11-05 on has no sampler line\"\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_results_requires_the_line_after_the_rule"
+      }
+    },
+    {
       "id": "bench-driver-best-of",
       "breaks": "The driver reports the best repetition as its median",
       "check": "test_bench_results.py spread",
@@ -3718,6 +3818,346 @@
       ],
       "expect": {
         "signature": "FAIL: test_a_name_perf_left_mangled_is_demangled",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stage-filter-ignores-stages",
+      "breaks": "The structure run's look-ahead starts every stage, whatever --stages names",
+      "check": "test_bench_replay StageFilter.OnlyTheStagesAndKindsNamedAreStarted",
+      "mutations": [
+        {
+          "file": "bench/stage_filter.hpp",
+          "old": "    if (((stages_ >> stage) & 1U) == 0 || payload.empty() ||\n",
+          "new": "    if (payload.empty() ||\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] StageFilter\\.OnlyTheStagesAndKindsNamedAreStarted",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stage-filter-ignores-kinds",
+      "breaks": "The structure run's look-ahead starts a stage for every message, whatever --kinds names",
+      "check": "test_bench_replay StageFilter.OnlyTheStagesAndKindsNamedAreStarted",
+      "mutations": [
+        {
+          "file": "bench/stage_filter.hpp",
+          "old": "  return named || added;\n",
+          "new": "  return true;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] StageFilter\\.OnlyTheStagesAndKindsNamedAreStarted",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-age-from-the-wrong-add",
+      "breaks": "A named order's age is taken from the time of the message, not from its add",
+      "check": "test_bench_replay OrderAge.EachNamedFrameIsChargedToItsTypeAndTheAgeOfItsOrder",
+      "mutations": [
+        {
+          "file": "bench/order_age.hpp",
+          "old": "                               : age_class(now - added_at[order]);\n",
+          "new": "                               : age_class(now);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] OrderAge\\.EachNamedFrameIsChargedToItsTypeAndTheAgeOfItsOrder",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-age-replace-not-stamped",
+      "breaks": "A replace's new order keeps the age of whatever order last had its slot",
+      "check": "test_bench_replay OrderAge.AReplacesNewOrderIsAgedFromTheReplace",
+      "mutations": [
+        {
+          "file": "bench/order_age.hpp",
+          "old": "      stamp(OrderReplace::from_wire(m).new_order_reference, now);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] OrderAge\\.AReplacesNewOrderIsAgedFromTheReplace",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-hypervisor-everywhere",
+      "breaks": "Every host is taken for a virtual machine, so the live-clock check never runs",
+      "check": "test_bench_platform BenchCrossCore.AnArmHostIsNeverSkipped",
+      "mutations": [
+        {
+          "file": "bench/platform/cross_core.hpp",
+          "old": "#else\n  return false;\n#endif\n",
+          "new": "#else\n  return true;\n#endif\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_platform"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_platform"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchCrossCore\\.AnArmHostIsNeverSkipped",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-age-walk-unchecked",
+      "breaks": "The age report publishes records whose age walk missed frames",
+      "check": "test_counts_report.py test_an_age_walk_that_missed_a_frame_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    if by_age and record.get(\"age_frames\") != pass_[\"frames\"]:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_age_walk_that_missed_a_frame_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-age-not-tiled",
+      "breaks": "The age report's check takes totals that do not tile the pass",
+      "check": "test_counts_report.py test_check_catches_a_slot_edited_after_the_fact",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if not total == listed == whole:\n            found.append((\"not-tiled\", f\"{name}: slots add up",
+          "new": "        if False:\n            found.append((\"not-tiled\", f\"{name}: slots add up"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_slot_edited_after_the_fact",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-age-summary-unchecked",
+      "breaks": "The age report's check does not hold the summary to the table",
+      "check": "test_counts_report.py test_check_catches_a_summary_that_differs_from_the_table",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if age in figures and f\"{fmt(figures[age], 3)} {said}\" not in summary:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_summary_that_differs_from_the_table",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-structure-bottleneck-any-share",
+      "breaks": "The structure report names its largest structure the bottleneck at any share",
+      "check": "test_variants_report.py test_structure_names_a_bottleneck_only_at_the_rule",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "    if share >= BOTTLENECK_SHARE:\n",
+          "new": "    if share >= 0:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_structure_names_a_bottleneck_only_at_the_rule",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-structure-unfiltered-accepted",
+      "breaks": "The structure report takes a look-ahead record that started every stage as one stage's",
+      "check": "test_variants_report.py test_structure_refuses_a_record_of_another_kind",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "                    or filtered != (variant[\"prefetch\"] != 0)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_structure_refuses_a_record_of_another_kind",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-layout-wrong-base",
+      "breaks": "The layout report sets the identity hash against paged-flat, not the hash it changes",
+      "check": "test_variants_report.py test_layout_sets_each_arm_against_the_one_it_changes",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "LAYOUT_PAIRS = ((\"hash policy\", \"identity-flat\", \"hash-flat\"),",
+          "new": "LAYOUT_PAIRS = ((\"hash policy\", \"identity-flat\", \"paged-flat\"),"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_layout_sets_each_arm_against_the_one_it_changes",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-window-not-monotone-unchecked",
+      "breaks": "The window report's check takes a wider window holding fewer prices",
+      "check": "test_window_report.py test_check_catches_a_wider_window_holding_less",
+      "mutations": [
+        {
+          "file": "scripts/window_report.py",
+          "old": "        if any(wider > narrower for narrower, wider in zip(widths, widths[1:])):\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_window_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_a_wider_window_holding_less",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-window-depths-unchecked",
+      "breaks": "The window report's check takes depth buckets that do not add up to the searches",
+      "check": "test_window_report.py test_check_catches_depths_that_do_not_add_up",
+      "mutations": [
+        {
+          "file": "scripts/window_report.py",
+          "old": "        if sum(counts[\"better\"][(kind, depth)] for depth in DEPTHS) != counts[f\"{kind}_searches\"]:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_window_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_catches_depths_that_do_not_add_up",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-window-unclean-walk",
+      "breaks": "The window report publishes a walk the book refused a message in",
+      "check": "test_window_report.py test_a_walk_that_was_not_clean_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/window_report.py",
+          "old": "    if counts[\"walk\"] != \"clean\" or counts[\"refused\"] != 0:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_window_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_walk_that_was_not_clean_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-predictions-skip-layout-results",
+      "breaks": "check_predictions leaves the layout, structure and window results unread, so one could name no prediction",
+      "check": "test_check_predictions test_a_layout_result_naming_no_prediction",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "\"simd_*.md\", \"layout_*.md\", \"structure_*.md\",\n                   \"window_*.md\")",
+          "new": "\"simd_*.md\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_layout_result_naming_no_prediction",
         "exit": 1
       }
     }

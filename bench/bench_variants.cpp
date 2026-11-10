@@ -3,6 +3,7 @@
 //
 //     bench_variants --input FILE --out RUN.json [--pass replay|lookup] [--design NAME]
 //                    [--dispatch switch|table|threaded|predicate] [--prefetch D]
+//                    [--stages DIGITS] [--kinds all|named|added]
 //                    [--core N] [--commit TEXT] [--dataset NAME] [--dataset-sha256 HEX]
 //                    [--orders N] [--levels N]
 //
@@ -13,10 +14,16 @@
 //               A recording pass, which is also the warm-up, then four timed passes on
 //               fresh books in the order check, answer, answer, check, so that a drift
 //               over the process falls on both modes alike.
-// --design      one of the four arms of the fast book; paged-flat, the default arm, if left
-//               out. The predicate form builds no book.
+// --design      any arm of the fast book (designs.hpp), carteret's layout experiments'
+//               among them; paged-flat, the default arm, if left out. The predicate form
+//               builds no book.
 // --prefetch    0, the default, or a look-ahead the arm takes: from its number of stages
 //               to 64. Only with --dispatch switch and --pass replay.
+// --stages      with --prefetch, start only these stages, each a digit below the arm's
+//               number of stages, through StageFilter (stage_filter.hpp), and with
+// --kinds       only for these messages: named (E, C, X, D, U), added (A, F) or all. Either
+//               one sends the look-ahead through the filter, so that a pass of every stage
+//               for every kind pays what a pass of one stage pays to be filtered.
 //
 // Every timed pass runs between a start and a stop of one counter group, outside the
 // clock: on debian cycles, instructions, branch misses, cache-misses (L2 misses on Zen 1)
@@ -59,6 +66,7 @@
 #include "platform/timer.hpp"
 #include "replay.hpp"
 #include "run_record.hpp"
+#include "stage_filter.hpp"
 
 namespace {
 
@@ -78,6 +86,9 @@ struct Options {
   PassKind pass = PassKind::replay;
   DispatchForm dispatch = DispatchForm::switch_case;
   std::uint64_t prefetch = 0;
+  std::string stages;  // Empty: no filter.
+  StageKinds kinds = StageKinds::all;
+  bool filtered = false;
 };
 
 template <class Number>
@@ -105,6 +116,15 @@ bool parse_option(std::string_view arg, std::string_view value, Options& options
     return parse_number(value, options.capacity.levels);
   } else if (arg == "--prefetch") {
     return parse_number(value, options.prefetch);
+  } else if (arg == "--stages") {
+    options.stages = value;
+    options.filtered = true;
+    return parse_stages(value).has_value();
+  } else if (arg == "--kinds") {
+    const std::optional<StageKinds> kinds = parse_stage_kinds(value);
+    options.kinds = kinds.value_or(options.kinds);
+    options.filtered = true;
+    return kinds.has_value();
   } else if (arg == "--design") {
     const std::optional<Design> design = parse_design(value);
     if (!design || design->kind != DesignKind::fast) {
@@ -148,6 +168,14 @@ std::optional<std::string> unsupported(const Options& options) {
   }
   if (options.pass == PassKind::lookup && options.dispatch != DispatchForm::switch_case) {
     return "--pass lookup runs only with --dispatch switch";
+  }
+  if (options.filtered && options.prefetch == 0) {
+    return "--stages and --kinds run only with a --prefetch look-ahead";
+  }
+  if (options.filtered && !options.stages.empty() &&
+      parse_stages(options.stages).value_or(0U) >= (1U << Book::kPrefetchStages)) {
+    return std::format("--stages {} names a stage this arm does not have: it has {}",
+                       options.stages, Book::kPrefetchStages);
   }
   if (options.prefetch > itch::LookaheadReader<Book>::kMostAhead ||
       !itch::LookaheadReader<Book>::valid_distance(static_cast<unsigned>(options.prefetch))) {
@@ -245,10 +273,12 @@ FormTotals form_pass(DispatchForm form, std::span<const std::byte> bytes, Book& 
   return {};
 }
 
-// The switch form through the look-ahead reader. With distance 0 it is switch_pass().
-template <class Book>
-FormTotals lookahead_pass(std::span<const std::byte> bytes, Book& book, unsigned distance) {
-  itch::LookaheadReader<Book> reader{bytes, book, distance};
+// The switch form through the look-ahead reader. With distance 0 it is switch_pass(). Ahead
+// is the book, or a StageFilter of it.
+template <class Book, class Ahead = Book>
+FormTotals lookahead_pass(std::span<const std::byte> bytes, Book& book, const Ahead& ahead,
+                          unsigned distance) {
+  itch::LookaheadReader<Ahead> reader{bytes, ahead, distance};
   FormTotals totals;
   for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status); frame = reader.next()) {
     if (frame.status == itch::FrameStatus::message) {
@@ -269,8 +299,13 @@ void run_replay(const Options& options, std::span<const std::byte> bytes, Counte
     return;
   }
   const auto distance = static_cast<unsigned>(options.prefetch);
+  const unsigned stages = options.stages.empty() ? (1U << Book::kPrefetchStages) - 1U
+                                                 : parse_stages(options.stages).value_or(0U);
   const auto one_pass = [&](Book& book) {
-    return distance != 0 ? lookahead_pass(bytes, book, distance)
+    if (distance != 0 && options.filtered) {
+      return lookahead_pass(bytes, book, StageFilter<Book>{book, stages, options.kinds}, distance);
+    }
+    return distance != 0 ? lookahead_pass(bytes, book, book, distance)
                          : form_pass(options.dispatch, bytes, book);
   };
   {
@@ -363,12 +398,18 @@ std::string record_json(const std::vector<HeaderField>& header, const Options& o
                        json_string(header[i].second));
   }
   out += "\n  },\n";
+  // The filter's fields only when it ran, so that an unfiltered record reads as before.
+  const std::string filter =
+      options.filtered ? std::format(R"("filtered": true, "stages": {}, "kinds": {}, )",
+                                     json_string(options.stages.empty() ? "all" : options.stages),
+                                     json_string(to_string(options.kinds)))
+                       : std::string{};
   out += std::format(
       "  \"variant\": {{\"pass\": {}, \"design\": {}, \"dispatch\": {}, \"prefetch\": {}, "
-      "\"threaded_built\": {}}},\n",
+      "{}\"threaded_built\": {}}},\n",
       json_string(options.pass == PassKind::replay ? "replay" : "lookup"),
       json_string(design_name({.kind = DesignKind::fast, .arm = options.arm})),
-      json_string(to_string(options.dispatch)), options.prefetch,
+      json_string(to_string(options.dispatch)), options.prefetch, filter,
       kThreadedBuilt ? "true" : "false");
   out += std::format(R"(  "mix": {{"messages": {}, "book_messages": {}}},)", record.mix.messages,
                      record.mix.book_messages);
@@ -410,10 +451,15 @@ std::string describe_variant(const Options& options) {
   if (options.dispatch == DispatchForm::predicate) {
     return "predicate: no book; the frame walk and every message's header fields";
   }
+  const std::string filter =
+      options.filtered
+          ? std::format(" through StageFilter, stages {}, kinds {}",
+                        options.stages.empty() ? "all" : options.stages, to_string(options.kinds))
+          : "";
   return std::format(
-      "{}: FastBook, {} dispatch, look-ahead {}; a warm-up pass and a timed pass, "
+      "{}: FastBook, {} dispatch, look-ahead {}{}; a warm-up pass and a timed pass, "
       "each on a fresh book",
-      design, to_string(options.dispatch), options.prefetch);
+      design, to_string(options.dispatch), options.prefetch, filter);
 }
 
 template <class Index, class Levels>
@@ -510,8 +556,8 @@ int run(int argc, char** argv) {
   if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
     std::println(stderr,
                  "usage: bench_variants --input FILE --out RUN.json [--pass replay|lookup] "
-                 "[--design hash-linked|hash-flat|paged-linked|paged-flat] "
-                 "[--dispatch switch|table|threaded|predicate] [--prefetch D] [--core N] "
+                 "[--design INDEX-LEVELS] [--dispatch switch|table|threaded|predicate] "
+                 "[--prefetch D] [--stages DIGITS] [--kinds all|named|added] [--core N] "
                  "[--commit TEXT] [--dataset NAME] [--dataset-sha256 HEX] [--orders N] "
                  "[--levels N]");
     return 2;

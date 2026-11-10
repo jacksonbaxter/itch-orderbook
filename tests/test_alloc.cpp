@@ -116,7 +116,7 @@ void expect_no_allocation(std::string_view name, unsigned prefetch = 0) {
     EXPECT_GT(book.index().fallback_inserts(), 0U) << "the paged index never fell back";
     EXPECT_EQ(book.index().peak_live_pages(), 4U) << "the paged index never ran out of pages";
   }
-  if constexpr (std::is_same_v<Levels, itch::FlatLevels>) {
+  if constexpr (requires { book.levels().relocations(); }) {
     EXPECT_GT(book.levels().relocations(), 0U) << "no flat array moved to a bigger block";
   }
 }
@@ -126,6 +126,10 @@ TEST(Allocation, TheFastBookAllocatesNothingAfterConstruction) {
   expect_no_allocation<itch::HashIndex, itch::FlatLevels>("hash, flat");
   expect_no_allocation<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked");
   expect_no_allocation<itch::PagedIndex<>, itch::FlatLevels>("paged, flat");
+  expect_no_allocation<itch::IdentityHashIndex, itch::FlatLevels>("identity, flat");
+  expect_no_allocation<itch::ChainedIndex, itch::FlatLevels>("chained, flat");
+  expect_no_allocation<itch::PagedIndex<>, itch::Scan16FlatLevels>("paged, flat-scan16");
+  expect_no_allocation<itch::PagedIndex<>, itch::BisectFlatLevels>("paged, flat-bisect");
 }
 
 TEST(Allocation, TheFastBookLookingAheadAllocatesNothingAfterConstruction) {
@@ -134,6 +138,8 @@ TEST(Allocation, TheFastBookLookingAheadAllocatesNothingAfterConstruction) {
     expect_no_allocation<itch::HashIndex, itch::FlatLevels>("hash, flat", prefetch);
     expect_no_allocation<itch::PagedIndex<>, itch::LinkedLevels>("paged, linked", prefetch);
     expect_no_allocation<itch::PagedIndex<>, itch::FlatLevels>("paged, flat", prefetch);
+    expect_no_allocation<itch::IdentityHashIndex, itch::FlatLevels>("identity, flat", prefetch);
+    expect_no_allocation<itch::ChainedIndex, itch::FlatLevels>("chained, flat", prefetch);
   }
 }
 

@@ -5,8 +5,9 @@
 
 results/predictions.md holds one `## P-NNNN: title` block per experiment. Every
 results/bench_*.md, chase_*.md, backtest_*.md, counters_*.md, flamegraph_*.md, mm_*.md,
-lookup_*.md, prefetch_*.md, dispatch_*.md, spsc_*.md, wasm_*.md and alloc_*.md names one in
-its header.
+lookup_*.md, prefetch_*.md, dispatch_*.md, spsc_*.md, wasm_*.md, simd_*.md and alloc_*.md
+names one in its header, and so does results/oracle_sessions.md, which sums other results
+files and is no run, so it has no row in the run log.
 With git history to read, the block must be committed, its commit must come before the
 result's, and its text must be what that commit wrote: a prediction is never edited. results/run_log.md gets a row for every run,
 failed ones included, and only ever grows.
@@ -33,7 +34,10 @@ PREDICTIONS = "results/predictions.md"
 RUN_LOG = "results/run_log.md"
 RESULT_PATTERNS = ("alloc_*.md", "bench_*.md", "chase_*.md", "backtest_*.md", "counters_*.md",
                    "flamegraph_*.md", "mm_*.md", "lookup_*.md", "prefetch_*.md", "dispatch_*.md",
-                   "spsc_*.md", "wasm_*.md")
+                   "spsc_*.md", "wasm_*.md", "simd_*.md", "layout_*.md", "structure_*.md",
+                   "window_*.md")
+# Results summed from other results files: each names its prediction, but no run.
+SUMMED = ("oracle_sessions.md",)
 BLOCK = re.compile(r"^## (P-\d{4}): .*?(?=^## |\Z)", re.MULTILINE | re.DOTALL)
 FIELD = re.compile(r"^- (prediction|run_id): (.*)$", re.MULTILINE)
 
@@ -118,7 +122,7 @@ def check_result(root, path, known, log_text, use_git):
         yield "prediction-missing", relative, f"{identifier} is not in {PREDICTIONS}"
         return
     run_id = fields.get("run_id")
-    if not run_id or run_id not in log_text:
+    if log_text is not None and (not run_id or run_id not in log_text):
         yield "run-missing-from-log", relative, f"{run_id} has no row in {RUN_LOG}"
     if use_git:
         yield from check_history(root, identifier, relative, known)
@@ -132,6 +136,10 @@ def find_violations(root, use_git):
     for pattern in RESULT_PATTERNS:
         for path in sorted((root / "results").glob(pattern)):
             violations.extend(check_result(root, path, known, log_text, use_git))
+    for name in SUMMED:
+        path = root / "results" / name
+        if path.is_file():
+            violations.extend(check_result(root, path, known, None, use_git))
     if use_git:
         violations.extend(check_log_history(root))
     return violations

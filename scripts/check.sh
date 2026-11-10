@@ -59,14 +59,17 @@ stage_script_tests() {
   python_test scripts/test_fetch_data.py &&
     python_test scripts/test_check_census.py &&
     python_test scripts/test_oracle_report.py &&
+    python_test scripts/test_oracle_sessions.py &&
     python_test scripts/test_trades_report.py &&
     python_test scripts/test_fault_matrix.py &&
     python_test scripts/test_fetch_tool.py
 }
 
-# The README's tables against a fresh run over results/, and its figures against those files.
+# The README's tables against a fresh run over results/, and its figures against those files,
+# and T-ORACLE-2's sum of the oracle's results files against a fresh one.
 stage_readme() {
-  python_test scripts/results_table.py --check &&
+  python_test scripts/oracle_sessions.py --check &&
+    python_test scripts/results_table.py --check &&
     python_test scripts/test_results_table.py &&
     python_test scripts/gate_numbers.py --page README.md
 }
@@ -111,6 +114,10 @@ stage_bench() {
     python_test scripts/test_counts_report.py &&
     python_test scripts/test_flame_report.py &&
     python_test scripts/test_variants_report.py &&
+    python_test scripts/test_window_report.py &&
+    python_test scripts/test_simd_report.py &&
+    python_test scripts/test_simd_driver.py &&
+    python_test scripts/test_simd_asm_audit.py &&
     python_test scripts/test_zen1_events.py &&
     python_test scripts/gate_numbers.py &&
     python_test scripts/check_predictions.py || return 1
@@ -123,7 +130,7 @@ stage_bench() {
   if [ -f results/chase_debian.md ]; then
     python_test scripts/chase_report.py --check results/chase_debian.md || return 1
   fi
-  for counts in results/counters_by_type_*.md; do
+  for counts in results/counters_by_type_*.md results/counters_by_age_*.md; do
     [ -f "$counts" ] || continue
     python_test scripts/counts_report.py --check "$counts" || return 1
   done
@@ -134,9 +141,21 @@ stage_bench() {
     [ -f "$graph" ] || continue
     python_test scripts/flame_report.py --check "$graph" || return 1
   done
-  for variants in results/lookup_*.md results/prefetch_*.md results/dispatch_*.md; do
+  for variants in results/lookup_*.md results/prefetch_*.md results/dispatch_*.md \
+    results/layout_*.md results/structure_*.md; do
     [ -f "$variants" ] || continue
     python_test scripts/variants_report.py --check "$variants" || return 1
+  done
+  for window in results/window_*.md; do
+    [ -f "$window" ] || continue
+    python_test scripts/window_report.py --check "$window" || return 1
+  done
+  for simd in results/simd_*.md; do
+    [ -f "$simd" ] || continue
+    case $simd in
+      results/simd_asm_*) python_test scripts/simd_asm_audit.py --check "$simd" || return 1 ;;
+      *) python_test scripts/simd_report.py --check "$simd" || return 1 ;;
+    esac
   done
   build_preset release && ctest --preset release -R '^test_bench'
 }

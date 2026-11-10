@@ -3,7 +3,8 @@
 //
 //     itch_map_compare FILE [--heap fresh|aged] [--seed N] [--warm-blocks N]
 //                      [--ring-blocks N] [--hash-every N] [--max-orders N] [--max-levels N]
-//                      [--index hash|paged] [--levels linked|flat] [--max-pages N]
+//                      [--index hash|paged|identity|chained]
+//                      [--levels linked|flat|flat-scan16|flat-bisect] [--max-pages N]
 //                      [--index-bits N] [--max-slots N] [--allocator ARM]
 //                      [--pages base|huge-if-offered|transparent|explicit]
 //
@@ -434,8 +435,9 @@ int main(int argc, const char* const* argv) {
       static_cast<void>(std::fputs(
           "usage: itch_map_compare FILE [--heap fresh|aged] [--seed N] [--warm-blocks N] "
           "[--ring-blocks N] [--hash-every N] [--max-orders N] [--max-levels N] "
-          "[--index hash|paged] [--levels linked|flat] [--max-pages N] [--index-bits N] "
-          "[--max-slots N] [--allocator ARM] [--pages base|huge-if-offered|transparent|explicit]\n",
+          "[--index hash|paged|identity|chained] [--levels linked|flat|flat-scan16|flat-bisect] "
+          "[--max-pages N] [--index-bits N] [--max-slots N] [--allocator ARM] "
+          "[--pages base|huge-if-offered|transparent|explicit]\n",
           stderr));
       return 2;
     }

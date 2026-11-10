@@ -26,7 +26,29 @@
 #include "platform/affinity.hpp"
 #include "platform/timer.hpp"
 
+#if defined(__x86_64__) && !defined(__EMSCRIPTEN__)
+#include <cpuid.h>
+#endif
+
 namespace itch::bench {
+
+// Whether this runs in a virtual machine, which x86 says in CPUID leaf 1, ECX bit 31. A
+// machine's cores promise one clock; a virtual machine's vCPUs promise nothing of the kind:
+// the hypervisor keeps a TSC offset for each, and a shared runner's vCPUs land on whatever
+// physical cores are free. So a bound that leaves out zero there says something about the
+// hypervisor, not about this code. Elsewhere false: an arm64 core's counter is one system
+// counter by the architecture, in a virtual machine or not.
+[[nodiscard]] inline bool under_hypervisor() noexcept {
+#if defined(__x86_64__) && !defined(__EMSCRIPTEN__)
+  unsigned eax = 0;
+  unsigned ebx = 0;
+  unsigned ecx = 0;
+  unsigned edx = 0;
+  return __get_cpuid(1, &eax, &ebx, &ecx, &edx) != 0 && ((ecx >> 31U) & 1U) != 0;
+#else
+  return false;
+#endif
+}
 
 // One trip, each stamp in its own core's ticks.
 struct CrossCoreTrip {

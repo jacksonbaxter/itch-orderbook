@@ -1,9 +1,9 @@
 // The book designs bench_replay can measure, by name, for --design.
 //
-// The four arms of the fast book, the map book on a fresh heap or on one HeapAger ages as
-// it goes, and the node book on each allocator arm of T-ARENA-1 (tools/alloc_arms.hpp), as
-// alloc-<arm>. Every design runs the same passes over the same input, so that one run can
-// put any of them side by side.
+// Every arm of the fast book, named index-levels (tools/book_arms.hpp), the map book on a
+// fresh heap or on one HeapAger ages as it goes, and the node book on each allocator arm of
+// T-ARENA-1 (tools/alloc_arms.hpp), as alloc-<arm>. Every design runs the same passes over
+// the same input, so that one run can put any of them side by side.
 #pragma once
 
 #include <cstdint>
@@ -42,8 +42,8 @@ struct Design {
                      tools::to_string(design.arm.levels));
 }
 
-// hash-linked, hash-flat, paged-linked, paged-flat, map-fresh, map-aged, or alloc- and an
-// allocator arm.
+// INDEX-LEVELS, such as paged-flat or chained-flat, map-fresh or map-aged, or alloc- and an
+// allocator arm. An index name has no dash, so the first dash ends it.
 [[nodiscard]] inline std::optional<Design> parse_design(std::string_view name) {
   if (name == "map-fresh") {
     return Design{.kind = DesignKind::map_fresh, .arm = {}};

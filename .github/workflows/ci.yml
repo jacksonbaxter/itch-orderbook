@@ -81,6 +81,19 @@ jobs:
         run: cmake --build --preset release
       - name: Test
         run: ctest --preset release
+      # ctest prints no output for a test that passes, so this shows which kernels the
+      # runner's CPU ran and which it skipped, and the CPU features that decided it.
+      - name: The kernels this CPU ran or skipped
+        run: |
+          if [ -r /proc/cpuinfo ]; then
+            grep -m 1 -E '^(model name|CPU part)' /proc/cpuinfo || echo "cpu: no model in /proc/cpuinfo"
+            for flag in ssse3 avx2 avx512f avx512bw avx512vl avx512vbmi; do
+              if grep -q -m 1 -w "$flag" /proc/cpuinfo; then echo "cpu has $flag"; else echo "cpu lacks $flag"; fi
+            done
+          else
+            sysctl -n machdep.cpu.brand_string
+          fi
+          ctest --preset release -R '^test_kernels_' --verbose
 
   wasm:
     name: Emscripten

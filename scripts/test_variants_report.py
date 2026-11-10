@@ -19,9 +19,9 @@ import variants_report  # noqa: E402
 DEBIAN = variants_report.DEBIAN
 MAC = variants_report.MAC
 MESSAGES = 1_000_000
-START = ("measure.sh: start load1=1.10 host=box at=2026-11-05T09:0{n}:00Z cpus=4 "
+START = ("measure.sh: start load1=1.10 host=box at=2026-11-05T09:{n:02d}:00Z cpus=4 "
          "governor=performance freq_khz=cpu4:2000000 perf_event_paranoid=2")
-END = ("measure.sh: end load1=1.20 exit=0 at=2026-11-05T09:0{n}:30Z cpus=4 "
+END = ("measure.sh: end load1=1.20 exit=0 at=2026-11-05T09:{n:02d}:30Z cpus=4 "
        "governor=performance freq_khz=cpu4:3500000 perf_event_paranoid=2")
 CHECK = "machine_check: pass governor: core 4 runs performance\nmachine_check: passed\n"
 STATE = ("uptime: 180000.00 700000.00 | up 2 days | perf_event_paranoid=2 | pswpout 41299 | "
@@ -227,6 +227,66 @@ class Variants(unittest.TestCase):
         with self.assertRaises(variants_report.ReportError):
             variants_report.render("prefetch", mac, [START.format(n=0) + "\n" + END.format(n=0)]
                                    * 2, "P-0021", [], [], None)
+
+    def layout_records(self, seconds):
+        records = []
+        for _ in range(3):
+            for design, s in seconds.items():
+                record = replay_record(DEBIAN, seconds=s)
+                record["variant"]["design"] = design
+                records.append(record)
+        return records
+
+    def test_layout_sets_each_arm_against_the_one_it_changes(self):
+        seconds = {"hash-flat": 0.25, "identity-flat": 0.2, "chained-flat": 0.3,
+                   "paged-flat": 0.2, "paged-flat-scan16": 0.2, "paged-flat-bisect": 0.25}
+        text, _, summary = self.render("layout", self.layout_records(seconds))
+        self.assertIn("hash policy +25.00% (identity-flat over hash-flat)", summary)
+        self.assertIn("open addressing against chaining -16.67% (chained-flat over hash-flat)",
+                      summary)
+        self.assertIn("search window of 16 +0.00% (paged-flat-scan16 over paged-flat, ranges "
+                      "overlap)", summary)
+        self.assertIn("| `chained-flat` | 3 | 3,333,333 |", text)
+        self.assertEqual(self.violations(text, "layout"), set())
+        edited = text.replace("hash policy +25.00%", "hash policy +35.00%", 1)
+        self.assertIn("summary-differs", self.violations(edited, "layout"))
+
+    def structure_records(self, fills):
+        records = []
+        for _ in range(3):
+            for name, fill in fills.items():
+                record = replay_record(DEBIAN, per_message=[400, 300, 2.1, 6.0, fill])
+                kinds, _, stages = name.partition(":")
+                record["variant"].update(
+                    prefetch=0 if name == "D=0" else 16, filtered=name != "D=0",
+                    kinds=kinds if name != "D=0" else "all",
+                    stages=stages if name != "D=0" else "all")
+                records.append(record)
+        return records
+
+    def test_structure_names_a_bottleneck_only_at_the_rule(self):
+        fills = {"D=0": 2.0, "named:0": 1.95, "named:1": 1.9, "named:2": 1.3, "named:3": 1.8,
+                 "added:2": 1.9, "all:all": 0.8}
+        text, _, summary = self.render("structure", self.structure_records(fills))
+        self.assertIn("largest single structure order record at 35.0%", summary)
+        self.assertIn("no bottleneck claimed", summary)
+        self.assertEqual(self.violations(text, "structure"), set())
+        fills["named:2"] = 1.2
+        text, _, summary = self.render("structure", self.structure_records(fills))
+        self.assertIn("bottleneck by the 40% rule: order record", summary)
+        self.assertIn("leaves 0.800, 40.0% of `D=0`'s", text)
+        edited = text.replace("bottleneck by the 40% rule", "no bottleneck by the 40% rule", 1)
+        self.assertIn("summary-differs", self.violations(edited, "structure"))
+
+    def test_structure_refuses_a_record_of_another_kind(self):
+        records = self.structure_records({"D=0": 2.0, "named:2": 1.3})
+        records[1]["variant"]["filtered"] = False
+        with self.assertRaises(variants_report.ReportError):
+            self.render("structure", records)
+        records = self.structure_records({"D=0": 2.0, "named:2": 1.3})
+        records[0]["variant"]["design"] = "hash-flat"
+        with self.assertRaises(variants_report.ReportError):
+            self.render("structure", records)
 
     def test_bad_records_are_refused(self):
         refused = self.prefetch_records(0.05)

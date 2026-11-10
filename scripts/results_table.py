@@ -56,7 +56,8 @@ def table_row(label, text, name):
 
 
 def day_of(name):
-    return find(r"(\d{8})", name, name)[1]
+    """The day's manifest key: its date, and a venue suffix such as _BX for another feed."""
+    return find(r"(\d{8}(?:_[A-Z]+)?)", name, name)[1]
 
 
 def header_host(text, name):
@@ -138,6 +139,14 @@ def oracle_rows(name, text):
     ]
 
 
+def sessions_row(name, text):
+    """T-ORACLE-2, from scripts/oracle_sessions.py's sum of every session's oracle file."""
+    verdict = find(r"^Verdict: \*\*(\w+)\*\*, (.*)\.$", text, name)
+    commits = find(r"^- Commits: (.*)$", text, name)[1]
+    return ("T-ORACLE-2", "every session", header_host(text, name), SHOWN[verdict[1]], verdict[2],
+            ", ".join(f"`{commit}`" for commit in commits.split(", ")), source(name))
+
+
 def odd_lot_detail(text, name):
     symbols = sorted(set(re.findall(r"^- `t3_odd_lots .*symbol=(\S+)", text, re.MULTILINE)))
     equal, total = find(r"^- equal_odd_lots (\d+) of (\d+) symbols", text, name).groups()
@@ -148,6 +157,22 @@ def odd_lot_detail(text, name):
             f"symbols; shares equal on {shares} of {compared}")
 
 
+def t3_failure_detail(text, name):
+    """What T-TRADE-3 found wrong: the columns and symbols the tool printed, by kind."""
+    found = re.findall(r"^- `(t3_\w+) .*?symbol=(\S+)", text, re.MULTILINE)
+    other = sorted({(check, symbol) for check, symbol in found if not check.startswith("t3_odd")})
+    parts = []
+    if other:
+        equal = re.findall(r"^- (equal_(?!odd)\w+) (\d+) of (\d+) symbols$", text, re.MULTILINE)
+        if not equal:
+            raise TableError(f"results/{name}: T-TRADE-3 failed with no equal_ line")
+        parts.append(", ".join(f"{check[len('t3_'):]} wrong on {symbol}" for check, symbol in other)
+                     + "; " + ", ".join(f"{key} {have} of {of}" for key, have, of in equal))
+    if not other or any(check.startswith("t3_odd") for check, _ in found):
+        parts.append(odd_lot_detail(text, name))
+    return "; ".join(parts)
+
+
 def trades_rows(name, text):
     day, host, commit = day_of(name), header_host(text, name), header_commit(text, name)
     arms = arm_verdicts(text, name)
@@ -155,9 +180,9 @@ def trades_rows(name, text):
     for check, verdict, violations in re.findall(r"^\| ([\w-]+) \| \*\*(\w+)\*\* \| (\d+) \|$",
                                                  text, re.MULTILINE):
         if verdict == "NOT_AVAILABLE":
-            detail = find(rf"^{check} is not available on \d+: (.*?), so ", text, name)[1]
+            detail = find(rf"^{check} is not available on \w+: (.*?), so ", text, name)[1]
         elif check == "T-TRADE-3" and verdict == "FAIL":
-            detail = odd_lot_detail(text, name)
+            detail = t3_failure_detail(text, name)
         elif check == "T-TRADE-3" and "odd-lot columns were not compared" in text:
             detail = f"{violations} violations; odd-lot columns not compared, the SEC's rule ended"
         else:
@@ -203,8 +228,8 @@ def summary_row(name, text):
     return (title, host, summary, f"`{header_commit(text, name)}`", source(name))
 
 
-SUMMARY_PREFIXES = ("flamegraph_", "profile_", "counters_zen1_", "lookup_", "prefetch_",
-                    "dispatch_")
+SUMMARY_PREFIXES = ("flamegraph_", "profile_", "counters_zen1_", "counters_by_age_", "lookup_",
+                    "prefetch_", "dispatch_", "simd_", "layout_", "structure_", "window_")
 
 
 def mm_rows(name, text):
@@ -417,7 +442,9 @@ def generate(root):
         if name in NOT_RESULTS:
             continue
         text = path.read_text(encoding="utf-8")
-        if name.startswith("oracle_"):
+        if name == "oracle_sessions.md":
+            rows = [sessions_row(name, text)]
+        elif name.startswith("oracle_"):
             rows = oracle_rows(name, text)
         elif name.startswith("trades_"):
             rows = trades_rows(name, text)

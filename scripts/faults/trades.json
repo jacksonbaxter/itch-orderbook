@@ -8167,6 +8167,106 @@
       }
     },
     {
+      "id": "trades-report-row-pin-one-quarter",
+      "breaks": "The report looks for the MIDAS row pin under 2019 Q4's zip only, so another quarter's day has none",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "             if key.startswith(\"midas_\") and date in ref.get(rows, {})]\n",
+          "new": "             if key == \"midas_2019q4\" and date in ref.get(rows, {})]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_midas_row_pin_is_found_under_any_quarter"
+      }
+    },
+    {
+      "id": "trades-report-row-pin-first-of-two",
+      "breaks": "The report takes the first of two MIDAS zips that pin rows for the same date",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "    if len(found) > 1:\n",
+          "new": "    if len(found) > 2:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_date_pinned_under_two_zips_is_refused"
+      }
+    },
+    {
+      "id": "trades-report-key-suffix-in-date",
+      "breaks": "The report reads the date from the whole key, so a venue suffix ends up in it",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "        date = args.day[4:8] + args.day[:4]\n",
+          "new": "        date = args.day[4:] + args.day[:4]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "test_a_venue_suffix_on_the_key_keeps_the_date"
+      }
+    },
+    {
+      "id": "trades-report-exchange-unchecked",
+      "breaks": "The report takes a BX day's T-TRADE-3 though the tool compared Nasdaq's rows",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "    require(compared_on == exchange,\n",
+          "new": "    require(True,\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_bx_day_compared_on_nasdaq_rows_fails"
+      }
+    },
+    {
+      "id": "trades-report-bx-pin-from-nasdaq",
+      "breaks": "The report reads a BX day's row pin from the Nasdaq rows, so it has none",
+      "check": "test_trades_report.py",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "    rows = f\"{exchange.lower()}_rows\"\n",
+          "new": "    rows = \"nasdaq_rows\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_bx_day_is_held_to_boston_rows"
+      }
+    },
+    {
       "id": "trades-report-ignores-t5-population",
       "breaks": "E outside the population can go unaccounted",
       "check": "test_trades_report.py",
@@ -8232,6 +8332,62 @@
       ],
       "expect": {
         "signature": "trades cli: FAIL linked capacity: exit \\d+, an add refused"
+      }
+    },
+    {
+      "id": "trades-cli-exchange-ignored",
+      "breaks": "itch_trades compares MIDAS's Nasdaq rows whatever --exchange says",
+      "check": "test_trades_cli, on the MIDAS fixture with its rows renamed to Boston",
+      "mutations": [
+        {
+          "file": "tools/itch_trades.cpp",
+          "old": "      file->bytes(), {.date = options.date, .exchange = options.exchange});",
+          "new": "      file->bytes(), {.date = options.date, .exchange = itch::trades::kMidasExchange});"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_trades_cli$"
+      ],
+      "expect": {
+        "signature": "trades cli: FAIL --exchange Boston: exit 3"
+      }
+    },
+    {
+      "id": "trades-cli-exchange-unnamed",
+      "breaks": "itch_trades does not say which exchange's MIDAS rows it compared",
+      "check": "test_trades_cli, the clean run's lines",
+      "mutations": [
+        {
+          "file": "tools/itch_trades.cpp",
+          "old": "  std::println(\"trades_midas_exchange {}\", options.exchange);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_trades_cli$"
+      ],
+      "expect": {
+        "signature": "trades cli: FAIL clean: no line 'trades_midas_exchange Nasdaq'"
       }
     },
     {

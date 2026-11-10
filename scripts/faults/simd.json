@@ -1,0 +1,576 @@
+{
+  "area": "simd",
+  "faults": [
+    {
+      "id": "simd-parser-tail-on-the-kernel",
+      "breaks": "The parser hands messages within kOverread bytes of the end to the overreading kernel",
+      "check": "test_kernels Kernels.MessagesNearTheEndGoToTheScalarKernel",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/parse.hpp",
+          "old": "    if (after >= Kernel::kOverread) {\n",
+          "new": "    if (after + Kernel::kOverread >= Kernel::kOverread) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_kernels"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_kernels"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Kernels\\.MessagesNearTheEndGoToTheScalarKernel",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-select-silent-fallback",
+      "breaks": "A kernel this build lacks runs scalar in its place instead of being an error",
+      "check": "test_kernels Kernels.AKernelThatCannotRunIsAnErrorWithItsReason",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/select.hpp",
+          "old": "  if (!built(*id)) {\n    return std::unexpected(std::format(\"kernel {} is not built: this is an {} build, with {}\", name,\n                                       kArch, built_names()));\n  }\n",
+          "new": "  if (!built(*id)) {\n    return Selected{KernelId::scalar, false};\n  }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_kernels"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_kernels"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Kernels\\.AKernelThatCannotRunIsAnErrorWithItsReason",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-scalar-deduct-shares-offset",
+      "breaks": "The scalar kernel reads an execution's or cancel's shares one byte late",
+      "check": "test_kernels Kernels.ScalarBookOpsAreTheShippedDecoders",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/scalar.hpp",
+          "old": "                .shares = read_be<std::uint32_t>(m + 19),\n",
+          "new": "                .shares = read_be<std::uint32_t>(m + 20),\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_kernels"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_kernels"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Kernels\\.ScalarBookOpsAreTheShippedDecoders",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-neon-batch-shares-reversed-by-eight",
+      "breaks": "The NEON batch reverses the four share counts eight bytes at a time, not four",
+      "check": "test_kernels Built/KernelTest.BatchOfFourMatchesScalar/neon",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/neon.hpp",
+          "old": "vreinterpretq_u32_u8(vrev32q_u8(vreinterpretq_u8_u32(vld1q_u32(shares.data())))));",
+          "new": "vreinterpretq_u32_u8(vrev64q_u8(vreinterpretq_u8_u32(vld1q_u32(shares.data())))));"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_kernels"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_kernels"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Built\\/KernelTest\\.BatchOfFourMatchesScalar\\/neon",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-cli-vector-kernel-for-a-kernel-free-experiment",
+      "breaks": "bench_kernels runs a kernel-free experiment under a vector kernel's name",
+      "check": "test_bench_kernels_cli.py",
+      "mutations": [
+        {
+          "file": "bench/bench_kernels.cpp",
+          "old": "  if (kernel_free && kernel != KernelId::scalar) {\n",
+          "new": "  if (kernel_free && kernel == KernelId::wasm) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_kernels"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_kernels_cli.py",
+        "{build}/bench/bench_kernels",
+        "{build}/tests/fault_bench_kernels_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "^bench kernels cli: FAIL vector kernel for framing: exit 0",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-cli-silent-fallback",
+      "breaks": "bench_kernels runs scalar when asked for a kernel this build lacks",
+      "check": "test_bench_kernels_cli.py",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/select.hpp",
+          "old": "  if (!built(*id)) {\n    return std::unexpected(std::format(\"kernel {} is not built: this is an {} build, with {}\", name,\n                                       kArch, built_names()));\n  }\n",
+          "new": "  if (!built(*id)) {\n    return Selected{KernelId::scalar, false};\n  }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_kernels"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_kernels_cli.py",
+        "{build}/bench/bench_kernels",
+        "{build}/tests/fault_bench_kernels_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "^bench kernels cli: FAIL \\S+: ran scalar, from auto False",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-tie-by-median-alone",
+      "breaks": "A winner is called on medians alone, overlapping repetitions and all",
+      "check": "test_simd_report.py test_overlapping_repetitions_are_a_tie_and_a_scalar_win_refutes_e2",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    return a[\"median\"] < b[\"median\"] and a[\"max\"] < b[\"min\"]\n",
+          "new": "    return a[\"median\"] < b[\"median\"]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_overlapping_repetitions_are_a_tie_and_a_scalar_win_refutes_e2",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-e3-threshold",
+      "breaks": "E3 is judged against a 5% gain, not 10%",
+      "check": "test_simd_report.py test_e3_is_refuted_at_a_ten_percent_gain_and_not_below",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "E3_GAIN = 0.10\n",
+          "new": "E3_GAIN = 0.05\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_e3_is_refuted_at_a_ten_percent_gain_and_not_below",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-sampler-not-reread",
+      "breaks": "The report publishes a process the sampler saw another process during",
+      "check": "test_simd_report.py test_a_published_process_must_have_been_sampled_quiet",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "            why = wasm_bench.unquiet(sampled, timestamp(start), timestamp(end))\n",
+          "new": "            why = None\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_published_process_must_have_been_sampled_quiet",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-answers-unchecked",
+      "breaks": "Kernels that folded different answers are reported side by side",
+      "check": "test_simd_report.py test_bad_records_are_refused",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    check_agreement(experiment, rows)\n",
+          "new": "    rows = list(rows)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_bad_records_are_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-kernel-unchecked",
+      "breaks": "A variant that ran another kernel than its name is reported under its name",
+      "check": "test_simd_report.py test_bad_records_are_refused",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "        if variant[\"kernel\"] != kernel_of(experiment, record[\"_variant\"]) or \\\n",
+          "new": "        if variant[\"kernel\"] != variant[\"kernel\"] or \\\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_bad_records_are_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-results-unchecked",
+      "breaks": "--check accepts results that are not what the table of passes gives",
+      "check": "test_simd_report.py test_a_result_finding_or_answer_unlike_the_table_is_caught",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    if check_results.section(text, \"Results\") != \"\\n\" + \"\\n\".join(results) + \"\\n\\n\":\n",
+          "new": "    if not results:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_result_finding_or_answer_unlike_the_table_is_caught",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-sampler-rule-unsaid",
+      "breaks": "--check accepts a macOS file that does not say the sampler rule was applied",
+      "check": "test_simd_report.py test_names_isa_sampler_rule_and_privacy",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    if host == MAC and fields.get(\"interference\") != INTERFERENCE:\n",
+          "new": "    if host == MAC and not fields.get(\"interference\"):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_names_isa_sampler_rule_and_privacy",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-isa-unchecked",
+      "breaks": "--check accepts a file whose instruction sets are not the kernels it ran",
+      "check": "test_simd_report.py test_names_isa_sampler_rule_and_privacy",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "        if fields.get(\"instruction_sets\") != isa:\n",
+          "new": "        if not fields.get(\"instruction_sets\"):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_names_isa_sampler_rule_and_privacy",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-vector-kernels-not-compared",
+      "breaks": "A debian results file never calls AVX2 against SSSE3, only each against scalar",
+      "check": "test_simd_report.py test_on_debian_avx2_is_called_against_ssse3_under_zen_1_s_caveats",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    return [(later, vector[0]) for later in vector[1:]]\n",
+          "new": "    return []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_debian_avx2_is_called_against_ssse3_under_zen_1_s_caveats",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-mac-caveats-on-debian",
+      "breaks": "A debian results file carries the Mac's caveats: two counters, unpinned, NEON's folded field",
+      "check": "test_simd_report.py test_on_debian_avx2_is_called_against_ssse3_under_zen_1_s_caveats",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    caveats = DEBIAN_CAVEATS if host == DEBIAN else CAVEATS\n",
+          "new": "    caveats = CAVEATS\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_debian_avx2_is_called_against_ssse3_under_zen_1_s_caveats",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-driver-sampler-ignored",
+      "breaks": "The driver publishes a process without asking the sampler",
+      "check": "test_simd_driver.py test_a_process_is_withdrawn_unless_sampled_quiet",
+      "mutations": [
+        {
+          "file": "scripts/simd_driver.py",
+          "old": "        return wasm_bench.unquiet(sampler.lines, *span)\n",
+          "new": "        return None\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_process_is_withdrawn_unless_sampled_quiet",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-driver-judges-before-the-last-sample",
+      "breaks": "The driver judges a process before the sampler has sampled after its end, so no span is ever covered",
+      "check": "test_simd_driver.py test_it_waits_for_the_sample_after_the_end",
+      "mutations": [
+        {
+          "file": "scripts/simd_driver.py",
+          "old": "        wait_for_sample(sampler, span[1])\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_it_waits_for_the_sample_after_the_end",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-driver-linux-unpinned",
+      "breaks": "On Linux the driver runs each process under measure.sh without taskset -c 4",
+      "check": "test_simd_driver.py test_on_linux_every_process_and_check_runs_pinned_under_measure_sh",
+      "mutations": [
+        {
+          "file": "scripts/simd_driver.py",
+          "old": "    wrap = [\"/usr/bin/time\", \"-l\"] if system == \"Darwin\" else list(LINUX_PIN)\n",
+          "new": "    wrap = [\"/usr/bin/time\", \"-l\"] if system == \"Darwin\" else []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_linux_every_process_and_check_runs_pinned_under_measure_sh",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-driver-check-outside-measure",
+      "breaks": "On Linux the driver runs machine_check.sh outside measure.sh, under the host's own governor",
+      "check": "test_simd_driver.py test_on_linux_every_process_and_check_runs_pinned_under_measure_sh",
+      "mutations": [
+        {
+          "file": "scripts/simd_driver.py",
+          "old": "    return [str(args.measure), *LINUX_PIN, \"bash\", str(REPO_ROOT / \"scripts\" / \"machine_check.sh\"),\n",
+          "new": "    return [*LINUX_PIN, \"bash\", str(REPO_ROOT / \"scripts\" / \"machine_check.sh\"),\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_linux_every_process_and_check_runs_pinned_under_measure_sh",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-predictions-skip-simd-results",
+      "breaks": "check_predictions leaves simd_*.md results unread, so a SIMD result could name no prediction",
+      "check": "test_check_predictions test_a_simd_result_naming_no_prediction",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "\"wasm_*.md\", \"simd_*.md\", \"layout_*.md\"",
+          "new": "\"wasm_*.md\", \"layout_*.md\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_simd_result_naming_no_prediction",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-asm-audit-counts-unchecked",
+      "breaks": "simd_asm_audit --check stops holding the table's counts to the listings",
+      "check": "test_simd_asm_audit.py test_the_published_file_passes_and_tampering_is_caught",
+      "mutations": [
+        {
+          "file": "scripts/simd_asm_audit.py",
+          "old": "                if any(listed[key][k] != counts[k] for k in COUNTS):\n",
+          "new": "                if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_asm_audit.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_published_file_passes_and_tampering_is_caught",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-asm-audit-linux-gets-mac-targets",
+      "breaks": "On debian the E12 audit compiles the Mac's targets, its arm64 configuration in fact the host's x86-64",
+      "check": "test_simd_asm_audit.py test_on_linux_each_compiler_targets_x86_64_linux_with_its_vector_kernels",
+      "mutations": [
+        {
+          "file": "scripts/simd_asm_audit.py",
+          "old": "    if (system or platform.system()) == \"Linux\":\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_asm_audit.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_linux_each_compiler_targets_x86_64_linux_with_its_vector_kernels",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-asm-audit-linux-no-gcc-vector-kernels",
+      "breaks": "On debian the E12 audit leaves out the vector kernels, so GCC's SSSE3 and AVX2 code is never counted",
+      "check": "test_simd_asm_audit.py test_on_linux_each_compiler_targets_x86_64_linux_with_its_vector_kernels",
+      "mutations": [
+        {
+          "file": "scripts/simd_asm_audit.py",
+          "old": "        out.append((f\"x86 {name} x86-64 -O3\", command, \"x86.cpp\", \"x86-64\", [*FLAGS, \"-O3\"]))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_asm_audit.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_on_linux_each_compiler_targets_x86_64_linux_with_its_vector_kernels",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-wasm-batch-price-not-reversed",
+      "breaks": "The SIMD128 kernel's batch4 leaves the prices in wire order",
+      "check": "itch_wasm_kernels_smoke in node, through the wasm preset",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/wasm.hpp",
+          "old": "detail::reverse32(wasm_v128_load(price.data()))",
+          "new": "wasm_v128_load(price.data())"
+        }
+      ],
+      "build": {
+        "preset": "wasm",
+        "targets": [
+          "itch_wasm_smoke",
+          "itch_wasm_kernels_smoke",
+          "itch_demo_smoke"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "wasm"
+      ],
+      "expect": {
+        "signature": "wasm kernels smoke: [1-9][0-9]* mismatches on random messages"
+      }
+    }
+  ]
+}

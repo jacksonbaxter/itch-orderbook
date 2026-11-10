@@ -77,11 +77,21 @@ def main():
     forms = [("table", ("--dispatch", "table")),
              ("prefetch 4", ("--prefetch", "4")),
              ("prefetch 64", ("--prefetch", "64")),
-             ("hash prefetch 3", ("--design", "hash-flat", "--prefetch", "3"))]
+             ("hash prefetch 3", ("--design", "hash-flat", "--prefetch", "3")),
+             ("prefetch 16 stage 2 named", ("--prefetch", "16", "--stages", "2", "--kinds", "named")),
+             ("prefetch 16 every stage", ("--prefetch", "16", "--kinds", "all"))]
+    for design in ("identity-flat", "chained-flat", "paged-flat-scan16", "paged-flat-bisect"):
+        forms.append((f"layout {design}", ("--design", design)))
     if threaded_built:
         forms.append(("threaded", ("--dispatch", "threaded")))
     for name, options in forms:
         data = published(name.replace(" ", "_"), *options)
+        filtered = "--stages" in options or "--kinds" in options
+        if data is not None and (data["variant"].get("filtered", False) != filtered or (
+                filtered and (data["variant"]["stages"], data["variant"]["kinds"]) !=
+                (options[options.index("--stages") + 1] if "--stages" in options else "all",
+                 options[options.index("--kinds") + 1]))):
+            failures.append(f"{name}: variant {data['variant']}")
         if data is not None and want is not None and not name.startswith("hash"):
             got = (data["passes"][0]["live_orders"], data["passes"][0]["live_levels"])
             if got != want:
@@ -118,6 +128,12 @@ def main():
                  ("lookup with table", ("--pass", "lookup", "--dispatch", "table"), "only with"),
                  ("lookup with prefetch", ("--pass", "lookup", "--prefetch", "8"), "only with"),
                  ("map design", ("--design", "map-fresh"), "usage"),
+                 ("stages without look-ahead", ("--stages", "2"), "only with a --prefetch"),
+                 ("stage the arm lacks", ("--prefetch", "16", "--stages", "4"), "does not have"),
+                 ("hash stage it lacks", ("--design", "hash-flat", "--prefetch", "3",
+                                          "--stages", "3"), "does not have"),
+                 ("bad kinds", ("--prefetch", "16", "--kinds", "both"), "usage"),
+                 ("bad stages", ("--prefetch", "16", "--stages", "22"), "usage"),
                  ("bad form", ("--dispatch", "computed-goto"), "usage"),
                  ("bad pass", ("--pass", "trace"), "usage")]
     for name, options, said in refusals:

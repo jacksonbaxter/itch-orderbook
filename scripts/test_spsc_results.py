@@ -238,6 +238,24 @@ class Files(unittest.TestCase):
         self.assertIn("sampler-rule-unsaid", codes(replace(
             ABLATION_FILE, check_results.SPSC_SAMPLER_RULE, "The sampler ran.")))
 
+    def test_a_mac_file_from_the_rule_day_keeps_its_own_sampler(self):
+        """From 2026-11-05 stamp_load.py wants a sampler's log beside a macOS run. The SPSC
+        driver samples each repetition itself, so its file is held to that and not to a
+        second log, which it never has."""
+        day = "2026-11-06"
+        sampled = {"every": 2.0, "withdrawn": [], "published": [
+            (f"{day}T10:00:02Z", f"{day}T10:00:04Z", SAMPLED["published"][0][2])] * 3}
+        text = spsc_driver.render([record("queues", s) for s in (1.0, 0.98, 1.03)], args_for(),
+                                  "P-0301-x", f"{day}T10:00:01Z", f"{day}T10:00:09Z", MACHINE,
+                                  "python3 -B scripts/spsc_driver.py", sampled=sampled)
+        try:
+            stamped = stamp_load.stamp(text, STDERR.replace("2026-10-31", day))
+        except ValueError as error:
+            self.fail(f"stamp_load asked an SPSC file for a second sampler: {error}")
+        self.assertEqual(codes(stamped), set())
+        self.assertIn("sampler-rule-unsaid", codes(replace(
+            stamped, check_results.SPSC_SAMPLER_RULE, "The sampler ran.")))
+
     def test_a_repetition_the_sampler_did_not_show_quiet(self):
         line = re.search(r"^\| repetition 2 \|.*$", PIPELINE_FILE, re.MULTILINE).group(0)
         self.assertIn("sampler-not-quiet", codes(replace(

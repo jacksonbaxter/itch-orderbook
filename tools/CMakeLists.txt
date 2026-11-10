@@ -57,3 +57,7 @@ if(TARGET itch::mimalloc)
   target_link_libraries(itch_alloc PRIVATE itch::mimalloc)
   target_link_libraries(itch_map_compare PRIVATE itch::mimalloc)
 endif()
+
+add_executable(itch_window itch_window.cpp)
+target_link_libraries(itch_window PRIVATE itch_parser)
+itch_apply_options(itch_window)
