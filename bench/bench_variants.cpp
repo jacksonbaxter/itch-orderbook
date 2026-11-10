@@ -123,7 +123,43 @@ bool parse_number(std::string_view text, Number& out) {
   return error == std::errc{} && end == text.data() + text.size();
 }
 
+// The options that take a number: whether the value parsed, or nothing for any other option.
+std::optional<bool> parse_number_option(std::string_view arg, std::string_view value,
+                                        Options& options) {
+  if (arg == "--core") {
+    return parse_number(value, options.core);
+  }
+  if (arg == "--orders") {
+    return parse_number(value, options.capacity.orders);
+  }
+  if (arg == "--levels") {
+    return parse_number(value, options.capacity.levels);
+  }
+  if (arg == "--max-pages") {
+    return parse_number(value, options.capacity.index_pages);
+  }
+  if (arg == "--index-bits") {
+    return parse_number(value, options.capacity.index_bits);
+  }
+  if (arg == "--max-slots") {
+    return parse_number(value, options.capacity.level_slots);
+  }
+  if (arg == "--block") {
+    return parse_number(value, options.block) && options.block != 0;
+  }
+  if (arg == "--messages") {
+    return parse_number(value, options.messages) && options.messages != 0;
+  }
+  if (arg == "--prefetch") {
+    return parse_number(value, options.prefetch);
+  }
+  return std::nullopt;
+}
+
 bool parse_option(std::string_view arg, std::string_view value, Options& options) {
+  if (const std::optional<bool> parsed = parse_number_option(arg, value, options)) {
+    return *parsed;
+  }
   if (arg == "--input") {
     options.input = value;
   } else if (arg == "--out") {
@@ -134,24 +170,6 @@ bool parse_option(std::string_view arg, std::string_view value, Options& options
     options.dataset = value;
   } else if (arg == "--dataset-sha256") {
     options.dataset_sha256 = value;
-  } else if (arg == "--core") {
-    return parse_number(value, options.core);
-  } else if (arg == "--orders") {
-    return parse_number(value, options.capacity.orders);
-  } else if (arg == "--levels") {
-    return parse_number(value, options.capacity.levels);
-  } else if (arg == "--max-pages") {
-    return parse_number(value, options.capacity.index_pages);
-  } else if (arg == "--index-bits") {
-    return parse_number(value, options.capacity.index_bits);
-  } else if (arg == "--max-slots") {
-    return parse_number(value, options.capacity.level_slots);
-  } else if (arg == "--block") {
-    return parse_number(value, options.block) && options.block != 0;
-  } else if (arg == "--messages") {
-    return parse_number(value, options.messages) && options.messages != 0;
-  } else if (arg == "--prefetch") {
-    return parse_number(value, options.prefetch);
   } else if (arg == "--stages") {
     options.stages = value;
     options.filtered = true;

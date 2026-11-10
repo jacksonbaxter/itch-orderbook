@@ -740,7 +740,13 @@ struct TypedBook {
   ApplyStatus status = ApplyStatus::applied;
   [[nodiscard]] ApplyStatus apply(std::span<const std::byte> payload) const {
     const char type = static_cast<char>(payload[0]);
-    trace->now += type == 'A' ? 100 : type == 'D' ? 30 : 10;
+    std::uint64_t cost = 10;
+    if (type == 'A') {
+      cost = 100;
+    } else if (type == 'D') {
+      cost = 30;
+    }
+    trace->now += cost;
     return status;
   }
 };
