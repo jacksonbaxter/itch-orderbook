@@ -37,7 +37,9 @@ On macOS the Mac's sampler rule applies to every timed process, as spsc_driver.p
 it to a repetition: the sampler of scripts/wasm_bench.py runs beside the whole run, and a
 timed process is published only if it covered the process's whole span with no gap over
 5 s and saw no foreign process in it. Otherwise it is withdrawn, its raw files set aside,
-with its own row in the run log, and run again. With --quiet-before S, each timed process
+with its own row in the run log, and run again. A process withdrawn --most-in-a-row
+times running (3 unless told) ends the run, refused, so that a busy Mac is given back
+rather than held while it stays busy; the run is tried again later. With --quiet-before S, each timed process
 first waits until the sampler has seen S seconds with no foreign process. The untimed
 processes publish counts and memory, which no other process can move, and are not judged.
 
@@ -78,6 +80,7 @@ OPERATIONS = ("all",) + bench_driver.OPERATIONS
 PERCENTILES = (50.0, 99.0, 99.9)
 BASELINE = "malloc-fresh"
 MOST_WITHDRAWN = 40
+MOST_IN_A_ROW = 3
 QUIET_WAIT_S = 4 * 3600
 
 
@@ -134,6 +137,7 @@ def withdraw(args, arm, index, begin, end, why, sampled, commit):
 
 def timed_process(args, arm, index, commit, digest, sampler, sampled):
     """One arm's timed process, rerun until the sampler rule publishes it."""
+    in_a_row = 0
     while True:
         spsc_driver.wait_for_quiet(sampler, args.quiet_before, args.quiet_wait)
         if sampler is not None:
@@ -152,6 +156,11 @@ def timed_process(args, arm, index, commit, digest, sampler, sampled):
         why = spsc_driver.span_unquiet(lines, begin, end)
         if why:
             withdraw(args, arm, index, begin, end, why, sampled, commit)
+            in_a_row += 1
+            if in_a_row >= args.most_in_a_row:
+                raise Refused(f"{arm}, repetition {index}",
+                              f"withdrawn {in_a_row} times in a row under the sampler rule, so "
+                              "the Mac is given back and the run is tried again later")
             continue
         sampled["published"].append((f"{arm}, repetition {index}", begin, end,
                                      spsc_driver.span_summary(lines, begin, end)))
@@ -615,6 +624,8 @@ def parse_args(argv):
                              "timed process")
     parser.add_argument("--quiet-wait", type=float, default=QUIET_WAIT_S, metavar="S")
     parser.add_argument("--most-withdrawn", type=int, default=MOST_WITHDRAWN)
+    parser.add_argument("--most-in-a-row", type=int, default=MOST_IN_A_ROW, metavar="N",
+                        help="end the run once one timed process is withdrawn N times running")
     parser.add_argument("--wrapped-by", help="what the run was started under, for the record")
     parser.add_argument("--allow-dirty", action="store_true", help="for tests, not for a report")
     parser.add_argument("--bench-arg", action="append", default=[], metavar="ARG")

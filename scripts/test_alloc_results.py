@@ -9,7 +9,6 @@ where machine_check records pinning rather than enforcing it.
 """
 
 import argparse
-import copy
 import json
 import platform
 import subprocess
@@ -354,9 +353,10 @@ print("verdict NODE-BOOK PASS")
 
 @unittest.skipUnless(platform.system() == "Darwin", "machine_check enforces pinning on Linux")
 class EndToEnd(unittest.TestCase):
-    def run_driver(self, root, code=0, busy_first=False):
+    def run_driver(self, root, code=0, busy_first=False, busy_always=False):
         """The driver on fakes. The sampler reads a fake ps, which shows another process at
-        50% CPU while `busy` exists; with busy_first, the first timed process makes it."""
+        50% CPU while `busy` exists; with busy_first, the first timed process makes it, and
+        with busy_always every timed process does."""
         (root / "results").mkdir()
         (root / "results" / "predictions.md").write_text("## P-0701: x\n\nIt runs.\n",
                                                          encoding="utf-8")
@@ -374,11 +374,12 @@ class EndToEnd(unittest.TestCase):
                                         top=2 * MESSAGES), encoding="utf-8")
             path.chmod(0o755)
             tools[name] = path
-        if busy_first:
+        if busy_first or busy_always:
+            once = "" if busy_always else f" and not os.path.exists('{root}/once')"
             bench = tools["bench"].read_text(encoding="utf-8").replace(
                 "open(options[\"--out\"]", (
-                    f"import os, time\nif options['--passes'] == 'timed' and not "
-                    f"os.path.exists('{root}/once'):\n    open('{root}/once', 'w').close(); "
+                    f"import os, time\nif options['--passes'] == 'timed'{once}:\n"
+                    f"    open('{root}/once', 'w').close(); "
                     f"open('{root}/busy', 'w').close(); time.sleep(1); os.remove('{root}/busy')\n"
                     "open(options[\"--out\"]"), 1)
             tools["bench"].write_text(bench, encoding="utf-8")
@@ -424,6 +425,17 @@ class EndToEnd(unittest.TestCase):
             raw = Path(directory) / "raw"
             self.assertTrue(
                 (raw / "alloc-malloc-fresh-repetition-1-timed-withdrawn-1.json").is_file())
+
+    def test_a_process_withdrawn_three_times_running_ends_the_run(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            result, out, log = self.run_driver(Path(directory), busy_always=True)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertFalse(out.exists())
+            self.assertEqual(log.count("withdrawn: alloc arms, malloc-fresh, repetition 1 "), 3)
+            self.assertIn("refused at malloc-fresh, repetition 1: withdrawn 3 times in a row "
+                          "under the sampler rule", log)
+            raw = Path(directory) / "raw"
+            self.assertFalse((raw / "alloc-malloc-aged-repetition-1-timed.json").exists())
 
     def test_a_bench_that_refuses_refuses_the_run(self):
         with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:

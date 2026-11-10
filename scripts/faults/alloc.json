@@ -456,6 +456,26 @@
    }
   },
   {
+   "id": "alloc-driver-holds-a-busy-mac",
+   "breaks": "alloc_driver reruns a timed process however many times running it is withdrawn, holding the Mac while it stays busy",
+   "check": "test_alloc_results",
+   "mutations": [
+    {
+     "file": "scripts/alloc_driver.py",
+     "old": "            if in_a_row >= args.most_in_a_row:\n",
+     "new": "            if False:\n"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_process_withdrawn_three_times_running_ends_the_run"
+   }
+  },
+  {
    "id": "alloc-driver-fault-check-always-passes",
    "breaks": "alloc_driver's fault check passes whatever the pool arms faulted",
    "check": "test_alloc_results",
