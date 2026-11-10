@@ -15,8 +15,10 @@
 #include "itch/book.hpp"
 #include "itch/heap_ager.hpp"
 #include "itch/messages.hpp"
+#include "order_age.hpp"
 #include "replay.hpp"
 #include "run_record.hpp"
+#include "stage_filter.hpp"
 #include "support/encode.hpp"
 #include "typed_counts.hpp"
 
@@ -513,7 +515,8 @@ TEST(BenchReplay, EveryDesignSeesTheSameMovesOfTheTop) {
   PlatformClock clock;
   std::vector<std::uint64_t> seen;
   for (const char* name :
-       {"hash-linked", "hash-flat", "paged-linked", "paged-flat", "map-fresh", "map-aged"}) {
+       {"hash-linked", "hash-flat", "paged-linked", "paged-flat", "map-fresh", "map-aged",
+        "identity-flat", "chained-flat", "paged-flat-scan16", "paged-flat-bisect"}) {
     const std::optional<Design> design = parse_design(name);
     ASSERT_TRUE(design.has_value()) << name;
     EXPECT_EQ(design_name(*design), name);
@@ -532,11 +535,12 @@ TEST(BenchReplay, EveryDesignSeesTheSameMovesOfTheTop) {
       });
     }
   }
-  EXPECT_EQ(seen, (std::vector<std::uint64_t>(6, 5)));
+  EXPECT_EQ(seen, (std::vector<std::uint64_t>(10, 5)));
 }
 
-TEST(BenchReplay, ADesignNameMustBeOneOfTheSix) {
-  for (const char* name : {"", "hash", "map", "hash-", "-linked", "paged-hash", "map-old"}) {
+TEST(BenchReplay, ADesignNameMustBeOneOfTheDesigns) {
+  for (const char* name : {"", "hash", "map", "hash-", "-linked", "paged-hash", "map-old",
+                           "identity", "chained-linked-flat", "paged-flat-scan", "paged-scan16"}) {
     EXPECT_FALSE(parse_design(name).has_value()) << name;
   }
 }
@@ -726,6 +730,106 @@ TEST(TypedCounts, AnEmptySpanHoldsTheReadAndNothingElse) {
   EXPECT_EQ(empty.spans, 1000U);
   EXPECT_EQ(empty.missed, 0U);
   EXPECT_EQ(empty.sums, (std::vector<std::uint64_t>{7000, 14000}));
+}
+
+// Records each stage it is asked to start, as type and stage: "A0" is stage 0 of an add.
+struct StageRecorder {
+  static constexpr unsigned kPrefetchStages = 4;
+  std::array<char, 64>* started;
+  std::size_t* count;
+  void prefetch_stage(std::span<const std::byte> payload, unsigned stage) const noexcept {
+    if (*count + 2 <= started->size()) {
+      (*started)[(*count)++] = static_cast<char>(payload[0]);
+      (*started)[(*count)++] = static_cast<char>('0' + stage);
+    }
+  }
+};
+
+TEST(StageFilter, OnlyTheStagesAndKindsNamedAreStarted) {
+  const std::vector<std::byte> an_add = add(1, 'B', 100, 10);
+  const std::vector<std::byte> a_delete = remove(1);
+  const std::vector<std::byte> a_trade = sized('P');
+  const auto run = [&](unsigned stages, StageKinds kinds) {
+    std::array<char, 64> started{};
+    std::size_t count = 0;
+    const StageRecorder book{.started = &started, .count = &count};
+    const StageFilter<StageRecorder> filter{book, stages, kinds};
+    for (const auto* payload : {&an_add, &a_delete, &a_trade}) {
+      for (unsigned stage = 0; stage < StageFilter<StageRecorder>::kPrefetchStages; ++stage) {
+        filter.prefetch_stage(*payload, stage);
+      }
+    }
+    return std::string(started.data(), count);
+  };
+  EXPECT_EQ(run(*parse_stages("2"), StageKinds::named), "D2");
+  EXPECT_EQ(run(*parse_stages("03"), StageKinds::added), "A0A3");
+  EXPECT_EQ(run(*parse_stages("0123"), StageKinds::all), "A0A1A2A3D0D1D2D3");
+  EXPECT_FALSE(parse_stages("").has_value());
+  EXPECT_FALSE(parse_stages("11").has_value());
+  EXPECT_FALSE(parse_stages("8").has_value());
+  EXPECT_EQ(parse_stage_kinds("named"), StageKinds::named);
+  EXPECT_FALSE(parse_stage_kinds("both").has_value());
+}
+
+std::vector<std::byte> at_time(std::vector<std::byte> payload, std::uint64_t nanoseconds) {
+  for (std::size_t at = 0; at < 6; ++at) {
+    payload[5 + at] = static_cast<std::byte>((nanoseconds >> (8U * (5 - at))) & 0xFFU);
+  }
+  return payload;
+}
+
+TEST(OrderAge, EachNamedFrameIsChargedToItsTypeAndTheAgeOfItsOrder) {
+  constexpr std::uint64_t kMs = 1'000'000;
+  constexpr itch::BookCapacity kCapacity{
+      .orders = 64, .levels = 64, .index_pages = 4, .index_bits = 16, .level_slots = 128};
+  itch::FastBook<> book{kCapacity};
+  const std::vector<std::byte> input = frames({
+      at_time(add(1, 'B', 100, 10), 0),
+      at_time(add(2, 'S', 100, 20), 900 * kMs),
+      at_time(cancel(1, 10), kMs / 2),    // Order 1, half a millisecond old.
+      at_time(cancel(2, 10), 950 * kMs),  // Order 2, 50 ms old, at 950 ms in the day.
+      sized('S'),
+      at_time(remove(1), 3000 * kMs),  // 3 s.
+      type_only('z'),
+      at_time(remove(9), 3000 * kMs),  // No such order.
+  });
+  const std::vector<std::uint8_t> slots = age_slots(input, book);
+  const std::size_t x_row = *naming_row('X');
+  const std::size_t d_row = *naming_row('D');
+  ASSERT_EQ(slots.size(), 8U);
+  EXPECT_EQ(slots[0], slot_of('A'));
+  EXPECT_EQ(slots[1], slot_of('A'));
+  EXPECT_EQ(slots[2], age_slot(x_row, AgeClass::under_1ms));
+  EXPECT_EQ(slots[3], age_slot(x_row, AgeClass::under_100ms));
+  EXPECT_EQ(slots[4], slot_of('S'));
+  EXPECT_EQ(slots[5], age_slot(d_row, AgeClass::from_1s));
+  EXPECT_EQ(slots[6], kNoMessageSlot);
+  EXPECT_EQ(slots[7], age_slot(d_row, AgeClass::unknown));
+  const auto named = named_slot(slots[3]);
+  ASSERT_TRUE(named.has_value());
+  EXPECT_EQ(named->type, 'X');
+  EXPECT_EQ(named->age, AgeClass::under_100ms);
+  EXPECT_FALSE(named_slot(slot_of('A')).has_value());
+}
+
+TEST(OrderAge, AReplacesNewOrderIsAgedFromTheReplace) {
+  constexpr std::uint64_t kMs = 1'000'000;
+  constexpr itch::BookCapacity kCapacity{
+      .orders = 64, .levels = 64, .index_pages = 4, .index_bits = 16, .level_slots = 128};
+  itch::FastBook<> book{kCapacity};
+  const std::vector<std::byte> replace =
+      itch::testing::encode(itch::OrderReplace{.header = header('U', 7),
+                                               .original_order_reference = 1,
+                                               .new_order_reference = 2,
+                                               .shares = 10,
+                                               .price = 101});
+  const std::vector<std::byte> input =
+      frames({at_time(add(1, 'B', 100, 10), 0), at_time(replace, 2000 * kMs),
+              at_time(remove(2), (2000 * kMs) + 10)});
+  const std::vector<std::uint8_t> slots = age_slots(input, book);
+  ASSERT_EQ(slots.size(), 3U);
+  EXPECT_EQ(slots[1], age_slot(*naming_row('U'), AgeClass::from_1s));
+  EXPECT_EQ(slots[2], age_slot(*naming_row('D'), AgeClass::under_1ms));
 }
 
 }  // namespace

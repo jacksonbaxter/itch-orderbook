@@ -1,9 +1,9 @@
 // Hardware counts by message type over a whole day, for T-PERF-1 and T-PERF-2. Untimed: the
 // counter reads are fenced and the pass's time means nothing.
 //
-//     bench_counts --input FILE --out RUN.json [--design NAME] [--core N] [--commit TEXT]
-//                  [--dataset NAME] [--dataset-sha256 HEX] [--empty-spans N]
-//                  [--orders N] [--levels N]
+//     bench_counts --input FILE --out RUN.json [--design NAME] [--by type|type-age]
+//                  [--core N] [--commit TEXT] [--dataset NAME] [--dataset-sha256 HEX]
+//                  [--empty-spans N] [--orders N] [--levels N]
 //
 // One process is one repetition. It maps the day, reads every page and checks they are all
 // resident, builds the book, then runs, with every event open in one group:
@@ -17,6 +17,10 @@
 // rdpmc exactly; the record says whether they did, and a run where they did not is refused.
 // --design takes any design whose heap does not age: map-aged takes its ageing steps between
 // messages, which would land inside the spans. scripts/counts_report.py reads the records.
+//
+// --by type-age charges each span that names a live order (E, C, X, D, U) to its type and the
+// age of that order as well, from a walk of the day through a book of its own before anything
+// is counted (order_age.hpp). The fast book only: the walk asks the book for order slots.
 //
 // Exit codes: 0 publishable, 3 refused, with the record still written, 2 bad usage.
 #include <sys/mman.h>
@@ -41,6 +45,7 @@
 #include "designs.hpp"
 #include "itch/book.hpp"
 #include "mapped_file.hpp"
+#include "order_age.hpp"
 #include "platform/affinity.hpp"
 #include "platform/counters.hpp"
 #include "platform/memory.hpp"
@@ -66,6 +71,7 @@ struct Options {
   std::uint64_t empty_spans = kDefaultEmptySpans;
   itch::BookCapacity capacity;
   Design design;
+  bool by_age = false;
 };
 
 template <class Number>
@@ -97,6 +103,9 @@ bool parse_option(std::string_view arg, std::string_view value, Options& options
     const std::optional<Design> design = parse_design(value);
     options.design = design.value_or(options.design);
     return design.has_value() && design->kind != DesignKind::map_aged;
+  } else if (arg == "--by") {
+    options.by_age = value == "type-age";
+    return value == "type" || value == "type-age";
   } else {
     return false;
   }
@@ -109,7 +118,8 @@ bool parse(std::span<char*> args, Options& options) {
       return false;
     }
   }
-  return args.size() % 2 == 0 && !options.input.empty() && !options.out.empty();
+  return args.size() % 2 == 0 && !options.input.empty() && !options.out.empty() &&
+         (!options.by_age || options.design.kind == DesignKind::fast);
 }
 
 // Everything the record holds besides the header.
@@ -122,6 +132,8 @@ struct CountsRecord {
   std::optional<TypedPass> pass;
   std::optional<TypeTally> tally;
   itch::bench::MessageMix mix;
+  bool by_age = false;
+  std::uint64_t age_frames = 0;  // Frames the age walk gave a slot.
   bool tiled = false;
   std::vector<std::string> refusals;
 };
@@ -151,10 +163,17 @@ std::string types_json(const TypeTally& tally) {
     for (std::size_t event = 0; event < tally.events(); ++event) {
       sums[event] = tally.sum(at, event);
     }
-    const std::string type =
+    const std::optional<NamedSlot> named = named_slot(at);
+    std::string type =
         at == kNoMessageSlot ? std::string{"none"} : std::string(1, static_cast<char>(at));
-    out += std::format(R"({}{{"type": {}, "spans": {}, "sums": {}}})", first ? "" : ", ",
-                       json_string(type), tally.spans(at), list_json(sums));
+    std::string age;
+    if (named.has_value()) {
+      type = std::string(1, named->type);
+      age = std::format(R"(, "age": {})",
+                        json_string(kAgeNames.at(static_cast<std::size_t>(named->age))));
+    }
+    out += std::format(R"({}{{"type": {}{}, "spans": {}, "sums": {}}})", first ? "" : ", ",
+                       json_string(type), age, tally.spans(at), list_json(sums));
     first = false;
   }
   return out + "]";
@@ -190,6 +209,8 @@ std::string record_json(const std::vector<HeaderField>& header, const CountsReco
                      list_json(by_rdpmc));
   out += std::format("  \"mix\": {{\"messages\": {}, \"book_messages\": {}}},\n",
                      record.mix.messages, record.mix.book_messages);
+  out += std::format("  \"by\": {},\n  \"age_frames\": {},\n",
+                     json_string(record.by_age ? "type-age" : "type"), record.age_frames);
   out += std::format("  \"empty_before\": {},\n  \"empty_after\": {},\n", empty_json(record.before),
                      empty_json(record.after));
   if (record.pass && record.tally) {
@@ -260,19 +281,33 @@ void judge(CountsRecord& record) {
   if (!record.tiled) {
     refuse("the spans by type do not add up to the whole pass");
   }
+  if (record.by_age && record.age_frames != record.pass->frames) {
+    refuse(std::format("the age walk gave {} frames a slot and the pass walked {}",
+                       record.age_frames, record.pass->frames));
+  }
 }
 
 template <class Book, class MakeBook>
 void count_design(std::span<const std::byte> bytes, const MakeBook& make_book, CounterGroup& group,
                   std::uint64_t empty, CountsRecord& record) {
+  std::vector<std::uint8_t> ages;
+  if constexpr (requires(Book& walked) { walked.order_slot(0); }) {
+    if (record.by_age) {
+      const std::unique_ptr<Book> walked = make_book();
+      ages = age_slots(bytes, *walked);
+      record.age_frames = ages.size();
+    }
+  }
   const std::unique_ptr<Book> book = make_book();
   record.names = group.event_names();
   TypeTally tally{group.event_count()};
   TypedPass pass;
   group.start();
   record.before = empty_spans(group, empty);
-  record.agreement =
-      cross_check(group, [&] { pass = typed_counts_pass(bytes, *book, group, tally); });
+  record.agreement = cross_check(group, [&] {
+    pass = record.by_age ? typed_counts_pass(bytes, *book, group, tally, GivenSlots{ages})
+                         : typed_counts_pass(bytes, *book, group, tally);
+  });
   record.after = empty_spans(group, empty);
   group.stop();
   record.statuses = group.statuses();
@@ -287,6 +322,13 @@ std::string describe_design(const Options& options) {
            "index, on the process's heap as it comes; no other book built in this process";
   }
   const itch::BookCapacity& capacity = options.capacity;
+  if (options.by_age) {
+    return std::format(
+        "{}: FastBook, {} orders and {} levels; charged by type and by the age of the order "
+        "named, from a walk of the day through another such book built and freed before the "
+        "count",
+        design_name(options.design), capacity.orders, capacity.levels);
+  }
   return std::format("{}: FastBook, {} orders and {} levels; no other book built in this process",
                      design_name(options.design), capacity.orders, capacity.levels);
 }
@@ -295,9 +337,11 @@ int run(int argc, char** argv) {
   Options options;
   if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
     std::println(stderr,
-                 "usage: bench_counts --input FILE --out RUN.json [--design NAME] [--core N] "
+                 "usage: bench_counts --input FILE --out RUN.json [--design NAME] "
+                 "[--by type|type-age] [--core N] "
                  "[--commit TEXT] [--dataset NAME] [--dataset-sha256 HEX] [--empty-spans N] "
-                 "[--orders N] [--levels N]; map-aged is not offered");
+                 "[--orders N] [--levels N]; map-aged is not offered, and --by type-age takes "
+                 "the fast book only");
     return 2;
   }
   std::optional<itch::tools::MappedFile> file =
@@ -319,6 +363,7 @@ int run(int argc, char** argv) {
   migrations.sample();
 
   CountsRecord record;
+  record.by_age = options.by_age;
   if (kPinningRequired && !pin.pinned) {
     record.refusals.push_back(pinning_field(pin));
   }

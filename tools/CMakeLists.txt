@@ -51,3 +51,7 @@ itch_apply_options(itch_mm)
 add_executable(itch_extract itch_extract.cpp)
 target_link_libraries(itch_extract PRIVATE itch_demo_engine)
 itch_apply_options(itch_extract)
+
+add_executable(itch_window itch_window.cpp)
+target_link_libraries(itch_window PRIVATE itch_parser)
+itch_apply_options(itch_window)

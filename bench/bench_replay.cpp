@@ -332,16 +332,9 @@ std::string describe_design(const Options& options) {
         "step before each A, F and U, outside the timing{}",
         name, ageing.seed, ageing.warm_blocks, ageing.ring_blocks, kMapWarmUp);
   }
-  const std::string index =
-      design.arm.index == itch::tools::IndexArm::hash
-          ? std::format("HashIndex for {} orders", capacity.orders)
-          : std::format("PagedIndex<8>, {} pages of 256, reach 2^{}, a fallback hash for {} orders",
-                        capacity.index_pages, capacity.index_bits, capacity.orders);
-  const std::string levels = design.arm.levels == itch::tools::LevelsArm::linked
-                                 ? std::string{"LinkedLevels"}
-                                 : std::format("FlatLevels, {} slots", capacity.level_slots);
-  return std::format("{}: FastBook, {}; {}; {} orders and {} levels", name, index, levels,
-                     capacity.orders, capacity.levels);
+  return std::format("{}: FastBook, {}; {} orders and {} levels", name,
+                     itch::tools::describe_arm(design.arm, capacity), capacity.orders,
+                     capacity.levels);
 }
 
 template <class Session>

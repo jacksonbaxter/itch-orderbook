@@ -1,8 +1,8 @@
 // The book designs bench_replay can measure, by name, for --design.
 //
-// The four arms of the fast book, and the map book on a fresh heap or on one HeapAger
-// ages as it goes. Every design runs the same passes over the same input, so that one
-// run can put any of them side by side.
+// Every arm of the fast book, named index-levels (tools/book_arms.hpp), and the map book on
+// a fresh heap or on one HeapAger ages as it goes. Every design runs the same passes over
+// the same input, so that one run can put any of them side by side.
 #pragma once
 
 #include <cstdint>
@@ -36,7 +36,8 @@ struct Design {
                      tools::to_string(design.arm.levels));
 }
 
-// hash-linked, hash-flat, paged-linked, paged-flat, map-fresh or map-aged.
+// INDEX-LEVELS, such as paged-flat or chained-flat, or map-fresh or map-aged. An index
+// name has no dash, so the first dash ends it.
 [[nodiscard]] inline std::optional<Design> parse_design(std::string_view name) {
   if (name == "map-fresh") {
     return Design{.kind = DesignKind::map_fresh, .arm = {}};
