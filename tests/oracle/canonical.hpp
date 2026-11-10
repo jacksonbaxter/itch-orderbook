@@ -23,6 +23,7 @@
 
 #include "itch/book.hpp"
 #include "itch/map_book.hpp"
+#include "itch/node_book.hpp"
 #include "oracle/reference_book.hpp"
 
 namespace itch::oracle {
@@ -218,6 +219,50 @@ void emit_map(const MapBook& book, Sink& sink) {
     if (!book.sides()[key].empty()) {
       emit_map_side(book, static_cast<std::uint16_t>(key >> 1U),
                     (key & 1U) == 0 ? Side::bid : Side::ask, sink);
+    }
+  }
+}
+
+template <class NodeBookType, class Sink>
+void emit_node_side(const NodeBookType& book, std::uint16_t locate, Side side, Sink& sink) {
+  using Level = NodeBookType::Level;
+  std::uint64_t level_count = 0;
+  book.walk_side(locate, side, [&level_count](const Level& /*level*/) {
+    ++level_count;
+    return level_count < kWalkLimit;
+  });
+  if (level_count == 0) {
+    return;
+  }
+  const TopOfBook top = book.best(locate, side);
+  sink(locate);
+  sink(static_cast<std::uint64_t>(side));
+  sink(top.price);
+  sink(top.shares);
+  sink(top.orders);
+  sink(level_count);
+  std::uint64_t remaining = level_count;
+  book.walk_side(locate, side, [&book, &sink, &remaining](const Level& level) {
+    sink(level.price);
+    sink(level.order_count);
+    sink(level.aggregate_shares);
+    std::uint64_t steps = 0;
+    for (auto order = level.front; order != NodeBookType::kNoOrder && steps < kWalkLimit;
+         order = book.order_at(order).newer, ++steps) {
+      sink(book.order_at(order).reference);
+      sink(book.order_at(order).shares);
+    }
+    return --remaining != 0;
+  });
+}
+
+template <class NodeBookType, class Sink>
+void emit_node(const NodeBookType& book, Sink& sink) {
+  const auto sides = book.sides();
+  for (std::size_t key = 0; key < sides.size(); ++key) {
+    if (sides[key] != NodeBookType::kNoLevel) {
+      emit_node_side(book, static_cast<std::uint16_t>(key >> 1U),
+                     (key & 1U) == 0 ? Side::bid : Side::ask, sink);
     }
   }
 }

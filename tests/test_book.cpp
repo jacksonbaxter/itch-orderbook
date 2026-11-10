@@ -1,4 +1,5 @@
-// Hand-built scenarios, run against the fast book and the reference book alike.
+// Hand-built scenarios, run against the fast book and the reference book alike, and the
+// map book and the node book on each of its allocator arms.
 //
 // Each test states the book it expects by hand. Neither book is the other's expected
 // value here, so a shared misreading of a scenario would have to be written into the
@@ -23,6 +24,8 @@
 #include "itch/heap_ager.hpp"
 #include "itch/map_book.hpp"
 #include "itch/messages.hpp"
+#include "itch/node_arms.hpp"
+#include "itch/node_book.hpp"
 #include "itch/reader.hpp"
 #include "oracle/canonical.hpp"
 #include "oracle/diff.hpp"
@@ -230,6 +233,59 @@ class MapAdapter {
   itch::MapBook book_;
 };
 
+// T-ARENA-1's node book, on one allocator arm, small.
+template <class NodeArm>
+class NodeAdapter {
+ public:
+  using Book = itch::NodeBook<NodeArm>;
+
+  std::string apply(const wire::Bytes& message) {
+    return std::string{to_string(book_.apply(message))};
+  }
+
+  [[nodiscard]] Fifo level(std::uint16_t locate, char side, std::uint32_t price) const {
+    Fifo fifo;
+    const auto* level =
+        book_.find_level(locate, side == 'B' ? itch::Side::bid : itch::Side::ask, price);
+    if (level == nullptr) {
+      return fifo;
+    }
+    std::uint64_t shares = 0;
+    for (auto at = level->front; at != Book::kNoOrder; at = book_.order_at(at).newer) {
+      fifo.push_back(
+          {.reference = book_.order_at(at).reference, .shares = book_.order_at(at).shares});
+      shares += book_.order_at(at).shares;
+    }
+    EXPECT_FALSE(fifo.empty()) << "an empty level was kept";
+    EXPECT_EQ(level->order_count, fifo.size());
+    EXPECT_EQ(level->aggregate_shares, shares);
+    return fifo;
+  }
+
+  [[nodiscard]] Top best(std::uint16_t locate, char side) const {
+    const itch::TopOfBook top = book_.best(locate, side == 'B' ? itch::Side::bid : itch::Side::ask);
+    if (!top.present) {
+      return kEmpty;
+    }
+    return {.present = true, .price = top.price, .shares = top.shares, .orders = top.orders};
+  }
+
+  [[nodiscard]] std::uint64_t live_orders() const { return book_.live_orders(); }
+
+  [[nodiscard]] std::vector<std::uint32_t> prices(std::uint16_t locate, char side) const {
+    std::vector<std::uint32_t> prices;
+    book_.walk_side(locate, side == 'B' ? itch::Side::bid : itch::Side::ask,
+                    [&prices](const auto& level) {
+                      prices.push_back(level.price);
+                      return true;
+                    });
+    return prices;
+  }
+
+ private:
+  Book book_{{.orders = 256, .levels = 64, .pages = itch::PageRequest::base}};
+};
+
 template <class Adapter>
 class BookScenario : public ::testing::Test {
  protected:
@@ -237,9 +293,12 @@ class BookScenario : public ::testing::Test {
 };
 
 // The default arm stays first, so that a failure on it is BookScenario/0.
-using Books = ::testing::Types<FastAdapter<itch::FastBook<>>, FastAdapter<HashLinked>,
-                               FastAdapter<HashFlat>, FastAdapter<PagedLinked>, ReferenceAdapter,
-                               MapAdapter<false>, MapAdapter<true>>;
+using Books =
+    ::testing::Types<FastAdapter<itch::FastBook<>>, FastAdapter<HashLinked>, FastAdapter<HashFlat>,
+                     FastAdapter<PagedLinked>, ReferenceAdapter, MapAdapter<false>,
+                     MapAdapter<true>, NodeAdapter<itch::MallocArm>, NodeAdapter<itch::PmrPoolArm>,
+                     NodeAdapter<itch::PmrMonotonicArm>, NodeAdapter<itch::PoolIndexArm>,
+                     NodeAdapter<itch::PoolPointerArm>, NodeAdapter<itch::PoolFifoArm>>;
 static_assert(std::is_same_v<itch::FastBook<>, PagedFlat>);
 TYPED_TEST_SUITE(BookScenario, Books);
 
