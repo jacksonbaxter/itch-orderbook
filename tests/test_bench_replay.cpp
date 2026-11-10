@@ -231,6 +231,34 @@ TEST(BenchReplay, AWarmUpWithAnotherBookBuildsNoneOfThisDesign) {
   EXPECT_EQ(rig.books, 1);
 }
 
+// Both passes' code runs on a book of its own over the leading operations, and nothing of
+// it reaches a timed figure.
+TEST(BenchReplay, TheCodeWarmUpRunsBothPassesOnBooksOfTheirOwn) {
+  Rig rig;
+  rig.input.bytes_ = frames({add(1, 'B', 100, 10), add(2, 'S', 50, 12), remove(1), remove(2)});
+  rig.session.warm_up();
+  rig.session.warm_code(2);
+  EXPECT_EQ(rig.books, 3);  // The warm-up's and one for each pass.
+  EXPECT_EQ(rig.session.report().code_warmup_messages, 2U);
+  // The warm-up, then the throughput pass and the latency pass over two messages.
+  EXPECT_EQ(rig.trace.events,
+            "saaaat"
+            "saat"
+            "ssatsatt");
+  ASSERT_TRUE(rig.session.timed_throughput());
+  EXPECT_EQ(rig.session.report().throughput->messages, 4U);
+}
+
+TEST(BenchReplay, TheLeadingOperationsEndOnTheLastOneAsked) {
+  const std::vector<std::byte> input =
+      frames({add(1, 'B', 100, 10), add(2, 'S', 50, 12), remove(1), remove(2)});
+  EXPECT_EQ(count_mix(leading_operations(input, 3)).messages, 3U);
+  EXPECT_EQ(count_mix(leading_operations(input, 1)).messages, 1U);
+  EXPECT_EQ(leading_operations(input, 9).size(), input.size());
+  const std::vector<std::byte> quiet = system_events(5);
+  EXPECT_EQ(leading_operations(quiet, 1).size(), quiet.size());
+}
+
 TEST(BenchReplay, NothingIsTimedBeforeTheWarmUp) {
   Rig rig;
   EXPECT_FALSE(rig.session.timed_throughput());

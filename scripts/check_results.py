@@ -45,6 +45,17 @@ SPSC file also says the Mac's sampler rule was applied, in its interference fiel
 Sampler section, with a quiet span for each published repetition; a debian one with one-way
 latencies says the two cores' clocks were checked and agree.
 
+An allocator file, one with an `allocators` field (scripts/alloc_driver.py, T-ARENA-1), is
+held to its own fields: the arms, the one capacity they all ran on, the pages asked for and
+the fault check's verdict. Its summary has each median inside its min and max; every
+latency cell, by arm and operation, is at or above the floor or written `below floor`; the
+Page faults section has a row for every arm, a pool arm's with every count read and its
+check `zero` only when every count is 0; the header's fault_check is PASS only when every
+pool arm's is zero, and FAIL when one is not; every pool arm passed itch_alloc on no
+allocation; every arm's book agreed with the fast book's, with no divergence; and the
+T-ARENA-1 row says it has no bar, beside the fault check's verdict. A macOS allocator file
+also says the sampler rule was applied, with a quiet span for every published timed process.
+
 Each violation prints as `check_results: FAIL <code> <file>: <detail>`.
 
 Exit codes: 0 every file passed, 1 at least one failed, 2 bad usage.
@@ -110,6 +121,25 @@ SPSC_SAMPLER_RULE = (
 SPSC_INTERFERENCE = re.compile(r"sampled every [\d.]+ s by the driver over each repetition's "
                                r"whole span; no other process above 20% CPU in any published "
                                r"repetition; \d+ withdrawn under the rule")
+ALLOC_ARMS = ("malloc-fresh", "malloc-aged", "mimalloc", "pmr-pool", "pmr-monotonic",
+              "pool-index", "pool-pointer", "pool-fifo")
+ALLOC_POOLS = ("pool-index", "pool-pointer", "pool-fifo")
+ALLOC_FIELDS = ("allocators", "node_capacity", "pages_requested", "fault_check", "design",
+                "input", "book_messages")
+ALLOC_OPERATIONS = ("all", "add", "delete", "replace", "reduce")
+FAULTS_ZERO = "zero"
+FAULTS_FAULTED = "faulted"
+FAULTS_HEAP = "not judged: a heap arm"
+FAULTS_NOT_RUN = "not run: "
+ARENA_VERDICT = "no bar to meet; fault check "
+ALLOC_SAMPLER_RULE = (
+    "The Mac's sampler rule was applied: a CPU sampler ran beside every timed process from "
+    "before it started to after it ended, and a timed process is published only if the sampler "
+    "covered its whole span with no gap over 5 s and saw no other process above 20% CPU in it. "
+    "A timed process that failed the rule was withdrawn, with its own row in results/run_log.md, "
+    "and run again; none was withdrawn for its numbers. The untimed processes, of memory alone, "
+    "are not judged.")
+ALLOC_INTERFERENCE = SPSC_INTERFERENCE
 _T1_HOST = "Ryzen 7 5825U, Linux, pinned"
 _T2_HOST = "i7-9700 under WSL2"
 _T3_HOST = "Ryzen 9 5950X, Linux, pinned"
@@ -726,6 +756,114 @@ def check_spsc(text, fields):
     yield from check_spsc_targets(text, fields, suite)
 
 
+def is_alloc_file(fields):
+    return "allocators" in fields
+
+
+def check_alloc_sampler(text, fields, arms):
+    if not ALLOC_INTERFERENCE.fullmatch(fields.get("interference", "")) or \
+            ALLOC_SAMPLER_RULE not in text:
+        yield "sampler-rule-unsaid", repr(fields.get("interference"))
+        return
+    published = [cells for cells in table_rows(text, "Sampler")
+                 if len(cells) == 4 and not cells[0].startswith(("Process", "withdrawn"))]
+    quiet = [cells for cells in published if cells[3].startswith("published: ")]
+    wanted = (number(fields.get("repetitions", "")) or 0) * len(arms)
+    if len(quiet) != len(published) or len(quiet) != wanted:
+        yield "sampler-not-quiet", (f"{len(quiet)} quiet spans of {len(published)} for "
+                                    f"{wanted:g} timed processes")
+
+
+def check_alloc_faults(text, fields, arms):
+    rows = {cells[0]: cells for cells in table_rows(text, "Page faults")
+            if len(cells) == 4 and cells[0] != "Arm"}
+    pools_zero = []
+    for arm in arms:
+        cells = rows.get(arm)
+        if cells is None:
+            yield "fault-row-missing", arm
+            continue
+        if arm not in ALLOC_POOLS:
+            if cells[3] != FAULTS_HEAP:
+                yield "fault-check-wrong", f"{arm} is a heap arm, judged {cells[3]!r}"
+            continue
+        counts = []
+        for cell in cells[1:3]:
+            parts = [part.strip() for part in cell.split("/")]
+            if not all(re.fullmatch(r"[0-9][0-9,]*", part) for part in parts):
+                yield "faults-unread", f"{arm}: {cell!r}"
+                counts = None
+                break
+            counts += [int(part.replace(",", "")) for part in parts]
+        if counts is None:
+            continue
+        zero = all(count == 0 for count in counts)
+        pools_zero.append(zero)
+        if cells[3] != (FAULTS_ZERO if zero else FAULTS_FAULTED):
+            yield "fault-check-wrong", f"{arm}: counts {counts} judged {cells[3]!r}"
+    verdict = fields.get("fault_check", "")
+    if not pools_zero:
+        if not verdict.startswith(FAULTS_NOT_RUN):
+            yield "fault-check-wrong", f"no pool arm ran, yet {verdict!r}"
+    elif all(pools_zero) != verdict.startswith("PASS: ") or \
+            not verdict.startswith(("PASS: ", "FAIL: ")):
+        yield "fault-check-wrong", f"the pool arms' rows against {verdict!r}"
+
+
+def check_alloc(text, fields):
+    for name in ALLOC_FIELDS:
+        if name not in fields:
+            yield "header-field-missing", name
+    arms = [arm.strip() for arm in fields.get("allocators", "").split(",") if arm.strip()]
+    unknown = [arm for arm in arms if arm not in ALLOC_ARMS]
+    if not arms or unknown:
+        yield "allocator-unknown", repr(fields.get("allocators"))
+        return
+    if fields.get("host") == MAC_HOST:
+        if "is not a pinned host." not in text:
+            yield "host-note-missing", "a macOS file without the note that macOS cannot pin"
+        yield from check_alloc_sampler(text, fields, arms)
+    yield from check_spsc_summary(text)
+    floor = number(fields.get("floor", ""))
+    latency = [cells for cells in table_rows(text, "Latency") if cells[0] != "Arm"]
+    for arm in arms:
+        for operation in ALLOC_OPERATIONS:
+            if not any(cells[:2] == [arm, operation] for cells in latency):
+                yield "latency-row-missing", f"{arm} {operation}"
+    for cells in latency:
+        if len(cells) != 6:
+            yield "latency-value-malformed", f"{' '.join(cells[:2])} has {len(cells)} cells"
+            continue
+        for percentile, value in zip(("p50", "p99", "p99.9"), cells[2:5]):
+            yield from check_value(f"{cells[0]} {cells[1]} {percentile}", value, floor)
+    yield from check_alloc_faults(text, fields, arms)
+    allocations = {cells[0]: cells for cells in table_rows(text, "Allocations")
+                   if len(cells) == 7 and cells[0] != "Arm"}
+    agreement = {cells[0]: cells for cells in table_rows(text, "Book agreement")
+                 if len(cells) == 7 and cells[0] != "Arm"}
+    for arm in arms:
+        cells = allocations.get(arm)
+        if cells is None:
+            yield "allocation-row-missing", arm
+        elif arm in ALLOC_POOLS and (cells[2] != "0" or cells[6] != "PASS"):
+            yield "pool-arm-allocated", f"{arm}: {cells[2]} calls, {cells[6]}"
+        elif arm not in ALLOC_POOLS and cells[6] != "REPORT":
+            yield "allocation-verdict-wrong", f"{arm}: {cells[6]}"
+        cells = agreement.get(arm)
+        if cells is None:
+            yield "book-agreement-missing", arm
+        elif cells[1] != "PASS" or cells[5] != "0":
+            yield "book-disagrees", f"{arm}: {cells[1]}, {cells[5]} divergences"
+    hashes = {cells[6] for cells in agreement.values()}
+    if len(hashes) > 1:
+        yield "book-disagrees", f"the arms ended on other books: {sorted(hashes)}"
+    targets = [cells for cells in table_rows(text, "Targets") if cells[0] == "T-ARENA-1"]
+    if not targets or len(targets[0]) != 4:
+        yield "target-missing", "T-ARENA-1"
+    elif targets[0][3] != ARENA_VERDICT + fields.get("fault_check", ""):
+        yield "target-verdict-invalid", f"T-ARENA-1: {targets[0][3]!r}"
+
+
 def check_book(text, fields):
     latency = ((check_no_latency(text),) if throughput_only(fields) else
                (check_book_latency(text, fields), check_operations(text, fields)))
@@ -751,6 +889,9 @@ def check_text(text):
         return violations
     if is_spsc_file(fields):
         violations.extend(check_spsc(text, fields))
+        return violations
+    if is_alloc_file(fields):
+        violations.extend(check_alloc(text, fields))
         return violations
     violations.extend(check_percentiles(text, fields))
     violations.extend(check_counters(text))

@@ -329,6 +329,9 @@ class OwnedInput {
   std::string description_;
 };
 
+// The book operations each timed pass's code warms up on, for a design that warms it.
+constexpr std::uint64_t kCodeWarmOperations = 10'000;
+
 std::string describe_design(const Options& options) {
   const Design& design = options.design;
   const itch::BookCapacity& capacity = options.capacity;
@@ -358,9 +361,12 @@ std::string describe_design(const Options& options) {
         "{}: NodeBook on the {} arm{}, linked levels and FIFOs of nodes, an open-addressed "
         "index of 16-byte slots, {} orders and {} levels, pool pages asked as {}; the warm-up "
         "runs the fast book's hash index with linked levels, so that every arm warms up "
-        "alike and the throughput pass's book is the first to take nodes from its allocator",
-        name, to_string(design.allocator), aged, nodes.orders, nodes.levels,
-        to_string(nodes.pages));
+        "alike, and then each timed pass's code runs, untimed, on a fresh book of this arm "
+        "over the day up to its {}th book operation, so that no timed pass faults in its own "
+        "instructions; a heap arm's heap has seen only those books' nodes before the "
+        "throughput pass",
+        name, to_string(design.allocator), aged, nodes.orders, nodes.levels, to_string(nodes.pages),
+        kCodeWarmOperations);
   }
   if (design.kind == DesignKind::map_aged) {
     const itch::HeapAgeing ageing;
@@ -589,6 +595,9 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
   }
   if (timed) {
     session.warm_up();
+    if (options.design.kind == DesignKind::alloc) {
+      session.warm_code(kCodeWarmOperations);
+    }
   } else {
     session.warm_up_without_book();
   }
@@ -662,6 +671,11 @@ int run_design(const Options& options, const OwnedInput& owned, const MakeBook& 
       obtained += std::format("{}book {}: {}", i == 0 ? "" : " | ", i + 1, (*pages)[i]);
     }
     record.header.emplace_back("pool_pages", scrub_private(obtained));
+  }
+  if (options.design.kind == DesignKind::alloc) {
+    record.header.emplace_back("node_capacity",
+                               std::format("{} orders and {} levels", options.node_capacity.orders,
+                                           options.node_capacity.levels));
   }
   record.header.emplace_back("input", scrub_private(owned.describe()));
   record.header.emplace_back(

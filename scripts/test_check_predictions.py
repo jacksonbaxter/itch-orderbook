@@ -90,6 +90,11 @@ class History(unittest.TestCase):
         (self.results / "spsc_fixture.md").write_text("# nothing\n", encoding="utf-8")
         self.assert_fails("prediction-missing")
 
+    def test_an_alloc_result_naming_no_prediction(self):
+        self.in_order()
+        (self.results / "alloc_fixture.md").write_text("# nothing\n", encoding="utf-8")
+        self.assert_fails("prediction-missing")
+
     def test_a_wasm_result_naming_no_prediction(self):
         self.in_order()
         (self.results / "wasm_fixture.md").write_text("# nothing\n", encoding="utf-8")

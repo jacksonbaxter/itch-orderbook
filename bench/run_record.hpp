@@ -166,8 +166,9 @@ namespace detail {
   }
   out += "\n  },\n";
   const SessionReport& session = record.session;
-  out += std::format(R"(  "warmup": {{"messages": {}, "book": {}}},)", session.warmup_messages,
-                     json_string(session.warmup_book));
+  out += std::format(R"(  "warmup": {{"messages": {}, "book": {}, "code_messages": {}}},)",
+                     session.warmup_messages, json_string(session.warmup_book),
+                     session.code_warmup_messages);
   out += std::format("\n  \"mix\": {},\n", detail::mix_json(session.mix));
   out += std::format("  \"throughput\": {},\n", detail::pass_json(session.throughput, timer));
   out += std::format("  \"latency_pass\": {},\n", detail::pass_json(session.latency, timer));
