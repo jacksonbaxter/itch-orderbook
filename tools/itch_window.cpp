@@ -16,7 +16,8 @@
 //     to it. A price with a fraction of a cent is outside at every width, since no window of
 //     cents can index it. carteret places the best a margin inside its window's edge and moves
 //     the window with hysteresis; neither is modelled, so this is the overflow of a window
-//     that follows the best exactly, a floor on carteret's at the same width;
+//     that follows the best exactly, which neither bounds carteret's at the same width nor
+//     is bounded by it;
 //   - this book's search: how many live levels on the side are better than the price, for
 //     each search FlatLevels makes, which is at every add and at every message that removes a
 //     level's last order. A search reads one key for each such level and one more, so this is

@@ -46,8 +46,8 @@ class WindowReport(unittest.TestCase):
         text = render()
         self.assertEqual(codes(text), set())
         self.assertIn("- summary: adds outside a window of 256 ticks 5.000%, of 2,048 1.000% "
-                      "(carteret 4.90% and 1.03%); sub-cent 0.500%; add searches past 2 or "
-                      "fewer better levels 82.50%, past 16 or more 5.00%\n", text)
+                      "(carteret 4.90% and 1.03%); sub-cent 0.500%; add searches past 1 or "
+                      "fewer better levels 70.00%, past 16 or more 5.00%\n", text)
         self.assertIn("| 256 | 200 | 100 | 5.000% | 3.333% |", text)
 
     def test_a_walk_that_was_not_clean_is_refused(self):

@@ -55,8 +55,10 @@ C, X, D, the old order of a U), it counts two things.
   best, or on an empty side, is inside: the window slides to it. A price with a fraction of a
   cent is outside at every width, since no window of cents can index it. carteret places the
   best a margin inside its window's edge and moves the window with hysteresis; neither is
-  modelled. So this is the overflow of a window that follows the best exactly, a floor on
-  carteret's at the same width.
+  modelled. So this is the overflow of a window that follows the best exactly, and it is
+  neither a floor nor a ceiling on carteret's at the same width: a margin leaves fewer ticks
+  behind the best, so more prices overflow, and hysteresis leaves the window where it was when
+  the best moves, so it can hold prices behind the old best that this one does not.
 - This book's search. The book keeps no window: a side is one sorted array of its live
   levels, best at the end, searched from there. For each search `FlatLevels` makes, at every
   add and at every message that removes its level's last order, the tool counts how many live
@@ -70,7 +72,8 @@ CAVEATS = """\
 - A count, not a time: how often a window would overflow says nothing alone about what the
   overflow costs. carteret's +15.2% and -7.2% are its own book's, on its own host.
 - The window is idealized: it follows the best exactly, with no margin and no hysteresis, so
-  every outside figure here is a floor on what carteret's window would overflow.
+  its figures and carteret's differ in definition as well as in book, and neither bounds the
+  other.
 - A price is placed against the side's best before the message applies. A U's new order is
   placed against the book with its old order still in it.
 - One day, 12302019. A day with wider spreads or more sub-penny prices moves every figure."""
@@ -164,16 +167,20 @@ def deep_share(counts, kind, floor_depth):
     return pct(deep, counts[f"{kind}_searches"])
 
 
-def shallow_share(counts, kind):
-    shallow = sum(counts["better"][(kind, depth)] for depth in DEPTHS[:3])
+def shallow_share(counts, kind, last_depth):
+    """The share of searches that pass at most the levels of the bucket `last_depth`."""
+    upto = DEPTHS.index(last_depth) + 1
+    shallow = sum(counts["better"][(kind, depth)] for depth in DEPTHS[:upto])
     return pct(shallow, counts[f"{kind}_searches"])
 
 
 def summary_of(counts):
-    return (f"adds outside a window of 256 ticks {pct(counts['outside'][('adds', 256)], counts['adds']):.3f}%"
-            f", of 2,048 {pct(counts['outside'][('adds', 2048)], counts['adds']):.3f}%"
-            f" (carteret 4.90% and 1.03%); sub-cent {pct(counts['adds_subcent'], counts['adds']):.3f}%"
-            f"; add searches past 2 or fewer better levels {shallow_share(counts, 'add'):.2f}%, "
+    adds = counts["adds"]
+    return (f"adds outside a window of 256 ticks {pct(counts['outside'][('adds', 256)], adds):.3f}%"
+            f", of 2,048 {pct(counts['outside'][('adds', 2048)], adds):.3f}%"
+            f" (carteret 4.90% and 1.03%); sub-cent {pct(counts['adds_subcent'], adds):.3f}%"
+            f"; add searches past 1 or fewer better levels "
+            f"{shallow_share(counts, 'add', '1'):.2f}%, "
             f"past 16 or more {deep_share(counts, 'add', '16-63'):.2f}%")
 
 
@@ -186,11 +193,12 @@ def finding(counts):
              "for its own window on this day, with its margin and hysteresis.",
              f"- {pct(counts['adds_subcent'], adds):.3f}% of the prices added have a fraction "
              "of a cent, outside a window of cents at every width.",
-             f"- {shallow_share(counts, 'add'):.2f}% of this book's add searches pass 2 or fewer "
-             f"better levels, {deep_share(counts, 'add', '16-63'):.2f}% pass 16 or more and "
+             f"- {shallow_share(counts, 'add', '1'):.2f}% of this book's add searches pass 1 or "
+             f"fewer better levels, {shallow_share(counts, 'add', '2-3'):.2f}% pass 3 or fewer, "
+             f"{deep_share(counts, 'add', '16-63'):.2f}% pass 16 or more and "
              f"{deep_share(counts, 'add', '256+'):.2f}% pass 256 or more. At a message that "
-             f"removes a level's last order, {shallow_share(counts, 'close'):.2f}% pass 2 or "
-             f"fewer and {deep_share(counts, 'close', '16-63'):.2f}% pass 16 or more."]
+             f"removes a level's last order, {shallow_share(counts, 'close', '1'):.2f}% pass 1 "
+             f"or fewer and {deep_share(counts, 'close', '16-63'):.2f}% pass 16 or more."]
     return lines
 
 
