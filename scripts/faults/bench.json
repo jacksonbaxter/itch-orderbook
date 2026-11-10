@@ -4142,12 +4142,12 @@
     },
     {
       "id": "bench-predictions-skip-layout-results",
-      "breaks": "check_predictions leaves the layout, structure and window results unread, so one could name no prediction",
+      "breaks": "check_predictions leaves the layout, structure, window and types results unread, so one could name no prediction",
       "check": "test_check_predictions test_a_layout_result_naming_no_prediction",
       "mutations": [
         {
           "file": "scripts/check_predictions.py",
-          "old": "\"simd_*.md\", \"layout_*.md\", \"structure_*.md\",\n                   \"window_*.md\")",
+          "old": "\"simd_*.md\", \"layout_*.md\", \"structure_*.md\",\n                   \"window_*.md\", \"types_*.md\")",
           "new": "\"simd_*.md\")"
         }
       ],

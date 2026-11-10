@@ -21,6 +21,7 @@
 #include "stage_filter.hpp"
 #include "support/encode.hpp"
 #include "typed_counts.hpp"
+#include "typed_time.hpp"
 
 // ASSERT_TRUE guards each dereference here, which the check cannot see.
 // NOLINTBEGIN(bugprone-unchecked-optional-access)
@@ -730,6 +731,103 @@ TEST(TypedCounts, AnEmptySpanHoldsTheReadAndNothingElse) {
   EXPECT_EQ(empty.spans, 1000U);
   EXPECT_EQ(empty.missed, 0U);
   EXPECT_EQ(empty.sums, (std::vector<std::uint64_t>{7000, 14000}));
+}
+
+// Costs each message by its type on the trace's clock: an add 100, a delete 30, anything else
+// 10. Each clock read costs 1, so a block holds its read.
+struct TypedBook {
+  Trace* trace{};
+  ApplyStatus status = ApplyStatus::applied;
+  [[nodiscard]] ApplyStatus apply(std::span<const std::byte> payload) const {
+    const char type = static_cast<char>(payload[0]);
+    trace->now += type == 'A' ? 100 : type == 'D' ? 30 : 10;
+    return status;
+  }
+};
+
+struct TypedClock {
+  Trace* trace;
+  [[nodiscard]] std::uint64_t operator()() const { return ++trace->now; }
+};
+
+constexpr std::size_t column_of(char type) { return kColumnOf[static_cast<std::uint8_t>(type)]; }
+
+std::uint64_t gram(const BlockSums& sums, char a, char b) {
+  return sums.gram[(column_of(a) * kTimedColumns) + column_of(b)];
+}
+
+TEST(TypedTime, EachBlockIsTimedWholeAndCountedByType) {
+  Trace trace;
+  TypedBook book{.trace = &trace};
+  TypedClock clock{&trace};
+  const std::vector<std::byte> input =
+      frames({add(1, 'B', 100, 10), remove(1), add(2, 'S', 1, 9), remove(2), sized('P')});
+  const TypedTime pass = typed_time_pass(input, book, 2, 5, 0, clock);
+  EXPECT_EQ(pass.messages, 5U);
+  EXPECT_EQ(pass.whole(), 273U);
+  EXPECT_TRUE(pass.tiled());
+  // Frames 0 and 1 open the first quarter's block, 2 and 3 the second's, and the short
+  // last block, frame 4, is the fourth quarter's.
+  EXPECT_EQ(pass.quarters[0].blocks, 1U);
+  EXPECT_EQ(pass.quarters[1].blocks, 1U);
+  EXPECT_EQ(pass.quarters[2].blocks, 0U);
+  EXPECT_EQ(pass.quarters[3].blocks, 1U);
+  EXPECT_EQ(pass.quarters[0].ticks, 131U);
+  EXPECT_EQ(pass.quarters[3].ticks, 11U);
+  EXPECT_EQ(pass.quarters[0].ticks_squared, 131U * 131U);
+  EXPECT_EQ(pass.quarters[0].counts[column_of('A')], 1U);
+  EXPECT_EQ(pass.quarters[0].cross[column_of('D')], 131U);
+  EXPECT_EQ(gram(pass.quarters[0], 'A', 'D'), 1U);
+  EXPECT_EQ(gram(pass.quarters[0], 'D', 'A'), 1U);
+  EXPECT_EQ(gram(pass.quarters[0], 'A', 'P'), 0U);
+  EXPECT_EQ(pass.quarters[3].counts[column_of('P')], 1U);
+  EXPECT_EQ(pass.quarters[3].cross[column_of('P')], 11U);
+}
+
+TEST(TypedTime, AColumnTakesItsCountSquaredAndItsTicks) {
+  Trace trace;
+  TypedBook book{.trace = &trace};
+  TypedClock clock{&trace};
+  const std::vector<std::byte> input = frames({add(1, 'B', 100, 10), add(2, 'B', 100, 10)});
+  const TypedTime pass = typed_time_pass(input, book, 2, 2, 0, clock);
+  EXPECT_EQ(gram(pass.quarters[0], 'A', 'A'), 4U);
+  EXPECT_EQ(pass.quarters[0].cross[column_of('A')], 2U * 201U);
+}
+
+TEST(TypedTime, BlocksUnderTheFloorAreCountedAndTheLongestKept) {
+  Trace trace;
+  TypedBook book{.trace = &trace};
+  TypedClock clock{&trace};
+  const std::vector<std::byte> input = frames({add(1, 'B', 100, 10), sized('P'), sized('P')});
+  const TypedTime pass = typed_time_pass(input, book, 1, 3, 50, clock);
+  EXPECT_EQ(pass.quarters[0].under_floor, 0U);
+  EXPECT_EQ(pass.quarters[0].most_ticks, 101U);
+  EXPECT_EQ(pass.quarters[1].under_floor + pass.quarters[2].under_floor, 2U);
+}
+
+TEST(TypedTime, AFrameWalkedPastGoesToTheLastColumnAndRejectionsAreCounted) {
+  Trace trace;
+  TypedBook book{.trace = &trace, .status = ApplyStatus::unknown_order};
+  TypedClock clock{&trace};
+  const std::vector<std::byte> input = frames({type_only('z'), remove(1)});
+  const TypedTime pass = typed_time_pass(input, book, 4, 2, 0, clock);
+  EXPECT_EQ(pass.frames, 2U);
+  EXPECT_EQ(pass.messages, 1U);
+  EXPECT_EQ(pass.rejected, 1U);
+  EXPECT_EQ(pass.quarters[0].counts[kOtherColumn], 1U);
+  EXPECT_EQ(pass.quarters[0].counts[column_of('D')], 1U);
+  EXPECT_TRUE(pass.tiled());
+}
+
+TEST(TypedTime, BlocksThatLoseTicksDoNotTile) {
+  Trace trace;
+  TypedBook book{.trace = &trace};
+  TypedClock clock{&trace};
+  const std::vector<std::byte> input = frames({add(1, 'B', 100, 10), remove(1)});
+  TypedTime pass = typed_time_pass(input, book, 1, 2, 0, clock);
+  ASSERT_TRUE(pass.tiled());
+  pass.quarters[1].ticks -= 1;
+  EXPECT_FALSE(pass.tiled());
 }
 
 // Records each stage it is asked to start, as type and stage: "A0" is stage 0 of an add.

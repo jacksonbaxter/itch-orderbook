@@ -1,0 +1,454 @@
+{
+  "area": "types",
+  "faults": [
+    {
+      "id": "types-block-not-restarted",
+      "breaks": "Every block of a typed pass is timed from the pass's first reading",
+      "check": "test_bench_replay TypedTime.EachBlockIsTimedWholeAndCountedByType",
+      "mutations": [
+        {
+          "file": "bench/typed_time.hpp",
+          "old": "      pass.quarters[quarter].add(counts, now - opened, floor_ticks);\n      opened = now;\n      counts = {};",
+          "new": "      pass.quarters[quarter].add(counts, now - opened, floor_ticks);\n      counts = {};"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] TypedTime\\.EachBlockIsTimedWholeAndCountedByType",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-short-block-dropped",
+      "breaks": "The short last block of a typed pass is never timed or counted",
+      "check": "test_bench_replay TypedTime.EachBlockIsTimedWholeAndCountedByType",
+      "mutations": [
+        {
+          "file": "bench/typed_time.hpp",
+          "old": "  if (in_block != 0) {",
+          "new": "  if (false) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] TypedTime\\.EachBlockIsTimedWholeAndCountedByType",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-gram-diagonal-only",
+      "breaks": "A block's counts are multiplied only by themselves, never by another column's",
+      "check": "test_bench_replay TypedTime.EachBlockIsTimedWholeAndCountedByType",
+      "mutations": [
+        {
+          "file": "bench/typed_time.hpp",
+          "old": "      for (std::size_t j = 0; j < found; ++j) {",
+          "new": "      for (std::size_t j = i; j <= i; ++j) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] TypedTime\\.EachBlockIsTimedWholeAndCountedByType",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-count-not-squared",
+      "breaks": "A column's count is added to its own product once instead of squared",
+      "check": "test_bench_replay TypedTime.AColumnTakesItsCountSquaredAndItsTicks",
+      "mutations": [
+        {
+          "file": "bench/typed_time.hpp",
+          "old": "        gram[(present[i] * kTimedColumns) + present[j]] += mine * block[present[j]];",
+          "new": "        gram[(present[i] * kTimedColumns) + present[j]] += i == j ? mine : mine * block[present[j]];"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] TypedTime\\.AColumnTakesItsCountSquaredAndItsTicks",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-floor-unchecked",
+      "breaks": "A block under the timer's floor is never counted as one",
+      "check": "test_bench_replay TypedTime.BlocksUnderTheFloorAreCountedAndTheLongestKept",
+      "mutations": [
+        {
+          "file": "bench/typed_time.hpp",
+          "old": "    under_floor += taken < floor_ticks ? 1U : 0U;",
+          "new": "    under_floor += 0U;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] TypedTime\\.BlocksUnderTheFloorAreCountedAndTheLongestKept",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-unknown-frame-uncounted",
+      "breaks": "A frame the reader walks past is in no column",
+      "check": "test_bench_replay TypedTime.AFrameWalkedPastGoesToTheLastColumnAndRejectionsAreCounted",
+      "mutations": [
+        {
+          "file": "bench/typed_time.hpp",
+          "old": "    ++counts[column];",
+          "new": "    counts[column] += column == kOtherColumn ? 0U : 1U;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] TypedTime\\.AFrameWalkedPastGoesToTheLastColumnAndRejectionsAreCounted",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-tiling-check-blind",
+      "breaks": "The check that a typed pass's blocks add up to the pass always passes",
+      "check": "test_bench_replay TypedTime.BlocksThatLoseTicksDoNotTile",
+      "mutations": [
+        {
+          "file": "bench/typed_time.hpp",
+          "old": "  [[nodiscard]] bool tiled() const noexcept { return block_ticks() == whole(); }",
+          "new": "  [[nodiscard]] bool tiled() const noexcept { return block_ticks() == block_ticks(); }"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_bench_replay"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] TypedTime\\.BlocksThatLoseTicksDoNotTile",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-cli-pass-order",
+      "breaks": "bench_variants --pass types runs a replay pass where a typed one belongs",
+      "check": "test_bench_variants_cli.py",
+      "mutations": [
+        {
+          "file": "bench/bench_variants.cpp",
+          "old": "  for (const bool by_blocks : {false, true, true, false}) {",
+          "new": "  for (const bool by_blocks : {false, true, false, false}) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_variants"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_variants_cli.py",
+        "{build}/bench/bench_variants",
+        "{build}/tests/fault_bench_variants_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "^bench variants cli: FAIL types: passes",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-cli-first-messages-ignored",
+      "breaks": "bench_variants --messages runs the whole input",
+      "check": "test_bench_variants_cli.py",
+      "mutations": [
+        {
+          "file": "bench/bench_variants.cpp",
+          "old": "first_messages(file->bytes(), options.messages);",
+          "new": "first_messages(file->bytes(), 0);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_variants"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_variants_cli.py",
+        "{build}/bench/bench_variants",
+        "{build}/tests/fault_bench_variants_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "^bench variants cli: FAIL first messages",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-cli-capacity-ignored",
+      "breaks": "bench_variants --max-pages sets the level slots instead of the index pages",
+      "check": "test_bench_variants_cli.py",
+      "mutations": [
+        {
+          "file": "bench/bench_variants.cpp",
+          "old": "    return parse_number(value, options.capacity.index_pages);",
+          "new": "    return parse_number(value, options.capacity.level_slots);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_variants"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_variants_cli.py",
+        "{build}/bench/bench_variants",
+        "{build}/tests/fault_bench_variants_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "^bench variants cli: FAIL types: the capacity",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-cli-block-with-replay",
+      "breaks": "bench_variants times a replay pass by blocks instead of refusing",
+      "check": "test_bench_variants_cli.py",
+      "mutations": [
+        {
+          "file": "bench/bench_variants.cpp",
+          "old": "  if (options.block != 0 && options.pass == PassKind::replay) {",
+          "new": "  if (options.block != 0 && options.pass == PassKind::lookup && false) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_variants"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_variants_cli.py",
+        "{build}/bench/bench_variants",
+        "{build}/tests/fault_bench_variants_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "^bench variants cli: FAIL block with replay",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-report-lookup-not-a-difference",
+      "breaks": "A type's lookups are the check fit alone, not check less answer",
+      "check": "test_types_report.py test_lookups_are_the_check_fit_less_the_answer_fit_by_type",
+      "mutations": [
+        {
+          "file": "scripts/types_report.py",
+          "old": "            lookup_coef.append([None if a is None or b is None else a - b",
+          "new": "            lookup_coef.append([None if a is None or b is None else a"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_types_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_lookups_are_the_check_fit_less_the_answer_fit_by_type",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-report-quarters-not-alone",
+      "breaks": "Each quarter is fitted with every quarter's blocks",
+      "check": "test_types_report.py test_a_quarter_whose_cost_moves_shows_it",
+      "mutations": [
+        {
+          "file": "scripts/types_report.py",
+          "old": "                    out.append(fit(summed([one[\"quarters\"][quarter]]), one[\"ns_per_tick\"]))",
+          "new": "                    out.append(fit(summed(one[\"quarters\"]), one[\"ns_per_tick\"]))"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_types_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_quarter_whose_cost_moves_shows_it",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-report-check-blind",
+      "breaks": "--check passes a file whose results its sums do not give",
+      "check": "test_types_report.py test_check_catches_a_figure_the_sums_do_not_give",
+      "mutations": [
+        {
+          "file": "scripts/types_report.py",
+          "old": "        if check_results.section(text, section) != \"\\n\" + \"\\n\".join(want) + \"\\n\\n\":",
+          "new": "        if False and check_results.section(text, section) != \"\\n\" + \"\\n\".join(want) + \"\\n\\n\":"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_types_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_catches_a_figure_the_sums_do_not_give",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-report-sampler-unread",
+      "breaks": "A Mac process is published with another process busy beside it",
+      "check": "test_types_report.py test_a_busy_mac_withdraws_the_process",
+      "mutations": [
+        {
+          "file": "scripts/types_report.py",
+          "old": "        variants_report.quiet_spans(sampler, lines)",
+          "new": "        variants_report.quiet_spans(sampler, [])"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_types_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_busy_mac_withdraws_the_process",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-report-day-mix-unchecked",
+      "breaks": "A slice's whole-day counts are published without the manifest's",
+      "check": "test_types_report.py test_a_slice_shows_the_whole_days_pinned_counts",
+      "mutations": [
+        {
+          "file": "scripts/types_report.py",
+          "old": "        if day != pinned:",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_types_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_slice_shows_the_whole_days_pinned_counts",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-report-untiled-published",
+      "breaks": "A typed pass whose blocks do not add up to it is published",
+      "check": "test_types_report.py test_blocks_that_do_not_tile_their_pass_are_refused",
+      "mutations": [
+        {
+          "file": "scripts/types_report.py",
+          "old": "            if typed is not None and sum(q[\"ticks\"] for q in typed[\"quarters\"]) != (",
+          "new": "            if False and typed is not None and sum(q[\"ticks\"] for q in typed[\"quarters\"]) != ("
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_types_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_blocks_that_do_not_tile_their_pass_are_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "types-report-fit-not-exact",
+      "breaks": "The fit leaves the last column out",
+      "check": "test_types_report.py test_the_fit_gives_each_types_cost_back_exactly",
+      "mutations": [
+        {
+          "file": "scripts/types_report.py",
+          "old": "    used = [i for i in range(len(COLUMNS)) if counts[i] > 0]",
+          "new": "    used = [i for i in range(len(COLUMNS) - 1) if counts[i] > 0]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_types_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_fit_gives_each_types_cost_back_exactly",
+        "exit": 1
+      }
+    }
+  ]
+}

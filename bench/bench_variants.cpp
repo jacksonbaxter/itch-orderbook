@@ -1,11 +1,11 @@
 // Three experiments on the book's hot loop, each variant picked at the command line, all in
 // one binary, over one day mapped from the page cache:
 //
-//     bench_variants --input FILE --out RUN.json [--pass replay|lookup] [--design NAME]
+//     bench_variants --input FILE --out RUN.json [--pass replay|lookup|types] [--design NAME]
 //                    [--dispatch switch|table|threaded|predicate] [--prefetch D]
-//                    [--stages DIGITS] [--kinds all|named|added]
+//                    [--stages DIGITS] [--kinds all|named|added] [--block N] [--messages N]
 //                    [--core N] [--commit TEXT] [--dataset NAME] [--dataset-sha256 HEX]
-//                    [--orders N] [--levels N]
+//                    [--orders N] [--levels N] [--max-pages N] [--index-bits N] [--max-slots N]
 //
 // --pass replay, the default: a warm-up pass and then one timed pass of the whole day, both
 //               with the same --dispatch form (dispatch.hpp, E7) and the same --prefetch
@@ -13,10 +13,22 @@
 // --pass lookup: the order lookup apart from the rest of the message (lookup_script.hpp).
 //               A recording pass, which is also the warm-up, then four timed passes on
 //               fresh books in the order check, answer, answer, check, so that a drift
-//               over the process falls on both modes alike.
+//               over the process falls on both modes alike. With --block, each of the four
+//               is timed by blocks as --pass types times its typed passes.
+// --pass types: the cost of each message type (typed_time.hpp). A warm-up pass, then four
+//               timed passes on fresh books in the order replay, typed, typed, replay: a
+//               replay pass is one span, as --pass replay's; a typed pass reads the clock
+//               after every --block frames, 64 if left out, and keeps the sums a fit of
+//               each block's ticks on its counts by type needs. The replay passes less the
+//               typed ones is what the blocks' reads and counts cost.
+// --messages    only the first N messages of the input, the book built from its start, for
+//               a day too large to hold in memory with its book. Every page of those
+//               messages is read and found resident, and no page after them is read.
 // --design      any arm of the fast book (designs.hpp), carteret's layout experiments'
 //               among them; paged-flat, the default arm, if left out. The predicate form
 //               builds no book.
+// --orders, --levels, --max-pages, --index-bits, --max-slots  the book's capacity, as
+//               itch_oracle takes it: BookCapacity's defaults unless given.
 // --prefetch    0, the default, or a look-ahead the arm takes: from its number of stages
 //               to 64. Only with --dispatch switch and --pass replay.
 // --stages      with --prefetch, start only these stages, each a digit below the arm's
@@ -67,12 +79,15 @@
 #include "replay.hpp"
 #include "run_record.hpp"
 #include "stage_filter.hpp"
+#include "typed_time.hpp"
 
 namespace {
 
 using namespace itch::bench;
 
-enum class PassKind : std::uint8_t { replay, lookup };
+enum class PassKind : std::uint8_t { replay, lookup, types };
+
+constexpr std::uint32_t kDefaultBlock = 64;
 
 struct Options {
   std::string input;
@@ -89,7 +104,18 @@ struct Options {
   std::string stages;  // Empty: no filter.
   StageKinds kinds = StageKinds::all;
   bool filtered = false;
+  std::uint32_t block = 0;    // Frames a typed pass reads the clock after. 0: whole passes.
+  std::uint64_t messages = 0;  // Messages of the input to run. 0: all of them.
 };
+
+std::string_view to_string(PassKind kind) {
+  switch (kind) {
+    case PassKind::replay: return "replay";
+    case PassKind::lookup: return "lookup";
+    case PassKind::types: return "types";
+  }
+  return "replay";
+}
 
 template <class Number>
 bool parse_number(std::string_view text, Number& out) {
@@ -114,6 +140,16 @@ bool parse_option(std::string_view arg, std::string_view value, Options& options
     return parse_number(value, options.capacity.orders);
   } else if (arg == "--levels") {
     return parse_number(value, options.capacity.levels);
+  } else if (arg == "--max-pages") {
+    return parse_number(value, options.capacity.index_pages);
+  } else if (arg == "--index-bits") {
+    return parse_number(value, options.capacity.index_bits);
+  } else if (arg == "--max-slots") {
+    return parse_number(value, options.capacity.level_slots);
+  } else if (arg == "--block") {
+    return parse_number(value, options.block) && options.block != 0;
+  } else if (arg == "--messages") {
+    return parse_number(value, options.messages) && options.messages != 0;
   } else if (arg == "--prefetch") {
     return parse_number(value, options.prefetch);
   } else if (arg == "--stages") {
@@ -132,10 +168,15 @@ bool parse_option(std::string_view arg, std::string_view value, Options& options
     }
     options.arm = design->arm;
   } else if (arg == "--pass") {
-    if (value != "replay" && value != "lookup") {
+    if (value == "replay") {
+      options.pass = PassKind::replay;
+    } else if (value == "lookup") {
+      options.pass = PassKind::lookup;
+    } else if (value == "types") {
+      options.pass = PassKind::types;
+    } else {
       return false;
     }
-    options.pass = value == "replay" ? PassKind::replay : PassKind::lookup;
   } else if (arg == "--dispatch") {
     const std::optional<DispatchForm> form = parse_dispatch(value);
     options.dispatch = form.value_or(options.dispatch);
@@ -152,6 +193,9 @@ bool parse(std::span<char*> args, Options& options) {
       return false;
     }
   }
+  if (options.pass == PassKind::types && options.block == 0) {
+    options.block = kDefaultBlock;
+  }
   return args.size() % 2 == 0 && !options.input.empty() && !options.out.empty();
 }
 
@@ -166,8 +210,15 @@ std::optional<std::string> unsupported(const Options& options) {
       (options.dispatch != DispatchForm::switch_case || options.pass != PassKind::replay)) {
     return "--prefetch runs only with --dispatch switch and --pass replay";
   }
-  if (options.pass == PassKind::lookup && options.dispatch != DispatchForm::switch_case) {
-    return "--pass lookup runs only with --dispatch switch";
+  if (options.pass != PassKind::replay && options.dispatch != DispatchForm::switch_case) {
+    return std::format("--pass {} runs only with --dispatch switch", to_string(options.pass));
+  }
+  if (options.block != 0 && options.pass == PassKind::replay) {
+    return "--block runs only with --pass types or --pass lookup";
+  }
+  if (options.filtered && options.pass != PassKind::replay) {
+    return std::format("--stages and --kinds run only with --pass replay, not --pass {}",
+                       to_string(options.pass));
   }
   if (options.filtered && options.prefetch == 0) {
     return "--stages and --kinds run only with a --prefetch look-ahead";
@@ -197,6 +248,7 @@ struct TimedPass {
   bool script_exact = true;
   std::uint64_t live_orders = 0;  // The book at the end of the pass.
   std::uint64_t live_levels = 0;
+  std::optional<TypedTime> typed;  // A pass timed by blocks.
   std::vector<CounterStatus> counters;
   std::string residency_before;
   std::string residency_after;
@@ -205,6 +257,10 @@ struct TimedPass {
 struct Record {
   std::vector<TimedPass> passes;
   MessageMix mix;
+  std::uint64_t frames = 0;
+  std::array<std::uint64_t, 256> by_type{};  // Messages by type byte.
+  std::uint64_t input_bytes = 0;             // Of the input run: all of it, or its first --messages.
+  std::uint64_t file_bytes = 0;
   std::uint64_t warmup_messages = 0;
   std::uint64_t script_entries = 0;  // Lookups the recording pass made.
   std::uint64_t script_capacity = 0;
@@ -253,7 +309,22 @@ TimedPass timed(std::span<const std::byte> bytes, CounterGroup& group, Record& r
   if (pass.rejected != 0) {
     record.refusals.push_back(std::format("the book rejected {} messages", pass.rejected));
   }
+  if (pass.typed && !pass.typed->tiled()) {
+    record.refusals.push_back(std::format("a {} pass's blocks add up to {} ticks of {}",
+                                          pass.mode, pass.typed->block_ticks(),
+                                          pass.typed->whole()));
+  }
   return pass;
+}
+
+// A pass of the switch form timed by blocks (typed_time.hpp), as FormTotals for timed().
+template <class Book>
+FormTotals typed_pass(std::span<const std::byte> bytes, Book& book, const Options& options,
+                      const Record& record, const TimerInfo& timer, TimedPass& pass) {
+  auto clock = [] { return ticks_start(); };
+  pass.typed = typed_time_pass(bytes, book, options.block, record.frames,
+                               static_cast<std::uint64_t>(timer.floor_ticks()), clock);
+  return {.messages = pass.typed->messages, .rejected = pass.typed->rejected, .fold = 0};
 }
 
 template <class Book>
@@ -320,6 +391,28 @@ void run_replay(const Options& options, std::span<const std::byte> bytes, Counte
   record.passes.push_back(std::move(pass));
 }
 
+// The cost of each type: a warm-up, then replay, typed, typed, replay, each on a fresh book,
+// so that a drift over the process falls on both kinds of pass alike.
+template <class Book>
+void run_types(const Options& options, std::span<const std::byte> bytes, CounterGroup& group,
+               const TimerInfo& timer, Record& record) {
+  {
+    const auto book = std::make_unique<Book>(options.capacity);
+    record.warmup_messages = switch_pass(bytes, *book).messages;
+  }
+  for (const bool by_blocks : {false, true, true, false}) {
+    const auto book = std::make_unique<Book>(options.capacity);
+    TimedPass pass = timed(bytes, group, record, by_blocks ? "typed" : "replay",
+                           [&](TimedPass& one) {
+                             return by_blocks ? typed_pass(bytes, *book, options, record, timer, one)
+                                              : switch_pass(bytes, *book);
+                           });
+    pass.live_orders = book->live_orders();
+    pass.live_levels = book->live_levels();
+    record.passes.push_back(std::move(pass));
+  }
+}
+
 // Every find() a day can ask for: one for each add, delete and reduce, two for a replace.
 std::uint64_t most_lookups(const MessageMix& mix) {
   const auto ops = [&mix](OpClass op) { return mix.by_op[static_cast<std::size_t>(op)]; };
@@ -328,7 +421,7 @@ std::uint64_t most_lookups(const MessageMix& mix) {
 
 template <class Index, class Levels>
 void run_lookup(const Options& options, std::span<const std::byte> bytes, CounterGroup& group,
-                Record& record) {
+                const TimerInfo& timer, Record& record) {
   const std::uint64_t capacity = most_lookups(record.mix);
   const std::optional<Arena> arena = Arena::make(capacity * sizeof(std::uint32_t));
   if (!arena) {
@@ -354,8 +447,10 @@ void run_lookup(const Options& options, std::span<const std::byte> bytes, Counte
     using Book = itch::FastBook<itch::NoWriteObserver, ScriptedIndex<Index, Mode>, Levels>;
     const auto book = std::make_unique<Book>(options.capacity);
     script.rewind();
-    TimedPass pass = timed(bytes, group, record, std::move(mode),
-                           [&](TimedPass&) { return switch_pass(bytes, *book); });
+    TimedPass pass = timed(bytes, group, record, std::move(mode), [&](TimedPass& one) {
+      return options.block == 0 ? switch_pass(bytes, *book)
+                                : typed_pass(bytes, *book, options, record, timer, one);
+    });
     pass.lookups = script.read();
     pass.mismatches = script.mismatches();
     pass.script_exact = script.consumed_exactly();
@@ -389,6 +484,45 @@ std::string counters_json(const std::vector<CounterStatus>& statuses) {
   return out + "]";
 }
 
+std::string list_json(std::span<const std::uint64_t> values) {
+  std::string out = "[";
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    out += std::format("{}{}", i == 0 ? "" : ", ", values[i]);
+  }
+  return out + "]";
+}
+
+// A typed pass's sums, quarter by quarter, every one an exact integer.
+std::string typed_json(const TypedTime& typed) {
+  std::string out = std::format(
+      R"({{"block": {}, "columns": {}, "first": {}, "last": {}, "frames": {}, "quarters": [)",
+      typed.block, json_string(std::format("{}*", kTimedTypes)), typed.first, typed.last,
+      typed.frames);
+  for (std::size_t i = 0; i < typed.quarters.size(); ++i) {
+    const BlockSums& q = typed.quarters[i];
+    out += std::format(
+        R"({}{{"blocks": {}, "ticks": {}, "ticks_squared": {}, "under_floor": {}, )"
+        R"("most_ticks": {}, "counts": {}, "cross": {}, "gram": {}}})",
+        i == 0 ? "" : ", ", q.blocks, q.ticks, q.ticks_squared, q.under_floor, q.most_ticks,
+        list_json(q.counts), list_json(q.cross), list_json(q.gram));
+  }
+  return out + "]}";
+}
+
+// The messages of each type the input holds, by type character.
+std::string types_json(const std::array<std::uint64_t, 256>& by_type) {
+  std::string out = "{";
+  bool first = true;
+  for (std::size_t type = 0; type < by_type.size(); ++type) {
+    if (by_type[type] != 0) {
+      out += std::format("{}{}: {}", first ? "" : ", ",
+                         json_string(std::string(1, static_cast<char>(type))), by_type[type]);
+      first = false;
+    }
+  }
+  return out + "}";
+}
+
 std::string record_json(const std::vector<HeaderField>& header, const Options& options,
                         const Record& record, const TimerInfo& timer, bool pinned,
                         std::uint64_t migrations) {
@@ -406,14 +540,20 @@ std::string record_json(const std::vector<HeaderField>& header, const Options& o
                        : std::string{};
   out += std::format(
       "  \"variant\": {{\"pass\": {}, \"design\": {}, \"dispatch\": {}, \"prefetch\": {}, "
-      "{}\"threaded_built\": {}}},\n",
-      json_string(options.pass == PassKind::replay ? "replay" : "lookup"),
+      "{}\"threaded_built\": {}{}}},\n",
+      json_string(to_string(options.pass)),
       json_string(design_name({.kind = DesignKind::fast, .arm = options.arm})),
       json_string(to_string(options.dispatch)), options.prefetch, filter,
-      kThreadedBuilt ? "true" : "false");
+      kThreadedBuilt ? "true" : "false",
+      options.block == 0 && options.messages == 0
+          ? std::string{}
+          : std::format(R"(, "block": {}, "first_messages": {})", options.block, options.messages));
   out += std::format(R"(  "mix": {{"messages": {}, "book_messages": {}}},)", record.mix.messages,
                      record.mix.book_messages);
   out += std::format("\n  \"warmup_messages\": {},\n", record.warmup_messages);
+  out += std::format(
+      "  \"input\": {{\"frames\": {}, \"bytes\": {}, \"file_bytes\": {}, \"types\": {}}},\n",
+      record.frames, record.input_bytes, record.file_bytes, types_json(record.by_type));
   out +=
       std::format("  \"script\": {{\"entries\": {}, \"capacity\": {}, \"arena\": {}}},\n",
                   record.script_entries, record.script_capacity, json_string(record.script_arena));
@@ -425,14 +565,16 @@ std::string record_json(const std::vector<HeaderField>& header, const Options& o
         "{}\n    {{\"mode\": {}, \"messages\": {}, \"seconds\": {:.6f}, \"rejected\": {}, "
         "\"fold\": {}, \"lookups\": {}, \"mismatches\": {}, \"script_exact\": {}, "
         "\"live_orders\": {}, \"live_levels\": {}, \"residency_before\": {}, "
-        "\"residency_after\": {}, \"counters\": {}}}",
+        "\"residency_after\": {}, \"counters\": {}{}}}",
         i == 0 ? "" : ",", json_string(p.mode), p.messages, seconds, p.rejected, p.fold, p.lookups,
         p.mismatches, p.script_exact ? "true" : "false", p.live_orders, p.live_levels,
-        json_string(p.residency_before), json_string(p.residency_after), counters_json(p.counters));
+        json_string(p.residency_before), json_string(p.residency_after), counters_json(p.counters),
+        p.typed ? ", \"typed\": " + typed_json(*p.typed) : std::string{});
   }
   out += "\n  ],\n";
   out += std::format("  \"pinned\": {},\n  \"migrations\": {},\n  \"peak_rss_bytes\": {},\n",
                      pinned ? "true" : "false", migrations, peak_rss_bytes());
+  out += std::format("  \"ns_per_tick\": {:.9f},\n", timer.ticks_to_ns(1.0));
   out += "  \"refusals\": [";
   for (std::size_t i = 0; i < record.refusals.size(); ++i) {
     out += std::format("{}{}", i == 0 ? "" : ", ", json_string(record.refusals[i]));
@@ -442,11 +584,24 @@ std::string record_json(const std::vector<HeaderField>& header, const Options& o
 
 std::string describe_variant(const Options& options) {
   const std::string design = design_name({.kind = DesignKind::fast, .arm = options.arm});
+  const itch::BookCapacity& c = options.capacity;
+  const std::string capacity =
+      std::format("{} orders, {} levels, {} index pages, index reach 2^{}, {} level slots",
+                  c.orders, c.levels, c.index_pages, c.index_bits, c.level_slots);
+  const std::string blocks =
+      options.block == 0 ? std::string{}
+                         : std::format(", each timed by blocks of {} frames", options.block);
   if (options.pass == PassKind::lookup) {
     return std::format(
-        "{}: FastBook with its index wrapped by ScriptedIndex; a recording pass as the warm-up, "
-        "then check, answer, answer, check, each on a fresh book",
-        design);
+        "{}: FastBook with its index wrapped by ScriptedIndex, {}; a recording pass as the "
+        "warm-up, then check, answer, answer, check, each on a fresh book{}",
+        design, capacity, blocks);
+  }
+  if (options.pass == PassKind::types) {
+    return std::format(
+        "{}: FastBook, {}; a warm-up pass, then replay, typed, typed, replay, each on a fresh "
+        "book, the typed passes timed by blocks of {} frames",
+        design, capacity, options.block);
   }
   if (options.dispatch == DispatchForm::predicate) {
     return "predicate: no book; the frame walk and every message's header fields";
@@ -460,6 +615,37 @@ std::string describe_variant(const Options& options) {
       "{}: FastBook, {} dispatch, look-ahead {}{}; a warm-up pass and a timed pass, "
       "each on a fresh book",
       design, to_string(options.dispatch), options.prefetch, filter);
+}
+
+// The input up to the end of its first `messages` messages, all of it for 0, or nothing if it
+// holds fewer. Walks the frames, so it reads each page of what it returns.
+std::span<const std::byte> first_messages(std::span<const std::byte> bytes,
+                                          std::uint64_t messages) {
+  if (messages == 0) {
+    return bytes;
+  }
+  itch::FrameReader reader{bytes};
+  std::uint64_t seen = 0;
+  for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status);
+       frame = reader.next()) {
+    seen += frame.status == itch::FrameStatus::message ? 1U : 0U;
+    if (seen == messages) {
+      return bytes.first(reader.consumed());
+    }
+  }
+  return {};
+}
+
+// Frames and messages by type byte, of the input as run.
+void count_types(std::span<const std::byte> bytes, Record& record) {
+  itch::FrameReader reader{bytes};
+  for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status);
+       frame = reader.next()) {
+    ++record.frames;
+    if (frame.status == itch::FrameStatus::message) {
+      ++record.by_type[static_cast<std::uint8_t>(itch::read_char(frame.payload.data()))];
+    }
+  }
 }
 
 template <class Index, class Levels>
@@ -478,7 +664,12 @@ int run_variant(const Options& options) {
   // MappedFile asks for sequential access, which lets a kernel drop pages behind the reader.
   ::posix_madvise(const_cast<std::byte*>(file->bytes().data()),  // NOLINT
                   file->bytes().size(), POSIX_MADV_NORMAL);
-  const std::span<const std::byte> bytes = file->bytes();
+  const std::span<const std::byte> bytes = first_messages(file->bytes(), options.messages);
+  if (bytes.empty()) {
+    std::println(stderr, "bench_variants: {} holds fewer than {} messages", options.input,
+                 options.messages);
+    return 2;
+  }
 
   const SysSource source = live_source();
   const std::string_view host = host_label(source.os, read_cpu_model(source));
@@ -493,10 +684,15 @@ int run_variant(const Options& options) {
   }
   fault_in(bytes);
   record.mix = count_mix(bytes);
+  count_types(bytes, record);
+  record.input_bytes = bytes.size();
+  record.file_bytes = file->bytes().size();
   CounterGroup group{host};
   if (record.refusals.empty()) {
     if (options.pass == PassKind::lookup) {
-      run_lookup<Index, Levels>(options, bytes, group, record);
+      run_lookup<Index, Levels>(options, bytes, group, timer, record);
+    } else if (options.pass == PassKind::types) {
+      run_types<Book>(options, bytes, group, timer, record);
     } else {
       run_replay<Book>(options, bytes, group, record);
     }
@@ -534,10 +730,16 @@ int run_variant(const Options& options) {
                                                 : "lookup script: " + record.script_arena,
        .residency = after.describe()});
   header.emplace_back("design", scrub_private(describe_variant(options)));
-  header.emplace_back("input",
-                      "mapped: read-only, MAP_PRIVATE, posix_madvise(POSIX_MADV_NORMAL); every "
-                      "page read and found resident before each timed pass, and found resident "
-                      "after it");
+  header.emplace_back(
+      "input",
+      std::format("mapped: read-only, MAP_PRIVATE, posix_madvise(POSIX_MADV_NORMAL); {}every "
+                  "page read and found resident before each timed pass, and found resident "
+                  "after it",
+                  options.messages == 0
+                      ? std::string{}
+                      : std::format("the first {} messages, {} of the file's {} bytes, the "
+                                    "book built from the start; ",
+                                    options.messages, bytes.size(), file->bytes().size())));
 
   std::ofstream out{options.out};
   out << record_json(header, options, record, timer, pin.pinned, migrations.migrations());
@@ -555,11 +757,12 @@ int run(int argc, char** argv) {
   Options options;
   if (!parse(std::span{argv, static_cast<std::size_t>(argc)}.subspan(1), options)) {
     std::println(stderr,
-                 "usage: bench_variants --input FILE --out RUN.json [--pass replay|lookup] "
-                 "[--design INDEX-LEVELS] [--dispatch switch|table|threaded|predicate] "
-                 "[--prefetch D] [--stages DIGITS] [--kinds all|named|added] [--core N] "
+                 "usage: bench_variants --input FILE --out RUN.json "
+                 "[--pass replay|lookup|types] [--design INDEX-LEVELS] "
+                 "[--dispatch switch|table|threaded|predicate] [--prefetch D] [--stages DIGITS] "
+                 "[--kinds all|named|added] [--block N] [--messages N] [--core N] "
                  "[--commit TEXT] [--dataset NAME] [--dataset-sha256 HEX] [--orders N] "
-                 "[--levels N]");
+                 "[--levels N] [--max-pages N] [--index-bits N] [--max-slots N]");
     return 2;
   }
   return itch::tools::with_book_arm(
