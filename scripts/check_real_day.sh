@@ -12,6 +12,8 @@
 # hash with linked levels first. Each report then holds every other arm to the first one's
 # answers, and the oracle's crossed and locked observations have to be the same file.
 # A pinned day with no file is a failure, because a skipped day would look like a pass.
+# A day whose book the default capacity cannot hold gives its own as book_capacity in the
+# manifest, and the oracle and the allocation check run with it.
 # Set ITCH_HEAVY_WRAPPER to a command to run each check under it, on a shared machine.
 # Raw logs go to ITCH_REAL_DAY_LOGS, default build/real-day-logs. The curated results go
 # to results/oracle_<day>.md and results/trades_<day>.md.
@@ -92,6 +94,18 @@ arm_flags() {
   [ "$1" = default ] || printf '%s\n' --index "${1%_*}" --levels "${1#*_}"
 }
 
+# The book's capacity for a day the default cannot hold, from the manifest's book_capacity,
+# one word per line. A day with none keeps the book's defaults.
+capacity_flags() {
+  python3 -B -c '
+import json, sys
+for flag, value in json.load(open("scripts/data_manifest.json"))["days"][sys.argv[1]].get(
+        "book_capacity", {}).items():
+    print(flag)
+    print(value)
+' "$1"
+}
+
 oracle() {
   local day=$1 file arm first= status mismatch=0 report_args=()
   local oracle_log alloc_log observations flags word
@@ -102,6 +116,7 @@ oracle() {
     observations=$log_dir/observations_${day}_$arm.txt
     flags=()
     while read -r word; do flags+=("$word"); done < <(arm_flags "$arm")
+    while read -r word; do flags+=("$word"); done < <(capacity_flags "$day")
     run_header "itch_oracle $file ${flags[*]-}${flags[*]:+ }--observations <raw log>" >"$oracle_log"
     # shellcheck disable=SC2086
     $(timer) $wrapper build/release/tools/itch_oracle "$file" ${flags[@]+"${flags[@]}"} \
