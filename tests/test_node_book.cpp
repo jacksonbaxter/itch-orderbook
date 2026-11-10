@@ -53,9 +53,9 @@ struct Probe {
 
 // ThreadSanitizer maps the shadow of a page on the first instrumented write to it, so in the
 // tsan build the process's fault count takes in the shadow's pages as well as the pool's.
-#if defined(__SANITIZE_THREAD__)
+#ifdef __SANITIZE_THREAD__
 constexpr bool kThreadSanitizer = true;
-#elif defined(__has_feature)
+#elifdef __has_feature
 #if __has_feature(thread_sanitizer)
 constexpr bool kThreadSanitizer = true;
 #else
