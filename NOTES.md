@@ -1989,6 +1989,14 @@ The 1,000,000-order schedule shows that per-order `ahead` updates are the other 
 - **What the README says of the UDP replay.** S1 is built and tested everywhere, S2 to S4 on Linux, CI included, and U1 to U5, which need liburing, have never been compiled, since neither CI nor the Mac has it. No mode is measured yet.
 - **Links.** No README link names a branch: every link is relative, apart from the local address the demo server prints.
 
+**The resume's figures, later the same day.** The user's resume quotes three figures, and a recruiter who follows it must find each at the top of the README: 0 divergences over 10 sessions (T-ORACLE-2, already there), T-BOOK-1 on `debian`, and T-BOOK-1 on the Mac.
+
+- T-BOOK-1 on `debian`, from P-0015's `paged-flat` file with the day in memory, replaces T-BOOK-2 in the headline; T-BOOK-2 stays in RESULTS.md. T-LAT-2 now comes from the same file, so the two book rows are one run. Both are missed, so the headline still shows a miss.
+- A book row's measured cell names the design, the input and whether the top was tracked, read from the file's header.
+- The Mac figure cannot be a row: its bar was set on x86 Linux, so it is neither met nor missed. It is a generated line under the table, inside the headline's markers, with its median, repetitions, CV, conditions and pinning, and the file's own words on why it has no verdict. The generator refuses such a line if its file is from `debian`, or if the file gives the target a verdict.
+- The pitch names both figures, each on a line that cites its file, so `gate_numbers.py` holds them to it.
+- Faults, each through `check.sh --only readme`: the headline's T-BOOK-1 figure edited, the Mac line's figure edited, and each of the pitch's two figures changed. Through the generator and its tests: the Mac line dropped, its verdict rule and its host rule each removed, and its median fixed in code. The faults that named T-BOOK-2's file and figures now name T-BOOK-1's.
+
 ## GitHub's runner DNS fault, 2026-11-11
 
 From about 14:10Z every Linux job failed at its `apt` step with `Temporary failure resolving 'azure.archive.ubuntu.com'`, before any of this repository's code ran; the macOS job passed each time. No code was changed for it.

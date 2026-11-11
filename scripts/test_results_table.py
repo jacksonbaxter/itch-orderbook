@@ -24,7 +24,8 @@ TRADES = "results/trades_10302019.md"
 BOOK_FIXTURES = REPO_ROOT / "tests" / "fixtures" / "bench_results"
 BOOK_FIXTURE = "good_book_mac.md"
 BOOK = "bench_book_hash-linked_ram_fixture_12302019.md"  # Beside the real files, not over one.
-HEADLINE_BOOK = "results/bench_book_paged-flat_mapped_top_counters_debian_12302019.md"
+HEADLINE_BOOK = "results/bench_book_paged-flat_ram_debian_12302019.md"
+UNJUDGED_BOOK = "results/bench_book_paged-flat_ram_mac_12302019.md"
 HEADLINE_BACKTEST = "results/backtest_quoting_debian_12302019.md"
 
 
@@ -201,7 +202,7 @@ class ResultsTable(unittest.TestCase):
 
     def test_write_mends_what_check_refused(self):
         self.edit("RESULTS.md", "| PASS | 0 divergences in 268", "| PASS | no divergences at all in 268")
-        self.edit("README.md", "| 5.04 M msg/s |", "| 12.6 M msg/s |")
+        self.edit("README.md", "| 5.15 M msg/s; `paged-flat`", "| 16.5 M msg/s; `paged-flat`")
         self.assertEqual(self.run_table("--write")[0], 0)
         self.assertEqual(self.run_table("--check")[0], 0)
 
@@ -453,11 +454,12 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| 0 allocations after warm-up in 268,744,780 messages; the control book "
                       "made 324,511,069; the same on 4 arms | Darwin arm64 Apple M4 Max | met |",
                       alloc)
-        self.assertIn("| ≥ 12.5 M msg/s, set on Ryzen 7 9700X, x86 Linux | 5.04 M msg/s | debian, "
-                      "AMD Ryzen Embedded V1605B, pinned to core 4 | **missed**: by 7.46 M msg/s |",
-                      book)
-        self.assertIn("| p50 130.13 ns; p99 780.80 ns; p99.9 1,331.86 ns | debian,", latency)
-        self.assertIn("| **missed**: p50 by 9.13 ns,", latency)
+        self.assertIn("| ≥ 16.4 M msg/s, set on Ryzen 7 9700X, x86 Linux | 5.15 M msg/s; `paged-flat`, "
+                      "file in memory, top of book not tracked | debian, AMD Ryzen Embedded V1605B, "
+                      "pinned to core 4 | **missed**: by 11.25 M msg/s |", book)
+        self.assertIn("| p50 140.14 ns; p99 840.86 ns; p99.9 1,472.00 ns; `paged-flat`, file in "
+                      "memory, top of book not tracked | debian,", latency)
+        self.assertIn("| **missed**: p50 by 19.14 ns,", latency)
         self.assertIn("| ≥ 2.00 M messages/s | 4.57 M messages/s | debian, AMD Ryzen Embedded "
                       "V1605B, pinned to core 4 | met |", backtest)
         self.assertIn("| ≤ 1.31×, set on Ryzen 9 5950X, Linux, pinned | 0.95×, pipelined time / "
@@ -471,16 +473,16 @@ class ResultsTable(unittest.TestCase):
                       "not pinned | met |", self.headline()[5])
 
     def test_a_headline_row_typed_over_fails(self):
-        self.edit("README.md", "| 5.04 M msg/s |", "| 12.6 M msg/s |")
+        self.edit("README.md", "| 5.15 M msg/s; `paged-flat`", "| 16.5 M msg/s; `paged-flat`")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
         self.assertRegex(output, r"results_table: FAIL README\.md:\d+: differs from a fresh run")
         self.assertIn("results_table: ok, RESULTS.md", output)
 
     def test_a_headline_value_follows_its_file(self):
-        self.edit(HEADLINE_BOOK, "| rate 5.04 M msg/s | missed: rate by 7.46 M msg/s |",
-                  "| rate 5.05 M msg/s | missed: rate by 7.45 M msg/s |")
-        self.assertIn("| 5.05 M msg/s | debian,", self.headline()[2])
+        self.edit(HEADLINE_BOOK, "| rate 5.15 M msg/s | missed: rate by 11.25 M msg/s |",
+                  "| rate 5.16 M msg/s | missed: rate by 11.24 M msg/s |")
+        self.assertIn("| 5.16 M msg/s; `paged-flat`", self.headline()[2])
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
         self.assertRegex(output, r"results_table: FAIL README\.md:\d+: differs from a fresh run")
@@ -488,7 +490,7 @@ class ResultsTable(unittest.TestCase):
     def test_a_stale_results_page_fails_and_both_pages_are_checked(self):
         self.edit("results/backtest_shadow_debian_12302019.md",
                   "| Replay rate, messages/s | 3,354,119 |", "| Replay rate, messages/s | 3,354,120 |")
-        self.edit("README.md", "| 5.04 M msg/s |", "| 12.6 M msg/s |")
+        self.edit("README.md", "| 5.15 M msg/s; `paged-flat`", "| 16.5 M msg/s; `paged-flat`")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
         self.assertRegex(output, r"results_table: FAIL RESULTS\.md:\d+: differs from a fresh run")
@@ -508,8 +510,8 @@ class ResultsTable(unittest.TestCase):
 
     def test_a_headline_with_no_missed_target_is_refused(self):
         text = (self.root / HEADLINE_BOOK).read_text(encoding="utf-8")
-        text = text.replace("| missed: rate by 7.46 M msg/s |", "| met |")
-        text = text.replace("| missed: p50 by 9.13 ns, p99 by 228.80 ns, p99.9 by 457.86 ns |",
+        text = text.replace("| missed: rate by 11.25 M msg/s |", "| met |")
+        text = text.replace("| missed: p50 by 19.14 ns, p99 by 288.86 ns, p99.9 by 598.00 ns |",
                             "| met |")
         (self.root / HEADLINE_BOOK).write_text(text, encoding="utf-8")
         code, output = self.run_table()
@@ -551,7 +553,45 @@ class ResultsTable(unittest.TestCase):
                        results_table.HEADLINE + results_table.HEADLINE[:1]):
             with self.assertRaisesRegex(results_table.TableError, "rows, not 5 to 6"):
                 results_table.headline(self.root, chosen)
-        self.assertEqual(len(results_table.headline(self.root, results_table.HEADLINE[:5])), 7)
+        self.assertEqual(len(results_table.headline(self.root, results_table.HEADLINE[:5], ())), 7)
+
+    def unjudged(self):
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        lines = output[output.index("README.md:\n"):].splitlines()
+        return [line for line in lines if line.startswith("**")]
+
+    def test_the_mac_figure_stands_under_the_table_with_no_verdict(self):
+        self.assertEqual(self.unjudged(), [
+            "**T-BOOK-1 on macOS (M4 Max), no verdict:** 21.87 M msg/s, median 21,873,432 msg/s "
+            "of 3 repetitions, CV 0.76%; `paged-flat`, file in memory, top of book not tracked; "
+            "not pinned. Its bar is ≥ 16.4 M msg/s, set on Ryzen 7 9700X, x86 Linux: a macOS "
+            "figure against a bar set on x86 Linux, neither a pass nor a fail. "
+            f"[{UNJUDGED_BOOK}]({UNJUDGED_BOOK})"])
+        self.assertFalse(any("21.87" in row for row in self.headline()))
+
+    def test_the_mac_figure_follows_its_file(self):
+        self.edit(UNJUDGED_BOOK, "| Throughput, messages/s | 21,873,432 |",
+                  "| Throughput, messages/s | 21,873,433 |")
+        self.assertIn("median 21,873,433 msg/s", self.unjudged()[0])
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertRegex(output, r"results_table: FAIL README\.md:\d+: differs from a fresh run")
+
+    def test_an_unjudged_figure_with_a_verdict_is_refused(self):
+        text = (self.root / UNJUDGED_BOOK).read_text(encoding="utf-8")
+        row = next(line for line in text.splitlines() if line.startswith("| T-BOOK-1 |"))
+        self.edit(UNJUDGED_BOOK, row, row[:row.index("| host differs")] + "| met |")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL {UNJUDGED_BOOK}: T-BOOK-1's verdict is 'met', not "
+                      "host differs", output)
+
+    def test_an_unjudged_figure_from_debian_is_refused(self):
+        self.edit(UNJUDGED_BOOK, "- host: macOS (M4 Max)\n", "- host: debian\n")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL {UNJUDGED_BOOK}: its host is debian", output)
 
 if __name__ == "__main__":
     unittest.main()

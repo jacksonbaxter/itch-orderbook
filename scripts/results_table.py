@@ -694,6 +694,23 @@ def targets_headline(target, name, text):
     return bar, measured, debian_host(text, name), verdict, gap.removeprefix("rate ")
 
 
+def book_conditions(text, name):
+    """What a book benchmark ran on, from its header: the design, the input and the top."""
+    design = header_field(text, "design", name).split(":")[0]
+    source_mode = header_field(text, "input", name).split(":")[0]
+    if source_mode not in ("ram", "mapped"):
+        raise TableError(f"results/{name}: input is {source_mode!r}")
+    top = header_field(text, "top_of_book", name)
+    return (f"`{design}`, {'file in memory' if source_mode == 'ram' else 'file mapped'}, top of "
+            f"book {'not tracked' if top == 'not tracked' else 'tracked'}")
+
+
+def book_headline(target, name, text):
+    """A book target's row, with the design, input and top-of-book tracking it ran with."""
+    bar, measured, host, verdict, gap = targets_headline(target, name, text)
+    return bar, f"{measured}; {book_conditions(text, name)}", host, verdict, gap
+
+
 # The README's headline: these targets, in this order, each from the results file beside it.
 # Only the words on what each measures are written here; every value comes from the file.
 HEADLINE = (
@@ -701,22 +718,26 @@ HEADLINE = (
      "The fast book against a simple reference book, after every message of every session"),
     ("T-ALLOC-1", "oracle_12302019.md", alloc_headline,
      "Heap allocations on the book's hot path over a whole day"),
-    ("T-BOOK-2", "bench_book_paged-flat_mapped_top_counters_debian_12302019.md",
-     targets_headline,
-     "Every symbol's L3 book rebuilt over a whole day, the file mapped and the top of book "
-     "tracked"),
-    ("T-LAT-2", "bench_book_paged-flat_mapped_top_counters_debian_12302019.md",
-     targets_headline, "Latency of one book update, over every message of the day"),
+    ("T-BOOK-1", "bench_book_paged-flat_ram_debian_12302019.md", book_headline,
+     "Every symbol's L3 book rebuilt over a whole day"),
+    ("T-LAT-2", "bench_book_paged-flat_ram_debian_12302019.md", book_headline,
+     "Latency of one book update, over every message of the day"),
     ("T-BT-1", "backtest_quoting_debian_12302019.md", targets_headline,
      "The backtester replaying the whole day with a quoting strategy and its queue model"),
     ("T-SPSC-3", "spsc_pipeline_debian_12302019.md", targets_headline,
      "Parser and book on two cores through the SPSC ring, against one thread doing both"),
 )
+# Figures under the headline that no bar can judge, because the bar was set on another host:
+# each a line of its own, saying so, never a row with a verdict.
+UNJUDGED = (
+    ("T-BOOK-1", "bench_book_paged-flat_ram_mac_12302019.md"),
+)
 HEADLINE_SIZE = (5, 6)
 
 
-def headline(root, chosen=HEADLINE):
-    """The lines of the README's headline table, or TableError."""
+def headline(root, chosen=HEADLINE, unjudged=UNJUDGED):
+    """The lines of the README's headline table and the unjudged lines under it, or
+    TableError."""
     if not HEADLINE_SIZE[0] <= len(chosen) <= HEADLINE_SIZE[1]:
         raise TableError(f"the headline has {len(chosen)} rows, not "
                          f"{HEADLINE_SIZE[0]} to {HEADLINE_SIZE[1]}")
@@ -737,8 +758,35 @@ def headline(root, chosen=HEADLINE):
     if not missed:
         raise TableError("the headline shows no missed target: at least one row must be a "
                          "miss, so that a reader sees one on the first page")
-    return markdown_table(("Target", "What it measures", "Bar", "Measured", "Host", "Verdict",
-                           "File"), rows)
+    lines = markdown_table(("Target", "What it measures", "Bar", "Measured", "Host", "Verdict",
+                            "File"), rows)
+    for target, name in unjudged:
+        lines += ["", unjudged_line(root, target, name)]
+    return lines
+
+
+def unjudged_line(root, target, name):
+    """A figure from a host its target's bar was not set on: its value, conditions and host,
+    and the file's own words on why it is neither a pass nor a fail."""
+    path = root / "results" / name
+    if not path.is_file():
+        raise TableError(f"results/{name}: the headline's unjudged {target} line names it, and "
+                         "it is not there")
+    text = path.read_text(encoding="utf-8")
+    host = header_field(text, "host", name)
+    if host == "debian":
+        raise TableError(f"results/{name}: its host is debian, which {target}'s bar can judge, "
+                         "so it belongs in the table")
+    bar, measured, _, verdict, why = targets_headline(target, name, text)
+    if verdict != "host differs":
+        raise TableError(f"results/{name}: {target}'s verdict is {verdict!r}, not host differs, "
+                         "so it cannot stand as an unjudged figure")
+    median, _, _, spread = table_row("Throughput, messages/s", text, name)
+    repetitions = header_field(text, "repetitions", name)
+    return (f"**{target} on {host}, no verdict:** {measured}, median {median} msg/s of "
+            f"{repetitions} repetitions, CV {spread}; {book_conditions(text, name)}; "
+            f"{pinned_cores(text, name)}. Its bar is {bar}: {why.split('; against the bar')[0]}. "
+            f"{source(name)}")
 
 
 # Each page, the markers its generated lines sit between, and what generates them.

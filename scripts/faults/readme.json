@@ -471,8 +471,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "| 5.04 M msg/s |",
-          "new": "| 12.6 M msg/s |"
+          "old": "| 5.15 M msg/s; `paged-flat`",
+          "new": "| 16.5 M msg/s; `paged-flat`"
         }
       ],
       "command": [
@@ -494,7 +494,7 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "| **missed**: by 7.46 M msg/s |",
+          "old": "| **missed**: by 11.25 M msg/s |",
           "new": "| met |"
         }
       ],
@@ -517,8 +517,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "| p50 130.13 ns; p99 780.80 ns;",
-          "new": "| p50 120.13 ns; p99 780.80 ns;"
+          "old": "| p50 140.14 ns; p99 840.86 ns;",
+          "new": "| p50 120.14 ns; p99 840.86 ns;"
         }
       ],
       "command": [
@@ -532,7 +532,7 @@
         "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 120\\.13 is not in results/bench_book_paged-flat_mapped_top_counters_debian_12302019\\.md",
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 120\\.14 is not in results/bench_book_paged-flat_ram_debian_12302019\\.md",
         "exit": 1
       }
     },
@@ -542,9 +542,9 @@
       "check": "results_table.py --check",
       "mutations": [
         {
-          "file": "results/bench_book_paged-flat_mapped_top_counters_debian_12302019.md",
-          "old": "| rate 5.04 M msg/s | missed: rate by 7.46 M msg/s |",
-          "new": "| rate 5.05 M msg/s | missed: rate by 7.45 M msg/s |"
+          "file": "results/bench_book_paged-flat_ram_debian_12302019.md",
+          "old": "| rate 5.15 M msg/s | missed: rate by 11.25 M msg/s |",
+          "new": "| rate 5.16 M msg/s | missed: rate by 11.24 M msg/s |"
         }
       ],
       "command": [
@@ -632,7 +632,7 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "    (\"T-BOOK-2\", \"bench_book_paged-flat_mapped_top_counters_debian_12302019.md\",\n     targets_headline,\n     \"Every symbol's L3 book rebuilt over a whole day, the file mapped and the top of book \"\n     \"tracked\"),\n    (\"T-LAT-2\", \"bench_book_paged-flat_mapped_top_counters_debian_12302019.md\",\n     targets_headline, \"Latency of one book update, over every message of the day\"),\n",
+          "old": "    (\"T-BOOK-1\", \"bench_book_paged-flat_ram_debian_12302019.md\", book_headline,\n     \"Every symbol's L3 book rebuilt over a whole day\"),\n    (\"T-LAT-2\", \"bench_book_paged-flat_ram_debian_12302019.md\", book_headline,\n     \"Latency of one book update, over every message of the day\"),\n",
           "new": "    (\"T-BT-1\", \"backtest_quoting_debian_12302019.md\", targets_headline,\n     \"The backtester replaying the whole day with a quoting strategy and its queue model\"),\n"
         }
       ],
@@ -954,6 +954,177 @@
       "expect": {
         "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
         "exit": 1
+      }
+    },
+    {
+      "id": "readme-stage-book1-debian-value-edited",
+      "breaks": "The headline's T-BOOK-1 figure on debian is edited, and check.sh must fail on it",
+      "check": "check.sh readme stage, results_table.py --check",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "| 5.15 M msg/s; `paged-flat`",
+          "new": "| 5.51 M msg/s; `paged-flat`"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/check.sh",
+        "--only",
+        "readme"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-stage-mac-figure-edited",
+      "breaks": "The Mac's T-BOOK-1 figure under the headline is edited, and check.sh must fail on it",
+      "check": "check.sh readme stage, results_table.py --check",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "no verdict:** 21.87 M msg/s,",
+          "new": "no verdict:** 21.78 M msg/s,"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/check.sh",
+        "--only",
+        "readme"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-stage-pitch-debian-figure-edited",
+      "breaks": "The pitch's T-BOOK-1 figure on debian is not its file's, and check.sh must fail on it",
+      "check": "check.sh readme stage, gate_numbers.py on README.md",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "L3 book at 5.15 M messages/s with the day in memory",
+          "new": "L3 book at 5.25 M messages/s with the day in memory"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/check.sh",
+        "--only",
+        "readme"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 5\\.25 is not in results/bench_book_paged-flat_ram_debian_12302019\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-stage-pitch-mac-figure-edited",
+      "breaks": "The pitch's Mac T-BOOK-1 figure is not its file's, and check.sh must fail on it",
+      "check": "check.sh readme stage, gate_numbers.py on README.md",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "the same design runs at 21.87 M messages/s",
+          "new": "the same design runs at 21.97 M messages/s"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/check.sh",
+        "--only",
+        "readme"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 21\\.97 is not in results/bench_book_paged-flat_ram_mac_12302019\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-unjudged-line-dropped",
+      "breaks": "The Mac's T-BOOK-1 figure is left out from under the headline",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        lines += [\"\", unjudged_line(root, target, name)]\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-unjudged-verdict-unchecked",
+      "breaks": "A figure under the headline is shown unjudged though its file gives it a verdict",
+      "check": "test_results_table.py test_an_unjudged_figure_with_a_verdict_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if verdict != \"host differs\":\n",
+          "new": "    if verdict is None:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_unjudged_figure_with_a_verdict_is_refused"
+      }
+    },
+    {
+      "id": "readme-unjudged-debian-allowed",
+      "breaks": "A debian figure stands under the headline with no verdict, where its bar can judge it",
+      "check": "test_results_table.py test_an_unjudged_figure_from_debian_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if host == \"debian\":\n",
+          "new": "    if host is None:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_unjudged_figure_from_debian_is_refused"
+      }
+    },
+    {
+      "id": "readme-unjudged-figure-fixed",
+      "breaks": "The Mac line's median is not read from its file",
+      "check": "test_results_table.py test_the_mac_figure_follows_its_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    median, _, _, spread = table_row(\"Throughput, messages/s\", text, name)\n",
+          "new": "    median, spread = \"21,873,432\", \"0.76%\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_mac_figure_follows_its_file"
       }
     }
   ]
