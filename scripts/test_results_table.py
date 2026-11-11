@@ -461,7 +461,14 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| ≥ 2.00 M messages/s | 4.57 M messages/s | debian, AMD Ryzen Embedded "
                       "V1605B, pinned to core 4 | met |", backtest)
         self.assertIn("| ≤ 1.31×, set on Ryzen 9 5950X, Linux, pinned | 0.95×, pipelined time / "
-                      "single-threaded time |", spsc)
+                      "single-threaded time | debian, AMD Ryzen Embedded V1605B, pinned to cores 4 "
+                      "and 6 | met |", spsc)
+
+    def test_a_second_thread_pinned_elsewhere_is_named_as_such(self):
+        self.edit("results/spsc_pipeline_debian_12302019.md",
+                  "- peer_pinning: pinned to core 6:", "- peer_pinning: not pinned:")
+        self.assertIn("| debian, AMD Ryzen Embedded V1605B, pinned to core 4; the second thread "
+                      "not pinned | met |", self.headline()[5])
 
     def test_a_headline_row_typed_over_fails(self):
         self.edit("README.md", "| 5.04 M msg/s |", "| 12.6 M msg/s |")

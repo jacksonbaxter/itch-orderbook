@@ -623,12 +623,25 @@ def shown_verdict(verdict, gap=""):
     return f"**missed**: {gap}" if gap else "**missed**"
 
 
+def pinned_cores(text, name):
+    """Where the run's threads ran, from the file's pinning fields: a second thread's peer
+    pinning too when the file has one, so a two-core run names both cores."""
+    pinnings = [find(r"^- pinning: (.*?)(?::|$)", text, name)[1]]
+    peer = re.search(r"^- peer_pinning: (.*?)(?::|$)", text, re.MULTILINE)
+    if peer is None:
+        return pinnings[0]
+    pinnings.append(peer[1])
+    cores = [re.fullmatch(r"pinned to core (\d+)", pinning) for pinning in pinnings]
+    if all(cores):
+        return f"pinned to cores {cores[0][1]} and {cores[1][1]}"
+    return f"{pinnings[0]}; the second thread {pinnings[1]}"
+
+
 def debian_host(text, name):
-    """A benchmark file's host, its CPU and where the thread ran, from the file's header."""
+    """A benchmark file's host, its CPU and where its threads ran, from the file's header."""
     host = header_field(text, "host", name)
     cpu = header_field(text, "cpu", name).split(" with ")[0]
-    pinning = find(r"^- pinning: (.*?)(?::|$)", text, name)[1]
-    return f"{host}, {cpu}, {pinning}"
+    return f"{host}, {cpu}, {pinned_cores(text, name)}"
 
 
 def sessions_headline(target, name, text):
