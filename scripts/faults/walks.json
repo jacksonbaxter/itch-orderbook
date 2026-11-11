@@ -1,0 +1,718 @@
+{
+  "area": "walks",
+  "faults": [
+    {
+      "id": "walks-generator-loop-uncounted",
+      "breaks": "The engine's rest walks its side in a loop of another form, which the counted copy's loop count does not see",
+      "check": "cmake/ItchWalkEngine.cmake's loop count, at build time",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    while (worse != kNoIndex && better(sim.side, levels_[worse].price, sim.price)) {\n      better_level = worse;\n      worse = levels_[worse].worse;\n    }\n",
+          "new": "    for (; worse != kNoIndex && better(sim.side, levels_[worse].price, sim.price);\n         worse = levels_[worse].worse) {\n      better_level = worse;\n    }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": []
+      },
+      "command": [
+        "cmake",
+        "--build",
+        "--preset",
+        "release",
+        "--parallel",
+        "3",
+        "--target",
+        "bench_walks"
+      ],
+      "expect": {
+        "signature": "backtest\\.hpp has 7 loops over the simulated levels, not 8"
+      }
+    },
+    {
+      "id": "walks-generator-anchor-moved",
+      "breaks": "The engine's text at a place the counted copy edits changes, so that edit no longer finds it",
+      "check": "cmake/ItchWalkEngine.cmake's exactly-once anchors, at build time",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    ++resting_[sim.locate];\n    ++resting_total_;\n",
+          "new": "    ++resting_total_;\n    ++resting_[sim.locate];\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": []
+      },
+      "command": [
+        "cmake",
+        "--build",
+        "--preset",
+        "release",
+        "--parallel",
+        "3",
+        "--target",
+        "bench_walks"
+      ],
+      "expect": {
+        "signature": "backtest\\.hpp: not found:"
+      }
+    },
+    {
+      "id": "walks-depletion-orders-uncounted",
+      "breaks": "The counted copy leaves a depletion's visits to the orders of the level found uncounted",
+      "check": "test_walk_counts HandBuilt.ADepletionFindsItsLevelThenVisitsItsOrders",
+      "mutations": [
+        {
+          "file": "cmake/ItchWalkEngine.cmake",
+          "old": "    for (std::uint32_t slot = levels_[level].front; slot != kNoIndex; slot = orders_[slot].newer) {\n      walk_.order();\n",
+          "new": "    for (std::uint32_t slot = levels_[level].front; slot != kNoIndex; slot = orders_[slot].newer) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_walk_counts"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_walk_counts"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] HandBuilt\\.ADepletionFindsItsLevelThenVisitsItsOrders"
+      }
+    },
+    {
+      "id": "walks-depletion-site-unnamed",
+      "breaks": "A depletion's find is counted at whichever site walked last",
+      "check": "test_walk_counts HandBuilt.ADepletionFindsItsLevelThenVisitsItsOrders",
+      "mutations": [
+        {
+          "file": "cmake/ItchWalkEngine.cmake",
+          "old": "    walk_.at(itch::bench::WalkSite::depletion);\n    const std::uint32_t level",
+          "new": "    const std::uint32_t level"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_walk_counts"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_walk_counts"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] HandBuilt\\.ADepletionFindsItsLevelThenVisitsItsOrders"
+      }
+    },
+    {
+      "id": "walks-rest-stop-uncounted",
+      "breaks": "A rest's walk leaves the level it stopped at uncounted",
+      "check": "test_walk_counts HandBuilt.EachRestWalksTheLevelsBetterThanItsPrice",
+      "mutations": [
+        {
+          "file": "cmake/ItchWalkEngine.cmake",
+          "old": "    if (worse != kNoIndex) {\n      walk_.level();  // The level the loop stopped at.\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_walk_counts"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_walk_counts"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] HandBuilt\\.EachRestWalksTheLevelsBetterThanItsPrice"
+      }
+    },
+    {
+      "id": "walks-level-leaving-uncounted",
+      "breaks": "A level that leaves its side stays in the side's depth",
+      "check": "test_walk_counts HandBuilt.EverySideIsEmptyAtTheEnd",
+      "mutations": [
+        {
+          "file": "cmake/ItchWalkEngine.cmake",
+          "old": "      walk_.remove_level(key);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_walk_counts"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_walk_counts"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] HandBuilt\\.EverySideIsEmptyAtTheEnd"
+      }
+    },
+    {
+      "id": "walks-counted-copy-diverges",
+      "breaks": "The counted copy does something the engine does not, here a stat counted at each rest",
+      "check": "test_walk_counts CountedEngine.GivesTheEnginesEventsOnRandomMarkets",
+      "mutations": [
+        {
+          "file": "cmake/ItchWalkEngine.cmake",
+          "old": "    walk_.at(itch::bench::WalkSite::rest);\n    walk_.begin(key);\n",
+          "new": "    walk_.at(itch::bench::WalkSite::rest);\n    walk_.begin(key);\n    ++stats_.late_adds;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_walk_counts"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_walk_counts"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] CountedEngine\\.GivesTheEnginesEventsOnRandomMarkets"
+      }
+    },
+    {
+      "id": "walks-bench-diverged-copy-not-refused",
+      "breaks": "bench_walks counts a copy that diverged from the engine and exits 0",
+      "check": "test_bench_walks_cli, the short life's exit and identical flag",
+      "mutations": [
+        {
+          "file": "cmake/ItchWalkEngine.cmake",
+          "old": "    walk_.at(itch::bench::WalkSite::rest);\n    walk_.begin(key);\n",
+          "new": "    walk_.at(itch::bench::WalkSite::rest);\n    walk_.begin(key);\n    ++stats_.late_adds;\n"
+        },
+        {
+          "file": "bench/bench_walks.cpp",
+          "old": "  if (!plain.same_as(counted)) {\n    refusals.emplace_back",
+          "new": "  if (false) {\n    refusals.emplace_back"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_walks"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_walks_cli.py",
+        "{build}/bench/bench_walks",
+        "{build}/bench_walks_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "bench walks cli: FAIL short life: the counted engine disagreed",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-histogram-drops-zero",
+      "breaks": "bench_walks' histograms leave out the walks of no step and of an empty side",
+      "check": "test_bench_walks_cli, each site's histograms against its walks",
+      "mutations": [
+        {
+          "file": "bench/bench_walks.cpp",
+          "old": "  for (std::size_t value = 0; value < histogram.size(); ++value) {\n",
+          "new": "  for (std::size_t value = 1; value < histogram.size(); ++value) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_walks"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_walks_cli.py",
+        "{build}/bench/bench_walks",
+        "{build}/bench_walks_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "bench walks cli: FAIL [a-z_]+: the (depth|steps) histogram does not sum to the walks",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-counts-underflow-unseen",
+      "breaks": "A side that loses a level or an order it does not hold leaves the counts consistent",
+      "check": "test_walk_counts WalkCountsAlone.LosingWhatASideDoesNotHoldIsInconsistent",
+      "mutations": [
+        {
+          "file": "bench/walk_counts.hpp",
+          "old": "    if (count == 0) {\n      broken_ = true;\n      return;\n    }\n",
+          "new": "    if (count == 0) {\n      return;\n    }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_walk_counts"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_walk_counts"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] WalkCountsAlone\\.LosingWhatASideDoesNotHoldIsInconsistent"
+      }
+    },
+    {
+      "id": "walks-counts-bound-unseen",
+      "breaks": "A walk past the histograms' bound leaves the counts consistent",
+      "check": "test_walk_counts WalkCountsAlone.AWalkPastItsBoundIsInconsistent",
+      "mutations": [
+        {
+          "file": "bench/walk_counts.hpp",
+          "old": "    if (!counted(site.steps, walk_steps_)) {\n      broken_ = true;\n    }\n",
+          "new": "    static_cast<void>(counted(site.steps, walk_steps_));\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_walk_counts"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_walk_counts"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] WalkCountsAlone\\.AWalkPastItsBoundIsInconsistent"
+      }
+    },
+    {
+      "id": "walks-report-unmatched-record-accepted",
+      "breaks": "walk_report counts a record whose counted engine did not give the engine's events",
+      "check": "test_walk_report.py test_records_the_counted_engine_did_not_match_are_refused",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "    for flag in (\"identical\", \"consistent\", \"empty_at_end\"):\n",
+          "new": "    for flag in (\"consistent\", \"empty_at_end\"):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_records_the_counted_engine_did_not_match_are_refused ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-total-unchecked",
+      "breaks": "A counts file whose all-sites row is not its sites' sum passes",
+      "check": "test_walk_report.py test_a_total_that_is_not_its_sites_sum",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "        if whole != sites[ALL]:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_total_that_is_not_its_sites_sum ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-message-figure-unchecked",
+      "breaks": "A figure a message that is not its total over the messages passes",
+      "check": "test_walk_report.py test_a_figure_a_message_off_its_total",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "        if tuple(cells[1:]) != expected:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_figure_a_message_off_its_total ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-depth-walks-unchecked",
+      "breaks": "A depth column that does not sum to its schedule's walks passes",
+      "check": "test_walk_report.py test_a_depth_column_that_is_not_its_walks",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "        if number(labelled.get(\"All walks\", [\"\"] * len(names))[column] or \"0\") != sum(counts) or \\\n                walks != sum(counts):\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_depth_column_that_is_not_its_walks ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-percentile-unchecked",
+      "breaks": "A depth percentile in the wrong bucket passes",
+      "check": "test_walk_report.py test_a_percentile_in_the_wrong_bucket",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "            if labelled.get(label, [\"\"] * len(names))[column] != want:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_percentile_in_the_wrong_bucket ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-deepest-unchecked",
+      "breaks": "A deepest side outside the top bucket passes",
+      "check": "test_walk_report.py test_a_deepest_outside_the_top_bucket",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "        if not deepest or bucket_of(number(deepest)) != top:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_deepest_outside_the_top_bucket ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-counts-summary-unchecked",
+      "breaks": "A counts file whose summary line is not what its tables give passes",
+      "check": "test_walk_report.py test_a_stale_summary",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "    if text.startswith(f\"# {COUNT_TITLE}\") and fields.get(\"summary\") != summary_line(message_table):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stale_summary \\(.*Counts\\.",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-hash-unchecked",
+      "breaks": "A schedule with no event hash passes",
+      "check": "test_walk_report.py test_a_missing_hash",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "    if not all(re.fullmatch(r\"[0-9a-f]{16}\", value) for value in hashes.values()):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_missing_hash ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-repetition-hash-unchecked",
+      "breaks": "A ladder repetition whose event hash is not its schedule's count's passes",
+      "check": "test_walk_report.py test_a_repetition_with_another_hash",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "        if hashes.get(cells[1]) != cells[4]:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_repetition_with_another_hash ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-ladder-summary-figure-unchecked",
+      "breaks": "A ladder schedule's median, min, max or CV off its repetitions passes",
+      "check": "test_walk_report.py test_a_summary_off_its_repetitions",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "        if cells != want:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_summary_off_its_repetitions ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-share-unchecked",
+      "breaks": "A walk's share that is not the line's slope times its steps over its median passes",
+      "check": "test_walk_report.py test_a_share_off_the_line",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "    if [tuple(cells) for cells in share] != rows:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_share_off_the_line ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-round-line-unchecked",
+      "breaks": "A round's line that is not what its repetitions give passes",
+      "check": "test_walk_report.py test_a_round_line_off_its_repetitions",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "    if [tuple(cells) for cells in table(text, \"Each round's line\")] != round_rows(known, steps):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_round_line_off_its_repetitions ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-slope-unchecked",
+      "breaks": "A ladder's slope or intercept field that is not its line passes",
+      "check": "test_walk_report.py test_a_stale_slope",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "    if fields.get(\"slope\") != f\"{slope} ns a walk step\" or \\\n            fields.get(\"intercept\") != f\"{intercept} ns a message\":\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stale_slope ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-round-range-unchecked",
+      "breaks": "A ladder's round_slopes field that is not its rounds' range passes",
+      "check": "test_walk_report.py test_a_stale_round_range",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "    if slope_range(round_rows(known, steps)) != fields.get(\"round_slopes\"):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stale_round_range ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-ladder-summary-unchecked",
+      "breaks": "A ladder whose summary line is not what its tables give passes",
+      "check": "test_walk_report.py test_a_stale_summary",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "    if fields.get(\"summary\") != ladder_summary(slope, rows):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stale_summary \\(.*Ladder\\.",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-report-line-not-least-squares",
+      "breaks": "The ladder's line is not the least-squares line",
+      "check": "test_walk_report.py test_the_line_is_least_squares",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "    slope = sum((x - mean_x) * (y - mean_y) for x, y in points) / spread\n",
+          "new": "    slope = (ys[-1] - ys[0]) / (xs[-1] - xs[0]) / 2\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_line_is_least_squares ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-results-ladder-not-dispatched",
+      "breaks": "check_results.py runs the backtest file's checks on a ladder, not walk_report's",
+      "check": "test_walk_report.py test_check_results_hands_a_ladder_to_this_check",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    return \"ladder\" in fields\n",
+          "new": "    return False\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_results_hands_a_ladder_to_this_check ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-driver-hash-unchecked",
+      "breaks": "walk_driver.py publishes a timed process whose event hash is not its schedule's count's",
+      "check": "test_walk_report.py test_a_timed_process_off_its_count_refuses_the_run",
+      "mutations": [
+        {
+          "file": "scripts/walk_driver.py",
+          "old": "            if record[\"timed\"][\"event_hash\"] != counts[life][\"engine\"][\"event_hash\"] or \\\n                    record[\"timed\"][\"messages\"] != counts[life][\"engine\"][\"messages\"]:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_timed_process_off_its_count_refuses_the_run ",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "walks-driver-count-unvalidated",
+      "breaks": "walk_driver.py times a ladder on a count whose counted engine did not give the engine's events",
+      "check": "test_walk_report.py test_a_count_the_engine_did_not_match_refuses_the_run",
+      "mutations": [
+        {
+          "file": "scripts/walk_driver.py",
+          "old": "    try:\n        walk_report.validate_record(record)\n    except walk_report.Refused as refusal:\n        raise Refused(where, f\"exited {code}: {refusal}\") from None\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_count_the_engine_did_not_match_refuses_the_run ",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "walks-predictions-skip-ladder-results",
+      "breaks": "check_predictions leaves walks_ladder_*.md results unread, so a ladder could name no prediction",
+      "check": "test_check_predictions.py test_a_walks_ladder_naming_no_prediction",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "RESULT_PATTERNS += (\"walks_ladder_*.md\",)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_walks_ladder_naming_no_prediction",
+        "exit": 1
+      }
+    }
+  ]
+}
