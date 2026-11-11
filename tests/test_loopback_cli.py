@@ -2,6 +2,7 @@
 """Black-box test of itch_loopback, the UDP replay's functional check on loopback.
 
 Usage: test_loopback_cli.py <itch_loopback> <scratch dir> <oracle fixtures> <trade fixtures>
+                            [<modes built, comma-separated>]
 
 Every fixture day passes whole, packed at the default 1,400 bytes, at the least cap a day
 packs under, one message a packet, and paced; so does a slice. Each pass prints the line
@@ -9,6 +10,11 @@ that says this is no measurement, and no rate. The negative control loses one pa
 must fail, with the gap seen and the book's digests apart; so must the controls that send
 one packet twice and flip a byte of one. A truncated day, a cap no message fits and bad
 usage exit 2.
+
+Every other receive mode the build has (S2 to S4 on Linux, U1 to U5 with liburing, as
+CMake lists them) passes every fixture day at the default packing and paced, and fails the
+lost-packet control; a mode the build lacks, or one that is not a mode, exits 2, and so does
+a packing too large for a batching mode's slot.
 
 A failure prints `loopback cli: FAIL <case>: <reason>`.
 """
@@ -60,6 +66,7 @@ def check_pass(name, done, failures):
 
 def main():
     tool, scratch, oracle, trades = sys.argv[1:5]
+    built = sys.argv[5].split(",") if len(sys.argv) > 5 and sys.argv[5] else ["S1"]
     scratch = Path(scratch)
     scratch.mkdir(parents=True, exist_ok=True)
     failures = []
@@ -128,6 +135,32 @@ def main():
         failures.append(("corrupt packet", "the flip reached the framing or the sequence"))
     if got.get("loopback_file_frame_hash") == got.get("loopback_udp_frame_hash"):
         failures.append(("corrupt packet", "the two paths' frames agree"))
+
+    for mode in built:
+        if mode == "S1":
+            continue
+        for day in days:
+            for label, extra in (("default", ()), ("paced", ("--rate", "2000000"))):
+                got = check_pass(f"{mode} {day.name} {label}",
+                                 run(str(day), "--mode", mode, *extra), failures)
+                if got is not None and got.get("loopback_receiver_mode") != mode:
+                    failures.append((f"{mode} {day.name}", "the run names another mode"))
+        dropped = run(session, "--mode", mode, "--drop-packet", "5")
+        if dropped.returncode != 1 or fields(dropped.stdout).get("loopback_gaps") != "1":
+            failures.append((f"{mode} lost packet", f"exit {dropped.returncode}, not 1 with the gap"))
+        if mode in ("S3", "S4", "U2", "U3", "U4", "U5"):
+            too_big = run(session, "--mode", mode, "--slot", "1000")
+            if too_big.returncode != 2:
+                failures.append((f"{mode} slot", f"exit {too_big.returncode} for a 1,400-byte "
+                                 "packing in 1,000-byte slots, not 2"))
+    for mode in ("S1", "S2", "S3", "S4", "U1", "U2", "U3", "U4", "U5"):
+        if mode in built:
+            continue
+        absent = run(session, "--mode", mode)
+        if absent.returncode != 2 or "not built here" not in absent.stderr:
+            failures.append((f"{mode} absent", f"exit {absent.returncode}, not 2 with a reason"))
+    if run(session, "--mode", "U6").returncode != 2:
+        failures.append(("unknown mode", "U6 did not exit 2"))
 
     truncated = scratch / "truncated.itch"
     truncated.write_bytes(Path(session).read_bytes()[:-3])

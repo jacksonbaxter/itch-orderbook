@@ -18,6 +18,7 @@
 #include <ranges>
 #include <span>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -29,7 +30,9 @@
 #include "support/churn.hpp"
 #include "support/fixtures.hpp"
 #include "udp/digest.hpp"
+#include "udp/kernel_counters.hpp"
 #include "udp/loopback.hpp"
+#include "udp/modes.hpp"
 #include "udp/receive_mode.hpp"
 #include "udp/sender.hpp"
 #include "udp/socket.hpp"
@@ -587,6 +590,453 @@ TEST(Loopback, ALostPacketIsSeenAndTheBookDiffers) {
   EXPECT_EQ(run.sequence.lost, packets->ref(kLost).messages);
   EXPECT_NE(summary, by_file(stream, checkpoint));
   EXPECT_NE(summary.frame_hash, by_file(stream, checkpoint).frame_hash);
+}
+
+// --- Schedules ------------------------------------------------------------------------
+
+TEST(Schedule, TheRateTableIsTheSendersOwnArithmetic) {
+  const mold::PacketArray packets = churn_packets();
+  constexpr std::uint64_t kRate = 1'000'000;
+  const std::vector<std::uint64_t> table = udp::rate_schedule(packets, kRate);
+  EXPECT_EQ(table, due_times(packets, 0, kRate));
+}
+
+TEST(Schedule, AFeedScheduleFollowsTheItchClockDividedBySpeedup) {
+  const Bytes stream = read_file(std::filesystem::path{ITCH_ORACLE_FIXTURES} / "session.itch");
+  const auto packets = mold::build_packets(stream, {.max_messages = 3});
+  ASSERT_TRUE(packets.has_value());
+  const std::vector<std::uint64_t> real = udp::feed_schedule(*packets, 1.0);
+  const std::vector<std::uint64_t> fast = udp::feed_schedule(*packets, 4.0);
+  ASSERT_EQ(real.size(), packets->size());
+  ASSERT_EQ(fast.size(), packets->size());
+  EXPECT_EQ(real.front(), 0U);
+  for (std::size_t i = 0; i < packets->size(); ++i) {
+    const std::uint64_t since = packets->ref(i).timestamp_ns - packets->ref(0).timestamp_ns;
+    EXPECT_EQ(real[i], std::max(since, i == 0 ? 0 : real[i - 1])) << i;
+    EXPECT_EQ(fast[i], std::max(static_cast<std::uint64_t>(static_cast<double>(since) / 4.0),
+                                i == 0 ? 0 : fast[i - 1]))
+        << i;
+  }
+  EXPECT_GT(real.back(), 0U);
+  EXPECT_TRUE(udp::feed_schedule(*packets, 0.0).empty());
+}
+
+TEST(Schedule, TheSenderKeepsADueTableAndRefusesOneOfTheWrongLength) {
+  const mold::PacketArray packets = churn_packets();
+  std::vector<std::uint64_t> due(packets.size());
+  for (std::size_t i = 0; i < due.size(); ++i) {
+    due[i] = (40 * i) + (i % 2 == 0 ? 0 : 25);  // Any non-decreasing schedule.
+  }
+  StepClock clock{3};
+  RecordingSocket socket{clock};
+  const auto report = udp::send_packets(packets, {.due_ns = due}, clock, socket);
+  ASSERT_TRUE(report.has_value());
+  EXPECT_TRUE(report->paced);
+  EXPECT_EQ(report->target_rate, 0U);
+  for (std::size_t i = 0; i < packets.size(); ++i) {
+    ASSERT_GE(socket.times[i], report->start_ns + due[i]) << i;
+    EXPECT_LT(socket.times[i], report->start_ns + due[i] + 10) << i;
+  }
+  const std::vector<std::uint64_t> short_table(packets.size() - 1);
+  StepClock again{3};
+  RecordingSocket unused{again};
+  const auto refused = udp::send_packets(packets, {.due_ns = short_table}, again, unused);
+  ASSERT_FALSE(refused.has_value());
+  EXPECT_EQ(refused.error(), udp::SendError::schedule_mismatch);
+  EXPECT_TRUE(unused.times.empty());
+}
+
+// --- The kernel's counts, parsed from text --------------------------------------------
+
+TEST(KernelCounters, TheUdpLinesOfSnmpAreReadByName) {
+  constexpr std::string_view kSnmp =
+      "Tcp: RtoAlgorithm RtoMin\nTcp: 1 200\n"
+      "Udp: InDatagrams NoPorts InErrors OutDatagrams RcvbufErrors SndbufErrors InCsumErrors "
+      "IgnoredMulti MemErrors\n"
+      "Udp: 1000 2 30 4000 25 6 7 8 9\n"
+      "UdpLite: InDatagrams NoPorts InErrors OutDatagrams RcvbufErrors SndbufErrors\n"
+      "UdpLite: 1 1 1 1 1 1\n";
+  const auto snmp = udp::parse_udp_snmp(kSnmp);
+  ASSERT_TRUE(snmp.has_value());
+  EXPECT_EQ(snmp->in_datagrams, 1000U);
+  EXPECT_EQ(snmp->no_ports, 2U);
+  EXPECT_EQ(snmp->in_errors, 30U);
+  EXPECT_EQ(snmp->out_datagrams, 4000U);
+  EXPECT_EQ(snmp->rcvbuf_errors, 25U);
+  EXPECT_EQ(snmp->sndbuf_errors, 6U);
+  EXPECT_FALSE(udp::parse_udp_snmp("Udp: InDatagrams NoPorts\nUdp: 1 2\n").has_value())
+      << "a missing column must not read as 0";
+  EXPECT_FALSE(udp::parse_udp_snmp("Udp: InDatagrams NoPorts InErrors OutDatagrams "
+                                   "RcvbufErrors SndbufErrors\nUdp: 1 2 x 4 5 6\n")
+                   .has_value());
+}
+
+TEST(KernelCounters, SoftnetColumnsAreHexAndTheSecondIsTheDrops) {
+  const auto rows = udp::parse_softnet(
+      "0000a0f1 00000000 00000003 00000000 00000000\n00000010 0000001f 00000000 00000000\n");
+  ASSERT_TRUE(rows.has_value());
+  ASSERT_EQ(rows->size(), 2U);
+  EXPECT_EQ((*rows)[0].processed, 0xa0f1U);
+  EXPECT_EQ((*rows)[0].dropped, 0U);
+  EXPECT_EQ((*rows)[0].squeezed, 3U);
+  EXPECT_EQ((*rows)[1].dropped, 0x1fU);
+  EXPECT_FALSE(udp::parse_softnet("00000010 zz 00000000\n").has_value());
+}
+
+TEST(KernelCounters, EachCpusSoftirqIsItsSeventhColumn) {
+  const auto cpus = udp::parse_proc_stat(
+      "cpu  100 1 50 9000 3 4 70 0 0 0\ncpu0 10 1 5 900 3 4 7 0 0 0\n"
+      "cpu6 20 0 6 800 0 2 33 0 0 0\nintr 12345\n");
+  ASSERT_TRUE(cpus.has_value());
+  ASSERT_EQ(cpus->size(), 2U) << "the all-CPU line is left out";
+  EXPECT_EQ((*cpus)[1].cpu, 6);
+  EXPECT_EQ((*cpus)[1].softirq, 33U);
+  EXPECT_EQ((*cpus)[1].irq, 2U);
+  EXPECT_EQ((*cpus)[1].user, 20U);
+  EXPECT_EQ((*cpus)[1].system, 6U);
+  EXPECT_EQ((*cpus)[0].user, 11U) << "user and nice together";
+}
+
+TEST(KernelCounters, ATasksTimesAreCountedFromItsLastParenthesis) {
+  // A command name with a space and a parenthesis of its own, as a thread may have.
+  // Fields 4 to 13, utime and stime (14, 15), 16 to 38 as zeros, then processor (39).
+  std::string line = "4242 (iou-sqp (4) x) S 1 2 3 4 5 6 7 8 9 10 111 222";
+  for (int field = 16; field <= 38; ++field) {
+    line += " 0";
+  }
+  line += " 6 0 0\n";
+  const auto task = udp::parse_task_stat(line);
+  ASSERT_TRUE(task.has_value());
+  EXPECT_EQ(task->tid, 4242);
+  EXPECT_EQ(task->comm, "iou-sqp (4) x");
+  EXPECT_EQ(task->utime, 111U);
+  EXPECT_EQ(task->stime, 222U);
+  EXPECT_EQ(task->processor, 6);
+  EXPECT_FALSE(udp::parse_task_stat("4242 (short) S 1 2").has_value());
+}
+
+TEST(KernelCounters, LinuxReadsEveryLayerAndOtherHostsReadNone) {
+  const udp::KernelSnapshot snapshot = udp::read_kernel_snapshot();
+  auto pair = udp::open_loopback_pair();
+  ASSERT_TRUE(pair.has_value());
+#if defined(__linux__)
+  EXPECT_TRUE(snapshot.udp.has_value());
+  EXPECT_TRUE(snapshot.softnet.has_value());
+  EXPECT_TRUE(snapshot.cpus.has_value());
+  EXPECT_FALSE(snapshot.tasks.empty());
+  EXPECT_TRUE(udp::socket_drops(pair->receiver.get()).has_value());
+  EXPECT_TRUE(udp::thread_cpu().read);
+  EXPECT_GT(udp::ticks_per_second(), 0);
+#else
+  EXPECT_FALSE(snapshot.udp.has_value());
+  EXPECT_FALSE(snapshot.cpus.has_value());
+  EXPECT_FALSE(udp::socket_drops(pair->receiver.get()).has_value());
+  EXPECT_FALSE(udp::thread_cpu().read);
+#endif
+}
+
+// --- A mode's setup ---------------------------------------------------------------------
+
+// A mode whose setup failed, as a ring's can.
+class FailedSetupMode {
+ public:
+  static constexpr std::string_view kId = "failed setup";
+  explicit FailedSetupMode(int /*fd*/) {
+    counters_.setup_call = "io_uring_queue_init_params";
+    counters_.setup_error = EPERM;
+  }
+  [[nodiscard]] udp::WaitResult wait(std::span<udp::Datagram> /*batch*/) const noexcept {
+    return {.status = udp::WaitStatus::failed, .count = 0, .error = EPERM};
+  }
+  void release(std::span<const udp::Datagram> /*done*/) noexcept {}
+  [[nodiscard]] const udp::ModeCounters& counters() const noexcept { return counters_; }
+
+ private:
+  udp::ModeCounters counters_;
+};
+static_assert(udp::ReceiveMode<FailedSetupMode>);
+
+TEST(Loopback, AModeWhoseSetupFailedIsRefusedBeforeTheSenderStarts) {
+  const mold::PacketArray packets = churn_packets();
+  CountFrames sink;
+  bool started = false;
+  const auto run = udp::run_loopback(
+      packets, {}, [](int fd) { return FailedSetupMode{fd}; }, sink,
+      [&started] { started = true; });
+  ASSERT_FALSE(run.has_value());
+  EXPECT_EQ(run.error().call, "io_uring_queue_init_params");
+  EXPECT_EQ(run.error().error, EPERM);
+  EXPECT_FALSE(started);
+  EXPECT_EQ(sink.frames, 0U);
+}
+
+// --- Every mode this build has ------------------------------------------------------------
+
+TEST(Modes, EachIdIsKnownAndS1IsBuiltEverywhere) {
+  EXPECT_TRUE(udp::mode_built("S1"));
+  EXPECT_FALSE(udp::is_mode("U6"));
+  EXPECT_FALSE(udp::mode_built("U6"));
+  for (const std::string_view id : udp::kModeIds) {
+    EXPECT_TRUE(udp::is_mode(id));
+    if (!udp::mode_built(id)) {
+      EXPECT_FALSE(udp::with_mode(id, {}, [](auto /*make*/) { return 1; }).has_value()) << id;
+      EXPECT_FALSE(udp::why_not_built(id).empty()) << id;
+    }
+  }
+#if defined(__linux__)
+  EXPECT_TRUE(udp::mode_built("S2") && udp::mode_built("S3") && udp::mode_built("S4"));
+#else
+  EXPECT_FALSE(udp::mode_built("S2") || udp::mode_built("S3") || udp::mode_built("S4"));
+  EXPECT_FALSE(udp::mode_built("U1") || udp::mode_built("U2") || udp::mode_built("U5"));
+#endif
+}
+
+std::vector<std::string_view> built_modes() {
+  std::vector<std::string_view> ids;
+  for (const std::string_view id : udp::kModeIds) {
+    if (udp::mode_built(id)) {
+      ids.push_back(id);
+    }
+  }
+  return ids;
+}
+
+// Each built mode on the pair, through with_mode()'s factory, every fixture arriving whole
+// and leaving the book as the file does; paced too.
+TEST(Modes, EveryBuiltModeDeliversEveryFixtureWhole) {
+  for (const std::string_view id : built_modes()) {
+    for (const auto& entry : std::filesystem::directory_iterator{ITCH_ORACLE_FIXTURES}) {
+      if (entry.path().extension() != ".itch") {
+        continue;
+      }
+      SCOPED_TRACE(std::string{id} + " " + entry.path().filename().string());
+      const Bytes stream = read_file(entry.path());
+      const auto packets = mold::build_packets(stream, {});
+      ASSERT_TRUE(packets.has_value());
+      const std::uint64_t checkpoint = (packets->messages() + 1) / 2;
+      const auto book = std::make_unique<itch::FastBook<>>(kCapacity);
+      udp::BookDigest digest{*book, checkpoint};
+      const auto run = udp::with_mode(id, {}, [&](auto make) {
+        return udp::run_loopback(*packets, {.send = {.messages_per_second = 4'000'000}}, make,
+                                 digest, [] {});
+      });
+      ASSERT_TRUE(run.has_value());
+      ASSERT_TRUE(run->has_value()) << (*run).error().call << " errno " << (*run).error().error;
+      expect_whole(**run, *packets);
+      EXPECT_EQ((*run)->mode.truncated, 0U);
+      EXPECT_EQ((*run)->mode.failures, 0U);
+      EXPECT_EQ(digest.finish(), by_file(stream, checkpoint));
+    }
+  }
+}
+
+TEST(Modes, EveryBuiltModeTimesOutWhenNothingComes) {
+  for (const std::string_view id : built_modes()) {
+    SCOPED_TRACE(id);
+    auto pair = udp::open_loopback_pair();
+    ASSERT_TRUE(pair.has_value());
+    constexpr std::chrono::milliseconds kTimeout{50};
+    ASSERT_TRUE(udp::set_receive_timeout(pair->receiver.get(), kTimeout));
+    const auto said = udp::with_mode(id, {.idle_timeout = kTimeout}, [&](auto make) {
+      auto mode = make(pair->receiver.get());
+      EXPECT_EQ(mode.counters().setup_error, 0) << mode.counters().setup_call;
+      std::array<udp::Datagram, udp::kMostBatch> batch{};
+      const auto started = std::chrono::steady_clock::now();
+      const udp::WaitResult result = mode.wait(batch);
+      const auto waited = std::chrono::steady_clock::now() - started;
+      EXPECT_GE(waited, kTimeout / 2);
+      EXPECT_LT(waited, std::chrono::seconds{5});
+      EXPECT_EQ(mode.counters().timeouts, 1U);
+      return result.status;
+    });
+    ASSERT_TRUE(said.has_value());
+    EXPECT_EQ(*said, udp::WaitStatus::idle_timeout);
+  }
+}
+
+// Sends each datagram of `sizes`, numbered in its first byte, then drains the mode until
+// it times out, releasing each batch; returns the bytes in arrival order, and the largest
+// batch one wait returned.
+struct Drained {
+  std::vector<Bytes> datagrams;
+  std::size_t largest_batch = 0;
+};
+
+template <class Mode>
+Drained send_then_drain(Mode& mode, const udp::ConnectedSocket& sender,
+                        const std::vector<std::size_t>& sizes) {
+  for (std::size_t i = 0; i < sizes.size(); ++i) {
+    Bytes datagram(sizes[i], static_cast<std::byte>(i));
+    EXPECT_TRUE(sender.send(datagram).sent) << i;
+  }
+  Drained out;
+  std::array<udp::Datagram, udp::kMostBatch> batch{};
+  for (;;) {
+    const udp::WaitResult result = mode.wait(batch);
+    if (result.status != udp::WaitStatus::datagrams) {
+      EXPECT_EQ(result.status, udp::WaitStatus::idle_timeout) << "errno " << result.error;
+      return out;
+    }
+    out.largest_batch = std::max(out.largest_batch, result.count);
+    for (const udp::Datagram& datagram : std::span{batch}.first(result.count)) {
+      out.datagrams.emplace_back(datagram.bytes.begin(), datagram.bytes.end());
+    }
+    mode.release(std::span<const udp::Datagram>{batch}.first(result.count));
+  }
+}
+
+struct Pair {
+  udp::LoopbackPair sockets;
+  udp::ConnectedSocket sender;
+};
+
+std::optional<Pair> pair_for(std::chrono::milliseconds timeout, int receive_buffer = 1 << 20) {
+  auto pair = udp::open_loopback_pair();
+  if (!pair || !udp::set_receive_timeout(pair->receiver.get(), timeout) ||
+      !udp::set_receive_buffer(pair->receiver.get(), receive_buffer)) {
+    return std::nullopt;
+  }
+  const int fd = pair->sender.get();
+  return Pair{.sockets = std::move(*pair), .sender = udp::ConnectedSocket{fd}};
+}
+
+// What was queued before the first wait arrives whole and in order, and a mode that holds
+// many takes more than one in a wait.
+TEST(Modes, QueuedDatagramsArriveInOrderAndTheBatchingModesTakeManyAtOnce) {
+  constexpr std::chrono::milliseconds kTimeout{100};
+  const std::vector<std::size_t> sizes{20, 1400, 600, 1400, 20, 900, 1, 1400, 300, 1200};
+  for (const std::string_view id : built_modes()) {
+    SCOPED_TRACE(id);
+    auto pair = pair_for(kTimeout);
+    ASSERT_TRUE(pair.has_value());
+    const auto drained = udp::with_mode(id, {.idle_timeout = kTimeout}, [&](auto make) {
+      auto mode = make(pair->sockets.receiver.get());
+      Drained out = send_then_drain(mode, pair->sender, sizes);
+      EXPECT_EQ(mode.counters().datagrams, sizes.size());
+      EXPECT_EQ(mode.counters().truncated, 0U);
+      return out;
+    });
+    ASSERT_TRUE(drained.has_value());
+    ASSERT_EQ(drained->datagrams.size(), sizes.size());
+    for (std::size_t i = 0; i < sizes.size(); ++i) {
+      EXPECT_EQ(drained->datagrams[i], Bytes(sizes[i], static_cast<std::byte>(i))) << i;
+    }
+    if (id == "S3" || id == "S4") {
+      EXPECT_EQ(drained->largest_batch, sizes.size()) << "recvmmsg took them one at a time";
+    } else if (!udp::uses_slots(id)) {
+      EXPECT_EQ(drained->largest_batch, 1U);
+    }
+  }
+}
+
+// A datagram larger than a mode's buffer is counted as cut short, never passed off whole.
+TEST(Modes, ADatagramPastTheSlotIsCountedTruncated) {
+  constexpr std::chrono::milliseconds kTimeout{100};
+  constexpr std::size_t kSlot = 512;
+  for (const std::string_view id : built_modes()) {
+    if (!udp::uses_slots(id)) {
+      continue;
+    }
+    SCOPED_TRACE(id);
+    auto pair = pair_for(kTimeout);
+    ASSERT_TRUE(pair.has_value());
+    const auto counted =
+        udp::with_mode(id, {.slot_bytes = kSlot, .idle_timeout = kTimeout}, [&](auto make) {
+          auto mode = make(pair->sockets.receiver.get());
+          const Drained out = send_then_drain(mode, pair->sender, {100, 2000, 100});
+          EXPECT_EQ(out.datagrams.size(), 3U);
+          for (const Bytes& datagram : out.datagrams) {
+            EXPECT_LE(datagram.size(), kSlot);
+          }
+          return mode.counters().truncated;
+        });
+    ASSERT_TRUE(counted.has_value());
+    EXPECT_EQ(*counted, 1U);
+  }
+}
+
+// S2 and U3 read SO_RXQ_OVFL: a socket that has dropped says so. The kernel stamps each
+// datagram with the drops before it was queued, so a flood that overflows the socket is
+// read out, and then a few more are sent, which carry the count.
+TEST(Modes, TheModesThatReadControlMessagesSeeTheSocketsDrops) {
+  constexpr std::chrono::milliseconds kTimeout{100};
+  std::size_t checked = 0;
+  for (const std::string_view id : built_modes()) {
+    SCOPED_TRACE(id);
+    auto pair = pair_for(kTimeout, 4096);  // Room for a few datagrams; the rest drop.
+    ASSERT_TRUE(pair.has_value());
+    const auto seen = udp::with_mode(id, {.idle_timeout = kTimeout}, [&](auto make) {
+      auto mode = make(pair->sockets.receiver.get());
+      if (!mode.counters().rxq_overflow_set) {
+        return std::optional<std::uint64_t>{};
+      }
+      const Drained flood =
+          send_then_drain(mode, pair->sender, std::vector<std::size_t>(200, 1000));
+      EXPECT_LT(flood.datagrams.size(), 200U);
+      const Drained after = send_then_drain(mode, pair->sender, {100, 100, 100});
+      EXPECT_EQ(after.datagrams.size(), 3U);
+      return std::optional<std::uint64_t>{mode.counters().rxq_overflow};
+    });
+    ASSERT_TRUE(seen.has_value());
+    if (!seen->has_value()) {
+      EXPECT_TRUE(id != "S2" && id != "U3") << "S2 and U3 must read SO_RXQ_OVFL";
+      continue;
+    }
+    ++checked;
+    EXPECT_GT(**seen, 0U);
+    EXPECT_EQ(udp::socket_drops(pair->sockets.receiver.get()).value_or(**seen), **seen)
+        << "SO_RXQ_OVFL and the socket's own count disagree";
+  }
+  EXPECT_EQ(checked != 0, udp::mode_built("S2") || udp::mode_built("U3"));
+}
+
+// A multishot mode that runs out of provided buffers ends its request with -ENOBUFS,
+// arms it again, and still takes every datagram the socket held (IU-30).
+TEST(Modes, AMultishotModeOutOfBuffersRearmsAndLosesNothing) {
+  constexpr std::chrono::milliseconds kTimeout{200};
+  for (const std::string_view id : built_modes()) {
+    if (!id.starts_with("U") || id == "U1") {
+      continue;
+    }
+    SCOPED_TRACE(id);
+    auto pair = pair_for(kTimeout);
+    ASSERT_TRUE(pair.has_value());
+    const std::vector<std::size_t> sizes(40, 700);
+    const auto drained =
+        udp::with_mode(id, {.ring_buffers = 4, .idle_timeout = kTimeout}, [&](auto make) {
+          auto mode = make(pair->sockets.receiver.get());
+          Drained out = send_then_drain(mode, pair->sender, sizes);
+          EXPECT_GE(mode.counters().no_buffers, 1U);
+          EXPECT_GE(mode.counters().rearms, 1U);
+          EXPECT_EQ(mode.counters().cq_overflow, 0U);
+          return out;
+        });
+    ASSERT_TRUE(drained.has_value());
+    ASSERT_EQ(drained->datagrams.size(), sizes.size());
+    for (std::size_t i = 0; i < sizes.size(); ++i) {
+      EXPECT_EQ(drained->datagrams[i].front(), static_cast<std::byte>(i)) << i;
+    }
+  }
+}
+
+// A ring mode with a buffer count the kernel would refuse fails its setup, and the loopback
+// refuses the run.
+TEST(Modes, ARingModeWithABadBufferCountFailsItsSetup) {
+  for (const std::string_view id : built_modes()) {
+    if (!id.starts_with("U") || id == "U1") {
+      continue;
+    }
+    SCOPED_TRACE(id);
+    const mold::PacketArray packets = churn_packets();
+    CountFrames sink;
+    const auto run = udp::with_mode(id, {.ring_buffers = 3}, [&](auto make) {
+      return udp::run_loopback(packets, {}, make, sink, [] {});
+    });
+    ASSERT_TRUE(run.has_value());
+    ASSERT_FALSE(run->has_value());
+    EXPECT_EQ(run->error().call, "ModeOptions");
+    EXPECT_EQ(run->error().error, EINVAL);
+  }
 }
 
 }  // namespace

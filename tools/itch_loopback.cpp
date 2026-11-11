@@ -1,14 +1,21 @@
-// A functional check of the UDP replay on loopback: the sender and S1 on one prebuilt
-// packet array, every message checked to arrive once, in order, and to leave the book as
-// the file path leaves it. It is never a measurement. It prints no rate or latency, and
-// nothing it prints is a result; T-URING-1 and T-URING-2 run on debian.
+// A functional check of the UDP replay on loopback: the sender and one receive mode, S1
+// unless --mode names another, on one prebuilt packet array, every message checked to
+// arrive once, in order, and to leave the book as the file path leaves it. It is never a
+// measurement. It prints no rate or latency, and nothing it prints is a result; T-URING-1
+// and T-URING-2 run on debian, through bench_udp.
 //
-//     itch_loopback FILE [--first N] [--frames N] [--datagram BYTES] [--max-messages N]
-//                   [--flush-gap-ns N] [--heartbeat-gap-ns N] [--rate MSGS_PER_S]
-//                   [--core N] [--receiver-core N] [--receive-buffer BYTES] [--timeout-ms N]
-//                   [--checkpoint N] [--drop-packet I] [--duplicate-packet I]
-//                   [--corrupt-packet I]
+//     itch_loopback FILE [--mode ID] [--first N] [--frames N] [--datagram BYTES]
+//                   [--max-messages N] [--flush-gap-ns N] [--heartbeat-gap-ns N]
+//                   [--rate MSGS_PER_S] [--core N] [--receiver-core N] [--sq-core N]
+//                   [--receive-buffer BYTES] [--timeout-ms N] [--slot BYTES]
+//                   [--ring-buffers N] [--checkpoint N] [--drop-packet I]
+//                   [--duplicate-packet I] [--corrupt-packet I]
 //                   [--max-orders N] [--max-levels N] [--max-pages N] [--max-slots N]
+//
+// --mode is S1 to S4 or U1 to U5 (bench/udp/modes.hpp); a mode this build lacks exits 2
+// and says why. --slot and --ring-buffers size the buffers of the modes that hold many
+// (ModeOptions), and a packing whose largest datagram does not fit a slot is refused.
+// --sq-core is U5's SQ thread.
 //
 // The slice is frames --first to --first + --frames of FILE, the whole file by default,
 // packed as mold_packets.hpp says. --rate paces the sender, 0 (the default) sends
@@ -20,7 +27,8 @@
 // byte of its last message, which leaves the framing and the sequence whole. The --max options size
 // both books, which are the default arm at the default capacity unless they say otherwise.
 //
-// Exit codes: 0 pass, 1 fail, 2 bad usage, an input that cannot be packed, or no socket.
+// Exit codes: 0 pass, 1 fail, 2 bad usage, an input that cannot be packed, a mode not
+// built here or whose setup fails, or no socket.
 #include <algorithm>
 #include <charconv>
 #include <chrono>
@@ -28,10 +36,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <exception>
+#include <format>
 #include <limits>
 #include <optional>
 #include <print>
 #include <span>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <vector>
@@ -42,6 +52,7 @@
 #include "mapped_file.hpp"
 #include "udp/digest.hpp"
 #include "udp/loopback.hpp"
+#include "udp/modes.hpp"
 #include "udp/sender.hpp"
 #include "udp/socket.hpp"
 
@@ -54,8 +65,10 @@ inline constexpr std::uint64_t kNone = std::numeric_limits<std::uint64_t>::max()
 
 struct Options {
   const char* path = nullptr;
+  std::string_view mode = "S1";
   mold::PacketPlan plan;
   udp::LoopbackConfig loopback;
+  udp::ModeOptions mode_options;
   itch::BookCapacity capacity;
   std::uint64_t checkpoint = kNone;
   std::uint64_t drop_packet = kNone;
@@ -112,6 +125,12 @@ struct Options {
     options.loopback.sender_core = static_cast<int>(number);
   } else if (arg == "--receiver-core" && number <= kMostInt) {
     options.loopback.receiver_core = static_cast<int>(number);
+  } else if (arg == "--sq-core" && number <= kMostInt) {
+    options.mode_options.sq_core = static_cast<int>(number);
+  } else if (arg == "--slot" && number != 0 && number <= udp::kDatagramBuffer) {
+    options.mode_options.slot_bytes = static_cast<std::size_t>(number);
+  } else if (arg == "--ring-buffers" && number != 0 && number <= udp::kMostRingBuffersAsked) {
+    options.mode_options.ring_buffers = static_cast<std::uint32_t>(number);
   } else if (arg == "--receive-buffer" && number <= kMostInt) {
     options.loopback.receive_buffer = static_cast<int>(number);
   } else if (arg == "--timeout-ms" && number != 0 && number <= kMostInt) {
@@ -144,14 +163,19 @@ struct Options {
     if (i + 1 == args.size()) {
       return std::nullopt;
     }
+    if (arg == "--mode") {
+      options.mode = args[++i];
+      continue;
+    }
     const std::optional<std::uint64_t> number = parse_number(args[++i]);
     if (!number || !take_option(arg, *number, options)) {
       return std::nullopt;
     }
   }
-  if (options.path == nullptr) {
+  if (options.path == nullptr || !udp::is_mode(options.mode)) {
     return std::nullopt;
   }
+  options.mode_options.idle_timeout = options.loopback.idle_timeout;
   return options;
 }
 
@@ -205,6 +229,17 @@ void print_summary(std::string_view path, const udp::ReplaySummary& summary) {
 }
 
 int run(const Options& options) {
+  if (!udp::mode_built(options.mode)) {
+    std::println(stderr, "itch_loopback: mode {} is not built here: {}", options.mode,
+                 udp::why_not_built(options.mode));
+    return 2;
+  }
+  if (udp::uses_slots(options.mode) &&
+      options.plan.max_datagram + udp::kSlotOverhead > options.mode_options.slot_bytes) {
+    std::println(stderr, "itch_loopback: a {}-byte datagram does not fit a {}-byte slot",
+                 options.plan.max_datagram, options.mode_options.slot_bytes);
+    return 2;
+  }
   const auto file = itch::tools::MappedFile::open(options.path);
   if (!file) {
     std::println(stderr, "itch_loopback: cannot open {}", options.path);
@@ -253,7 +288,13 @@ int run(const Options& options) {
   const auto wrap = [&options](udp::ConnectedSocket socket) {
     return FaultySocket{socket, options};
   };
-  const auto loop = udp::run_loopback_s1(*packets, options.loopback, udp_digest, [] {}, wrap);
+  const auto ran = udp::with_mode(options.mode, options.mode_options, [&](auto make) {
+    return udp::run_loopback(*packets, options.loopback, make, udp_digest, [] {}, wrap);
+  });
+  if (!ran) {
+    return 2;
+  }
+  const auto& loop = *ran;
   if (!loop) {
     std::println(stderr, "itch_loopback: {} failed: errno {}", loop.error().call,
                  loop.error().error);
@@ -281,8 +322,16 @@ int run(const Options& options) {
     pass = pass && sent.sent_packets == packets->size() && sent.failed_packets == 0;
   }
   const mold::SequenceCounts& sequence = loop->sequence;
-  std::println("loopback_receiver_mode {}", udp::RecvfromMode::kId);
+  const udp::ModeCounters& mode = loop->mode;
+  std::println("loopback_receiver_mode {}", options.mode);
   std::println("loopback_receiver_end {}", udp::to_string(loop->received.end));
+  std::println("loopback_mode_failures {} (last errno {})", mode.failures, mode.last_error);
+  std::println("loopback_truncated {}", mode.truncated);
+  std::println("loopback_rearms {}", mode.rearms);
+  std::println("loopback_no_buffers {}", mode.no_buffers);
+  std::println("loopback_cq_overflow {}", mode.cq_overflow);
+  std::println("loopback_rxq_overflow {}",
+               mode.rxq_overflow_set ? std::format("{}", mode.rxq_overflow) : "not read");
   std::println("loopback_datagrams {}", loop->feed.datagrams);
   std::println("loopback_malformed {}", loop->feed.malformed());
   std::println("loopback_admitted {}", sequence.admitted);
@@ -294,9 +343,9 @@ int run(const Options& options) {
   print_summary("file", by_file);
   print_summary("udp", by_udp);
 
-  pass = pass && loop->received.end == udp::ReceiveEnd::end_of_session &&
-         loop->feed.malformed() == 0 && sequence.gaps == 0 && sequence.lost == 0 &&
-         sequence.duplicate_messages == 0 && sequence.foreign_session == 0 &&
+  pass = pass && loop->received.end == udp::ReceiveEnd::end_of_session && mode.truncated == 0 &&
+         mode.rxq_overflow == 0 && loop->feed.malformed() == 0 && sequence.gaps == 0 &&
+         sequence.lost == 0 && sequence.duplicate_messages == 0 && sequence.foreign_session == 0 &&
          sequence.out_of_range == 0 && sequence.admitted == packets->messages() &&
          loop->next_expected == packets->next_sequence() && by_file.frames == packets->messages() &&
          by_udp == by_file;
@@ -311,13 +360,12 @@ int main(int argc, const char* const* argv) {
     const auto options = parse_options(std::span{argv + 1, static_cast<std::size_t>(argc - 1)});
     if (!options) {
       static_cast<void>(std::fputs(
-          "usage: itch_loopback FILE [--first N] [--frames N] [--datagram BYTES] "
+          "usage: itch_loopback FILE [--mode ID] [--first N] [--frames N] [--datagram BYTES] "
           "[--max-messages N] [--flush-gap-ns N] [--heartbeat-gap-ns N] [--rate MSGS_PER_S] "
-          "[--core N] [--receiver-core N] [--receive-buffer BYTES] [--timeout-ms N] [--checkpoint "
-          "N] "
+          "[--core N] [--receiver-core N] [--sq-core N] [--receive-buffer BYTES] "
+          "[--timeout-ms N] [--slot BYTES] [--ring-buffers N] [--checkpoint N] "
           "[--drop-packet I] [--duplicate-packet I] [--corrupt-packet I] [--max-orders N] "
-          "[--max-levels N] [--max-pages N] "
-          "[--max-slots N]\n",
+          "[--max-levels N] [--max-pages N] [--max-slots N]\n",
           stderr));
       return 2;
     }

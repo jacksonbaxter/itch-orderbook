@@ -2,15 +2,17 @@
 //
 //     ID  Mode                                              Wait
 //     S1  recvfrom                                          blocking         here
-//     S2  recvmsg with cmsg                                 blocking         Linux piece
-//     S3  recvmmsg, vlen 64, MSG_WAITFORONE                 blocking         Linux piece
-//     S4  recvmmsg, vlen 64, MSG_DONTWAIT                   spin             Linux piece
-//     U1  IORING_OP_RECV single-shot, re-armed              DEFER_TASKRUN    Linux piece
-//     U2  multishot RECV, provided-buffer ring              DEFER_TASKRUN    Linux piece
-//     U3  multishot RECVMSG, provided buffers, SO_RXQ_OVFL  DEFER_TASKRUN    Linux piece
-//     U4  U2 with COOP_TASKRUN and TASKRUN_FLAG             peek, enter      Linux piece
-//     U5  U2 with SQPOLL on a third core                    CQ spin          Linux piece
+//     S2  recvmsg with cmsg                                 blocking         socket_modes.hpp
+//     S3  recvmmsg, vlen 64, MSG_WAITFORONE                 blocking         socket_modes.hpp
+//     S4  recvmmsg, vlen 64, MSG_DONTWAIT                   spin             socket_modes.hpp
+//     U1  IORING_OP_RECV single-shot, re-armed              DEFER_TASKRUN    ring_modes.hpp
+//     U2  multishot RECV, provided-buffer ring              DEFER_TASKRUN    ring_modes.hpp
+//     U3  multishot RECVMSG, provided buffers, SO_RXQ_OVFL  DEFER_TASKRUN    ring_modes.hpp
+//     U4  U2 with COOP_TASKRUN and TASKRUN_FLAG             peek, enter      ring_modes.hpp
+//     U5  U2 with SQPOLL on a third core                    CQ spin          ring_modes.hpp
 //
+// socket_modes.hpp is Linux only and ring_modes.hpp needs liburing as well; modes.hpp
+// names every mode by its ID for the tools.
 // (io-uring-flamegraph.md, the comparison plan's mode table. U2 and S3 are the headline
 // pair.) A mode does one thing: wait() fills a batch with datagrams, each a view of a
 // buffer the mode owns, and release() hands those buffers back once the feed has read
@@ -28,6 +30,7 @@
 #include <sys/types.h>
 
 #include <cerrno>
+#include <chrono>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -72,13 +75,40 @@ struct ModeCounters {
   std::uint64_t timeouts = 0;
   std::uint64_t failures = 0;
   int last_error = 0;
-  // Filled by the Linux piece's modes. MSG_TRUNC on a datagram (S2, S3, S4, U3); the
+  // Filled by the Linux modes. MSG_TRUNC on a datagram (S2, S3, S4, U3), or a datagram
+  // that filled its whole buffer where the call cannot say (U1, U2, U4, U5); the
   // multishot re-arms after a CQE without IORING_CQE_F_MORE; -ENOBUFS completions; and
   // the ring's CQ overflow count (IU-30, IU-43).
   std::uint64_t truncated = 0;
   std::uint64_t rearms = 0;
   std::uint64_t no_buffers = 0;
   std::uint64_t cq_overflow = 0;
+  // SO_RXQ_OVFL, for the modes that read a datagram's control messages (S2, U3): whether
+  // the option was set, and the most the socket said it had dropped (IU-28, IU-43). The
+  // kernel attaches the count only once it is above 0, so a mode that set the option and
+  // saw none read 0.
+  bool rxq_overflow_set = false;
+  std::uint64_t rxq_overflow = 0;
+  // A mode whose setup can fail, a ring for instance, says which call failed and its
+  // errno here, and run_loopback() then refuses the run before the sender starts.
+  std::string_view setup_call;
+  int setup_error = 0;
+};
+
+// What a Linux mode is built with, beyond its socket. One struct for every mode, each
+// reading only its own fields.
+struct ModeOptions {
+  // Each buffer of a mode that holds many datagrams at once (S3, S4, U2 to U5). Smaller
+  // than kDatagramBuffer so that a batch's buffers do not all start 64 KiB apart, on the
+  // same cache sets; the tools refuse a packing whose largest datagram does not fit.
+  std::size_t slot_bytes = 2048;
+  std::uint32_t ring_buffers = 1024;  // Provided buffers, a power of two up to 32768 (IU-30).
+  std::uint32_t ring_entries = 64;    // Submission queue entries, U1 to U5.
+  // How long a mode that the socket's receive timeout cannot reach (S4, U1 to U5) waits
+  // with nothing arriving before it says so.
+  std::chrono::milliseconds idle_timeout{2000};
+  int sq_core = -1;                 // U5's SQ thread, -1 for none (IORING_SETUP_SQ_AFF).
+  std::uint32_t sq_idle_ms = 1000;  // U5's SQ thread sleeps after this long with no work.
 };
 
 template <class Mode>

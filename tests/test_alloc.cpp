@@ -59,6 +59,7 @@
 #include "support/fixtures.hpp"
 #include "udp/digest.hpp"
 #include "udp/loopback.hpp"
+#include "udp/modes.hpp"
 #ifdef ITCH_HAVE_MIMALLOC
 #include "itch/mimalloc_arm.hpp"
 #endif
@@ -350,6 +351,37 @@ TEST(Allocation, TheUdpReplayAllocatesNothingAfterConstruction) {
   EXPECT_EQ(run->sender.report->sent_packets, packets->size());
   EXPECT_GT(run->mode.datagrams, packets->size() / 2) << "the receiver took too few packets";
   EXPECT_TRUE(digest.finish().checkpoint_reached) << "the checkpoint's hash walk was not counted";
+}
+
+// Every receive mode this build has, S1 to S4 on Linux and U1 to U5 with liburing, on the
+// same paced replay: the mode's wait() and release() inside the window with the sender and
+// the book. Each mode's buffers and ring are made before the window opens.
+TEST(Allocation, EveryReceiveModeAllocatesNothingAfterConstruction) {
+  const std::vector<std::byte> stream = build_stream();
+  const auto packets = itch::mold::build_packets(stream, {});
+  ASSERT_TRUE(packets.has_value());
+  std::size_t modes = 0;
+  for (const std::string_view id : itch::bench::udp::kModeIds) {
+    if (!itch::bench::udp::mode_built(id)) {
+      continue;
+    }
+    ++modes;
+    itch::FastBook<> received{kCapacity};
+    itch::bench::udp::BookDigest digest{received, packets->messages() / 2};
+    const auto run = itch::bench::udp::with_mode(id, {}, [&](auto make) {
+      return itch::bench::udp::run_loopback(*packets, {.send = {.messages_per_second = 2'000'000}},
+                                            make, digest, [] { reset_alloc_counts(); });
+    });
+    const AllocCounts by_mode = read_alloc_counts();
+    ASSERT_TRUE(run.has_value()) << id;
+    ASSERT_TRUE(run->has_value()) << id << ": " << (*run).error().call;
+    std::println("udp {}: {} datagrams, {} frames, {} lost, {} allocations", id,
+                 (*run)->mode.datagrams, (*run)->feed.frames, (*run)->sequence.lost,
+                 by_mode.total());
+    EXPECT_EQ(by_mode.total(), 0U) << "allocation in mode " << id;
+    EXPECT_GT((*run)->mode.datagrams, packets->size() / 2) << id << " took too few packets";
+  }
+  EXPECT_GE(modes, 1U);
 }
 
 TEST(Allocation, TheControlBookIsSeenAllocating) {

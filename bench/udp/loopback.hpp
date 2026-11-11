@@ -84,6 +84,9 @@ template <mold::FrameSink Sink, class MakeMode, class OnReady, class Wrap = Plai
   }
 
   auto mode = make_mode(pair->receiver.get());
+  if (const ModeCounters& made = mode.counters(); made.setup_error != 0) {
+    return std::unexpected(SocketError{.call = made.setup_call, .error = made.setup_error});
+  }
   mold::FeedHandler<Sink> feed{packets.plan().session, packets.plan().first_sequence, sink};
   auto socket = wrap(ConnectedSocket{pair->sender.get()});
   SteadyClock clock;

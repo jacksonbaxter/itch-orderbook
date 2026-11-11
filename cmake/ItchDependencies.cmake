@@ -229,7 +229,8 @@ endfunction()
 
 # liburing, on Linux only, from a build the caller names at configure time: on debian,
 # -DITCH_LIBURING_ROOT=<the liburing prefix in its toolchain>. Empty leaves it off, which
-# is what macOS and every default build do. Nothing links it until Phase 3.
+# is what macOS and every default build do. The ring modes U1 to U5 link it, through
+# itch_udp_modes().
 function(itch_require_liburing)
   if(NOT ITCH_LIBURING_ROOT)
     message(STATUS "liburing: off")
@@ -257,6 +258,19 @@ function(itch_require_liburing)
     INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${ITCH_LIBURING_ROOT}/include"
     INTERFACE_INCLUDE_DIRECTORIES "${ITCH_LIBURING_ROOT}/include")
   message(STATUS "liburing: ${major}.${minor}")
+endfunction()
+
+# The receive modes a target that includes bench/udp/modes.hpp has: S2 to S4 on Linux, and
+# U1 to U5 where -DITCH_LIBURING_ROOT made liburing::liburing. macOS and Emscripten get
+# neither, and S1 alone, with no code change.
+function(itch_udp_modes target)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_compile_definitions(${target} PRIVATE ITCH_UDP_SOCKET_MODES=1)
+  endif()
+  if(TARGET liburing::liburing)
+    target_compile_definitions(${target} PRIVATE ITCH_UDP_RING_MODES=1)
+    target_link_libraries(${target} PRIVATE liburing::liburing)
+  endif()
 endfunction()
 
 # mimalloc as itch::mimalloc: the static library, with its override of malloc, its macOS

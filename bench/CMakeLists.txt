@@ -64,3 +64,11 @@ endif()
 add_executable(bench_kernels bench_kernels.cpp)
 target_link_libraries(bench_kernels PRIVATE itch_bench_support)
 itch_apply_options(bench_kernels)
+
+# T-URING-1 and T-URING-2: one run of the UDP replay on loopback, in any receive mode this
+# build has (S1 everywhere, S2 to S4 on Linux, U1 to U5 with liburing).
+add_executable(bench_udp bench_udp.cpp)
+target_include_directories(bench_udp PRIVATE "${PROJECT_SOURCE_DIR}/tests")
+target_link_libraries(bench_udp PRIVATE itch_bench_support hdr_histogram::hdr_histogram_static)
+itch_udp_modes(bench_udp)
+itch_apply_options(bench_udp)

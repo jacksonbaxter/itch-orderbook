@@ -80,6 +80,8 @@ target_compile_definitions(test_mold PRIVATE
 # The replay sender's pacing on a hand-moved clock, S1, and the two on loopback.
 itch_add_test(test_udp test_udp.cpp)
 target_include_directories(test_udp PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+itch_udp_modes(test_udp)
+itch_udp_modes(test_alloc)
 target_compile_definitions(test_udp PRIVATE
   "ITCH_ORACLE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle\"")
 
@@ -102,6 +104,16 @@ foreach(kernel ${ITCH_KERNELS})
     SKIP_REGULAR_EXPRESSION "\\[  SKIPPED \\]"
     FAIL_REGULAR_EXPRESSION "Running 0 tests")
 endforeach()
+
+# The receive modes itch_udp_modes() gives this build, for the tools' CLI tests.
+set(itch_udp_modes_built S1)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND itch_udp_modes_built S2 S3 S4)
+endif()
+if(TARGET liburing::liburing)
+  list(APPEND itch_udp_modes_built U1 U2 U3 U4 U5)
+endif()
+list(JOIN itch_udp_modes_built "," itch_udp_modes_built)
 
 if(ITCH_BUILD_BENCH)
   add_test(NAME test_bench_cli
@@ -130,8 +142,13 @@ if(ITCH_BUILD_BENCH)
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_kernels_cli.py"
             "$<TARGET_FILE:bench_kernels>" "${CMAKE_CURRENT_BINARY_DIR}/bench_kernels_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
+  add_test(NAME test_bench_udp_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_udp_cli.py"
+            "$<TARGET_FILE:bench_udp>" "${CMAKE_CURRENT_BINARY_DIR}/bench_udp_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch" "${itch_udp_modes_built}")
   set_tests_properties(test_bench_cli test_bench_backtest_cli test_bench_counts_cli
-    test_bench_variants_cli test_bench_spsc_cli test_bench_kernels_cli PROPERTIES LABELS unit)
+    test_bench_variants_cli test_bench_spsc_cli test_bench_kernels_cli test_bench_udp_cli
+    PROPERTIES LABELS unit)
 endif()
 
 if(ITCH_BUILD_TOOLS)
@@ -170,7 +187,8 @@ if(ITCH_BUILD_TOOLS)
   add_test(NAME test_loopback_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_loopback_cli.py"
             "$<TARGET_FILE:itch_loopback>" "${CMAKE_CURRENT_BINARY_DIR}/loopback_cli"
-            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades")
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades"
+            "${itch_udp_modes_built}")
   set_tests_properties(test_census_cli test_oracle_cli test_trades_cli test_map_compare_cli
     test_backtest_cli test_queue_jumps_cli test_calibrate_cli test_select_cli test_mm_cli
     test_loopback_cli PROPERTIES LABELS unit)
