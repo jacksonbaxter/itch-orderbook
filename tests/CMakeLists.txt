@@ -72,6 +72,17 @@ endif()
 itch_add_test(test_book_variants test_book_variants.cpp)
 target_include_directories(test_book_variants PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 
+# MoldUDP64 framing, the sequence check, the prebuilt packets and the feed (T-URING-1).
+itch_add_test(test_mold test_mold.cpp)
+target_compile_definitions(test_mold PRIVATE
+  "ITCH_ORACLE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle\""
+  "ITCH_TRADE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades\"")
+# The replay sender's pacing on a hand-moved clock, S1, and the two on loopback.
+itch_add_test(test_udp test_udp.cpp)
+target_include_directories(test_udp PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+target_compile_definitions(test_udp PRIVATE
+  "ITCH_ORACLE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle\"")
+
 # The parsing kernels. Each kernel this build has is its own ctest entry, so that one the CPU
 # cannot run shows as skipped, never as passed, and an entry whose filter matches nothing
 # fails. test_kernels runs the rest: selection, the parser's scalar tail, the scalar oracle.
