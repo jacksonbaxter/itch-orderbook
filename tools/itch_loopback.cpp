@@ -5,14 +5,15 @@
 //
 //     itch_loopback FILE [--first N] [--frames N] [--datagram BYTES] [--max-messages N]
 //                   [--flush-gap-ns N] [--heartbeat-gap-ns N] [--rate MSGS_PER_S]
-//                   [--core N] [--receive-buffer BYTES] [--timeout-ms N]
+//                   [--core N] [--receiver-core N] [--receive-buffer BYTES] [--timeout-ms N]
 //                   [--checkpoint N] [--drop-packet I] [--duplicate-packet I]
 //                   [--corrupt-packet I]
 //                   [--max-orders N] [--max-levels N] [--max-pages N] [--max-slots N]
 //
 // The slice is frames --first to --first + --frames of FILE, the whole file by default,
 // packed as mold_packets.hpp says. --rate paces the sender, 0 (the default) sends
-// unpaced. --core asks for the sender's core, which only Linux can grant. --checkpoint
+// unpaced. --core and --receiver-core ask for the two threads' cores, which only Linux
+// can grant. --checkpoint
 // is the frame after which both paths hash the book, half the slice by default.
 // The negative controls, each of which the check must fail: --drop-packet I loses packet I
 // on the way, --duplicate-packet I sends it twice, and --corrupt-packet I flips the last
@@ -109,6 +110,8 @@ struct Options {
     options.loopback.send.messages_per_second = number;
   } else if (arg == "--core" && number <= kMostInt) {
     options.loopback.sender_core = static_cast<int>(number);
+  } else if (arg == "--receiver-core" && number <= kMostInt) {
+    options.loopback.receiver_core = static_cast<int>(number);
   } else if (arg == "--receive-buffer" && number <= kMostInt) {
     options.loopback.receive_buffer = static_cast<int>(number);
   } else if (arg == "--timeout-ms" && number != 0 && number <= kMostInt) {
@@ -262,9 +265,12 @@ int run(const Options& options) {
   std::println("loopback_sender_at {}:{}", loop->sender_at.host, loop->sender_at.port);
   std::println("loopback_receive_buffer requested {} read back {}", loop->receive_buffer.requested,
                loop->receive_buffer.read_back);
-  std::println("loopback_sender_pinning {}{}", udp::kSenderCanPin ? "" : "unsupported here, ",
+  std::println("loopback_sender_pinning {}{}", udp::kCanPin ? "" : "unsupported here, ",
                loop->sender.pin.pinned ? "pinned" : "not pinned");
   std::println("loopback_sender_pin_attempt {}", loop->sender.pin.attempt);
+  std::println("loopback_receiver_pinning {}{}", udp::kCanPin ? "" : "unsupported here, ",
+               loop->receiver_pin.pinned ? "pinned" : "not pinned");
+  std::println("loopback_receiver_pin_attempt {}", loop->receiver_pin.attempt);
   bool pass = loop->sender.report.has_value();
   if (loop->sender.report) {
     const udp::SendReport& sent = *loop->sender.report;
@@ -307,7 +313,8 @@ int main(int argc, const char* const* argv) {
       static_cast<void>(std::fputs(
           "usage: itch_loopback FILE [--first N] [--frames N] [--datagram BYTES] "
           "[--max-messages N] [--flush-gap-ns N] [--heartbeat-gap-ns N] [--rate MSGS_PER_S] "
-          "[--core N] [--receive-buffer BYTES] [--timeout-ms N] [--checkpoint N] "
+          "[--core N] [--receiver-core N] [--receive-buffer BYTES] [--timeout-ms N] [--checkpoint "
+          "N] "
           "[--drop-packet I] [--duplicate-packet I] [--corrupt-packet I] [--max-orders N] "
           "[--max-levels N] [--max-pages N] "
           "[--max-slots N]\n",

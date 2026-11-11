@@ -1,8 +1,10 @@
 // The sender and a receive mode on one loopback pair, each on its own thread: the shape
-// every T-URING run takes, here with S1, the mode every platform has.
+// every T-URING run takes. run_loopback() takes any ReceiveMode, made by the caller's
+// factory from the receiver's socket; run_loopback_s1() is it with S1, the mode every
+// platform has.
 //
 // Everything that allocates is done before either thread starts its loop: the sockets,
-// the mode's buffer, the feed and the pin, whose record is a string. Each thread then
+// the mode and its buffers, the feed and each pin, whose record is a string. Each thread then
 // says it is ready, and on_ready() runs on the caller's thread before the sender is let
 // go, so that a test can open its allocation window there with both loops inside it.
 //
@@ -17,6 +19,8 @@
 #include <cstdint>
 #include <expected>
 #include <thread>
+#include <type_traits>
+#include <utility>
 
 #include "itch/mold_feed.hpp"
 #include "itch/mold_packets.hpp"
@@ -28,7 +32,8 @@ namespace itch::bench::udp {
 
 struct LoopbackConfig {
   SendPlan send;
-  int sender_core = -1;
+  int sender_core = -1;  // -1 asks for no pin. Only Linux can grant one.
+  int receiver_core = -1;
   int receive_buffer = 4 << 20;  // Asked for; what the kernel gave is read back.
   std::chrono::milliseconds idle_timeout{2000};
 };
@@ -38,6 +43,7 @@ struct LoopbackRun {
   Endpoint sender_at;
   BufferSize receive_buffer;
   SenderRun sender;
+  PinOutcome receiver_pin;
   ReceiveOutcome received;
   ModeCounters mode;
   mold::FeedCounts feed;
@@ -50,13 +56,17 @@ struct PlainSocket {
   [[nodiscard]] ConnectedSocket operator()(ConnectedSocket socket) const noexcept { return socket; }
 };
 
-// S1 against the sender over a fresh pair, every frame the feed admits handed to sink.
-// wrap() may put the sender's socket inside another DatagramSocket, which is how a
-// negative control loses a packet on the way.
-template <mold::FrameSink Sink, class OnReady, class Wrap = PlainSocket>
-[[nodiscard]] std::expected<LoopbackRun, SocketError> run_loopback_s1(
-    const mold::PacketArray& packets, const LoopbackConfig& config, Sink& sink, OnReady on_ready,
-    Wrap wrap = {}) {
+// A receive mode against the sender over a fresh pair, every frame the feed admits handed
+// to sink. make_mode(fd) builds the mode on the receiver's socket, which already has its
+// buffer size and timeout. wrap() may put the sender's socket inside another
+// DatagramSocket, which is how a negative control loses a packet on the way.
+template <mold::FrameSink Sink, class MakeMode, class OnReady, class Wrap = PlainSocket>
+  requires ReceiveMode<std::invoke_result_t<MakeMode&, int>>
+[[nodiscard]] std::expected<LoopbackRun, SocketError> run_loopback(const mold::PacketArray& packets,
+                                                                   const LoopbackConfig& config,
+                                                                   MakeMode make_mode, Sink& sink,
+                                                                   OnReady on_ready,
+                                                                   Wrap wrap = {}) {
   auto pair = open_loopback_pair();
   if (!pair) {
     return std::unexpected(pair.error());
@@ -73,7 +83,7 @@ template <mold::FrameSink Sink, class OnReady, class Wrap = PlainSocket>
     return std::unexpected(timeout.error());
   }
 
-  RecvfromMode mode{pair->receiver.get()};
+  auto mode = make_mode(pair->receiver.get());
   mold::FeedHandler<Sink> feed{packets.plan().session, packets.plan().first_sequence, sink};
   auto socket = wrap(ConnectedSocket{pair->sender.get()});
   SteadyClock clock;
@@ -82,11 +92,12 @@ template <mold::FrameSink Sink, class OnReady, class Wrap = PlainSocket>
   std::atomic<bool> go{false};
 
   std::thread receiver{[&] {
+    run.receiver_pin = pin_thread(config.receiver_core);
     ready.fetch_add(1, std::memory_order_release);
     run.received = receive_until_end(mode, feed, batch);
   }};
   std::thread sender{[&] {
-    run.sender.pin = pin_sender(config.sender_core);
+    run.sender.pin = pin_thread(config.sender_core);
     ready.fetch_add(1, std::memory_order_release);
     while (!go.load(std::memory_order_acquire)) {
       std::this_thread::yield();
@@ -106,6 +117,16 @@ template <mold::FrameSink Sink, class OnReady, class Wrap = PlainSocket>
   run.sequence = feed.sequence().counts();
   run.next_expected = feed.sequence().next_expected();
   return run;
+}
+
+// S1, blocking recvfrom(), against the sender.
+template <mold::FrameSink Sink, class OnReady, class Wrap = PlainSocket>
+[[nodiscard]] std::expected<LoopbackRun, SocketError> run_loopback_s1(
+    const mold::PacketArray& packets, const LoopbackConfig& config, Sink& sink, OnReady on_ready,
+    Wrap wrap = {}) {
+  return run_loopback(
+      packets, config, [](int fd) { return RecvfromMode{fd}; }, sink, std::move(on_ready),
+      std::move(wrap));
 }
 
 }  // namespace itch::bench::udp

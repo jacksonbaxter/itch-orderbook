@@ -160,13 +160,14 @@ template <SendClock Clock, DatagramSocket Socket>
 
 // The sender as its thread runs it: pinned first if a core is asked for, then the loop.
 // Pinning is Linux only. Elsewhere pin_current_thread() says it was not done and why,
-// and the run goes on unpinned with that on its record, never a claim.
+// and the run goes on unpinned with that on its record, never a claim. The receiver's
+// thread is pinned the same way.
 struct SenderRun {
   PinOutcome pin;
   std::expected<SendReport, SendError> report = std::unexpected(SendError::schedule_overflow);
 };
 
-[[nodiscard]] inline PinOutcome pin_sender(int core) {
+[[nodiscard]] inline PinOutcome pin_thread(int core) {
   if (core < 0) {
     return {.requested_core = -1, .pinned = false, .attempt = "no core was requested"};
   }
@@ -175,6 +176,6 @@ struct SenderRun {
 
 // Whether this build can pin at all: false on macOS, where a requested core is reported
 // as unsupported.
-inline constexpr bool kSenderCanPin = kPinningRequired;
+inline constexpr bool kCanPin = kPinningRequired;
 
 }  // namespace itch::bench::udp

@@ -262,19 +262,19 @@ TEST(Sender, LatenessBucketsArePowersOfTwo) {
 
 // Pinning is Linux only. Elsewhere the sender says it did not pin, and why.
 TEST(Sender, PinningIsReportedAsItIs) {
-  const itch::bench::PinOutcome none = udp::pin_sender(-1);
+  const itch::bench::PinOutcome none = udp::pin_thread(-1);
   EXPECT_FALSE(none.pinned);
   EXPECT_EQ(none.attempt, "no core was requested");
   itch::bench::PinOutcome asked;
   int core = -1;
   std::thread pinned{[&] {
     core = std::max(0, itch::bench::current_core());
-    asked = udp::pin_sender(core);
+    asked = udp::pin_thread(core);
   }};
   pinned.join();
   EXPECT_EQ(asked.requested_core, core);
   EXPECT_FALSE(asked.attempt.empty());
-  if constexpr (udp::kSenderCanPin) {
+  if constexpr (udp::kCanPin) {
     EXPECT_TRUE(asked.pinned) << asked.attempt;
   } else {
     EXPECT_FALSE(asked.pinned) << asked.attempt;
@@ -514,6 +514,51 @@ TEST(Loopback, PacedAndInSmallPacketsItStillArrivesWhole) {
   expect_whole(run, *packets);
   EXPECT_EQ(summary, by_file(stream, checkpoint));
   EXPECT_TRUE(run.sender.report->paced);
+}
+
+// S1 with a count of the releases it is owed, to show a mode of the caller's own runs.
+class CountingMode {
+ public:
+  static constexpr std::string_view kId = "counting S1";
+  explicit CountingMode(int fd) : inner_{fd} {}
+  [[nodiscard]] udp::WaitResult wait(std::span<udp::Datagram> batch) noexcept {
+    ++releases_owed_;
+    return inner_.wait(batch);
+  }
+  void release(std::span<const udp::Datagram> done) noexcept {
+    --releases_owed_;
+    inner_.release(done);
+  }
+  [[nodiscard]] const udp::ModeCounters& counters() const noexcept { return inner_.counters(); }
+  [[nodiscard]] int releases_owed() const noexcept { return releases_owed_; }
+
+ private:
+  udp::RecvfromMode inner_;
+  int releases_owed_ = 0;
+};
+static_assert(udp::ReceiveMode<CountingMode>);
+
+// Any ReceiveMode runs on the pair, made by the caller's factory on the receiver's socket.
+TEST(Loopback, AnyModeRunsOnThePairThroughItsFactory) {
+  const Bytes stream = read_file(std::filesystem::path{ITCH_ORACLE_FIXTURES} / "session.itch");
+  const auto packets = mold::build_packets(stream, {});
+  ASSERT_TRUE(packets.has_value());
+  itch::FastBook<> book{kCapacity};
+  udp::BookDigest digest{book, packets->messages() / 2};
+  int fd_seen = -1;
+  const auto run = udp::run_loopback(
+      *packets, {.send = {}, .sender_core = -1, .receiver_core = -1},
+      [&fd_seen](int fd) {
+        fd_seen = fd;
+        return CountingMode{fd};
+      },
+      digest, [] {});
+  ASSERT_TRUE(run.has_value());
+  expect_whole(*run, *packets);
+  EXPECT_GE(fd_seen, 0);
+  EXPECT_EQ(digest.finish(), by_file(stream, packets->messages() / 2));
+  EXPECT_FALSE(run->receiver_pin.pinned);
+  EXPECT_EQ(run->receiver_pin.attempt, "no core was requested");
 }
 
 // The negative control: one packet lost on the way is a gap of its messages, and the
