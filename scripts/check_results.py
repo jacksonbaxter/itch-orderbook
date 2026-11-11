@@ -43,7 +43,8 @@ the summary's medians as shown, the bar, and the verdict in the fixed words, con
 both. Every SPSC bar was set on x86, so a macOS file may only say the host differs. A macOS
 SPSC file also says the Mac's sampler rule was applied, in its interference field and its
 Sampler section, with a quiet span for each published repetition; a debian one with one-way
-latencies says the two cores' clocks were checked and agree.
+latencies says the two cores' clocks were checked and agree. Its command passes each sibling
+the machine check read as idle.
 
 An allocator file, one with an `allocators` field (scripts/alloc_driver.py, T-ARENA-1), is
 held to its own fields: the arms, the one capacity they all ran on, the pages asked for and
@@ -740,6 +741,16 @@ def check_spsc_sampler(text, fields):
                                     f"{fields.get('repetitions')} repetitions")
 
 
+def check_spsc_command(text):
+    """Each sibling the machine check found idle was asked for, so the command shown carries
+    it: the check reads a sibling only when the driver is given one."""
+    command = section(text, "Commands") or ""
+    for sibling in re.findall(r"^machine_check: \w+ sibling-idle: cpu(\d+) ", text, re.MULTILINE):
+        if not re.search(rf" --(?:peer-)?sibling {sibling}(?:\s|$)", command):
+            yield "command-differs", (f"the machine check read cpu{sibling} as a sibling, and the "
+                                      f"command shown passes no --sibling {sibling}")
+
+
 def check_spsc(text, fields):
     suite = fields.get("suite", "")
     if suite not in SPSC_SUITES:
@@ -774,6 +785,7 @@ def check_spsc(text, fields):
     else:
         yield from check_spsc_latency(text, fields)
     yield from check_spsc_targets(text, fields, suite)
+    yield from check_spsc_command(text)
 
 
 def is_alloc_file(fields):

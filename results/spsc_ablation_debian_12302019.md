@@ -220,5 +220,5 @@ machine_check: passed
 ## Commands
 
 ```
-measure.sh taskset -c 4,6 python3 -B scripts/spsc_driver.py --suite ablation --bench <raw>/bench_spsc --probe <raw>/bench_probe --input <raw>/12302019.NASDAQ_ITCH50 --prediction P-0307 --repetitions 3 --raw-dir <raw> --out results/spsc_ablation_debian_12302019.md --core 4 --peer-core 6
+measure.sh taskset -c 4,6 python3 -B scripts/spsc_driver.py --suite ablation --bench <raw>/bench_spsc --probe <raw>/bench_probe --input <raw>/12302019.NASDAQ_ITCH50 --prediction P-0307 --repetitions 3 --raw-dir <raw> --out results/spsc_ablation_debian_12302019.md --core 4 --peer-core 6 --sibling 5 --peer-sibling 7
 ```

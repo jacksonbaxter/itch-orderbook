@@ -739,9 +739,16 @@ def relative_command(args):
              "--out", shown_path(args.out)]
     if args.suite == "pipeline":
         words += ["--checkpoint-ops", str(args.checkpoint_ops)]
-    for flag, value in (("--core", args.core), ("--peer-core", args.peer_core)):
+    for flag, value in (("--core", args.core), ("--peer-core", args.peer_core),
+                        ("--sibling", args.sibling), ("--peer-sibling", args.peer_sibling)):
         if value is not None:
             words += [flag, str(value)]
+    # The Mac's waits, when they are not the defaults, are part of what ran.
+    for flag, value, default in (("--quiet-before", args.quiet_before, 0.0),
+                                 ("--quiet-wait", args.quiet_wait, QUIET_WAIT_S),
+                                 ("--most-withdrawn", args.most_withdrawn, MOST_WITHDRAWN)):
+        if value != default:
+            words += [flag, f"{value:g}"]
     for argument in args.bench_arg:
         words += [f"--bench-arg={argument}"]
     text = " ".join(shlex.quote(word) if "<" not in word else word for word in words)

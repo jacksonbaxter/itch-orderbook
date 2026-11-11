@@ -350,6 +350,16 @@ class Debian(unittest.TestCase):
         unchecked = re.sub(r"(?m)^- cross_core_timer: .*\n", "", text)
         self.assertIn("cross-core-timer-unchecked", codes(unchecked))
 
+    def test_a_sibling_the_machine_check_read_is_in_the_command(self):
+        records = [record("queues", s, DEBIAN_HEADER) for s in (1.0, 0.98, 1.03)]
+        text = replace(rendered(records), "machine_check: passed",
+                       "machine_check: pass sibling-idle: cpu5 is 0.0% busy over 1 s\n"
+                       "machine_check: passed")
+        self.assertIn("command-differs", codes(text))
+        asked = replace(text, "\npython3 -B scripts/spsc_driver.py\n",
+                        "\npython3 -B scripts/spsc_driver.py --core 4 --sibling 5\n")
+        self.assertNotIn("command-differs", codes(asked))
+
     def test_a_target_whose_queue_did_not_run(self):
         records = [record("queues", s, DEBIAN_HEADER) for s in (1.0, 0.98, 1.03)]
         for one in records:
@@ -376,6 +386,18 @@ class Driver(unittest.TestCase):
         bad["burst"]["speedup"] = 10
         with self.assertRaisesRegex(spsc_driver.Refused, "faster than the day"):
             spsc_driver.validate_run(bad, "queues")
+
+    def test_the_command_shown_carries_every_flag_that_ran(self):
+        base = ["--suite", "queues", "--bench", "b", "--probe", "p", "--input", "i",
+                "--prediction", "P-0306", "--raw-dir", "r", "--out", "results/x.md"]
+        plain = spsc_driver.relative_command(spsc_driver.parse_args(base))
+        self.assertNotIn("--sibling", plain)
+        self.assertNotIn("--quiet", plain)
+        command = spsc_driver.relative_command(spsc_driver.parse_args(
+            [*base, "--core", "4", "--peer-core", "6", "--sibling", "5", "--peer-sibling", "7",
+             "--quiet-before", "60"]))
+        self.assertIn(" --core 4 --peer-core 6 --sibling 5 --peer-sibling 7 --quiet-before 60",
+                      command)
 
     def test_another_suite_is_refused(self):
         with self.assertRaisesRegex(spsc_driver.Refused, "suite"):

@@ -213,5 +213,5 @@ machine_check: passed
 ## Commands
 
 ```
-measure.sh /usr/bin/time -l python3 -B scripts/spsc_driver.py --suite ablation --bench build/release/bench/bench_spsc --probe build/release/bench/bench_probe --input data/12302019.NASDAQ_ITCH50 --prediction P-0302 --repetitions 3 --raw-dir <raw> --out results/spsc_ablation_mac_12302019.md
+measure.sh /usr/bin/time -l python3 -B scripts/spsc_driver.py --suite ablation --bench build/release/bench/bench_spsc --probe build/release/bench/bench_probe --input data/12302019.NASDAQ_ITCH50 --prediction P-0302 --repetitions 3 --raw-dir <raw> --out results/spsc_ablation_mac_12302019.md --quiet-before 60
 ```

@@ -736,6 +736,46 @@
       "expect": {
         "signature": "\\[  FAILED  \\] BenchCrossCore\\.AnOffsetLargerThanATripIsBoundedAwayFromZero"
       }
+    },
+    {
+      "id": "spsc-results-command-unchecked",
+      "breaks": "check_results takes an SPSC file whose command leaves out a sibling its machine check read",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    yield from check_spsc_command(text)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_sibling_the_machine_check_read_is_in_the_command"
+      }
+    },
+    {
+      "id": "spsc-driver-command-drops-siblings",
+      "breaks": "The driver's command line leaves out --sibling and --peer-sibling, as it did for P-0306 to P-0308",
+      "check": "test_spsc_results",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "                        (\"--sibling\", args.sibling), (\"--peer-sibling\", args.peer_sibling)):\n",
+          "new": "                        ):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_command_shown_carries_every_flag_that_ran"
+      }
     }
   ]
 }

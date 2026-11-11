@@ -139,5 +139,5 @@ machine_check: passed
 ## Commands
 
 ```
-measure.sh /usr/bin/time -l python3 -B scripts/spsc_driver.py --suite pipeline --bench build/release/bench/bench_pipeline --probe build/release/bench/bench_probe --input data/12302019.NASDAQ_ITCH50 --prediction P-0304 --repetitions 3 --raw-dir <raw> --out results/spsc_pipeline_mac_12302019.md --checkpoint-ops 131000000
+measure.sh /usr/bin/time -l python3 -B scripts/spsc_driver.py --suite pipeline --bench build/release/bench/bench_pipeline --probe build/release/bench/bench_probe --input data/12302019.NASDAQ_ITCH50 --prediction P-0304 --repetitions 3 --raw-dir <raw> --out results/spsc_pipeline_mac_12302019.md --checkpoint-ops 131000000 --quiet-before 60
 ```
