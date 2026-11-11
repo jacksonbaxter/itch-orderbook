@@ -59,6 +59,9 @@ T-ARENA-1 row says it has no bar, beside the fault check's verdict. A macOS allo
 also says the sampler rule was applied, with a quiet span for every published timed process.
 Its command passes each sibling the machine check read as idle.
 
+A walks ladder file, from scripts/walk_driver.py, is held to scripts/walk_report.py's checks
+of its own tables, and its command passes each sibling the machine check read as idle.
+
 Each violation prints as `check_results: FAIL <code> <file>: <detail>`.
 
 Exit codes: 0 every file passed, 1 at least one failed, 2 bad usage.
@@ -935,6 +938,7 @@ def check_text(text):
         violations.extend(found)
     if is_walks_file(fields):
         violations.extend(check_walks(text))
+        violations.extend(check_command_siblings(text))
         return violations
     if is_backtest_file(fields):
         violations.extend(check_backtest(text, fields))

@@ -713,6 +713,48 @@
         "signature": "^FAIL: test_a_walks_ladder_naming_no_prediction",
         "exit": 1
       }
+    },
+    {
+      "id": "walks-driver-command-drops-sibling",
+      "breaks": "walk_driver.py's results file shows a command without the --sibling the run was given",
+      "check": "test_walk_report.py test_the_command_shows_the_core_and_the_sibling",
+      "mutations": [
+        {
+          "file": "scripts/walk_driver.py",
+          "old": "    for flag, value in ((\"--core\", args.core), (\"--sibling\", args.sibling)):\n",
+          "new": "    for flag, value in ((\"--core\", args.core),):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_command_shows_the_core_and_the_sibling ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-results-sibling-unchecked",
+      "breaks": "check_results passes a ladder whose machine check read a sibling its command never asked for",
+      "check": "test_walk_report.py test_a_sibling_read_but_not_asked_for",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        violations.extend(check_walks(text))\n        violations.extend(check_command_siblings(text))\n",
+          "new": "        violations.extend(check_walks(text))\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_sibling_read_but_not_asked_for ",
+        "exit": 1
+      }
     }
   ]
 }

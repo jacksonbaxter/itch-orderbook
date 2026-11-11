@@ -225,6 +225,22 @@ class Ladder(unittest.TestCase):
         broken = replace(LADDER, "- slope: ", "- slope: 9")
         self.assertIn("line-stale", {code for code, _ in check_results.check_text(broken)})
 
+    def test_the_command_shows_the_core_and_the_sibling(self):
+        args = walk_driver.parse_args(
+            ["--bench", "b", "--walks", "w", "--probe", "p", "--input", "i", "--date", "20191230",
+             "--prediction", "P-0999", "--raw-dir", "r", "--out", "results/x.md", "--core", "4",
+             "--sibling", "5", "--wrapped-by", "measure.sh taskset -c 4"])
+        command = walk_driver.relative_command(args)
+        self.assertTrue(command.startswith("measure.sh taskset -c 4 python3 -B"), command)
+        self.assertTrue(command.endswith(" --core 4 --sibling 5"), command)
+
+    def test_a_sibling_read_but_not_asked_for(self):
+        broken = replace(LADDER, "machine_check: passed",
+                         "machine_check: pass sibling-idle: cpu5 is 0.0% busy over 1 s\n"
+                         "machine_check: passed")
+        self.assertIn("command-differs",
+                      {code for code, _ in check_results.check_text(broken)})
+
     def test_the_generic_rules_still_apply(self):
         broken = replace(LADDER, "machine_check: passed", "machine_check: refused")
         self.assertIn("machine-check-failed", {code for code, _ in check_results.check_text(broken)})
