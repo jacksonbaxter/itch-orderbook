@@ -105,7 +105,7 @@ def day_manifest(day):
     """What scripts/data_manifest.json pins for this day's file, or nothing."""
     manifest = json.loads((REPO_ROOT / "scripts" / "data_manifest.json").read_text(encoding="utf-8"))
     for entry in manifest.get("days", {}).values():
-        if entry.get("name") == day.name:
+        if day.name in (entry.get("name"), entry.get("unpacked_name")):
             return entry
     return {}
 

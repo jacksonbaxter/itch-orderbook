@@ -561,6 +561,94 @@
         "timestamp_ns": 68700000008170,
         "offset": 2422694497
       }
+    },
+    "06122026": {
+      "name": "S061226-v50.txt",
+      "unpacked_name": "06122026.NASDAQ_ITCH50",
+      "url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/S061226-v50.txt.gz",
+      "expected": {
+        "compressed_bytes": 17894268560,
+        "unpacked_bytes": 41662444846,
+        "messages": 1304894064,
+        "gzip_isize": 3007739182
+      },
+      "third_party": {
+        "source": "anminfang-tamu/astra-feed-engine docs/trace-manifest-S061226-v50.txt and docs/trace-profile-S061226-v50.txt",
+        "url": "https://github.com/anminfang-tamu/astra-feed-engine/blob/HEAD/docs/trace-manifest-S061226-v50.txt",
+        "gz_sha256": "1f9d35e12120ef37ea22df9f59dc5207fe51b075b6ccf1c9cdfd09fa566dc1d5",
+        "unpacked_sha256": "8aab04f1f6e1287ef73acd7405a5f8487b131a5c6a7ae0f5c8d6d134c2f32238",
+        "per_type_counts": {
+          "A": 450612715,
+          "C": 1090052,
+          "D": 438765434,
+          "E": 19232537,
+          "F": 4908319,
+          "H": 12979,
+          "I": 6044629,
+          "J": 132,
+          "K": 1,
+          "L": 270943,
+          "P": 8596422,
+          "Q": 25686,
+          "R": 12809,
+          "S": 6,
+          "U": 361712117,
+          "V": 1,
+          "X": 13595987,
+          "Y": 13295
+        },
+        "note": "Nasdaq publishes no usable checksum, so the pin is trust-on-first-use except where a third party's hash agrees. This third party publishes the .gz and the unpacked SHA-256 and a count by type for this day, read on 2026-10-30 (BENCHMARKS.md, DS-13); the fetch fails on any difference.",
+        "agrees": [
+          "gz_sha256",
+          "unpacked_sha256"
+        ]
+      },
+      "compressed_bytes": 17894268560,
+      "etag": "\"cde32cfe443dd1:0\"",
+      "last_modified": "Tue, 23 Jun 2026 19:17:54 GMT",
+      "gz_sha256": "1f9d35e12120ef37ea22df9f59dc5207fe51b075b6ccf1c9cdfd09fa566dc1d5",
+      "gzip_crc32": "f9b37255",
+      "gzip_isize": 3007739182,
+      "gzip_members": 1,
+      "unpacked_bytes": 41662444846,
+      "unpacked_sha256": "8aab04f1f6e1287ef73acd7405a5f8487b131a5c6a7ae0f5c8d6d134c2f32238",
+      "messages": 1304894064,
+      "per_type_counts": {
+        "A": 450612715,
+        "C": 1090052,
+        "D": 438765434,
+        "E": 19232537,
+        "F": 4908319,
+        "H": 12979,
+        "I": 6044629,
+        "J": 132,
+        "K": 1,
+        "L": 270943,
+        "P": 8596422,
+        "Q": 25686,
+        "R": 12809,
+        "S": 6,
+        "U": 361712117,
+        "V": 1,
+        "X": 13595987,
+        "Y": 13295
+      },
+      "last_message": {
+        "type": "S",
+        "event_code": "C",
+        "stock_locate": 0,
+        "tracking_number": 0,
+        "timestamp_ns": 72300000020522,
+        "offset": 41662444832
+      },
+      "book_capacity": {
+        "--max-orders": 16777216,
+        "--max-levels": 4194304,
+        "--max-pages": 2097152,
+        "--index-bits": 32,
+        "--max-slots": 8388608
+      },
+      "book_capacity_note": "The book's default capacity is sized for the 2019 days and cannot hold this one: a third party counts 6,677,709 live orders at the peak, over the default's 4,194,304, and a largest reference of 2,382,540,224, past the default reach of 2^30. scripts/check_real_day.sh passes these to itch_oracle and itch_alloc: room for every order the day could hold at once with margin, and a reach of 2^32."
     }
   },
   "references": {

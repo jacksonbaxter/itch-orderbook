@@ -180,6 +180,25 @@
       }
     },
     {
+      "id": "harness-fetch-unpacked-name",
+      "breaks": "A day is unpacked under Nasdaq's .txt name though the manifest gives it another, so macOS types the binary day as plain text and Spotlight's importer reads it",
+      "check": "scripts/test_fetch_data.py",
+      "mutations": [
+        {
+          "file": "scripts/fetch_data.py",
+          "old": "    return day.get(\"unpacked_name\", day[\"name\"])\n",
+          "new": "    return day[\"name\"]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/test_fetch_data.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_day_with_an_unpacked_name_is_unpacked_under_it"
+      }
+    },
+    {
       "id": "harness-fetch-range-status",
       "breaks": "The download accepts a chunk that is not status 206, as a resumed Range must be",
       "check": "scripts/test_fetch_data.py",

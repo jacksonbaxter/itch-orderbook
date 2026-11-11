@@ -5,7 +5,9 @@ Usage: test_bench_variants_cli.py <bench_variants> <scratch dir> <session.itch>
 
 Every variant this build has runs, walks all 3,330 messages in each timed pass and leaves
 the book where the switch form leaves it. The lookup passes run in the order check, answer,
-answer, check, each reading the whole script with no mismatch. A variant the build or the
+answer, check, each reading the whole script with no mismatch. The types passes run in the
+order replay, typed, typed, replay, and every pass timed by blocks has blocks that tile it
+and count every message; --messages runs the first N messages and no more. A variant the build or the
 arm cannot run exits 2 with its reason and writes no record: the threaded form where the
 compiler has no [[clang::musttail]], a look-ahead outside the arm's range, a look-ahead or
 a lookup pass with another form, and a map design. On Linux, where an unpinned run is
@@ -120,6 +122,48 @@ def main():
                     (one["live_orders"], one["live_levels"]) != want:
                 failures.append(f"lookup {design} {one['mode']}: the book ended elsewhere")
 
+    def tiles(name, one, block):
+        typed = one.get("typed")
+        if typed is None:
+            failures.append(f"{name} {one['mode']}: no blocks")
+            return
+        quarters = typed["quarters"]
+        counted = sum(sum(q["counts"]) for q in quarters)
+        if (typed["block"] != block or typed["columns"] != "AFDUECXPIL*"
+                or sum(q["ticks"] for q in quarters) != typed["last"] - typed["first"]
+                or counted != typed["frames"] or typed["frames"] != one["messages"]):
+            failures.append(f"{name} {one['mode']}: blocks of {typed['block']} do not tile or "
+                            f"count the pass ({counted} of {typed['frames']})")
+
+    types = published("types", "--pass", "types", "--max-pages", "4096", "--index-bits", "32",
+                      "--max-slots", "65536")
+    if types is not None:
+        modes = [one["mode"] for one in types["passes"]]
+        if modes != ["replay", "typed", "typed", "replay"] or types["variant"]["block"] != 64:
+            failures.append(f"types: passes {modes}, variant {types['variant']}")
+        if sum(types["input"]["types"].values()) != SESSION_MESSAGES:
+            failures.append(f"types: the input's types count {types['input']['types']}")
+        if "4096 index pages, index reach 2^32, 65536 level slots" not in types["header"]["design"]:
+            failures.append(f"types: the capacity is not the one asked: {types['header']['design']}")
+        for one in types["passes"]:
+            if one["mode"] == "typed":
+                tiles("types", one, 64)
+            elif "typed" in one:
+                failures.append("types: a replay pass timed by blocks")
+            if want is not None and (one["live_orders"], one["live_levels"]) != want:
+                failures.append(f"types {one['mode']}: the book ended elsewhere")
+    blocks = published("lookup_blocks", "--pass", "lookup", "--block", "16")
+    if blocks is not None:
+        for one in blocks["passes"]:
+            tiles("lookup blocks", one, 16)
+    done, out = run("first_messages", "--pass", "types", "--messages", "1000")
+    first = json.loads(out.read_text(encoding="utf-8")) if out.is_file() else None
+    if done.returncode != 0 or first is None or first["refusals"] or any(
+            one["messages"] != 1000 for one in first["passes"]) or \
+            first["input"]["frames"] != 1000 or first["input"]["bytes"] >= \
+            first["input"]["file_bytes"] or "the first 1000 messages" not in first["header"]["input"]:
+        failures.append(f"first messages: exit {done.returncode}: {done.stderr.strip()}")
+
     refusals = [("threaded", ("--dispatch", "threaded"), "musttail")] if not threaded_built else []
     refusals += [("prefetch 3", ("--prefetch", "3"), "--prefetch 3"),
                  ("prefetch 65", ("--prefetch", "65"), "--prefetch 65"),
@@ -135,7 +179,13 @@ def main():
                  ("bad kinds", ("--prefetch", "16", "--kinds", "both"), "usage"),
                  ("bad stages", ("--prefetch", "16", "--stages", "22"), "usage"),
                  ("bad form", ("--dispatch", "computed-goto"), "usage"),
-                 ("bad pass", ("--pass", "trace"), "usage")]
+                 ("bad pass", ("--pass", "trace"), "usage"),
+                 ("block with replay", ("--block", "8"), "--block runs only"),
+                 ("types with table", ("--pass", "types", "--dispatch", "table"), "only with"),
+                 ("types with stages", ("--pass", "types", "--stages", "2"),
+                  "only with --pass replay"),
+                 ("block of none", ("--pass", "types", "--block", "0"), "usage"),
+                 ("more messages than the input", ("--messages", "5000"), "fewer than 5000")]
     for name, options, said in refusals:
         done, out = run(name.replace(" ", "_"), *options)
         if done.returncode != 2 or said not in done.stderr or out.exists():

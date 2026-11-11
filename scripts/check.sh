@@ -114,6 +114,7 @@ stage_bench() {
     python_test scripts/test_counts_report.py &&
     python_test scripts/test_flame_report.py &&
     python_test scripts/test_variants_report.py &&
+    python_test scripts/test_types_report.py &&
     python_test scripts/test_window_report.py &&
     python_test scripts/test_simd_report.py &&
     python_test scripts/test_simd_driver.py &&
@@ -145,6 +146,10 @@ stage_bench() {
     results/layout_*.md results/structure_*.md; do
     [ -f "$variants" ] || continue
     python_test scripts/variants_report.py --check "$variants" || return 1
+  done
+  for types in results/types_*.md; do
+    [ -f "$types" ] || continue
+    python_test scripts/types_report.py --check "$types" || return 1
   done
   for window in results/window_*.md; do
     [ -f "$window" ] || continue

@@ -531,6 +531,24 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0701-20261110T101720Z` | `P-0701` | `827bcbf08cf9` | Darwin | `withdrawn` |
 | `P-0701-20261110T102208Z` | `P-0701` | `827bcbf08cf9` | Darwin | `withdrawn` |
 | `P-0701-20261110T100918Z` | `P-0701` | `827bcbf08cf9` | Darwin | `refused at malloc-fresh, repetition 1` |
+| `P-0802-20261110T162713Z_oracle` | `P-0802` | `b0b0b1f` | Darwin | `stopped by hand` |
+| `P-0801-20261110T165443Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T170230Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T170541Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `not published` |
+| `P-0801-20261110T170649Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T170831Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T171943Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T180217Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T181339Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T182251Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `not published` |
+| `P-0801-20261110T183306Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T184413Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T194206Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T213940Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T215103Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T221012Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T221334Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
+| `P-0801-20261110T221456Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
 <!-- results table: end -->
 
 T-INV-2 is strict, and it fails on real data: books cross while a symbol is halted or quoting, and for a moment after it resumes. That result stands, and no scoped version of it counts as a pass. A count of crossed books cannot tell a halt's leftovers from a broken book, so T-INV-3 exists as a second, separately named check, which the user approved after seeing real data: during normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet, and any new cross is a failure. T-TRADE-3 compares odd lots on the SEC's published round-lot rule, chosen after a fixed lot and the directory's lot had each failed, and its odd-lot columns are not compared on dates that rule does not cover. T-TRADE-2 is compared with Nasdaq's CrossStats file on every Nasdaq day, and is not available on the BX day, since that file lists only Nasdaq's own crosses.

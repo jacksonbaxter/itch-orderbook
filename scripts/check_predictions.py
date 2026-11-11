@@ -35,7 +35,7 @@ RUN_LOG = "results/run_log.md"
 RESULT_PATTERNS = ("alloc_*.md", "bench_*.md", "chase_*.md", "backtest_*.md", "counters_*.md",
                    "flamegraph_*.md", "mm_*.md", "lookup_*.md", "prefetch_*.md", "dispatch_*.md",
                    "spsc_*.md", "wasm_*.md", "simd_*.md", "layout_*.md", "structure_*.md",
-                   "window_*.md")
+                   "window_*.md", "types_*.md")
 # Results summed from other results files: each names its prediction, but no run.
 SUMMED = ("oracle_sessions.md",)
 BLOCK = re.compile(r"^## (P-\d{4}): .*?(?=^## |\Z)", re.MULTILINE | re.DOTALL)

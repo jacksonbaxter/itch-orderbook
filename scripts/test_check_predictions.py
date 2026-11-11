@@ -107,7 +107,8 @@ class History(unittest.TestCase):
 
     def test_a_layout_result_naming_no_prediction(self):
         self.in_order()
-        for name in ("layout_fixture.md", "structure_fixture.md", "window_fixture.md"):
+        for name in ("layout_fixture.md", "structure_fixture.md", "window_fixture.md",
+                     "types_fixture.md"):
             with self.subTest(name=name):
                 (self.results / name).write_text("# nothing\n", encoding="utf-8")
                 self.assert_fails("prediction-missing")
