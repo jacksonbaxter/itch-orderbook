@@ -404,7 +404,7 @@ def alloc_rows(name, text):
         memory = summary_median(text, f"{arm}, book memory, MiB", name)
         rows.append((arm, day_of(name), host, pinning, rate, spread, ratios.get(arm, "–"),
                      *tails[arm], faults[arm], memory, f"`{commit}`", source(name)))
-    return rows, header_field(text, "fault_check", name)
+    return rows, header_field(text, "fault_check", name), header_field(text, "pages_requested", name)
 
 
 def run_rows(text):
@@ -474,8 +474,8 @@ def generate(root):
             browsers.append(wasm_row(name, text))
             rows = []
         elif name.startswith("alloc_"):
-            arms, fault_check = alloc_rows(name, text)
-            arenas.append((name, fault_check, arms))
+            arms, fault_check, pages = alloc_rows(name, text)
+            arenas.append((name, fault_check, pages, arms))
             rows = []
         elif name.startswith("mm_pnl_"):
             pnl += pnl_rows(name, text)
@@ -535,10 +535,10 @@ def generate(root):
                       "weak evidence.", ""]
         lines += markdown_table(("Target", "Comparison", "Day", "Host", "Pinning", "Measured",
                                  "Bar", "Verdict", "Commit", "File"), spsc)
-    for name, fault_check, arms in arenas:
+    for name, fault_check, pages, arms in arenas:
         lines += ["", f"T-ARENA-1, the node book on each allocator arm, from "
-                      f"[results/{name}](results/{name}). Only the allocator changes between "
-                      "arms. T-ARENA-1 is UNCONFIRMED, so no bar is met or missed; the check is "
+                      f"[results/{name}](results/{name}), the pools' pages requested as "
+                      f"`{pages}`. Only the allocator changes between arms. T-ARENA-1 is UNCONFIRMED, so no bar is met or missed; the check is "
                       "that no timed pass of a pool arm takes a page fault, and it read: "
                       f"{fault_check}. Tails are over every operation, in ns.", ""]
         lines += markdown_table(("Arm", "Day", "Host", "Pinning", "Median messages/s", "CV",

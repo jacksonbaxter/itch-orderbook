@@ -312,6 +312,7 @@ class ResultsTable(unittest.TestCase):
             judged = "zero" if arm in test_alloc_results.POOLS else "not judged: a heap arm"
             self.assertIn(f"| {judged} |", row)
         self.assertIn("it read: PASS: no page fault", output)
+        self.assertIn("the pools' pages requested as `huge-if-offered`.", output)
         path.write_text(re.sub(r"(?m)^\| pool-fifo \| all \|.*\n", "", test_alloc_results.GOOD),
                         encoding="utf-8")
         code, output = self.run_table()
