@@ -4,3 +4,4 @@
 /.venv/
 __pycache__/
 /docs/local/
+/CLAUDE.md
