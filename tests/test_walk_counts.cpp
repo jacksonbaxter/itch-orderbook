@@ -85,19 +85,22 @@ void expect_site(const WalkCounts& walks, WalkSite site, const Expected& expecte
 
 class HandBuilt : public ::testing::Test {
  protected:
-  HandBuilt() : engine{config()} {
-    strategy.send(kA, 10, Side::bid, k1000, 100);
-    strategy.send(kB, 20, Side::bid, k999, 100);
-    strategy.send(kC, 30, Side::bid, k998, 100);
-    strategy.send(kD, 40, Side::bid, k999, 100);
+  HandBuilt() : engine_{config()} {
+    strategy_.send(kA, 10, Side::bid, k1000, 100);
+    strategy_.send(kB, 20, Side::bid, k999, 100);
+    strategy_.send(kC, 30, Side::bid, k998, 100);
+    strategy_.send(kD, 40, Side::bid, k999, 100);
     feed(wire::directory(kLocate, 'Q', 'P', 100, 1));
   }
 
-  void feed(const wire::Bytes& message) { engine.feed(message, strategy); }
-  [[nodiscard]] const WalkCounts& walks() const { return engine.walks(); }
+  void feed(const wire::Bytes& message) { engine_.feed(message, strategy_); }
+  void finish() { engine_.finish(strategy_); }
+  [[nodiscard]] const WalkCounts& walks() const { return engine_.walks(); }
+  [[nodiscard]] const Stats& stats() const { return engine_.stats(); }
 
-  Counted engine;
-  Scripted strategy;
+ private:
+  Counted engine_;
+  Scripted strategy_;
 };
 
 // Each order's rest walks the bid side from $10.00: A finds it empty, no step; B steps on A,
@@ -163,8 +166,8 @@ TEST_F(HandBuilt, AnExecutionWalksEveryLevelAtOrBetterThanItsPrice) {
   feed(wire::execute(kLocate, 2, 50, 150));
   expect_site(walks(), WalkSite::execution,
               {.walks = 1, .nonempty = 1, .level_steps = 3, .order_steps = 3});
-  EXPECT_EQ(engine.stats().fills, 1U);
-  EXPECT_EQ(engine.stats().filled_shares, 50U);
+  EXPECT_EQ(stats().fills, 1U);
+  EXPECT_EQ(stats().filled_shares, 50U);
 }
 
 // A late add, reference 5 after 10 was shown, at $9.99: the find steps on A, then B, found,
@@ -174,17 +177,17 @@ TEST_F(HandBuilt, ALateAddFindsItsLevelAndVisitsItsOrders) {
   feed(wire::add(kLocate, 5, 'B', 100, k999, 170));
   expect_site(walks(), WalkSite::late_add,
               {.walks = 1, .nonempty = 1, .level_steps = 2, .order_steps = 2});
-  EXPECT_EQ(engine.stats().late_adds_ahead, 1U);
+  EXPECT_EQ(stats().late_adds_ahead, 1U);
 }
 
 // At the end every order expires and leaves its side, so the counts close at zero.
 TEST_F(HandBuilt, EverySideIsEmptyAtTheEnd) {
   feed(wire::add(kLocate, 1, 'B', 100, k997, 100));
   EXPECT_FALSE(walks().empty());
-  engine.finish(strategy);
+  finish();
   EXPECT_TRUE(walks().empty());
   EXPECT_TRUE(walks().consistent());
-  EXPECT_EQ(engine.stats().expired, 4U);
+  EXPECT_EQ(stats().expired, 4U);
 }
 
 // A side that loses an order it does not hold makes the counts inconsistent.
