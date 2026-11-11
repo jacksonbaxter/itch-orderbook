@@ -269,7 +269,7 @@ static_assert(std::is_trivially_copyable_v<FlatLevel>);
 //
 // Scan is how many entries a search reads one by one from the best end before it
 // binary-searches the rest: all of them in FlatLevels, the arm as designed, and fewer in
-// the arms that stand for carteret's window-width experiment (NOTES.md, "carteret's layout
+// the arms that stand for carteret's window-width experiment (docs/NOTES.md, "carteret's layout
 // experiments on our book"). This book has no window: a level of any price is an entry of
 // the same array, so nothing overflows. What a far price costs here is a longer search, and
 // Scan is how far the search walks before it stops walking. Every Scan finds the same place.

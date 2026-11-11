@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Writes carteret's window-width experiment, as counts over a day of this book, from
-itch_window's output (NOTES.md, "carteret's layout experiments on our book").
+itch_window's output (docs/NOTES.md, "carteret's layout experiments on our book").
 
     window_report.py --counts WINDOW.out --time TIME.err --commit COMMIT --day DAY \\
         --prediction P-NNNN --out results/window_DAY.md [--run-log results/run_log.md]
@@ -40,7 +40,7 @@ DEPTHS = ("0", "1", "2-3", "4-7", "8-15", "16-63", "64-255", "256+")
 KINDS = {"adds": "adds: A, F and a U's new order", "named": "named: E, C, X, D and a U's old order"}
 SEARCHES = {"add": "at an add", "close": "at a message that removes its level's last order"}
 HOST = "macOS (M4 Max)"
-CARTERET = {256: 4.90, 2048: 1.03}  # carteret's overflow on 12302019, % of adds (NOTES.md)
+CARTERET = {256: 4.90, 2048: 1.03}  # carteret's overflow on 12302019, % of adds (docs/NOTES.md)
 COMMIT_FIELD = re.compile(r"^[0-9a-f]{12}( \(.*\))?$")
 
 METHOD = """\

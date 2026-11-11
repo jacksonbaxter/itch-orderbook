@@ -105,7 +105,7 @@ E7_FLAT = 0.05
 SAMPLE_GAP = 5  # seconds: the sampler writes a line every 2 s, so a longer gap is a stop
 FOREIGN_CPU = 20.0
 INTERFERENCE = ("sampled every 2 s over each process's whole span; no other process above "
-                "20% CPU during any of them (NOTES.md, \"The Mac rule for other work\")")
+                "20% CPU during any of them (docs/NOTES.md, \"The Mac rule for other work\")")
 TITLES = {"lookup": "The order lookup apart from the level work",
           "prefetch": "E8: prefetch look-ahead on the book build",
           "dispatch": "E7: dispatch form",
@@ -192,7 +192,7 @@ by changing one policy of this book and holding the rest:
   counted in `results/window_12302019.md`.
 
 Every arm gives the same answers on every message: each passed the oracle over the whole
-day (NOTES.md).""",
+day (docs/NOTES.md).""",
     "structure": """\
 Each process maps the day, reads every page and finds every page resident, then runs a
 warm-up pass and one timed pass, each on a fresh `paged-flat` book. `D=0` reads frames with

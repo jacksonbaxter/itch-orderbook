@@ -17,7 +17,7 @@
 // A run. The slice is packed before anything is timed (mold_packets.hpp), the file path's
 // book is built from the same frames and kept only as its statuses and canonical hash,
 // and the file is then unmapped and its page cache dropped, so that the day and its copy
-// are never both resident (NOTES.md, "The UDP replay's portable groundwork", item 7). The
+// are never both resident (docs/NOTES.md, "The UDP replay's portable groundwork", item 7). The
 // sender and the mode then run on their own threads, each pinned if a core is given, the
 // receiver applying every frame to a book. A run passes when every message arrived once
 // and the receiver's book ends with the file path's hash and statuses.

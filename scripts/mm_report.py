@@ -233,7 +233,7 @@ def render_body(evaluation, runs):
              "sample.", "",
              f"- Tuned on {selection}; reported on {report}: out of sample by day. The "
              "symbols, γ, h, the order size and σ, k and A were committed before anything ran "
-             f"on {evaluation['report_day']} (`{EVALUATION}`, NOTES.md, \"The market maker's "
+             f"on {evaluation['report_day']} (`{EVALUATION}`, docs/NOTES.md, \"The market maker's "
              "evaluation\").",
              f"- {NO_IMPACT} Every fill is priced against the historical book, which went on "
              "as if the strategy were not there.",

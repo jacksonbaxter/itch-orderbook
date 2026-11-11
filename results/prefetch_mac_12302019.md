@@ -39,7 +39,7 @@ Host: **macOS (M4 Max)**. Numbers from the two hosts are never mixed.
 - measure_load_end: measure.sh: end load1=1.20 exit=0 at=2026-11-05T20:58:50Z written-by=rerun.sh-inside-measure.sh-pid-5566
 - run_started: 2026-11-05T15:21:54Z
 - run_finished: 2026-11-05T20:58:50Z
-- interference: sampled every 2 s over each process's whole span; no other process above 20% CPU during any of them (NOTES.md, "The Mac rule for other work")
+- interference: sampled every 2 s over each process's whole span; no other process above 20% CPU during any of them (docs/NOTES.md, "The Mac rule for other work")
 - summary: best look-ahead D=4 at -18.01% over D=0; E8 refuted (under 10% at every D)
 
 ## What was run

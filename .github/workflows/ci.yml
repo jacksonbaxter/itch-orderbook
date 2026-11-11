@@ -2,7 +2,7 @@
 # failed three jobs, and none of them had got as far as the tests: both GCC jobs at Build,
 # on a -Wconversion error that only Linux's 64-bit uint_fast32_t shows, and the x86-64
 # Clang job at the LLVM fetch, whose 1 GiB zstd window tar's zstd refused. The run at
-# da1a707 was the first with every job green. NOTES.md, "CI's first runs on GitHub".
+# da1a707 was the first with every job green. docs/NOTES.md, "CI's first runs on GitHub".
 #
 # Each job builds the release preset and runs all of ctest on its own compiler:
 #   x86-64 Linux, GCC     g++ 14 from Ubuntu 24.04.

@@ -1,6 +1,6 @@
 // The executions that did not hit the front of their level's queue, and what the feed says
 // about them. T-TRADE-5 reports these as the remainder of the queue-front rate, and the
-// backtester met the same events as queue anomalies. NOTES.md, "Queue jumps".
+// backtester met the same events as queue anomalies. docs/NOTES.md, "Queue jumps".
 //
 //     itch_queue_jumps FILE [--details FILE] [--strict]
 //

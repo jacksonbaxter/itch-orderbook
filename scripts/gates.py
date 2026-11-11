@@ -513,7 +513,7 @@ def gates():
              scan_lines(PRIVATE_ADDRESS, "private address: {}"), lambda root: list(walk(root))),
         Gate("private-name", "no result, flamegraph, code or script names this machine or its user",
              private_name, results_files),
-        Gate("held-vendor", "the vendor held in NOTES.md appears in no code, script or result",
+        Gate("held-vendor", "the vendor held in docs/NOTES.md appears in no code, script or result",
              held_vendor, lambda root: list(walk(root))),
         Gate("no-conditional-compilation", "no hooks or test-only #if in parser code",
              preprocessor_condition, lambda root: cxx_files(root, PRODUCTION_CODE)),

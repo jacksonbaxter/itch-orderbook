@@ -8,7 +8,7 @@
         [--allow-dirty]
 
 The question is what share of a message's time the walk of the simulated levels takes
-(TASKS.md, "T-BT-3's 100,000 shadow orders"). The schedules differ only in how long each
+(docs/TASKS.md, "T-BT-3's 100,000 shadow orders"). The schedules differ only in how long each
 order lives, so they place the same orders at the same times, and the longer lives hold more
 orders, on more levels, at once: the walk steps a message rise, and the rest of the work
 barely moves, as the counts show beside the times. The time a message read against the walk

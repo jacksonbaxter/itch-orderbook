@@ -8,7 +8,7 @@
 // order.
 //
 // apply() also says which levels the message can have changed. That is the touched set
-// T(m) of the proof in NOTES.md, worked out from this book's own state.
+// T(m) of the proof in docs/NOTES.md, worked out from this book's own state.
 #pragma once
 
 #include <array>

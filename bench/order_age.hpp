@@ -1,5 +1,5 @@
 // The age of the order each message names, so that counts can be charged to message type and
-// order age together (NOTES.md, "Attributing the misses").
+// order age together (docs/NOTES.md, "Attributing the misses").
 //
 // age_slots() walks the day once, before anything is counted, through a book of its own, and
 // gives each frame the slot of typed_counts.hpp's tally its span is to be charged to:

@@ -1,5 +1,5 @@
 // A look-ahead that starts only some of the book's loads, to tell which structure a DRAM fill
-// comes from (NOTES.md, "Attributing the misses").
+// comes from (docs/NOTES.md, "Attributing the misses").
 //
 //     StageFilter<Book> filter{book, stages, kinds};
 //     itch::LookaheadReader<StageFilter<Book>> reader{bytes, filter, distance};

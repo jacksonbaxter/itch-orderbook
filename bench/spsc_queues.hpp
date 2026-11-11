@@ -51,7 +51,7 @@ class ProjectQueue {
 // A ring under one std::mutex: the floor every lock-free queue should clear. A call that
 // finds the ring full or empty yields before it returns, as a blocking queue would sleep:
 // without that, a thread spinning on an empty ring retakes the lock as soon as it lets it
-// go, and on macOS a round trip took 2.2 ms (NOTES.md, "The SPSC ring").
+// go, and on macOS a round trip took 2.2 ms (docs/NOTES.md, "The SPSC ring").
 template <class T>
 class MutexQueue {
  public:

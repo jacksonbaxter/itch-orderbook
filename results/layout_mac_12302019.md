@@ -39,7 +39,7 @@ Host: **macOS (M4 Max)**. Numbers from the two hosts are never mixed.
 - measure_load_end: measure.sh: end load1=1.17 exit=0 at=2026-11-10T12:05:59Z
 - run_started: 2026-11-10T10:33:18Z
 - run_finished: 2026-11-10T12:05:59Z
-- interference: sampled every 2 s over each process's whole span; no other process above 20% CPU during any of them (NOTES.md, "The Mac rule for other work")
+- interference: sampled every 2 s over each process's whole span; no other process above 20% CPU during any of them (docs/NOTES.md, "The Mac rule for other work")
 - summary: hash policy +3.81% (identity-flat over hash-flat); open addressing against chaining +8.08% (chained-flat over hash-flat); search window of 16 -1.13% (paged-flat-scan16 over paged-flat); search window of 0 -13.95% (paged-flat-bisect over paged-flat)
 
 ## What was run
@@ -67,7 +67,7 @@ by changing one policy of this book and holding the rest:
   counted in `results/window_12302019.md`.
 
 Every arm gives the same answers on every message: each passed the oracle over the whole
-day (NOTES.md).
+day (docs/NOTES.md).
 
 Counted on this host, over each whole timed pass, between the counter group's start and stop: cycles, user and kernel, instructions, user and kernel.
 

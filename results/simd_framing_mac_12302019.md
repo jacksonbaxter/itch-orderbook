@@ -114,7 +114,7 @@ One row a timed pass, in the order run. Each counter is the pass's whole count; 
 - **Not pinned.** macOS cannot pin a thread; the sampler rule keeps other work out of every
   published process, not the scheduler.
 - **One day, one host.** The x86 kernels run on debian later, from the same binary and the
-  same commands (NOTES.md).
+  same commands (docs/NOTES.md).
 
 ## measure.sh load lines
 

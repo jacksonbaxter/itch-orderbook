@@ -251,7 +251,7 @@ A replay running flat out measures service time, not response time to an arrival
 
 T-TRADE-1, 2, 3 and 5 are the trade-print checks. T-TRADE-4 is held and is not one of them.
 
-The user's sentence cannot hold for two whole classes. `P` references no visible order, and `Q` is a bulk print. `P` and `Q` are each counted and reported per the per-type table, so the reader can see where the user's sentence was refined and why. Non-printable `C` volume is already inside `Q`, so summing it would double-count. The full per-type table is in `trade-verification.md` under "Proposed check definitions", and TASKS.md carries it. No tolerance applies anywhere.
+The user's sentence cannot hold for two whole classes. `P` references no visible order, and `Q` is a bulk print. `P` and `Q` are each counted and reported per the per-type table, so the reader can see where the user's sentence was refined and why. Non-printable `C` volume is already inside `Q`, so summing it would double-count. The full per-type table is in `trade-verification.md` under "Proposed check definitions", and docs/TASKS.md carries it. No tolerance applies anywhere.
 
 Per type: `E` must hit a live order, deducting at the order's price. `C` must hit a live order, leaving the order price unchanged, and the print price may differ. `P` must have reference 0 and change nothing in the book. `Q` is compared with Nasdaq's own per-symbol cross file. `B` reverses a stored match.
 

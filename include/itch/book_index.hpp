@@ -9,7 +9,7 @@
 // repeat carteret's layout experiments on this book, each changing one thing against
 // HashIndex: IdentityHashIndex its hash, the reference's own low bits for the multiply-shift
 // (carteret's record 016), and ChainedIndex its collisions, a chain from a head per bucket
-// for linear probing. NOTES.md, "carteret's layout experiments on our book".
+// for linear probing. docs/NOTES.md, "carteret's layout experiments on our book".
 //
 // Each arm also names the dependent loads a lookup makes before it has the order's slot,
 // kPrefetchStages of them, so that a reader running ahead of the book can ask for each in
