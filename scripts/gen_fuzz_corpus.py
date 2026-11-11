@@ -125,6 +125,52 @@ def book_seeds(fixtures):
     return seeds
 
 
+MOLD_SESSION = b"SESSION001"  # fuzz_mold's session.
+
+
+def mold_packet(sequence, messages, count=None, session=MOLD_SESSION):
+    """A MoldUDP64 packet: session, sequence and count, then each message as a block."""
+    count = len(messages) if count is None else count
+    return (session + struct.pack(">QH", sequence, count)
+            + b"".join(frame(m) for m in messages))
+
+
+def mold_seeds(fixtures):
+    """Runs of datagrams for fuzz_mold, each behind its 2-byte length."""
+    messages = messages_in_order(fixtures)
+    system = fixtures["kSystemEvent"]
+    add = fixtures["kAddOrder"]
+
+    def run(*datagrams):
+        return b"".join(frame(d) for d in datagrams)
+
+    beat = mold_packet(1, [], count=0)
+    good = mold_packet(1, [system, add])
+    return {
+        "all-types": run(mold_packet(1, messages), mold_packet(24, [], count=0xFFFF)),
+        "in-order": run(mold_packet(1, [system, add, system]), mold_packet(4, [add, add]),
+                        mold_packet(6, [], count=0), mold_packet(6, [], count=0xFFFF)),
+        "heartbeat": run(beat),
+        "gap": run(good, mold_packet(10, [add]), mold_packet(11, [], count=0xFFFF)),
+        "tail-loss": run(good, mold_packet(5, [], count=0), mold_packet(5, [], count=0xFFFF)),
+        "duplicate": run(good, good, mold_packet(1, [system])),
+        "overlap": run(mold_packet(1, [system, add, system]), mold_packet(2, [add, system, add])),
+        "late-after-gap": run(good, mold_packet(6, [add]), mold_packet(3, [add, add])),
+        "foreign-session": run(mold_packet(1, [system], session=b"OTHERSESSN"), good),
+        "after-end": run(good, mold_packet(3, [], count=0xFFFF), mold_packet(3, [add])),
+        "zero-length-blocks": run(mold_packet(1, [b"", system, b""])),
+        "out-of-range": run(mold_packet(0xFFFFFFFFFFFFFFFF, [system, add])),
+        "short-header": run(good[:10], good),
+        "count-past-blocks": run(mold_packet(1, [system, add], count=3)),
+        "block-past-end": run(good[:-1]),
+        "trailing-bytes": run(mold_packet(1, [system, add], count=1)),
+        "heartbeat-with-data": run(mold_packet(1, [system], count=0)),
+        "end-with-data": run(mold_packet(1, [system], count=0xFFFF)),
+        "unframed-tail": good,
+        "empty": b"",
+    }
+
+
 CROSS_HEADER = ("Date      ,Symbol,ListingMarket,OpeningCross,ClosingCross,IntradayCross,\r\n"
                 "----------,------,-------------,------------,------------,-------------,\r\n")
 CROSS_ROWS = ("12/30/2019,AAA   ,Q            ,          13,           0,            0,\r\n"
@@ -198,6 +244,7 @@ TARGETS = {
     "fuzz_book": book_seeds,
     "fuzz_crossstats": cross_stats_seeds,
     "fuzz_midas": midas_seeds,
+    "fuzz_mold": mold_seeds,
 }
 
 

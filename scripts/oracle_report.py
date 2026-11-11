@@ -422,7 +422,8 @@ def render(log, entry, day, alloc, arms):
         f"- Compiler: {run.get('run_compiler', 'unavailable')}",
         f"- Flags: `{run.get('run_flags', 'unavailable')}`",
         f"- Host: {run.get('run_host', 'unavailable')}. Mac numbers stay labelled macOS.",
-        f"- Dataset: `{entry['name']}`, SHA-256 of the unpacked file `{entry['unpacked_sha256']}`",
+        f"- Dataset: `{entry.get('unpacked_name', entry['name'])}`, SHA-256 of the unpacked file "
+        f"`{entry['unpacked_sha256']}`",
         f"- Command: `{run.get('run_command', 'unavailable')}`",
         f"- Elapsed: {values.get('elapsed_seconds', '?')} s in the replay, "
         f"{time.get('real', 0.0):.1f} s real, {time.get('user', 0.0):.1f} s user",

@@ -61,8 +61,9 @@ class ResultsTable(unittest.TestCase):
         for day in ("10302019", "12302019"):
             self.assertIn("| **FAIL** |", self.row("T-INV-2", day))
             self.assertIn("strict:", self.row("T-INV-2", day))
-        self.assertIn("| **NOT AVAILABLE** |", self.row("T-TRADE-2", "10302019"))
-        self.assertIn("| PASS |", self.row("T-TRADE-2", "12302019"))
+        self.assertIn("| **NOT AVAILABLE** |", self.row("T-TRADE-2", "01302019_BX"))
+        for day in ("10302019", "12302019"):
+            self.assertIn("| PASS |", self.row("T-TRADE-2", day))
 
     def test_t_inv_3_stands_beside_t_inv_2_on_both_days(self):
         row = self.row("T-INV-3", "12302019")
@@ -100,17 +101,23 @@ class ResultsTable(unittest.TestCase):
         self.assertNotIn("odd-lot", row)
 
     def test_a_day_of_another_venue_keeps_its_suffix_and_says_why_t_trade_2_did_not_run(self):
-        text = (self.root / TRADES).read_text(encoding="utf-8")
-        old = ("T-TRADE-2 is not available on 10302019: no CrossStats file for that day is in hand, "
-               "so ")
-        self.assertEqual(text.count(old), 1)
-        text = text.replace(old, "T-TRADE-2 is not available on 10302019_BX: CrossStats is "
-                                 "Nasdaq's file of its own crosses, and this is a BX feed, so ")
-        (self.root / "results" / "trades_10302019_BX.md").write_text(text, encoding="utf-8")
-        row = self.row("T-TRADE-2", "10302019_BX")
+        row = self.row("T-TRADE-2", "01302019_BX")
         self.assertIn("| **NOT AVAILABLE** | CrossStats is Nasdaq's file of its own crosses, and "
                       "this is a BX feed", row)
-        self.assertIn("(results/trades_10302019_BX.md)", row)
+        self.assertIn("(results/trades_01302019_BX.md)", row)
+        self.assertIn("| PASS |", self.row("T-TRADE-2", "01302019"))
+
+    def test_a_nasdaq_day_with_no_cross_file_says_so(self):
+        # Every Nasdaq day now has its file, so the BX day's text stands in for one without.
+        text = (self.root / "results" / "trades_01302019_BX.md").read_text(encoding="utf-8")
+        old = ("T-TRADE-2 is not available on 01302019_BX: CrossStats is Nasdaq's file of its own "
+               "crosses, and this is a BX feed, so ")
+        self.assertEqual(text.count(old), 1)
+        text = text.replace(old, "T-TRADE-2 is not available on 10302019: no CrossStats file for "
+                                 "that day is in hand, so ")
+        (self.root / TRADES).write_text(text, encoding="utf-8")
+        row = self.row("T-TRADE-2", "10302019")
+        self.assertIn("| **NOT AVAILABLE** | no CrossStats file for that day is in hand", row)
 
     def test_a_late_day_says_its_odd_lots_were_not_compared(self):
         self.edit(TRADES, "## Results\n", "## Results\n\nThe odd-lot columns were not compared.\n")
@@ -129,8 +136,8 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| PASS |", self.row("T-INV-1", "12302019"))
 
     def test_an_arm_with_another_trade_verdict_fails_its_row(self):
-        self.edit(TRADES, "| `hash_flat` | PASS | NOT_AVAILABLE | PASS | PASS |",
-                  "| `hash_flat` | PASS | NOT_AVAILABLE | PASS | FAIL |")
+        self.edit(TRADES, "| `hash_flat` | PASS | PASS | PASS | PASS |",
+                  "| `hash_flat` | PASS | PASS | PASS | FAIL |")
         row = self.row("T-TRADE-5", "10302019")
         self.assertIn("| **FAIL** |", row)
         self.assertIn("the arms disagree: hash_flat FAIL", row)

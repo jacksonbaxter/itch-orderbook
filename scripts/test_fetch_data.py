@@ -439,6 +439,38 @@ class WholeFetch(Scratch):
         with self.assertRaisesRegex(fd.VerifyError, "missing"):
             fd.verify_only(unpinned_day(self.gz, self.raw), self.data_dir)
 
+    def test_a_day_with_an_unpacked_name_is_unpacked_under_it(self):
+        day = unpinned_day(self.gz, self.raw, name="S061226-v50.txt",
+                           unpacked_name="06122026.NASDAQ_ITCH50")
+        self.fetch(day, FakeServer(self.gz))
+        self.assertEqual(sorted(p.name for p in self.data_dir.iterdir() if p.name[0] != "."),
+                         ["06122026.NASDAQ_ITCH50", "S061226-v50.txt.gz"])
+        self.assertEqual((self.data_dir / "S061226-v50.txt.gz").read_bytes(), self.gz)
+        self.assertEqual((self.data_dir / "06122026.NASDAQ_ITCH50").read_bytes(), self.raw)
+        self.assertFalse((self.data_dir / "S061226-v50.txt").exists())
+        self.assertEqual(fd.verify_only(day, self.data_dir)[0]["messages"], 5)
+        (self.data_dir / "06122026.NASDAQ_ITCH50").unlink()
+        self.fetch(day, FakeServer(b""))
+        self.assertEqual((self.data_dir / "06122026.NASDAQ_ITCH50").read_bytes(), self.raw)
+
+
+class ManifestNames(unittest.TestCase):
+    # 10182019 was unpacked under Nasdaq's .txt name before unpacked_name existed, and its
+    # published results name that file; its unpacked copy is not kept on this Mac.
+    BEFORE_UNPACKED_NAME = {"10182019"}
+
+    def test_no_day_is_unpacked_under_a_name_macos_reads_as_text(self):
+        manifest = fd.read_json(fd.REPO_ROOT / "scripts" / "data_manifest.json")
+        for key, day in manifest["days"].items():
+            if key in self.BEFORE_UNPACKED_NAME:
+                continue
+            with self.subTest(day=key):
+                self.assertFalse(fd.unpacked_name(day).lower().endswith(".txt"),
+                                 f"{key} unpacks to {fd.unpacked_name(day)}, which Spotlight "
+                                 "imports as plain text; give it an unpacked_name")
+        self.assertEqual(fd.unpacked_name(manifest["days"]["06122026"]),
+                         "06122026.NASDAQ_ITCH50")
+
 
 class References(Scratch):
     def zip_bytes(self):
