@@ -173,7 +173,7 @@ stage_bench() {
     [ -f "$walks" ] || continue
     python_test scripts/walk_report.py check "$walks" || return 1
   done
-  build_preset release && ctest --preset release -R '^test_bench'
+  build_preset release && ctest --preset release -R '^(test_bench|test_walk_counts$)'
 }
 # The market maker: T-MM-2's report on its fixtures and its results file against a rerun; the
 # report day's report on its fixtures and its results file against the tool output it carries;
