@@ -1,0 +1,856 @@
+{
+  "area": "udp",
+  "faults": [
+    {
+      "id": "udp-mold-count-byte-order",
+      "breaks": "The header's count is written low byte first",
+      "check": "test_mold MoldHeader.LaysOutSessionSequenceAndCountAsTheSpecSays",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "  dst[kCountOffset] = static_cast<std::byte>(header.count >> 8U);\n  dst[kCountOffset + 1] = static_cast<std::byte>(header.count & 0xFFU);\n",
+          "new": "  dst[kCountOffset + 1] = static_cast<std::byte>(header.count >> 8U);\n  dst[kCountOffset] = static_cast<std::byte>(header.count & 0xFFU);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldHeader.LaysOutSessionSequenceAndCountAsTheSpecSays"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldHeader\\.LaysOutSessionSequenceAndCountAsTheSpecSays"
+      }
+    },
+    {
+      "id": "udp-mold-end-of-session-count",
+      "breaks": "The end of session is taken to be count 0xFFFE",
+      "check": "test_mold MoldDecode.CountZeroIsAHeartbeatAndCountFFFFTheEnd",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "inline constexpr std::uint16_t kEndOfSessionCount = 0xFFFF;",
+          "new": "inline constexpr std::uint16_t kEndOfSessionCount = 0xFFFE;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldDecode.CountZeroIsAHeartbeatAndCountFFFFTheEnd"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldDecode\\.CountZeroIsAHeartbeatAndCountFFFFTheEnd"
+      }
+    },
+    {
+      "id": "udp-mold-decoder-ignores-count",
+      "breaks": "The decoder walks blocks to the end of the datagram, whatever the count says",
+      "check": "test_mold MoldDecode.ACountPastTheBlocksIsATruncatedBlock",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "  for (std::uint16_t block = 0; block < packet.header.count; ++block) {\n",
+          "new": "  while (at < size) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldDecode.ACountPastTheBlocksIsATruncatedBlock"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldDecode\\.ACountPastTheBlocksIsATruncatedBlock"
+      }
+    },
+    {
+      "id": "udp-mold-trailing-bytes-accepted",
+      "breaks": "Bytes after the count's last block are let through",
+      "check": "test_mold MoldDecode.BytesAfterTheCountsLastBlockAreRefused",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "  if (at != size) {\n    packet.status = PacketStatus::trailing_bytes;\n    return packet;\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldDecode.BytesAfterTheCountsLastBlockAreRefused"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldDecode\\.BytesAfterTheCountsLastBlockAreRefused"
+      }
+    },
+    {
+      "id": "udp-mold-trailing-bytes-fuzz",
+      "breaks": "Bytes after the count's last block are let through",
+      "check": "corpus_fuzz_mold, the decoder against the target's own walk",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "  if (at != size) {\n    packet.status = PacketStatus::trailing_bytes;\n    return packet;\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_mold"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_mold$"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: packet\\.status == expected_status\\(datagram\\)"
+      }
+    },
+    {
+      "id": "udp-mold-heartbeat-with-data",
+      "breaks": "A heartbeat or end of session with bytes after its header is accepted",
+      "check": "test_mold MoldDecode.AHeartbeatOrEndOfSessionWithBytesAfterIsRefused",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "    if (size != kHeaderBytes) {\n",
+          "new": "    if (size < kHeaderBytes) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldDecode.AHeartbeatOrEndOfSessionWithBytesAfterIsRefused"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldDecode\\.AHeartbeatOrEndOfSessionWithBytesAfterIsRefused"
+      }
+    },
+    {
+      "id": "udp-sequence-misses-a-duplicate",
+      "breaks": "A packet ending at the next expected sequence is not counted as a duplicate",
+      "check": "test_mold MoldSequence.APacketAgainIsADuplicateAndAdmitsNothing",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "    if (end <= next_) {\n",
+          "new": "    if (end < next_) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldSequence.APacketAgainIsADuplicateAndAdmitsNothing"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldSequence\\.APacketAgainIsADuplicateAndAdmitsNothing"
+      }
+    },
+    {
+      "id": "udp-sequence-gap-loses-nothing",
+      "breaks": "A jump ahead counts a gap but no lost messages",
+      "check": "test_mold MoldSequence.AJumpAheadIsAGapAndItsMessagesAreLost",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "      counts_.lost += header.sequence - next_;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldSequence.AJumpAheadIsAGapAndItsMessagesAreLost"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldSequence\\.AJumpAheadIsAGapAndItsMessagesAreLost"
+      }
+    },
+    {
+      "id": "udp-sequence-gap-loses-nothing-fuzz",
+      "breaks": "A jump ahead counts a gap but no lost messages",
+      "check": "corpus_fuzz_mold, next expected = admitted + lost",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "      counts_.lost += header.sequence - next_;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_mold"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_mold$"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: feed\\.sequence\\(\\)\\.next_expected\\(\\) - kFirstSequence"
+      }
+    },
+    {
+      "id": "udp-sequence-heartbeat-gap-ignored",
+      "breaks": "A heartbeat ahead of the next expected sequence is no gap, so loss at the tail is unseen",
+      "check": "test_mold MoldSequence.AHeartbeatAheadShowsLossAtTheTail",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "    if (header.sequence > next_) {\n",
+          "new": "    if (!control && header.sequence > next_) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldSequence.AHeartbeatAheadShowsLossAtTheTail"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldSequence\\.AHeartbeatAheadShowsLossAtTheTail"
+      }
+    },
+    {
+      "id": "udp-sequence-overlap-reapplied",
+      "breaks": "A packet overlapping the last hands on its old blocks again",
+      "check": "test_mold MoldSequence.AnOverlapAdmitsOnlyTheNewTail",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "    const auto skip = static_cast<std::uint16_t>(next_ - header.sequence);\n",
+          "new": "    const auto skip = static_cast<std::uint16_t>((next_ - header.sequence) * 0U);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldSequence.AnOverlapAdmitsOnlyTheNewTail"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldSequence\\.AnOverlapAdmitsOnlyTheNewTail"
+      }
+    },
+    {
+      "id": "udp-sequence-any-session",
+      "breaks": "A packet of another session is taken as this one's",
+      "check": "test_mold MoldSequence.AnotherSessionIsIgnored",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "    if (header.session != session_) {\n",
+          "new": "    if (header.session == Session{}) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldSequence.AnotherSessionIsIgnored"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldSequence\\.AnotherSessionIsIgnored"
+      }
+    },
+    {
+      "id": "udp-feed-skip-ignored",
+      "breaks": "The feed hands on an overlapping packet's old blocks",
+      "check": "test_mold MoldFeed.AnOverlappingPacketHandsOnOnlyItsNewBlocks",
+      "mutations": [
+        {
+          "file": "include/itch/mold_feed.hpp",
+          "old": "    for (std::uint16_t skipped = 0; skipped < admit.skip; ++skipped) {\n      static_cast<void>(reader.next());\n    }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldFeed.AnOverlappingPacketHandsOnOnlyItsNewBlocks"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldFeed\\.AnOverlappingPacketHandsOnOnlyItsNewBlocks"
+      }
+    },
+    {
+      "id": "udp-packets-cap-without-header",
+      "breaks": "The size cap leaves the 20-byte header out, so packets run 20 bytes over it",
+      "check": "test_mold MoldPackets.TheChurnStreamPacksByteForByteAtEveryCap",
+      "mutations": [
+        {
+          "file": "include/itch/mold_packets.hpp",
+          "old": "        (kHeaderBytes + open_bytes + block > plan.max_datagram ||",
+          "new": "        (open_bytes + block > plan.max_datagram ||"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldPackets.TheChurnStreamPacksByteForByteAtEveryCap"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldPackets\\.TheChurnStreamPacksByteForByteAtEveryCap"
+      }
+    },
+    {
+      "id": "udp-packets-block-copied-short",
+      "breaks": "Each packet's blocks are copied a byte short",
+      "check": "test_mold MoldPackets.TheBlocksAreTheFileByteForByte",
+      "mutations": [
+        {
+          "file": "include/itch/mold_packets.hpp",
+          "old": "std::memcpy(array.bytes_.data() + at + kHeaderBytes, blocks.data(), blocks.size());",
+          "new": "std::memcpy(array.bytes_.data() + at + kHeaderBytes, blocks.data(), blocks.size() - 1);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldPackets.TheBlocksAreTheFileByteForByte"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldPackets\\.TheBlocksAreTheFileByteForByte"
+      }
+    },
+    {
+      "id": "udp-packets-slice-off-by-one",
+      "breaks": "A slice starts one frame early",
+      "check": "test_mold MoldPackets.ASliceTakesItsFramesAndNumbersThemFromTheFirstSequence",
+      "mutations": [
+        {
+          "file": "include/itch/mold_packets.hpp",
+          "old": "  for (std::uint64_t skipped = 0; skipped < plan.first_frame; ++skipped) {\n",
+          "new": "  for (std::uint64_t skipped = 0; skipped + 1 < plan.first_frame; ++skipped) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldPackets.ASliceTakesItsFramesAndNumbersThemFromTheFirstSequence"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldPackets\\.ASliceTakesItsFramesAndNumbersThemFromTheFirstSequence"
+      }
+    },
+    {
+      "id": "udp-packets-no-closing-heartbeat",
+      "breaks": "The array ends on the end of session with no heartbeat before it",
+      "check": "test_mold MoldPackets.TheBlocksAreTheFileByteForByte",
+      "mutations": [
+        {
+          "file": "include/itch/mold_packets.hpp",
+          "old": "  close();\n  control(kHeartbeatCount);\n  control(kEndOfSessionCount);\n",
+          "new": "  close();\n  control(kEndOfSessionCount);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldPackets.TheBlocksAreTheFileByteForByte"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldPackets\\.TheBlocksAreTheFileByteForByte"
+      }
+    },
+    {
+      "id": "udp-sender-no-spin",
+      "breaks": "The sender sends each packet without waiting for its time",
+      "check": "test_udp Sender.NoPacketGoesBeforeItsTime",
+      "mutations": [
+        {
+          "file": "bench/udp/sender.hpp",
+          "old": "      while (now < due) {\n        now = clock.now_ns();\n      }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Sender.NoPacketGoesBeforeItsTime"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Sender\\.NoPacketGoesBeforeItsTime"
+      }
+    },
+    {
+      "id": "udp-sender-forgives-a-stall",
+      "breaks": "A late send starts the schedule again from itself, so the sends behind a stall are never late",
+      "check": "test_udp Sender.AStallIsChargedAgainstTheSchedule",
+      "mutations": [
+        {
+          "file": "bench/udp/sender.hpp",
+          "old": "      ++report.lateness[lateness_bucket(late)];\n",
+          "new": "      ++report.lateness[lateness_bucket(late)];\n      report.start_ns += late;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Sender.AStallIsChargedAgainstTheSchedule"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Sender\\.AStallIsChargedAgainstTheSchedule"
+      }
+    },
+    {
+      "id": "udp-sender-lateness-not-summed",
+      "breaks": "The lateness total leaves every send out",
+      "check": "test_udp Sender.NoPacketGoesBeforeItsTime",
+      "mutations": [
+        {
+          "file": "bench/udp/sender.hpp",
+          "old": "      report.late_total_ns += late;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Sender.NoPacketGoesBeforeItsTime"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Sender\\.NoPacketGoesBeforeItsTime"
+      }
+    },
+    {
+      "id": "udp-sender-failure-counted-sent",
+      "breaks": "A failed send's messages are counted as sent",
+      "check": "test_udp Sender.AFailedSendIsCountedByItsErrorAndNotRetried",
+      "mutations": [
+        {
+          "file": "bench/udp/sender.hpp",
+          "old": "      report.failed_messages += ref.messages;\n",
+          "new": "      report.sent_messages += ref.messages;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Sender.AFailedSendIsCountedByItsErrorAndNotRetried"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Sender\\.AFailedSendIsCountedByItsErrorAndNotRetried"
+      }
+    },
+    {
+      "id": "udp-sender-errno-misfiled",
+      "breaks": "EPERM is counted as ENOBUFS",
+      "check": "test_udp Sender.AFailedSendIsCountedByItsErrorAndNotRetried",
+      "mutations": [
+        {
+          "file": "bench/udp/sender.hpp",
+          "old": "      if (result.error == ENOBUFS) {\n",
+          "new": "      if (result.error == ENOBUFS || result.error == EPERM) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Sender.AFailedSendIsCountedByItsErrorAndNotRetried"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Sender\\.AFailedSendIsCountedByItsErrorAndNotRetried"
+      }
+    },
+    {
+      "id": "udp-sender-pin-claimed",
+      "breaks": "The sender claims a pin whatever the call did",
+      "check": "test_udp Sender.PinningIsReportedAsItIs, on macOS",
+      "mutations": [
+        {
+          "file": "bench/udp/sender.hpp",
+          "old": "  return pin_current_thread(core);\n",
+          "new": "  PinOutcome outcome = pin_current_thread(core);\n  outcome.pinned = true;\n  return outcome;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Sender.PinningIsReportedAsItIs"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Sender\\.PinningIsReportedAsItIs"
+      }
+    },
+    {
+      "id": "udp-receive-loop-first-of-batch",
+      "breaks": "The receive loop hands on only the first datagram of each batch",
+      "check": "test_udp ReceiveLoop.BatchesAreHandedOnInOrderAndReleasedWhole",
+      "mutations": [
+        {
+          "file": "bench/udp/receive_mode.hpp",
+          "old": "    for (const Datagram& datagram : arrived) {\n",
+          "new": "    for (const Datagram& datagram : arrived.first(1)) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=ReceiveLoop.BatchesAreHandedOnInOrderAndReleasedWhole"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ReceiveLoop\\.BatchesAreHandedOnInOrderAndReleasedWhole"
+      }
+    },
+    {
+      "id": "udp-s1-timeout-as-failure",
+      "breaks": "S1 reports a receive timeout as a failed call",
+      "check": "test_udp RecvfromMode.ItTimesOutWhenNothingComes",
+      "mutations": [
+        {
+          "file": "bench/udp/receive_mode.hpp",
+          "old": "        return {.status = WaitStatus::idle_timeout, .count = 0, .error = error};\n",
+          "new": "        return {.status = WaitStatus::failed, .count = 0, .error = error};\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=RecvfromMode.ItTimesOutWhenNothingComes"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] RecvfromMode\\.ItTimesOutWhenNothingComes"
+      }
+    },
+    {
+      "id": "udp-s1-datagram-cut",
+      "breaks": "S1 hands on at most 1,400 bytes of a datagram",
+      "check": "test_udp RecvfromMode.EachDatagramArrivesWholeAndInOrder",
+      "mutations": [
+        {
+          "file": "bench/udp/receive_mode.hpp",
+          "old": "        batch[0] = {.bytes = std::span<const std::byte>{buffer_}.first(size)};\n",
+          "new": "        batch[0] = {.bytes = std::span<const std::byte>{buffer_}.first(size > 1400 ? 1400 : size)};\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=RecvfromMode.EachDatagramArrivesWholeAndInOrder"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] RecvfromMode\\.EachDatagramArrivesWholeAndInOrder"
+      }
+    },
+    {
+      "id": "udp-alloc-sender-allocates",
+      "breaks": "The sender takes a block from the heap for each packet",
+      "check": "test_alloc Allocation.TheUdpReplayAllocatesNothingAfterConstruction",
+      "mutations": [
+        {
+          "file": "bench/udp/sender.hpp",
+          "old": "    ++report.packets;\n",
+          "new": "    ++report.packets;\n    ::operator delete(::operator new(16));\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_alloc",
+        "--gtest_filter=Allocation.TheUdpReplayAllocatesNothingAfterConstruction"
+      ],
+      "expect": {
+        "signature": "allocation in the sender or the receiver"
+      }
+    },
+    {
+      "id": "udp-alloc-s1-allocates",
+      "breaks": "S1 takes a block from the heap for each datagram",
+      "check": "test_alloc Allocation.TheUdpReplayAllocatesNothingAfterConstruction",
+      "mutations": [
+        {
+          "file": "bench/udp/receive_mode.hpp",
+          "old": "        ++counters_.datagrams;\n",
+          "new": "        ++counters_.datagrams;\n        ::operator delete(::operator new(16));\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_alloc",
+        "--gtest_filter=Allocation.TheUdpReplayAllocatesNothingAfterConstruction"
+      ],
+      "expect": {
+        "signature": "allocation in the sender or the receiver"
+      }
+    },
+    {
+      "id": "udp-alloc-feed-allocates",
+      "breaks": "The feed takes a block from the heap for each datagram",
+      "check": "test_alloc Allocation.TheUdpReplayAllocatesNothingAfterConstruction",
+      "mutations": [
+        {
+          "file": "include/itch/mold_feed.hpp",
+          "old": "    ++counts_.datagrams;\n",
+          "new": "    ++counts_.datagrams;\n    ::operator delete(::operator new(16));\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_alloc",
+        "--gtest_filter=Allocation.TheUdpReplayAllocatesNothingAfterConstruction"
+      ],
+      "expect": {
+        "signature": "allocation in the feed"
+      }
+    },
+    {
+      "id": "udp-loopback-verdict-ignores-the-paths",
+      "breaks": "itch_loopback passes without comparing the file path's frames and book with the UDP path's",
+      "check": "test_loopback_cli.py, the corrupt-packet control",
+      "mutations": [
+        {
+          "file": "tools/itch_loopback.cpp",
+          "old": "         by_udp == by_file;\n",
+          "new": "         by_udp.frames == by_file.frames;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_loopback"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_loopback_cli.py",
+        "{build}/tools/itch_loopback",
+        "{build}/loopback_fault",
+        "{tree}/tests/fixtures/oracle",
+        "{tree}/tests/fixtures/trades"
+      ],
+      "expect": {
+        "signature": "loopback cli: FAIL corrupt packet"
+      }
+    },
+    {
+      "id": "udp-loopback-verdict-ignores-duplicates",
+      "breaks": "itch_loopback passes a run in which a packet came twice",
+      "check": "test_loopback_cli.py, the duplicate-packet control",
+      "mutations": [
+        {
+          "file": "tools/itch_loopback.cpp",
+          "old": "         sequence.duplicate_messages == 0 && sequence.foreign_session == 0 &&\n",
+          "new": "         sequence.foreign_session == 0 &&\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_loopback"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_loopback_cli.py",
+        "{build}/tools/itch_loopback",
+        "{build}/loopback_fault",
+        "{tree}/tests/fixtures/oracle",
+        "{tree}/tests/fixtures/trades"
+      ],
+      "expect": {
+        "signature": "loopback cli: FAIL duplicate packet"
+      }
+    },
+    {
+      "id": "udp-loopback-checkpoint-never-taken",
+      "breaks": "The book digest never takes its checkpoint hash, so the book part way through goes unchecked",
+      "check": "test_loopback_cli.py, the checkpoint on both paths",
+      "mutations": [
+        {
+          "file": "bench/udp/digest.hpp",
+          "old": "    if (summary_.frames == checkpoint_) {\n",
+          "new": "    if (summary_.frames == checkpoint_ + 1000000000) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_loopback"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_loopback_cli.py",
+        "{build}/tools/itch_loopback",
+        "{build}/loopback_fault",
+        "{tree}/tests/fixtures/oracle",
+        "{tree}/tests/fixtures/trades"
+      ],
+      "expect": {
+        "signature": "never reached its checkpoint"
+      }
+    }
+  ]
+}
