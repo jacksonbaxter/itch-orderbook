@@ -72,6 +72,17 @@ endif()
 itch_add_test(test_book_variants test_book_variants.cpp)
 target_include_directories(test_book_variants PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 
+# MoldUDP64 framing, the sequence check, the prebuilt packets and the feed (T-URING-1).
+itch_add_test(test_mold test_mold.cpp)
+target_compile_definitions(test_mold PRIVATE
+  "ITCH_ORACLE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle\""
+  "ITCH_TRADE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades\"")
+# The replay sender's pacing on a hand-moved clock, S1, and the two on loopback.
+itch_add_test(test_udp test_udp.cpp)
+target_include_directories(test_udp PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+target_compile_definitions(test_udp PRIVATE
+  "ITCH_ORACLE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle\"")
+
 # The parsing kernels. Each kernel this build has is its own ctest entry, so that one the CPU
 # cannot run shows as skipped, never as passed, and an entry whose filter matches nothing
 # fails. test_kernels runs the rest: selection, the parser's scalar tail, the scalar oracle.
@@ -156,9 +167,13 @@ if(ITCH_BUILD_TOOLS)
   add_test(NAME test_mm_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_mm_cli.py"
             "$<TARGET_FILE:itch_mm>" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle")
+  add_test(NAME test_loopback_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_loopback_cli.py"
+            "$<TARGET_FILE:itch_loopback>" "${CMAKE_CURRENT_BINARY_DIR}/loopback_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades")
   set_tests_properties(test_census_cli test_oracle_cli test_trades_cli test_map_compare_cli
     test_backtest_cli test_queue_jumps_cli test_calibrate_cli test_select_cli test_mm_cli
-    PROPERTIES LABELS unit)
+    test_loopback_cli PROPERTIES LABELS unit)
 endif()
 
 if(ITCH_BUILD_TOOLS AND ITCH_BUILD_BENCH)

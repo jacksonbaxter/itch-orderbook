@@ -61,3 +61,11 @@ endif()
 add_executable(itch_window itch_window.cpp)
 target_link_libraries(itch_window PRIVATE itch_parser)
 itch_apply_options(itch_window)
+
+# The UDP replay's functional check on loopback: the sender and S1 from bench/udp, the
+# book digest from the oracle's canonical walk. Never a measurement.
+add_executable(itch_loopback itch_loopback.cpp)
+target_include_directories(itch_loopback PRIVATE
+  "${PROJECT_SOURCE_DIR}/bench" "${PROJECT_SOURCE_DIR}/tests")
+target_link_libraries(itch_loopback PRIVATE itch_parser)
+itch_apply_options(itch_loopback)
