@@ -36,6 +36,23 @@ add_executable(bench_backtest bench_backtest.cpp)
 target_link_libraries(bench_backtest PRIVATE itch_bench_support)
 itch_apply_options(bench_backtest)
 
+# The walks of T-BT-3's simulated levels, counted through a copy of the engine made at build
+# time with a count at each walk (cmake/ItchWalkEngine.cmake). The engine itself is untouched.
+set(itch_walk_engine "${CMAKE_CURRENT_BINARY_DIR}/generated/walk_engine.hpp")
+add_custom_command(OUTPUT "${itch_walk_engine}"
+  COMMAND "${CMAKE_COMMAND}" "-DSOURCE=${PROJECT_SOURCE_DIR}/include/itch/backtest.hpp"
+          "-DOUTPUT=${itch_walk_engine}" -P "${PROJECT_SOURCE_DIR}/cmake/ItchWalkEngine.cmake"
+  DEPENDS "${PROJECT_SOURCE_DIR}/include/itch/backtest.hpp"
+          "${PROJECT_SOURCE_DIR}/cmake/ItchWalkEngine.cmake"
+  COMMENT "Copying the backtester's engine with its walks counted"
+  VERBATIM)
+add_custom_target(itch_walk_engine DEPENDS "${itch_walk_engine}")
+add_executable(bench_walks bench_walks.cpp)
+add_dependencies(bench_walks itch_walk_engine)
+target_include_directories(bench_walks PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_link_libraries(bench_walks PRIVATE itch_bench_support)
+itch_apply_options(bench_walks)
+
 # T-SPSC-1 and T-SPSC-2. Built in every configuration with the project ring and the mutex
 # floor; the third-party queues join when ITCH_COMPARISON_QUEUES fetched them.
 add_executable(bench_spsc bench_spsc.cpp)

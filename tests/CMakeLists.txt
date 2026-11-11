@@ -116,6 +116,13 @@ endif()
 list(JOIN itch_udp_modes_built "," itch_udp_modes_built)
 
 if(ITCH_BUILD_BENCH)
+  # bench_walks' counted engine, made in bench/ (cmake/ItchWalkEngine.cmake), against hand
+  # counts and against the engine.
+  itch_add_test(test_walk_counts test_walk_counts.cpp)
+  add_dependencies(test_walk_counts itch_walk_engine)
+  target_include_directories(test_walk_counts PRIVATE "${PROJECT_SOURCE_DIR}/bench"
+    "${PROJECT_BINARY_DIR}/bench/generated")
+  set_tests_properties(test_walk_counts PROPERTIES TIMEOUT 60)
   add_test(NAME test_bench_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_cli.py"
             "$<TARGET_FILE:bench_replay>" "$<TARGET_FILE:bench_probe>"
@@ -146,9 +153,13 @@ if(ITCH_BUILD_BENCH)
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_udp_cli.py"
             "$<TARGET_FILE:bench_udp>" "${CMAKE_CURRENT_BINARY_DIR}/bench_udp_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch" "${itch_udp_modes_built}")
+  add_test(NAME test_bench_walks_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_walks_cli.py"
+            "$<TARGET_FILE:bench_walks>" "${CMAKE_CURRENT_BINARY_DIR}/bench_walks_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
   set_tests_properties(test_bench_cli test_bench_backtest_cli test_bench_counts_cli
     test_bench_variants_cli test_bench_spsc_cli test_bench_kernels_cli test_bench_udp_cli
-    PROPERTIES LABELS unit)
+    test_bench_walks_cli PROPERTIES LABELS unit)
 endif()
 
 if(ITCH_BUILD_TOOLS)
