@@ -1997,3 +1997,12 @@ From about 14:10Z every Linux job failed at its `apt` step with `Temporary failu
 - Run 43041520046, 78dcd6d: attempt 1, then reruns at 15:08:19Z, 15:31:03Z, 15:54:07Z and 16:17:11Z, all four Linux jobs failing at the `apt` step with that error.
 
 The DNS fault then cleared. Attempt 6 of 43041520046 got past `apt` and showed a real failure: both GCC 14 jobs stop at `tests/test_walk_counts.cpp` line 91 with `-Werror=stringop-overflow`. Clang, macOS and Emscripten pass. Another piece owns that fix and will check it with GCC 14 on `debian`. Until it lands, every commit's GCC jobs fail the same way and `main` cannot move.
+
+## The repo's layout, 2026-11-11
+
+At the user's request, for a visitor who opens `main`: the session's instructions leave the tree, the two working files move under `docs/`, and the code gets a licence.
+
+- **CLAUDE.md.** Untracked with `git rm --cached` and ignored as `/CLAUDE.md`. It stays on disk. No history was rewritten, since every results file cites commits.
+- **docs/NOTES.md and docs/TASKS.md.** Moved with `git mv`. Every mention in code comments, scripts, the CI comment, the README and BENCHMARKS.md names the new path, and the four links here to `results/` became `../results/`. The results files that name this file are generated, so `variants_report.py`, `simd_report.py` and `mm_report.py` now write `docs/NOTES.md`, and the 14 committed files differ from before in that path only: the nine `simd_*_mac` files are byte-identical to a fresh render from their raw runs, and the others pass their generators' `--check`. The demo's gates read only `.html`, `.css` and `.js` under `docs/`, and the demo stage's browser run copies its files by name, so neither meets the two new files.
+- **What still says the old path.** `results/predictions.md` and `results/run_log.md`, which `check_predictions.py` holds unedited; `scripts/mm_evaluation.json`, fixed before any run of the market maker; and `results/fault_matrix.md`, the record of a run at b9a7d8e. Each is a record of its time, so none was changed.
+- **LICENSE.** MIT, for the project's own code. The README names what keeps its source's terms: figures from Nasdaq's sample files, MIDAS and CrossStats in `results/`, and the FlameGraph script each flamegraph SVG embeds, which is under the CDDL.
