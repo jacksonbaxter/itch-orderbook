@@ -593,3 +593,12 @@ included.
 - Prediction, rate: the median between 1.6 and 3.0 M extract messages/s, most likely near 2.1 M, so T-BT-3 is missed on `debian` by about 2.5 M messages/s: a 2.0 GHz embedded Zen 1 part against the M1 Pro. CV under 2%. The untimed extract takes between 3 and 15 s a process.
 - Prediction, counts: every repetition gives the same counts and event hash, and they are the Mac file's: 5,425,845 extract messages, 131,519 fills, 0 queue anomalies, 7,109 hidden prints, event hash `06cbd8541ec86564`.
 - Prediction, peak memory: peak RSS from `getrusage` between 8.0 and 9.6 GiB, since the extract reads the whole mapped day; `pswpout` does not move.
+
+## P-0503: T-TRADE-2 on 10302019, against Nasdaq's CrossStats for that day
+
+- Experiment: `scripts/check_real_day.sh --only trades --arms all 10302019` on `macOS (M4 Max)`, each `itch_trades` under `heavy.sh` and `/usr/bin/time -l`, all four arms of the fast book, now with `data/CrossStats20191030.txt`, which `scripts/fetch_data.py` pinned with the eight new sessions' files for P-0501 and which no check has read.
+- What it is for: T-TRADE-2 on the second reference day, which was not available while no CrossStats file for it was in hand. Exact per-symbol equality: opening `Q` shares against the file's Opening column and closing `Q` shares against its Closing column, the `Q` shares outside the file equal to the type-`H` sum, and test symbols counted apart.
+- What was seen before this was written: the file's size and SHA-256 against its pin, and nothing of its content. `results/trades_10302019.md` at f09ea44, without the file: 5,690 `Q` with shares, 99,636,548 shares, and 12,085 with none; cross legs of `C_N` beside `Q_O`, `Q_C` and `Q_H`; 13,941 test-symbol prints. T-TRADE-2 passed on 12302019 and on the seven Nasdaq sessions of P-0501, each against its own file.
+- Prediction, T-TRADE-2: PASS on every arm, 0 violations: every file row equal to the feed's opening and closing `Q` shares on its symbol, and the `Q` shares outside the file, test symbols left out, equal to the type-`H` sum.
+- Prediction, the other checks: T-TRADE-1, T-TRADE-3, T-TRADE-5 and PRINTS PASS with the counts of f09ea44's file, and every arm's log agreeing with the first arm's.
+- Prediction, memory: maximum RSS between 9.4 and 10.5 GiB on each arm, the mapped day counted, and peak footprint between 0.9 and 1.7 GiB.
