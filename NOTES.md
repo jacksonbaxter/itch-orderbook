@@ -1192,6 +1192,14 @@ T-INV-2 strict, crossed and locked observations, then those with the market open
 
 **At the merge into `jb-build`, 2026-11-10.** `results/oracle_sessions.md` now names P-0501, and `check_predictions.py` holds it to that prediction's history: committed before the file and never edited. It is a sum of other results files and no run, so it needs no run-log row. Each day's `oracle_*.md` and `trades_*.md` still names no prediction: 12302019's and 10302019's were written before predictions were kept, and none of them is a driver's run.
 
+## T-TRADE-2 on 10302019, 2026-11-10
+
+P-0503. `CrossStats20191030.txt` was pinned with P-0501's files and no check had read it, so 10302019's T-TRADE-2 stood as not available. It now ran: `scripts/check_real_day.sh --only trades --arms all 10302019` on `macOS (M4 Max)`, each `itch_trades` under `heavy.sh` and `/usr/bin/time -l`, the file checked against its pin by `fetch_data.py --verify-only` first.
+
+**T-TRADE-2 passes on all four arms**, 0 violations. All 3,180 file rows equal the feed per symbol: 15,535,078 opening shares and 83,990,843 closing shares. The feed's `Q` outside the file, test symbols left out, is 1,327 shares, and the three type `H` crosses sum to exactly that. Test symbols crossed 13,008 opening and 96,292 closing shares, counted apart. The four parts sum to the 99,636,548 `Q` shares of the earlier file. T-TRADE-1, 3, 5 and PRINTS gave the counts of f09ea44's file again, and every arm's log agreed with `hash_linked`'s. Maximum RSS 9.63 to 10.07 GiB, the mapped day counted, peak footprint 1.01 to 1.45 GiB, inside the prediction. The replay times in the results file are wall time on a shared Mac, not measurements.
+
+So T-TRADE-2 has passed on every Nasdaq day the project holds, and the line under "What the checks do not prove" that it ran on one day is out of date. `results/trades_10302019.md` names no prediction, like every `trades_*.md`; P-0503 is its record.
+
 ## T-BOOK-4 on 01302019, 2026-11-05
 
 P-0502, `bench_replay` through `bench_driver.py` with the day in memory, `paged-flat`, under `measure.sh /usr/bin/time -l`, `mac-hold` held and a CPU sampler beside it. Every attempt so far was withdrawn under the sampler rule, each with its run-log row: the first for a backup at up to 165% CPU (and it was stopped by hand, `measure.sh` first, so the driver ran some seconds after the measure lock was freed); the second and third for a browser, another project's Python, Spotlight and macOS daemons above 20%. Later attempts wait until the sampler's test has shown the Mac quiet for 120 s running and are spaced 20 minutes apart.
