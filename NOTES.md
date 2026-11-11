@@ -1773,3 +1773,30 @@ The obtained size comes from the `AnonHugePages` and `KernelPageSize` lines of `
 **The ratio between the two.** A message of T-BT-3 costs 1.36 times one of T-BT-1 here, where it cost 2.15 times on the Mac. Every message of T-BT-3 is on a traded symbol and goes through both books and the placer, so its extra work is fixed; what differs is T-BT-1's base. Its 268.7 million messages walk the book of every symbol of the day, far beyond this host's 4 MB of L3, while T-BT-3's four symbols' books stay in cache. That would make the full day relatively dearer on the smaller cache, but no counter was read in either run, so it is a likely reason, not a measured one.
 
 **The predictions against what ran.** P-0103 held in full: the rate inside 4.0 to 5.2 M and near the 4.6 M expected, met; engine events 1.023 times the message rate; CV under 2%; the Mac's counts and hash; peak RSS inside 8.3 to 9.6 GiB. P-0104 held on the counts, the hash, the extract's time and peak RSS, and on the verdict, a miss. It failed on the rate, 3.35 M above the 1.6 to 3.0 M predicted, so the miss is 1.26 M and not about 2.5 M; the prior scaled the Mac's T-BT-3 by the hosts' T-BT-1 ratio, which the paragraph above shows does not carry over. It failed on the CV too, 2.06% against under 2%: the second process's timed pass took 1.672 s against 1.609 and 1.618, on a pass of 1.6 s.
+
+## T-ARENA-1 on `debian`: the Linux page code and the arms' checks, 2026-11-11
+
+**The Linux page code builds and passes.** `src/page_map_linux.cpp` was built for the first time on Linux, on `debian` at c8ca2e2, in the release build with mimalloc v3.5.3 (`-DITCH_MIMALLOC=ON`), with no warning under `-Wall -Wextra -Werror`. `test_book`, `test_alloc`, `test_node_book` and `test_bench_replay` passed there, the four `PageMapping` and pool tests among them: `PageMapping.BasePagesAreTheBasePageSize`, `PageMapping.AHugeRequestClaimsOnlyWhatTheKernelSays`, `NodePool.TheFaultCountSeesFreshPagesFaultIn` and `NodeBook.ThePoolArmsTakeTheirPagesUpFront`.
+
+**The host's pages.** `transparent_hugepage` is `enabled [always]` and `defrag [madvise]`, khugepaged's `defrag` is 1, and `vm.nr_hugepages` is 0, with `nr_overcommit_hugepages` 0. So under `always` every large anonymous mapping may get 2 MiB pages whatever this project asks: the day's copy, the index, the latency samples and every heap arm's memory. Only the pools' own mappings are steered, by `madvise(MADV_NOHUGEPAGE)` under `base` and `madvise(MADV_HUGEPAGE)` under `transparent`. The crossing is therefore of the pools' pages alone, which is what T-ARENA-1's crossing asks.
+
+**What the kernel gave.** Read back from `/proc/self/smaps` for the order pool's mapping by `itch_alloc` and `itch_map_compare`, which report that pool only:
+- under `base`: `KernelPageSize` 4 kB and `AnonHugePages` 0 kB, on every pool arm, so no node sat on a huge page;
+- under `transparent`: `AnonHugePages` 57,344 kB of a 58,720,256-byte mapping on the index arms (24-byte orders) and 94,208 kB of 96,468,992 bytes on the pointer arm (40-byte orders), the whole mapping each time, so every order node sat on a 2 MiB page. `KernelPageSize` still reads 4 kB for a transparent mapping, as it does for any THP, so the claim rests on `AnonHugePages`.
+
+**The checks on the whole day, before any timing.** `itch_alloc --allocator ARM --pages P` and `itch_map_compare --allocator ARM --pages P` on all of 12302019, for each pool arm under `base` and `transparent`, each its own process through `heavy.sh`, its peak RSS from `getrusage` of its children. Every one passed:
+
+| Tool | Arm | `base` peak RSS GiB, wall s | `transparent` peak RSS GiB, wall s |
+|---|---|---|---|
+| `itch_alloc` | pool-index | 8.16, 352 | 8.16, 292 |
+| `itch_alloc` | pool-pointer | 8.21, 331 | 8.21, 291 |
+| `itch_alloc` | pool-fifo | 8.16, 305 | 8.16, 280 |
+| `itch_map_compare` | pool-index | 8.55, 318 | 8.55, 245 |
+| `itch_map_compare` | pool-pointer | 8.60, 270 | 8.60, 247 |
+| `itch_map_compare` | pool-fifo | 8.55, 269 | 8.55, 250 |
+
+Each `itch_alloc` gave `T-ARENA-1-ALLOC PASS` with 0 allocations by the book against 324,511,069 by the map book's control, 0 refused, and 184,132,100 nodes made. Each `itch_map_compare` gave `NODE-BOOK PASS` over 268,744,780 messages with 0 divergences and the same last hash. The peaks count the mapped day. These runs were at nice 5 (the previous section), which is no matter for a count. The wall times are not measurements and are not compared.
+
+**`pmr-monotonic` does not fit, so it is not run on `debian`.** It never reuses a node, so its book ends holding every node the day makes. The pool arms made 184,132,100 nodes. 140,270,523 of them are orders, one an add or a replace (118,631,456 and 21,639,067), so 43,861,577 are levels. At the pointer arms' 40 and 56 bytes, that is 5.61 GB of orders and 2.46 GB of levels, 7.51 GiB, before any of the resource's own overhead. Beside it, a timed process holds the 7.68 GiB copy of the day and about 1.25 GiB of latency samples: 16.4 GiB in a host of 15.3 GiB of RAM, of which about 14.4 GiB was available with nothing of this project running. Even the throughput pass alone, the day and the book, would need 15.2 GiB. The arm is left out of both runs. Its figures would have to come from a host with more memory, or from a run that streams the day instead of copying it, which would be a different experiment from the other arms'.
+
+**`explicit` is blocked on the user.** `--pages explicit` maps from the reserved pool with `MAP_HUGETLB` and takes no fallback. `vm.nr_hugepages` is 0 on `debian`, and setting it is a root step outside this project: at least 73 pages of 2 MiB for one pointer book, 160 to be safe. No run was attempted.
