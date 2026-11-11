@@ -1967,3 +1967,31 @@ If the measured share at T-BT-3 is above 10%, or the deep schedules' share is la
 - no allocation after construction.
 
 The 1,000,000-order schedule shows that per-order `ahead` updates are the other cost, and a lookup does not touch it.
+
+## The README's layout, 2026-11-11
+
+`main` is now the default branch, and a recruiter is likely to open the README first, so its top is a short pitch and a headline of six targets, and the full tables moved to RESULTS.md.
+
+- **Two generated pages.** `scripts/results_table.py` writes RESULTS.md's tables between their markers, as it wrote the README's, and the README's headline between a second pair. `--check` checks both pages and reports each one that differs, and a page that is missing or has lost a marker fails. RESULTS.md keeps every row the README had: every verdict, failures included, and every run in the run log.
+- **The headline's rows.** A fixed list in the generator, `HEADLINE`: each target with the file it is read from. The bar, the measured value, the host and the verdict all come from that file; only the words on what each target measures are written there.
+  - T-ORACLE-2, from `oracle_sessions.md`: the correctness claim the rest stands on, 0 divergences over 10 sessions.
+  - T-ALLOC-1, from `oracle_12302019.md`: the allocation-free hot path, with the control book's count beside it and every arm's verdict read.
+  - T-BOOK-2, missed, from P-0013's `paged-flat` file on `debian`: the throughput of the realistic pipeline, the file mapped and the top tracked. P-0013 is the later of the two `debian` runs of it; P-0011's 5.09 M stays in RESULTS.md.
+  - T-LAT-2, missed, from the same file: the per-message tail a low-latency reader looks for.
+  - T-BT-1, from the quoting backtest on `debian`.
+  - T-SPSC-3, from the pipeline file on `debian`: the ring inside the replay.
+
+  The two Mac rows are counts, not timings, and every timed row is from `debian`. Left out: T-WASM-1, whose row says the browser differs and so is neither met nor missed; T-BT-3, T-SPSC-1, T-SPSC-2, T-PERF-1 and T-PERF-2, all missed or failed on `debian`, which the README's list of what is built names and RESULTS.md shows.
+- **What the generator refuses.** A headline of fewer than 5 rows or more than 6; a row whose file is gone, whose targets table has no row or two for it, or whose verdict is neither met nor missed, such as a Mac file's "host differs"; and a headline with no missed target in it.
+- **Checks.** `gate_numbers.py` reads RESULTS.md by default beside the README and the demo page, and `check.sh`'s readme stage gates both pages by name. The pitch's figures are held the same way: its one large figure cites `results/oracle_sessions.md` on its line.
+- **Faults.** The readme area's faults that edited README rows now edit RESULTS.md and expect its name. New ones: the headline typed over, a missed verdict rewritten as met, a headline figure not in its file, the headline and RESULTS.md each left stale after a results file changes, RESULTS.md's marker gone, a missing RESULTS.md not reported, both missed rows dropped from `HEADLINE`, the miss rule, the verdict rule, the size rule and the file rule each removed, the verdict or the oracle's host fixed in code, an arm's allocation ignored, `--check` stopping at the first page, `gate_numbers.py` leaving RESULTS.md out, and a figure in RESULTS.md's prose that only the readme stage's gate can see. The demo, matrix and marketmaker areas copy RESULTS.md into their trees, since `test_results_table.py` reads it.
+- **Links.** No README link names a branch: every link is relative, apart from the local address the demo server prints.
+
+## GitHub's runner DNS fault, 2026-11-11
+
+From about 14:10Z every Linux job failed at its `apt` step with `Temporary failure resolving 'azure.archive.ubuntu.com'`, before any of this repository's code ran; the macOS job passed each time. No code was changed for it.
+
+- Run 43035681290, 5a944ca: three attempts from 14:09Z, the same error each time.
+- Run 43041520046, 78dcd6d: attempt 1, then reruns at 15:08:19Z, 15:31:03Z, 15:54:07Z and 16:17:11Z, all four Linux jobs failing at the `apt` step with that error.
+
+The DNS fault then cleared. Attempt 6 of 43041520046 got past `apt` and showed a real failure: both GCC 14 jobs stop at `tests/test_walk_counts.cpp` line 91 with `-Werror=stringop-overflow`. Clang, macOS and Emscripten pass. Another piece owns that fix and will check it with GCC 14 on `debian`. Until it lands, every commit's GCC jobs fail the same way and `main` cannot move.
