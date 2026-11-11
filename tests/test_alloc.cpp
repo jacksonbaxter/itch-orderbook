@@ -9,7 +9,8 @@
 // animation's step(), which also reads each print.
 // The backtester takes a synthetic market with a strategy trading on it, in the same kind
 // of window. So do the SPSC ring and T-SPSC-3's pipelined replay, the window opening once
-// its parser thread is waiting.
+// its parser thread is waiting, and the UDP replay: the feed on its own, then the paced
+// sender and S1 on loopback, the window opening once both threads are waiting.
 // The reference book takes the same stream and must allocate, and each form of new is
 // shown reaching its own counter, so a broken counter fails here instead of passing the
 // fast book. The map book, the T-DESIGN-1 baseline, allocates by design, and the heap ager
@@ -44,6 +45,8 @@
 #include "itch/mm/marks.hpp"
 #include "itch/mm/session.hpp"
 #include "itch/mm/strategy.hpp"
+#include "itch/mold_feed.hpp"
+#include "itch/mold_packets.hpp"
 #include "itch/node_arms.hpp"
 #include "itch/node_book.hpp"
 #include "itch/reader.hpp"
@@ -54,6 +57,8 @@
 #include "pipeline.hpp"
 #include "support/churn.hpp"
 #include "support/fixtures.hpp"
+#include "udp/digest.hpp"
+#include "udp/loopback.hpp"
 #ifdef ITCH_HAVE_MIMALLOC
 #include "itch/mimalloc_arm.hpp"
 #endif
@@ -300,6 +305,51 @@ TEST(Allocation, TheRingAndThePipelineAllocateNothingAfterConstruction) {
   EXPECT_EQ(counts.of(itch::ApplyStatus::applied), counts.ops);
   EXPECT_GT(counts.ops, 100U * ops.capacity()) << "the ring did not wrap";
   EXPECT_TRUE(counts.checkpoint_reached) << "the checkpoint's hash walk was not counted";
+}
+
+// The UDP replay's two loops. First the feed alone, every packet of the churn stream
+// through the framing, the sequence check and the book. Then the same packets down a
+// loopback pair: the sender paced on its thread, S1 on its own, the book's hash taken at
+// a checkpoint on the receiver's thread, all inside the window.
+TEST(Allocation, TheUdpReplayAllocatesNothingAfterConstruction) {
+  const std::vector<std::byte> stream = build_stream();
+  const auto packets = itch::mold::build_packets(stream, {});
+  ASSERT_TRUE(packets.has_value());
+
+  itch::FastBook<> fed{kCapacity};
+  std::uint64_t refused = 0;
+  const auto apply = [&fed, &refused](const itch::Frame& frame) {
+    const itch::ApplyStatus status = fed.apply(frame.payload);
+    refused += status == itch::ApplyStatus::applied || status == itch::ApplyStatus::no_book_effect
+                   ? 0U
+                   : 1U;
+  };
+  itch::mold::FeedHandler feed{packets->plan().session, 1, apply};
+  reset_alloc_counts();
+  for (std::size_t i = 0; i < packets->size(); ++i) {
+    feed.on_datagram(packets->packet(i));
+  }
+  const AllocCounts by_feed = read_alloc_counts();
+  std::println("udp feed: {} packets, {} frames, {} refused, {} allocations", packets->size(),
+               feed.counts().frames, refused, by_feed.total());
+  EXPECT_EQ(by_feed.total(), 0U) << "allocation in the feed";
+  EXPECT_EQ(feed.counts().frames, packets->messages());
+  EXPECT_EQ(refused, 0U);
+
+  itch::FastBook<> received{kCapacity};
+  itch::bench::udp::BookDigest digest{received, packets->messages() / 2};
+  const auto run = itch::bench::udp::run_loopback_s1(
+      *packets, {.send = {.messages_per_second = 2'000'000}}, digest, [] { reset_alloc_counts(); });
+  const AllocCounts by_loopback = read_alloc_counts();
+  ASSERT_TRUE(run.has_value());
+  ASSERT_TRUE(run->sender.report.has_value());
+  std::println("udp loopback: {} packets sent, {} datagrams, {} frames, {} lost, {} allocations",
+               run->sender.report->sent_packets, run->mode.datagrams, run->feed.frames,
+               run->sequence.lost, by_loopback.total());
+  EXPECT_EQ(by_loopback.total(), 0U) << "allocation in the sender or the receiver";
+  EXPECT_EQ(run->sender.report->sent_packets, packets->size());
+  EXPECT_GT(run->mode.datagrams, packets->size() / 2) << "the receiver took too few packets";
+  EXPECT_TRUE(digest.finish().checkpoint_reached) << "the checkpoint's hash walk was not counted";
 }
 
 TEST(Allocation, TheControlBookIsSeenAllocating) {

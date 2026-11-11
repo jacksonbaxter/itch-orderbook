@@ -167,9 +167,13 @@ if(ITCH_BUILD_TOOLS)
   add_test(NAME test_mm_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_mm_cli.py"
             "$<TARGET_FILE:itch_mm>" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle")
+  add_test(NAME test_loopback_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_loopback_cli.py"
+            "$<TARGET_FILE:itch_loopback>" "${CMAKE_CURRENT_BINARY_DIR}/loopback_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades")
   set_tests_properties(test_census_cli test_oracle_cli test_trades_cli test_map_compare_cli
     test_backtest_cli test_queue_jumps_cli test_calibrate_cli test_select_cli test_mm_cli
-    PROPERTIES LABELS unit)
+    test_loopback_cli PROPERTIES LABELS unit)
 endif()
 
 if(ITCH_BUILD_TOOLS AND ITCH_BUILD_BENCH)
