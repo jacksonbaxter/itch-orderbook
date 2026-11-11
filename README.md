@@ -91,3 +91,10 @@ scripts/check.sh --only NAME   # one stage
 ```
 
 It reads nothing from `data/`. Each stage's log is in `build/check-logs/`.
+
+## Licence
+
+The project's own code is under the MIT licence in [LICENSE](LICENSE). Some committed files are derived from third-party data or code, and those keep their source's terms:
+
+- The results files in `results/` report figures measured on Nasdaq's TotalView-ITCH sample files, which the repo does not ship, and `results/trades_*.md` also carry per-symbol figures from the SEC's MIDAS files and Nasdaq's CrossStats files. Those figures keep Nasdaq's and the SEC's terms ([docs/NOTES.md](docs/NOTES.md), "Terms"; [BENCHMARKS.md](BENCHMARKS.md), T-TRADE-2 and T-TRADE-3).
+- The flamegraph SVGs in `results/` are drawn by Brendan Gregg's [FlameGraph](https://github.com/brendangregg/FlameGraph), and each embeds its script, which is under the Common Development and Distribution License.
