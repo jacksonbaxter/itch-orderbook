@@ -65,13 +65,14 @@ stage_script_tests() {
     python_test scripts/test_fetch_tool.py
 }
 
-# The README's tables against a fresh run over results/, and its figures against those files,
-# and T-ORACLE-2's sum of the oracle's results files against a fresh one.
+# RESULTS.md's tables and the README's headline against a fresh run over results/, and the
+# figures on both pages against those files, and T-ORACLE-2's sum of the oracle's results files
+# against a fresh one.
 stage_readme() {
   python_test scripts/oracle_sessions.py --check &&
     python_test scripts/results_table.py --check &&
     python_test scripts/test_results_table.py &&
-    python_test scripts/gate_numbers.py --page README.md
+    python_test scripts/gate_numbers.py --page README.md --page RESULTS.md
 }
 
 # Reads .github/workflows with the pinned actionlint, fetched into the build tree. No

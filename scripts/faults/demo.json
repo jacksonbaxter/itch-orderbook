@@ -15,7 +15,8 @@
     "scripts",
     "results",
     "docs",
-    "README.md"
+    "README.md",
+    "RESULTS.md"
   ],
   "faults": [
     {

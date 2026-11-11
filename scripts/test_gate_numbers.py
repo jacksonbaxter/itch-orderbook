@@ -45,10 +45,10 @@ class Gate(unittest.TestCase):
     def test_the_fixture_passes(self):
         code, output = run(self.root)
         self.assertEqual(code, 0, output)
-        self.assertIn("figures across 2 pages", output)
+        self.assertIn("figures across 3 pages", output)
 
     def test_each_figure_changed_in_turn_fails_alone(self):
-        for page in ("README.md", "docs/index.html"):
+        for page in ("README.md", "RESULTS.md", "docs/index.html"):
             original = (self.root / page).read_text(encoding="utf-8")
             figures = list(gate_numbers.figures_in(original))
             self.assertTrue(figures)
@@ -94,8 +94,17 @@ class Gate(unittest.TestCase):
         code, output = run(self.root)
         self.assertEqual(code, 1, output)
 
+    def test_the_results_page_is_gated_without_being_named(self):
+        page = self.root / "RESULTS.md"
+        page.write_text(page.read_text(encoding="utf-8").replace("20,677,835", "20,677,836"),
+                        encoding="utf-8")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("RESULTS.md:5: 20,677,836 is not in results/bench_one.md", output)
+
     def test_no_pages_at_all_passes_and_says_so(self):
         (self.root / "README.md").unlink()
+        (self.root / "RESULTS.md").unlink()
         shutil.rmtree(self.root / "docs")
         code, output = run(self.root)
         self.assertEqual(code, 0)

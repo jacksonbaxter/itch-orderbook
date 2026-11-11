@@ -2,18 +2,20 @@
   "area": "readme",
   "tree": [
     "README.md",
+    "RESULTS.md",
     "results",
     "scripts",
-    "tests/fixtures/bench_results"
+    "tests/fixtures/bench_results",
+    "tests/fixtures/gate_numbers"
   ],
   "faults": [
     {
       "id": "readme-table-typed-by-hand",
-      "breaks": "A row of the results table is typed over by hand",
+      "breaks": "A row of RESULTS.md's results table is typed over by hand",
       "check": "results_table.py --check",
       "mutations": [
         {
-          "file": "README.md",
+          "file": "RESULTS.md",
           "old": "| T-ALLOC-1 | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 allocations after warm-up, fast book; the same on 4 arms |",
           "new": "| T-ALLOC-1 | 12302019 | Darwin arm64 Apple M4 Max | PASS | no allocations at all; the same on 4 arms |"
         }
@@ -26,7 +28,7 @@
         "--check"
       ],
       "expect": {
-        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
         "exit": 1
       }
     },
@@ -36,7 +38,7 @@
       "check": "results_table.py --check",
       "mutations": [
         {
-          "file": "README.md",
+          "file": "RESULTS.md",
           "old": "strict: 18,958 crossed",
           "new": "strict: 18,959 crossed"
         }
@@ -49,17 +51,17 @@
         "--check"
       ],
       "expect": {
-        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
         "exit": 1
       }
     },
     {
       "id": "readme-figure-not-in-results",
-      "breaks": "One figure on a README line is not in the file that line cites",
-      "check": "gate_numbers.py on README.md",
+      "breaks": "One figure on a RESULTS.md line is not in the file that line cites",
+      "check": "gate_numbers.py on RESULTS.md",
       "mutations": [
         {
-          "file": "README.md",
+          "file": "RESULTS.md",
           "old": "strict: 18,958 crossed",
           "new": "strict: 18,959 crossed"
         }
@@ -70,10 +72,12 @@
         "--root",
         "{tree}",
         "--page",
-        "README.md"
+        "README.md",
+        "--page",
+        "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 18,959 is not in results/oracle_12302019\\.md",
+        "signature": "gate_numbers: FAIL RESULTS\\.md:\\d+: 18,959 is not in results/oracle_12302019\\.md",
         "exit": 1
       }
     },
@@ -83,7 +87,7 @@
       "check": "results_table.py --check",
       "mutations": [
         {
-          "file": "README.md",
+          "file": "RESULTS.md",
           "old": "| **FAIL** | strict: 18,958 crossed",
           "new": "| PASS | strict: 18,958 crossed"
         }
@@ -96,7 +100,7 @@
         "--check"
       ],
       "expect": {
-        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
         "exit": 1
       }
     },
@@ -125,11 +129,11 @@
     },
     {
       "id": "readme-t-inv-3-leftovers-altered",
-      "breaks": "The README says every resumption had a leftover",
+      "breaks": "RESULTS.md says every resumption had a leftover",
       "check": "results_table.py --check",
       "mutations": [
         {
-          "file": "README.md",
+          "file": "RESULTS.md",
           "old": "22 of 33 resumptions found",
           "new": "33 of 33 resumptions found"
         }
@@ -142,7 +146,7 @@
         "--check"
       ],
       "expect": {
-        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
         "exit": 1
       }
     },
@@ -268,7 +272,7 @@
     },
     {
       "id": "readme-mm-pnl-table-dropped",
-      "breaks": "The market maker's report-day table is left out of the README",
+      "breaks": "The market maker's report-day table is left out of RESULTS.md",
       "check": "results_table.py --check",
       "mutations": [
         {
@@ -285,7 +289,7 @@
         "--check"
       ],
       "expect": {
-        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
         "exit": 1
       }
     },
@@ -413,7 +417,7 @@
         "--check"
       ],
       "expect": {
-        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
         "exit": 1
       }
     },
@@ -457,6 +461,392 @@
       ],
       "expect": {
         "signature": "results_table: FAIL results/run_log\\.md:\\d+: a line of the table that is not a run with five cells",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-headline-typed-by-hand",
+      "breaks": "A value in the README's headline is typed over by hand",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "| 5.04 M msg/s |",
+          "new": "| 12.6 M msg/s |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-headline-verdict-to-met",
+      "breaks": "A missed target in the README's headline is rewritten as met",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "| **missed**: by 7.46 M msg/s |",
+          "new": "| met |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-headline-figure-not-in-file",
+      "breaks": "A figure in the README's headline is not in the results file its row links",
+      "check": "gate_numbers.py on README.md",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "| p50 130.13 ns; p99 780.80 ns;",
+          "new": "| p50 120.13 ns; p99 780.80 ns;"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 120\\.13 is not in results/bench_book_paged-flat_mapped_top_counters_debian_12302019\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-headline-stale",
+      "breaks": "A headline target's results file changes and the README is not regenerated",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "results/bench_book_paged-flat_mapped_top_counters_debian_12302019.md",
+          "old": "| rate 5.04 M msg/s | missed: rate by 7.46 M msg/s |",
+          "new": "| rate 5.05 M msg/s | missed: rate by 7.45 M msg/s |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-results-page-stale",
+      "breaks": "A results file changes and RESULTS.md is not regenerated",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "results/backtest_shadow_debian_12302019.md",
+          "old": "| Replay rate, messages/s | 3,354,119 |",
+          "new": "| Replay rate, messages/s | 3,354,120 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-results-page-markers-gone",
+      "breaks": "RESULTS.md loses its begin marker, so its tables are no longer held to a fresh run",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "RESULTS.md",
+          "old": "<!-- results table: begin, generated by scripts/results_table.py, do not edit -->\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL RESULTS\\.md: the two marker lines are not there exactly once",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-results-page-missing-unchecked",
+      "breaks": "A missing RESULTS.md is not reported as a missing page",
+      "check": "test_results_table.py test_a_missing_results_page_fails",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if not path.is_file():\n        print(f\"results_table: FAIL {page}: the page is not there\")\n        return None\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "(?:FAIL|ERROR): test_a_missing_results_page_fails"
+      }
+    },
+    {
+      "id": "readme-headline-missed-rows-dropped",
+      "breaks": "The headline's choice leaves out both missed targets, so the first page shows only passes",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    (\"T-BOOK-2\", \"bench_book_paged-flat_mapped_top_counters_debian_12302019.md\",\n     targets_headline,\n     \"Every symbol's L3 book rebuilt over a whole day, the file mapped and the top of book \"\n     \"tracked\"),\n    (\"T-LAT-2\", \"bench_book_paged-flat_mapped_top_counters_debian_12302019.md\",\n     targets_headline, \"Latency of one book update, over every message of the day\"),\n",
+          "new": "    (\"T-BT-1\", \"backtest_quoting_debian_12302019.md\", targets_headline,\n     \"The backtester replaying the whole day with a quoting strategy and its queue model\"),\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL the headline shows no missed target",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-headline-miss-unrequired",
+      "breaks": "A headline with no missed target is accepted",
+      "check": "test_results_table.py test_a_headline_with_no_missed_target_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if not missed:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_headline_with_no_missed_target_is_refused"
+      }
+    },
+    {
+      "id": "readme-headline-any-verdict",
+      "breaks": "A headline row takes whatever its file's verdict cell says, a host-differs row included",
+      "check": "test_results_table.py test_a_headline_row_with_no_verdict_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        if verdict not in (\"met\", \"missed\"):\n",
+          "new": "        if verdict is None:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_headline_row_with_no_verdict_is_refused"
+      }
+    },
+    {
+      "id": "readme-headline-verdict-fixed",
+      "breaks": "Every headline row is shown met, whatever its file says",
+      "check": "test_results_table.py test_the_headline_has_its_targets_in_order_each_from_its_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if verdict == \"met\":\n        return \"met\"\n",
+          "new": "    if verdict:\n        return \"met\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_headline_has_its_targets_in_order_each_from_its_file"
+      }
+    },
+    {
+      "id": "readme-headline-host-fixed",
+      "breaks": "The oracle's headline rows say debian, though the Mac ran them",
+      "check": "test_results_table.py test_the_headline_has_its_targets_in_order_each_from_its_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    return (bar, measured, header_host(text, name), \"met\" if verdict == \"PASS\" else \"missed\",\n            gap or \"\")\n",
+          "new": "    return (bar, measured, \"debian\", \"met\" if verdict == \"PASS\" else \"missed\",\n            gap or \"\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_headline_has_its_targets_in_order_each_from_its_file"
+      }
+    },
+    {
+      "id": "readme-headline-alloc-arms-ignored",
+      "breaks": "The T-ALLOC-1 headline row keeps the first arm's verdict when another arm allocated",
+      "check": "test_results_table.py test_an_arm_that_allocated_misses_the_alloc_headline",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    return (bar, measured, header_host(text, name), \"met\" if verdict == \"PASS\" else \"missed\",\n            \"\")\n",
+          "new": "    return (bar, measured.split(\"; the arms\")[0], header_host(text, name), \"met\",\n            \"\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_arm_that_allocated_misses_the_alloc_headline"
+      }
+    },
+    {
+      "id": "readme-headline-file-optional",
+      "breaks": "A headline row whose results file is gone is skipped instead of refused",
+      "check": "test_results_table.py test_a_headline_file_that_is_gone_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            raise TableError(f\"results/{name}: the headline's {target} row names it, and it is \"\n                             \"not there\")\n",
+          "new": "            continue\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_headline_file_that_is_gone_is_refused"
+      }
+    },
+    {
+      "id": "readme-headline-size-unchecked",
+      "breaks": "A headline of any length is accepted",
+      "check": "test_results_table.py test_the_headline_is_five_or_six_rows",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if not HEADLINE_SIZE[0] <= len(chosen) <= HEADLINE_SIZE[1]:\n",
+          "new": "    if not chosen:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_headline_is_five_or_six_rows"
+      }
+    },
+    {
+      "id": "readme-check-stops-at-first-page",
+      "breaks": "--check stops at the first page that differs, so the README's headline goes unread when RESULTS.md is stale",
+      "check": "test_results_table.py test_a_stale_results_page_fails_and_both_pages_are_checked",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    codes = [check_page(root, page, begin, end, fresh[page]) for page, begin, end, _ in PAGES]\n    return max(codes)\n",
+          "new": "    for page, begin, end, _ in PAGES:\n        if check_page(root, page, begin, end, fresh[page]):\n            return 1\n    return 0\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_stale_results_page_fails_and_both_pages_are_checked"
+      }
+    },
+    {
+      "id": "readme-gate-skips-results-page",
+      "breaks": "gate_numbers.py leaves RESULTS.md out of the pages it reads by default",
+      "check": "test_gate_numbers.py test_the_results_page_is_gated_without_being_named",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "DEFAULT_PAGES = (\"README.md\", \"RESULTS.md\", \"docs/index.html\")",
+          "new": "DEFAULT_PAGES = (\"README.md\", \"docs/index.html\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_results_page_is_gated_without_being_named"
+      }
+    },
+    {
+      "id": "readme-stage-results-page-figure",
+      "breaks": "RESULTS.md's prose, outside the generated tables, carries a figure no results file holds",
+      "check": "check.sh readme stage, gate_numbers.py on RESULTS.md",
+      "mutations": [
+        {
+          "file": "RESULTS.md",
+          "old": "\n## The tables\n",
+          "new": "\nIt ran 99,999.5 messages.\n\n## The tables\n"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/check.sh",
+        "--only",
+        "readme"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL RESULTS\\.md:\\d+: 99,999\\.5 is in no results file",
         "exit": 1
       }
     }

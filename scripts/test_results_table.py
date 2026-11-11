@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""results_table.py on a copy of the real results: what it must show, and what it must refuse."""
+"""results_table.py on a copy of the real results: what RESULTS.md and the README's headline
+must show, and what each must refuse."""
 
 import contextlib
 import io
@@ -23,6 +24,8 @@ TRADES = "results/trades_10302019.md"
 BOOK_FIXTURES = REPO_ROOT / "tests" / "fixtures" / "bench_results"
 BOOK_FIXTURE = "good_book_mac.md"
 BOOK = "bench_book_hash-linked_ram_fixture_12302019.md"  # Beside the real files, not over one.
+HEADLINE_BOOK = "results/bench_book_paged-flat_mapped_top_counters_debian_12302019.md"
+HEADLINE_BACKTEST = "results/backtest_quoting_debian_12302019.md"
 
 
 class ResultsTable(unittest.TestCase):
@@ -32,6 +35,7 @@ class ResultsTable(unittest.TestCase):
         self.root = Path(scratch.name).resolve()
         shutil.copytree(REPO_ROOT / "results", self.root / "results")
         shutil.copy(REPO_ROOT / "README.md", self.root / "README.md")
+        shutil.copy(REPO_ROOT / "RESULTS.md", self.root / "RESULTS.md")
 
     def run_table(self, *extra):
         out = io.StringIO()
@@ -183,25 +187,26 @@ class ResultsTable(unittest.TestCase):
         self.edit(ORACLE, "Verdict, strict: **FAIL**", "Verdict, strict: **PASS**")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
-        self.assertIn("results_table: FAIL README.md:", output)
+        self.assertIn("results_table: FAIL RESULTS.md:", output)
 
     def test_a_row_typed_over_fails(self):
-        self.edit("README.md", "| PASS | 0 divergences in 268", "| PASS | no divergences at all in 268")
+        self.edit("RESULTS.md", "| PASS | 0 divergences in 268", "| PASS | no divergences at all in 268")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
 
     def test_a_line_typed_in_fails(self):
-        self.edit("README.md", results_table.END, "| one more row |\n" + results_table.END)
+        self.edit("RESULTS.md", results_table.END, "| one more row |\n" + results_table.END)
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
 
     def test_write_mends_what_check_refused(self):
-        self.edit("README.md", "| PASS | 0 divergences in 268", "| PASS | no divergences at all in 268")
+        self.edit("RESULTS.md", "| PASS | 0 divergences in 268", "| PASS | no divergences at all in 268")
+        self.edit("README.md", "| 5.04 M msg/s |", "| 12.6 M msg/s |")
         self.assertEqual(self.run_table("--write")[0], 0)
         self.assertEqual(self.run_table("--check")[0], 0)
 
     def test_a_missing_marker_fails(self):
-        self.edit("README.md", results_table.END + "\n", "")
+        self.edit("RESULTS.md", results_table.END + "\n", "")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
         self.assertIn("marker", output)
@@ -429,6 +434,117 @@ class ResultsTable(unittest.TestCase):
                 self.assertEqual(len(re.findall(r" \| ", line)),
                                  len(re.findall(r" \| ", header)), line)
 
+
+    # The README's headline
+
+    def headline(self):
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        lines = output[output.index("README.md:\n"):].splitlines()[1:]
+        return [line for line in lines if line.startswith("| T-")]
+
+    def test_the_headline_has_its_targets_in_order_each_from_its_file(self):
+        rows = self.headline()
+        self.assertEqual([row.split(" | ")[0][2:] for row in rows],
+                         [target for target, *_ in results_table.HEADLINE])
+        oracle, alloc, book, latency, backtest, spsc = rows
+        self.assertIn("| 0 divergences in 3,081,392,329 messages over 10 sessions | "
+                      "Darwin arm64 Apple M4 Max | met | [results/oracle_sessions.md]", oracle)
+        self.assertIn("| 0 allocations after warm-up in 268,744,780 messages; the control book "
+                      "made 324,511,069; the same on 4 arms | Darwin arm64 Apple M4 Max | met |",
+                      alloc)
+        self.assertIn("| ≥ 12.5 M msg/s, set on Ryzen 7 9700X, x86 Linux | 5.04 M msg/s | debian, "
+                      "AMD Ryzen Embedded V1605B, pinned to core 4 | **missed**: by 7.46 M msg/s |",
+                      book)
+        self.assertIn("| p50 130.13 ns; p99 780.80 ns; p99.9 1,331.86 ns | debian,", latency)
+        self.assertIn("| **missed**: p50 by 9.13 ns,", latency)
+        self.assertIn("| ≥ 2.00 M messages/s | 4.57 M messages/s | debian, AMD Ryzen Embedded "
+                      "V1605B, pinned to core 4 | met |", backtest)
+        self.assertIn("| ≤ 1.31×, set on Ryzen 9 5950X, Linux, pinned | 0.95×, pipelined time / "
+                      "single-threaded time |", spsc)
+
+    def test_a_headline_row_typed_over_fails(self):
+        self.edit("README.md", "| 5.04 M msg/s |", "| 12.6 M msg/s |")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertRegex(output, r"results_table: FAIL README\.md:\d+: differs from a fresh run")
+        self.assertIn("results_table: ok, RESULTS.md", output)
+
+    def test_a_headline_value_follows_its_file(self):
+        self.edit(HEADLINE_BOOK, "| rate 5.04 M msg/s | missed: rate by 7.46 M msg/s |",
+                  "| rate 5.05 M msg/s | missed: rate by 7.45 M msg/s |")
+        self.assertIn("| 5.05 M msg/s | debian,", self.headline()[2])
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertRegex(output, r"results_table: FAIL README\.md:\d+: differs from a fresh run")
+
+    def test_a_stale_results_page_fails_and_both_pages_are_checked(self):
+        self.edit("results/backtest_shadow_debian_12302019.md",
+                  "| Replay rate, messages/s | 3,354,119 |", "| Replay rate, messages/s | 3,354,120 |")
+        self.edit("README.md", "| 5.04 M msg/s |", "| 12.6 M msg/s |")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertRegex(output, r"results_table: FAIL RESULTS\.md:\d+: differs from a fresh run")
+        self.assertRegex(output, r"results_table: FAIL README\.md:\d+: differs from a fresh run")
+
+    def test_a_missing_results_page_fails(self):
+        (self.root / "RESULTS.md").unlink()
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL RESULTS.md: the page is not there", output)
+
+    def test_a_missing_headline_marker_fails(self):
+        self.edit("README.md", results_table.HEAD_END + "\n", "")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL README.md: the two marker lines", output)
+
+    def test_a_headline_with_no_missed_target_is_refused(self):
+        text = (self.root / HEADLINE_BOOK).read_text(encoding="utf-8")
+        text = text.replace("| missed: rate by 7.46 M msg/s |", "| met |")
+        text = text.replace("| missed: p50 by 9.13 ns, p99 by 228.80 ns, p99.9 by 457.86 ns |",
+                            "| met |")
+        (self.root / HEADLINE_BOOK).write_text(text, encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL the headline shows no missed target", output)
+
+    def test_a_headline_row_with_no_verdict_is_refused(self):
+        self.edit(HEADLINE_BACKTEST, "| 4.57 M messages/s | met |",
+                  "| 4.57 M messages/s | host differs: a macOS figure |")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL {HEADLINE_BACKTEST}: T-BT-1's verdict is 'host "
+                      "differs', neither met nor missed", output)
+
+    def test_a_headline_file_that_is_gone_is_refused(self):
+        (self.root / HEADLINE_BACKTEST).unlink()
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL {HEADLINE_BACKTEST}: the headline's T-BT-1 row names "
+                      "it, and it is not there", output)
+
+    def test_a_headline_target_missing_from_its_targets_table_is_refused(self):
+        self.edit(HEADLINE_BACKTEST, "| T-BT-1 | ≥ 2.00 M", "| T-BT-9 | ≥ 2.00 M")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("0 T-BT-1 rows in its targets table, not 1", output)
+
+    def test_an_arm_that_allocated_misses_the_alloc_headline(self):
+        self.edit(ORACLE, "| `paged_flat` | PASS | PASS | FAIL, 18,958 crossed and 1,018 locked | "
+                          "PASS | PASS |",
+                  "| `paged_flat` | PASS | PASS | FAIL, 18,958 crossed and 1,018 locked | "
+                  "PASS | FAIL |")
+        alloc = self.headline()[1]
+        self.assertIn("the arms disagree: paged_flat FAIL", alloc)
+        self.assertIn("| **missed** |", alloc)
+
+    def test_the_headline_is_five_or_six_rows(self):
+        for chosen in (results_table.HEADLINE[:4],
+                       results_table.HEADLINE + results_table.HEADLINE[:1]):
+            with self.assertRaisesRegex(results_table.TableError, "rows, not 5 to 6"):
+                results_table.headline(self.root, chosen)
+        self.assertEqual(len(results_table.headline(self.root, results_table.HEADLINE[:5])), 7)
 
 if __name__ == "__main__":
     unittest.main()

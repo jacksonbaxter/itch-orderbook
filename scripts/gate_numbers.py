@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Every figure in the README and the demo page appears in a results file (criterion 30).
+"""Every figure in the README, RESULTS.md and the demo page appears in a results file
+(criterion 30).
 
     gate_numbers.py [--root DIR] [--page PATH]...
 
@@ -9,7 +10,8 @@ figure measured. A figure is a number with a decimal point, a thousands separato
 or more digits, or a unit. Code spans, code blocks, URLs, HTML tags, dates and the names in
 EXEMPT are left out, and so is any line ending in `<!-- figures: not measured -->`.
 
-The gate runs on whichever pages exist, so a tree with neither passes and says so.
+The gate runs on whichever pages exist, so a tree with none passes and says so. A page
+named with --page must exist.
 
 Each violation prints as `gate_numbers: FAIL <page>:<line>: <detail>`.
 
@@ -24,7 +26,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_PAGES = ("README.md", "docs/index.html")
+DEFAULT_PAGES = ("README.md", "RESULTS.md", "docs/index.html")
 NOT_RESULTS = {"predictions.md", "run_log.md"}
 EXEMPT = ("ITCH 5.0", "C++23", "BinaryFILE 1.0")
 SKIP_MARK = "<!-- figures: not measured -->"
