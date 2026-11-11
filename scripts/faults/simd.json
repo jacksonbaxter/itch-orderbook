@@ -1,5 +1,20 @@
 {
   "area": "simd",
+  "tree": [
+    "CMakeLists.txt",
+    "CMakePresets.json",
+    ".clang-tidy",
+    ".github",
+    "cmake",
+    "include",
+    "src",
+    "tests",
+    "tools",
+    "fuzz",
+    "bench",
+    "scripts",
+    "results"
+  ],
   "faults": [
     {
       "id": "simd-parser-tail-on-the-kernel",
@@ -612,6 +627,49 @@
       ],
       "expect": {
         "signature": "wasm kernels smoke: [1-9][0-9]* mismatches on random messages"
+      }
+    },
+    {
+      "id": "simd-report-command-unchecked",
+      "breaks": "A results file whose command leaves out the wrapper the driver ran it under, taskset's pin on debian, passes",
+      "check": "test_simd_report.py test_the_command_shown_is_the_one_the_driver_runs",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    if not command.startswith(wrapper(host) + \" \"):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_command_shown_is_the_one_the_driver_runs"
+      }
+    },
+    {
+      "id": "simd-report-command-without-the-pin",
+      "breaks": "The debian results files show the command without taskset -c 4, which every process ran under",
+      "check": "simd_report.py --check on a debian results file",
+      "mutations": [
+        {
+          "file": "results/simd_parse_debian_12302019.md",
+          "old": "\nmeasure.sh taskset -c 4 build/release/bench/bench_kernels ",
+          "new": "\nmeasure.sh build/release/bench/bench_kernels "
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/simd_report.py",
+        "--check",
+        "{tree}/results/simd_parse_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "simd_report: FAIL command-differs: the command shown does not run under 'measure\\.sh taskset -c 4'",
+        "exit": 1
       }
     }
   ]

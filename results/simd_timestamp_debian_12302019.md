@@ -207,5 +207,5 @@ measure.sh: end load1=1.13 exit=0 at=2026-11-10T07:12:33Z cpus=4 governor=perfor
 ## Command
 
 ```
-measure.sh build/release/bench/bench_kernels --input <raw>/12302019.NASDAQ_ITCH50 --experiment timestamp --kernel K [--width W] [--form F] [--watchlist N] --core 4 --commit <commit> --out <raw>/VARIANT-N.json  (scripts/simd_driver.py)
+measure.sh taskset -c 4 build/release/bench/bench_kernels --input <raw>/12302019.NASDAQ_ITCH50 --experiment timestamp --kernel K [--width W] [--form F] [--watchlist N] --core 4 --commit <commit> --out <raw>/VARIANT-N.json  (scripts/simd_driver.py)
 ```

@@ -42,6 +42,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_results  # noqa: E402
+import simd_driver  # noqa: E402
 import stamp_load  # noqa: E402
 import wasm_bench  # noqa: E402
 
@@ -843,12 +844,20 @@ def render(manifest, records, stderrs, sampler):
     return "\n".join(out), summary
 
 
+def wrapper(host):
+    """What the driver puts between measure.sh and the benchmark on the host: taskset's pin on
+    debian, /usr/bin/time -l on macOS."""
+    words = simd_driver.process_words(argparse.Namespace(measure="measure.sh"), [],
+                                      "Linux" if host == DEBIAN else "Darwin")
+    return " ".join(words)
+
+
 def command_line(experiment, host, day):
     if experiment == "e11":
-        return ("measure.sh /usr/bin/time -l node scripts/simd_wasm_e11.mjs --module "
+        return (f"{wrapper(host)} node scripts/simd_wasm_e11.mjs --module "
                 f"build/wasm/bench/wasm/itch_e11.mjs --input <raw>/{day}.NASDAQ_ITCH50 "
                 "--kernel scalar|wasm --commit <commit> --out <raw>/VARIANT-N.json")
-    prefix = "measure.sh" if host == DEBIAN else "measure.sh /usr/bin/time -l"
+    prefix = wrapper(host)
     core = " --core 4" if host == DEBIAN else ""
     return (f"{prefix} build/release/bench/bench_kernels --input <raw>/{day}.NASDAQ_ITCH50 "
             f"--experiment {experiment} --kernel K [--width W] [--form F] [--watchlist N]{core} "
@@ -887,6 +896,10 @@ def check_published(text, name=None):
         output = check_results.section(text, "machine_check output") or ""
         if output.count("machine_check: passed") != 2 or "machine_check: FAIL" in output:
             found.append(("machine-check-failed", "wanted a passing check before and after"))
+    command = (check_results.section(text, "Command") or "").strip().strip("`").strip()
+    if not command.startswith(wrapper(host) + " "):
+        found.append(("command-differs", f"the command shown does not run under "
+                                         f"{wrapper(host)!r}: {command[:60]!r}"))
     events = events_of(host, experiment)
     try:
         rows = parse_pass_table(text, events)

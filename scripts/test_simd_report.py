@@ -332,6 +332,23 @@ class SimdReportTest(unittest.TestCase):
         with self.assertRaisesRegex(simd_report.ReportError, "not pinned"):
             simd_report.render(whole, records, stderrs, None)
 
+    def test_the_command_shown_is_the_one_the_driver_runs(self):
+        records = self.debian_records((("scalar", 0.130), ("avx2", 0.120)))
+        whole = manifest("decode", records)
+        whole.update(sampler=None, machine_check_before="machine_check: passed",
+                     machine_check_after="machine_check: passed")
+        stderrs = [stderr_for(i) for i in range(len(records))]
+        text, _ = simd_report.render(whole, records, stderrs, None)
+        self.assertIn("\nmeasure.sh taskset -c 4 build/release/bench/bench_kernels ", text)
+        name = "simd_decode_debian_12302019.md"
+        unpinned = text.replace("measure.sh taskset -c 4 ", "measure.sh ", 1)
+        self.assertIn("command-differs",
+                      [c for c, _ in simd_report.check_published(unpinned, name)])
+        mac, _ = self.render("decode", decode_records())
+        self.assertIn("\nmeasure.sh /usr/bin/time -l build/release/bench/bench_kernels ", mac)
+        untimed = mac.replace("measure.sh /usr/bin/time -l ", "measure.sh ", 1)
+        self.assertIn("command-differs", self.violations(untimed))
+
     def test_main_writes_the_file_and_its_run_log_row(self):
         with tempfile.TemporaryDirectory() as scratch:
             run = Path(scratch) / "run"
