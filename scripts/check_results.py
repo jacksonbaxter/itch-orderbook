@@ -580,6 +580,18 @@ def is_backtest_file(fields):
     return "workload" in fields
 
 
+def is_walks_file(fields):
+    """scripts/walk_driver.py's ladder of shadow-order schedules."""
+    return "ladder" in fields
+
+
+def check_walks(text):
+    # Imported here: walk_report imports this module.
+    import walk_report  # noqa: PLC0415
+
+    return walk_report.check_text(text)
+
+
 def check_backtest_summary(text, fields):
     rows = {cells[0]: cells for cells in table_rows(text, "Summary")}
     for label in BACKTEST_SUMMARY:
@@ -917,6 +929,9 @@ def check_text(text):
                   check_load(fields), check_sampler(fields), check_machine(text),
                   check_private(text, fields)):
         violations.extend(found)
+    if is_walks_file(fields):
+        violations.extend(check_walks(text))
+        return violations
     if is_backtest_file(fields):
         violations.extend(check_backtest(text, fields))
         return violations

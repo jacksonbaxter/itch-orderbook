@@ -120,6 +120,20 @@ class History(unittest.TestCase):
                                                                     encoding="utf-8")
         self.assert_fails("prediction-missing")
 
+    def test_a_walks_ladder_naming_no_prediction(self):
+        self.in_order()
+        (self.results / "walks_ladder_debian_12302019.md").write_text("# nothing\n",
+                                                                      encoding="utf-8")
+        self.assert_fails("prediction-missing")
+
+    def test_a_walks_counts_file_needs_no_prediction(self):
+        # walk_report.py's counts are untimed, so they are no experiment.
+        self.in_order()
+        (self.results / "walks_counts_12302019.md").write_text("# nothing\n", encoding="utf-8")
+        self.commit("walks_counts_12302019.md")
+        code, output = check(self.root)
+        self.assertEqual(code, 0, output)
+
     def test_the_oracle_sessions_naming_no_prediction(self):
         self.in_order()
         (self.results / "oracle_sessions.md").write_text("# nothing\n", encoding="utf-8")

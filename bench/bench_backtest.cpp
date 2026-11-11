@@ -44,6 +44,7 @@
 #include <utility>
 #include <vector>
 
+#include "backtest_extract.hpp"
 #include "backtest_workloads.hpp"
 #include "itch/backtest.hpp"
 #include "itch/reader.hpp"
@@ -161,70 +162,6 @@ template <class Number>
   return text;
 }
 
-// The messages of the symbols and every System Event, framed as in the file, in one arena.
-struct Extract {
-  std::optional<Arena> arena;
-  std::uint64_t input_messages = 0;
-  std::uint64_t messages = 0;
-  std::uint64_t bytes = 0;
-  double ns = 0.0;
-};
-
-[[nodiscard]] bool kept(std::span<const std::byte> payload, std::vector<std::uint8_t>& locates,
-                        const std::vector<itch::Stock>& symbols) {
-  const std::byte* m = payload.data();
-  const char type = itch::read_char(m);
-  const auto locate = itch::read_be<std::uint16_t>(m + 1);
-  if (type == itch::StockDirectory::kType) {
-    const itch::StockDirectory directory = itch::StockDirectory::from_wire(m);
-    locates[locate] = std::ranges::find(symbols, directory.stock) != symbols.end() ? 1U : 0U;
-  }
-  return type == itch::SystemEvent::kType || locates[locate] != 0;
-}
-
-[[nodiscard]] Extract extract(std::span<const std::byte> day,
-                              const std::vector<itch::Stock>& symbols, const TimerInfo& timer) {
-  Extract out;
-  const std::uint64_t start = ticks_start();
-  std::vector<std::uint8_t> locates(std::size_t{1} << 16U, 0);
-  std::byte* base = nullptr;  // The arena's, from the second pass.
-  for (int pass = 0; pass < 2; ++pass) {
-    std::size_t at = 0;
-    itch::FrameReader reader{day};
-    for (itch::Frame frame = reader.next(); !itch::is_terminal(frame.status);
-         frame = reader.next()) {
-      if (frame.status != itch::FrameStatus::message) {
-        continue;
-      }
-      out.input_messages += pass == 0 ? 1U : 0U;
-      if (!kept(frame.payload, locates, symbols)) {
-        continue;
-      }
-      const std::size_t framed = frame.payload.size() + 2;
-      if (pass == 0) {
-        ++out.messages;
-        out.bytes += framed;
-        continue;
-      }
-      // The two-byte big-endian length, then the payload.
-      base[at] = static_cast<std::byte>(frame.payload.size() >> 8U);
-      base[at + 1] = static_cast<std::byte>(frame.payload.size() & 0xFFU);
-      std::ranges::copy(frame.payload, base + at + 2);
-      at += framed;
-    }
-    if (pass == 0) {
-      std::optional<Arena> made = Arena::make(out.bytes, PageHint::base, Prefault::now);
-      if (!made) {
-        return out;
-      }
-      base = made->data();
-      out.arena.emplace(std::move(*made));
-    }
-  }
-  out.ns = timer.ticks_to_ns(static_cast<double>(ticks_stop() - start));
-  return out;
-}
-
 // What one pass of the workload did, for the record and the warm-up's agreement.
 struct Pass {
   Stats stats;
@@ -247,22 +184,7 @@ struct Pass {
 };
 
 [[nodiscard]] Config engine_config(const Options& options) {
-  Config config;
-  config.date = options.date;
-  config.symbols = options.symbols;
-  if (options.workload == Workload::shadow) {
-    config.latency = Latency{.market_data = 0, .order_entry = 0, .response = 0, .compute = 0};
-  }
-  // The view book holds only the traded symbols. A reference past its pages falls back to
-  // the hash table, slower and never wrong. As itch_backtest sizes it.
-  config.view_capacity = {.orders = 1U << 20U,
-                          .levels = 1U << 16U,
-                          .index_pages = 1U << 15U,
-                          .index_bits = 30,
-                          .level_slots = 1U << 18U};
-  config.max_orders = 1U << 17U;
-  config.queue_capacity = 1U << 17U;
-  return config;
+  return backtest_config(options.date, options.symbols, options.workload == Workload::shadow);
 }
 
 template <class Strategy>

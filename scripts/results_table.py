@@ -237,7 +237,7 @@ def summary_row(name, text):
 
 SUMMARY_PREFIXES = ("flamegraph_", "profile_", "counters_zen1_", "counters_by_age_", "lookup_",
                     "prefetch_", "dispatch_", "simd_", "layout_", "structure_", "window_",
-                    "types_")
+                    "types_", "walks_")
 
 
 def mm_rows(name, text):

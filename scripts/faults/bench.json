@@ -3173,8 +3173,8 @@
       "check": "test_bench_backtest_cli.py shadow",
       "mutations": [
         {
-          "file": "bench/bench_backtest.cpp",
-          "old": "  return type == itch::SystemEvent::kType || locates[locate] != 0;\n",
+          "file": "bench/backtest_extract.hpp",
+          "old": "  return type == SystemEvent::kType || locates[locate] != 0;\n",
           "new": "  return type != '\\0' || locates[locate] != 0;\n"
         }
       ],
@@ -3203,9 +3203,9 @@
       "check": "test_bench_backtest_cli.py shadow",
       "mutations": [
         {
-          "file": "bench/bench_backtest.cpp",
-          "old": "    config.latency = Latency{.market_data = 0, .order_entry = 0, .response = 0, .compute = 0};\n",
-          "new": "    config.latency = Latency{};\n"
+          "file": "bench/backtest_extract.hpp",
+          "old": "        backtest::Latency{.market_data = 0, .order_entry = 0, .response = 0, .compute = 0};\n",
+          "new": "        backtest::Latency{};\n"
         }
       ],
       "build": {

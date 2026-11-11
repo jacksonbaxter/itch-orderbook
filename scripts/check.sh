@@ -120,12 +120,13 @@ stage_bench() {
     python_test scripts/test_simd_driver.py &&
     python_test scripts/test_udp_report.py &&
     python_test scripts/test_udp_driver.py &&
+    python_test scripts/test_walk_report.py &&
     python_test scripts/test_simd_asm_audit.py &&
     python_test scripts/test_zen1_events.py &&
     python_test scripts/gate_numbers.py &&
     python_test scripts/check_predictions.py || return 1
   results=$(find results -name 'bench_*.md' -o -name 'backtest_*.md' -o -name 'spsc_*.md' \
-    -o -name 'alloc_*.md')
+    -o -name 'alloc_*.md' -o -name 'walks_ladder_*.md')
   if [ -n "$results" ]; then
     # shellcheck disable=SC2086
     python_test scripts/check_results.py $results || return 1
@@ -168,7 +169,11 @@ stage_bench() {
     [ -f "$udp" ] || continue
     python_test scripts/udp_report.py --check "$udp" || return 1
   done
-  build_preset release && ctest --preset release -R '^test_bench'
+  for walks in results/walks_*.md; do
+    [ -f "$walks" ] || continue
+    python_test scripts/walk_report.py check "$walks" || return 1
+  done
+  build_preset release && ctest --preset release -R '^(test_bench|test_walk_counts$)'
 }
 # The market maker: T-MM-2's report on its fixtures and its results file against a rerun; the
 # report day's report on its fixtures and its results file against the tool output it carries;

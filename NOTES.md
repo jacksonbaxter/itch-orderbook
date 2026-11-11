@@ -1880,3 +1880,90 @@ The 2026 day would be measured on its first 500,000,000 messages (`--messages`),
 **Blocked on a quiet Mac.** P-0801 (12302019) ran four sequences on 2026-11-10, each under `mac-hold` with the sampler beside it. The sampler rule withdrew 11 of the 17 processes for other processes above 20% CPU inside their spans. The offenders were the browser, Spotlight (`mds_stores`, `corespotlightd`, `mdworker_shared`), `mediaanalysisd`, `launchd`, another project's unit tests at 100% and another project's benchmark at 800%. Four more were withdrawn because `vm_stat`'s pageouts moved, by 2 or 3 pages, across them. Swapouts never moved. Before sequence 4, the readings were taken before `measure.sh` waited for its lock; they now bracket only the process. Two types processes were quiet; no lookup process was. Sequence 1 ran only the machine check and was stopped by hand while it waited for quiet, so that the wait would have a bound. Sequences 2 to 4 each ended on one kind withdrawn three times running, and the fourth was the last try, so measuring stopped. Nothing of P-0801 or P-0802 is published, and every process has its own row in the run log. A types process peaked at 8.96 GB resident, the mapped day included, and a 0.71 GB footprint. A lookup process peaked at 10.09 GB and 1.85 GB.
 
 **The oracle on 06122026 cannot finish.** The full-day oracle ran at the manifest's capacity under `heavy.sh`, after the census passed. It was stopped by hand after 8,244 s of CPU. By then it had reached only about message 181,705,808, 09:52 in the day, judging by its last crossed-book observation. Nearly all its time goes to `compare_level` and `compare_fifo` (`tests/oracle/diff.hpp`), which walk the whole FIFO of every level a message touches. On this day's deep levels, and with the oracle slowing as the day went on, that would take more than a day. Divergences print only when the run ends, so the run says nothing about the book, and no oracle result is written for this day. A per-message check that does not walk whole FIFOs, with a proof that the unwalked part cannot have diverged, is a change to the oracle's design and is left open. TV-16, the trade-total residual, was not observed on this day, because `trades` was not run. The run's maximum RSS was 10.73 GB, with a 6.13 GB footprint.
+
+## The walk of T-BT-3's simulated levels, 2026-11-11
+
+TASKS.md's line on T-BT-3's 100,000 shadow orders is not done. The counts are in, and so is the timed method, but the method has not run on `debian` yet. Nothing in the engine changed.
+
+**What is walked.** The engine keeps each side's simulated orders as a doubly linked list of levels, ordered from the best price, and each level is a FIFO of orders. Six places walk the list from the best (`bench/walk_counts.hpp`):
+
+- an execution (`E`, `C`): every level at or better than the traded price, plus the one it stops at, visiting every order on each;
+- a cross (an add or a replace on a symbol with a resting simulated order): the other side's levels while the new order reaches them;
+- a depletion (`X`, `D`, `U`): a find of the real order's price, then every order on the level found;
+- a late add: the same find, then every order on the level found;
+- a hidden print (`P`): a find on each side, the ask side only when the bid side has no level at that price;
+- a rest (a simulated order arriving): the levels better than its price, plus the one the loop stops at.
+
+A level step is one level whose price a walk reads, the stopping one included. An order step is one order visited. Walk steps are both.
+
+**How it is counted, with nothing added to the engine.** `cmake/ItchWalkEngine.cmake` runs at build time. It copies the engine's text from `include/itch/backtest.hpp` into `itch::backtest::counted`, and it inserts a call into `WalkCounts` at each walk and wherever a level or an order joins or leaves a side. Each insertion names its place by text that must occur exactly once. The script also requires exactly eight loops over the simulated levels. So a change to the engine that moves a place or adds a walk stops the build; it cannot leave a walk uncounted. `bench_walks` runs T-BT-3's extract through both the engine and the copy, and it refuses (exit 3) unless:
+
+- all 23 words of `Stats`, the event hash and the placer's counts agree;
+- no side lost a level or an order it did not hold;
+- every side is empty at the end.
+
+`test_walk_counts` checks the copy two ways. On a hand-built book of four simulated bids, it checks every site against counts worked out by hand. On random markets, under all three queue rules, with and without latency, it checks the copy against the engine. Side depth is kept as levels and orders are added and removed, so a walk's depth is the depth when it began. The engine's hot path is unchanged and allocates nothing; the copy exists only in `bench_walks` and the test.
+
+**The schedules.** These are T-BT-3's own 100,000 orders with lives of 60 s (T-BT-3 itself), 600 s, 3,600 s, 14,400 s and 23,400 s, and 1,000,000 orders with a 60 s life. Changing only the life keeps every placement at the same time and price rule. A longer life holds more orders at once and so builds deeper sides. A tenfold order count tests the other way of holding more: more orders at the same prices.
+
+The counts are in `results/walks_counts_12302019.md`, from 3077b849234b. Each count took about 4 s on the Mac (14 s cold), at 8.68 GiB peak RSS (`getrusage`, the mapped day counted) and a 1.06 to 1.08 GB peak footprint. Every schedule's copy gave the engine's stats and hash, and T-BT-3's hash is P-0102's, `06cbd8541ec86564`.
+
+| Schedule | Resting orders, mean / max | Level steps a message | Order steps a message | Levels on the side at a walk, mean | Deepest |
+|---|---|---|---|---|---|
+| T-BT-3 (60 s) | 86.4 / 191 | 1.769 | 0.518 | 4.37 | 24 |
+| 600 s life | 359.8 / 784 | 2.978 | 0.826 | 14.66 | 104 |
+| 3,600 s life | 980.6 / 1,795 | 4.581 | 0.980 | 37.81 | 257 |
+| 14,400 s life | 1,766.6 / 3,412 | 6.305 | 1.030 | 70.90 | 363 |
+| 23,400 s life | 1,940.0 / 4,156 | 6.781 | 1.035 | 81.67 | 427 |
+| 1,000,000 orders, 60 s | 1,318.3 / 2,344 | 3.749 | 8.208 | 9.16 | 74 |
+
+Walks a message are about 1.08 on every 100,000-order schedule and 1.25 at 1,000,000 orders.
+
+**What the counts already say.**
+
+- **T-BT-3 holds fewer live orders than TASKS.md assumed.** It holds 86.4 on average over its eight sides and 191 at most, not "about 257": fills end many lives before the 60 s cancel. Its sides are shallow. A walk meets 4.37 levels on average, the median walk's side has 2 to 3, the 99th percentile 8 to 15, and the deepest 24.
+- **The work is small.** A T-BT-3 message makes 1.08 walks and 2.29 walk steps: 1.77 level steps and 0.52 order steps. Each step is a dependent load on a side of at most a few dozen levels, which stays in cache. At a few ns a step, that is a few percent of `debian`'s 298 ns a message (P-0104), which is what P-0105 predicts.
+- **Depletion finds dominate the level steps, and more so as sides deepen.** They are 67% of T-BT-3's level steps, 85% at 3,600 s and 89% at 14,400 s. A cancel, delete or replace looks for a simulated level at its price by walking from the best, and most real orders' prices have no simulated level. So a depletion usually walks past every better level, and its steps grow with depth. Crosses make about 1 level step a walk on every schedule, rests and executions are few, and late adds are the same in every 100,000-order schedule. The late adds are consistent with falling in the opening minute, before any cancel, where they were orders held for the open ("Queue jumps").
+- **More orders at the same prices shift the cost to order steps.** At 1,000,000 orders the sides are only 9.16 levels deep on average, but order steps reach 8.21 a message, of which depletions make 32.6 million. Each depletion visits every simulated order on its level to update the shares ahead of it. A price-keyed lookup of the level would not remove that; only keeping `ahead` per level, rather than per order, would.
+
+**The timed method: a ladder of lives (`scripts/walk_driver.py`).**
+
+- **What it runs.** The production engine through `bench_backtest --workload shadow`, P-0104's process, on the 60, 600, 3,600 and 14,400 s schedules, after `bench_walks` has counted each one, untimed. There are 5 rounds of one fresh process per schedule, and the order of the schedules turns by one each round.
+- **Why these schedules.** They place the same orders at the same times, with 200,000 arrivals and 200,000 wakes each, so the work outside the walk barely moves. Fills go 131,519, 163,303, 172,609 and 175,322, while walk steps a message rise 2.287, 3.803, 5.561 and 7.335.
+- **What it fits.** The least-squares line of each schedule's median ns a message against its walk steps a message. The slope is the cost of a walk step where the engine really takes it. The walk's share of a schedule is the slope times its steps over its median. Each round's own line gives the spread.
+- **Why 23,400 s is left out.** At that life some cancels fall after the input ends, so arrivals and wakes drop to 162,983 and the work outside the walk changes.
+- **Its limits.**
+  - The slope is an upper bound. Fills and reports also rise with the life, by about 0.008 a message from T-BT-3 to 3,600 s; between 3,600 and 14,400 s they rise by only 2,713 fills.
+  - The fixed cost of starting a walk, about 1.08 a message on every schedule, is in the intercept, not the slope. Any price-keyed structure would still pay that cost.
+- **What the driver refuses.**
+  - a process that refused;
+  - processes of one schedule that disagree;
+  - a timed process whose event hash or message count is not its count's;
+  - a count whose copy did not match the engine;
+  - a page swapped out.
+- **Where the output goes.** `scripts/walk_report.py check` and `check_results.py` hold the file to its own tables: the medians to the repetitions, the line and the shares to the medians and the counts, each round's line to its repetitions, and the header's slope, round range and summary to the tables. `check_predictions.py` requires the prediction of a `walks_ladder_*.md` file. `check.sh`'s bench stage runs `test_walk_report.py`, checks every `results/walks_*.md`, and runs `test_walk_counts` and `test_bench_walks_cli`. The faults are in `scripts/faults/walks.json`.
+
+The driver ran once end to end on the Mac, on three lives and 3 repetitions under `heavy.sh`, as an integration check. Its file passed both checks. It ran outside `measure.sh` and is not published, and its figures were not used for P-0105.
+
+**On `debian`, after the merge: P-0105.** `bench_walks` has to be built there beside `bench_backtest`. Then, from `src`, as `measure.sh taskset -c 4`'s direct child:
+
+```
+measure.sh taskset -c 4 python3 -B scripts/walk_driver.py --bench ../build/bench/bench_backtest \
+  --walks ../build/bench/bench_walks --probe ../build/bench/bench_probe \
+  --input ../data/12302019.NASDAQ_ITCH50 --date 20191230 --prediction P-0105 \
+  --out results/walks_ladder_debian_12302019.md --core 4 --sibling 5 --raw-dir <raw> \
+  --wrapped-by 'measure.sh taskset -c 4' > <raw>/stdout.txt 2> <raw>/stderr.txt
+python3 -B scripts/stamp_load.py --results results/walks_ladder_debian_12302019.md --stderr <raw>/stderr.txt
+```
+
+That is 4 counts and 20 timed processes, each about 9 GiB resident and run one at a time, about 5 minutes in all.
+
+**If the walk matters.** P-0105 expects the walk at about 5% of a T-BT-3 message, 2% to 9%. Even all of it would not lift `debian` past the 4.61 M bar, so the walk is not why T-BT-3 misses there. At 14,400 s, P-0105 expects 7% to 25%.
+
+If the measured share at T-BT-3 is above 10%, or the deep schedules' share is large, the finding is that the list walk is a real cost on deep sides. The next step is then a price-keyed lookup for `find_sim_level`, which serves depletions, late adds and hidden prints and takes most of the level steps. For example, a small map per side from price to level beside the list, leaving the list for ordered walks. That change would have to keep:
+
+- the event hash;
+- `test_walk_counts`' identity with the engine;
+- no allocation after construction.
+
+The 1,000,000-order schedule shows that per-order `ahead` updates are the other cost, and a lookup does not touch it.
