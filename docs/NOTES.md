@@ -1817,6 +1817,95 @@ Each `itch_alloc` gave `T-ARENA-1-ALLOC PASS` with 0 allocations by the book aga
 
 **`explicit` is blocked on the user.** `--pages explicit` maps from the reserved pool with `MAP_HUGETLB` and takes no fallback. `vm.nr_hugepages` is 0 on `debian`, and setting it is a root step outside this project: at least 73 pages of 2 MiB for one pointer book, 160 to be safe. No run was attempted. P-0702 gives `vm.nr_hugepages` as 1: that was khugepaged's `defrag` line, read in the wrong place. It is 0, and `/proc/meminfo` shows `HugePages_Total: 0`; the conclusion is the same.
 
+## T-ARENA-1's timed arms on `debian`, crossed with the pools' pages, 2026-11-11
+
+**How it ran.** P-0702, from c8ca2e2 as `debian_sync.sh` exported it, the binaries the checks above used. `scripts/alloc_driver.py` was `measure.sh taskset -c 4`'s direct child, with `--core 4 --sibling 5`, three repetitions, and the day read into RAM. It was started at nice 0 from `bash -c`. There were two runs, back to back, one a page request, each in its own file:
+- `--pages base`, `results/alloc_arms_base_debian_12302019.md`, 11:55 to 16:50 UTC;
+- `--pages transparent`, `results/alloc_arms_transparent_debian_12302019.md`, 16:50 to 21:37 UTC.
+
+The run script waited from 06:17 to 11:35 UTC because a five-hour step could otherwise have reached the host's 03:30 to 04:30 window. The driver then waited 20 minutes more for `measure.sh`'s lock. `machine_check` passed before and after. `pswpout` stayed at 2,302,291 from the session's start to its end, `perf_event_paranoid` read 2 at both ends, and uptime ran on from 154,722 s to 210,948 s, so there was no reboot. Load was 1.49 at the base run's start and 1.00 at the transparent run's end. `MemAvailable` was 12.1 GB when the base run started and 14.8 GB when the transparent one did. `pmr-monotonic` was left out of both runs (above), and `explicit` was not run (above).
+
+**Throughput.** Medians of three, in messages/s:
+
+| Arm | `base` | CV | `transparent` | CV | `transparent` against `base` |
+|---|---|---|---|---|---|
+| malloc-fresh | 2,032,184 | 2.18% | 2,039,018 | 4.36% | +0.3% |
+| malloc-aged | 1,830,177 | 0.76% | 1,805,215 | 0.19% | -1.4% |
+| mimalloc | 2,286,807 | 0.87% | 2,282,973 | 0.29% | -0.2% |
+| pmr-pool | 2,429,324 | 0.48% | 2,435,928 | 0.09% | +0.3% |
+| pool-index | 2,513,655 | 0.16% | 2,834,723 | 0.09% | +12.8% |
+| pool-pointer | 2,395,751 | 0.49% | 2,728,838 | 0.62% | +13.9% |
+| pool-fifo | 2,405,381 | 0.93% | 2,717,053 | 0.26% | +13.0% |
+
+Under `base`, `pool-index` leads every arm: it is 1.238 times `malloc-fresh` on the per-repetition ratio and 3.5% ahead of `pmr-pool`. Under `transparent` its lead grows to 1.390 times `malloc-fresh` and 16% ahead of `pmr-pool`. `malloc-aged` is the slowest arm in both runs, at 0.90 and 0.89 times `malloc-fresh`. Its book also takes the most memory, 364.9 MiB at its most, against 264.9 for `malloc-fresh`. `mimalloc` runs 13% ahead of glibc's fresh heap, and `pmr-pool` 20% ahead.
+
+**The crossing is of the pools alone, and it moved only the pools.** The two runs differ only in what the pools ask of the kernel. The four heap arms moved by -1.4% to +0.3%. The three pool arms gained 12.8% to 13.9%, 45 to 51 ns a message, for a book whose order and level nodes moved from 4 KiB pages to 2 MiB pages, as the `Pages` table of each file records from smaps. Zen 1's 1,536-entry L2 TLB covers 6 MiB on 4 KiB pages. The pools hold 221 to 275 MiB of nodes, so under `base` most node touches that miss the cache also miss the TLB. On 2 MiB pages the same entries cover 3 GiB. No counter was read in either run, so this is the likely reason for the gain, not a measured one.
+
+The pool arms' order among themselves holds in both runs. Index is first. Pointer and FIFO are 3.7% to 4.7% behind it, within 0.4% of each other under `base` and 0.4% under `transparent`.
+
+**The fault check FAILS in both files.** The prediction was 0: a pool maps and touches every node before any pass, and `itch_alloc` counts no allocation by a pool arm. The pool arms' timed passes took these page faults, from `getrusage` around each pass, one figure a repetition:
+
+| Arm | `base`, throughput pass | `base`, latency pass | `base`, total | `transparent`, throughput pass | `transparent`, latency pass | `transparent`, total |
+|---|---|---|---|---|---|---|
+| pool-index | 3 / 20 / 0 | 107 / 6 / 0 | 136 | 1 / 0 / 2 | 0 / 1 / 0 | 4 |
+| pool-pointer | 1 / 13 / 19 | 86 / 51 / 30 | 200 | 0 / 0 / 1 | 0 / 0 / 0 | 1 |
+| pool-fifo | 0 / 2 / 2 | 4 / 4 / 134 | 146 | 0 / 0 / 0 | 0 / 0 / 0 | 0 |
+
+Each file's verdict is FAIL, against P-0702's prediction of 0 in every pass of both runs. `pool-fifo` under `transparent` is the only arm and mode with none.
+
+These are few against the pools' size. A `base` pointer pool is 23,520 pages of 4 KiB for its orders alone, and the passes took at most 134 faults. Still, any fault means a page that had been touched was no longer mapped when the pass reached it. The counts vary from 0 to 134 between repetitions of one arm, and they fell to 5 in all under `transparent`.
+
+The heap arms fault by design and are not judged:
+- `malloc-fresh`: about 34,000 a throughput pass;
+- `malloc-aged`: about 14,300;
+- `pmr-pool`: 8,267 to 9,367;
+- `mimalloc`: 72 to 89.
+
+The 10-second memory samples the driver takes did not show why. `thp_fault_fallback` stayed at 0, `MemFree` was 1.0 to 1.6 GiB with the page cache holding most of the rest, and load stayed near 1. P-0703 is the diagnostic that looks for the cause. The FAIL stands as published whatever it finds.
+
+**Latency.** These are all operations' latencies, in ns, from each file:
+- p50 was 170 to 250 ns on every arm in both runs.
+- p99 was 4,808 (`pool-index`) to 5,457 (`malloc-aged`) under `base`, and 4,228 (`pool-index`) to 5,529 (`malloc-aged`) under `transparent`.
+- p99.9 was 20,997 to 28,653 under `base`, and 18,739 to 28,781 under `transparent`.
+- Under `transparent`, the pool arms' p99 fell by 12.0% to 12.7% and their p99.9 by 10.6% to 12.1%.
+
+Replaces have the highest p99 and p99.9 of the four operations on every arm. For example, `pool-index` under `base` has a replace p99 of 22,518 and a p99.9 of 58,587. That is about the fast hash-linked book's replace p99 of 21,077 on this host.
+
+**Memory.** These are each book's figures at its most, in MiB, from the untimed process:
+- `pool-index` and `pool-fifo`: 221.1 under `base` and 222.5 under `transparent`;
+- `pool-pointer`: 273.4 and 275.0;
+- `malloc-fresh`: 264.9;
+- `mimalloc`: 267.0;
+- `pmr-pool`: 332.9;
+- `malloc-aged`: 364.9.
+
+A pool's figure grows under `transparent` because each mapping is rounded up to whole 2 MiB pages: 58,720,256 bytes for the index arms' orders against 57,802,752 under `base`. Peak RSS of the timed processes was 9.16 to 9.31 GiB in both runs, the day's copy and the latency samples counted.
+
+**Counts, agreement and calls.** These are the same in both files:
+- 184,132,100 nodes made on every arm;
+- `itch_map_compare` passed on all seven arms, with 0 divergences over 268,744,780 messages and last hash `9e3779b97f4a7c15`;
+- `itch_alloc` passed on the three pool arms with 0 calls;
+- 184,132,100 calls on `malloc-fresh` and `malloc-aged`, one a node;
+- 50 calls on `pmr-pool`;
+- 0 calls seen by the counter on `mimalloc`, whose 184,132,100 calls the book counts itself.
+
+**The first process of each run.** `malloc-fresh`'s first repetition was the first timed process of each run. Its empty timer pair read 18.8 and 18.3 ns, against 24.0 to 25.0 ns in every other process of both runs. Its throughput was 3.6% below that arm's median under `base` and 7.4% above it under `transparent`. That one repetition is what puts `malloc-fresh`'s CV at 4.36% under `transparent`. What differed in that first process was not measured.
+
+**The predictions against what ran.** P-0702 held on these:
+- the checks: nodes inside 150 to 220 million, 0 divergences on every arm in both modes, the pool arms on 0 calls, one call a node for the malloc arms, `pmr-pool` under 10,000, and `mimalloc` unseen by the counter;
+- the pages read back under both requests, and `pmr-monotonic` not fitting (its estimate here is 7.51 GiB of nodes, against the prediction's 5.2 GiB of orders alone);
+- throughput under `base`: `pool-index` at 2.51 M, inside 1.8 to 3.2 M and 1.8% under the fast hash-linked book's 2.56 M; `pool-pointer` 4.7% and `pool-fifo` 4.3% behind it; `mimalloc` 9.0% and `pmr-pool` 3.4% behind; `malloc-fresh` 19.2% behind; `malloc-aged` 9.9% behind `malloc-fresh`;
+- the heap arms within 3% between the two files;
+- the latency p50 range, and replaces with the highest tails;
+- the books inside 150 to 300 MiB, peak RSS inside 9.0 to 9.9 GiB, `pswpout` still, and every stand-alone `itch_map_compare` under 10 GiB.
+
+It failed on these:
+- **The fault check:** 136, 200 and 146 faults under `base` and 4, 1 and 0 under `transparent`, against 0.
+- **The crossing:** the pool arms gained 12.8% to 13.9%, above the predicted 1% to 10%, most likely near 4%. The prior weighed the TLB's reach against the pools' size, but not by how much a missed walk costs per message on this host.
+- **The latency tails:** over all operations, p99 was 4,228 to 5,529 ns, above the predicted 600 to 3,000, and p99.9 was 18,739 to 28,781 ns, above the predicted 1,000 to 15,000. The fast book's figures on this host gave the prior only per-operation tails, no all-operation one. Replaces are 8.05% of the day's messages, with a p99 of 20 to 30 µs, so the slowest 1% of all messages lies mostly in the replaces' upper tail, about their slowest eighth. This is a reading of the tables, not a separate measurement.
+- **CV under 3% on every arm:** `malloc-fresh` under `transparent` was 4.36%, from its first repetition (above).
+- **A pool book the same in both modes:** it differed by 1.4 to 1.6 MiB, the rounding up to 2 MiB pages.
+
 ## The UDP replay's portable groundwork, 2026-11-10
 
 This is the part of T-URING-1 and T-URING-2 that builds and tests on the Mac. The Linux receive modes and every `debian` run come later, as a main-tree piece, because only the main tree reaches `debian`. Nothing here is a measurement, and nothing here makes a prediction.
