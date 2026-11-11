@@ -57,7 +57,7 @@
 #include <hdr/hdr_histogram.h>
 #include <unistd.h>
 
-#if defined(__linux__)
+#ifdef __linux__
 #include <fcntl.h>
 #endif
 
@@ -144,9 +144,11 @@ struct Options {
   return value;
 }
 
-[[nodiscard]] bool take_number(std::string_view arg, std::uint64_t number, Options& options) {
-  constexpr std::uint64_t kMostInt = std::numeric_limits<int>::max();
-  constexpr std::uint64_t kMost32 = std::numeric_limits<std::uint32_t>::max();
+constexpr std::uint64_t kMostInt = std::numeric_limits<int>::max();
+constexpr std::uint64_t kMost32 = std::numeric_limits<std::uint32_t>::max();
+
+// The packing's and the schedule's numbers.
+[[nodiscard]] bool take_plan_number(std::string_view arg, std::uint64_t number, Options& options) {
   if (arg == "--first") {
     options.plan.first_frame = number;
   } else if (arg == "--frames") {
@@ -163,7 +165,15 @@ struct Options {
     options.loopback.send.messages_per_second = number;
   } else if (arg == "--warmup-ms") {
     options.warmup_ms = number;
-  } else if (arg == "--core" && number <= kMostInt) {
+  } else {
+    return false;
+  }
+  return true;
+}
+
+// The cores, the socket and the receive mode's numbers.
+[[nodiscard]] bool take_host_number(std::string_view arg, std::uint64_t number, Options& options) {
+  if (arg == "--core" && number <= kMostInt) {
     options.loopback.sender_core = static_cast<int>(number);
   } else if (arg == "--receiver-core" && number <= kMostInt) {
     options.loopback.receiver_core = static_cast<int>(number);
@@ -177,18 +187,36 @@ struct Options {
     options.mode_options.slot_bytes = static_cast<std::size_t>(number);
   } else if (arg == "--ring-buffers" && number != 0 && number <= udp::kMostRingBuffersAsked) {
     options.mode_options.ring_buffers = static_cast<std::uint32_t>(number);
-  } else if (arg == "--max-orders" && number <= kMost32) {
-    options.capacity.orders = static_cast<std::uint32_t>(number);
-  } else if (arg == "--max-levels" && number <= kMost32) {
-    options.capacity.levels = static_cast<std::uint32_t>(number);
-  } else if (arg == "--max-pages" && number <= kMost32) {
-    options.capacity.index_pages = static_cast<std::uint32_t>(number);
-  } else if (arg == "--max-slots" && number <= kMost32) {
-    options.capacity.level_slots = static_cast<std::uint32_t>(number);
   } else {
     return false;
   }
   return true;
+}
+
+// The book's capacity.
+[[nodiscard]] bool take_capacity_number(std::string_view arg, std::uint64_t number,
+                                        Options& options) {
+  if (number > kMost32) {
+    return false;
+  }
+  const auto value = static_cast<std::uint32_t>(number);
+  if (arg == "--max-orders") {
+    options.capacity.orders = value;
+  } else if (arg == "--max-levels") {
+    options.capacity.levels = value;
+  } else if (arg == "--max-pages") {
+    options.capacity.index_pages = value;
+  } else if (arg == "--max-slots") {
+    options.capacity.level_slots = value;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+[[nodiscard]] bool take_number(std::string_view arg, std::uint64_t number, Options& options) {
+  return take_plan_number(arg, number, options) || take_host_number(arg, number, options) ||
+         take_capacity_number(arg, number, options);
 }
 
 [[nodiscard]] bool take_text(std::string_view arg, std::string_view value, Options& options) {
@@ -214,30 +242,40 @@ struct Options {
   return true;
 }
 
+// Takes args[i], and its value from args[i + 1] when it has one; false on a bad argument.
+[[nodiscard]] bool take_argument(std::span<const char* const> args, std::size_t& i,
+                                 Options& options) {
+  const std::string_view arg = args[i];
+  if (!arg.starts_with("--")) {
+    if (options.path != nullptr) {
+      return false;
+    }
+    options.path = args[i];
+    return true;
+  }
+  if (arg == "--peaks") {
+    options.peaks = true;
+    return true;
+  }
+  if (arg == "--probe") {
+    options.probe = true;
+    return true;
+  }
+  if (i + 1 == args.size()) {
+    return false;
+  }
+  const std::string_view value = args[++i];
+  if (take_text(arg, value, options)) {
+    return true;
+  }
+  const std::optional<std::uint64_t> number = parse_number(value);
+  return number && take_number(arg, *number, options);
+}
+
 [[nodiscard]] std::optional<Options> parse_options(std::span<const char* const> args) {
   Options options;
   for (std::size_t i = 0; i < args.size(); ++i) {
-    const std::string_view arg = args[i];
-    if (!arg.starts_with("--")) {
-      if (options.path != nullptr) {
-        return std::nullopt;
-      }
-      options.path = args[i];
-      continue;
-    }
-    if (arg == "--peaks" || arg == "--probe") {
-      (arg == "--peaks" ? options.peaks : options.probe) = true;
-      continue;
-    }
-    if (i + 1 == args.size()) {
-      return std::nullopt;
-    }
-    const std::string_view value = args[++i];
-    if (take_text(arg, value, options)) {
-      continue;
-    }
-    const std::optional<std::uint64_t> number = parse_number(value);
-    if (!number || !take_number(arg, *number, options)) {
+    if (!take_argument(args, i, options)) {
       return std::nullopt;
     }
   }
@@ -259,7 +297,7 @@ struct Options {
 // so that the receiver does a replay's work and no more; the two books are compared by
 // their canonical hash once the run is over.
 struct BookSink {
-  itch::FastBook<>* book;
+  itch::FastBook<>* book = nullptr;
   std::array<std::uint64_t, udp::kApplyStatuses> statuses{};
   std::uint64_t frames = 0;
 
@@ -559,31 +597,32 @@ class Json {
 }
 
 struct HostDeltas {
-  std::optional<std::uint64_t> rcvbuf_errors;
-  std::optional<std::uint64_t> in_errors;
-  std::optional<std::uint64_t> softnet_dropped;
+  udp::Reading rcvbuf_errors;
+  udp::Reading in_errors;
+  udp::Reading softnet_dropped;
 };
 
 [[nodiscard]] HostDeltas host_deltas(const udp::KernelSnapshot& before,
                                      const udp::KernelSnapshot& after) {
   HostDeltas deltas;
   if (before.udp && after.udp) {
-    deltas.rcvbuf_errors = after.udp->rcvbuf_errors - before.udp->rcvbuf_errors;
-    deltas.in_errors = after.udp->in_errors - before.udp->in_errors;
+    deltas.rcvbuf_errors = {.read = true,
+                            .value = after.udp->rcvbuf_errors - before.udp->rcvbuf_errors};
+    deltas.in_errors = {.read = true, .value = after.udp->in_errors - before.udp->in_errors};
   }
   if (before.softnet && after.softnet && before.softnet->size() == after.softnet->size()) {
     std::uint64_t dropped = 0;
     for (std::size_t i = 0; i < after.softnet->size(); ++i) {
       dropped += (*after.softnet)[i].dropped - (*before.softnet)[i].dropped;
     }
-    deltas.softnet_dropped = dropped;
+    deltas.softnet_dropped = {.read = true, .value = dropped};
   }
   return deltas;
 }
 
-void optional_number(Json& json, std::string_view key, std::optional<std::uint64_t> value) {
-  if (value) {
-    json.number(key, *value);
+void optional_number(Json& json, std::string_view key, const udp::Reading& reading) {
+  if (reading.read) {
+    json.number(key, reading.value);
   } else {
     json.null(key);
   }
@@ -693,7 +732,7 @@ bool write_record(const Options& options, const Json& record) {
 
 // Drops the file's pages from the page cache once it is packed (Linux; elsewhere nothing).
 [[nodiscard]] std::string drop_page_cache(const char* path) {
-#if defined(__linux__)
+#ifdef __linux__
   const int fd = ::open(path, O_RDONLY | O_CLOEXEC);
   if (fd < 0) {
     return std::format("open failed, errno {}", errno);
@@ -704,7 +743,7 @@ bool write_record(const Options& options, const Json& record) {
                      : std::format("posix_fadvise failed, {}", result);
 #else
   static_cast<void>(path);
-  return "not dropped: no posix_fadvise here";
+  return std::string{"not dropped: no posix_fadvise here"};
 #endif
 }
 
@@ -796,7 +835,7 @@ int run_sender(const Options& options) {
   }};
   sender.join();
   const udp::KernelSnapshot after = udp::read_kernel_snapshot();
-  const std::optional<std::uint64_t> socket_dropped = udp::socket_drops(pair->receiver.get());
+  const udp::Reading socket_dropped = udp::socket_drops(pair->receiver.get());
 
   Json record;
   record.text("tool", "bench_udp");
@@ -842,37 +881,218 @@ int run_sender(const Options& options) {
   return whole ? 0 : 1;
 }
 
-int run_receive(const Options& options) {
+// Whether this build and this packing can run the mode; says why not on stderr.
+[[nodiscard]] bool mode_runs(const Options& options) {
   if (!udp::mode_built(options.mode)) {
     std::println(stderr, "bench_udp: mode {} is not built here: {}", options.mode,
                  udp::why_not_built(options.mode));
-    return 2;
+    return false;
   }
   if (udp::uses_slots(options.mode) &&
       options.plan.max_datagram + udp::kSlotOverhead > options.mode_options.slot_bytes) {
     std::println(stderr, "bench_udp: a {}-byte datagram does not fit a {}-byte slot",
                  options.plan.max_datagram, options.mode_options.slot_bytes);
+    return false;
+  }
+  return true;
+}
+
+// The file path first, kept only as its result, then the packets; the file is unmapped
+// before this returns.
+[[nodiscard]] std::optional<mold::PacketArray> replay_and_pack(const Options& options,
+                                                               BookResult& by_file) {
+  const auto file = itch::tools::MappedFile::open(options.path);
+  if (!file) {
+    std::println(stderr, "bench_udp: cannot open {}", options.path);
+    return std::nullopt;
+  }
+  {
+    const auto book = std::make_unique<itch::FastBook<>>(options.capacity);
+    BookSink sink{.book = book.get()};
+    udp::replay_frames(file->bytes(), options.plan.first_frame, options.plan.frame_limit, sink);
+    by_file = finish(sink);
+  }
+  return pack(options, file->bytes());
+}
+
+// What a receive run found, from which its verdict follows.
+struct Findings {
+  bool delivered = false;   // Every packet sent, every message admitted once, in order.
+  bool book_match = false;  // The book from UDP is the book from the file.
+  bool lossless = false;    // Delivered, and every drop counter read and 0.
+  bool pass = false;
+};
+
+[[nodiscard]] Findings judge(const udp::LoopbackRun& loop, const mold::PacketArray& packets,
+                             const BookResult& by_file, const BookResult& by_udp,
+                             const udp::Reading& socket_dropped, const HostDeltas& deltas) {
+  const udp::SendReport& sent = *loop.sender.report;
+  const udp::ModeCounters& mode = loop.mode;
+  const mold::SequenceCounts& sequence = loop.sequence;
+  Findings found;
+  found.delivered = loop.received.end == udp::ReceiveEnd::end_of_session &&
+                    sent.failed_packets == 0 && sent.sent_packets == packets.size() &&
+                    loop.feed.malformed() == 0 && sequence.gaps == 0 && sequence.lost == 0 &&
+                    sequence.duplicate_messages == 0 && sequence.foreign_session == 0 &&
+                    sequence.out_of_range == 0 && sequence.admitted == packets.messages() &&
+                    loop.next_expected == packets.next_sequence();
+  found.book_match = by_udp == by_file && by_file.frames == packets.messages();
+  const bool counters_zero = mode.truncated == 0 && mode.no_buffers == 0 && mode.cq_overflow == 0 &&
+                             mode.rxq_overflow == 0 && socket_dropped.read_zero() &&
+                             deltas.rcvbuf_errors.read_zero() && deltas.in_errors.read_zero() &&
+                             deltas.softnet_dropped.read_zero();
+  found.lossless = found.delivered && counters_zero;
+  found.pass = found.delivered && found.book_match;
+  return found;
+}
+
+[[nodiscard]] std::string_view schedule_kind(bool feed, bool paced) noexcept {
+  if (feed) {
+    return "feed";
+  }
+  return paced ? "rate" : "unpaced";
+}
+
+[[nodiscard]] Json mode_options_json(const udp::ModeOptions& mode_options) {
+  Json out;
+  out.number("slot_bytes", mode_options.slot_bytes);
+  out.number("ring_buffers", mode_options.ring_buffers);
+  out.number("ring_entries", mode_options.ring_entries);
+  out.number("idle_timeout_ms", static_cast<std::uint64_t>(mode_options.idle_timeout.count()));
+  out.number("sq_idle_ms", mode_options.sq_idle_ms);
+  return out;
+}
+
+[[nodiscard]] Json received_json(const udp::LoopbackRun& loop, std::uint64_t window_ns) {
+  const mold::SequenceCounts& sequence = loop.sequence;
+  Json out;
+  out.text("end", udp::to_string(loop.received.end));
+  out.signed_number("error", loop.received.error);
+  out.object("mode", mode_json(loop.mode));
+  out.number("feed_datagrams", loop.feed.datagrams);
+  out.number("malformed", loop.feed.malformed());
+  out.number("admitted", sequence.admitted);
+  out.number("gaps", sequence.gaps);
+  out.number("lost", sequence.lost);
+  out.number("duplicate_messages", sequence.duplicate_messages);
+  out.number("heartbeats", sequence.heartbeats);
+  out.number("foreign_session", sequence.foreign_session);
+  out.number("next_expected", loop.next_expected);
+  out.number("receive_window_ns", window_ns);
+  return out;
+}
+
+[[nodiscard]] Json drops_json(const udp::LoopbackRun& loop, const udp::Reading& socket_dropped,
+                              const HostDeltas& deltas) {
+  const udp::ModeCounters& mode = loop.mode;
+  Json out;
+  out.number("failed_sends", loop.sender.report->failed_packets);
+  out.number("tracker_gaps", loop.sequence.gaps);
+  out.number("tracker_lost", loop.sequence.lost);
+  out.number("tracker_duplicates", loop.sequence.duplicate_messages);
+  out.number("truncated", mode.truncated);
+  out.number("no_buffers", mode.no_buffers);
+  out.number("cq_overflow", mode.cq_overflow);
+  if (mode.rxq_overflow_set) {
+    out.number("rxq_overflow", mode.rxq_overflow);
+  } else {
+    out.null("rxq_overflow");
+  }
+  optional_number(out, "socket_drops", socket_dropped);
+  optional_number(out, "rcvbuf_errors", deltas.rcvbuf_errors);
+  optional_number(out, "in_errors", deltas.in_errors);
+  optional_number(out, "softnet_dropped", deltas.softnet_dropped);
+  return out;
+}
+
+[[nodiscard]] Json book_json(const BookResult& by_file, const BookResult& by_udp, bool match) {
+  Json out;
+  out.number("file_frames", by_file.frames);
+  out.number("udp_frames", by_udp.frames);
+  out.text("file_end_hash", std::format("{:016x}", by_file.end_hash));
+  out.text("udp_end_hash", std::format("{:016x}", by_udp.end_hash));
+  out.boolean("match", match);
+  return out;
+}
+
+// Everything a receive run measured, as its record says it. Every pointer is set.
+struct ReceiveRun {
+  const mold::PacketArray* packets = nullptr;
+  const std::vector<std::uint64_t>* due = nullptr;
+  const udp::LoopbackRun* loop = nullptr;
+  const Stamps* stamps = nullptr;
+  const SenderCpu* sender_cpu = nullptr;
+  const udp::KernelSnapshot* before = nullptr;
+  std::uint64_t ready_ns = 0;
+  std::string_view page_cache;
+  const BookResult* by_file = nullptr;
+  const BookResult* by_udp = nullptr;
+  udp::Reading socket_dropped;
+  HostDeltas deltas;
+  Findings found;
+};
+
+[[nodiscard]] Json receive_record(const Options& options, const ReceiveRun& run) {
+  const udp::LoopbackRun& loop = *run.loop;
+  const Stamps& stamps = *run.stamps;
+  const udp::SendReport& sent = *loop.sender.report;
+  const bool feed = options.feed_speedup > 0.0;
+  const std::uint64_t window_ns = stamps.end_ns > run.ready_ns ? stamps.end_ns - run.ready_ns : 0;
+  Json record;
+  record.text("tool", "bench_udp");
+  record.text("kind", "receive");
+  record.text("mode", options.mode);
+  record.text("comparability", kNotANetwork);
+  record.object("header", header_of(options, options.loopback.receiver_core));
+  record.object("plan", plan_json(options, *run.packets));
+  record.text("page_cache", run.page_cache);
+  Json schedule;
+  schedule.text("kind", schedule_kind(feed, sent.paced));
+  schedule.number("rate", feed ? 0 : options.loopback.send.messages_per_second);
+  schedule.decimal("feed_speedup", options.feed_speedup);
+  schedule.number("span_ns", run.due->empty() ? 0 : run.due->back());
+  record.object("schedule", schedule);
+  Json pins;
+  pins.object("sender", pin_json(loop.sender.pin));
+  pins.object("receiver", pin_json(loop.receiver_pin));
+  pins.signed_number("sq_core", options.mode_options.sq_core);
+  record.object("pins", pins);
+  Json buffer_json;
+  buffer_json.number("requested", static_cast<std::uint64_t>(loop.receive_buffer.requested));
+  buffer_json.number("read_back", static_cast<std::uint64_t>(loop.receive_buffer.read_back));
+  record.object("receive_buffer", buffer_json);
+  record.object("mode_options", mode_options_json(options.mode_options));
+  record.object("send", send_json(sent));
+  record.object("receive", received_json(loop, window_ns));
+  record.object("drops", drops_json(loop, run.socket_dropped, run.deltas));
+  record.boolean("delivered", run.found.delivered);
+  record.boolean("lossless", run.found.lossless);
+  record.object("book", book_json(*run.by_file, *run.by_udp, run.found.book_match));
+  if (sent.paced) {
+    record.object("latency",
+                  latency_json(stamps, *run.due, sent.start_ns, options.warmup_ms * 1'000'000));
+  } else {
+    record.null("latency");
+  }
+  Json cpu;
+  cpu.object("sender", thread_cpu_json(run.sender_cpu->start, run.sender_cpu->end));
+  cpu.number("sender_window_ns", sent.elapsed_ns());
+  cpu.object("receiver", thread_cpu_json(stamps.receiver_start, stamps.receiver_end));
+  cpu.number("window_ns", window_ns);
+  cpu.object("kernel", stamps.ended ? cpu_ticks_json(*run.before, stamps.at_end) : Json{});
+  record.object("cpu", cpu);
+  record.text("verdict", run.found.pass ? "PASS" : "FAIL");
+  return record;
+}
+
+int run_receive(const Options& options) {
+  if (!mode_runs(options)) {
     return 2;
   }
-  // The file path first, kept only as its result, then the packets, then the file goes.
-  std::optional<mold::PacketArray> packets;
   BookResult by_file;
-  {
-    const auto file = itch::tools::MappedFile::open(options.path);
-    if (!file) {
-      std::println(stderr, "bench_udp: cannot open {}", options.path);
-      return 2;
-    }
-    {
-      const auto book = std::make_unique<itch::FastBook<>>(options.capacity);
-      BookSink sink{.book = book.get()};
-      udp::replay_frames(file->bytes(), options.plan.first_frame, options.plan.frame_limit, sink);
-      by_file = finish(sink);
-    }
-    packets = pack(options, file->bytes());
-    if (!packets) {
-      return 2;
-    }
+  const std::optional<mold::PacketArray> packets = replay_and_pack(options, by_file);
+  if (!packets) {
+    return 2;
   }
   const std::string dropped = drop_page_cache(options.path);
 
@@ -917,136 +1137,42 @@ int run_receive(const Options& options) {
     return 2;
   }
   const udp::KernelSnapshot after = udp::read_kernel_snapshot();
-  const std::optional<std::uint64_t> socket_dropped =
-      held.get() >= 0 ? udp::socket_drops(held.get()) : std::nullopt;
+  const udp::Reading socket_dropped = udp::socket_drops(held.get());
   held.reset();
   const BookResult by_udp = finish(sink);
-
   if (!loop->sender.report) {
     std::println(
         stderr, "bench_udp: the schedule cannot be sent: {}",
         loop->sender.report.error() == udp::SendError::schedule_mismatch ? "mismatch" : "overflow");
     return 2;
   }
-  const udp::SendReport& sent = *loop->sender.report;
-  const udp::ModeCounters& mode = loop->mode;
-  const mold::SequenceCounts& sequence = loop->sequence;
+
   const HostDeltas deltas = host_deltas(before, after);
-
-  const bool delivered = loop->received.end == udp::ReceiveEnd::end_of_session &&
-                         sent.failed_packets == 0 && sent.sent_packets == packets->size() &&
-                         loop->feed.malformed() == 0 && sequence.gaps == 0 && sequence.lost == 0 &&
-                         sequence.duplicate_messages == 0 && sequence.foreign_session == 0 &&
-                         sequence.out_of_range == 0 && sequence.admitted == packets->messages() &&
-                         loop->next_expected == packets->next_sequence();
-  const bool book_match = by_udp == by_file && by_file.frames == packets->messages();
-  const bool counters_zero = mode.truncated == 0 && mode.no_buffers == 0 && mode.cq_overflow == 0 &&
-                             mode.rxq_overflow == 0 && socket_dropped.value_or(1) == 0 &&
-                             deltas.rcvbuf_errors.value_or(1) == 0 &&
-                             deltas.in_errors.value_or(1) == 0 &&
-                             deltas.softnet_dropped.value_or(1) == 0;
-  const bool lossless = delivered && counters_zero;
-  const bool pass = delivered && book_match;
-
-  Json record;
-  record.text("tool", "bench_udp");
-  record.text("kind", "receive");
-  record.text("mode", options.mode);
-  record.text("comparability", kNotANetwork);
-  record.object("header", header_of(options, options.loopback.receiver_core));
-  record.object("plan", plan_json(options, *packets));
-  record.text("page_cache", dropped);
-  Json schedule;
-  schedule.text("kind", feed ? "feed" : (sent.paced ? "rate" : "unpaced"));
-  schedule.number("rate", feed ? 0 : options.loopback.send.messages_per_second);
-  schedule.decimal("feed_speedup", options.feed_speedup);
-  schedule.number("span_ns", due.empty() ? 0 : due.back());
-  record.object("schedule", schedule);
-  Json pins;
-  pins.object("sender", pin_json(loop->sender.pin));
-  pins.object("receiver", pin_json(loop->receiver_pin));
-  pins.signed_number("sq_core", options.mode_options.sq_core);
-  record.object("pins", pins);
-  Json buffer_json;
-  buffer_json.number("requested", static_cast<std::uint64_t>(loop->receive_buffer.requested));
-  buffer_json.number("read_back", static_cast<std::uint64_t>(loop->receive_buffer.read_back));
-  record.object("receive_buffer", buffer_json);
-  Json options_json;
-  options_json.number("slot_bytes", options.mode_options.slot_bytes);
-  options_json.number("ring_buffers", options.mode_options.ring_buffers);
-  options_json.number("ring_entries", options.mode_options.ring_entries);
-  options_json.number("idle_timeout_ms",
-                      static_cast<std::uint64_t>(options.mode_options.idle_timeout.count()));
-  options_json.number("sq_idle_ms", options.mode_options.sq_idle_ms);
-  record.object("mode_options", options_json);
-  record.object("send", send_json(sent));
-  Json received;
-  received.text("end", udp::to_string(loop->received.end));
-  received.signed_number("error", loop->received.error);
-  received.object("mode", mode_json(mode));
-  received.number("feed_datagrams", loop->feed.datagrams);
-  received.number("malformed", loop->feed.malformed());
-  received.number("admitted", sequence.admitted);
-  received.number("gaps", sequence.gaps);
-  received.number("lost", sequence.lost);
-  received.number("duplicate_messages", sequence.duplicate_messages);
-  received.number("heartbeats", sequence.heartbeats);
-  received.number("foreign_session", sequence.foreign_session);
-  received.number("next_expected", loop->next_expected);
-  received.number("receive_window_ns", stamps.end_ns > ready_ns ? stamps.end_ns - ready_ns : 0);
-  record.object("receive", received);
-  Json drops;
-  drops.number("failed_sends", sent.failed_packets);
-  drops.number("tracker_gaps", sequence.gaps);
-  drops.number("tracker_lost", sequence.lost);
-  drops.number("tracker_duplicates", sequence.duplicate_messages);
-  drops.number("truncated", mode.truncated);
-  drops.number("no_buffers", mode.no_buffers);
-  drops.number("cq_overflow", mode.cq_overflow);
-  if (mode.rxq_overflow_set) {
-    drops.number("rxq_overflow", mode.rxq_overflow);
-  } else {
-    drops.null("rxq_overflow");
-  }
-  optional_number(drops, "socket_drops", socket_dropped);
-  optional_number(drops, "rcvbuf_errors", deltas.rcvbuf_errors);
-  optional_number(drops, "in_errors", deltas.in_errors);
-  optional_number(drops, "softnet_dropped", deltas.softnet_dropped);
-  record.object("drops", drops);
-  record.boolean("delivered", delivered);
-  record.boolean("lossless", lossless);
-  Json book_json;
-  book_json.number("file_frames", by_file.frames);
-  book_json.number("udp_frames", by_udp.frames);
-  book_json.text("file_end_hash", std::format("{:016x}", by_file.end_hash));
-  book_json.text("udp_end_hash", std::format("{:016x}", by_udp.end_hash));
-  book_json.boolean("match", book_match);
-  record.object("book", book_json);
-  if (sent.paced) {
-    record.object("latency",
-                  latency_json(stamps, due, sent.start_ns, options.warmup_ms * 1'000'000));
-  } else {
-    record.null("latency");
-  }
-  Json cpu;
-  cpu.object("sender", thread_cpu_json(sender_cpu.start, sender_cpu.end));
-  cpu.number("sender_window_ns", sent.elapsed_ns());
-  cpu.object("receiver", thread_cpu_json(stamps.receiver_start, stamps.receiver_end));
-  cpu.number("window_ns", stamps.end_ns > ready_ns ? stamps.end_ns - ready_ns : 0);
-  cpu.object("kernel", stamps.ended ? cpu_ticks_json(before, stamps.at_end) : Json{});
-  record.object("cpu", cpu);
-  record.text("verdict", pass ? "PASS" : "FAIL");
-
+  const Findings found = judge(*loop, *packets, by_file, by_udp, socket_dropped, deltas);
+  const Json record = receive_record(options, {.packets = &*packets,
+                                               .due = &due,
+                                               .loop = &*loop,
+                                               .stamps = &stamps,
+                                               .sender_cpu = &sender_cpu,
+                                               .before = &before,
+                                               .ready_ns = ready_ns,
+                                               .page_cache = dropped,
+                                               .by_file = &by_file,
+                                               .by_udp = &by_udp,
+                                               .socket_dropped = socket_dropped,
+                                               .deltas = deltas,
+                                               .found = found});
   std::println("bench_udp_mode {}", options.mode);
-  std::println("bench_udp_delivered {}", delivered ? "yes" : "no");
-  std::println("bench_udp_lossless {}", lossless ? "yes" : "no");
-  std::println("bench_udp_book {}", book_match ? "matches the file" : "differs from the file");
-  std::println("bench_udp_verdict {}", pass ? "PASS" : "FAIL");
+  std::println("bench_udp_delivered {}", found.delivered ? "yes" : "no");
+  std::println("bench_udp_lossless {}", found.lossless ? "yes" : "no");
+  std::println("bench_udp_book {}",
+               found.book_match ? "matches the file" : "differs from the file");
+  std::println("bench_udp_verdict {}", found.pass ? "PASS" : "FAIL");
   if (!write_record(options, record)) {
     std::println(stderr, "bench_udp: cannot write {}", options.out);
     return 2;
   }
-  return pass ? 0 : 1;
+  return found.pass ? 0 : 1;
 }
 
 // Every mode this build has, set up on a fresh pair and waited on once with nothing sent:
@@ -1082,7 +1208,7 @@ int run_probe(const Options& options) {
     });
     std::println("bench_udp_probe {} {}", id, said.value_or("not built"));
   }
-#if ITCH_UDP_HAS_RING_MODES
+#ifdef ITCH_UDP_RING_MODES
   const udp::RingProbe ring = udp::probe_ring();
   std::println("bench_udp_probe_ring {}", ring.summary);
 #endif

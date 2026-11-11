@@ -37,6 +37,8 @@
 #include "udp/sender.hpp"
 #include "udp/socket.hpp"
 
+// ASSERT_TRUE(x.has_value()) guards each access, which the check cannot see.
+// NOLINTBEGIN(bugprone-unchecked-optional-access)
 namespace {
 
 namespace mold = itch::mold;
@@ -658,12 +660,12 @@ TEST(KernelCounters, TheUdpLinesOfSnmpAreReadByName) {
       "UdpLite: 1 1 1 1 1 1\n";
   const auto snmp = udp::parse_udp_snmp(kSnmp);
   ASSERT_TRUE(snmp.has_value());
-  EXPECT_EQ(snmp->in_datagrams, 1000U);
-  EXPECT_EQ(snmp->no_ports, 2U);
-  EXPECT_EQ(snmp->in_errors, 30U);
-  EXPECT_EQ(snmp->out_datagrams, 4000U);
-  EXPECT_EQ(snmp->rcvbuf_errors, 25U);
-  EXPECT_EQ(snmp->sndbuf_errors, 6U);
+  EXPECT_EQ(snmp.value().in_datagrams, 1000U);
+  EXPECT_EQ(snmp.value().no_ports, 2U);
+  EXPECT_EQ(snmp.value().in_errors, 30U);
+  EXPECT_EQ(snmp.value().out_datagrams, 4000U);
+  EXPECT_EQ(snmp.value().rcvbuf_errors, 25U);
+  EXPECT_EQ(snmp.value().sndbuf_errors, 6U);
   EXPECT_FALSE(udp::parse_udp_snmp("Udp: InDatagrams NoPorts\nUdp: 1 2\n").has_value())
       << "a missing column must not read as 0";
   EXPECT_FALSE(udp::parse_udp_snmp("Udp: InDatagrams NoPorts InErrors OutDatagrams "
@@ -675,11 +677,11 @@ TEST(KernelCounters, SoftnetColumnsAreHexAndTheSecondIsTheDrops) {
   const auto rows = udp::parse_softnet(
       "0000a0f1 00000000 00000003 00000000 00000000\n00000010 0000001f 00000000 00000000\n");
   ASSERT_TRUE(rows.has_value());
-  ASSERT_EQ(rows->size(), 2U);
-  EXPECT_EQ((*rows)[0].processed, 0xa0f1U);
-  EXPECT_EQ((*rows)[0].dropped, 0U);
-  EXPECT_EQ((*rows)[0].squeezed, 3U);
-  EXPECT_EQ((*rows)[1].dropped, 0x1fU);
+  ASSERT_EQ(rows.value().size(), 2U);
+  EXPECT_EQ(rows.value()[0].processed, 0xa0f1U);
+  EXPECT_EQ(rows.value()[0].dropped, 0U);
+  EXPECT_EQ(rows.value()[0].squeezed, 3U);
+  EXPECT_EQ(rows.value()[1].dropped, 0x1fU);
   EXPECT_FALSE(udp::parse_softnet("00000010 zz 00000000\n").has_value());
 }
 
@@ -688,13 +690,13 @@ TEST(KernelCounters, EachCpusSoftirqIsItsSeventhColumn) {
       "cpu  100 1 50 9000 3 4 70 0 0 0\ncpu0 10 1 5 900 3 4 7 0 0 0\n"
       "cpu6 20 0 6 800 0 2 33 0 0 0\nintr 12345\n");
   ASSERT_TRUE(cpus.has_value());
-  ASSERT_EQ(cpus->size(), 2U) << "the all-CPU line is left out";
-  EXPECT_EQ((*cpus)[1].cpu, 6);
-  EXPECT_EQ((*cpus)[1].softirq, 33U);
-  EXPECT_EQ((*cpus)[1].irq, 2U);
-  EXPECT_EQ((*cpus)[1].user, 20U);
-  EXPECT_EQ((*cpus)[1].system, 6U);
-  EXPECT_EQ((*cpus)[0].user, 11U) << "user and nice together";
+  ASSERT_EQ(cpus.value().size(), 2U) << "the all-CPU line is left out";
+  EXPECT_EQ(cpus.value()[1].cpu, 6);
+  EXPECT_EQ(cpus.value()[1].softirq, 33U);
+  EXPECT_EQ(cpus.value()[1].irq, 2U);
+  EXPECT_EQ(cpus.value()[1].user, 20U);
+  EXPECT_EQ(cpus.value()[1].system, 6U);
+  EXPECT_EQ(cpus.value()[0].user, 11U) << "user and nice together";
 }
 
 TEST(KernelCounters, ATasksTimesAreCountedFromItsLastParenthesis) {
@@ -707,11 +709,11 @@ TEST(KernelCounters, ATasksTimesAreCountedFromItsLastParenthesis) {
   line += " 6 0 0\n";
   const auto task = udp::parse_task_stat(line);
   ASSERT_TRUE(task.has_value());
-  EXPECT_EQ(task->tid, 4242);
-  EXPECT_EQ(task->comm, "iou-sqp (4) x");
-  EXPECT_EQ(task->utime, 111U);
-  EXPECT_EQ(task->stime, 222U);
-  EXPECT_EQ(task->processor, 6);
+  EXPECT_EQ(task.value().tid, 4242);
+  EXPECT_EQ(task.value().comm, "iou-sqp (4) x");
+  EXPECT_EQ(task.value().utime, 111U);
+  EXPECT_EQ(task.value().stime, 222U);
+  EXPECT_EQ(task.value().processor, 6);
   EXPECT_FALSE(udp::parse_task_stat("4242 (short) S 1 2").has_value());
 }
 
@@ -719,18 +721,18 @@ TEST(KernelCounters, LinuxReadsEveryLayerAndOtherHostsReadNone) {
   const udp::KernelSnapshot snapshot = udp::read_kernel_snapshot();
   auto pair = udp::open_loopback_pair();
   ASSERT_TRUE(pair.has_value());
-#if defined(__linux__)
+#ifdef __linux__
   EXPECT_TRUE(snapshot.udp.has_value());
   EXPECT_TRUE(snapshot.softnet.has_value());
   EXPECT_TRUE(snapshot.cpus.has_value());
   EXPECT_FALSE(snapshot.tasks.empty());
-  EXPECT_TRUE(udp::socket_drops(pair->receiver.get()).has_value());
+  EXPECT_TRUE(udp::socket_drops(pair->receiver.get()).read);
   EXPECT_TRUE(udp::thread_cpu().read);
   EXPECT_GT(udp::ticks_per_second(), 0);
 #else
   EXPECT_FALSE(snapshot.udp.has_value());
   EXPECT_FALSE(snapshot.cpus.has_value());
-  EXPECT_FALSE(udp::socket_drops(pair->receiver.get()).has_value());
+  EXPECT_FALSE(udp::socket_drops(pair->receiver.get()).read);
   EXPECT_FALSE(udp::thread_cpu().read);
 #endif
 }
@@ -745,7 +747,7 @@ class FailedSetupMode {
     counters_.setup_call = "io_uring_queue_init_params";
     counters_.setup_error = EPERM;
   }
-  [[nodiscard]] udp::WaitResult wait(std::span<udp::Datagram> /*batch*/) const noexcept {
+  [[nodiscard]] static udp::WaitResult wait(std::span<udp::Datagram> /*batch*/) noexcept {
     return {.status = udp::WaitStatus::failed, .count = 0, .error = EPERM};
   }
   void release(std::span<const udp::Datagram> /*done*/) noexcept {}
@@ -783,7 +785,7 @@ TEST(Modes, EachIdIsKnownAndS1IsBuiltEverywhere) {
       EXPECT_FALSE(udp::why_not_built(id).empty()) << id;
     }
   }
-#if defined(__linux__)
+#ifdef __linux__
   EXPECT_TRUE(udp::mode_built("S2") && udp::mode_built("S3") && udp::mode_built("S4"));
 #else
   EXPECT_FALSE(udp::mode_built("S2") || udp::mode_built("S3") || udp::mode_built("S4"));
@@ -890,7 +892,7 @@ struct Pair {
   udp::ConnectedSocket sender;
 };
 
-std::optional<Pair> pair_for(std::chrono::milliseconds timeout, int receive_buffer = 1 << 20) {
+std::optional<Pair> pair_for(std::chrono::milliseconds timeout, int receive_buffer = 1'048'576) {
   auto pair = udp::open_loopback_pair();
   if (!pair || !udp::set_receive_timeout(pair->receiver.get(), timeout) ||
       !udp::set_receive_buffer(pair->receiver.get(), receive_buffer)) {
@@ -984,7 +986,8 @@ TEST(Modes, TheModesThatReadControlMessagesSeeTheSocketsDrops) {
     }
     ++checked;
     EXPECT_GT(**seen, 0U);
-    EXPECT_EQ(udp::socket_drops(pair->sockets.receiver.get()).value_or(**seen), **seen)
+    const udp::Reading socket = udp::socket_drops(pair->sockets.receiver.get());
+    EXPECT_EQ(socket.read ? socket.value : **seen, **seen)
         << "SO_RXQ_OVFL and the socket's own count disagree";
   }
   EXPECT_EQ(checked != 0, udp::mode_built("S2") || udp::mode_built("U3"));
@@ -995,7 +998,7 @@ TEST(Modes, TheModesThatReadControlMessagesSeeTheSocketsDrops) {
 TEST(Modes, AMultishotModeOutOfBuffersRearmsAndLosesNothing) {
   constexpr std::chrono::milliseconds kTimeout{200};
   for (const std::string_view id : built_modes()) {
-    if (!id.starts_with("U") || id == "U1") {
+    if (!id.starts_with('U') || id == "U1") {
       continue;
     }
     SCOPED_TRACE(id);
@@ -1023,7 +1026,7 @@ TEST(Modes, AMultishotModeOutOfBuffersRearmsAndLosesNothing) {
 // refuses the run.
 TEST(Modes, ARingModeWithABadBufferCountFailsItsSetup) {
   for (const std::string_view id : built_modes()) {
-    if (!id.starts_with("U") || id == "U1") {
+    if (!id.starts_with('U') || id == "U1") {
       continue;
     }
     SCOPED_TRACE(id);
@@ -1040,3 +1043,4 @@ TEST(Modes, ARingModeWithABadBufferCountFailsItsSetup) {
 }
 
 }  // namespace
+// NOLINTEND(bugprone-unchecked-optional-access)

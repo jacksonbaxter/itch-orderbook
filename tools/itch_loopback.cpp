@@ -105,6 +105,22 @@ struct Options {
   return true;
 }
 
+// The checkpoint and the faults a test puts in the stream.
+[[nodiscard]] bool take_check(std::string_view arg, std::uint64_t number, Options& options) {
+  if (arg == "--checkpoint") {
+    options.checkpoint = number;
+  } else if (arg == "--drop-packet") {
+    options.drop_packet = number;
+  } else if (arg == "--duplicate-packet") {
+    options.duplicate_packet = number;
+  } else if (arg == "--corrupt-packet") {
+    options.corrupt_packet = number;
+  } else {
+    return false;
+  }
+  return true;
+}
+
 [[nodiscard]] bool take_option(std::string_view arg, std::uint64_t number, Options& options) {
   constexpr std::uint64_t kMostInt = std::numeric_limits<int>::max();
   if (arg == "--first") {
@@ -135,16 +151,8 @@ struct Options {
     options.loopback.receive_buffer = static_cast<int>(number);
   } else if (arg == "--timeout-ms" && number != 0 && number <= kMostInt) {
     options.loopback.idle_timeout = std::chrono::milliseconds{number};
-  } else if (arg == "--checkpoint") {
-    options.checkpoint = number;
-  } else if (arg == "--drop-packet") {
-    options.drop_packet = number;
-  } else if (arg == "--duplicate-packet") {
-    options.duplicate_packet = number;
-  } else if (arg == "--corrupt-packet") {
-    options.corrupt_packet = number;
   } else {
-    return take_capacity(arg, number, options.capacity);
+    return take_check(arg, number, options) || take_capacity(arg, number, options.capacity);
   }
   return true;
 }

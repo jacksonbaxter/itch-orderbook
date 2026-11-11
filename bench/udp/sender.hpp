@@ -63,8 +63,10 @@ struct SteadyClock {
 struct SendPlan {
   std::uint64_t messages_per_second = 0;  // 0 sends unpaced.
   // When not empty, packet i is due at the start plus due_ns[i], one entry a packet, and
-  // messages_per_second is not read. The caller owns the table.
-  std::span<const std::uint64_t> due_ns{};
+  // messages_per_second is not read. The caller owns the table. The braces say there is a
+  // default, so that a plan given by rate alone does not trip
+  // -Wmissing-designated-field-initializers.
+  std::span<const std::uint64_t> due_ns{};  // NOLINT(readability-redundant-member-init)
 };
 
 // A schedule's numerator, messages_before * 1e9, has to fit 64 bits.
@@ -115,6 +117,32 @@ enum class SendError : std::uint8_t {
   schedule_mismatch,  // A due-time table whose length is not the packet count.
 };
 
+namespace detail {
+
+// Counts one send's outcome into the report.
+inline void count_send(SendReport& report, const mold::PacketRef& ref,
+                       const SendResult& result) noexcept {
+  ++report.packets;
+  if (result.sent) {
+    ++report.sent_packets;
+    report.sent_messages += ref.messages;
+    report.sent_bytes += ref.size;
+    return;
+  }
+  ++report.failed_packets;
+  report.failed_messages += ref.messages;
+  report.first_error = report.first_error == 0 ? result.error : report.first_error;
+  if (result.error == ENOBUFS) {
+    ++report.no_buffers;
+  } else if (result.error == ECONNREFUSED) {
+    ++report.refused;
+  } else {
+    ++report.other_errors;
+  }
+}
+
+}  // namespace detail
+
 template <SendClock Clock, DatagramSocket Socket>
 [[nodiscard]] std::expected<SendReport, SendError> send_packets(
     const mold::PacketArray& packets, const SendPlan& plan, Clock& clock,
@@ -147,24 +175,7 @@ template <SendClock Clock, DatagramSocket Socket>
       report.late_total_ns += late;
       ++report.lateness[lateness_bucket(late)];
     }
-    const SendResult result = socket.send(packets.packet(i));
-    ++report.packets;
-    if (result.sent) {
-      ++report.sent_packets;
-      report.sent_messages += ref.messages;
-      report.sent_bytes += ref.size;
-    } else {
-      ++report.failed_packets;
-      report.failed_messages += ref.messages;
-      report.first_error = report.first_error == 0 ? result.error : report.first_error;
-      if (result.error == ENOBUFS) {
-        ++report.no_buffers;
-      } else if (result.error == ECONNREFUSED) {
-        ++report.refused;
-      } else {
-        ++report.other_errors;
-      }
-    }
+    detail::count_send(report, ref, socket.send(packets.packet(i)));
     before += ref.messages;
   }
   report.end_ns = clock.now_ns();

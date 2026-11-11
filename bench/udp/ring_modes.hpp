@@ -43,7 +43,7 @@
 // allocate nothing.
 #pragma once
 
-#if !defined(__linux__)
+#ifndef __linux__
 #error "udp/ring_modes.hpp is Linux only; CMake adds it to targets that link liburing alone"
 #endif
 

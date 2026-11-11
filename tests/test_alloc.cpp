@@ -374,12 +374,14 @@ TEST(Allocation, EveryReceiveModeAllocatesNothingAfterConstruction) {
     });
     const AllocCounts by_mode = read_alloc_counts();
     ASSERT_TRUE(run.has_value()) << id;
-    ASSERT_TRUE(run->has_value()) << id << ": " << (*run).error().call;
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access): the assertion above guards it.
+    const auto& outcome = *run;
+    ASSERT_TRUE(outcome.has_value()) << id << ": " << outcome.error().call;
     std::println("udp {}: {} datagrams, {} frames, {} lost, {} allocations", id,
-                 (*run)->mode.datagrams, (*run)->feed.frames, (*run)->sequence.lost,
+                 outcome->mode.datagrams, outcome->feed.frames, outcome->sequence.lost,
                  by_mode.total());
     EXPECT_EQ(by_mode.total(), 0U) << "allocation in mode " << id;
-    EXPECT_GT((*run)->mode.datagrams, packets->size() / 2) << id << " took too few packets";
+    EXPECT_GT(outcome->mode.datagrams, packets->size() / 2) << id << " took too few packets";
   }
   EXPECT_GE(modes, 1U);
 }

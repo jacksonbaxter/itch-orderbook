@@ -16,7 +16,7 @@
 // Every buffer is allocated when the mode is made; wait() and release() allocate nothing.
 #pragma once
 
-#if !defined(__linux__)
+#ifndef __linux__
 #error "udp/socket_modes.hpp is Linux only; CMake adds it to Linux targets alone"
 #endif
 

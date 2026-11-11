@@ -36,7 +36,7 @@
 
 #include "platform/sysinfo.hpp"
 
-#if defined(__linux__)
+#ifdef __linux__
 #include <linux/sock_diag.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
@@ -44,6 +44,16 @@
 #endif
 
 namespace itch::bench::udp {
+
+// A count read from the kernel, or not. Both fields are always set, so that a failed read
+// leaves nothing a compiler can see as unset (GCC's maybe-uninitialized reads a disengaged
+// std::optional's payload that way). A count not read is never taken as 0.
+struct Reading {
+  bool read = false;
+  std::uint64_t value = 0;
+
+  [[nodiscard]] constexpr bool read_zero() const noexcept { return read && value == 0; }
+};
 
 struct UdpSnmp {
   std::uint64_t in_datagrams = 0;
@@ -120,6 +130,57 @@ namespace detail {
 
 }  // namespace detail
 
+namespace detail {
+
+// The columns of /proc/net/snmp's Udp: lines that a record keeps, by name.
+struct UdpColumn {
+  std::string_view name;
+  std::uint64_t UdpSnmp::* field;
+};
+inline constexpr std::array<UdpColumn, 6> kUdpColumns{{
+    {.name = "InDatagrams", .field = &UdpSnmp::in_datagrams},
+    {.name = "NoPorts", .field = &UdpSnmp::no_ports},
+    {.name = "InErrors", .field = &UdpSnmp::in_errors},
+    {.name = "OutDatagrams", .field = &UdpSnmp::out_datagrams},
+    {.name = "RcvbufErrors", .field = &UdpSnmp::rcvbuf_errors},
+    {.name = "SndbufErrors", .field = &UdpSnmp::sndbuf_errors},
+}};
+
+// Whether names and values are the Udp: header line and the line of numbers under it, as
+// against the UdpLite: pair or the header line paired with the line before it.
+[[nodiscard]] inline bool is_udp_pair(const std::vector<std::string_view>& names,
+                                      const std::vector<std::string_view>& values) {
+  if (names.size() < 2 || names.size() != values.size()) {
+    return false;
+  }
+  return names[0] == "Udp:" && values[0] == "Udp:" && !number(names[1]);
+}
+
+// The kept columns of one Udp: pair; nullopt if a value is not a number or a column is missing.
+[[nodiscard]] inline std::optional<UdpSnmp> read_udp_pair(
+    const std::vector<std::string_view>& names, const std::vector<std::string_view>& values) {
+  UdpSnmp snmp;
+  std::size_t found = 0;
+  for (std::size_t column = 1; column < names.size(); ++column) {
+    const std::optional<std::uint64_t> value = number(values[column]);
+    if (!value) {
+      return std::nullopt;
+    }
+    for (const UdpColumn& kept : kUdpColumns) {
+      if (kept.name == names[column]) {
+        snmp.*kept.field = *value;
+        ++found;
+      }
+    }
+  }
+  if (found != kUdpColumns.size()) {
+    return std::nullopt;
+  }
+  return snmp;
+}
+
+}  // namespace detail
+
 // The Udp: pair of lines in /proc/net/snmp, the first naming the columns and the second
 // giving them. A missing column is a parse failure, never a 0.
 [[nodiscard]] inline std::optional<UdpSnmp> parse_udp_snmp(std::string_view text) {
@@ -127,34 +188,9 @@ namespace detail {
   for (std::size_t i = 0; i + 1 < lines.size(); ++i) {
     const std::vector<std::string_view> names = detail::split_words(lines[i]);
     const std::vector<std::string_view> values = detail::split_words(lines[i + 1]);
-    if (names.empty() || names[0] != "Udp:" || values.empty() || values[0] != "Udp:" ||
-        names.size() != values.size() || detail::number(names.size() > 1 ? names[1] : "x")) {
-      continue;
+    if (detail::is_udp_pair(names, values)) {
+      return detail::read_udp_pair(names, values);
     }
-    UdpSnmp snmp;
-    int found = 0;
-    for (std::size_t column = 1; column < names.size(); ++column) {
-      const std::optional<std::uint64_t> value = detail::number(values[column]);
-      if (!value) {
-        return std::nullopt;
-      }
-      const std::string_view name = names[column];
-      std::uint64_t* field = name == "InDatagrams"    ? &snmp.in_datagrams
-                             : name == "NoPorts"      ? &snmp.no_ports
-                             : name == "InErrors"     ? &snmp.in_errors
-                             : name == "OutDatagrams" ? &snmp.out_datagrams
-                             : name == "RcvbufErrors" ? &snmp.rcvbuf_errors
-                             : name == "SndbufErrors" ? &snmp.sndbuf_errors
-                                                      : nullptr;
-      if (field != nullptr) {
-        *field = *value;
-        ++found;
-      }
-    }
-    if (found != 6) {
-      return std::nullopt;
-    }
-    return snmp;
   }
   return std::nullopt;
 }
@@ -262,7 +298,7 @@ struct KernelSnapshot {
 
 [[nodiscard]] inline KernelSnapshot read_kernel_snapshot() {
   KernelSnapshot snapshot;
-#if defined(__linux__)
+#ifdef __linux__
   if (const auto text = read_whole_file("/proc/net/snmp")) {
     snapshot.udp = parse_udp_snmp(*text);
   }
@@ -286,7 +322,7 @@ struct KernelSnapshot {
 
 // USER_HZ, the unit of every tick above.
 [[nodiscard]] inline long ticks_per_second() noexcept {
-#if defined(__linux__)
+#ifdef __linux__
   return ::sysconf(_SC_CLK_TCK);
 #else
   return 0;
@@ -294,19 +330,19 @@ struct KernelSnapshot {
 }
 
 // The socket's sk_drops since it was made, /proc/net/udp's drops column.
-[[nodiscard]] inline std::optional<std::uint64_t> socket_drops(int fd) noexcept {
-#if defined(__linux__)
+[[nodiscard]] inline Reading socket_drops(int fd) noexcept {
+#ifdef __linux__
   constexpr auto kDrops = static_cast<std::size_t>(SK_MEMINFO_DROPS);
   std::array<std::uint32_t, static_cast<std::size_t>(SK_MEMINFO_VARS)> info{};
   socklen_t length = sizeof(info);
-  if (::getsockopt(fd, SOL_SOCKET, SO_MEMINFO, info.data(), &length) != 0 ||
+  if (fd < 0 || ::getsockopt(fd, SOL_SOCKET, SO_MEMINFO, info.data(), &length) != 0 ||
       length < (kDrops + 1) * sizeof(std::uint32_t)) {
-    return std::nullopt;
+    return {};
   }
-  return info[kDrops];
+  return {.read = true, .value = info[kDrops]};
 #else
   static_cast<void>(fd);
-  return std::nullopt;
+  return {};
 #endif
 }
 
@@ -318,7 +354,7 @@ struct ThreadCpu {
 };
 
 [[nodiscard]] inline ThreadCpu thread_cpu() noexcept {
-#if defined(__linux__)
+#ifdef __linux__
   rusage usage{};
   if (::getrusage(RUSAGE_THREAD, &usage) != 0) {
     return {};

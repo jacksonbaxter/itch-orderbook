@@ -8,6 +8,7 @@
 // and says so of every other mode rather than putting anything in its place.
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -17,25 +18,27 @@
 
 #include "udp/receive_mode.hpp"
 
-#if defined(ITCH_UDP_SOCKET_MODES) && ITCH_UDP_SOCKET_MODES
+#ifdef ITCH_UDP_SOCKET_MODES
 #include "udp/socket_modes.hpp"
-#define ITCH_UDP_HAS_SOCKET_MODES 1
-#else
-#define ITCH_UDP_HAS_SOCKET_MODES 0
 #endif
-#if defined(ITCH_UDP_RING_MODES) && ITCH_UDP_RING_MODES
+#ifdef ITCH_UDP_RING_MODES
 #include "udp/ring_modes.hpp"
-#define ITCH_UDP_HAS_RING_MODES 1
-#else
-#define ITCH_UDP_HAS_RING_MODES 0
 #endif
 
 namespace itch::bench::udp {
 
 inline constexpr std::array<std::string_view, 9> kModeIds{"S1", "S2", "S3", "S4", "U1",
                                                           "U2", "U3", "U4", "U5"};
-inline constexpr bool kHasSocketModes = ITCH_UDP_HAS_SOCKET_MODES != 0;
-inline constexpr bool kHasRingModes = ITCH_UDP_HAS_RING_MODES != 0;
+#ifdef ITCH_UDP_SOCKET_MODES
+inline constexpr bool kHasSocketModes = true;
+#else
+inline constexpr bool kHasSocketModes = false;
+#endif
+#ifdef ITCH_UDP_RING_MODES
+inline constexpr bool kHasRingModes = true;
+#else
+inline constexpr bool kHasRingModes = false;
+#endif
 
 // Room a buffer needs beyond the datagram: U3's kernel header and control message, with
 // some to spare, and the byte that tells a whole buffer from a cut datagram. A packing
@@ -44,12 +47,7 @@ inline constexpr bool kHasRingModes = ITCH_UDP_HAS_RING_MODES != 0;
 inline constexpr std::size_t kSlotOverhead = 64;
 
 [[nodiscard]] constexpr bool is_mode(std::string_view id) noexcept {
-  for (const std::string_view known : kModeIds) {
-    if (known == id) {
-      return true;
-    }
-  }
-  return false;
+  return std::ranges::any_of(kModeIds, [id](std::string_view known) { return known == id; });
 }
 
 // The modes that hold many datagrams at once, each in a buffer of ModeOptions::slot_bytes.
@@ -90,7 +88,7 @@ template <class Visit>
   if (id == "S1") {
     return visit([](int fd) { return RecvfromMode{fd}; });
   }
-#if ITCH_UDP_HAS_SOCKET_MODES
+#ifdef ITCH_UDP_SOCKET_MODES
   if (id == "S2") {
     return visit([](int fd) { return RecvmsgMode{fd}; });
   }
@@ -101,7 +99,7 @@ template <class Visit>
     return visit([&options](int fd) { return RecvmmsgSpinMode{fd, options}; });
   }
 #endif
-#if ITCH_UDP_HAS_RING_MODES
+#ifdef ITCH_UDP_RING_MODES
   if (id == "U1") {
     return visit([&options](int fd) { return RecvSingleShotMode{fd, options}; });
   }
