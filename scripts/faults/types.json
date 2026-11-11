@@ -113,7 +113,7 @@
         {
           "file": "bench/typed_time.hpp",
           "old": "    under_floor += taken < floor_ticks ? 1U : 0U;",
-          "new": "    under_floor += 0U;"
+          "new": "    under_floor += 0U * floor_ticks;"
         }
       ],
       "build": {
