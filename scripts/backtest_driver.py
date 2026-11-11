@@ -360,8 +360,9 @@ def relative_command(args):
              "--workload", args.workload, "--date", args.date,
              "--prediction", args.prediction, "--repetitions", str(args.repetitions),
              "--raw-dir", "<raw>", "--out", shown(args.out)]
-    if args.core is not None:
-        words += ["--core", str(args.core)]
+    for flag, value in (("--core", args.core), ("--sibling", args.sibling)):
+        if value is not None:
+            words += [flag, str(value)]
     text = " ".join(shlex.quote(word) if "<" not in word else word for word in words)
     return f"{args.wrapped_by} {text}" if args.wrapped_by else text
 

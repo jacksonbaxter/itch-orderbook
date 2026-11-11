@@ -17,7 +17,8 @@ with each median inside its min and max and matching the median of the repetitio
 a statement of what one event is and of the rate's denominator, the counts with the queue
 anomalies, the macOS note on a Mac, and its target's verdict in the fixed words, consistent
 with the median and the bar: T-BT-1's bar was set on x86, so a macOS file may not call it
-met or missed, while T-BT-3's was set on a Mac.
+met or missed, while T-BT-3's was set on a Mac. Its command passes each sibling the machine
+check read as idle.
 
 A book file, any other file not labelled as the Phase 2 stub-book harness proof, is held to more:
 the design, input and top-of-book fields, a statement of how the run read the day beside
@@ -56,6 +57,7 @@ pool arm's is zero, and FAIL when one is not; every pool arm passed itch_alloc o
 allocation; every arm's book agreed with the fast book's, with no divergence; and the
 T-ARENA-1 row says it has no bar, beside the fault check's verdict. A macOS allocator file
 also says the sampler rule was applied, with a quiet span for every published timed process.
+Its command passes each sibling the machine check read as idle.
 
 Each violation prints as `check_results: FAIL <code> <file>: <detail>`.
 
@@ -660,6 +662,7 @@ def check_backtest(text, fields):
     if fields.get("host") == MAC_HOST and "is not a pinned host." not in text:
         yield "host-note-missing", "a macOS file without the note that macOS cannot pin"
     yield from check_backtest_target(text, fields)
+    yield from check_command_siblings(text)
 
 
 def is_spsc_file(fields):
@@ -753,7 +756,7 @@ def check_spsc_sampler(text, fields):
                                     f"{fields.get('repetitions')} repetitions")
 
 
-def check_spsc_command(text):
+def check_command_siblings(text):
     """Each sibling the machine check found idle was asked for, so the command shown carries
     it: the check reads a sibling only when the driver is given one."""
     command = section(text, "Commands") or ""
@@ -797,7 +800,7 @@ def check_spsc(text, fields):
     else:
         yield from check_spsc_latency(text, fields)
     yield from check_spsc_targets(text, fields, suite)
-    yield from check_spsc_command(text)
+    yield from check_command_siblings(text)
 
 
 def is_alloc_file(fields):
@@ -881,6 +884,7 @@ def check_alloc(text, fields):
         for percentile, value in zip(("p50", "p99", "p99.9"), cells[2:5]):
             yield from check_value(f"{cells[0]} {cells[1]} {percentile}", value, floor)
     yield from check_alloc_faults(text, fields, arms)
+    yield from check_command_siblings(text)
     allocations = {cells[0]: cells for cells in table_rows(text, "Allocations")
                    if len(cells) == 7 and cells[0] != "Arm"}
     agreement = {cells[0]: cells for cells in table_rows(text, "Book agreement")

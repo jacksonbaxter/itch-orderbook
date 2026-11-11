@@ -260,6 +260,15 @@ class Rendered(unittest.TestCase):
         home = "/".join(("", "Users", "someone", "x"))
         self.assertIn("private-text", codes(GOOD + f"\n{home}\n"))
 
+    def test_a_sibling_the_machine_check_read_is_in_the_command(self):
+        text = replace(GOOD, "machine_check: passed",
+                       "machine_check: pass sibling-idle: cpu5 is 0.0% busy over 1 s\n"
+                       "machine_check: passed")
+        self.assertIn("command-differs", codes(text))
+        asked = replace(text, "\npython3 -B scripts/alloc_driver.py\n",
+                        "\npython3 -B scripts/alloc_driver.py --core 4 --sibling 5\n")
+        self.assertNotIn("command-differs", codes(asked))
+
 
 class Driver(unittest.TestCase):
     def test_a_record_of_another_arm_is_refused(self):
@@ -305,6 +314,15 @@ class Driver(unittest.TestCase):
                                      "--compare-tool", "c", "--input", "i", "--prediction",
                                      "P-0701", "--raw-dir", "r", "--out", "o",
                                      "--repetitions", "2"])
+
+    def test_the_command_shown_carries_the_core_and_its_sibling(self):
+        base = ["--bench", "b", "--probe", "p", "--alloc-tool", "a", "--compare-tool", "c",
+                "--input", "i", "--prediction", "P-0702", "--raw-dir", "r", "--out", "o"]
+        plain = alloc_driver.relative_command(alloc_driver.parse_args(base))
+        self.assertNotIn("--sibling", plain)
+        command = alloc_driver.relative_command(alloc_driver.parse_args(
+            [*base, "--core", "4", "--sibling", "5"]))
+        self.assertIn(" --core 4 --sibling 5", command)
 
     def test_the_pages_reach_every_bench_process(self):
         args = alloc_driver.parse_args(["--bench", "b", "--probe", "p", "--alloc-tool", "a",

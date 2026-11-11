@@ -128,5 +128,5 @@ machine_check: passed
 ## Commands
 
 ```
-measure.sh taskset -c 4 python3 -B scripts/backtest_driver.py --bench <raw>/bench_backtest --probe <raw>/bench_probe --input <raw>/12302019.NASDAQ_ITCH50 --workload shadow --date 20191230 --prediction P-0104 --repetitions 3 --raw-dir <raw> --out results/backtest_shadow_debian_12302019.md --core 4
+measure.sh taskset -c 4 python3 -B scripts/backtest_driver.py --bench <raw>/bench_backtest --probe <raw>/bench_probe --input <raw>/12302019.NASDAQ_ITCH50 --workload shadow --date 20191230 --prediction P-0104 --repetitions 3 --raw-dir <raw> --out results/backtest_shadow_debian_12302019.md --core 4 --sibling 5
 ```

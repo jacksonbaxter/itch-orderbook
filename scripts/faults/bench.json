@@ -4160,6 +4160,46 @@
         "signature": "FAIL: test_a_layout_result_naming_no_prediction",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-backtest-file-command-unchecked",
+      "breaks": "check_results takes a backtest file whose command leaves out a sibling its machine check read",
+      "check": "test_backtest_results.py test_a_sibling_the_machine_check_read_is_in_the_command",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    yield from check_backtest_target(text, fields)\n    yield from check_command_siblings(text)\n",
+          "new": "    yield from check_backtest_target(text, fields)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_sibling_the_machine_check_read_is_in_the_command"
+      }
+    },
+    {
+      "id": "bench-backtest-driver-command-drops-sibling",
+      "breaks": "The backtest driver's command line leaves out --sibling, as it did for P-0103 and P-0104",
+      "check": "test_backtest_results.py test_the_command_shown_carries_the_core_and_its_sibling",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    for flag, value in ((\"--core\", args.core), (\"--sibling\", args.sibling)):\n",
+          "new": "    for flag, value in ((\"--core\", args.core),):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_command_shown_carries_the_core_and_its_sibling"
+      }
     }
   ]
 }

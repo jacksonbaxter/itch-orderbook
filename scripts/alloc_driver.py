@@ -550,7 +550,8 @@ def relative_command(args):
     if args.arm != list(ARMS):
         for arm in args.arm:
             words += ["--arm", arm]
-    for flag, value in (("--core", args.core), ("--quiet-before", args.quiet_before or None)):
+    for flag, value in (("--core", args.core), ("--sibling", args.sibling),
+                        ("--quiet-before", args.quiet_before or None)):
         if value is not None:
             words += [flag, f"{value:g}" if isinstance(value, float) else str(value)]
     for argument in args.user_bench_arg:
