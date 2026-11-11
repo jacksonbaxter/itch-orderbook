@@ -207,6 +207,16 @@ class Files(unittest.TestCase):
         self.assertIn("target-verdict-invalid", codes(broken))
 
 
+    def test_a_sibling_the_machine_check_read_is_in_the_command(self):
+        text = replace(QUOTING, "machine_check: passed",
+                       "machine_check: pass sibling-idle: cpu5 is 0.0% busy over 1 s\n"
+                       "machine_check: passed")
+        self.assertIn("command-differs", codes(text))
+        asked = replace(text, "\npython3 -B scripts/backtest_driver.py\n",
+                        "\npython3 -B scripts/backtest_driver.py --core 4 --sibling 5\n")
+        self.assertNotIn("command-differs", codes(asked))
+
+
 class Driver(unittest.TestCase):
     def test_a_good_record_is_accepted(self):
         for workload in ("quoting", "shadow"):
@@ -252,6 +262,15 @@ class Driver(unittest.TestCase):
         self.assertIn("The denominator is the 5,425,845 extract messages", SHADOW)
         self.assertIn("differ by 4", SHADOW)
         self.assertIn("5,425,849", SHADOW)
+
+    def test_the_command_shown_carries_the_core_and_its_sibling(self):
+        base = ["--bench", "x", "--probe", "x", "--input", "x", "--workload", "quoting",
+                "--date", "20191230", "--prediction", "P-0103", "--raw-dir", "x", "--out", "x"]
+        plain = backtest_driver.relative_command(backtest_driver.parse_args(base))
+        self.assertNotIn("--sibling", plain)
+        command = backtest_driver.relative_command(backtest_driver.parse_args(
+            [*base, "--core", "4", "--sibling", "5"]))
+        self.assertIn(" --core 4 --sibling 5", command)
 
     def test_two_repetitions_are_not_enough(self):
         with self.assertRaises(SystemExit), \

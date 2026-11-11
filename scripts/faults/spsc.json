@@ -744,8 +744,8 @@
       "mutations": [
         {
           "file": "scripts/check_results.py",
-          "old": "    yield from check_spsc_command(text)\n",
-          "new": ""
+          "old": "    yield from check_spsc_targets(text, fields, suite)\n    yield from check_command_siblings(text)\n",
+          "new": "    yield from check_spsc_targets(text, fields, suite)\n"
         }
       ],
       "command": [

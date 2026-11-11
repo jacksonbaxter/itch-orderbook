@@ -240,6 +240,30 @@ The SPSC ring. Each row is one comparison from a results file's targets table: a
 | T-SPSC-1 | project rtt / moodycamel rtt | 12302019 | macOS (M4 Max) | not pinned | 0.53× | ≤ 1.00× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
 | T-SPSC-1 | project rtt / rigtorp rtt | 12302019 | macOS (M4 Max) | not pinned | 0.91× | ≤ 1.00× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
 
+T-ARENA-1, the node book on each allocator arm, from [results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md), the pools' pages requested as `base`. Only the allocator changes between arms. T-ARENA-1 is UNCONFIRMED, so no bar is met or missed; the check is that no timed pass of a pool arm takes a page fault, and it read: FAIL: page faults in the timed passes of pool-index 136, pool-pointer 200, pool-fifo 146. Tails are over every operation, in ns.
+
+| Arm | Day | Host | Pinning | Median messages/s | CV | Over malloc-fresh | p99 | p99.9 | Page faults, timed passes | Book memory MiB | Commit | File |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| malloc-fresh | 12302019 | debian | pinned to core 4 | 2,032,184 | 2.18% | – | 5228.8 | 25529.5 | not judged: a heap arm | 264.9 | `c8ca2e2dd09b` | [results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md) |
+| malloc-aged | 12302019 | debian | pinned to core 4 | 1,830,177 | 0.76% | 0.901× | 5457.1 | 28652.7 | not judged: a heap arm | 364.9 | `c8ca2e2dd09b` | [results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md) |
+| mimalloc | 12302019 | debian | pinned to core 4 | 2,286,807 | 0.87% | 1.128× | 4848.4 | 24104.1 | not judged: a heap arm | 267.0 | `c8ca2e2dd09b` | [results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md) |
+| pmr-pool | 12302019 | debian | pinned to core 4 | 2,429,324 | 0.48% | 1.195× | 5016.6 | 28060.1 | not judged: a heap arm | 332.9 | `c8ca2e2dd09b` | [results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md) |
+| pool-index | 12302019 | debian | pinned to core 4 | 2,513,655 | 0.16% | 1.238× | 4808.4 | 20996.9 | faulted | 221.1 | `c8ca2e2dd09b` | [results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md) |
+| pool-pointer | 12302019 | debian | pinned to core 4 | 2,395,751 | 0.49% | 1.186× | 5056.7 | 22214.1 | faulted | 273.4 | `c8ca2e2dd09b` | [results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md) |
+| pool-fifo | 12302019 | debian | pinned to core 4 | 2,405,381 | 0.93% | 1.199× | 4948.5 | 21477.4 | faulted | 221.1 | `c8ca2e2dd09b` | [results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md) |
+
+T-ARENA-1, the node book on each allocator arm, from [results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md), the pools' pages requested as `transparent`. Only the allocator changes between arms. T-ARENA-1 is UNCONFIRMED, so no bar is met or missed; the check is that no timed pass of a pool arm takes a page fault, and it read: FAIL: page faults in the timed passes of pool-index 4, pool-pointer 1. Tails are over every operation, in ns.
+
+| Arm | Day | Host | Pinning | Median messages/s | CV | Over malloc-fresh | p99 | p99.9 | Page faults, timed passes | Book memory MiB | Commit | File |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| malloc-fresh | 12302019 | debian | pinned to core 4 | 2,039,018 | 4.36% | – | 5477.1 | 26586.6 | not judged: a heap arm | 264.9 | `c8ca2e2dd09b` | [results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md) |
+| malloc-aged | 12302019 | debian | pinned to core 4 | 1,805,215 | 0.19% | 0.887× | 5529.1 | 28780.9 | not judged: a heap arm | 364.9 | `c8ca2e2dd09b` | [results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md) |
+| mimalloc | 12302019 | debian | pinned to core 4 | 2,282,973 | 0.29% | 1.124× | 4836.4 | 24072.1 | not judged: a heap arm | 267.0 | `c8ca2e2dd09b` | [results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md) |
+| pmr-pool | 12302019 | debian | pinned to core 4 | 2,435,928 | 0.09% | 1.196× | 5068.7 | 28332.4 | not judged: a heap arm | 332.9 | `c8ca2e2dd09b` | [results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md) |
+| pool-index | 12302019 | debian | pinned to core 4 | 2,834,723 | 0.09% | 1.390× | 4227.8 | 18738.6 | faulted | 222.5 | `c8ca2e2dd09b` | [results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md) |
+| pool-pointer | 12302019 | debian | pinned to core 4 | 2,728,838 | 0.62% | 1.338× | 4416.0 | 19523.4 | faulted | 275.0 | `c8ca2e2dd09b` | [results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md) |
+| pool-fifo | 12302019 | debian | pinned to core 4 | 2,717,053 | 0.26% | 1.330× | 4355.9 | 19203.1 | zero | 222.5 | `c8ca2e2dd09b` | [results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md) |
+
 The market maker on its report day, 12302019, a late-December session, with every parameter chosen on 10302019, an FOMC day. One symbol-day. No edge is claimed. 2 symbols on one day: each is its own symbol-day. The file gives S gross, fees, the markout curve and how Q-off and L-off each change the PnL. Dollars at the base fee tier; a replayed feed cannot react, so market impact is absent.
 
 | Symbol | Run | Fills | Shares | S, $ | A, $ | I, $ | Total, $ | Total, ticks a share | File |
@@ -572,4 +596,8 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0801-20261110T221456Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
 | `P-0621-20261110T073644Z` | `P-0621` | `bd81414b46e7` | Linux | `diagnostic` |
 | `P-0309-debian-tsan-stress` | `P-0309` | `675befb3ad78` | Linux | `diagnostic` |
+| `P-0702-20261111T115529Z` | `P-0702` | `c8ca2e2dd09b` | Linux | `published` |
+| `P-0702-20261111T165051Z` | `P-0702` | `c8ca2e2dd09b` | Linux | `published` |
+| `P-0703-20261111T230006Z` | `P-0703` | `c8ca2e2dd09b` | Linux | `diagnostic, from the build of c8ca2e2 that P-0702 ran, not rebuilt, `src/` then holding df1676ed0e18` |
+| `P-0703-20261111T230854Z` | `P-0703` | `c8ca2e2dd09b` | Linux | `diagnostic, from the build of c8ca2e2 that P-0702 ran, not rebuilt, `src/` then holding df1676ed0e18` |
 <!-- results table: end -->

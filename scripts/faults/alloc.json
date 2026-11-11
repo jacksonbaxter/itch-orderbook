@@ -535,6 +535,46 @@
     "signature": "^FAIL: test_an_alloc_result_naming_no_prediction",
     "exit": 1
    }
+  },
+  {
+   "id": "alloc-results-command-unchecked",
+   "breaks": "check_results takes an allocator file whose command leaves out a sibling its machine check read",
+   "check": "test_alloc_results.py test_a_sibling_the_machine_check_read_is_in_the_command",
+   "mutations": [
+    {
+     "file": "scripts/check_results.py",
+     "old": "    yield from check_alloc_faults(text, fields, arms)\n    yield from check_command_siblings(text)\n",
+     "new": "    yield from check_alloc_faults(text, fields, arms)\n"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "{tree}/scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_sibling_the_machine_check_read_is_in_the_command"
+   }
+  },
+  {
+   "id": "alloc-driver-command-drops-sibling",
+   "breaks": "The allocator driver's command line leaves out --sibling, as it did for P-0702",
+   "check": "test_alloc_results.py test_the_command_shown_carries_the_core_and_its_sibling",
+   "mutations": [
+    {
+     "file": "scripts/alloc_driver.py",
+     "old": "    for flag, value in ((\"--core\", args.core), (\"--sibling\", args.sibling),\n",
+     "new": "    for flag, value in ((\"--core\", args.core),\n"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "{tree}/scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_the_command_shown_carries_the_core_and_its_sibling"
+   }
   }
  ]
 }
