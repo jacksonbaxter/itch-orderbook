@@ -114,6 +114,12 @@ class History(unittest.TestCase):
                 self.assert_fails("prediction-missing")
                 (self.results / name).unlink()
 
+    def test_a_udp_result_naming_no_prediction(self):
+        self.in_order()
+        (self.results / "udp_bisect_debian_12302019.md").write_text("# nothing\n",
+                                                                    encoding="utf-8")
+        self.assert_fails("prediction-missing")
+
     def test_the_oracle_sessions_naming_no_prediction(self):
         self.in_order()
         (self.results / "oracle_sessions.md").write_text("# nothing\n", encoding="utf-8")

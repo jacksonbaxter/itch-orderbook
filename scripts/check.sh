@@ -118,6 +118,8 @@ stage_bench() {
     python_test scripts/test_window_report.py &&
     python_test scripts/test_simd_report.py &&
     python_test scripts/test_simd_driver.py &&
+    python_test scripts/test_udp_report.py &&
+    python_test scripts/test_udp_driver.py &&
     python_test scripts/test_simd_asm_audit.py &&
     python_test scripts/test_zen1_events.py &&
     python_test scripts/gate_numbers.py &&
@@ -161,6 +163,10 @@ stage_bench() {
       results/simd_asm_*) python_test scripts/simd_asm_audit.py --check "$simd" || return 1 ;;
       *) python_test scripts/simd_report.py --check "$simd" || return 1 ;;
     esac
+  done
+  for udp in results/udp_*.md; do
+    [ -f "$udp" ] || continue
+    python_test scripts/udp_report.py --check "$udp" || return 1
   done
   build_preset release && ctest --preset release -R '^test_bench'
 }

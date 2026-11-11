@@ -1,0 +1,572 @@
+{
+  "area": "udp_runs",
+  "faults": [
+    {
+      "id": "udp-report-comparability-unchecked",
+      "breaks": "A UDP results file without the sentence that loopback is not a network passes --check",
+      "check": "test_udp_report.py test_check_refuses_a_file_without_the_comparability_sentence",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    if COMPARABILITY not in text.splitlines():\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_a_file_without_the_comparability_sentence ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-above-cap-accepted",
+      "breaks": "A rate-paced row above 0.9 x the sender's ceiling passes --check",
+      "check": "test_udp_report.py test_check_refuses_a_rate_above_the_cap",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "row[\"target\"] is not None and row[\"target\"] > cap:",
+          "new": "row[\"target\"] is not None and row[\"target\"] > 2 * cap:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_a_rate_above_the_cap ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-unpinned-accepted",
+      "breaks": "A row whose sender or receiver was not pinned passes --check",
+      "check": "test_udp_report.py test_check_refuses_an_unpinned_row",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "        if \"not pinned\" in row[\"pins\"] or \\\n                any(not row[\"pins\"].startswith(role) and f\", {role} \" not in row[\"pins\"]\n                    for role in roles):\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_an_unpinned_row ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-host-name-unchecked",
+      "breaks": "A debian file named as a Mac file passes --check",
+      "check": "test_udp_report.py test_check_refuses_a_host_label_the_name_does_not_match",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "        if match is None or match.group(2) != (\"debian\" if host == DEBIAN else \"mac\") or \\\n",
+          "new": "        if match is None or \\\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_a_host_label_the_name_does_not_match ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-machine-check-uncounted",
+      "breaks": "A file with a machine check that did not pass passes --check",
+      "check": "test_udp_report.py test_check_refuses_a_failed_or_missing_machine_check",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    if not runs or output.count(\"machine_check: passed\") != wanted or \\\n",
+          "new": "    if not runs or \\\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_a_failed_or_missing_machine_check ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-derived-unchecked",
+      "breaks": "An edited T-URING-1 ratio or T-URING-2 count passes --check",
+      "check": "test_udp_report.py test_check_refuses_an_edited_ratio_or_rate",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "        if check_results.section(text, title) != \"\\n\" + \"\\n\".join(lines) + \"\\n\\n\":\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_an_edited_ratio_or_rate ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-lossless-ignores-rcvbuf",
+      "breaks": "The report's lossless check leaves out Udp RcvbufErrors",
+      "check": "test_udp_report.py test_check_refuses_a_lossless_cell_its_counters_contradict",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    if any(row[name] != 0 for name in udp_driver.LOSS_COUNTERS):\n",
+          "new": "    if any(row[name] != 0 for name in udp_driver.LOSS_COUNTERS if name != \"rcvbuf_errors\"):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_a_lossless_cell_its_counters_contradict ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-private-unchecked",
+      "breaks": "A UDP results file with a home path or an address passes --check",
+      "check": "test_udp_report.py test_check_refuses_anything_private",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    found += list(check_results.check_private(text, fields))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_anything_private ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-t-uring-2-any-repetition",
+      "breaks": "T-URING-2 passes when one confirmation of several was lossless",
+      "check": "test_udp_report.py test_t_uring_2_passes_only_on_every_confirmation_with_its_gap",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    verdict = \"PASS\" if total and good == total else \"FAIL\"\n",
+          "new": "    verdict = \"PASS\" if good else \"FAIL\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_t_uring_2_passes_only_on_every_confirmation_with_its_gap ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-sender-limit-unsaid",
+      "breaks": "A mode lossless at the cap is reported as its largest rate, not as sender limited",
+      "check": "test_udp_report.py test_the_largest_lossless_rates_and_t_uring_1_by_hand",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "\"result\": \"sender limited\" if best >= cap else \"max\"",
+          "new": "\"result\": \"max\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_the_largest_lossless_rates_and_t_uring_1_by_hand ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-speedup-unchecked",
+      "breaks": "A feed row whose speedup is not the target over the window's peak passes --check",
+      "check": "test_udp_report.py test_a_feed_file_scales_each_window_by_its_own_peak",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "            if row[\"schedule\"] != speedups[row[\"role\"]]:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_feed_file_scales_each_window_by_its_own_peak ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-ceiling-unchecked",
+      "breaks": "A sender ceiling that is not the median of the file's sender rows passes --check",
+      "check": "test_udp_report.py test_check_refuses_a_ceiling_that_is_not_the_rows",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "        if from_rows is not None and from_rows != shown:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_a_ceiling_that_is_not_the_rows ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-verdict-marks-uncounted",
+      "breaks": "A UDP file with a second verdict mark passes --check",
+      "check": "test_udp_report.py test_check_refuses_a_verdict_mark_too_many_or_a_bad_governor_or_load_line",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    expected = 1 if fields.get(\"step\") == \"bisect\" else 0\n",
+          "new": "    expected = marks\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_a_verdict_mark_too_many_or_a_bad_governor_or_load_line ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-prediction-unchecked",
+      "breaks": "A UDP file whose prediction check_predictions.py cannot read passes --check",
+      "check": "test_udp_report.py test_check_refuses_a_prediction_check_predictions_cannot_read",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    if fields.get(\"run_id\") not in runs or \\\n            not re.fullmatch(r\"P-\\d{4}\", fields.get(\"prediction\", \"\")):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_a_prediction_check_predictions_cannot_read ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-sender-behind-trusted",
+      "breaks": "The bisection trusts a trial whose sender fell behind its target",
+      "check": "test_udp_driver.py test_a_sender_that_fell_behind_does_not_count",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "    if achieved < PACE * target:\n",
+          "new": "    if achieved < 0.5 * target:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_sender_that_fell_behind_does_not_count ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-lossless-ignores-rcvbuf",
+      "breaks": "The driver's lossless leaves out Udp RcvbufErrors",
+      "check": "test_udp_driver.py test_every_counter_is_read_not_the_flag_alone",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "\"truncated\", \"no_buffers\", \"cq_overflow\", \"socket_drops\", \"rcvbuf_errors\",\n                 \"in_errors\", \"softnet_dropped\")",
+          "new": "\"truncated\", \"no_buffers\", \"cq_overflow\", \"socket_drops\",\n                 \"in_errors\", \"softnet_dropped\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_counter_is_read_not_the_flag_alone ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-unread-counter-is-zero",
+      "breaks": "A loss counter that could not be read counts as zero",
+      "check": "test_udp_driver.py test_every_counter_is_read_not_the_flag_alone",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "        if drops.get(name) != 0:\n",
+          "new": "        if drops.get(name):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_counter_is_read_not_the_flag_alone ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-runs-at-the-ceiling",
+      "breaks": "The bisection's cap is the sender's ceiling, not 0.9 x it",
+      "check": "test_udp_driver.py test_a_bisect_step_leaves_its_manifest_and_confirms_t_uring_2",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "    cap = cap_of(ceiling[\"messages_per_s\"])\n",
+          "new": "    cap = ceiling[\"messages_per_s\"]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_a_bisect_step_leaves_its_manifest_and_confirms_t_uring_2 ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-floor-ignored",
+      "breaks": "A start rate that is never lossless is halved past the floor",
+      "check": "test_udp_driver.py test_a_lossy_start_is_halved_down_to_the_floor",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "            if rate // 2 < self.floor:\n",
+          "new": "            if rate // 2 < 1:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_lossy_start_is_halved_down_to_the_floor ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-steps-unbounded",
+      "breaks": "The bisection runs past its most steps",
+      "check": "test_udp_driver.py test_it_stops_after_the_most_steps",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "self.steps >= self.most_steps",
+          "new": "self.steps >= 10 * self.most_steps"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_it_stops_after_the_most_steps ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-speedup-inverted",
+      "breaks": "The feed's speedup is the peak rate over the target",
+      "check": "test_udp_driver.py test_the_speedup_is_the_target_over_the_peak_rate",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "    return target / (peak_messages / seconds)\n",
+          "new": "    return (peak_messages / seconds) / target\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_speedup_is_the_target_over_the_peak_rate ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-flush-gap-unscaled",
+      "breaks": "The feed's flush gap is not scaled by the speedup",
+      "check": "test_udp_driver.py test_the_flush_gap_and_timeout_scale_with_the_speedup",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "    return int(round(flush_us * 1000 * speedup))\n",
+          "new": "    return int(round(flush_us * 1000))\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_flush_gap_and_timeout_scale_with_the_speedup ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-low-rate-in-packets",
+      "breaks": "The latency step's low rate is taken as messages, not packets",
+      "check": "test_udp_driver.py test_the_latency_rates",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "    low = int(round(low_packets * per_packet))\n",
+          "new": "    low = int(low_packets)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_latency_rates ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-busy-not-retried",
+      "breaks": "A process measure.sh refused with exit 75 is not run again",
+      "check": "test_udp_driver.py test_a_bisect_step_leaves_its_manifest_and_confirms_t_uring_2",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "        if code != 75:\n            return code\n",
+          "new": "        if True:\n            return code\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_a_bisect_step_leaves_its_manifest_and_confirms_t_uring_2 ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-failure-not-logged",
+      "breaks": "A process that failed gets no row in the run log",
+      "check": "test_udp_driver.py test_a_sender_behind_never_counts_and_a_failed_mode_is_logged",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "            self.failed += 1\n            bench_driver.append_log(\n                self.args.run_log,",
+          "new": "            self.failed += 1\n            (lambda *_: None)(\n                self.args.run_log,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_sender_behind_never_counts_and_a_failed_mode_is_logged ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-results-table-verdict-dropped",
+      "breaks": "results_table.py drops a UDP file's T-URING-2 verdict",
+      "check": "test_udp_report.py test_results_table_takes_the_verdict_and_the_modes",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        rows.append(verdict_row(\"T-URING-2\", day_of(name), host, verdict, detail, commit, name))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_results_table_takes_the_verdict_and_the_modes ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-predictions-skip-udp-results",
+      "breaks": "check_predictions leaves the UDP results unread, so one could name no prediction",
+      "check": "test_check_predictions test_a_udp_result_naming_no_prediction",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "RESULT_PATTERNS += (\"udp_*.md\",)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_udp_result_naming_no_prediction ",
+        "exit": 1
+      }
+    }
+  ]
+}

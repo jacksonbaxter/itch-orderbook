@@ -5,8 +5,8 @@
 
 results/predictions.md holds one `## P-NNNN: title` block per experiment. Every
 results/bench_*.md, chase_*.md, backtest_*.md, counters_*.md, flamegraph_*.md, mm_*.md,
-lookup_*.md, prefetch_*.md, dispatch_*.md, spsc_*.md, wasm_*.md, simd_*.md and alloc_*.md
-names one in its header, and so does results/oracle_sessions.md, which sums other results
+lookup_*.md, prefetch_*.md, dispatch_*.md, spsc_*.md, wasm_*.md, simd_*.md, alloc_*.md
+and udp_*.md names one in its header, and so does results/oracle_sessions.md, which sums other results
 files and is no run, so it has no row in the run log.
 With git history to read, the block must be committed, its commit must come before the
 result's, and its text must be what that commit wrote: a prediction is never edited. results/run_log.md gets a row for every run,
@@ -36,6 +36,8 @@ RESULT_PATTERNS = ("alloc_*.md", "bench_*.md", "chase_*.md", "backtest_*.md", "c
                    "flamegraph_*.md", "mm_*.md", "lookup_*.md", "prefetch_*.md", "dispatch_*.md",
                    "spsc_*.md", "wasm_*.md", "simd_*.md", "layout_*.md", "structure_*.md",
                    "window_*.md", "types_*.md")
+# scripts/udp_report.py's files (T-URING-1, T-URING-2).
+RESULT_PATTERNS += ("udp_*.md",)
 # Results summed from other results files: each names its prediction, but no run.
 SUMMED = ("oracle_sessions.md",)
 BLOCK = re.compile(r"^## (P-\d{4}): .*?(?=^## |\Z)", re.MULTILINE | re.DOTALL)

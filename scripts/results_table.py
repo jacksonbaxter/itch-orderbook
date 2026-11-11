@@ -11,7 +11,9 @@ with no reader here is refused, and so is a file with a verdict no row took up, 
 neither can drop out unseen. A book benchmark file missing a field its row needs is
 refused as well. An oracle or trades file runs each arm of the fast book, and a
 row says whether every arm gave its verdict. An arm that gave another one makes the row a
-failure that names it. predictions.md is not a result, and run_log.md gets its own
+failure that names it. A UDP replay file gives a T-URING-2 row when it
+holds a bisection, and each mode's largest lossless rate to the T-URING-1 table, which
+has no verdict. predictions.md is not a result, and run_log.md gets its own
 table, every row of it, failed runs included; a line of its table that is not a run is
 refused. Each row cites its file, so scripts/gate_numbers.py holds the
 row's figures to that file.
@@ -413,6 +415,26 @@ def alloc_rows(name, text):
     return rows, header_field(text, "fault_check", name), header_field(text, "pages_requested", name)
 
 
+def udp_rows(name, text):
+    """A UDP replay file (scripts/udp_report.py): T-URING-2's verdict when the file has a
+    bisection, and T-URING-1's largest lossless rate for each mode, which has no bar."""
+    host = header_field(text, "host", name)
+    commit = header_commit(text, name)
+    rows = []
+    if re.search(r"^## T-URING-2: ", text, re.MULTILINE):
+        verdict, detail = find(r"^Verdict: \*\*(PASS|FAIL)\*\*, (.*)\.$", text, name).groups()
+        rows.append(verdict_row("T-URING-2", day_of(name), host, verdict, detail, commit, name))
+    modes = []
+    if re.search(r"^## T-URING-1: ", text, re.MULTILINE):
+        for cells in section_rows(text, "T-URING-1: io_uring against sockets", name):
+            if len(cells) != 3:
+                raise TableError(f"results/{name}: a T-URING-1 row of {len(cells)} cells")
+            modes.append((*cells, day_of(name), host, f"`{commit}`", source(name)))
+        if not modes:
+            raise TableError(f"results/{name}: T-URING-1 has no mode")
+    return rows, modes
+
+
 def run_rows(text):
     """A row for every line of the log's table. A line of it that is not the head, the rule
     or a run with its five cells is refused, never skipped, so no run drops out unseen."""
@@ -450,6 +472,7 @@ def generate(root):
     spsc = []
     pnl = []
     arenas = []
+    turing1 = []
     for path in sorted((root / "results").glob("*.md")):
         name = path.name
         if name in NOT_RESULTS:
@@ -495,6 +518,9 @@ def generate(root):
             rows = []
         elif name.startswith("mm_"):
             rows = mm_rows(name, text)
+        elif name.startswith("udp_"):
+            rows, modes = udp_rows(name, text)
+            turing1 += modes
         else:
             raise TableError(f"results/{name}: this script has no reader for it")
         marked = len(VERDICT_MARK.findall(text))
@@ -548,6 +574,14 @@ def generate(root):
                       "weak evidence.", ""]
         lines += markdown_table(("Target", "Comparison", "Day", "Host", "Pinning", "Measured",
                                  "Bar", "Verdict", "Commit", "File"), spsc)
+    if turing1:
+        lines += ["", "T-URING-1, io_uring against sockets: each receive mode's largest lossless "
+                      "message rate on loopback, and its ratio over S3's, from its results file. "
+                      "The target is UNCONFIRMED, so there is no bar and no verdict. Loopback runs "
+                      "the receive softirq on the sender's CPU, so these are syscall-and-copy "
+                      "figures on one host, not network ones.", ""]
+        lines += markdown_table(("Mode", "Largest lossless msgs/s", "Over S3", "Day", "Host",
+                                 "Commit", "File"), turing1)
     for name, fault_check, pages, arms in arenas:
         lines += ["", f"T-ARENA-1, the node book on each allocator arm, from "
                       f"[results/{name}](results/{name}), the pools' pages requested as "
