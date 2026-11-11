@@ -2014,3 +2014,34 @@ At the user's request, for a visitor who opens `main`: the session's instruction
 - **docs/NOTES.md and docs/TASKS.md.** Moved with `git mv`. Every mention in code comments, scripts, the CI comment, the README and BENCHMARKS.md names the new path, and the four links here to `results/` became `../results/`. The results files that name this file are generated, so `variants_report.py`, `simd_report.py` and `mm_report.py` now write `docs/NOTES.md`, and the 14 committed files differ from before in that path only: the nine `simd_*_mac` files are byte-identical to a fresh render from their raw runs, and the others pass their generators' `--check`. The demo's gates read only `.html`, `.css` and `.js` under `docs/`, and the demo stage's browser run copies its files by name, so neither meets the two new files.
 - **What still says the old path.** `results/predictions.md` and `results/run_log.md`, which `check_predictions.py` holds unedited; `scripts/mm_evaluation.json`, fixed before any run of the market maker; and `results/fault_matrix.md`, the record of a run at b9a7d8e. Each is a record of its time, so none was changed.
 - **LICENSE.** MIT, for the project's own code. The README names what keeps its source's terms: figures from Nasdaq's sample files, MIDAS and CrossStats in `results/`, and the FlameGraph script each flamegraph SVG embeds, which is under the CDDL.
+
+## GCC 14 and test_walk_counts, 2026-11-11
+
+After jb-walk was merged into jb-build as 78dcd6d, both GCC 14 jobs in CI (x86-64 and arm64 Linux, run 43041520046, and again on 0c3e096, run 43090658388) failed to build `test_walk_counts`. The error was `-Wstringop-overflow=`, made an error by `-Werror`: "writing 1 byte into a region of size 0 … at offset 72 into destination object of size 64 allocated by 'operator new'", inlined into `HandBuilt::HandBuilt()` at `tests/test_walk_counts.cpp:91:19`.
+
+**Reproduced on `debian`.** GCC 14.2.0 (Debian 14.2.0-19), from 0c3e096 as `debian_sync.sh` exported it, built as CI builds (command below), failed at the same place, `FAILED: tests/CMakeFiles/test_walk_counts.dir/test_walk_counts.cpp.o`, with three errors where CI's log showed the first. All three are in the third `send` at line 91. Each is "writing 1 byte into a region of size 0", through `push_back`'s path that constructs in spare capacity (`vector.tcc:117`, `emplace_back`). Each names the 64-byte buffer that the second `send`, at line 90, allocated in `_M_realloc_append` (`vector.tcc:596`). The three are at offsets 72, 82 and 92 into that buffer. Nothing else in the tree failed before ninja stopped.
+
+**It was a false positive, not a real overflow.** The evidence:
+
+- **Where the error points.** Line 91, column 19 is the `(` of the third `strategy_.send(...)` in the fixture's constructor, not the `feed(wire::directory(...))` two lines below it. `send` appends one `Scripted::Step` to `plan_`, a `std::vector<Step>`.
+- **The sizes.** These were checked with `static_assert` on the Mac's LP64 layout, which is the same on both Linux targets. A `Step` is 32 bytes. `time` is at offset 0 and `op`, a 1-byte enum, at offset 8. The `OrderRequest` is at offset 16, with its 1-byte `side` at 2 and its 1-byte `tif` at 12 within it.
+- **What GCC reports.** `plan_` starts empty in the constructor. The first send allocates 32 bytes and the second 64, so after two sends the buffer is full. GCC's three offsets are a third `Step` placed at offset 64 of that full buffer: its `op` at 64 + 8 = 72, its `side` at 64 + 16 + 2 = 82, and its `tif` at 64 + 16 + 12 = 92. These are the three 1-byte stores of its construction. GCC warned on `push_back`'s spare-capacity path, a path the third send never takes: with 2 elements in a capacity of 2, `push_back` goes to `_M_realloc_append`, which allocates 128 bytes and constructs the third `Step` there.
+- **At run time.** `test_walk_counts` built under the `asan-ubsan` preset (`-O1 -fsanitize=address,undefined -fno-sanitize-recover=all`) passes all 10 tests. Every `HandBuilt` test makes that third send, so a real overflow would have stopped them.
+- **Why only this test.** No other test that GCC 14 builds in CI makes three plan steps in a row on a fresh `Scripted`: `test_backtest`'s tests send one or two orders each. So no other test has a full buffer whose size GCC can work out at a third send. `wire::directory` is not involved; `test_backtest`'s `Replay` constructor feeds the same message and builds cleanly.
+
+**The fix** (`tests/test_walk_counts.cpp`). The fixture writes its plan and feeds the directory in `SetUp()`, not in its constructor. GoogleTest calls `SetUp()` through the base class after construction, so GCC no longer sees that `plan_` starts empty, and has no buffer size to compare a write with. No pragma is used, and no warning or flag is changed. The tests and their expected counts are unchanged.
+
+**CI's GCC job on `debian`.** It runs from the synced `src`, in a build directory of its own, so that the Clang build in `../build`, which measurements use, is untouched. `ninja` is the only tool taken from the toolchain. `env.sh` is not sourced, because it would set `CC` and `CXX` to the pinned Clang and put the toolchain's liburing on cmake's search path; the configure says `liburing: off`, as on CI.
+
+```
+cd ~/quant-projects/itch-orderbook/src
+gcc-14 --version
+rm -rf ../build-gcc14
+~/quant-projects/bin/heavy.sh env -u ITCH_LIBURING_ROOT \
+  PATH="$HOME/quant-projects/.toolchain/ninja:$PATH" TMPDIR="$HOME/quant-projects/.toolchain/tmp" \
+  CC=gcc-14 CXX=g++-14 bash -c 'cmake --preset release -B ../build-gcc14 \
+  && cmake --build ../build-gcc14 --parallel 3 \
+  && ctest --test-dir ../build-gcc14 --output-on-failure --no-tests=error'
+```
+
+This is the CI job's configure (`cmake --preset release`: Ninja, `CMAKE_BUILD_TYPE=Release`, `ITCH_MIMALLOC=ON`), with the same compile flags. Those are `-O3 -DNDEBUG -std=c++23` and `itch_warnings`, which is `-Wall -Wextra -Werror -Wconversion -Wsign-conversion -Wshadow -Wold-style-cast -Wno-attributes=clang::`. Only the binary directory and the job count differ from CI, and neither changes a flag. A fresh directory makes the configure pick up the compiler; reusing one configured with Clang would keep Clang.

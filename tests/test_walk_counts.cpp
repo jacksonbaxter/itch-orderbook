@@ -85,7 +85,14 @@ void expect_site(const WalkCounts& walks, WalkSite site, const Expected& expecte
 
 class HandBuilt : public ::testing::Test {
  protected:
-  HandBuilt() : engine_{config()} {
+  HandBuilt() : engine_{config()} {}
+
+  // The plan is written here, not in the constructor. Inlined into the constructor, where the
+  // plan is known to start empty, the third send's growth of the plan from 64 to 128 bytes
+  // looked to GCC 14 like a write past the old 64 (-Wstringop-overflow, docs/NOTES.md,
+  // "GCC 14 and test_walk_counts"). GoogleTest calls SetUp() through the base class after
+  // construction, so nothing here is known about the plan's size.
+  void SetUp() override {
     strategy_.send(kA, 10, Side::bid, k1000, 100);
     strategy_.send(kB, 20, Side::bid, k999, 100);
     strategy_.send(kC, 30, Side::bid, k998, 100);
