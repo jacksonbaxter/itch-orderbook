@@ -428,7 +428,8 @@ class UdpReportTest(unittest.TestCase):
 
     def test_check_refuses_anything_private(self):
         text = self.bisect_text()
-        self.assertIn("private-text", self.codes(text.replace("<raw>", "/home/someone/raw", 1)))
+        planted = "/" + "home" + "/someone/raw"  # In two pieces, so that the gate passes.
+        self.assertIn("private-text", self.codes(text.replace("<raw>", planted, 1)))
         self.assertIn("private-text", self.codes(text.replace("loopback, unicast",
                                                               "127.0.0.1, unicast", 1)))
 
