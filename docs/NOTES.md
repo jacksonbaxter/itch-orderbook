@@ -2168,3 +2168,42 @@ rm -rf ../build-gcc14
 ```
 
 This is the CI job's configure (`cmake --preset release`: Ninja, `CMAKE_BUILD_TYPE=Release`, `ITCH_MIMALLOC=ON`), with the same compile flags. Those are `-O3 -DNDEBUG -std=c++23` and `itch_warnings`, which is `-Wall -Wextra -Werror -Wconversion -Wsign-conversion -Wshadow -Wold-style-cast -Wno-attributes=clang::`. Only the binary directory and the job count differ from CI, and neither changes a flag. A fresh directory makes the configure pick up the compiler; reusing one configured with Clang would keep Clang.
+
+## P-0105: the walk's share of T-BT-3 on `debian`, 2026-11-11
+
+**How it ran.** From df1676e as `debian_sync.sh` exported it. `bench_backtest`, `bench_walks` and `bench_probe` were rebuilt in `../build`, the release build with Clang and mimalloc, under `heavy.sh`. `scripts/walk_driver.py --core 4 --sibling 5` ran as `measure.sh taskset -c 4`'s direct child, started at nice 0 from `bash -c`, with `machine_check` passing before and after. The driver ran from 23:35:00 to 23:38:27 UTC: 4 untimed counts, then 5 rounds of the 4 schedules, 20 timed processes. `pswpout` did not move. Peak RSS was 8.66 GiB for `bench_backtest` and 8.67 GiB for each `bench_walks` count, from `getrusage`, the mapped day counted.
+
+Another project's sanitizer test suites ran at nice 5 throughout, and with no isolation nothing kept them off core 4. `measure.sh`'s load was 1.46 at the start and 2.22 at the end, and the 10 s samples ranged from 1.50 to 2.31. The machine check read the SMT sibling, cpu5, as 0.0% busy. The driver has no rule on other processes, so nothing was withdrawn.
+
+**What it measured** (`results/walks_ladder_debian_12302019.md`).
+
+| Schedule | Walk steps a message | Median ns a message | Walk's share |
+|---|---|---|---|
+| T-BT-3 | 2.287 | 323.88 | 3.51% |
+| 600 s life | 3.803 | 331.75 | 5.70% |
+| 3,600 s life | 5.561 | 341.19 | 8.10% |
+| 14,400 s life | 7.335 | 348.76 | 10.45% |
+
+- **The line.** The least-squares line through the four medians gives 4.969 ns a walk step and 312.81 ns a message at none. It passes within 0.8 ns of every median.
+- **What the walk costs T-BT-3.** It takes 11.4 ns of a message, 3.5%. With that taken off, T-BT-3's schedule would run at 3.20 M messages/s, still 1.41 M under the 4.61 M bar.
+- **The verdict on T-BT-3's miss.** The walk is not why T-BT-3 misses on `debian`; the rest of the engine's work a message is. The walk only matters on deep sides: at 14,400 s, with sides 70.9 levels deep on average, it is 10.4% of a message. T-BT-3 does not need a price-keyed lookup for `find_sim_level`, so none was added.
+- **The counts.** Every count, event hash, fill and report matched the Mac's counts file for each schedule, with 0 queue anomalies in every process.
+
+**P-0105 is refuted, on one criterion.**
+
+- **What failed.** P-0105 said every round's slope would be positive. Round 1's was −1.237 ns a walk step: its T-BT-3 process was the first timed process of the run, and took 354.27 ns a message, with a warm-up of 347.60, against 322.26 to 328.79 in the other four rounds. Rounds 2 to 5 have slopes from 4.166 to 5.061. That one slow process also makes T-BT-3's CV 4.09%.
+- **What held.**
+  - The counts and hashes.
+  - T-BT-3's rate, 3.09 M messages/s, inside 3.0 to 3.7 M.
+  - Medians that rise with the life.
+  - The slope, 4.97 ns, inside 3 to 12 ns, below the 6 expected.
+  - The 14,400 s median exceeding T-BT-3's by 24.88 ns, inside 15 to 60.
+  - T-BT-3's share, 3.51%, inside 2% to 9% and below the 5% expected.
+  - The rate with the walk off, 3.20 M, under 4.2 M.
+  - The 14,400 s share, 10.45%, inside 7% to 25%.
+  - Peak RSS and `pswpout`.
+- **No rerun.** The run is published as it ran, since a rerun under the same prediction would be a rerun to pass.
+
+**Against P-0104.** T-BT-3's schedule ran at 323.88 ns a message here, against P-0104's 298.14 ns from c8ca2e2. The two runs differ in commit, in the other project's load (none was recorded in P-0104), and in the core's frequency, which read 3.25 to 3.42 GHz in this run's processes and 3.59 GHz in P-0104's header. No counter was read, so which of these made the 8.6% is not known.
+
+**The command shown in the file.** `walk_driver.py` printed its command without `--sibling 5`, though the run was given it and the machine check read cpu5. This is the omission `check_results.py` now refuses in backtest and allocator files since jb-alloc2. The driver now prints `--sibling` as `backtest_driver.py` does, and `check_results.py` holds a ladder file to the same rule. The committed file was rendered again from the run's raw records, through the fixed `walk_driver.render`, and stamped from the run's own `measure.sh` stderr. Its only difference from the file the run wrote is the command line. The machine check's output and the swap line were taken from the run's file, since the run printed them nowhere else.
