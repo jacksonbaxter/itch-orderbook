@@ -3253,6 +3253,26 @@
         "signature": "\\[  FAILED  \\] FastBook\\.EveryScanFindsThePlaceAWholeWalkFinds",
         "exit": 1
       }
+    },
+    {
+      "id": "oracle-report-stopped-clock-shown-as-real",
+      "breaks": "A real time shorter than the replay, read by macOS's time at the run's first SIGSTOP, is shown as the run's real time, and the footprint at that stop as the run's",
+      "check": "test_oracle_report.py test_a_real_time_shorter_than_the_replay_is_not_shown_as_the_runs",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    return real is not None and elapsed is not None and real < float(elapsed)\n",
+          "new": "    return False\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_real_time_shorter_than_the_replay_is_not_shown_as_the_runs"
+      }
     }
   ]
 }

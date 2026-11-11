@@ -365,6 +365,22 @@ def inv3_section(log):
     return lines
 
 
+def stopped_early(log):
+    """Whether /usr/bin/time's clock stopped before the replay ended. macOS's time reads its
+    clock and the footprint when the process is first stopped (SIGSTOP), and user, sys and
+    the maximum RSS when it exits, so a run paused while it went on shows a real time shorter
+    than its own replay, and a footprint of its start alone."""
+    real = log["time"].get("real")
+    elapsed = log["values"].get("elapsed_seconds")
+    return real is not None and elapsed is not None and real < float(elapsed)
+
+
+def footprint_cell(log, unit=""):
+    gib = 1024.0 ** 3
+    footprint = f"{log['time'].get('peak_footprint', 0) / gib:.2f}{unit}"
+    return f"{footprint} to the first stop" if stopped_early(log) else footprint
+
+
 def arms_section(arms):
     """One row per arm. The verdicts here are not marked up: the sections below hold them."""
     gib = 1024.0 ** 3
@@ -397,7 +413,7 @@ def arms_section(arms):
             count(int(log["values"].get("moved_checks", 0))),
             log["values"].get("elapsed_seconds", "?"),
             f"{time.get('max_rss', 0) / gib:.2f}",
-            f"{time.get('peak_footprint', 0) / gib:.2f}",
+            footprint_cell(log),
             f"`{arm['raw']}`",
         ))
     lines += format_table(
@@ -405,6 +421,18 @@ def arms_section(arms):
          "Messages diffed", "Last hash", "Moves reported", "Moved levels compared",
          "Replay, s", "Maximum RSS, GiB", "Peak footprint, GiB", "Raw log"), rows)
     return lines
+
+
+def elapsed_line(values, time, early):
+    replay = values.get("elapsed_seconds", "?")
+    if early:
+        return (f"- Elapsed: {replay} s in the replay, wall time with the pause included, "
+                f"{time.get('user', 0.0):.1f} s user. /usr/bin/time's real, "
+                f"{time.get('real', 0.0):.1f} s, is shorter than the replay: the run was paused "
+                "with SIGSTOP, and macOS's time stops its clock and reads the footprint at the "
+                "first stop, so neither is the whole run's")
+    return (f"- Elapsed: {replay} s in the replay, {time.get('real', 0.0):.1f} s real, "
+            f"{time.get('user', 0.0):.1f} s user")
 
 
 def render(log, entry, day, alloc, arms):
@@ -425,10 +453,9 @@ def render(log, entry, day, alloc, arms):
         f"- Dataset: `{entry.get('unpacked_name', entry['name'])}`, SHA-256 of the unpacked file "
         f"`{entry['unpacked_sha256']}`",
         f"- Command: `{run.get('run_command', 'unavailable')}`",
-        f"- Elapsed: {values.get('elapsed_seconds', '?')} s in the replay, "
-        f"{time.get('real', 0.0):.1f} s real, {time.get('user', 0.0):.1f} s user",
+        elapsed_line(values, time, stopped_early(log)),
         f"- Maximum RSS: {time.get('max_rss', 0) / gib:.2f} GiB, which includes the mapped file",
-        f"- Peak memory footprint: {time.get('peak_footprint', 0) / gib:.2f} GiB",
+        f"- Peak memory footprint: {footprint_cell(log, ' GiB')}",
         f"- Book: `FastBook`, {len(arms)} arm{'s' if len(arms) != 1 else ''} below. The run "
         f"above and the detail after the table are `{arms[0]['name']}`.",
     ]

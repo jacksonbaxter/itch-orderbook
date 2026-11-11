@@ -177,6 +177,23 @@ class OracleReport(unittest.TestCase):
         self.assertIn("| Fast book | 4 | 0 |", written)
         self.assertIn("Verdict, strict: **PASS**", written)
 
+    def test_real_time_is_shown_beside_the_replay(self):
+        self.run_report()
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("- Elapsed: 1.5 s in the replay, 9.0 s real, 8.0 s user", written)
+        self.assertIn("- Peak memory footprint: 2.00 GiB\n", written)
+
+    def test_a_real_time_shorter_than_the_replay_is_not_shown_as_the_runs(self):
+        # macOS's time read its clock and the footprint at the first SIGSTOP.
+        self.log = self.log.replace("elapsed_seconds 1.5", "elapsed_seconds 38.8")
+        self.run_report()
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("- Elapsed: 38.8 s in the replay, wall time with the pause included, 8.0 s "
+                      "user. /usr/bin/time's real, 9.0 s, is shorter than the replay", written)
+        self.assertNotIn("9.0 s real", written)
+        self.assertIn("- Peak memory footprint: 2.00 GiB to the first stop", written)
+        self.assertIn("| 2.00 to the first stop |", written)
+
     def test_a_shorter_replay_than_the_census_fails(self):
         self.day["messages"] = 5
         self.assert_fails("frames 4, manifest 5")
