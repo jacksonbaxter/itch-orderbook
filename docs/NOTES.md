@@ -1906,6 +1906,38 @@ It failed on these:
 - **CV under 3% on every arm:** `malloc-fresh` under `transparent` was 4.36%, from its first repetition (above).
 - **A pool book the same in both modes:** it differed by 1.4 to 1.6 MiB, the rounding up to 2 MiB pages.
 
+**Where the faults come from: P-0703, a diagnostic.** P-0703 ran two timed processes of `alloc-pool-pointer --pages base`, 23:00 to 23:16 UTC. They used the build of c8ca2e2 that P-0702 ran, not rebuilt; `src/` then held df1676e from another piece's sync. Each process ran under `measure.sh taskset -c 4 perf record -e minor-faults:u -e major-faults:u -c 1 -d`, which records every user-space fault with its address and instruction, and every mapping. `/proc/vmstat` was read each second from core 0.
+
+The host was not quiet:
+- another project's ASan and TSan test suites and its compiles ran at nice 5 throughout, with load up to 6.99;
+- `MemFree` was 0.15 to 1.7 GB, against 1.0 to 1.6 GiB in P-0702;
+- `pswpout` moved by 1 and by 2.
+
+So this is a diagnostic only. Its 1.88 M messages/s under perf is not a measurement. Perf's clock was set against UTC by its first and last samples and `measure.sh`'s start and end stamps, which agree to 1 s over each process's 440 s.
+
+- **The counts.** Both processes faulted in both passes, 79 and 86 in the first and 370 and 161 in the second. perf found exactly those numbers of faults from the node book's code (`apply`, `rest_order`, `replace_order`, `remove_order`) inside each pass. Every one was a minor fault. Outside the passes, the replay's code faulted twice, both times on its own text.
+- **Where they land.** Of the 696 faults across both processes:
+  - 528 fell on the pool's own mappings: 121 on the order pool and 407 on the level pool;
+  - 155 on the index;
+  - 12 on the brk heap;
+  - 1 on the day's copy.
+
+  The index is the open-addressed `std::vector` of 16-byte slots, 128 MiB on the heap, the same for every arm. It is not a `PageMapping`, so it takes no `madvise` and falls under THP `always`.
+
+  Every faulted page had been touched before, by the pool's prefault or the index's fill. These pages had been present and were then taken away.
+- **What took them.** kcompactd ran a migration episode every 32 to 36 s through both processes, moving 6,102 to 109,689 pages each time: 281,588 pages over the first process's passes and 445,168 over the second's. `thp_migration_success` stayed at 0, so no huge page was moved.
+  - 668 of the 696 faults came within 3 s of such an episode, including all 531 of the second process.
+  - The other 28 fell in the first process's latency pass, all on the index, in six bursts 10 s apart, khugepaged's `scan_sleep_millisecs`. They were 2, 8, 6, 8, 8 and 4 faults, and `thp_collapse_alloc` rose by 2, 8, 6, 8, 8 and 4 within the next 2 s. The 8 at 23:06:53 also coincided with a migration episode.
+
+  So kcompactd's compaction, with `compaction_proactiveness` 20, moves the movable 4 KiB pages under the running book: the pool's nodes and the index. khugepaged collapses the index's 4 KiB runs into 2 MiB pages. Each move costs the replay a minor fault when it next touches the page. Not every episode hits the book: 2 of 9 in the first process and 3 of 8 in the second brought no fault.
+- **Why `transparent` took almost none.** Compaction did not move a huge page here, and under `transparent` every pool node is on one. What a `transparent` run can still lose is the index. That fits its 4, 1 and 0 faults, but P-0703 did not run that mode.
+- **Against P-0703.** It held on the counts: every pass faulted, the processes differ, and perf's count equals the record's. It held on there being no major fault, and on compaction rising in the seconds that hold the faults. It failed on where:
+  - the faults fell on the index (155), the heap (12) and the day's copy (1) as well as on the pools;
+  - `thp_collapse_alloc` does account for 28 of them, the index's khugepaged collapses.
+
+  The cause it named, the kernel migrating movable 4 KiB pages for compaction, holds for 668 of 696. It is not only the pool's pages.
+- **What follows for the check.** On this host, a timed pass of a pool arm on 4 KiB pages takes faults whenever kcompactd's period falls inside it. The kernel's settings that would stop that (`compaction_proactiveness`, `compact_unevictable_allowed`, THP `enabled`) are root steps outside this project. No code change has been made. Two would narrow the check's exposure: putting the index on a `PageMapping` with the pool's request, and preferring 2 MiB pools. Neither would make a `base` run fault-free. P-0702's FAIL stands as published.
+
 ## The UDP replay's portable groundwork, 2026-11-10
 
 This is the part of T-URING-1 and T-URING-2 that builds and tests on the Mac. The Linux receive modes and every `debian` run come later, as a main-tree piece, because only the main tree reaches `debian`. Nothing here is a measurement, and nothing here makes a prediction.

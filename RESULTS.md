@@ -598,4 +598,6 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0309-debian-tsan-stress` | `P-0309` | `675befb3ad78` | Linux | `diagnostic` |
 | `P-0702-20261111T115529Z` | `P-0702` | `c8ca2e2dd09b` | Linux | `published` |
 | `P-0702-20261111T165051Z` | `P-0702` | `c8ca2e2dd09b` | Linux | `published` |
+| `P-0703-20261111T230006Z` | `P-0703` | `c8ca2e2dd09b` | Linux | `diagnostic, from the build of c8ca2e2 that P-0702 ran, not rebuilt, `src/` then holding df1676ed0e18` |
+| `P-0703-20261111T230854Z` | `P-0703` | `c8ca2e2dd09b` | Linux | `diagnostic, from the build of c8ca2e2 that P-0702 ran, not rebuilt, `src/` then holding df1676ed0e18` |
 <!-- results table: end -->
