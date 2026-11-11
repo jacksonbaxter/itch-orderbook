@@ -849,6 +849,112 @@
         "signature": "gate_numbers: FAIL RESULTS\\.md:\\d+: 99,999\\.5 is in no results file",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-headline-peer-core-dropped",
+      "breaks": "A headline row of a run on two cores names only the first core's pinning",
+      "check": "test_results_table.py test_the_headline_has_its_targets_in_order_each_from_its_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    peer = re.search(r\"^- peer_pinning: (.*?)(?::|$)\", text, re.MULTILINE)\n",
+          "new": "    peer = None\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_headline_has_its_targets_in_order_each_from_its_file"
+      }
+    },
+    {
+      "id": "readme-headline-unpinned-peer-called-pinned",
+      "breaks": "A second thread that was not pinned is shown as pinned to a core",
+      "check": "test_results_table.py test_a_second_thread_pinned_elsewhere_is_named_as_such",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    return f\"{pinnings[0]}; the second thread {pinnings[1]}\"\n",
+          "new": "    return f\"pinned to cores {pinnings[0][-1]} and 6\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_second_thread_pinned_elsewhere_is_named_as_such"
+      }
+    },
+    {
+      "id": "readme-stage-headline-value-edited",
+      "breaks": "One value in the README's headline is edited, and check.sh must fail on it",
+      "check": "check.sh readme stage, results_table.py --check",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "| 4.57 M messages/s |",
+          "new": "| 4.75 M messages/s |"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/check.sh",
+        "--only",
+        "readme"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-stage-results-row-edited",
+      "breaks": "One row of RESULTS.md is edited, and check.sh must fail on it",
+      "check": "check.sh readme stage, results_table.py --check",
+      "mutations": [
+        {
+          "file": "RESULTS.md",
+          "old": "| PASS | 0 divergences in 268,744,780 messages; the same on 4 arms |",
+          "new": "| PASS | 0 divergences in 268,744,781 messages; the same on 4 arms |"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/check.sh",
+        "--only",
+        "readme"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-stage-results-row-deleted",
+      "breaks": "A failing row, T-MM-2's, is deleted from RESULTS.md, and check.sh must fail on it",
+      "check": "check.sh readme stage, results_table.py --check",
+      "mutations": [
+        {
+          "file": "RESULTS.md",
+          "old": "| T-MM-2 | none | Darwin arm64 Apple M4 Max | **FAIL** | average spread 1.4918, 1.3490, 3.0317 against the paper's 1.49, 1.35, 3.02: 2 of 3 match at two decimals; other columns 23 of 24 within 2 standard errors | `9fee6ab0cb7b` | [results/mm_as_tables.md](results/mm_as_tables.md) |\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/check.sh",
+        "--only",
+        "readme"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
     }
   ]
 }
