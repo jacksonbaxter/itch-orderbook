@@ -50,7 +50,7 @@ concept DatagramSocket = requires(Socket& socket, std::span<const std::byte> dat
 // steady_clock, which is CLOCK_MONOTONIC on Linux: the clock the comparison plan paces
 // and stamps with on both sides.
 struct SteadyClock {
-  [[nodiscard]] std::uint64_t now_ns() const noexcept {
+  [[nodiscard]] static std::uint64_t now_ns() noexcept {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
@@ -109,9 +109,10 @@ enum class SendError : std::uint8_t {
 };
 
 template <SendClock Clock, DatagramSocket Socket>
-[[nodiscard]] std::expected<SendReport, SendError> send_packets(const mold::PacketArray& packets,
-                                                                const SendPlan& plan, Clock& clock,
-                                                                Socket& socket) noexcept {
+[[nodiscard]] std::expected<SendReport, SendError> send_packets(
+    const mold::PacketArray& packets, const SendPlan& plan, Clock& clock,
+    Socket& socket) noexcept(noexcept(clock.now_ns()) &&
+                             noexcept(socket.send(std::span<const std::byte>{}))) {
   const std::uint64_t rate = plan.messages_per_second;
   if (rate != 0 && packets.messages() > kMostScheduledMessages) {
     return std::unexpected(SendError::schedule_overflow);

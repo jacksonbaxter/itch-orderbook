@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <ranges>
 #include <span>
 #include <string>
@@ -65,13 +66,12 @@ class StepClock {
 };
 
 // Records the clock at each send, and fails the sends it is told to.
-class RecordingSocket {
- public:
-  explicit RecordingSocket(const StepClock& clock) : clock_{&clock} {}
+struct RecordingSocket {
+  explicit RecordingSocket(const StepClock& clock) : source{&clock} {}
 
   [[nodiscard]] udp::SendResult send(std::span<const std::byte> datagram) {
     const std::size_t index = times.size();
-    times.push_back(clock_->peek());
+    times.push_back(source->peek());
     sizes.push_back(datagram.size());
     for (const auto& [at, error] : failures) {
       if (at == index) {
@@ -84,9 +84,7 @@ class RecordingSocket {
   std::vector<std::uint64_t> times;
   std::vector<std::size_t> sizes;
   std::vector<std::pair<std::size_t, int>> failures;
-
- private:
-  const StepClock* clock_;
+  const StepClock* source;
 };
 
 mold::PacketArray churn_packets(std::size_t cap = mold::kDefaultDatagram) {
@@ -210,7 +208,7 @@ TEST(Sender, TheAchievedRateIsWhatWasSentOverTheRun) {
   ASSERT_TRUE(report.has_value());
   const std::uint64_t sent = packets.messages() - packets.ref(3).messages;
   EXPECT_EQ(report->sent_messages, sent);
-  const double elapsed = static_cast<double>(report->end_ns - report->start_ns);
+  const auto elapsed = static_cast<double>(report->end_ns - report->start_ns);
   EXPECT_DOUBLE_EQ(report->achieved_rate(), static_cast<double>(sent) * 1e9 / elapsed);
   // Paced, the run takes the schedule's length and no longer than one step past it.
   const std::vector<std::uint64_t> due = due_times(packets, report->start_ns, kRate);
@@ -303,12 +301,13 @@ class ScriptedMode {
     }
     return {.status = udp::WaitStatus::datagrams, .count = serve.size(), .error = 0};
   }
-  void release(std::span<const udp::Datagram> done) { released.push_back(done.size()); }
+  void release(std::span<const udp::Datagram> done) { released_.push_back(done.size()); }
   [[nodiscard]] const udp::ModeCounters& counters() const noexcept { return counters_; }
-
-  std::vector<std::size_t> released;
+  // The size of each release(), in order.
+  [[nodiscard]] const std::vector<std::size_t>& released() const noexcept { return released_; }
 
  private:
+  std::vector<std::size_t> released_;
   std::vector<std::vector<Bytes>> batches_;
   udp::WaitStatus last_;
   std::size_t next_ = 0;
@@ -349,9 +348,9 @@ TEST(ReceiveLoop, BatchesAreHandedOnInOrderAndReleasedWhole) {
   const udp::ReceiveOutcome outcome = udp::receive_until_end(mode, feed, batch);
   EXPECT_EQ(outcome.end, udp::ReceiveEnd::end_of_session);
   EXPECT_EQ(sink.frames, packets->messages());
-  ASSERT_EQ(mode.released.size(), batches.size());
+  ASSERT_EQ(mode.released().size(), batches.size());
   for (std::size_t i = 0; i < batches.size(); ++i) {
-    EXPECT_EQ(mode.released[i], batches[i].size());
+    EXPECT_EQ(mode.released()[i], batches[i].size());
   }
 }
 
@@ -359,14 +358,14 @@ TEST(ReceiveLoop, ItStopsAtTheEndOfSessionWithTheRestUnread) {
   const Bytes stream = itch::fixtures::all_messages_stream();
   const auto packets = mold::build_packets(stream, {});
   ASSERT_TRUE(packets.has_value());
-  std::vector<std::vector<Bytes>> batches{datagrams_of(*packets), datagrams_of(*packets)};
+  const std::vector<std::vector<Bytes>> batches{datagrams_of(*packets), datagrams_of(*packets)};
   ScriptedMode mode{batches};
   CountFrames sink;
   mold::FeedHandler feed{packets->plan().session, 1, sink};
   std::array<udp::Datagram, udp::kMostBatch> batch{};
   const udp::ReceiveOutcome outcome = udp::receive_until_end(mode, feed, batch);
   EXPECT_EQ(outcome.end, udp::ReceiveEnd::end_of_session);
-  EXPECT_EQ(mode.released.size(), 1U);
+  EXPECT_EQ(mode.released().size(), 1U);
 }
 
 TEST(ReceiveLoop, AnIdleTimeoutOrAFailureEndsItShort) {
@@ -435,9 +434,10 @@ TEST(RecvfromMode, EachDatagramArrivesWholeAndInOrder) {
 TEST(Sockets, TheReceiveBufferIsReadBack) {
   auto pair = udp::open_loopback_pair();
   ASSERT_TRUE(pair.has_value());
-  const auto size = udp::set_receive_buffer(pair->receiver.get(), 1 << 20);
+  constexpr int kAsked = 1024 * 1024;
+  const auto size = udp::set_receive_buffer(pair->receiver.get(), kAsked);
   ASSERT_TRUE(size.has_value());
-  EXPECT_EQ(size->requested, 1 << 20);
+  EXPECT_EQ(size->requested, kAsked);
   EXPECT_GT(size->read_back, 0);
 }
 
@@ -451,9 +451,11 @@ Bytes read_file(const std::filesystem::path& path) {
   return bytes;
 }
 
+// The books are on the heap: the analyzer takes a summary returned past a book on the
+// stack for the book's address escaping (clang-analyzer-core.StackAddressEscape).
 udp::ReplaySummary by_file(std::span<const std::byte> stream, std::uint64_t checkpoint) {
-  itch::FastBook<> book{kCapacity};
-  udp::BookDigest digest{book, checkpoint};
+  const auto book = std::make_unique<itch::FastBook<>>(kCapacity);
+  udp::BookDigest digest{*book, checkpoint};
   udp::replay_frames(stream, 0, ~0ULL, digest);
   return digest.finish();
 }
@@ -463,8 +465,8 @@ std::pair<udp::LoopbackRun, udp::ReplaySummary> by_loopback(const mold::PacketAr
                                                             const udp::LoopbackConfig& config,
                                                             std::uint64_t checkpoint,
                                                             Wrap wrap = {}) {
-  itch::FastBook<> book{kCapacity};
-  udp::BookDigest digest{book, checkpoint};
+  const auto book = std::make_unique<itch::FastBook<>>(kCapacity);
+  udp::BookDigest digest{*book, checkpoint};
   auto run = udp::run_loopback_s1(packets, config, digest, [] {}, wrap);
   EXPECT_TRUE(run.has_value());
   return {std::move(*run), digest.finish()};
@@ -569,6 +571,7 @@ TEST(Loopback, ALostPacketIsSeenAndTheBookDiffers) {
   ASSERT_TRUE(packets.has_value());
   constexpr std::size_t kLost = 7;
   struct Losing {
+    explicit Losing(udp::ConnectedSocket through) noexcept : socket{through} {}
     udp::ConnectedSocket socket;
     std::size_t sends = 0;
     udp::SendResult send(std::span<const std::byte> datagram) {
@@ -576,9 +579,8 @@ TEST(Loopback, ALostPacketIsSeenAndTheBookDiffers) {
     }
   };
   const std::uint64_t checkpoint = packets->messages() - 1;
-  const auto [run, summary] =
-      by_loopback(*packets, {}, checkpoint,
-                  [](udp::ConnectedSocket socket) { return Losing{.socket = socket}; });
+  const auto [run, summary] = by_loopback(
+      *packets, {}, checkpoint, [](udp::ConnectedSocket socket) { return Losing{socket}; });
   EXPECT_EQ(run.sequence.gaps, 1U);
   EXPECT_EQ(run.sequence.lost, packets->ref(kLost).messages);
   EXPECT_NE(summary, by_file(stream, checkpoint));

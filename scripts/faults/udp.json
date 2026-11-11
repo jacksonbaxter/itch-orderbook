@@ -350,8 +350,8 @@
       "mutations": [
         {
           "file": "include/itch/mold_packets.hpp",
-          "old": "        (kHeaderBytes + open_bytes + block > plan.max_datagram ||",
-          "new": "        (open_bytes + block > plan.max_datagram ||"
+          "old": "    return kHeaderBytes + open_bytes_ + block > plan_.max_datagram ||",
+          "new": "    return open_bytes_ + block > plan_.max_datagram ||"
         }
       ],
       "build": {
@@ -428,8 +428,8 @@
       "mutations": [
         {
           "file": "include/itch/mold_packets.hpp",
-          "old": "  close();\n  control(kHeartbeatCount);\n  control(kEndOfSessionCount);\n",
-          "new": "  close();\n  control(kEndOfSessionCount);\n"
+          "old": "    close();\n    control(kHeartbeatCount);\n    control(kEndOfSessionCount);\n",
+          "new": "    close();\n    control(kEndOfSessionCount);\n"
         }
       ],
       "build": {

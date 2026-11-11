@@ -165,8 +165,11 @@ struct ReceiveOutcome {
 // arrival order, release, until the feed has seen its end of session. It allocates
 // nothing; the batch is the caller's.
 template <ReceiveMode Mode, mold::FrameSink Sink>
-[[nodiscard]] ReceiveOutcome receive_until_end(Mode& mode, mold::FeedHandler<Sink>& feed,
-                                               std::span<Datagram> batch) noexcept {
+[[nodiscard]] ReceiveOutcome receive_until_end(
+    Mode& mode, mold::FeedHandler<Sink>& feed,
+    std::span<Datagram> batch) noexcept(noexcept(mode.wait(batch)) &&
+                                        noexcept(mode.release(std::span<const Datagram>{})) &&
+                                        noexcept(feed.on_datagram(std::span<const std::byte>{}))) {
   while (!feed.ended()) {
     const WaitResult result = mode.wait(batch);
     if (result.status == WaitStatus::idle_timeout) {

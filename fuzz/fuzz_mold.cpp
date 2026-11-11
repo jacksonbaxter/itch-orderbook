@@ -75,7 +75,7 @@ void check_decode(std::span<const std::byte> datagram) {
 
 struct CountFrames {
   std::uint64_t frames = 0;
-  void operator()(const itch::Frame& frame) noexcept {
+  void operator()(const itch::Frame& frame) {
     FUZZ_CHECK(!itch::is_terminal(frame.status));
     ++frames;
   }

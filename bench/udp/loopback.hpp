@@ -34,7 +34,7 @@ struct LoopbackConfig {
   SendPlan send;
   int sender_core = -1;  // -1 asks for no pin. Only Linux can grant one.
   int receiver_core = -1;
-  int receive_buffer = 4 << 20;  // Asked for; what the kernel gave is read back.
+  int receive_buffer = 4 * 1024 * 1024;  // Asked for; what the kernel gave is read back.
   std::chrono::milliseconds idle_timeout{2000};
 };
 

@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <utility>
 
 #include "itch/mold.hpp"
 #include "itch/reader.hpp"
@@ -45,7 +46,8 @@ class FeedHandler {
   FeedHandler(Session session, std::uint64_t first_sequence, Sink& sink) noexcept
       : sequence_{session, first_sequence}, sink_{&sink} {}
 
-  void on_datagram(std::span<const std::byte> datagram) noexcept {
+  void on_datagram(std::span<const std::byte> datagram) noexcept(
+      noexcept(std::declval<Sink&>()(std::declval<const Frame&>()))) {
     ++counts_.datagrams;
     counts_.bytes += datagram.size();
     const Packet packet = decode(datagram);

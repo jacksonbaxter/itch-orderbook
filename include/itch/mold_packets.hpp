@@ -125,8 +125,8 @@ class PacketArray {
   }
 
  private:
-  friend std::expected<PacketArray, BuildFailure> build_packets(std::span<const std::byte>,
-                                                                const PacketPlan&);
+  friend std::expected<PacketArray, BuildFailure> build_packets(std::span<const std::byte> input,
+                                                                const PacketPlan& plan);
   PacketPlan plan_;
   std::vector<std::byte> bytes_;
   std::vector<PacketRef> refs_;
@@ -140,48 +140,133 @@ namespace detail {
 inline constexpr std::size_t kTimestampOffset = 5;
 inline constexpr std::size_t kTimestampEnd = kTimestampOffset + 6;
 
-// One walk of the slice, calling emit(header, blocks, timestamp_ns) for each packet in
-// order, blocks empty for a heartbeat and the end of session.
-template <class Emit>
-[[nodiscard]] std::expected<void, BuildFailure> pack(std::span<const std::byte> input,
-                                                     const PacketPlan& plan, const Emit& emit) {
-  FrameReader reader{input};
-  bool slice_reached = true;
+// Reads past the frames before the slice. False when the input ends first, so the slice
+// is empty.
+[[nodiscard]] inline std::expected<bool, BuildFailure> skip_to_slice(FrameReader& reader,
+                                                                     const PacketPlan& plan) {
   for (std::uint64_t skipped = 0; skipped < plan.first_frame; ++skipped) {
     const Frame frame = reader.next();
     if (frame.status == FrameStatus::end_of_input) {
-      slice_reached = false;
-      break;
+      return false;
     }
     if (is_terminal(frame.status)) {
       return std::unexpected(
           BuildFailure{.error = BuildError::truncated_input, .offset = frame.offset});
     }
   }
+  return true;
+}
 
-  std::uint64_t next = plan.first_sequence;
-  std::uint64_t last_ts = 0;
-  bool have_last_ts = false;
-  bool open = false;
-  std::size_t open_start = 0;
-  std::size_t open_bytes = 0;
-  std::uint16_t open_count = 0;
-  std::uint64_t open_sequence = 0;
-  std::uint64_t open_ts = 0;
-  bool have_open_ts = false;
-  const auto close = [&] {
-    if (open) {
-      emit(Header{.session = plan.session, .sequence = open_sequence, .count = open_count},
-           input.subspan(open_start, open_bytes), open_ts);
-      open = false;
+// The packet being filled, and the packets it hands to emit(header, blocks, timestamp_ns)
+// in order, blocks empty for a heartbeat and the end of session.
+template <class Emit>
+class Packer {
+ public:
+  Packer(std::span<const std::byte> input, const PacketPlan& plan, const Emit& emit)
+      : input_{input}, plan_{plan}, emit_{emit}, next_{plan.first_sequence} {}
+
+  // One frame of the slice into the open packet, a heartbeat and a new packet first if
+  // it calls for them.
+  [[nodiscard]] std::expected<void, BuildFailure> take(const Frame& frame) {
+    const std::size_t block = kBlockPrefix + frame.payload.size();
+    if (kHeaderBytes + block > plan_.max_datagram) {
+      return std::unexpected(
+          BuildFailure{.error = BuildError::oversized_frame, .offset = frame.offset});
     }
-  };
-  const auto control = [&](std::uint16_t count) {
-    emit(Header{.session = plan.session, .sequence = next, .count = count},
-         std::span<const std::byte>{}, last_ts);
-  };
+    const bool has_ts =
+        frame.status == FrameStatus::message && frame.payload.size() >= kTimestampEnd;
+    const std::uint64_t ts = has_ts ? read_be48(frame.payload.data() + kTimestampOffset) : 0;
+    if (has_ts && have_last_ts_ && plan_.heartbeat_gap_ns != 0 && ts > last_ts_ &&
+        ts - last_ts_ >= plan_.heartbeat_gap_ns) {
+      close();
+      control(kHeartbeatCount);
+    }
+    if (open_ && full_for(block, has_ts, ts)) {
+      close();
+    }
+    if (!open_) {
+      start(frame.offset);
+    }
+    open_bytes_ += block;
+    ++open_count_;
+    ++next_;
+    if (has_ts) {
+      last_ts_ = ts;
+      have_last_ts_ = true;
+      if (!have_open_ts_) {
+        open_ts_ = ts;
+        have_open_ts_ = true;
+      }
+    }
+    return {};
+  }
 
-  for (std::uint64_t taken = 0; slice_reached && taken < plan.frame_limit; ++taken) {
+  // The last packet, then a heartbeat and the end of session.
+  void finish() {
+    close();
+    control(kHeartbeatCount);
+    control(kEndOfSessionCount);
+  }
+
+ private:
+  // Whether the open packet must close before a block of this size and time.
+  [[nodiscard]] bool full_for(std::size_t block, bool has_ts, std::uint64_t ts) const noexcept {
+    return kHeaderBytes + open_bytes_ + block > plan_.max_datagram ||
+           open_count_ == plan_.max_messages ||
+           (plan_.flush_gap_ns != 0 && has_ts && have_open_ts_ && ts > open_ts_ &&
+            ts - open_ts_ > plan_.flush_gap_ns);
+  }
+
+  void start(std::size_t offset) noexcept {
+    open_ = true;
+    open_start_ = offset;
+    open_bytes_ = 0;
+    open_count_ = 0;
+    open_sequence_ = next_;
+    open_ts_ = last_ts_;
+    have_open_ts_ = false;
+  }
+
+  void close() {
+    if (open_) {
+      emit_(Header{.session = plan_.session, .sequence = open_sequence_, .count = open_count_},
+            input_.subspan(open_start_, open_bytes_), open_ts_);
+      open_ = false;
+    }
+  }
+
+  void control(std::uint16_t count) {
+    emit_(Header{.session = plan_.session, .sequence = next_, .count = count},
+          std::span<const std::byte>{}, last_ts_);
+  }
+
+  std::span<const std::byte> input_;
+  PacketPlan plan_;
+  Emit emit_;  // The callers' lambdas hold references, so a copy writes where they do.
+  std::uint64_t next_;
+  std::uint64_t last_ts_ = 0;
+  bool have_last_ts_ = false;
+  bool open_ = false;
+  std::size_t open_start_ = 0;
+  std::size_t open_bytes_ = 0;
+  std::uint16_t open_count_ = 0;
+  std::uint64_t open_sequence_ = 0;
+  std::uint64_t open_ts_ = 0;
+  bool have_open_ts_ = false;
+};
+
+// One walk of the slice, calling emit(header, blocks, timestamp_ns) for each packet in
+// order.
+template <class Emit>
+[[nodiscard]] std::expected<void, BuildFailure> pack(std::span<const std::byte> input,
+                                                     const PacketPlan& plan, const Emit& emit) {
+  FrameReader reader{input};
+  const auto reached = skip_to_slice(reader, plan);
+  if (!reached) {
+    return std::unexpected(reached.error());
+  }
+  Packer<Emit> packer{input, plan, emit};
+  for (std::uint64_t taken = 0; *reached && taken < plan.frame_limit; ++taken) {
     const Frame frame = reader.next();
     if (is_terminal(frame.status)) {
       if (frame.status != FrameStatus::end_of_input) {
@@ -190,49 +275,12 @@ template <class Emit>
       }
       break;
     }
-    const std::size_t block = kBlockPrefix + frame.payload.size();
-    if (kHeaderBytes + block > plan.max_datagram) {
-      return std::unexpected(
-          BuildFailure{.error = BuildError::oversized_frame, .offset = frame.offset});
-    }
-    const bool has_ts =
-        frame.status == FrameStatus::message && frame.payload.size() >= kTimestampEnd;
-    const std::uint64_t ts = has_ts ? read_be48(frame.payload.data() + kTimestampOffset) : 0;
-    if (has_ts && have_last_ts && plan.heartbeat_gap_ns != 0 && ts > last_ts &&
-        ts - last_ts >= plan.heartbeat_gap_ns) {
-      close();
-      control(kHeartbeatCount);
-    }
-    if (open &&
-        (kHeaderBytes + open_bytes + block > plan.max_datagram || open_count == plan.max_messages ||
-         (plan.flush_gap_ns != 0 && has_ts && have_open_ts && ts > open_ts &&
-          ts - open_ts > plan.flush_gap_ns))) {
-      close();
-    }
-    if (!open) {
-      open = true;
-      open_start = frame.offset;
-      open_bytes = 0;
-      open_count = 0;
-      open_sequence = next;
-      open_ts = last_ts;
-      have_open_ts = false;
-    }
-    open_bytes += block;
-    ++open_count;
-    ++next;
-    if (has_ts) {
-      last_ts = ts;
-      have_last_ts = true;
-      if (!have_open_ts) {
-        open_ts = ts;
-        have_open_ts = true;
-      }
+    const auto took = packer.take(frame);
+    if (!took) {
+      return std::unexpected(took.error());
     }
   }
-  close();
-  control(kHeartbeatCount);
-  control(kEndOfSessionCount);
+  packer.finish();
   return {};
 }
 
