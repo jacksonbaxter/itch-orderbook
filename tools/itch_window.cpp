@@ -1,4 +1,4 @@
-// carteret's window-width experiment, as counts over a day of this book (NOTES.md, "carteret's
+// carteret's window-width experiment, as counts over a day of this book (docs/NOTES.md, "carteret's
 // layout experiments on our book"). Nothing here is timed, and every count is the same on any
 // host.
 //

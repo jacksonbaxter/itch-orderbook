@@ -139,7 +139,7 @@ TEST(NodePool, ItRefusesPastItsCapacityAndTakesBackAfterAGiveBack) {
 
 // Every page is touched in the constructor, so writing every node faults nothing in. Under
 // ThreadSanitizer the first write to each page faults in its shadow, about one fault for each
-// of the pool's 16 KiB pages on this Mac where an uninstrumented write faults none (NOTES.md,
+// of the pool's 16 KiB pages on this Mac where an uninstrumented write faults none (docs/NOTES.md,
 // "The node pool's fault test under TSan"), so there the count is printed and not judged.
 TEST(NodePool, EveryNodeIsFaultedInBeforeTheFirstIsTaken) {
   constexpr std::uint32_t kNodes = 1U << 18U;  // 4 MiB of nodes.

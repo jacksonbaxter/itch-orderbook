@@ -42,7 +42,7 @@ CLEAN_FILES = {
     "include/itch/mm/attribution.hpp": ('#pragma once\n#include "itch/mm/fills.hpp"\n'
                                         "// Never reads the ledger.\nint attribute();\n"),
     "include/itch/mm/fills.hpp": "#pragma once\nint fill();\n",
-    "NOTES.md": "Notes.\n",
+    "docs/NOTES.md": "Notes.\n",
     "results/run.md": "Host: debian.\n",
     ".github/workflows/ci.yml": f"jobs:\n  a:\n    steps:\n      - uses: {PINNED} # v1.2.3\n",
     "docs/index.html": ("<!doctype html><html><body><h1>Replay <code>09:30</code></h1>\n"
@@ -189,19 +189,19 @@ class Gates(unittest.TestCase):
 
     def test_home_path(self):
         for path in (HOME, LINUX_HOME, "C:" + chr(92) + "Users" + chr(92) + "someone"):
-            for name in ("scripts/tool.py", "NOTES.md"):
+            for name in ("scripts/tool.py", "docs/NOTES.md"):
                 with self.subTest(path=path, name=name):
                     self.reset()
                     self.assert_only_gate_fails("home-path", name, f"path = {path}data\n")
 
     def test_relative_paths_are_allowed(self):
-        self.assert_passes("NOTES.md", "See data/12302019 and scripts/tool.py.\n")
+        self.assert_passes("docs/NOTES.md", "See data/12302019 and scripts/tool.py.\n")
 
     def test_private_address(self):
         for address in (TAILNET_ADDRESS, LAN_ADDRESS):
             with self.subTest(address):
                 self.reset()
-                self.assert_only_gate_fails("private-address", "NOTES.md", f"host {address}\n")
+                self.assert_only_gate_fails("private-address", "docs/NOTES.md", f"host {address}\n")
 
     def test_private_name(self):
         planted = "some" + "host-name"
@@ -222,10 +222,10 @@ class Gates(unittest.TestCase):
         os.environ[gates.PRIVATE_NAMES_ENV] = planted
         self.addCleanup(os.environ.pop, gates.PRIVATE_NAMES_ENV, None)
         self.assert_passes("results/run.md", f"x{planted}y and {planted}_z, host debian\n")
-        self.assert_passes("NOTES.md", f"The flamegraph names {planted} nowhere.\n")
+        self.assert_passes("docs/NOTES.md", f"The flamegraph names {planted} nowhere.\n")
 
     def test_public_numbers_are_allowed(self):
-        self.assert_passes("NOTES.md", "version 1.18.0, ratio 100.5, address 8.8.8.8\n")
+        self.assert_passes("docs/NOTES.md", "version 1.18.0, ratio 100.5, address 8.8.8.8\n")
 
     def test_held_vendor(self):
         for name in ("scripts/tool.py", "src/parser.cpp", "results/table.md.txt"):
@@ -234,7 +234,7 @@ class Gates(unittest.TestCase):
                 self.assert_only_gate_fails("held-vendor", name, f"name = '{VENDOR.lower()}'\n")
 
     def test_prose_may_discuss_the_held_vendor(self):
-        self.assert_passes("NOTES.md", f"{VENDOR} stays held until the user decides.\n")
+        self.assert_passes("docs/NOTES.md", f"{VENDOR} stays held until the user decides.\n")
 
     def test_no_conditional_compilation(self):
         for directive in ("#ifdef ITCH_FAULT\n", "#if defined(TESTING)\n", "#  ifndef X\n"):
@@ -352,7 +352,7 @@ class Gates(unittest.TestCase):
         scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name).resolve()
-        self.plant({"NOTES.md": "Only prose.\n"})
+        self.plant({"docs/NOTES.md": "Only prose.\n"})
         code, output = self.run_gates()
         self.assertEqual(code, 1)
         self.assertIn("FAIL wire-pointer-cast: scanned no files", output)

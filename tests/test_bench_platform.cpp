@@ -367,8 +367,8 @@ TEST(BenchCrossCore, NoOffsetFitsAClockThatWentBackwards) {
 
 // On a real machine, any two cores read one clock, so the bound holds zero. In a virtual
 // machine it need not: on 2026-11-10 a GitHub x86-64 runner gave a bound that held together
-// and left zero out, and passed on a rerun on another runner (NOTES.md, "The cross-core test on
-// shared runners"). There the trips still run, and the bound is printed and not judged.
+// and left zero out, and passed on a rerun on another runner (docs/NOTES.md, "The cross-core
+// test on shared runners"). There the trips still run, and the bound is printed and not judged.
 TEST(BenchCrossCore, TheLiveClocksAgreeAcrossTwoThreads) {
   std::vector<CrossCoreTrip> buffer(1'000);
   const CrossCoreRun run = check_cross_core(-1, -1, buffer);

@@ -39,7 +39,7 @@ Host: **macOS (M4 Max)**. Numbers from the two hosts are never mixed.
 - measure_load_end: measure.sh: end load1=1.44 exit=0 at=2026-11-05T21:02:46Z written-by=rerun.sh-inside-measure.sh-pid-5566
 - run_started: 2026-11-05T15:32:08Z
 - run_finished: 2026-11-05T21:02:46Z
-- interference: sampled every 2 s over each process's whole span; no other process above 20% CPU during any of them (NOTES.md, "The Mac rule for other work")
+- interference: sampled every 2 s over each process's whole span; no other process above 20% CPU during any of them (docs/NOTES.md, "The Mac rule for other work")
 - summary: fastest form threaded; E7 not judged on this host, no branch-miss counter
 
 ## What was run

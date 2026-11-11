@@ -68,7 +68,7 @@ by changing one policy of this book and holding the rest:
   counted in `results/window_12302019.md`.
 
 Every arm gives the same answers on every message: each passed the oracle over the whole
-day (NOTES.md).
+day (docs/NOTES.md).
 
 Counted on this host, over each whole timed pass, between the counter group's start and stop: cycles, instructions, branch misses, `cache-misses`, L2 misses, `r0843:u`, floor on DRAM demand fills.
 

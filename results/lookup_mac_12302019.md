@@ -39,7 +39,7 @@ Host: **macOS (M4 Max)**. Numbers from the two hosts are never mixed.
 - measure_load_end: measure.sh: end load1=1.27 exit=0 at=2026-11-05T20:26:03Z
 - run_started: 2026-11-05T15:17:01Z
 - run_finished: 2026-11-05T20:26:03Z
-- interference: sampled every 2 s over each process's whole span; no other process above 20% CPU during any of them (NOTES.md, "The Mac rule for other work")
+- interference: sampled every 2 s over each process's whole span; no other process above 20% CPU during any of them (docs/NOTES.md, "The Mac rule for other work")
 - summary: paged-flat lookup 8.95 ns, 19.6% of the pass; hash-flat lookup 5.03 ns, 9.1% of the pass
 
 ## What was run

@@ -286,7 +286,7 @@ The reason is on the SEC's method page: until Nov 3, 2025 a round lot is 100 sha
 - measure.sh's start line carries the hostname. `stamp_load.py` swaps that one word for the fixed host label, since the header may never hold a hostname, and refuses lines that do not bracket the run.
 - `/usr/bin/time -l` reports peak RSS across the whole process tree but peak footprint only for its direct child, which here is the Python driver. The file says so. The 0.02 GiB is the driver's.
 
-**The harness proof on 12302019.** [results/bench_replay_stub_mac_12302019.md](results/bench_replay_stub_mac_12302019.md), P-0001. Stub book, macOS, not pinned.
+**The harness proof on 12302019.** [results/bench_replay_stub_mac_12302019.md](../results/bench_replay_stub_mac_12302019.md), P-0001. Stub book, macOS, not pinned.
 
 | Prediction | What happened |
 |---|---|
@@ -314,7 +314,7 @@ Everything below is from `debian`, on the stub book where a book is involved. Co
 
 **`rdpmc`.** User-mode `rdpmc` works at `perf_event_paranoid=2`, for all five events in the group, with `nmi_watchdog=1`. It is fenced with `lfence` on both sides now, because `rdpmc` does not serialise and a count could otherwise land on the wrong message.
 
-**The chase, P-0002: held in all 3 runs.** [results/chase_debian.md](results/chase_debian.md), commit `9392a9ba8a5b`. `r0843:u` is 0.0000 per load at 64 KB and 128 KB, and 0.97 and 0.99 at 64 MB and 256 MB. `cache-misses` is 0.76 to 0.92 between L2 and L3, where `r0843:u` is at most 0.03. So `r0843:u` may stand in for last-level misses here, and `cache-misses` counts L2 misses. The widest `rdpmc` gap against `read()` on those two events is 0.000008 per load. `r0964:u`, opened raw in the same group, matches `cache-misses` to the event. sysfs gives `event=0x64,umask=0x09`, which is the PPR's PMCx064 bits 3 and 0 (55570-B1 Rev 3.14, p. 170). That PPR is for Model 18h and this CPU is Model 11h, so the measurement is what ties the bits to this part.
+**The chase, P-0002: held in all 3 runs.** [results/chase_debian.md](../results/chase_debian.md), commit `9392a9ba8a5b`. `r0843:u` is 0.0000 per load at 64 KB and 128 KB, and 0.97 and 0.99 at 64 MB and 256 MB. `cache-misses` is 0.76 to 0.92 between L2 and L3, where `r0843:u` is at most 0.03. So `r0843:u` may stand in for last-level misses here, and `cache-misses` counts L2 misses. The widest `rdpmc` gap against `read()` on those two events is 0.000008 per load. `r0964:u`, opened raw in the same group, matches `cache-misses` to the event. sysfs gives `event=0x64,umask=0x09`, which is the PPR's PMCx064 bits 3 and 0 (55570-B1 Rev 3.14, p. 170). That PPR is for Model 18h and this CPU is Model 11h, so the measurement is what ties the bits to this part.
 
 Two things the chase showed that nobody asked it. `cache-misses` passes one per load above L3, 1.16 at 64 MB and 1.62 at 256 MB, with one demand load per step, so it counts more than demand data. The page walker is the likely source, on 4 KB pages, and that is unmeasured. And a chase says nothing about prefetched lines: `r0843:u` counts demand fills only, so a book number from it is a floor on last-level misses.
 
@@ -324,13 +324,13 @@ Two things the chase showed that nobody asked it. `cache-misses` passes one per 
 
 The likely cause is the order inside the harness, though nothing recorded which allocation did it. The page cache was full, with 219 MB free, and the 1 GiB sample arena is allocated after the warm-up, so it would push a few file pages out. The check also ran before each pass built its book, so a page lost to that allocation would never have been seen. Now residency is asked after the pass's allocations, any page they pushed out is read back first, and residency is asked again when the pass ends, with no touching, so a page lost in a timed span is a refusal. The refusal itself never moved.
 
-**The stub proof, P-0006: held.** [results/bench_replay_stub_debian_12302019.md](results/bench_replay_stub_debian_12302019.md), commit `92e3f74c5766`. Every page was resident at each end of each pass, in 3 repetitions, pinned to core 4, no migrations. 2.28 to 2.49 million messages/s at CV 4.34%, which is close to the 5% limit. Ratio 1.09 to 1.15. p50 resolved. Peak RSS 8.90 GiB, from `getrusage`: `/usr/bin/time` is not installed on `debian`, and GNU time does not pass SIGTERM on, so it would break `measure.sh`'s signal path anyway. Over the whole counter pass, the widest `rdpmc` gap against `read()` is 11,150 of 687.8 billion cycles, and 13 of 1.28 billion on `r0843:u`.
+**The stub proof, P-0006: held.** [results/bench_replay_stub_debian_12302019.md](../results/bench_replay_stub_debian_12302019.md), commit `92e3f74c5766`. Every page was resident at each end of each pass, in 3 repetitions, pinned to core 4, no migrations. 2.28 to 2.49 million messages/s at CV 4.34%, which is close to the 5% limit. Ratio 1.09 to 1.15. p50 resolved. Peak RSS 8.90 GiB, from `getrusage`: `/usr/bin/time` is not installed on `debian`, and GNU time does not pass SIGTERM on, so it would break `measure.sh`'s signal path anyway. Over the whole counter pass, the widest `rdpmc` gap against `read()` is 11,150 of 687.8 billion cycles, and 13 of 1.28 billion on `r0843:u`.
 
 The per-message means include the counter reads themselves, and no empty span is measured or subtracted. Each span from the first event's read to its second holds the other four reads, each with two `lfence`s. So `instructions` and `cycles` per message are too high by an amount not yet known, and the fill counts probably much less so. That has to be measured before T-PERF-1 or T-PERF-2 quotes a figure.
 
 The driver is `measure.sh`'s child here and the benchmark is the driver's, which forwards signals. The chase and the flamegraph ran under `measure.sh` directly.
 
-**Flamegraph, P-0005: held.** `perf record -g --user-callchains -e cycles:u` on a separate frame-pointer build, commit `92e3f74c5766`, 83,232 samples at 199 Hz, folded to 97 stacks. Stacks run from `main` to `FastBook::apply`, which is 93% of the cycles. No kernel frame appears, and none can: `cycles:k` is refused at `perf_event_paranoid=2`, exit 255, so time inside the kernel shows only as a gap. [results/flamegraph_stub_debian_12302019.svg](results/flamegraph_stub_debian_12302019.svg) has no home paths or addresses, at 32 KB. It says nothing about the real book. The frame-pointer throughput delta is not published: one run is not a measurement of it.
+**Flamegraph, P-0005: held.** `perf record -g --user-callchains -e cycles:u` on a separate frame-pointer build, commit `92e3f74c5766`, 83,232 samples at 199 Hz, folded to 97 stacks. Stacks run from `main` to `FastBook::apply`, which is 93% of the cycles. No kernel frame appears, and none can: `cycles:k` is refused at `perf_event_paranoid=2`, exit 255, so time inside the kernel shows only as a gap. [results/flamegraph_stub_debian_12302019.svg](../results/flamegraph_stub_debian_12302019.svg) has no home paths or addresses, at 32 KB. It says nothing about the real book. The frame-pointer throughput delta is not published: one run is not a measurement of it.
 
 **Faults.** Fourteen new ones in `scripts/faults/bench.json`, and two for the residency order. The chase verdict, its table, the event encoding, the `rdpmc` agreement and the kernel mapping all run on the Mac from invented records in `tests/fixtures/chase`. What the PMU does can only be shown on `debian`, which is what P-0003 is for.
 
@@ -643,7 +643,7 @@ An example, with L_compute 10 ns and L_oe 50 ns. The bid at $10.00 holds R1 100 
 
 **The 12302019 smoke.** `itch_backtest data/12302019.NASDAQ_ITCH50 --date 20191230` under `heavy.sh` and `/usr/bin/time -l`, at 8c05843, with the trivial strategy in `tests/backtest/joiner.hpp` on AAPL, MSFT, SPY and TSLA: 268,744,780 messages, 857,080 decisions, 346,265 fills (30,711 maker, 315,554 taker, 10,927 by crossing adds), 0 allocations after construction, no refused message, no ring overflow, no fee error, and the replayed book byte for byte equal to a plain book. Peak RSS 9,805,348,864 bytes, the mapped day counted; peak footprint 1,558,011,128 bytes. Repeated at 9d1108b, after the clang-tidy changes: every line the same, event hash `57fa4e60511e29e0` both times, peak footprint 1,557,994,744 bytes. No timing is reported: it is not a benchmark.
 
-**Queue anomalies on the real day.** That run counted 1,347, on 810 simulated orders, all in state T, all at S's own price. A scratch build that printed each one (not committed) found `ahead` equal to an independent recount from the real L3 book in all 1,347: the engine's state is right, and in each case the feed executed an order that joined the level after S while orders that joined before S still rested there, 116 times with only odd lots ahead and 1,231 with round lots. Strict time priority among displayed orders does not explain that, and the cause is not found. The engine stays conservative and fills nothing on these. It is open in TASKS.md, to settle before T-BT-1 reports fill rates. Settled in "Queue jumps" below: they are orders held for the open and shown late, and printable `C` messages at an improved price.
+**Queue anomalies on the real day.** That run counted 1,347, on 810 simulated orders, all in state T, all at S's own price. A scratch build that printed each one (not committed) found `ahead` equal to an independent recount from the real L3 book in all 1,347: the engine's state is right, and in each case the feed executed an order that joined the level after S while orders that joined before S still rested there, 116 times with only odd lots ahead and 1,231 with round lots. Strict time priority among displayed orders does not explain that, and the cause is not found. The engine stays conservative and fills nothing on these. It is open in docs/TASKS.md, to settle before T-BT-1 reports fill rates. Settled in "Queue jumps" below: they are orders held for the open and shown late, and printable `C` messages at an improved price.
 
 **What didn't work.**
 
@@ -802,7 +802,7 @@ The old rule was not conservative on these. With `ahead` at zero, a late add exe
 
 **P-0102 against what ran.** Held: the extract's 5,425,845 messages, 4 fewer than queuetruth's; the rate, 7.80 M inside 4 to 12 M and near the 7 M expected, so met; CV under 5%; the extract in 1.84 s, inside 1 to 10; identical counts and hash; 0 queue anomalies; 100,000 placed with none skipped, each cancelled once; 131,519 fills, at least 10,000; peak RSS 8.67 GiB, inside 8.5 to 10.
 
-**Left open.** T-BT-1 on `debian` (TASKS.md). The 4 messages between the extract and queuetruth's count are not traced; its count was taken from its results page, not reproduced.
+**Left open.** T-BT-1 on `debian` (docs/TASKS.md). The 4 messages between the extract and queuetruth's count are not traced; its count was taken from its results page, not reproduced.
 
 ## P-0015: every book design on `debian` with the day in memory, 2026-11-04
 
@@ -1007,11 +1007,11 @@ Next to BENCHMARKS.md: 11 of 14 runs lost money at the base tier, as carteret's 
 - P-0021 held: on `debian` not refuted, the best D (16) inside 8 to 32 with a gain (16.41%) inside 15% to 60%, D = 4 under the best, D = 64 under the best and over D = 0, cycles falling with the time (−14.2% against −14.1%), peak RSS 8.34 GiB; on the Mac a smaller gain than on `debian` and E8 refuted there; the default kept at 0. Not held: instructions up by 15 to 60 a message (299 on `debian`, 256 on the Mac); L2 misses within 20% of D = 0 (−23%); CV under 1% at each D (D = 0 10.83% on `debian`, from one process at 4.36 M; 2.71% at D = 4); the Mac's best D gaining 0% to 30% (it lost 18%). The gain is about half of the 30% expected and a third of the evidence's 1.5 to 2 times.
 - P-0022 held: `switch` 2.03 branch misses a message on `debian`, inside 1.9 to 2.6; `table` within 0.1 of it; `predicate` 0.0000, and 24.5 and 12.7 times `switch`; `table` within 3% and `threaded` within −2% to +8% of `switch` on `debian`, both within 5% on the Mac; E7 not refuted by the letter; `predicate`'s peak RSS 0.65 GiB under `switch`'s on both hosts (7.69 against 8.34 GiB). Not held: `threaded` below `switch` by 0.05 to 0.4 misses a message (it is 0.06 above); the Mac's `table` within 10 instructions a message of `switch` (12.1 under).
 
-**Out of scope here, pointers.** carteret's layout experiments (hash policy, open addressing against chaining, window width) and attributing misses by message type, order age and structure: TASKS.md's next Book line, using `bench_counts` for the types. The 8.7% and 27.7% `U` mixes. SIMD parsing kernels (E1 to E6, E9, E11 to E13). The look-ahead on the hash arms is built and tested but measured only on `paged-flat`, the default arm.
+**Out of scope here, pointers.** carteret's layout experiments (hash policy, open addressing against chaining, window width) and attributing misses by message type, order age and structure: docs/TASKS.md's next Book line, using `bench_counts` for the types. The 8.7% and 27.7% `U` mixes. SIMD parsing kernels (E1 to E6, E9, E11 to E13). The look-ahead on the hash arms is built and tested but measured only on `paged-flat`, the default arm.
 
 ## The SPSC ring, 2026-11-05
 
-`include/itch/spsc.hpp`, the comparison and ablation in `bench/bench_spsc.cpp`, the pipeline in `bench/pipeline.hpp` and `bench/bench_pipeline.cpp`, the stress test in `tests/spsc_stress.cpp`, and three results on the Mac. Nothing here ran on `debian`; what is left for it is in TASKS.md.
+`include/itch/spsc.hpp`, the comparison and ablation in `bench/bench_spsc.cpp`, the pipeline in `bench/pipeline.hpp` and `bench/bench_pipeline.cpp`, the stress test in `tests/spsc_stress.cpp`, and three results on the Mac. Nothing here ran on `debian`; what is left for it is in docs/TASKS.md.
 
 **The ring.** Free-running 64-bit indices, so a full ring uses every slot. Each side keeps a copy of the other's index and reads the shared one only when its copy says full, or empty. The capacity is rounded up to a power of two and a slot is `index & mask`. The batch calls write or read every slot they can and store their index once. Each of the four is a switch in `SpscConfig`, so T-SPSC-2 builds one variant per change; `modulo` divides by a capacity read at run time, so the compiler cannot turn it back into a mask. Four orders and no more: publish (release), observe (acquire), return (release) and reclaim (acquire), with no fence, seq_cst or read-modify-write. The disassembly shows them as two `stlr` and two `ldapr` in the producer and an `ldapr` and an `stlur` in the consumer. The slots are a vector allocated and zeroed in the constructor, and `test_alloc` counts no allocation in any call after it, the pipeline's included.
 
@@ -1100,7 +1100,7 @@ carteret found the pipeline 1.31 times slower on x86 and single-threaded replay 
 - TSan with the four negative controls, and the x86 stress with each.
 - A cross-core check of the timer before any one-way latency there.
 
-On the Mac, the reason padding-8 runs faster saturated. TASKS.md lists each.
+On the Mac, the reason padding-8 runs faster saturated. docs/TASKS.md lists each.
 
 ## The browser demo, 2026-11-05
 
@@ -1863,7 +1863,7 @@ Each packet's entry keeps its offset, size, message count and its first message'
 
 ## Replace, delete and add on the 2019 and 2026 mixes, 2026-11-10
 
-TASKS.md's line on the `U` mixes is not done. The method and the stretch day are in the tree; no number is published.
+docs/TASKS.md's line on the `U` mixes is not done. The method and the stretch day are in the tree; no number is published.
 
 **The stretch day.** Nasdaq's `S061226-v50.txt.gz` was fetched with `scripts/fetch_data.py --pin` under `heavy.sh`. Every check passed: the gzip SHA-256 and the unpacked SHA-256 match the third party's (astra-feed-engine), and so does every count by type. The manifest key is `06122026`, in the MMDDYYYY form the other keys use, since `results_table.py` and the report scripts read a day from eight digits. The day takes about 56 GiB of disk, gzip and unpacked together. Unpacked it is 41,662,444,846 bytes and 1,304,894,064 messages, with `U` at 27.72% of them. `scripts/check_census.py` agrees with every pinned count.
 
@@ -1883,7 +1883,7 @@ The 2026 day would be measured on its first 500,000,000 messages (`--messages`),
 
 ## The walk of T-BT-3's simulated levels, 2026-11-11
 
-TASKS.md's line on T-BT-3's 100,000 shadow orders is not done. The counts are in, and so is the timed method, but the method has not run on `debian` yet. Nothing in the engine changed.
+docs/TASKS.md's line on T-BT-3's 100,000 shadow orders is not done. The counts are in, and so is the timed method, but the method has not run on `debian` yet. Nothing in the engine changed.
 
 **What is walked.** The engine keeps each side's simulated orders as a doubly linked list of levels, ordered from the best price, and each level is a FIFO of orders. Six places walk the list from the best (`bench/walk_counts.hpp`):
 
@@ -1921,7 +1921,7 @@ Walks a message are about 1.08 on every 100,000-order schedule and 1.25 at 1,000
 
 **What the counts already say.**
 
-- **T-BT-3 holds fewer live orders than TASKS.md assumed.** It holds 86.4 on average over its eight sides and 191 at most, not "about 257": fills end many lives before the 60 s cancel. Its sides are shallow. A walk meets 4.37 levels on average, the median walk's side has 2 to 3, the 99th percentile 8 to 15, and the deepest 24.
+- **T-BT-3 holds fewer live orders than docs/TASKS.md assumed.** It holds 86.4 on average over its eight sides and 191 at most, not "about 257": fills end many lives before the 60 s cancel. Its sides are shallow. A walk meets 4.37 levels on average, the median walk's side has 2 to 3, the 99th percentile 8 to 15, and the deepest 24.
 - **The work is small.** A T-BT-3 message makes 1.08 walks and 2.29 walk steps: 1.77 level steps and 0.52 order steps. Each step is a dependent load on a side of at most a few dozen levels, which stays in cache. At a few ns a step, that is a few percent of `debian`'s 298 ns a message (P-0104), which is what P-0105 predicts.
 - **Depletion finds dominate the level steps, and more so as sides deepen.** They are 67% of T-BT-3's level steps, 85% at 3,600 s and 89% at 14,400 s. A cancel, delete or replace looks for a simulated level at its price by walking from the best, and most real orders' prices have no simulated level. So a depletion usually walks past every better level, and its steps grow with depth. Crosses make about 1 level step a walk on every schedule, rests and executions are few, and late adds are the same in every 100,000-order schedule. The late adds are consistent with falling in the opening minute, before any cancel, where they were orders held for the open ("Queue jumps").
 - **More orders at the same prices shift the cost to order steps.** At 1,000,000 orders the sides are only 9.16 levels deep on average, but order steps reach 8.21 a message, of which depletions make 32.6 million. Each depletion visits every simulated order on its level to update the shares ahead of it. A price-keyed lookup of the level would not remove that; only keeping `ahead` per level, rather than per order, would.
@@ -2005,3 +2005,12 @@ From about 14:10Z every Linux job failed at its `apt` step with `Temporary failu
 - Run 43041520046, 78dcd6d: attempt 1, then reruns at 15:08:19Z, 15:31:03Z, 15:54:07Z and 16:17:11Z, all four Linux jobs failing at the `apt` step with that error.
 
 The DNS fault then cleared. Attempt 6 of 43041520046 got past `apt` and showed a real failure: both GCC 14 jobs stop at `tests/test_walk_counts.cpp` line 91 with `-Werror=stringop-overflow`. Clang, macOS and Emscripten pass. Another piece owns that fix and will check it with GCC 14 on `debian`. Until it lands, every commit's GCC jobs fail the same way and `main` cannot move.
+
+## The repo's layout, 2026-11-11
+
+At the user's request, for a visitor who opens `main`: the session's instructions leave the tree, the two working files move under `docs/`, and the code gets a licence.
+
+- **CLAUDE.md.** Untracked with `git rm --cached` and ignored as `/CLAUDE.md`. It stays on disk. No history was rewritten, since every results file cites commits.
+- **docs/NOTES.md and docs/TASKS.md.** Moved with `git mv`. Every mention in code comments, scripts, the CI comment, the README and BENCHMARKS.md names the new path, and the four links here to `results/` became `../results/`. The results files that name this file are generated, so `variants_report.py`, `simd_report.py` and `mm_report.py` now write `docs/NOTES.md`, and the 14 committed files differ from before in that path only: the nine `simd_*_mac` files are byte-identical to a fresh render from their raw runs, and the others pass their generators' `--check`. The demo's gates read only `.html`, `.css` and `.js` under `docs/`, and the demo stage's browser run copies its files by name, so neither meets the two new files.
+- **What still says the old path.** `results/predictions.md` and `results/run_log.md`, which `check_predictions.py` holds unedited; `scripts/mm_evaluation.json`, fixed before any run of the market maker; and `results/fault_matrix.md`, the record of a run at b9a7d8e. Each is a record of its time, so none was changed.
+- **LICENSE.** MIT, for the project's own code. The README names what keeps its source's terms: figures from Nasdaq's sample files, MIDAS and CrossStats in `results/`, and the FlameGraph script each flamegraph SVG embeds, which is under the CDDL.

@@ -1,6 +1,6 @@
 // The per-message diff of the fast book against the reference, and the run around it.
 //
-// NOTES.md, "The oracle's proof", says what each piece covers and what it does not.
+// docs/NOTES.md, "The oracle's proof", says what each piece covers and what it does not.
 // After every message, with no sampling:
 //
 //   1. Both books gave the same status.

@@ -44,7 +44,7 @@
 // receipt, but an order held for the open is shown only when its symbol opens, after orders
 // it was received before. Such an add carries a reference below the highest its symbol has
 // already shown. On 12302019 and 10302019 every `E` hit the lowest reference at its level,
-// and every execution behind the front of a level was of a late add (NOTES.md, "Queue
+// and every execution behind the front of a level was of a late add (docs/NOTES.md, "Queue
 // jumps"). So a late add gets arrival number 0, ahead of every simulated order, and its shares
 // join `ahead` of each one resting at its price. That is exact for a simulated order that
 // arrived after the open, when every held order had been received, and errs towards fewer

@@ -8,7 +8,7 @@
 // FlatLevels, in book_levels.hpp. The default, the paged index with flat levels, is the
 // fastest arm on both hosts measured, on 12302019 with the day in memory and mapped with
 // the top tracked. It holds about three times the memory of the hash arms, nearly all of it
-// the page pool sized up front, and stays under T-BOOK-3. NOTES.md, "The default arm".
+// the page pool sized up front, and stays under T-BOOK-3. docs/NOTES.md, "The default arm".
 //
 // All storage is sized in the constructor, so apply() never allocates. Orders live in
 // a pool and sit on an intrusive FIFO per level, with the oldest order at the front, in

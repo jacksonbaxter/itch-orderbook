@@ -35,7 +35,7 @@ FetchContent_Declare(hdr_histogram
 # release asset, so its URL names the tag and not the commit. boost-1.92.0 is
 # afdfa32505af73e3d208144b3f623f0096cb62b6. folly is its release v2026.10.26.00, of which
 # ProducerConsumerQueue.h and the headers it includes are used and nothing is built: they
-# need no configure result, so folly-config.h is written empty (NOTES.md, "The SPSC ring").
+# need no configure result, so folly-config.h is written empty (docs/NOTES.md, "The SPSC ring").
 # atomic_queue is the commit of the results LC-1 cites, and xenium the commit LC-9 read.
 if(ITCH_COMPARISON_QUEUES)
   FetchContent_Declare(boost_headers

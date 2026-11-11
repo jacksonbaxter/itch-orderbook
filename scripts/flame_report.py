@@ -5,8 +5,8 @@
     perf script -i perf.data | flame_report.py fold-perf --out STACKS.folded
     flame_report.py render --folded STACKS.folded --flamegraph flamegraph.pl \\
         --record RUN.json --source perf|sample --workload NAME --day DAY --command TEXT \\
-        --prediction P-NNNN|none [--run-id ID --run-log results/run_log.md] --notes NOTES.md \\
-        --out results/flamegraph_NAME_HOST_DAY.md \\
+        --prediction P-NNNN|none [--run-id ID --run-log results/run_log.md] \\
+        --notes WHAT_IT_SHOWS.md --out results/flamegraph_NAME_HOST_DAY.md \\
         [--annotate ANNOTATE.txt --annotate-symbol NAME] [--normal FILE --frame-pointer FILE]
     flame_report.py --check FILE...
 

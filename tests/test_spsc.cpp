@@ -252,7 +252,7 @@ std::uint64_t consume(Ring& ring, std::uint64_t items, std::atomic<bool>& abando
 // batches and the consumer single pops with batches, through a small ring so that it is
 // full and empty again and again. Every item must arrive once, in order, whole. A 256-byte
 // item checks that no item arrives torn; its copy is a memcpy, which TSan on this Mac did
-// not check for the race a weakened order leaves (NOTES.md, "The SPSC ring"), so an 8-byte
+// not check for the race a weakened order leaves (docs/NOTES.md, "The SPSC ring"), so an 8-byte
 // item, copied by a single load and store, runs the same handover for TSan to see.
 template <SpscConfig Config>
 void expect_handover(std::uint64_t items) {
