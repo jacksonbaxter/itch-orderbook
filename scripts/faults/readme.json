@@ -388,6 +388,77 @@
       "expect": {
         "signature": "FAIL: test_a_day_of_another_venue_keeps_its_suffix_and_says_why_t_trade_2_did_not_run"
       }
+    },
+    {
+      "id": "readme-run-rows-skipped",
+      "breaks": "The run table skips run-log rows whose id has a suffix, as it did before 307 rows were shown: the per-process rows and the window row drop out unseen",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "RUN_ID = r\"P-\\d+-[\\w-]+\"\n",
+          "new": "RUN_ID = r\"P-\\d+-\\w+\"\n"
+        },
+        {
+          "file": "scripts/results_table.py",
+          "old": "            raise TableError(f\"results/run_log.md:{number}: a line of the table that is not a \"\n                             f\"run with five cells: {line.strip()[:80]}\")\n",
+          "new": "            continue\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-unplaced-run-row-skipped",
+      "breaks": "A line of the run log's table that is not a run is skipped instead of refused",
+      "check": "test_results_table.py test_a_run_row_the_table_cannot_place_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            raise TableError(f\"results/run_log.md:{number}: a line of the table that is not a \"\n                             f\"run with five cells: {line.strip()[:80]}\")\n",
+          "new": "            continue\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_run_row_the_table_cannot_place_is_refused"
+      }
+    },
+    {
+      "id": "readme-run-id-unchecked",
+      "breaks": "A run row whose id is not a run id reaches the table",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "results/run_log.md",
+          "old": "| P-0001-20261031T083536Z | P-0001 |",
+          "new": "| P-0001 20261031T083536Z | P-0001 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL results/run_log\\.md:\\d+: a line of the table that is not a run with five cells",
+        "exit": 1
+      }
     }
   ]
 }

@@ -12,7 +12,8 @@ neither can drop out unseen. A book benchmark file missing a field its row needs
 refused as well. An oracle or trades file runs each arm of the fast book, and a
 row says whether every arm gave its verdict. An arm that gave another one makes the row a
 failure that names it. predictions.md is not a result, and run_log.md gets its own
-table, failed runs included. Each row cites its file, so scripts/gate_numbers.py holds the
+table, every row of it, failed runs included; a line of its table that is not a run is
+refused. Each row cites its file, so scripts/gate_numbers.py holds the
 row's figures to that file.
 
 Each violation prints as `results_table: FAIL <place>: <detail>`.
@@ -36,6 +37,10 @@ VERDICT_MARK = re.compile(r"\*\*(?:Verdict: )?(PASS|FAIL|NOT_AVAILABLE)\*\*")
 TRADE_CHECKS = {"T-TRADE-1", "T-TRADE-2", "T-TRADE-3", "T-TRADE-5", "PRINTS"}
 HARNESS_LABEL = "Stub-book harness proof, not a book result."
 SHOWN = {"PASS": "PASS", "FAIL": "**FAIL**", "NOT_AVAILABLE": "**NOT AVAILABLE**"}
+RUN_HEADS = ("Run", "Prediction", "Commit", "OS", "Outcome")
+# A run's id: its prediction, the time it began, and for a run of many processes or a
+# window, what each row is of, as P-0601-20261106T031311Z_scalar-w2-1.
+RUN_ID = r"P-\d+-[\w-]+"
 
 
 class TableError(Exception):
@@ -409,11 +414,18 @@ def alloc_rows(name, text):
 
 
 def run_rows(text):
+    """A row for every line of the log's table. A line of it that is not the head, the rule
+    or a run with its five cells is refused, never skipped, so no run drops out unseen."""
     rows = []
-    for line in text.splitlines():
-        cells = [cell.strip() for cell in line.strip("|").split("|")]
-        if len(cells) != 5 or not re.fullmatch(r"P-\d+-\w+", cells[0]):
+    for number, line in enumerate(text.splitlines(), 1):
+        if not line.strip().startswith("|"):
             continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if cells == list(RUN_HEADS) or all(re.fullmatch(r"-+", cell) for cell in cells):
+            continue
+        if len(cells) != 5 or not re.fullmatch(RUN_ID, cells[0]):
+            raise TableError(f"results/run_log.md:{number}: a line of the table that is not a "
+                             f"run with five cells: {line.strip()[:80]}")
         run, prediction, commit, system, outcome = cells
         rows.append((f"`{run}`", f"`{prediction}`", f"`{commit.split()[0]}`", system,
                      f"`{outcome.split(':')[0]}`"))
@@ -556,7 +568,7 @@ def generate(root):
                                  "Total, $", "Total, ticks a share", "File"), pnl)
     lines += ["", "Every benchmark run, failed ones included, from "
                   "[results/run_log.md](results/run_log.md).", ""]
-    lines += markdown_table(("Run", "Prediction", "Commit", "OS", "Outcome"), run_rows(run_log))
+    lines += markdown_table(RUN_HEADS, run_rows(run_log))
     return lines
 
 

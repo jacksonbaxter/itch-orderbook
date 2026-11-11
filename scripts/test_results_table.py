@@ -160,6 +160,25 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("`chase verdict FAIL`", output)
         self.assertIn("`refused at repetition 1`", output)
 
+    def test_every_run_row_reaches_the_table(self):
+        _, output = self.run_table()
+        log = (self.root / "results" / "run_log.md").read_text(encoding="utf-8")
+        runs = [line for line in log.splitlines() if line.startswith("| P-")]
+        shown = [line for line in output.splitlines() if line.startswith("| `P-")]
+        self.assertEqual(len(shown), len(runs))
+        self.assertIn("| `P-0601-20261106T031311Z_scalar-w2-1` |", output)
+        self.assertIn("| `P-0024-window-12302019` |", output)
+
+    def test_a_run_row_the_table_cannot_place_is_refused(self):
+        path = self.root / "results" / "run_log.md"
+        path.write_text(path.read_text(encoding="utf-8")
+                        + "| P-0999 typed by hand | P-0999 | abc | Darwin | published |\n",
+                        encoding="utf-8")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertRegex(output, r"results_table: FAIL results/run_log\.md:\d+: a line of the "
+                                 r"table that is not a run with five cells")
+
     def test_a_changed_verdict_changes_the_table_and_fails_the_check(self):
         self.edit(ORACLE, "Verdict, strict: **FAIL**", "Verdict, strict: **PASS**")
         code, output = self.run_table("--check")
