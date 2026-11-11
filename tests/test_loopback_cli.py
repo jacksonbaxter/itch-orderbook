@@ -6,8 +6,9 @@ Usage: test_loopback_cli.py <itch_loopback> <scratch dir> <oracle fixtures> <tra
 Every fixture day passes whole, packed at the default 1,400 bytes, at the least cap a day
 packs under, one message a packet, and paced; so does a slice. Each pass prints the line
 that says this is no measurement, and no rate. The negative control loses one packet and
-must fail, with the gap seen and the book's digests apart. A truncated day, a cap no
-message fits and bad usage exit 2.
+must fail, with the gap seen and the book's digests apart; so must the controls that send
+one packet twice and flip a byte of one. A truncated day, a cap no message fits and bad
+usage exit 2.
 
 A failure prints `loopback cli: FAIL <case>: <reason>`.
 """
@@ -102,6 +103,31 @@ def main():
                          f"{got.get('loopback_lost')}"))
     if got.get("loopback_file_frame_hash") == got.get("loopback_udp_frame_hash"):
         failures.append(("lost packet", "the two paths' frames agree"))
+
+    # A packet twice: the duplicate is counted and never applied, so the two paths agree,
+    # and the check fails on the count alone.
+    twice = run(session, "--duplicate-packet", "5")
+    got = fields(twice.stdout)
+    if twice.returncode != 1 or got.get("loopback_verdict") != "FAIL":
+        failures.append(("duplicate packet", f"exit {twice.returncode}, verdict "
+                         f"{got.get('loopback_verdict')}, not 1 and FAIL"))
+    if got.get("loopback_duplicate_messages", "0") == "0":
+        failures.append(("duplicate packet", "no duplicate was counted"))
+    for key in ("frames", "frame_hash", "end_hash"):
+        if got.get(f"loopback_file_{key}") != got.get(f"loopback_udp_{key}"):
+            failures.append(("duplicate packet", f"a duplicate was applied: {key} differs"))
+
+    # A byte flipped inside a message: framing and sequence whole, so only the two paths'
+    # frames can tell.
+    flipped = run(session, "--corrupt-packet", "5")
+    got = fields(flipped.stdout)
+    if flipped.returncode != 1 or got.get("loopback_verdict") != "FAIL":
+        failures.append(("corrupt packet", f"exit {flipped.returncode}, verdict "
+                         f"{got.get('loopback_verdict')}, not 1 and FAIL"))
+    if got.get("loopback_gaps") != "0" or got.get("loopback_malformed") != "0":
+        failures.append(("corrupt packet", "the flip reached the framing or the sequence"))
+    if got.get("loopback_file_frame_hash") == got.get("loopback_udp_frame_hash"):
+        failures.append(("corrupt packet", "the two paths' frames agree"))
 
     truncated = scratch / "truncated.itch"
     truncated.write_bytes(Path(session).read_bytes()[:-3])

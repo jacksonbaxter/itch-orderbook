@@ -6,18 +6,21 @@
 //     itch_loopback FILE [--first N] [--frames N] [--datagram BYTES] [--max-messages N]
 //                   [--flush-gap-ns N] [--heartbeat-gap-ns N] [--rate MSGS_PER_S]
 //                   [--core N] [--receive-buffer BYTES] [--timeout-ms N]
-//                   [--checkpoint N] [--drop-packet I]
+//                   [--checkpoint N] [--drop-packet I] [--duplicate-packet I]
+//                   [--corrupt-packet I]
 //                   [--max-orders N] [--max-levels N] [--max-pages N] [--max-slots N]
 //
 // The slice is frames --first to --first + --frames of FILE, the whole file by default,
 // packed as mold_packets.hpp says. --rate paces the sender, 0 (the default) sends
 // unpaced. --core asks for the sender's core, which only Linux can grant. --checkpoint
 // is the frame after which both paths hash the book, half the slice by default.
-// --drop-packet I is the negative control: packet I never reaches the socket, as if lost
-// on the way, and the check must fail. The --max options size both books, which are the
-// default arm at the default capacity unless they say otherwise.
+// The negative controls, each of which the check must fail: --drop-packet I loses packet I
+// on the way, --duplicate-packet I sends it twice, and --corrupt-packet I flips the last
+// byte of its last message, which leaves the framing and the sequence whole. The --max options size
+// both books, which are the default arm at the default capacity unless they say otherwise.
 //
 // Exit codes: 0 pass, 1 fail, 2 bad usage, an input that cannot be packed, or no socket.
+#include <algorithm>
 #include <charconv>
 #include <chrono>
 #include <cstddef>
@@ -30,6 +33,7 @@
 #include <span>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #include "itch/book.hpp"
 #include "itch/mold.hpp"
@@ -54,6 +58,8 @@ struct Options {
   itch::BookCapacity capacity;
   std::uint64_t checkpoint = kNone;
   std::uint64_t drop_packet = kNone;
+  std::uint64_t duplicate_packet = kNone;
+  std::uint64_t corrupt_packet = kNone;
 };
 
 [[nodiscard]] std::optional<std::uint64_t> parse_number(std::string_view text) {
@@ -111,6 +117,10 @@ struct Options {
     options.checkpoint = number;
   } else if (arg == "--drop-packet") {
     options.drop_packet = number;
+  } else if (arg == "--duplicate-packet") {
+    options.duplicate_packet = number;
+  } else if (arg == "--corrupt-packet") {
+    options.corrupt_packet = number;
   } else {
     return take_capacity(arg, number, options.capacity);
   }
@@ -142,15 +152,29 @@ struct Options {
   return options;
 }
 
-// The negative control's socket: one packet is reported sent and never sent.
-class DroppingSocket {
+// The negative controls' socket: one packet reported sent and never sent, one sent twice,
+// and one sent with its last byte flipped.
+class FaultySocket {
  public:
-  DroppingSocket(udp::ConnectedSocket socket, std::uint64_t drop) noexcept
-      : socket_{socket}, drop_{drop} {}
+  FaultySocket(udp::ConnectedSocket socket, const Options& options)
+      : socket_{socket},
+        drop_{options.drop_packet},
+        duplicate_{options.duplicate_packet},
+        corrupt_{options.corrupt_packet},
+        copy_(mold::kMostDatagram) {}
 
   [[nodiscard]] udp::SendResult send(std::span<const std::byte> datagram) noexcept {
-    if (sends_++ == drop_) {
+    const std::uint64_t index = sends_++;
+    if (index == drop_) {
       return {.sent = true, .error = 0};
+    }
+    if (index == duplicate_) {
+      static_cast<void>(socket_.send(datagram));
+    }
+    if (index == corrupt_ && !datagram.empty()) {
+      std::ranges::copy(datagram, copy_.begin());
+      copy_[datagram.size() - 1] ^= std::byte{0x01};
+      return socket_.send(std::span<const std::byte>{copy_}.first(datagram.size()));
     }
     return socket_.send(datagram);
   }
@@ -158,6 +182,9 @@ class DroppingSocket {
  private:
   udp::ConnectedSocket socket_;
   std::uint64_t drop_;
+  std::uint64_t duplicate_;
+  std::uint64_t corrupt_;
+  std::vector<std::byte> copy_;
   std::uint64_t sends_ = 0;
 };
 
@@ -204,6 +231,13 @@ int run(const Options& options) {
   if (options.drop_packet != kNone) {
     std::println("loopback_negative_control packet {} is never sent", options.drop_packet);
   }
+  if (options.duplicate_packet != kNone) {
+    std::println("loopback_negative_control packet {} is sent twice", options.duplicate_packet);
+  }
+  if (options.corrupt_packet != kNone) {
+    std::println("loopback_negative_control packet {} has its last byte flipped",
+                 options.corrupt_packet);
+  }
 
   itch::FastBook<> file_book{options.capacity};
   udp::BookDigest file_digest{file_book, checkpoint};
@@ -214,7 +248,7 @@ int run(const Options& options) {
   itch::FastBook<> udp_book{options.capacity};
   udp::BookDigest udp_digest{udp_book, checkpoint};
   const auto wrap = [&options](udp::ConnectedSocket socket) {
-    return DroppingSocket{socket, options.drop_packet};
+    return FaultySocket{socket, options};
   };
   const auto loop = udp::run_loopback_s1(*packets, options.loopback, udp_digest, [] {}, wrap);
   if (!loop) {
@@ -274,7 +308,8 @@ int main(int argc, const char* const* argv) {
           "usage: itch_loopback FILE [--first N] [--frames N] [--datagram BYTES] "
           "[--max-messages N] [--flush-gap-ns N] [--heartbeat-gap-ns N] [--rate MSGS_PER_S] "
           "[--core N] [--receive-buffer BYTES] [--timeout-ms N] [--checkpoint N] "
-          "[--drop-packet I] [--max-orders N] [--max-levels N] [--max-pages N] "
+          "[--drop-packet I] [--duplicate-packet I] [--corrupt-packet I] [--max-orders N] "
+          "[--max-levels N] [--max-pages N] "
           "[--max-slots N]\n",
           stderr));
       return 2;

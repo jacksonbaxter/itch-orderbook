@@ -132,6 +132,18 @@ TEST(MoldDecode, HeartbeatAndEndOfSessionCarryNoBlocks) {
   EXPECT_EQ(mold::decode(end).header.sequence, 9U);
 }
 
+// The two control counts from hand-written bytes, not from the constants.
+TEST(MoldDecode, CountZeroIsAHeartbeatAndCountFFFFTheEnd) {
+  std::array<std::uint8_t, 20> raw{'S', 'E', 'S', 'S', 'I', 'O', 'N', '0', '0', '1',
+                                   0,   0,   0,   0,   0,   0,   0,   9,   0,   0};
+  EXPECT_EQ(mold::decode(to_bytes(raw)).status, PacketStatus::heartbeat);
+  raw[18] = 0xFF;
+  raw[19] = 0xFF;
+  EXPECT_EQ(mold::decode(to_bytes(raw)).status, PacketStatus::end_of_session);
+  raw[19] = 0xFE;
+  EXPECT_EQ(mold::decode(to_bytes(raw)).status, PacketStatus::truncated_block);
+}
+
 TEST(MoldDecode, AShortHeaderIsRefused) {
   const Bytes bytes = packet_of(1, {kSystem});
   for (std::size_t size = 0; size < mold::kHeaderBytes; ++size) {
