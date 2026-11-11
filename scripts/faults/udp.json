@@ -532,8 +532,8 @@
       "mutations": [
         {
           "file": "bench/udp/sender.hpp",
-          "old": "      report.failed_messages += ref.messages;\n",
-          "new": "      report.sent_messages += ref.messages;\n"
+          "old": "  report.failed_messages += ref.messages;\n",
+          "new": "  report.sent_messages += ref.messages;\n"
         }
       ],
       "build": {
@@ -558,8 +558,8 @@
       "mutations": [
         {
           "file": "bench/udp/sender.hpp",
-          "old": "      if (result.error == ENOBUFS) {\n",
-          "new": "      if (result.error == ENOBUFS || result.error == EPERM) {\n"
+          "old": "  if (result.error == ENOBUFS) {\n",
+          "new": "  if (result.error == ENOBUFS || result.error == EPERM) {\n"
         }
       ],
       "build": {
@@ -688,8 +688,8 @@
       "mutations": [
         {
           "file": "bench/udp/sender.hpp",
-          "old": "    ++report.packets;\n",
-          "new": "    ++report.packets;\n    ::operator delete(::operator new(16));\n"
+          "old": "  ++report.packets;\n",
+          "new": "  ++report.packets;\n  ::operator delete(::operator new(16));\n"
         }
       ],
       "build": {
@@ -797,8 +797,8 @@
       "mutations": [
         {
           "file": "tools/itch_loopback.cpp",
-          "old": "         sequence.duplicate_messages == 0 && sequence.foreign_session == 0 &&\n",
-          "new": "         sequence.foreign_session == 0 &&\n"
+          "old": "sequence.lost == 0 && sequence.duplicate_messages == 0 && sequence.foreign_session == 0 &&\n",
+          "new": "sequence.lost == 0 && sequence.foreign_session == 0 &&\n"
         }
       ],
       "build": {

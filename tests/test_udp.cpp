@@ -623,6 +623,45 @@ TEST(Schedule, AFeedScheduleFollowsTheItchClockDividedBySpeedup) {
   EXPECT_TRUE(udp::feed_schedule(*packets, 0.0).empty());
 }
 
+// A message stamped earlier than the one before it is held at the one before, so that no
+// packet is due ahead of a packet sent before it.
+TEST(Schedule, AFeedScheduleNeverRunsBackwards) {
+  Bytes stream = read_file(std::filesystem::path{ITCH_ORACLE_FIXTURES} / "session.itch");
+  const auto length_at = [&](std::size_t at) {
+    return (std::to_integer<std::size_t>(stream[at]) << 8U) |
+           std::to_integer<std::size_t>(stream[at + 1]);
+  };
+  constexpr std::size_t kStamp = 2 + 5;  // A frame's length, then the message's timestamp.
+  constexpr std::size_t kStampBytes = 6;
+  const auto stamp_at = [&](std::size_t at) {
+    return Bytes(stream.begin() + static_cast<std::ptrdiff_t>(at + kStamp),
+                 stream.begin() + static_cast<std::ptrdiff_t>(at + kStamp + kStampBytes));
+  };
+  // The first frame stamped later than the first, then the frame after it given the first
+  // frame's stamp, earlier than its own.
+  const Bytes first = stamp_at(0);
+  std::size_t at = 0;
+  while (at + 2 < stream.size() && stamp_at(at) <= first) {
+    at += 2 + length_at(at);
+  }
+  ASSERT_LT(at + 2, stream.size());
+  at += 2 + length_at(at);
+  ASSERT_LT(at + kStamp + kStampBytes, stream.size());
+  std::ranges::copy(first, stream.begin() + static_cast<std::ptrdiff_t>(at + kStamp));
+  const auto packets = mold::build_packets(stream, {.max_messages = 1});
+  ASSERT_TRUE(packets.has_value());
+  bool backwards = false;
+  for (std::size_t i = 1; i < packets->size(); ++i) {
+    backwards = backwards || packets->ref(i).timestamp_ns < packets->ref(i - 1).timestamp_ns;
+  }
+  ASSERT_TRUE(backwards) << "the stream has no stamp earlier than the one before it";
+  const std::vector<std::uint64_t> due = udp::feed_schedule(*packets, 1.0);
+  ASSERT_EQ(due.size(), packets->size());
+  for (std::size_t i = 1; i < due.size(); ++i) {
+    EXPECT_GE(due[i], due[i - 1]) << i;
+  }
+}
+
 TEST(Schedule, TheSenderKeepsADueTableAndRefusesOneOfTheWrongLength) {
   const mold::PacketArray packets = churn_packets();
   std::vector<std::uint64_t> due(packets.size());
@@ -671,6 +710,15 @@ TEST(KernelCounters, TheUdpLinesOfSnmpAreReadByName) {
   EXPECT_FALSE(udp::parse_udp_snmp("Udp: InDatagrams NoPorts InErrors OutDatagrams "
                                    "RcvbufErrors SndbufErrors\nUdp: 1 2 x 4 5 6\n")
                    .has_value());
+}
+
+// A count that could not be read is never taken for a zero, so no run is called lossless on
+// a counter nobody read.
+TEST(KernelCounters, ACountNotReadIsNeverZero) {
+  EXPECT_FALSE(udp::Reading{}.read_zero());
+  EXPECT_FALSE((udp::Reading{.read = false, .value = 0}).read_zero());
+  EXPECT_FALSE((udp::Reading{.read = true, .value = 3}).read_zero());
+  EXPECT_TRUE((udp::Reading{.read = true, .value = 0}).read_zero());
 }
 
 TEST(KernelCounters, SoftnetColumnsAreHexAndTheSecondIsTheDrops) {

@@ -151,6 +151,35 @@ class Matrix(unittest.TestCase):
         self.assertEqual(self.matrix(), 1)
         self.assert_verdict(fm.STALE)
 
+    def test_a_fault_for_another_system_is_listed_and_not_run(self):
+        # The fault would be undetected if it ran; on another system it is not run.
+        self.define(good_fault(),
+                    good_fault(id="linux", system="Linux",
+                               mutations=[{"file": "notes.txt", "old": "twin twin", "new": "x"}]))
+        self.assertEqual(self.matrix("--system", "Darwin"), 0, self.output)
+        self.assert_verdict(fm.DETECTED)
+        self.assert_verdict(fm.OTHER_HOST, "linux")
+        report = (self.root / "report.md").read_text(encoding="utf-8")
+        self.assertIn("1 of 1 detected", report)
+        self.assertIn("Not run on this host: 1, for Linux only", report)
+        self.assertIn("1 for another system not run", self.output)
+
+    def test_a_fault_for_this_system_runs(self):
+        self.define(good_fault(id="linux", system="Linux",
+                               mutations=[{"file": "notes.txt", "old": "twin twin", "new": "x"}]))
+        self.assertEqual(self.matrix("--system", "Linux"), 1)
+        self.assert_verdict(fm.UNDETECTED, "linux")
+
+    def test_a_fault_for_another_system_is_still_checked_for_staleness(self):
+        self.define(good_fault(system="Linux",
+                               mutations=[{"file": "payload.txt", "old": "gone", "new": "x"}]))
+        self.assertEqual(self.matrix("--system", "Darwin"), 1)
+        self.assert_verdict(fm.STALE)
+
+    def test_an_unknown_system_is_a_definition_error(self):
+        self.define(good_fault(system="Plan9"))
+        self.assertEqual(self.matrix(), 2)
+
     def test_a_fault_with_no_effect_is_undetected(self):
         self.define(good_fault(mutations=[{"file": "notes.txt", "old": "twin twin", "new": "x"}]))
         self.assertEqual(self.matrix(), 1)

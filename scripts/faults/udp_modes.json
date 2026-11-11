@@ -1,0 +1,575 @@
+{
+  "area": "udp_modes",
+  "faults": [
+    {
+      "id": "udp-snmp-missing-column-read",
+      "breaks": "A /proc/net/snmp Udp: pair without every kept column is read, the missing ones as 0",
+      "check": "test_udp KernelCounters.TheUdpLinesOfSnmpAreReadByName",
+      "mutations": [
+        {
+          "file": "bench/udp/kernel_counters.hpp",
+          "old": "  if (found != kUdpColumns.size()) {\n",
+          "new": "  if (found == 0) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=KernelCounters.TheUdpLinesOfSnmpAreReadByName"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] KernelCounters\\.TheUdpLinesOfSnmpAreReadByName"
+      }
+    },
+    {
+      "id": "udp-softnet-read-as-decimal",
+      "breaks": "softnet_stat's hex drop column is read as decimal",
+      "check": "test_udp KernelCounters.SoftnetColumnsAreHexAndTheSecondIsTheDrops",
+      "mutations": [
+        {
+          "file": "bench/udp/kernel_counters.hpp",
+          "old": "    const auto dropped = detail::number(words[1], 16);\n",
+          "new": "    const auto dropped = detail::number(words[1], 10);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=KernelCounters.SoftnetColumnsAreHexAndTheSecondIsTheDrops"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] KernelCounters\\.SoftnetColumnsAreHexAndTheSecondIsTheDrops"
+      }
+    },
+    {
+      "id": "udp-proc-stat-softirq-is-irq",
+      "breaks": "A CPU's softirq time is read from /proc/stat's irq column",
+      "check": "test_udp KernelCounters.EachCpusSoftirqIsItsSeventhColumn",
+      "mutations": [
+        {
+          "file": "bench/udp/kernel_counters.hpp",
+          "old": "                    .softirq = ticks[6],\n",
+          "new": "                    .softirq = ticks[5],\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=KernelCounters.EachCpusSoftirqIsItsSeventhColumn"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] KernelCounters\\.EachCpusSoftirqIsItsSeventhColumn"
+      }
+    },
+    {
+      "id": "udp-task-stat-first-paren",
+      "breaks": "A thread's stat line is split at the first ')', so a name with one in it shifts every field",
+      "check": "test_udp KernelCounters.ATasksTimesAreCountedFromItsLastParenthesis",
+      "mutations": [
+        {
+          "file": "bench/udp/kernel_counters.hpp",
+          "old": "  const std::size_t close = line.rfind(')');\n",
+          "new": "  const std::size_t close = line.find(')');\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=KernelCounters.ATasksTimesAreCountedFromItsLastParenthesis"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] KernelCounters\\.ATasksTimesAreCountedFromItsLastParenthesis"
+      }
+    },
+    {
+      "id": "udp-unread-count-is-zero",
+      "breaks": "A drop counter that could not be read counts as zero, so a run is lossless on counters nobody read",
+      "check": "test_udp KernelCounters.ACountNotReadIsNeverZero",
+      "mutations": [
+        {
+          "file": "bench/udp/kernel_counters.hpp",
+          "old": "return read && value == 0; }",
+          "new": "return value == 0; }"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=KernelCounters.ACountNotReadIsNeverZero"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] KernelCounters\\.ACountNotReadIsNeverZero"
+      }
+    },
+    {
+      "id": "udp-feed-schedule-runs-backwards",
+      "breaks": "The feed schedule follows a timestamp that goes back, so a packet is due before the one ahead of it",
+      "check": "test_udp Schedule.AFeedScheduleNeverRunsBackwards",
+      "mutations": [
+        {
+          "file": "bench/udp/sender.hpp",
+          "old": "    last = offset > last ? offset : last;\n",
+          "new": "    last = offset;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Schedule.AFeedScheduleNeverRunsBackwards"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Schedule\\.AFeedScheduleNeverRunsBackwards"
+      }
+    },
+    {
+      "id": "udp-feed-schedule-ignores-speedup",
+      "breaks": "The feed schedule runs at real time whatever the speedup",
+      "check": "test_udp Schedule.AFeedScheduleFollowsTheItchClockDividedBySpeedup",
+      "mutations": [
+        {
+          "file": "bench/udp/sender.hpp",
+          "old": "static_cast<double>(since) / speedup);\n",
+          "new": "static_cast<double>(since));\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Schedule.AFeedScheduleFollowsTheItchClockDividedBySpeedup"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Schedule\\.AFeedScheduleFollowsTheItchClockDividedBySpeedup"
+      }
+    },
+    {
+      "id": "udp-sender-due-table-halved",
+      "breaks": "The sender sends a due-time table's packets early",
+      "check": "test_udp Schedule.TheSenderKeepsADueTableAndRefusesOneOfTheWrongLength",
+      "mutations": [
+        {
+          "file": "bench/udp/sender.hpp",
+          "old": "(scheduled ? plan.due_ns[i] : before",
+          "new": "(scheduled ? plan.due_ns[i] / 2 : before"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Schedule.TheSenderKeepsADueTableAndRefusesOneOfTheWrongLength"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Schedule\\.TheSenderKeepsADueTableAndRefusesOneOfTheWrongLength"
+      }
+    },
+    {
+      "id": "udp-s2-drops-unread",
+      "breaks": "S2 never reads SO_RXQ_OVFL, so the socket's drops go unseen",
+      "check": "test_udp Modes.TheModesThatReadControlMessagesSeeTheSocketsDrops",
+      "mutations": [
+        {
+          "file": "bench/udp/socket_modes.hpp",
+          "old": "        static_cast<void>(read_rxq_overflow(msg, counters_.rxq_overflow));\n",
+          "new": "        static_cast<void>(msg);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Modes.TheModesThatReadControlMessagesSeeTheSocketsDrops"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Modes\\.TheModesThatReadControlMessagesSeeTheSocketsDrops"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-s3-one-at-a-time",
+      "breaks": "S3 and S4 ask recvmmsg for one datagram a call",
+      "check": "test_udp Modes.QueuedDatagramsArriveInOrderAndTheBatchingModesTakeManyAtOnce",
+      "mutations": [
+        {
+          "file": "bench/udp/socket_modes.hpp",
+          "old": "    const std::size_t vlen = batch.size() < kMostBatch ? batch.size() : kMostBatch;\n",
+          "new": "    const std::size_t vlen = 1;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Modes.QueuedDatagramsArriveInOrderAndTheBatchingModesTakeManyAtOnce"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Modes\\.QueuedDatagramsArriveInOrderAndTheBatchingModesTakeManyAtOnce"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-s3-truncation-unseen",
+      "breaks": "S3 and S4 pass a datagram cut to its slot off as whole",
+      "check": "test_udp Modes.ADatagramPastTheSlotIsCountedTruncated",
+      "mutations": [
+        {
+          "file": "bench/udp/socket_modes.hpp",
+          "old": "          counters_.truncated += (headers_[i].msg_hdr.msg_flags & MSG_TRUNC) != 0 ? 1U : 0U;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Modes.ADatagramPastTheSlotIsCountedTruncated"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Modes\\.ADatagramPastTheSlotIsCountedTruncated"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-alloc-s3-allocates",
+      "breaks": "S3 and S4 take a block from the heap on each wait",
+      "check": "test_alloc Allocation.EveryReceiveModeAllocatesNothingAfterConstruction",
+      "mutations": [
+        {
+          "file": "bench/udp/socket_modes.hpp",
+          "old": "    const std::size_t vlen = batch.size() < kMostBatch ? batch.size() : kMostBatch;\n",
+          "new": "    const std::size_t vlen = batch.size() < kMostBatch ? batch.size() : kMostBatch;\n    ::operator delete(::operator new(16));\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_alloc",
+        "--gtest_filter=Allocation.EveryReceiveModeAllocatesNothingAfterConstruction"
+      ],
+      "expect": {
+        "signature": "allocation in mode S3"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-ring-buffer-never-returned",
+      "breaks": "A multishot mode never hands a provided buffer back to its ring",
+      "check": "test_udp Modes.AMultishotModeOutOfBuffersRearmsAndLosesNothing",
+      "mutations": [
+        {
+          "file": "bench/udp/ring_modes.hpp",
+          "old": "        give_back(static_cast<std::uint16_t>(offset / slot_bytes_));\n",
+          "new": "        static_cast<void>(offset);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Modes.AMultishotModeOutOfBuffersRearmsAndLosesNothing"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Modes\\.AMultishotModeOutOfBuffersRearmsAndLosesNothing"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-ring-never-rearmed",
+      "breaks": "A multishot request that ended is never armed again",
+      "check": "test_udp Modes.AMultishotModeOutOfBuffersRearmsAndLosesNothing",
+      "mutations": [
+        {
+          "file": "bench/udp/ring_modes.hpp",
+          "old": "      if ((cqe.flags & IORING_CQE_F_MORE) == 0) {\n        armed_ = false;\n      }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Modes.AMultishotModeOutOfBuffersRearmsAndLosesNothing"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Modes\\.AMultishotModeOutOfBuffersRearmsAndLosesNothing"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-ring-rearm-uncounted",
+      "breaks": "A multishot mode's re-arms are not counted (IU-30)",
+      "check": "test_udp Modes.AMultishotModeOutOfBuffersRearmsAndLosesNothing",
+      "mutations": [
+        {
+          "file": "bench/udp/ring_modes.hpp",
+          "old": "      counters_.rearms += arms_ > 0 ? 1U : 0U;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Modes.AMultishotModeOutOfBuffersRearmsAndLosesNothing"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Modes\\.AMultishotModeOutOfBuffersRearmsAndLosesNothing"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-u3-drops-unread",
+      "breaks": "U3 never finds SO_RXQ_OVFL among its control messages",
+      "check": "test_udp Modes.TheModesThatReadControlMessagesSeeTheSocketsDrops",
+      "mutations": [
+        {
+          "file": "bench/udp/ring_modes.hpp",
+          "old": "cmsg->cmsg_type == SO_RXQ_OVFL &&\n",
+          "new": "cmsg->cmsg_type == -1 &&\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Modes.TheModesThatReadControlMessagesSeeTheSocketsDrops"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Modes\\.TheModesThatReadControlMessagesSeeTheSocketsDrops"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-u3-truncation-unseen",
+      "breaks": "U3 ignores MSG_TRUNC in the kernel's header",
+      "check": "test_udp Modes.ADatagramPastTheSlotIsCountedTruncated",
+      "mutations": [
+        {
+          "file": "bench/udp/ring_modes.hpp",
+          "old": "        counters_.truncated += (out->flags & MSG_TRUNC) != 0 ? 1U : 0U;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Modes.ADatagramPastTheSlotIsCountedTruncated"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Modes\\.ADatagramPastTheSlotIsCountedTruncated"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-ring-recv-truncation-unseen",
+      "breaks": "U2, U4 and U5 pass a datagram that filled its buffer off as whole",
+      "check": "test_udp Modes.ADatagramPastTheSlotIsCountedTruncated",
+      "mutations": [
+        {
+          "file": "bench/udp/ring_modes.hpp",
+          "old": "        counters_.truncated += filled >= slot_bytes_ ? 1U : 0U;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_udp"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_udp",
+        "--gtest_filter=Modes.ADatagramPastTheSlotIsCountedTruncated"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Modes\\.ADatagramPastTheSlotIsCountedTruncated"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-alloc-ring-allocates",
+      "breaks": "A ring mode takes a block from the heap on each wait",
+      "check": "test_alloc Allocation.EveryReceiveModeAllocatesNothingAfterConstruction",
+      "mutations": [
+        {
+          "file": "bench/udp/ring_modes.hpp",
+          "old": "    ++counters_.waits;\n",
+          "new": "    ++counters_.waits;\n    ::operator delete(::operator new(16));\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_alloc",
+        "--gtest_filter=Allocation.EveryReceiveModeAllocatesNothingAfterConstruction"
+      ],
+      "expect": {
+        "signature": "allocation in mode U[1-5]"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-bench-slot-unchecked",
+      "breaks": "bench_udp runs a batching mode whose slot cannot hold the packing's largest datagram",
+      "check": "test_bench_udp_cli.py, the small-slot cases",
+      "mutations": [
+        {
+          "file": "bench/bench_udp.cpp",
+          "old": "options.plan.max_datagram + udp::kSlotOverhead > options.mode_options.slot_bytes) {\n",
+          "new": "options.plan.max_datagram + udp::kSlotOverhead > options.mode_options.slot_bytes + 65536) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_udp"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_udp_cli.py",
+        "{build}/bench/bench_udp",
+        "{build}/bench_udp_fault",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "S1,S2,S3,S4,U1,U2,U3,U4,U5"
+      ],
+      "expect": {
+        "signature": "bench_udp cli: FAIL S3 small slot"
+      },
+      "system": "Linux"
+    },
+    {
+      "id": "udp-loopback-slot-unchecked",
+      "breaks": "itch_loopback runs a batching mode whose slot cannot hold the packing's largest datagram",
+      "check": "test_loopback_cli.py, the slot-too-small case",
+      "mutations": [
+        {
+          "file": "tools/itch_loopback.cpp",
+          "old": "options.plan.max_datagram + udp::kSlotOverhead > options.mode_options.slot_bytes) {\n",
+          "new": "options.plan.max_datagram + udp::kSlotOverhead > options.mode_options.slot_bytes + 65536) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_loopback"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_loopback_cli.py",
+        "{build}/tools/itch_loopback",
+        "{build}/loopback_fault",
+        "{tree}/tests/fixtures/oracle",
+        "{tree}/tests/fixtures/trades",
+        "S1,S2,S3,S4,U1,U2,U3,U4,U5"
+      ],
+      "expect": {
+        "signature": "loopback cli: FAIL .*slot"
+      },
+      "system": "Linux"
+    }
+  ]
+}

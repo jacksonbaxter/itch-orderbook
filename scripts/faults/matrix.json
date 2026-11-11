@@ -57,6 +57,66 @@
       "expect": {
         "signature": "^FAIL: test_a_crash_does_not_count_unless_the_signature_says_so"
       }
+    },
+    {
+      "id": "matrix-other-system-run-anyway",
+      "breaks": "A fault for another system runs here, where its code is not built, and fails the run",
+      "check": "scripts/test_fault_matrix.py",
+      "mutations": [
+        {
+          "file": "scripts/fault_matrix.py",
+          "old": "        elif fault.system is not None and fault.system != args.system:\n",
+          "new": "        elif fault.system is not None and fault.system == \"never\":\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_fault_for_another_system_is_listed_and_not_run"
+      }
+    },
+    {
+      "id": "matrix-other-system-counted",
+      "breaks": "A fault for another system, never run, is counted in the faults the run must detect",
+      "check": "scripts/test_fault_matrix.py",
+      "mutations": [
+        {
+          "file": "scripts/fault_matrix.py",
+          "old": "    run_here = sum(fault.status != OTHER_HOST for fault in faults)\n",
+          "new": "    run_here = len(faults)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_fault_for_another_system_is_listed_and_not_run"
+      }
+    },
+    {
+      "id": "matrix-other-system-skips-stale",
+      "breaks": "A fault for another system is not checked for staleness, so its old text can drift unseen",
+      "check": "scripts/test_fault_matrix.py",
+      "mutations": [
+        {
+          "file": "scripts/fault_matrix.py",
+          "old": "        reason = find_stale(fault, root)\n",
+          "new": "        reason = None if fault.system not in (None, args.system) else find_stale(fault, root)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_fault_for_another_system_is_still_checked_for_staleness"
+      }
     }
   ]
 }

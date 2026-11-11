@@ -21,7 +21,10 @@ set(ITCH_SANITIZE "" CACHE STRING "Sanitizers, comma separated, for example addr
 # tests/support/spsc_ordering.hpp weakens the named order to relaxed in those builds.
 set(ITCH_SPSC_NEGATIVE_CONTROL "" CACHE STRING
   "Weaken one SPSC order in the ring's tests: publish, observe, return or reclaim. Empty for none")
-set(ITCH_LIBURING_ROOT "" CACHE PATH "Prefix of a liburing build, Linux only. Empty leaves it off")
+# The environment's ITCH_LIBURING_ROOT is the default, so that a tree the fault matrix
+# configures by preset alone builds the ring modes on a host that names its liburing.
+set(ITCH_LIBURING_ROOT "$ENV{ITCH_LIBURING_ROOT}" CACHE PATH
+  "Prefix of a liburing build, Linux only. Empty leaves it off")
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(ItchOptions)

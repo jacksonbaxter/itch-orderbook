@@ -32,12 +32,17 @@ Adding an area means adding scripts/faults/<area>.json:
         "build": {"preset": "release", "targets": ["test_wire"], "gtest": true},
         "command": ["{build}/tests/test_wire"],
         "expect": {"signature": "regex", "exit": 1},
-        "timeout": 300
+        "timeout": 300,
+        "system": "Linux"                  optional: run only on this platform.system()
       }]
     }
 
 mutations and inputs may be used together, and at least one is required. build is
-optional. expect.exit is optional and defaults to any non-zero exit. Commands run in
+optional. expect.exit is optional and defaults to any non-zero exit. A fault with a system
+breaks code that only that system builds or runs, such as the Linux receive modes: on any
+other host it is checked for staleness, then listed as other-host and left out of the count,
+and it is run on a host of its own system with --area. A fault is never given a system to
+keep it from running where it can run. Commands run in
 the tree copy, with {tree}, {build} and {python} substituted. Input ops are flip_byte
 (offset, mask), truncate (size, negative counts from the end), delete_bytes (offset,
 length), duplicate_bytes (offset, length), json_set (path, value), replace_text (old,
@@ -46,8 +51,8 @@ new, which must occur exactly once) and remove_files.
     fault_matrix.py --list
     fault_matrix.py [--only ID] [--area NAME] [--log-dir DIR] [--out FILE] [--keep]
 
-Exit codes: 0 every selected fault detected and every control passed, 1 otherwise,
-2 the definitions could not be used.
+Exit codes: 0 every selected fault this host's system can run detected and every control
+passed, 1 otherwise, 2 the definitions could not be used.
 """
 
 from __future__ import annotations
@@ -80,10 +85,12 @@ TIMEOUT = "timeout"
 STALE = "stale"
 BUILD_ERROR = "build-error"
 NOT_RUN = "not-run"
+OTHER_HOST = "other-host"
+SYSTEMS = ("Linux", "Darwin")
 
 ID_FORMAT = re.compile(r"[a-z0-9][a-z0-9-]*")
 REQUIRED_KEYS = {"id", "breaks", "check", "command", "expect"}
-ALLOWED_KEYS = REQUIRED_KEYS | {"mutations", "inputs", "build", "timeout"}
+ALLOWED_KEYS = REQUIRED_KEYS | {"mutations", "inputs", "build", "timeout", "system"}
 
 
 class DefinitionError(Exception):
@@ -104,6 +111,7 @@ class Fault:
     build: dict | None
     timeout: int
     tree: tuple
+    system: str | None = None
     status: str = ""
     detail: str = ""
     exit_seen: int | None = None
@@ -160,11 +168,13 @@ def parse_fault(raw, area, tree, source):
     require(command and all(isinstance(word, str) for word in command), f"{where}: bad command")
     require(build is not None or not any("{build}" in word for word in command),
             f"{where}: {{build}} needs a build")
+    system = raw.get("system")
+    require(system is None or system in SYSTEMS, f"{where}: system must be one of {SYSTEMS}")
 
     return Fault(id=raw["id"], area=area, breaks=raw["breaks"], check=raw["check"],
                  command=command, signature=expect["signature"], exit_code=expect.get("exit"),
                  mutations=mutations, inputs=inputs, build=build,
-                 timeout=raw.get("timeout", DEFAULT_TIMEOUT), tree=tree)
+                 timeout=raw.get("timeout", DEFAULT_TIMEOUT), tree=tree, system=system)
 
 
 def load_faults(faults_dir):
@@ -486,6 +496,8 @@ def compiler_description():
 
 def write_report(path, root, faults, selection, control_count, control_failures):
     passed = sum(fault.status == DETECTED for fault in faults)
+    elsewhere = [fault for fault in faults if fault.status == OTHER_HOST]
+    run_here = len(faults) - len(elsewhere)
     lines = [
         "# Fault matrix",
         "",
@@ -500,7 +512,13 @@ def write_report(path, root, faults, selection, control_count, control_failures)
         f"- Host: {platform.system()} {platform.machine()}",
         f"- Selection: {selection}",
         f"- Controls: {control_count} commands, {len(control_failures)} failed",
-        f"- Result: {passed} of {len(faults)} detected",
+        f"- Result: {passed} of {run_here} detected",
+    ]
+    if elsewhere:
+        systems = ", ".join(sorted({fault.system for fault in elsewhere}))
+        lines.append(f"- Not run on this host: {len(elsewhere)}, for {systems} only, each run "
+                     "on a host of its own system")
+    lines += [
         "",
     ]
     for failure in control_failures:
@@ -545,6 +563,7 @@ def parse_args(argv):
     parser.add_argument("--root", type=Path, default=REPO_ROOT, help=argparse.SUPPRESS)
     parser.add_argument("--faults-dir", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--build-root", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--system", default=platform.system(), help=argparse.SUPPRESS)
     return parser.parse_args(argv)
 
 
@@ -574,6 +593,10 @@ def main(argv=None):
         if reason:
             fault.status, fault.detail = STALE, reason
             print(f"{fault.id}: {STALE}: {reason}", flush=True)
+        elif fault.system is not None and fault.system != args.system:
+            fault.status = OTHER_HOST
+            fault.detail = f"{fault.system} only, not run on {args.system}"
+            print(f"{fault.id}: {OTHER_HOST}: {fault.detail}", flush=True)
         else:
             live.append(fault)
 
@@ -590,6 +613,7 @@ def main(argv=None):
               f"({fault.seconds:.1f} s)", flush=True)
 
     passed = sum(fault.status == DETECTED for fault in faults)
+    run_here = sum(fault.status != OTHER_HOST for fault in faults)
     selection = "all areas"
     if args.only or args.area:
         selection = "subset: " + ", ".join(args.area + args.only)
@@ -597,9 +621,11 @@ def main(argv=None):
         write_report(args.out, root, faults, selection, control_count, control_failures)
     if not args.keep:
         shutil.rmtree(build_root / "_control", ignore_errors=True)
-    print(f"fault matrix: {passed} of {len(faults)} detected, "
-          f"{len(control_failures)} control failures", flush=True)
-    return 0 if passed == len(faults) and not control_failures else 1
+    print(f"fault matrix: {passed} of {run_here} detected, "
+          f"{len(control_failures)} control failures"
+          + (f", {len(faults) - run_here} for another system not run" if run_here < len(faults)
+             else ""), flush=True)
+    return 0 if passed == run_here and not control_failures else 1
 
 
 if __name__ == "__main__":
