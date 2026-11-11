@@ -243,8 +243,10 @@ TEST(Sender, AFailedSendIsCountedByItsErrorAndNotRetried) {
   EXPECT_EQ(report->refused, 1U);
   EXPECT_EQ(report->other_errors, 1U);
   EXPECT_EQ(report->first_error, ENOBUFS);
-  const std::uint64_t failed = packets.ref(2).messages + packets.ref(5).messages +
-                               packets.ref(7).messages + packets.ref(9).messages;
+  // Each count is widened on its own: two uint16_t add up to an int.
+  const std::uint64_t failed =
+      std::uint64_t{packets.ref(2).messages} + std::uint64_t{packets.ref(5).messages} +
+      std::uint64_t{packets.ref(7).messages} + std::uint64_t{packets.ref(9).messages};
   EXPECT_EQ(report->failed_messages, failed);
   EXPECT_EQ(report->sent_messages + report->failed_messages, packets.messages());
 }
