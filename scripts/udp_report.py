@@ -38,7 +38,11 @@ header's; on a load line that is not measure.sh's; and on anything private.
 
 How a trial counts, as the driver counts it: lossless, verdict PASS and the sender kept pace,
 achieving at least 0.99 x the target. The largest lossless rate is the largest such trial's
-rate; when that is the cap, the mode is "at least" the cap, sender limited.
+rate; when that is the cap, the mode is "at least" the cap, sender limited. So is a mode
+whose search stopped where the sender fell behind: when every trial at the lowest lossy rate
+above its figure lost nothing, was PASS and failed only on pace, the receiver's own limit was
+never reached, and the figure is "at least" it, sender limited, whatever the cap. A mode
+wins only if no other mode's figure is such a lower bound.
 
 The header's prediction and run_id are the file's own step's run, as check_predictions.py
 reads them; predictions and runs list every run the file draws on.
@@ -348,25 +352,41 @@ def by_mode(rows, role):
     return {mode: out[mode] for mode in MODES if mode in out}
 
 
+def behind_only(row):
+    """A trial that lost nothing and failed only because the sender fell behind the schedule."""
+    return row_lossless(row) and bool(row["lossless"]) and row["verdict"] == "PASS" and \
+        row["target"] is not None and row["achieved"] < udp_driver.PACE * row["target"]
+
+
 def largest_lossless(rows, cap):
-    """{mode: {result, rate, above, trials}} from the trial rows."""
+    """{mode: {result, rate, above, trials, behind}} from the trial rows. behind: every trial
+    at the lowest lossy rate above the figure failed only on the sender's pace."""
     out = {}
     for mode, trials in by_mode(rows, "trial").items():
         good = [row["target"] for row in trials if valid_lossless(row)]
         bad = [row["target"] for row in trials if not valid_lossless(row)]
         if not good:
             out[mode] = {"result": "below", "rate": min(bad), "above": min(bad),
-                         "trials": len(trials)}
+                         "trials": len(trials), "behind": False}
             continue
         best = max(good)
-        above = [rate for rate in bad if rate > best]
+        above = min((rate for rate in bad if rate > best), default=None)
+        behind = above is not None and all(
+            behind_only(row) for row in trials
+            if row["target"] == above and not valid_lossless(row))
         out[mode] = {"result": "sender limited" if best >= cap else "max", "rate": best,
-                     "above": min(above) if above else None, "trials": len(trials)}
+                     "above": above, "trials": len(trials), "behind": behind}
     return out
 
 
+def sender_limited(one):
+    """The figure is a lower bound set by the sender: lossless at the cap, or the sender fell
+    behind above it with nothing lost."""
+    return one["result"] == "sender limited" or (one["result"] == "max" and one["behind"])
+
+
 def rate_text(one):
-    if one["result"] == "sender limited":
+    if sender_limited(one):
         return f"at least {one['rate']:,}, sender limited"
     if one["result"] == "below":
         return f"below {one['rate']:,}"
@@ -374,7 +394,7 @@ def rate_text(one):
 
 
 def rate_words(one):
-    if one["result"] == "sender limited":
+    if sender_limited(one):
         return f"at least {one['rate']:,} msg/s, sender limited"
     return f"{rate_text(one)} msg/s"
 
@@ -415,10 +435,12 @@ def ratio_text(one, base):
         return NONE
     if one["result"] == "sender limited" and base["result"] == "sender limited":
         return "both at the cap"
+    if sender_limited(one) and sender_limited(base):
+        return "both sender limited"
     ratio = f"{one['rate'] / base['rate']:.3f}"
-    if one["result"] == "sender limited":
+    if sender_limited(one):
         return f"≥ {ratio}"
-    if base["result"] == "sender limited":
+    if sender_limited(base):
         return f"≤ {ratio}"
     return ratio
 
@@ -444,7 +466,19 @@ def turing1_lines(found, packets):
         return lines
     top = max(rate for rate, _ in ranked)
     winners = [mode for rate, mode in ranked if rate == top]
-    if len(winners) == 1:
+    behind = [mode for mode, one in found.items() if one["result"] == "max" and one["behind"]]
+    if behind:
+        lines.append(f"- Sender limited below the cap: {', '.join(behind)}. At the lowest rate "
+                     "above each figure the sender fell behind the schedule, achieving under "
+                     "0.99 × the target, and the receiver lost nothing, so the receiver's own "
+                     "limit was not reached.")
+    bounds = [mode for mode in behind if mode not in winners]
+    if bounds:
+        lines.append(f"- No winner: {', '.join(bounds)} "
+                     f"{'is' if len(bounds) == 1 else 'are'} sender limited below the top, "
+                     f"{top:,} msg/s, so no mode can be ranked above "
+                     f"{'it' if len(bounds) == 1 else 'them'}.")
+    elif len(winners) == 1:
         lines.append(f"- Won: {winners[0]}, lossless up to {rate_words(found[winners[0]])}.")
     elif found[winners[0]]["result"] == "sender limited":
         lines.append(f"- No winner: {', '.join(winners)} each reached the cap, {top:,} msg/s, "
@@ -469,8 +503,8 @@ def turing2_lines(found, rows, failed, cap, ceiling):
     gap = one["rate"] - TARGET_1MS
     measured = (f"{best}'s largest lossless rate in the bisection is "
                 + (f"at least {one['rate']:,} msg/s, sender limited" if
-                   one["result"] == "sender limited" else f"{one['rate']:,} msg/s")
-                + f"; gap {'at least ' if one['result'] == 'sender limited' else ''}"
+                   sender_limited(one) else f"{one['rate']:,} msg/s")
+                + f"; gap {'at least ' if sender_limited(one) else ''}"
                 f"{gap:+,} msg/s ({100 * gap / TARGET_1MS:+.1f}%) against the target")
     confirms = [row for row in rows if row["role"] == "confirm"]
     lost = [one for one in failed if one["role"] == "confirm"]

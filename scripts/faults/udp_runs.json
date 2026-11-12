@@ -798,6 +798,48 @@
         "signature": "^FAIL: test_results_table_labels_each_packet_size_and_takes_t_uring_2_at_1400_alone |^ERROR: test_results_table_labels_each_packet_size_and_takes_t_uring_2_at_1400_alone ",
         "exit": 1
       }
+    },
+    {
+      "id": "udp-report-behind-read-as-the-receiver-s",
+      "breaks": "A mode whose search stopped where the sender fell behind, nothing lost, is shown as the receiver's largest lossless rate, not a lower bound set by the sender",
+      "check": "test_udp_report.py test_a_search_stopped_by_the_sender_falling_behind_is_sender_limited",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "        row[\"target\"] is not None and row[\"achieved\"] < udp_driver.PACE * row[\"target\"]\n",
+          "new": "        row[\"target\"] is not None and row[\"achieved\"] < 0\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_search_stopped_by_the_sender_falling_behind_is_sender_limited |^ERROR: test_a_search_stopped_by_the_sender_falling_behind_is_sender_limited ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-winner-over-a-lower-bound",
+      "breaks": "A mode is named the winner over another whose figure is only a lower bound set by the sender",
+      "check": "test_udp_report.py test_a_search_stopped_by_the_sender_falling_behind_is_sender_limited",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    bounds = [mode for mode in behind if mode not in winners]\n",
+          "new": "    bounds = []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_search_stopped_by_the_sender_falling_behind_is_sender_limited |^ERROR: test_a_search_stopped_by_the_sender_falling_behind_is_sender_limited ",
+        "exit": 1
+      }
     }
   ]
 }

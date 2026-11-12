@@ -177,8 +177,11 @@ def ceiling_run(folder, achieved=(3_000_100, 2_999_900, 3_000_000)):
 THRESHOLDS = {"S3": 1_500_000, "U2": 1_800_000, "U5": 9_000_000}
 
 
-def bisect_run(folder, ceiling=3_000_000, thresholds=None, confirm=(True, True), start=300):
-    """A bisection run as the driver would leave it, each mode lossless up to its threshold."""
+def bisect_run(folder, ceiling=3_000_000, thresholds=None, confirm=(True, True), start=300,
+               behind=None):
+    """A bisection run as the driver would leave it, each mode lossless up to its threshold,
+    and a mode in `behind` losing nothing above its rate there, where the sender falls
+    behind."""
     thresholds = thresholds or THRESHOLDS
     cap = udp_driver.cap_of(ceiling)
     run = Written(folder, manifest("bisect", "P-0700-20261111T100000Z",
@@ -189,8 +192,13 @@ def bisect_run(folder, ceiling=3_000_000, thresholds=None, confirm=(True, True),
     for mode, limit in thresholds.items():
         search = udp_driver.Bisection(cap, 100_000, 1_000)
         while (rate := search.next_rate()) is not None:
-            ok = rate <= limit
-            run.add(mode, "trial", receive_record(mode, rate, lossless=ok), target=rate)
+            if behind and mode in behind and rate > behind[mode]:
+                ok = False
+                record = receive_record(mode, rate, achieved=0.95 * rate)
+            else:
+                ok = rate <= limit
+                record = receive_record(mode, rate, lossless=ok)
+            run.add(mode, "trial", record, target=rate)
             search.record(rate, ok)
         results[mode] = search.result()
     run.manifest["bisect"] = results
@@ -297,6 +305,32 @@ class UdpReportTest(unittest.TestCase):
         self.assertIn("won in this regime, 1,400 bytes a datagram, header included, rate-paced",
                       turing1)
         self.assertEqual(len(results_table.VERDICT_MARK.findall(turing1)), 0)
+
+    def test_a_search_stopped_by_the_sender_falling_behind_is_sender_limited(self):
+        # At the lowest lossy rate above S3's and U2's figures the sender fell behind and the
+        # receiver lost nothing, so each figure is a lower bound; U5 lost datagrams above its.
+        text = self.bisect_text(thresholds={"S3": 9_000_000, "U2": 9_000_000, "U5": 1_500_000},
+                                behind={"S3": 2_000_000, "U2": 1_800_000})
+        self.assertEqual(udp_report.check_published(text, NAME), [])
+        lossless = udp_report.check_results.section(text, "Largest lossless rate")
+        s3 = next(line for line in lossless.splitlines() if line.startswith("| S3 |"))
+        self.assertRegex(s3, r"^\| S3 \| at least 1,9\d\d,\d{3}, sender limited \| 2,0[\d,]+ \|")
+        self.assertRegex(lossless, r"\| U5 \| 1,[45]\d\d,\d{3} \|")
+        turing1 = udp_report.check_results.section(text, "T-URING-1: io_uring against sockets")
+        self.assertIn("| U2 | at least 1,", turing1)
+        self.assertIn("| both sender limited |", turing1)
+        self.assertIn("- U2 over S3, the headline pair: both sender limited.", turing1)
+        self.assertIn("- Sender limited below the cap: S3, U2. At the lowest rate above each "
+                      "figure the sender fell behind the schedule", turing1)
+        self.assertIn("- No winner: U2 is sender limited below the top, ", turing1)
+        self.assertNotIn("- Won:", turing1)
+        # One sender-limited mode on top of modes that lost datagrams wins as a lower bound.
+        text = self.bisect_text(thresholds={"S3": 1_500_000, "U2": 9_000_000},
+                                behind={"U2": 2_000_000})
+        turing1 = udp_report.check_results.section(text, "T-URING-1: io_uring against sockets")
+        self.assertRegex(turing1, r"- Won: U2, lossless up to at least 1,9\d\d,\d{3} msg/s, "
+                                  r"sender limited\.")
+        self.assertIn("- Sender limited below the cap: U2.", turing1)
 
     def test_t_uring_2_passes_only_on_every_confirmation_with_its_gap(self):
         text = self.bisect_text()
