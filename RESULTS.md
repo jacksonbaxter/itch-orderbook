@@ -120,6 +120,7 @@ T-INV-2 is strict, and it fails on real data: books cross while a symbol is halt
 | T-TRADE-3 | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 4 arms | `f09ea44` | [results/trades_12302019.md](results/trades_12302019.md) |
 | T-TRADE-5 | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 4 arms | `f09ea44` | [results/trades_12302019.md](results/trades_12302019.md) |
 | PRINTS | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 4 arms | `f09ea44` | [results/trades_12302019.md](results/trades_12302019.md) |
+| T-URING-2 | 12302019 | debian | PASS | S4 lossless at 2,547,190 msg/s in 10 of 10 repetitions; S4's largest lossless rate in the bisection is 2,830,848 msg/s; gap +283,658 msg/s (+11.1%) against the target | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
 | Fault matrix | none | Darwin arm64 | 436 of 436 detected | all areas; controls: 66 commands, 0 failed | `b9a7d8e` | [results/fault_matrix.md](results/fault_matrix.md) |
 
 Throughput. These rows prove the harness on the stub book. They say nothing about a real book, and the two hosts are not to be compared.
@@ -240,6 +241,20 @@ The SPSC ring. Each row is one comparison from a results file's targets table: a
 | T-SPSC-1 | boost rtt / project rtt | 12302019 | macOS (M4 Max) | not pinned | 1.91× | ≥ 1.16× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
 | T-SPSC-1 | project rtt / moodycamel rtt | 12302019 | macOS (M4 Max) | not pinned | 0.53× | ≤ 1.00× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
 | T-SPSC-1 | project rtt / rigtorp rtt | 12302019 | macOS (M4 Max) | not pinned | 0.91× | ≤ 1.00× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
+
+T-URING-1, io_uring against sockets: each receive mode's largest lossless message rate on loopback, and its ratio over S3's, from its results file. The target is UNCONFIRMED, so there is no bar and no verdict. Loopback runs the receive softirq on the sender's CPU, so these are syscall-and-copy figures on one host, not network ones.
+
+| Mode | Largest lossless msgs/s | Over S3 | Day | Host | Commit | File |
+|---|---|---|---|---|---|---|
+| S1 | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| S2 | 2,689,622 | 0.983 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| S3 | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| S4 | 2,830,848 | 1.035 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| U1 | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| U2 | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| U3 | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| U4 | 1,945,047 | 0.711 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| U5 | 1,912,149 | 0.699 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
 
 T-ARENA-1, the node book on each allocator arm, from [results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md), the pools' pages requested as `base`. Only the allocator changes between arms. T-ARENA-1 is UNCONFIRMED, so no bar is met or missed; the check is that no timed pass of a pool arm takes a page fault, and it read: FAIL: page faults in the timed passes of pool-index 136, pool-pointer 200, pool-fifo 146. Tails are over every operation, in ns.
 
@@ -602,4 +617,16 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0703-20261111T230006Z` | `P-0703` | `c8ca2e2dd09b` | Linux | `diagnostic, from the build of c8ca2e2 that P-0702 ran, not rebuilt, `src/` then holding df1676ed0e18` |
 | `P-0703-20261111T230854Z` | `P-0703` | `c8ca2e2dd09b` | Linux | `diagnostic, from the build of c8ca2e2 that P-0702 ran, not rebuilt, `src/` then holding df1676ed0e18` |
 | `P-0105-20261111T233500Z` | `P-0105` | `df1676ed0e18` | Linux | `published` |
+| `P-0901-20261112T020300Z_smoke-loopback-S3` | `P-0901` | `d847e8750aac` | Linux | `failed` |
+| `P-0901-20261112T020300Z_smoke-loopback-U4` | `P-0901` | `d847e8750aac` | Linux | `failed` |
+| `P-0901-20261112T020300Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` |
+| `P-0901-20261112T020304Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` |
+| `P-0902-20261112T020551Z` | `P-0902` | `d847e8750aac` | Linux | `recorded` |
+| `P-0901-20261112T030148Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` |
+| `P-0901-20261112T044013Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` |
+| `P-0901-20261112T020541Z_smoke-paced` | `P-0901` | `d847e8750aac` | Linux | `diagnostic, outside the driver, after the smoke step's unpaced S3 and U4 runs failed` |
+| `P-0901-20261112T020304Z_report` | `P-0901` | `d847e8750aac` | Linux | `published` |
+| `P-0902-20261112T020551Z_report` | `P-0902` | `d847e8750aac` | Linux | `published` |
+| `P-0901-20261112T030148Z_report` | `P-0901` | `d847e8750aac` | Linux | `published` |
+| `P-0901-20261112T044013Z_report` | `P-0901` | `d847e8750aac` | Linux | `published` |
 <!-- results table: end -->

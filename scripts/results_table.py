@@ -427,7 +427,9 @@ def alloc_rows(name, text):
 
 def udp_rows(name, text):
     """A UDP replay file (scripts/udp_report.py): T-URING-2's verdict when the file has a
-    bisection, and T-URING-1's largest lossless rate for each mode, which has no bar."""
+    bisection, and T-URING-1's largest lossless rate for each mode, which has no bar. Those
+    rates come from the bisect step's file alone: a later step's file that draws on the same
+    bisection repeats its T-URING-1 table, and would list every mode twice."""
     host = header_field(text, "host", name)
     commit = header_commit(text, name)
     rows = []
@@ -435,7 +437,7 @@ def udp_rows(name, text):
         verdict, detail = find(r"^Verdict: \*\*(PASS|FAIL)\*\*, (.*)\.$", text, name).groups()
         rows.append(verdict_row("T-URING-2", day_of(name), host, verdict, detail, commit, name))
     modes = []
-    if re.search(r"^## T-URING-1: ", text, re.MULTILINE):
+    if header_field(text, "step", name) == "bisect":
         for cells in section_rows(text, "T-URING-1: io_uring against sockets", name):
             if len(cells) != 3:
                 raise TableError(f"results/{name}: a T-URING-1 row of {len(cells)} cells")

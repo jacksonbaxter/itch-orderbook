@@ -2207,3 +2207,91 @@ Another project's sanitizer test suites ran at nice 5 throughout, and with no is
 **Against P-0104.** T-BT-3's schedule ran at 323.88 ns a message here, against P-0104's 298.14 ns from c8ca2e2. The two runs differ in commit, in the other project's load (none was recorded in P-0104), and in the core's frequency, which read 3.25 to 3.42 GHz in this run's processes and 3.59 GHz in P-0104's header. No counter was read, so which of these made the 8.6% is not known.
 
 **The command shown in the file.** `walk_driver.py` printed its command without `--sibling 5`, though the run was given it and the machine check read cpu5. This is the omission `check_results.py` now refuses in backtest and allocator files since jb-alloc2. The driver now prints `--sibling` as `backtest_driver.py` does, and `check_results.py` holds a ladder file to the same rule. The committed file was rendered again from the run's raw records, through the fixed `walk_driver.render`, and stamped from the run's own `measure.sh` stderr. Its only difference from the file the run wrote is the command line. The machine check's output and the swap line were taken from the run's file, since the run printed them nowhere else.
+
+## T-URING-1 and T-URING-2 on `debian`, 2026-11-12
+
+Loopback runs the receive softirq on the sender's CPU, so everything here is a syscall-and-copy benchmark on one host, not a network benchmark (IU-47). Nasdaq's feed reaches a firm over a NIC; none of these figures is a market-data latency or a NIC rate.
+
+**How it ran.** The predictions went in first, in d847e87: P-0901 for T-URING-1 and the steps around it, P-0902 for T-URING-2. Every timed process ran from d847e87 as `debian_sync.sh` exported it, in a release build with Clang, mimalloc and `-DITCH_LIBURING_ROOT` at the `.toolchain`'s liburing 2.15, its `configure` never run. Each was a fresh `measure.sh taskset -c 4,6` process (`4,6,2` for U5), with the sender on core 4, the receiver on core 6 and U5's SQ thread on core 2, each pin read back. Each step's machine checks passed before and after it. The driver, `scripts/udp_driver.py`, ran each step in turn from one launcher, with the common arguments `--input data/12302019.NASDAQ_ITCH50 --bench build-uring2/bench/bench_udp --probe build-uring2/bench/bench_probe --measure ../bin/measure.sh --core 4 --receiver-core 6 --sq-core 2`:
+
+| Step | Run | Arguments | Processes | Time, UTC |
+|---|---|---|---|---|
+| smoke | P-0901-20261112T020300Z | `--step smoke` | 9 functional runs, 2 failed | 02:03 |
+| ceiling | P-0901-20261112T020304Z | `--step ceiling --repetitions 10 --frames-cap 50000000` | 10 | 02:03 to 02:05 |
+| bisect | P-0902-20261112T020551Z | `--step bisect --ceiling-from <ceiling run> --trial-seconds 30 --start-rate 1000000 --repetitions 10 --frames-cap 50000000` | 91 | 02:05 to 03:01 |
+| latency | P-0901-20261112T030148Z | `--step latency --bisect-from <bisect run> --repetitions 3 --cpu-rate 2000000 --trial-seconds 30 --frames-cap 50000000` | 135 | 03:01 to 04:40 |
+| feed | P-0901-20261112T044013Z | `--step feed --heavy ../bin/heavy.sh --feed-lead-frames 5000000 --frames-cap 6000000 --repetitions 3 --flush-us 100` | 81 | 04:40 to 07:11 |
+
+`scripts/udp_report.py` wrote one file a timed step from the raw run directories, which stay outside the repository: `results/udp_ceiling_debian_12302019.md`, `results/udp_bisect_debian_12302019.md`, `results/udp_latency_debian_12302019.md` (which carries the bisection its rates come from) and `results/udp_feed_debian_12302019.md`. Each passes `udp_report.py --check`. Every run, the failed ones included, has its row in `results/run_log.md`.
+
+**No mode was stopped by the host.** Every mode set up on every run. The 4 MiB receive buffer asked for read back as 8,388,608 bytes, under `rmem_max`; the rings fit in `ulimit -l` of 8,192 KiB. No limit had to be raised, and none was.
+
+**The sender's ceiling.** Alone and unpaced, the sender reached 9,863,736 messages/s, the median of 10, which is 225,530 packets/s of 1,400 bytes. No trial ran above 0.9 × that, 8,877,362.
+
+**T-URING-1: the largest lossless rate of each mode.** Its target is UNCONFIRMED, so this says which mode won here and sets no bar.
+
+| Mode | Largest lossless msgs/s | Over S3 |
+|---|---|---|
+| S4 | 2,830,848 | 1.035 |
+| S1, S3, U1, U2, U3 | 2,735,896 | 1.000 |
+| S2 | 2,689,622 | 0.983 |
+| U4 | 1,945,047 | 0.711 |
+| U5 | 1,912,149 | 0.699 |
+
+- Five modes share one figure because the search walks the same geometric steps for every mode: each went lossless at 2,735,896 and lost datagrams at 2,782,967, 1.7% above it. Within 2%, the step's tolerance, they cannot be told apart. U2 over S3, the headline pair, is 1.000.
+- S4, which spins on `recvmmsg` with `MSG_DONTWAIT`, won by one step, 3.5%.
+- U4 and U5 rank last for a different reason. Their lossy trials below 2,979,490, U4's at 1,978,512 and 2,267,809 and U5's at 1,945,047, 1,978,512 and 2,267,809, lost no datagram. Each counted as lossy because the buffer ring ran dry at least once: the multishot request ended with ENOBUFS, and the mode armed it again. The rule fixed before the runs counts that as a loss, and so the bisection stopped there. U5 was lossless on every other counter at 2,979,490, above S4's figure; U4 lost 50,396 datagrams there. The ring has 1,024 buffers of 2,048 bytes. A larger ring would answer whether that, rather than the receive path, limits them. That is a new experiment with a new prediction, not a change to this one.
+- Every lossy trial's socket drop count equals its `RcvbufErrors`: 31 in the bisection, with `InErrors` and softnet drops zero.
+
+**T-URING-2: PASS.** S4, the winning mode, was lossless at 2,547,190 messages/s in 10 runs of 10, each run 50,000,000 messages from the day's first frame. Its bisection figure is 11.1% above the target.
+
+**The feed-shaped replay.** 6,000,000 frames from 5,000,000 before the day's busiest second were replayed by their own ITCH timestamps: in real time, then sped up ×1.263 so the window's busiest second runs at 1,305,440 messages/s, then ×1.523 so its busiest millisecond runs at 2,547,190. All nine modes were lossless in all three repetitions of all three schedules, 27 of 27.
+
+**Latency**, from each packet's due time to the receiver's return, medians over 3 runs:
+
+- At 1,000 packets/s, 43,736 messages/s, the blocking modes' p50 is 32.6 to 35.6 µs and their p99 447 to 556 µs: a wake-up on another core. The spinning modes, S4, U4 and U5, have a p50 of 6.1 to 6.5 µs and a p99 of 9.5 to 10.9 µs.
+- From 0.1 to 0.8 of each mode's largest rate, p50 falls to 9 to 12 µs for the blocking modes and stays near 6 µs for the spinning ones. p99 is 8.3 to 32.4 µs, except for S1 at 0.8, which is 1,828 µs. p99.9 at 0.8 is 20 to 26 ms for the seven modes bisected near 2.7 M, and 3.4 to 3.5 ms for U4 and U5, whose 0.8 is a lower rate.
+
+**The CPU split at 2,000,000 messages/s.** The sender's thread is busy 99.9% of its window in every mode. The blocking receivers use 59.4% (S1) to 66.5% (U3) of core 6. S4, U4 and U5 use 99.9% by construction, and U5's SQ thread 99.8%. Softirq ticks are 7.2% to 9.2% of core 4, the sender's, and 0.0% of core 6. At this rate, above their largest lossless rates, U4 and U5 each ran the ring dry once in each of their 3 runs, with no datagram lost, so those six runs count as lossy by the same rule.
+
+**P-0901 and P-0902 against what ran.**
+
+| Prediction | Predicted | Measured | |
+|---|---|---|---|
+| Ceiling | 200,000 to 700,000 packets/s | 225,530 | held |
+| No mode sender-limited | none at the cap | none | held |
+| Each mode's largest rate | 3.0 to 5.0 M msg/s | 1.91 to 2.83 M | missed: every mode below |
+| The nine within 15% | within 15% | S4 is 1.48 × U5 | missed |
+| U2 over S3 | 0.95 to 1.10 | 1.000 | held |
+| Spinning modes top by 0 to 8% | S4, U4, U5 on top | S4 top by 3.5%; U4 and U5 last | missed for U4 and U5 |
+| U1 and S1 at the bottom | bottom | tied with S3, U2, U3 | missed |
+| Each search ends on the 2% tolerance | every mode | every mode, 1.7% | held |
+| Feed lossless | every mode, every schedule | 27 of 27 | held |
+| 1 s speedup | 1.254 | 1.263 | missed: the window's own busiest second, 1,033,952 messages, is not the day's 1,041,188 the prediction used |
+| 1 ms speedup | 1.3 to 3 | 1.523 | held |
+| Low-rate p50, blocking | 5 to 40 µs | 32.6 to 35.6 | held |
+| Low-rate p50, spinning | 2 to 15 µs | 6.1 to 6.5 | held |
+| p99 at 0.8 over 10 × the low-rate p99 | every mode | none: S1 4.1 ×, the others under 1.2 × | missed |
+| Spinning modes' receiver at 100% | 100% | 99.9% | held |
+| Blocking receivers under the spinning ones | yes | 59 to 67% against 99.9% | held |
+| Batching modes under S1, S2, U1 | S3, U2, U3 lower | S3 64.7%, U2 65.6%, U3 66.5% against S1 59.4% | missed |
+| Softirq on core 4, not 6 | yes | 7 to 9% against 0.0% | held |
+| U5's SQ thread busy | the whole run | 99.8% | held |
+| Counters zero when lossless; drops agree with `RcvbufErrors` when not | yes | yes, on every trial | held |
+| T-URING-2 | PASS, 10 of 10 | PASS, 10 of 10 | held |
+| 2,547,190 as a share of the winner's largest rate | 50 to 85% | 90.0% | missed |
+
+**What went wrong.**
+
+- The smoke step ran each mode's functional check unpaced. S3 lost 53,132 datagrams and U4 6,264 to a sender that outruns a receiver applying every message to the book, so both checks failed and the smoke run exited 1. Their rows are in the run log. A paced check of all nine at 1,000,000 messages/s then passed, also logged, and every timed step went ahead. The driver now paces the smoke step's runs (`--smoke-rate`, 1e8f78f); the timed steps ran from d847e87, before that change.
+- The first launcher read each run's id from the driver's stdout, which also held `check_predictions`'s line, so it would have handed the latency step a wrong bisect directory. It was stopped after the smoke step, with the ceiling step left running, and a second launcher ran the rest. No timed process was lost or repeated. The driver now prints the id alone (1e8f78f).
+- Before any timed run, the Linux faults of `scripts/faults/udp_modes.json` found a real bug: a ring mode whose multishot request kept ending with no buffer given back looped in `wait()` past its idle timeout. The fault `udp-ring-buffer-never-returned` timed out at 300 s where its test should have failed. `wait()` is now bounded by the idle timeout (9b99ef6), and the area is 21 of 21 on `debian`.
+- `fault_matrix.py` gained a `system` field so a fault that needs Linux is checked for staleness on the Mac and run only on Linux; three matrix faults hold that.
+- `results_table.py` listed each mode's T-URING-1 rate twice, once from the bisect file and once from the latency file that repeats its table. It now takes the rates from the bisect step's file alone, with a test and the fault `udp-results-table-modes-from-every-file`; the udp_runs area is 30 of 30.
+- The CI reruns for GitHub's runner DNS fault on 5a944ca, run 43035681290 attempts 1 to 3, are in "GitHub's runner DNS fault" above.
+
+**The host's readings.**
+
+- `rmem_max`. "The UDP replay's portable groundwork" (2026-11-10) computed its buffer depth from a 212,992-byte `rmem_max`. That figure is IU-45's assumption, a default seen on one Ubuntu system and marked as a placeholder until the host was read; no reading of `debian`'s value before this step was found. P-0901's smoke read it on `debian` on 2026-11-12 as 7,340,032, and `rmem_default` as 212,992. The value comes from outside this project: `/usr/lib/sysctl.d/30-syncthing.conf`, a file of the syncthing package, sets `net.core.rmem_max` and `net.core.wmem_max` to 7,340,032. dpkg last changed it on 2026-10-21. This project changed no sysctl.
+- `CONFIG_IRQ_TIME_ACCOUNTING` is not set in the running kernel, so softirq time may also show in the sender thread's system time. The CPU split counts softirq from `/proc/stat` per CPU and says the sum can count that work twice.
+- Kernel 6.12.116, `io_uring_disabled` 0, `io_uring_group` -1, `ulimit -l` 8,192 KiB, `lo`'s MTU 65,536, `ip_early_demux` 1, clock source `tsc`, `perf_event_paranoid` 2, governor `performance` on cores 4 and 6 under `measure.sh`, turbo and SMT on, no isolated core. Every file's header gives the mitigations, `pswpout` and uptime at the start and end, and each process's `measure.sh` load line. The feed step's first machine check read a five-minute load of 3.75; every sibling-idle check passed.

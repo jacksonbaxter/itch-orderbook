@@ -544,6 +544,28 @@ class UdpReportTest(unittest.TestCase):
             with self.assertRaisesRegex(results_table.TableError, "2 verdicts in the file, 1 rows"):
                 results_table.generate(root)
 
+    def test_results_table_takes_the_modes_from_the_bisect_file_alone(self):
+        with scratch() as folder:
+            root = Path(folder)
+            (root / "results").mkdir()
+            (root / "results" / "run_log.md").write_text(
+                "| Run | Prediction | Commit | OS | Outcome |\n|---|---|---|---|---|\n",
+                encoding="utf-8")
+            text = self.bisect_text()
+            (root / "results" / NAME).write_text(text, encoding="utf-8")
+            once = results_table.generate(root)
+            # A later step's file repeats the bisection's T-URING-1 table, not its verdict.
+            head, rest = text.split("\n## T-URING-2: ", 1)
+            later = head + "\n## " + rest.split("\n## ", 1)[1]
+            later = later.replace("\n- step: bisect\n", "\n- step: latency\n")
+            self.assertIn("## T-URING-1: ", later)
+            (root / "results" / "udp_latency_debian_12302019.md").write_text(later,
+                                                                           encoding="utf-8")
+            twice = results_table.generate(root)
+            for mode in ("U2", "U5"):
+                self.assertEqual(sum(line.startswith(f"| {mode} | ") for line in once), 1)
+                self.assertEqual(sum(line.startswith(f"| {mode} | ") for line in twice), 1)
+
     def test_the_main_writes_then_checks_and_check_fails_a_broken_file(self):
         with scratch() as folder:
             root = Path(folder)

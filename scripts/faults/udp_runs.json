@@ -548,6 +548,27 @@
       }
     },
     {
+      "id": "udp-results-table-modes-from-every-file",
+      "breaks": "results_table.py takes T-URING-1's modes from every UDP file with the table, so a latency file drawing on the bisection lists each mode a second time",
+      "check": "test_udp_report.py test_results_table_takes_the_modes_from_the_bisect_file_alone",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if header_field(text, \"step\", name) == \"bisect\":\n        for cells",
+          "new": "    if re.search(r\"^## T-URING-1: \", text, re.MULTILINE):\n        for cells"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_results_table_takes_the_modes_from_the_bisect_file_alone ",
+        "exit": 1
+      }
+    },
+    {
       "id": "udp-predictions-skip-udp-results",
       "breaks": "check_predictions leaves the UDP results unread, so one could name no prediction",
       "check": "test_check_predictions test_a_udp_result_naming_no_prediction",
