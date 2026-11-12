@@ -340,6 +340,28 @@ class ProcessTest(unittest.TestCase):
         self.assertEqual(words[3], "4,6")
         self.assertNotIn("--receiver-core", words)
 
+    def test_the_smoke_runs_are_paced_under_heavy_sh(self):
+        # Unpaced, a sender outruns a receiver that applies every message to the book, and a
+        # mode that delivers would fail the smoke for want of pace.
+        args = arguments(Path("/q"), heavy=Path("/q/bin/heavy.sh"),
+                         loopback=Path("/q/itch_loopback"), input=Path("/q/day"),
+                         smoke_frames=1_000_000, smoke_rate=1_000_000)
+        words = udp_driver.smoke_words(args, "U5")
+        self.assertEqual(words[:5], ["/q/bin/heavy.sh", "/q/itch_loopback", "/q/day", "--mode",
+                                     "U5"])
+        self.assertEqual(words[words.index("--rate") + 1], "1000000")
+        self.assertEqual(words[-2:], ["--sq-core", "2"])
+        self.assertNotIn("--sq-core", udp_driver.smoke_words(args, "S3"))
+
+    def test_stdout_is_the_run_id_alone(self):
+        # A launcher takes the run id from the driver's stdout, so check_predictions' line
+        # goes to stderr.
+        source = (SCRIPTS / "udp_driver.py").read_text(encoding="utf-8")
+        call = source[source.index('checker = REPO_ROOT / "scripts" / "check_predictions.py"'):]
+        call = call[:call.index("run = run_step(")]
+        self.assertIn("capture_output=True", call)
+        self.assertIn("file=sys.stderr", call)
+
     def test_a_bisect_step_leaves_its_manifest_and_confirms_t_uring_2(self):
         with records.scratch() as folder:
             folder = Path(folder)

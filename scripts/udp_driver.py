@@ -9,7 +9,7 @@ fresh bench_udp under measure.sh, pinned by taskset.
         [--sq-core Q] [--first F] [--frames-cap N] [--trial-seconds S] [--datagram BYTES] \\
         [--allow-dirty] [--run-log FILE] STEP'S OPTIONS
 
-    smoke     --heavy HEAVY_SH --loopback ITCH_LOOPBACK [--smoke-frames N]
+    smoke     --heavy HEAVY_SH --loopback ITCH_LOOPBACK [--smoke-frames N] [--smoke-rate R]
     ceiling   (no more)
     bisect    (--ceiling MSGS_PER_S | --ceiling-from CEILING_RUN_DIR) [--start-rate R]
               [--floor-rate R] [--most-steps N]
@@ -36,7 +36,9 @@ The steps:
   ulimit -l, every vulnerabilities line, lo's MTU, the clocksource, the three cores'
   governors and SMT siblings, nmi_watchdog, perf_event_paranoid, ip_early_demux,
   CONFIG_IRQ_TIME_ACCOUNTING, lscpu), `bench_udp --probe`, and one functional itch_loopback
-  per mode under heavy.sh, each verdict. A reading that cannot be had is recorded as
+  per mode under heavy.sh, paced at --smoke-rate msg/s, each verdict. Paced, because an
+  unpaced sender outruns a receiver that applies every message to the book, and the check
+  is that each mode delivers, not how fast. A reading that cannot be had is recorded as
   `unreadable: <why>`, never filled in, and no limit is changed.
 - ceiling: the sender alone, unpaced, --repetitions times (the comparison plan's task 2).
   The manifest gets the median achieved messages/s and packets/s.
@@ -560,6 +562,17 @@ def slice_args(args, frames, first=None):
             "--datagram", str(args.datagram)]
 
 
+def smoke_words(args, mode):
+    """One functional itch_loopback run of the smoke step, under heavy.sh, paced."""
+    words = [str(args.heavy), str(args.loopback), str(args.input), "--mode", mode,
+             "--first", str(args.first), "--frames", str(args.smoke_frames),
+             "--datagram", str(args.datagram), "--rate", str(args.smoke_rate),
+             "--core", str(args.core), "--receiver-core", str(args.receiver_core)]
+    if mode == SQ_MODE:
+        words += ["--sq-core", str(args.sq_core)]
+    return words
+
+
 def step_smoke(run):
     args = run.args
     if args.heavy is None or args.loopback is None:
@@ -571,12 +584,7 @@ def step_smoke(run):
     smoke["loopback"] = {}
     for mode in args.modes:
         stem = run.dir / f"smoke-loopback-{mode}"
-        words = [str(args.heavy), str(args.loopback), str(args.input), "--mode", mode,
-                 "--first", str(args.first), "--frames", str(args.smoke_frames),
-                 "--datagram", str(args.datagram), "--core", str(args.core),
-                 "--receiver-core", str(args.receiver_core)]
-        if mode == SQ_MODE:
-            words += ["--sq-core", str(args.sq_core)]
+        words = smoke_words(args, mode)
         with open(f"{stem}.out", "w", encoding="utf-8") as out, \
                 open(f"{stem}.err", "w", encoding="utf-8") as err:
             code = subprocess.run(words, stdout=out, stderr=err, stdin=subprocess.DEVNULL,
@@ -831,6 +839,7 @@ def parse_args(argv):
     parser.add_argument("--trial-seconds", type=float, default=60.0)
     parser.add_argument("--datagram", type=int, default=1400)
     parser.add_argument("--smoke-frames", type=int, default=1_000_000)
+    parser.add_argument("--smoke-rate", type=int, default=1_000_000)
     parser.add_argument("--ceiling", type=int)
     parser.add_argument("--ceiling-from", type=Path)
     parser.add_argument("--start-rate", type=int, default=100_000)
@@ -865,8 +874,11 @@ def main(argv=None):
     try:
         commit = bench_driver.git_commit(REPO_ROOT, args.allow_dirty)
         checker = REPO_ROOT / "scripts" / "check_predictions.py"
-        if subprocess.run([sys.executable, "-B", str(checker), "--require", args.prediction],
-                          check=False).returncode != 0:
+        # Its lines go to stderr: stdout is the run id alone, for a launcher to read.
+        checked = subprocess.run([sys.executable, "-B", str(checker), "--require",
+                                  args.prediction], capture_output=True, text=True, check=False)
+        print((checked.stdout + checked.stderr).strip(), file=sys.stderr)
+        if checked.returncode != 0:
             raise Refused("prediction", f"{args.prediction} is not on record")
         run = run_step(args, run_id, commit)
     except (Refused, OSError, ValueError, KeyError) as error:

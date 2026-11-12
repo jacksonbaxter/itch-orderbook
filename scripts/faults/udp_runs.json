@@ -567,6 +567,48 @@
         "signature": "^FAIL: test_a_udp_result_naming_no_prediction ",
         "exit": 1
       }
+    },
+    {
+      "id": "udp-driver-smoke-unpaced",
+      "breaks": "The smoke step's functional runs go unpaced, so a mode that delivers fails for want of pace",
+      "check": "test_udp_driver.py test_the_smoke_runs_are_paced_under_heavy_sh",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "             \"--datagram\", str(args.datagram), \"--rate\", str(args.smoke_rate),\n",
+          "new": "             \"--datagram\", str(args.datagram),\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^ERROR: test_the_smoke_runs_are_paced_under_heavy_sh |^FAIL: test_the_smoke_runs_are_paced_under_heavy_sh ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-stdout-not-the-run-id",
+      "breaks": "check_predictions' line goes to the driver's stdout, so a launcher reading the run id from it gets two lines",
+      "check": "test_udp_driver.py test_stdout_is_the_run_id_alone",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "                                  args.prediction], capture_output=True, text=True, check=False)\n",
+          "new": "                                  args.prediction], text=True, check=False)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_stdout_is_the_run_id_alone ",
+        "exit": 1
+      }
     }
   ]
 }
