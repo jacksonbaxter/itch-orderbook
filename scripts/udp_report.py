@@ -2,7 +2,7 @@
 """Writes a results file of the UDP replay's comparison (T-URING-1, T-URING-2) from runs of
 scripts/udp_driver.py.
 
-    udp_report.py --run-dir DIR [--run-dir DIR ...] --out results/udp_STEP_debian_DAY.md
+    udp_report.py --run-dir DIR [--run-dir DIR ...] --out results/udp_STEP[_CAPb]_debian_DAY.md
         [--run-log FILE]
     udp_report.py --check FILE
 
@@ -12,6 +12,12 @@ given (ceiling, bisect, feed or latency); the others give the file what it needs
 a ceiling run its sender rows, a smoke run its readings for the header. Every process with a
 record is a row of the table of every process, and every one without is listed with the
 reason. Only debian files are written: no Mac loopback figure is a result.
+
+The packet size is part of the name. T-URING-2 is judged at 1,400 bytes a datagram (P-0902),
+and a file at that size has no _CAPb; a file at any other size, such as T-URING-1's
+small-packet arm at 72 bytes, names it, udp_bisect_72b_debian_DAY.md, so that the two sizes
+never share a file. Only a bisection at 1,400 bytes carries T-URING-2's verdict; one at
+another size says where the verdict is instead, and a confirmation run in it is refused.
 
 Every figure comes from the file's own table of every process, so --check rebuilds the
 sender's ceiling, each mode's largest lossless rate, T-URING-1's ratios, T-URING-2's
@@ -26,8 +32,9 @@ whose sender or receiver was not pinned; on a governor other than performance; o
 check missing or failed before or after any run; on a row whose lossless cell is not what
 its counters say; on a rate-paced row above the cap, 0.9 x the sender's ceiling, or a cap
 that is not 0.9 x the ceiling shown; on a feed speedup that is not the target over the
-window's peak; on a T-URING-2 verdict mark missing, doubled or in a file with no bisection;
-on a load line that is not measure.sh's; and on anything private.
+window's peak; on a T-URING-2 verdict mark missing, doubled, in a file with no bisection or
+in one at a packet size other than 1,400 bytes; on a name whose packet size is not the
+header's; on a load line that is not measure.sh's; and on anything private.
 
 How a trial counts, as the driver counts it: lossless, verdict PASS and the sender kept pace,
 achieving at least 0.99 x the target. The largest lossless rate is the largest such trial's
@@ -61,7 +68,9 @@ import udp_driver  # noqa: E402
 DEBIAN = "debian"
 COMPARABILITY = ("Loopback runs the receive softirq on the sender's CPU, so this is a "
                  "syscall-and-copy benchmark on one host, not a network benchmark (IU-47).")
-FILE_NAME = re.compile(r"^udp_(ceiling|bisect|feed|latency)_(debian|mac)_(\d{8})\.md$")
+FILE_NAME = re.compile(r"^udp_(ceiling|bisect|feed|latency)(?:_(\d+)b)?_(debian|mac)_(\d{8})"
+                       r"\.md$")
+CAP_FIELD = re.compile(r"^([0-9,]+) bytes a datagram")
 TIMED_STEPS = ("ceiling", "bisect", "feed", "latency")
 DESTINATION = "127.0.0.1, unicast, both sockets connect()ed"
 CONNECTED = "loopback, unicast, both sockets connect()ed"
@@ -69,6 +78,7 @@ NONE = "–"
 MODES = udp_driver.MODES
 TARGET_1S = udp_driver.TARGET_1S
 TARGET_1MS = udp_driver.TARGET_1MS
+TURING2_DATAGRAM = udp_driver.TURING2_DATAGRAM
 TITLES = {"ceiling": "the sender's ceiling",
           "bisect": "each receive mode's largest lossless rate",
           "feed": "the feed-shaped replay",
@@ -103,18 +113,19 @@ COLUMNS = (
     ("Verdict", "verdict", "text"))
 FAILED_COLUMNS = (("Run", "run"), ("Mode", "mode"), ("Role", "role"), ("Exit", "exit"),
                   ("Why", "why"))
+BISECTION = ("Each mode's largest lossless rate by bisection on the message rate, one trial a "
+             "process, the modes taken in a shuffled order each round. A trial runs min(rate × "
+             "the trial's seconds, the frame cap) messages; it counts as lossless only when the "
+             "record is lossless on every counter of IU-43, its verdict is PASS and the sender "
+             "kept pace, achieving at least 0.99 × the target. From the start rate, halved while "
+             "lossy; then the cap; then geometric bisection until high over low is at most 1.02 "
+             "or ten midpoints.")
 METHOD = {
     "ceiling": "The sender alone, unpaced, down a pair whose receiving socket nobody reads "
                "(`bench_udp --mode sender`): the comparison plan's task 2. No trial runs above "
                "0.9 × its median.",
-    "bisect": "Each mode's largest lossless rate by bisection on the message rate, one "
-              "trial a process, the modes taken in a shuffled order each round. A trial runs "
-              "min(rate × the trial's seconds, the frame cap) messages; it counts as lossless "
-              "only when the record is lossless on every counter of IU-43, its verdict is "
-              "PASS and the sender kept pace, achieving at least 0.99 × the target. From the "
-              "start rate, halved while lossy; then the cap; then geometric bisection until "
-              "high over low is at most 1.02 or ten midpoints. Then the best mode at "
-              f"{TARGET_1MS:,} msg/s, if that is under the cap.",
+    "bisect": BISECTION + f" Then the best mode at {TARGET_1MS:,} msg/s, if that is under "
+                          "the cap.",
     "feed": "A window of the day around its busiest second, replayed by its ITCH timestamps "
             "three ways: in real time; sped up so its own busiest 1 s runs at "
             f"{TARGET_1S:,} msg/s; and so its own busiest 1 ms runs at {TARGET_1MS:,} msg/s, "
@@ -132,6 +143,30 @@ METHOD = {
 
 class ReportError(Exception):
     """The input cannot become a results file."""
+
+
+# --- Packet sizes --------------------------------------------------------------------------
+
+def file_name(step, datagram, host, day):
+    """A results file's name: no _CAPb at T-URING-2's 1,400 bytes a datagram, the size named
+    at any other, so that the two sizes never share a file."""
+    tag = "" if datagram == TURING2_DATAGRAM else f"_{datagram}b"
+    return f"udp_{step}{tag}_{host}_{day}.md"
+
+
+def datagram_of(fields):
+    """The packet size the header gives, in bytes a datagram, or None."""
+    match = CAP_FIELD.match(fields.get("packet_size_cap", ""))
+    return int(match.group(1).replace(",", "")) if match else None
+
+
+def method_of(step, datagram):
+    """What a step ran, in words. T-URING-2 is judged at 1,400 bytes a datagram alone, so a
+    bisection at another size ran no confirmation."""
+    if step == "bisect" and datagram != TURING2_DATAGRAM:
+        return (BISECTION + f" No run at {TARGET_1MS:,} msg/s: T-URING-2 is judged at "
+                            f"{TURING2_DATAGRAM:,} bytes a datagram.")
+    return METHOD[step]
 
 
 # --- Rows ----------------------------------------------------------------------------------
@@ -565,16 +600,28 @@ def derived(fields, rows, failed):
     shown = check_results.number(fields.get("sender_ceiling", "")) \
         if fields.get("sender_ceiling", "").split(" ")[0][:1].isdigit() else None
     found = largest_lossless(rows, cap) if cap is not None else {}
+    datagram = datagram_of(fields)
+    judged = datagram == TURING2_DATAGRAM
+    if not judged and any(row["role"] == "confirm" for row in rows):
+        raise ReportError(f"T-URING-2 confirmation runs at {datagram} bytes a datagram; "
+                          f"T-URING-2 is judged at {TURING2_DATAGRAM:,}")
     if any(row["role"] == "trial" for row in rows):
         if cap is None:
             raise ReportError("trials with no rate_cap field")
         sections["Largest lossless rate"] = lossless_lines(found)
-        sections["T-URING-1: io_uring against sockets"] = turing1_lines(
-            found, fields.get("packet_size_cap", "packet size not recorded"))
+        lines = turing1_lines(found, fields.get("packet_size_cap", "packet size not recorded"))
+        if fields.get("step") == "bisect" and not judged:
+            elsewhere = file_name("bisect", TURING2_DATAGRAM, fields.get("host"),
+                                  fields.get("dataset", "").split(".", 1)[0])
+            lines.append(f"- No T-URING-2 verdict here: T-URING-2 is judged at "
+                         f"{TURING2_DATAGRAM:,} bytes a datagram (P-0902), in `{elsewhere}`.")
+        sections["T-URING-1: io_uring against sockets"] = lines
         if "S3" in found and "U2" in found:
             summary.append(f"U2 {rate_text(found['U2'])} against S3 {rate_text(found['S3'])} "
                            "msg/s")
-    if fields.get("step") == "bisect":
+    if fields.get("step") == "bisect" and not judged:
+        summary.append(f"no T-URING-2 verdict at {datagram} bytes a datagram")
+    elif fields.get("step") == "bisect":
         if cap is None or shown is None:
             raise ReportError("a bisect file with no sender_ceiling or rate_cap")
         lines, verdict, best = turing2_lines(found, rows, failed, cap, int(shown))
@@ -724,7 +771,7 @@ def render(timed, smoke, name):
     match = FILE_NAME.match(name)
     if match is None:
         raise ReportError(f"{name} is not udp_STEP_debian_DAY.md")
-    step, host_file, day = match.groups()
+    step, _, host_file, day = match.groups()
     manifests = [manifest for manifest, _, _ in timed]
     steps = [manifest["step"] for manifest in manifests]
     if steps.count(step) != 1:
@@ -743,6 +790,13 @@ def render(timed, smoke, name):
         raise ReportError(f"a {header['host']} run: only debian files are written")
     if header["dataset"].split(".", 1)[0] != day:
         raise ReportError(f"{name} names {day}, the records {header['dataset']}")
+    datagrams = sorted({record["plan"]["max_datagram"] for record in records})
+    if len(datagrams) != 1:
+        raise ReportError(f"the records differ in max_datagram: {datagrams}")
+    datagram = datagrams[0]
+    if name != file_name(step, datagram, host_file, day):
+        raise ReportError(f"{name} is not the name for {datagram:,} bytes a datagram: "
+                          f"{file_name(step, datagram, host_file, day)}")
     cores = manifests[0]["cores"]
     if any(manifest["cores"] != cores for manifest in manifests):
         raise ReportError("the runs used different cores")
@@ -819,7 +873,9 @@ def render(timed, smoke, name):
     parsed = parse_runs_table("## Every process\n\n" + "\n".join(runs_table(rows)) + "\n")
     sections, summary = derived(as_dict, parsed, failed)
     fields.append(("summary", summary))
-    out = [f"# T-URING-1 and T-URING-2, {TITLES[step]}, {host_file}, {day}", "",
+    title = f"T-URING-1 and T-URING-2, {TITLES[step]}" if datagram == TURING2_DATAGRAM else \
+        f"T-URING-1 at {datagram:,} bytes a datagram, {TITLES[step]}"
+    out = [f"# {title}, {host_file}, {day}", "",
            "Generated by `scripts/udp_report.py` from raw records that are not committed. "
            "Do not edit by hand.", "",
            f"Host: **{DEBIAN}**. Numbers from the two hosts are never mixed.", "",
@@ -829,7 +885,7 @@ def render(timed, smoke, name):
     out += ["## Header", ""]
     out += [f"- {key}: {value}" for key, value in fields]
     out += ["", "## What was run", ""]
-    out += [f"- {s}: {METHOD[s]}" for s in dict.fromkeys(steps)]
+    out += [f"- {s}: {method_of(s, datagram)}" for s in dict.fromkeys(steps)]
     for title, lines in sections.items():
         out += ["", f"## {title}", ""] + lines
     out += ["", "## Every process", "",
@@ -887,9 +943,13 @@ def check_published(text, name=None):
     match = FILE_NAME.match(name) if name is not None else None
     if name is not None:
         day = fields.get("dataset", "").split(".", 1)[0]
-        if match is None or match.group(2) != ("debian" if host == DEBIAN else "mac") or \
-                match.group(1) != fields.get("step") or match.group(3) != day:
+        if match is None or match.group(3) != ("debian" if host == DEBIAN else "mac") or \
+                match.group(1) != fields.get("step") or match.group(4) != day:
             found.append(("host-label", f"{name} holds {fields.get('step')} on {host}, {day}"))
+        datagram = datagram_of(fields)
+        if match is not None and (datagram is None or match.group(2) != (
+                None if datagram == TURING2_DATAGRAM else str(datagram))):
+            found.append(("cap-label", f"{name} for {fields.get('packet_size_cap')!r}"))
     if not re.match(r"^[0-9a-f]{12} ", fields.get("commit", "")):
         found.append(("commit-missing", repr(fields.get("commit"))))
     found += list(check_results.check_load(fields))
@@ -928,7 +988,8 @@ def check_published(text, name=None):
     if fields.get("summary") != summary:
         found.append(("summary-differs", f"{fields.get('summary')!r} against {summary!r}"))
     marks = len(results_table.VERDICT_MARK.findall(text))
-    expected = 1 if fields.get("step") == "bisect" else 0
+    expected = 1 if fields.get("step") == "bisect" and \
+        datagram_of(fields) == TURING2_DATAGRAM else 0
     if marks != expected:
         found.append(("verdict-marks", f"{marks} verdict marks, wanted {expected}"))
     return found

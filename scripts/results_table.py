@@ -14,8 +14,10 @@ neither can drop out unseen. A book benchmark file missing a field its row needs
 refused as well. An oracle or trades file runs each arm of the fast book, and a
 row says whether every arm gave its verdict. An arm that gave another one makes the row a
 failure that names it. A UDP replay file gives a T-URING-2 row when it
-holds a bisection, and each mode's largest lossless rate to the T-URING-1 table, which
-has no verdict. predictions.md is not a result, and run_log.md gets its own
+holds a bisection at 1,400 bytes a datagram, T-URING-2's packet size, and a verdict in a file
+at any other size is refused. Each bisection, at either size, gives each mode's largest
+lossless rate to the T-URING-1 table, which has no verdict, each row labelled with its
+packet size. predictions.md is not a result, and run_log.md gets its own
 table, every row of it, failed runs included; a line of its table that is not a run is
 refused. Each row cites its file, so scripts/gate_numbers.py holds the
 row's figures to that file.
@@ -425,15 +427,25 @@ def alloc_rows(name, text):
     return rows, header_field(text, "fault_check", name), header_field(text, "pages_requested", name)
 
 
+# T-URING-2's packet size, bytes a datagram (P-0902), as scripts/udp_driver.py has it.
+TURING2_DATAGRAM = 1400
+
+
 def udp_rows(name, text):
     """A UDP replay file (scripts/udp_report.py): T-URING-2's verdict when the file has a
-    bisection, and T-URING-1's largest lossless rate for each mode, which has no bar. Those
-    rates come from the bisect step's file alone: a later step's file that draws on the same
-    bisection repeats its T-URING-1 table, and would list every mode twice."""
+    bisection at 1,400 bytes a datagram, and T-URING-1's largest lossless rate for each mode,
+    which has no bar, at the file's packet size. Those rates come from the bisect step's file
+    alone: a later step's file that draws on the same bisection repeats its T-URING-1 table,
+    and would list every mode twice."""
     host = header_field(text, "host", name)
     commit = header_commit(text, name)
+    datagram = int(find(r"^([0-9,]+) bytes a datagram",
+                        header_field(text, "packet_size_cap", name), name)[1].replace(",", ""))
     rows = []
     if re.search(r"^## T-URING-2: ", text, re.MULTILINE):
+        if datagram != TURING2_DATAGRAM:
+            raise TableError(f"results/{name}: a T-URING-2 verdict at {datagram:,} bytes a "
+                             f"datagram; T-URING-2 is judged at {TURING2_DATAGRAM:,}")
         verdict, detail = find(r"^Verdict: \*\*(PASS|FAIL)\*\*, (.*)\.$", text, name).groups()
         rows.append(verdict_row("T-URING-2", day_of(name), host, verdict, detail, commit, name))
     modes = []
@@ -441,7 +453,8 @@ def udp_rows(name, text):
         for cells in section_rows(text, "T-URING-1: io_uring against sockets", name):
             if len(cells) != 3:
                 raise TableError(f"results/{name}: a T-URING-1 row of {len(cells)} cells")
-            modes.append((*cells, day_of(name), host, f"`{commit}`", source(name)))
+            modes.append((cells[0], f"{datagram:,} bytes", *cells[1:], day_of(name), host,
+                          f"`{commit}`", source(name)))
         if not modes:
             raise TableError(f"results/{name}: T-URING-1 has no mode")
     return rows, modes
@@ -588,12 +601,15 @@ def generate(root):
                                  "Bar", "Verdict", "Commit", "File"), spsc)
     if turing1:
         lines += ["", "T-URING-1, io_uring against sockets: each receive mode's largest lossless "
-                      "message rate on loopback, and its ratio over S3's, from its results file. "
-                      "The target is UNCONFIRMED, so there is no bar and no verdict. Loopback runs "
+                      "message rate on loopback, and its ratio over S3's, from its results file, "
+                      "at each packet size it ran at, a datagram's bytes with its header. The "
+                      "target is UNCONFIRMED, so there is no bar and no verdict. Loopback runs "
                       "the receive softirq on the sender's CPU, so these are syscall-and-copy "
                       "figures on one host, not network ones.", ""]
-        lines += markdown_table(("Mode", "Largest lossless msgs/s", "Over S3", "Day", "Host",
-                                 "Commit", "File"), turing1)
+        # The larger packet first: 1,400 bytes is T-URING-2's size and the headline pair's.
+        turing1.sort(key=lambda row: -int(row[1].split()[0].replace(",", "")))
+        lines += markdown_table(("Mode", "Packet size", "Largest lossless msgs/s", "Over S3",
+                                 "Day", "Host", "Commit", "File"), turing1)
     for name, fault_check, pages, arms in arenas:
         lines += ["", f"T-ARENA-1, the node book on each allocator arm, from "
                       f"[results/{name}](results/{name}), the pools' pages requested as "

@@ -24,6 +24,7 @@ CORES = {"sender": 4, "receiver": 6, "sq": 2}
 CHECK = ("machine_check: record host debian\nmachine_check: pass pin-readback: allowed on "
          "exactly core 4\nmachine_check: passed")
 NAME = "udp_bisect_debian_12302019.md"
+SMALL = "udp_bisect_72b_debian_12302019.md"
 TARGET = udp_driver.TARGET_1MS
 
 
@@ -443,6 +444,69 @@ class UdpReportTest(unittest.TestCase):
         self.assertIn("summary-differs", self.codes(text.replace("T-URING-2 PASS",
                                                                  "T-URING-2 FAIL")))
 
+    # the small-packet arm: T-URING-1 at a packet size other than T-URING-2's
+
+    def small_dirs(self, root, confirm=()):
+        """A ceiling and a bisection with every record at 72 bytes a datagram."""
+        dirs = [smoke_run(root / "smoke"), ceiling_run(root / "ceiling"),
+                bisect_run(root / "bisect", confirm=confirm)]
+        for each in dirs:
+            for path in each.glob("*.json"):
+                if path.name in ("manifest.json", "smoke.json"):
+                    continue
+                record = json.loads(path.read_text(encoding="utf-8"))
+                record["plan"]["max_datagram"] = 72
+                path.write_text(json.dumps(record), encoding="utf-8")
+        return dirs
+
+    def test_a_small_packet_bisection_has_its_own_name_and_no_t_uring_2(self):
+        with scratch() as folder:
+            dirs = self.small_dirs(Path(folder))
+            text = self.render(dirs, SMALL)[0]
+            with self.assertRaisesRegex(udp_report.ReportError, "not the name for 72 bytes"):
+                self.render(dirs, NAME)
+        self.assertEqual(udp_report.check_published(text, SMALL), [])
+        self.assertTrue(text.startswith("# T-URING-1 at 72 bytes a datagram, each receive "
+                                         "mode's largest lossless rate, debian, 12302019\n"))
+        fields = udp_report.check_results.parse_header(text)
+        self.assertEqual(fields["packet_size_cap"], "72 bytes a datagram, header included")
+        self.assertTrue(fields["summary"].endswith("; no T-URING-2 verdict at 72 bytes a "
+                                                   "datagram"))
+        self.assertNotIn("## T-URING-2", text)
+        self.assertEqual(len(results_table.VERDICT_MARK.findall(text)), 0)
+        self.assertNotIn("| confirm |", text)
+        self.assertIn("No run at 2,547,190 msg/s: T-URING-2 is judged at 1,400 bytes", text)
+        turing1 = udp_report.check_results.section(text, "T-URING-1: io_uring against sockets")
+        self.assertIn("won in this regime, 72 bytes a datagram, header included", turing1)
+        self.assertIn("- No T-URING-2 verdict here: T-URING-2 is judged at 1,400 bytes a "
+                      "datagram (P-0902), in `udp_bisect_debian_12302019.md`.", turing1)
+
+    def test_check_refuses_a_name_whose_packet_size_is_not_the_header_s(self):
+        with scratch() as folder:
+            small = self.render(self.small_dirs(Path(folder)), SMALL)[0]
+        self.assertIn("cap-label", self.codes(small, NAME))
+        self.assertIn("cap-label", self.codes(small, "udp_bisect_64b_debian_12302019.md"))
+        text = self.bisect_text()
+        self.assertIn("cap-label", self.codes(text, SMALL))
+        self.assertIn("cap-label", self.codes(text, "udp_bisect_1400b_debian_12302019.md"))
+        self.assertIn("cap-label", self.codes(small.replace("- packet_size_cap: 72 bytes",
+                                                            "- packet_size_cap: 64 bytes"), SMALL))
+
+    def test_a_small_packet_file_carries_no_t_uring_2_verdict(self):
+        with scratch() as folder:
+            dirs = self.small_dirs(Path(folder), confirm=(True, True))
+            with self.assertRaisesRegex(udp_report.ReportError, "T-URING-2 is judged at 1,400"):
+                self.render(dirs, SMALL)
+        with scratch() as folder:
+            small = self.render(self.small_dirs(Path(folder)), SMALL)[0]
+        self.assertIn("verdict-marks", self.codes(small + "\n**PASS**\n", SMALL))
+        verdict = udp_report.check_results.section(
+            self.bisect_text(), "T-URING-2: lossless at Nasdaq's peak message rate")
+        planted = small.replace("\n## Every process\n", "\n## T-URING-2: lossless at Nasdaq's "
+                                                        f"peak message rate\n{verdict}\n"
+                                                        "## Every process\n")
+        self.assertIn("verdict-marks", self.codes(planted, SMALL))
+
     # the other steps
 
     def feed_text(self, lossy_mode=None):
@@ -537,9 +601,9 @@ class UdpReportTest(unittest.TestCase):
             self.assertIn("| T-URING-2 | 12302019 | debian | PASS | U5 lossless at 2,547,190 "
                           "msg/s in 2 of 2 repetitions;", verdict)
             self.assertIn("`0123456789ab`", verdict)
-            self.assertTrue(any(line.startswith("| U2 | 1,") for line in lines))
-            self.assertTrue(any(line.startswith("| U5 | at least 2,700,000, sender limited | ≥ ")
-                                for line in lines))
+            self.assertTrue(any(line.startswith("| U2 | 1,400 bytes | 1,") for line in lines))
+            self.assertTrue(any(line.startswith("| U5 | 1,400 bytes | at least 2,700,000, sender "
+                                                "limited | ≥ ") for line in lines))
             (root / "results" / NAME).write_text(text + "\n**FAIL**\n", encoding="utf-8")
             with self.assertRaisesRegex(results_table.TableError, "2 verdicts in the file, 1 rows"):
                 results_table.generate(root)
@@ -565,6 +629,33 @@ class UdpReportTest(unittest.TestCase):
             for mode in ("U2", "U5"):
                 self.assertEqual(sum(line.startswith(f"| {mode} | ") for line in once), 1)
                 self.assertEqual(sum(line.startswith(f"| {mode} | ") for line in twice), 1)
+
+    def test_results_table_labels_each_packet_size_and_takes_t_uring_2_at_1400_alone(self):
+        with scratch() as folder:
+            root = Path(folder)
+            (root / "results").mkdir()
+            (root / "results" / "run_log.md").write_text(
+                "| Run | Prediction | Commit | OS | Outcome |\n|---|---|---|---|---|\n",
+                encoding="utf-8")
+            (root / "results" / NAME).write_text(self.bisect_text(), encoding="utf-8")
+            with scratch() as runs:
+                small = self.render(self.small_dirs(Path(runs)), SMALL)[0]
+            (root / "results" / SMALL).write_text(small, encoding="utf-8")
+            lines = results_table.generate(root)
+            self.assertEqual(sum(line.startswith("| T-URING-2 |") for line in lines), 1)
+            modes = [line for line in lines if line.startswith(("| S3 |", "| U2 |", "| U5 |"))]
+            self.assertEqual([line.split(" | ")[1] for line in modes],
+                             ["1,400 bytes"] * 3 + ["72 bytes"] * 3)
+            self.assertTrue(all(f"results/{SMALL}" in line for line in modes[3:]))
+            # A verdict in a file at another packet size is refused, not taken up.
+            verdict = udp_report.check_results.section(
+                self.bisect_text(), "T-URING-2: lossless at Nasdaq's peak message rate")
+            (root / "results" / SMALL).write_text(
+                small + "\n## T-URING-2: lossless at Nasdaq's peak message rate\n" + verdict,
+                encoding="utf-8")
+            with self.assertRaisesRegex(results_table.TableError,
+                                        "a T-URING-2 verdict at 72 bytes a datagram"):
+                results_table.generate(root)
 
     def test_the_main_writes_then_checks_and_check_fails_a_broken_file(self):
         with scratch() as folder:

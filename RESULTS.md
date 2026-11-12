@@ -242,19 +242,19 @@ The SPSC ring. Each row is one comparison from a results file's targets table: a
 | T-SPSC-1 | project rtt / moodycamel rtt | 12302019 | macOS (M4 Max) | not pinned | 0.53× | ≤ 1.00× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
 | T-SPSC-1 | project rtt / rigtorp rtt | 12302019 | macOS (M4 Max) | not pinned | 0.91× | ≤ 1.00× | host differs | `0550a6017ece` | [results/spsc_queues_mac_12302019.md](results/spsc_queues_mac_12302019.md) |
 
-T-URING-1, io_uring against sockets: each receive mode's largest lossless message rate on loopback, and its ratio over S3's, from its results file. The target is UNCONFIRMED, so there is no bar and no verdict. Loopback runs the receive softirq on the sender's CPU, so these are syscall-and-copy figures on one host, not network ones.
+T-URING-1, io_uring against sockets: each receive mode's largest lossless message rate on loopback, and its ratio over S3's, from its results file, at each packet size it ran at, a datagram's bytes with its header. The target is UNCONFIRMED, so there is no bar and no verdict. Loopback runs the receive softirq on the sender's CPU, so these are syscall-and-copy figures on one host, not network ones.
 
-| Mode | Largest lossless msgs/s | Over S3 | Day | Host | Commit | File |
-|---|---|---|---|---|---|---|
-| S1 | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
-| S2 | 2,689,622 | 0.983 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
-| S3 | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
-| S4 | 2,830,848 | 1.035 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
-| U1 | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
-| U2 | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
-| U3 | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
-| U4 | 1,945,047 | 0.711 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
-| U5 | 1,912,149 | 0.699 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| Mode | Packet size | Largest lossless msgs/s | Over S3 | Day | Host | Commit | File |
+|---|---|---|---|---|---|---|---|
+| S1 | 1,400 bytes | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| S2 | 1,400 bytes | 2,689,622 | 0.983 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| S3 | 1,400 bytes | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| S4 | 1,400 bytes | 2,830,848 | 1.035 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| U1 | 1,400 bytes | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| U2 | 1,400 bytes | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| U3 | 1,400 bytes | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| U4 | 1,400 bytes | 1,945,047 | 0.711 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| U5 | 1,400 bytes | 1,912,149 | 0.699 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
 
 T-ARENA-1, the node book on each allocator arm, from [results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md), the pools' pages requested as `base`. Only the allocator changes between arms. T-ARENA-1 is UNCONFIRMED, so no bar is met or missed; the check is that no timed pass of a pool arm takes a page fault, and it read: FAIL: page faults in the timed passes of pool-index 136, pool-pointer 200, pool-fifo 146. Tails are over every operation, in ns.
 

@@ -396,6 +396,25 @@ class ProcessTest(unittest.TestCase):
             stems = [p["stem"] for p in manifest["processes"]]
             self.assertEqual(len(set(stems)), len(stems))
 
+    def test_a_bisection_off_t_uring_2_s_packet_size_confirms_nothing(self):
+        # T-URING-2 is judged at 1,400 bytes a datagram (P-0902): the small-packet arm of
+        # T-URING-1 searches as the 1,400-byte one does, and runs no confirmation.
+        with records.scratch() as folder:
+            folder = Path(folder)
+            self.stand_ins(folder)
+            args = arguments(folder, datagram=72)
+            with Environment(FAKE_THRESHOLD=2_600_000):
+                run = udp_driver.Run(args, "P-0700-20261111T100000Z", "0123456789ab (clean)")
+                udp_driver.step_bisect(run)
+            manifest = json.loads((run.dir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["datagram"], 72)
+            self.assertEqual(manifest["best_mode"], "S3")
+            self.assertEqual(manifest["t_uring_2"]["tested"], False)
+            self.assertIn("judged at 1,400 bytes a datagram", manifest["t_uring_2"]["why"])
+            self.assertEqual([p for p in manifest["processes"] if p["role"] == "confirm"], [])
+            trial = manifest["processes"][0]["extra"]
+            self.assertEqual(trial[trial.index("--datagram") + 1], "72")
+
     def test_a_sender_behind_never_counts_and_a_failed_mode_is_logged(self):
         with records.scratch() as folder:
             folder = Path(folder)

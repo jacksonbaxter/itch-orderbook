@@ -51,6 +51,8 @@ The steps:
   geometric bisection between the lossless low and the lossy high until high/low <= 1.02 or
   --most-steps midpoints. Then T-URING-2: the best mode at 2,547,190 msg/s, --repetitions
   times, if that is under the cap; otherwise the manifest says it cannot be tested there.
+  T-URING-2 is judged at 1,400 bytes a datagram (P-0902), so a bisection at any other
+  --datagram, such as T-URING-1's small-packet arm, runs no confirmation and says why.
 - feed: the day's busiest 1 s and 1 ms (bench_udp --peaks, under heavy.sh), then a window of
   --frames-cap frames from --feed-lead-frames before the busiest second, replayed by its ITCH
   timestamps three ways: x1; sped up so its own busiest 1 s runs at 1,305,440 msg/s; and so
@@ -109,6 +111,7 @@ SQ_MODE = "U5"
 SPIN_MODES = ("S4", "U4", "U5")
 TARGET_1S = 1_305_440  # BENCHMARKS.md, DS-78: Nasdaq's 1 s peak, msg/s.
 TARGET_1MS = 2_547_190  # T-URING-2: Nasdaq's 1 ms peak, msg/s.
+TURING2_DATAGRAM = 1400  # T-URING-2's packet size, bytes a datagram (P-0902).
 CAP_FRACTION = 0.9
 PACE = 0.99
 TOLERANCE = 1.02
@@ -677,6 +680,11 @@ def search_and_confirm(run):
     run.manifest["best_mode"] = best
     if best is None:
         run.manifest["t_uring_2"] = {"tested": False, "why": "no mode was lossless at any rate"}
+        return
+    if args.datagram != TURING2_DATAGRAM:
+        run.manifest["t_uring_2"] = {
+            "tested": False, "why": f"T-URING-2 is judged at {TURING2_DATAGRAM:,} bytes a "
+                                    f"datagram, and this bisection ran at {args.datagram:,}"}
         return
     if TARGET_1MS > cap:
         run.manifest["t_uring_2"] = {

@@ -71,7 +71,7 @@
       "mutations": [
         {
           "file": "scripts/udp_report.py",
-          "old": "        if match is None or match.group(2) != (\"debian\" if host == DEBIAN else \"mac\") or \\\n",
+          "old": "        if match is None or match.group(3) != (\"debian\" if host == DEBIAN else \"mac\") or \\\n",
           "new": "        if match is None or \\\n"
         }
       ],
@@ -260,7 +260,7 @@
       "mutations": [
         {
           "file": "scripts/udp_report.py",
-          "old": "    expected = 1 if fields.get(\"step\") == \"bisect\" else 0\n",
+          "old": "    expected = 1 if fields.get(\"step\") == \"bisect\" and \\\n        datagram_of(fields) == TURING2_DATAGRAM else 0\n",
           "new": "    expected = marks\n"
         }
       ],
@@ -628,6 +628,174 @@
       ],
       "expect": {
         "signature": "^FAIL: test_stdout_is_the_run_id_alone ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-confirms-off-t-uring-2-size",
+      "breaks": "A bisection at a datagram cap other than T-URING-2's 1,400 bytes runs T-URING-2's confirmation, so the small-packet arm would carry a verdict",
+      "check": "test_udp_driver.py test_a_bisection_off_t_uring_2_s_packet_size_confirms_nothing",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "    if args.datagram != TURING2_DATAGRAM:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_bisection_off_t_uring_2_s_packet_size_confirms_nothing |^ERROR: test_a_bisection_off_t_uring_2_s_packet_size_confirms_nothing ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-cap-label-unchecked",
+      "breaks": "A UDP results file whose name's packet size is not its header's passes --check, so the small-packet arm could sit under the 1,400-byte name",
+      "check": "test_udp_report.py test_check_refuses_a_name_whose_packet_size_is_not_the_header_s",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "        if match is not None and (datagram is None or match.group(2) != (\n",
+          "new": "        if False and (datagram is None or match.group(2) != (\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_refuses_a_name_whose_packet_size_is_not_the_header_s |^ERROR: test_check_refuses_a_name_whose_packet_size_is_not_the_header_s ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-small-name-unchecked",
+      "breaks": "udp_report writes a 72-byte run under the 1,400-byte file's name",
+      "check": "test_udp_report.py test_a_small_packet_bisection_has_its_own_name_and_no_t_uring_2",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    if name != file_name(step, datagram, host_file, day):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_small_packet_bisection_has_its_own_name_and_no_t_uring_2 |^ERROR: test_a_small_packet_bisection_has_its_own_name_and_no_t_uring_2 ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-t-uring-2-at-any-size",
+      "breaks": "A bisection at 72 bytes a datagram gets a T-URING-2 section and verdict, though T-URING-2 is judged at 1,400",
+      "check": "test_udp_report.py test_a_small_packet_bisection_has_its_own_name_and_no_t_uring_2",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    judged = datagram == TURING2_DATAGRAM\n",
+          "new": "    judged = True\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_small_packet_bisection_has_its_own_name_and_no_t_uring_2 |^ERROR: test_a_small_packet_bisection_has_its_own_name_and_no_t_uring_2 ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-small-verdict-marks-uncounted",
+      "breaks": "--check wants one verdict mark in every bisect file, so a verdict planted in the small-packet arm's file passes",
+      "check": "test_udp_report.py test_a_small_packet_file_carries_no_t_uring_2_verdict",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    expected = 1 if fields.get(\"step\") == \"bisect\" and \\\n        datagram_of(fields) == TURING2_DATAGRAM else 0\n",
+          "new": "    expected = 1 if fields.get(\"step\") == \"bisect\" else 0\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_small_packet_file_carries_no_t_uring_2_verdict |^ERROR: test_a_small_packet_file_carries_no_t_uring_2_verdict ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-small-confirm-accepted",
+      "breaks": "T-URING-2 confirmation runs at 72 bytes a datagram are written into the small-packet arm's file",
+      "check": "test_udp_report.py test_a_small_packet_file_carries_no_t_uring_2_verdict",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    if not judged and any(row[\"role\"] == \"confirm\" for row in rows):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_small_packet_file_carries_no_t_uring_2_verdict |^ERROR: test_a_small_packet_file_carries_no_t_uring_2_verdict ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-results-table-verdict-at-any-size",
+      "breaks": "results_table takes a T-URING-2 verdict from a file at 72 bytes a datagram",
+      "check": "test_udp_report.py test_results_table_labels_each_packet_size_and_takes_t_uring_2_at_1400_alone",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        if datagram != TURING2_DATAGRAM:\n            raise TableError(f\"results/{name}: a T-URING-2 verdict",
+          "new": "        if False:\n            raise TableError(f\"results/{name}: a T-URING-2 verdict"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_results_table_labels_each_packet_size_and_takes_t_uring_2_at_1400_alone |^ERROR: test_results_table_labels_each_packet_size_and_takes_t_uring_2_at_1400_alone ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-results-table-packet-size-unlabelled",
+      "breaks": "T-URING-1's rows in RESULTS.md do not say which packet size they ran at, so the two arms read as one",
+      "check": "test_udp_report.py test_results_table_labels_each_packet_size_and_takes_t_uring_2_at_1400_alone",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            modes.append((cells[0], f\"{datagram:,} bytes\", *cells[1:], day_of(name), host,\n",
+          "new": "            modes.append((cells[0], \"\", *cells[1:], day_of(name), host,\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_results_table_labels_each_packet_size_and_takes_t_uring_2_at_1400_alone |^ERROR: test_results_table_labels_each_packet_size_and_takes_t_uring_2_at_1400_alone ",
         "exit": 1
       }
     }
