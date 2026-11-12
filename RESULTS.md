@@ -255,6 +255,15 @@ T-URING-1, io_uring against sockets: each receive mode's largest lossless messag
 | U3 | 1,400 bytes | 2,735,896 | 1.000 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
 | U4 | 1,400 bytes | 1,945,047 | 0.711 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
 | U5 | 1,400 bytes | 1,912,149 | 0.699 | 12302019 | debian | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
+| S1 | 72 bytes | at least 191,646, sender limited | both sender limited | 12302019 | debian | `1843ac9d69ec` | [results/udp_bisect_72b_debian_12302019.md](results/udp_bisect_72b_debian_12302019.md) |
+| S2 | 72 bytes | at least 187,539, sender limited | both sender limited | 12302019 | debian | `1843ac9d69ec` | [results/udp_bisect_72b_debian_12302019.md](results/udp_bisect_72b_debian_12302019.md) |
+| S3 | 72 bytes | at least 220,621, sender limited | both sender limited | 12302019 | debian | `1843ac9d69ec` | [results/udp_bisect_72b_debian_12302019.md](results/udp_bisect_72b_debian_12302019.md) |
+| S4 | 72 bytes | at least 232,897, sender limited | both sender limited | 12302019 | debian | `1843ac9d69ec` | [results/udp_bisect_72b_debian_12302019.md](results/udp_bisect_72b_debian_12302019.md) |
+| U1 | 72 bytes | at least 218,244, sender limited | both sender limited | 12302019 | debian | `1843ac9d69ec` | [results/udp_bisect_72b_debian_12302019.md](results/udp_bisect_72b_debian_12302019.md) |
+| U2 | 72 bytes | at least 218,244, sender limited | both sender limited | 12302019 | debian | `1843ac9d69ec` | [results/udp_bisect_72b_debian_12302019.md](results/udp_bisect_72b_debian_12302019.md) |
+| U3 | 72 bytes | at least 215,893, sender limited | both sender limited | 12302019 | debian | `1843ac9d69ec` | [results/udp_bisect_72b_debian_12302019.md](results/udp_bisect_72b_debian_12302019.md) |
+| U4 | 72 bytes | 220,621 | ≤ 1.000 | 12302019 | debian | `1843ac9d69ec` | [results/udp_bisect_72b_debian_12302019.md](results/udp_bisect_72b_debian_12302019.md) |
+| U5 | 72 bytes | at least 213,568, sender limited | both sender limited | 12302019 | debian | `1843ac9d69ec` | [results/udp_bisect_72b_debian_12302019.md](results/udp_bisect_72b_debian_12302019.md) |
 
 T-ARENA-1, the node book on each allocator arm, from [results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md), the pools' pages requested as `base`. Only the allocator changes between arms. T-ARENA-1 is UNCONFIRMED, so no bar is met or missed; the check is that no timed pass of a pool arm takes a page fault, and it read: FAIL: page faults in the timed passes of pool-index 136, pool-pointer 200, pool-fifo 146. Tails are over every operation, in ns.
 
@@ -629,4 +638,10 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0902-20261112T020551Z_report` | `P-0902` | `d847e8750aac` | Linux | `published` |
 | `P-0901-20261112T030148Z_report` | `P-0901` | `d847e8750aac` | Linux | `published` |
 | `P-0901-20261112T044013Z_report` | `P-0901` | `d847e8750aac` | Linux | `published` |
+| `P-0903-20261112T163205Z_readings` | `P-0903` | `d847e8750aac` | Linux | `reading, untimed, outside the driver and `measure.sh`, before P-0903 was written` |
+| `P-0903-20261112T165325Z` | `P-0903` | `1843ac9d69ec` | Linux | `recorded` |
+| `P-0903-20261112T165458Z` | `P-0903` | `1843ac9d69ec` | Linux | `recorded` |
+| `P-0903-20261112T172808Z` | `P-0903` | `1843ac9d69ec` | Linux | `recorded` |
+| `P-0903-20261112T165458Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
+| `P-0903-20261112T172808Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
 <!-- results table: end -->
