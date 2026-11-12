@@ -212,11 +212,22 @@ class RingMode {
     if (!enabled_ && !enable()) {
       return failure(counters_.last_error);
     }
-    for (;;) {
+    // A request that keeps ending with no datagram, out of buffers with none given back,
+    // would go round this loop for ever, each block() seeing a completion. The idle timeout
+    // bounds it as it bounds a quiet socket.
+    auto empty_since = std::chrono::steady_clock::time_point{};
+    for (bool empty = false;; empty = true) {
       const std::size_t count = harvest(batch);
       if (count > 0) {
         counters_.datagrams += count;
         return {.status = WaitStatus::datagrams, .count = count, .error = 0};
+      }
+      const auto now = std::chrono::steady_clock::now();
+      if (!empty) {
+        empty_since = now;
+      } else if (now - empty_since >= idle_timeout_) {
+        ++counters_.timeouts;
+        return {.status = WaitStatus::idle_timeout, .count = 0, .error = ETIME};
       }
       if (!armed_ && failed_ == 0) {
         arm();
