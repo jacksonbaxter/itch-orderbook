@@ -6,9 +6,11 @@
 
 A line that cites `results/<name>.md` is held to that file, and any other line to every
 results file. predictions.md and run_log.md are not results: a figure predicted is not a
-figure measured. A figure is a number with a decimal point, a thousands separator, three
-or more digits, or a unit. Code spans, code blocks, URLs, HTML tags, dates and the names in
-EXEMPT are left out, and so is any line ending in `<!-- figures: not measured -->`.
+figure measured. Of fault_matrix.md only the header above its table is a source: the table
+quotes each fault's output, and so the figures a fault made up to be caught. A figure is a
+number with a decimal point, a thousands separator, three or more digits, or a unit. Code
+spans, code blocks, URLs, HTML tags, dates and the names in EXEMPT are left out, and so is
+any line ending in `<!-- figures: not measured -->`.
 
 The gate runs on whichever pages exist, so a tree with none passes and says so. A page
 named with --page must exist.
@@ -28,6 +30,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PAGES = ("README.md", "RESULTS.md", "docs/index.html")
 NOT_RESULTS = {"predictions.md", "run_log.md"}
+HEADER_ONLY = {"fault_matrix.md"}
 EXEMPT = ("ITCH 5.0", "C++23", "BinaryFILE 1.0")
 SKIP_MARK = "<!-- figures: not measured -->"
 
@@ -53,8 +56,17 @@ def tokens_of(text):
     return {normal(match) for match in TOKEN.findall(text)}
 
 
+def source_text(path):
+    """The file's text, or for a file in HEADER_ONLY the lines above its first table row."""
+    text = path.read_text(encoding="utf-8")
+    if path.name in HEADER_ONLY:
+        table = re.search(r"^\|", text, re.MULTILINE)
+        text = text[:table.start()] if table else text
+    return text
+
+
 def load_results(root):
-    return {path.name: tokens_of(path.read_text(encoding="utf-8"))
+    return {path.name: tokens_of(source_text(path))
             for path in sorted((root / "results").glob("*.md")) if path.name not in NOT_RESULTS}
 
 

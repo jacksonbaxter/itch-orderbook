@@ -88,6 +88,39 @@ class Gate(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("99,999.5 is in no results file", output)
 
+    def write_fault_matrix(self):
+        """A matrix file whose one row quotes the made-up figure its fault was caught on."""
+        (self.root / "results" / "fault_matrix.md").write_text(
+            "# Fault matrix\n\n- Controls: 196 commands, 0 failed\n"
+            "- Result: 1061 of 1061 detected\n\n"
+            "| Fault | Result | Signature seen |\n|---|---|---|\n"
+            "| `page-figure` | detected | `gate_numbers: FAIL RESULTS.md:11: 88,888.5 is in no "
+            "results file` |\n", encoding="utf-8")
+
+    def test_a_figure_only_in_a_fault_matrix_row_fails(self):
+        self.write_fault_matrix()
+        with open(self.root / "README.md", "a", encoding="utf-8") as readme:
+            readme.write("It reached 88,888.5 messages.\n")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("88,888.5 is in no results file", output)
+
+    def test_a_fault_matrix_row_backs_no_figure_that_cites_the_file(self):
+        self.write_fault_matrix()
+        with open(self.root / "RESULTS.md", "a", encoding="utf-8") as page:
+            page.write("| Fault matrix | 88,888.5 | [results/fault_matrix.md](x) |\n")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("88,888.5 is not in results/fault_matrix.md", output)
+
+    def test_the_fault_matrix_header_is_a_source(self):
+        self.write_fault_matrix()
+        with open(self.root / "RESULTS.md", "a", encoding="utf-8") as page:
+            page.write("| Fault matrix | 1061 of 1061 detected | controls: 196 commands "
+                       "| [results/fault_matrix.md](x) |\n")
+        code, output = run(self.root)
+        self.assertEqual(code, 0, output)
+
     def test_a_figure_inside_a_longer_number_is_not_found(self):
         with open(self.root / "README.md", "a", encoding="utf-8") as readme:
             readme.write("It reached 77,835 messages.\n")

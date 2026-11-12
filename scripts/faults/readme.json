@@ -829,6 +829,46 @@
       }
     },
     {
+      "id": "readme-gate-reads-fault-matrix-rows",
+      "breaks": "gate_numbers.py takes figures from fault_matrix.md's rows, which quote the figures faults made up",
+      "check": "test_gate_numbers.py test_a_figure_only_in_a_fault_matrix_row_fails",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "HEADER_ONLY = {\"fault_matrix.md\"}",
+          "new": "HEADER_ONLY = set()"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_figure_only_in_a_fault_matrix_row_fails"
+      }
+    },
+    {
+      "id": "readme-gate-drops-fault-matrix-header",
+      "breaks": "gate_numbers.py drops fault_matrix.md's header too, so RESULTS.md's fault-matrix row has no source",
+      "check": "test_gate_numbers.py test_the_fault_matrix_header_is_a_source",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "text = text[:table.start()] if table else text",
+          "new": "text = \"\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_fault_matrix_header_is_a_source"
+      }
+    },
+    {
       "id": "readme-stage-results-page-figure",
       "breaks": "RESULTS.md's prose, outside the generated tables, carries a figure no results file holds",
       "check": "check.sh readme stage, gate_numbers.py on RESULTS.md",
