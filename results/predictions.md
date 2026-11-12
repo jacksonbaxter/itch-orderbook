@@ -640,3 +640,46 @@ included.
 - What was seen before this was written: P-0702's two files; the pools' mappings reading back `KernelPageSize` 4 kB and `AnonHugePages` 0 kB under `base` and fully huge under `transparent`; the host's `transparent_hugepage` `enabled [always]`, `defrag [madvise]`, khugepaged `defrag` 1; `MemFree` between 1.0 and 1.6 GiB during P-0702's processes, the page cache holding most of the rest; `thp_fault_fallback` at 0 throughout. No fault's address has been seen.
 - Prediction, the counts: at least one of the four timed passes again takes a page fault, and the two processes differ. perf's count of faults from the replay's code in each process equals the sum of that process's two pass counts in its record, or exceeds it by no more than the faults of the untimed code warm-up.
 - Prediction, where: the faults from the replay's code fall on the pool's order and level mappings, not on the index, the day's copy, the samples or code, and none is a major fault. In the seconds that hold them, the host's `pgmigrate_success` and the compaction counters (`compact_migrate_scanned` or `compact_daemon_migrate_scanned`) rise, and `thp_collapse_alloc` does not account for them. So the cause is the kernel migrating the pool's movable 4 KiB pages, for compaction under memory held mostly by the page cache, and a pool on 2 MiB pages is moved far less often. If instead the faults fall outside the pool, the cause is not the pool's pages, and NOTES.md says where they fell.
+
+## P-0901: T-URING-1 on debian, 12302019: each receive mode's largest lossless rate, the feed-shaped replay, latency and the CPU split, on loopback
+
+- Experiment: `scripts/udp_driver.py` on `debian`, from a commit exported by `debian_sync.sh`, the release build with Clang and `-DITCH_LIBURING_ROOT` at liburing 2.15. Every timed process is `measure.sh taskset -c 4,6[,2] bench_udp ...`, a fresh process. The sender is on core 4 and the receiver on core 6, two physical cores. For U5, the SQ thread is on core 2, a third. The input is `12302019.NASDAQ_ITCH50`, packed into MoldUDP64 datagrams of at most 1,400 bytes with no flush gap, so each packet is full, and sent over loopback to a connected socket with a 4 MiB receive buffer requested. Every receiver applies every message to the fast book (`paged-flat`), and its end hash is compared with the file's. The steps, each with its own run directory, manifest and machine checks before and after, in this order:
+  - smoke: the host's readings, the feature probe, and one functional run of each mode;
+  - ceiling: the sender alone, unpaced, 10 processes, each sending the day's first 50,000,000 frames;
+  - bisect: each of S1, S2, S3, S4, U1, U2, U3, U4 and U5, the largest message rate a paced trial carries with every loss counter at zero and the sender keeping pace, capped at 0.9 × the ceiling. Trials start at 1,000,000 msg/s and run from the day's first frame, `min(rate × 30 s, 50,000,000)` frames, with the modes shuffled each round. The search halves on a loss, tries the cap after a lossless start, then bisects geometrically to within 2% or 10 steps. T-URING-2 (P-0902) then runs on the best mode;
+  - feed: 6,000,000 frames from 5,000,000 before the day's busiest second, which is frame 266,549,225 at 16:00:00, the close. The window spans 80.35 s of ITCH time and its longest gap is 2.278 ms. It is replayed by its timestamps three ways: at its own pace, sped up so its busiest second runs at 1,305,440 msg/s, and sped up so its busiest millisecond runs at 2,547,190 msg/s. Each way runs 3 times for every mode, with a 100 µs flush gap in replay time;
+  - latency: at 1,000 packets/s in messages, at 0.1, 0.5 and 0.8 of each mode's largest lossless rate, and at 2,000,000 msg/s for every mode, from whose records the CPU split comes. Each runs 3 times, the first second of each run left out as warm-up.
+  - `scripts/udp_report.py` writes one results file per timed step.
+- What it is for: T-URING-1, whose target is `UNCONFIRMED` as a ratio. The report says which mode won under which regime. This is loopback: the receive softirq runs on the sender's CPU, so it is a syscall-and-copy benchmark on one host, not a network benchmark (IU-47).
+- What was seen before this was written:
+  - The UDP tests on `debian` at 2264cc7 pass for every mode, the allocation test included.
+  - `bench_udp --probe` set every mode up and saw an empty wait time out, with RECV and RECVMSG in the opcode probe, and EXT_ARG, NODROP, REG_REG_RING and MIN_TIMEOUT among the features.
+  - The host reads kernel 6.12.116, `io_uring_disabled` 0, `rmem_max` 7,340,032, `ulimit -l` 8192, lo's MTU 65,536, `perf_event_paranoid` 2, and `CONFIG_IRQ_TIME_ACCOUNTING` not set.
+  - The fast book on this host replays the whole day in RAM at 5.15 M msg/s (`results/bench_book_paged-flat_ram_debian_12302019.md`).
+  - `bench_udp --peaks` on the day, under `heavy.sh`: 268,744,780 messages; the busiest second is 1,041,188 messages from frame 266,549,225 at 16:00:00.000; the busiest millisecond is 1,989 messages at 10:13:36.016, outside the feed window. The feed window's span and gaps come from the driver's own scan.
+  - The Linux faults of `scripts/faults/udp_modes.json` on `debian` found that a ring mode starved of buffers looped in `wait()` past its idle timeout (fixed in 9b99ef6).
+  - No rate trial, ceiling, feed or latency run has been made.
+- Prediction, ceiling: the sender alone, whose send carries the whole loopback receive path in its softirq, reaches 200,000 to 700,000 packets/s, which is 8 to 30 M msg/s at about 40 to 46 messages a full packet. The cap is far above what any receiver can apply to the book, so no mode is sender-limited.
+- Prediction, bisect:
+  - Every mode is limited by the book, not by its receive call. Each mode's largest lossless rate is between 3.0 and 5.0 M msg/s, below the book's 5.15 M because the receiver also frames, checks sequence and receives.
+  - The nine modes are within 15% of one another.
+  - U2 over S3 is between 0.95 and 1.10, so T-URING-1's headline pair is decided by less than its spread, and no mode wins by much.
+  - The spinning modes (S4, U4, U5) are at the top, by 0% to 8% over the best blocking mode. U1 and S1, one datagram a call, are at the bottom.
+  - Every mode's bisection ends on the 2% tolerance, never at the cap and never below the floor.
+- Prediction, feed: every mode is lossless on all three schedules. The busiest-second schedule's speedup is 1.254, the day's own peak second scaled to 1,305,440. The busiest-millisecond schedule's speedup is between 1.3 and 3, since the window's busiest millisecond is under the day's 1,989 messages.
+- Prediction, latency:
+  - At about 1,000 packets/s, the median from a packet's due time to the receiver's return is 5 to 40 µs for the blocking modes, which pay a wake-up on another core, and 2 to 15 µs for the spinning modes.
+  - At 0.8 of each mode's largest rate, p99 is above 10 times its low-rate p99.
+- Prediction, CPU split, at the common rate:
+  - S4, U4 and U5 hold the receiver's core at 100% by construction.
+  - The blocking modes use less of the receiver's core than the spinning modes, and the batching modes (S3, U2, U3) less than S1, S2 and U1.
+  - The softirq ticks land on the sender's core, 4, not on the receiver's.
+  - U5's SQ thread is busy for the whole run.
+- Prediction, the hosts' counters: zero `RcvbufErrors`, `InErrors`, socket drops and softnet drops on every trial counted lossless. On a lossy trial, the socket's drop count and `RcvbufErrors` agree.
+
+## P-0902: T-URING-2 on debian, 12302019: zero loss at Nasdaq's 1 ms peak rate for the winning mode
+
+- Experiment: P-0901's bisect step ends by running the mode with the largest lossless rate at 2,547,190 msg/s, 10 times. Each run is a fresh `measure.sh taskset` process from the day's first frame, 30 s of messages (76,415,700 frames, capped at 50,000,000). It is lossless only if every loss counter is zero, the book matches the file's, and the sender keeps pace (at least 0.99 of the rate).
+- What it is for: T-URING-2, zero loss at ≥ 2,547,190 msg/s on `debian` for the winning mode. Nasdaq's feed reaches firms over a NIC; this is loopback, where the receive softirq runs on the sender's CPU, so it is a syscall-and-copy benchmark, not a network one (IU-47, IU-48).
+- What was seen before this was written: P-0901's list.
+- Prediction: PASS, 10 of 10 runs lossless. 2,547,190 msg/s is 50% to 85% of the winning mode's largest lossless rate (P-0901), about 56,000 to 64,000 full packets/s.
