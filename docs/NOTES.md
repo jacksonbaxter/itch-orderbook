@@ -2358,3 +2358,11 @@ The prediction took the sender alone as the limit and gave the ring's 1,024 buff
 - The P-0901 smoke step's lesson held: the smoke runs at 72 bytes were paced, at 100,000 messages/s, and all nine passed.
 - One of the ten sender runs, `ceiling-sender-0005`, reached 259,721 messages/s against 267,770 to 271,519 for the other nine. The ceiling is their median, as at 1,400 bytes.
 - Nothing ran on `debian` between 10:30Z and 11:30Z, no limit or sysctl was changed, and nothing of this piece is left running there. The raw run directories stay outside the repository.
+
+## The Phase 3 gate, 2026-11-12
+
+The final full check of Phase 3 ran on the Mac at 31b5d80, under one hold of the check lock. `scripts/check.sh` ran its 18 stages other than the fault matrix (toolchain, format, gates, actionlint, readme, script_tests, corpus, release, oracle, trades, bench, market_maker, asan_ubsan, tidy, tsan, fuzz_smoke, wasm, demo) from 18:57:43Z to 19:15:54Z, and every one passed. The fault matrix then ran over all areas, with `--out results/fault_matrix.md`, from 19:15:54Z to 21:14:18Z: 196 control commands with no failure, and 1,061 of 1,061 faults detected. The other 13 of the tree's 1,074 faults are for Linux only and were not run on the Mac; `results/fault_matrix.md` lists them as other-host.
+
+Those 13 are the Linux faults of the `udp_modes` area. That area was last run on `debian` at 9b99ef6, 21 of 21 detected (see "T-URING-1 and T-URING-2 on `debian`" above). `git diff 9b99ef6..31b5d80 -- src include bench tests tools fuzz web cmake CMakeLists.txt CMakePresets.json .github` is empty, so that run covers the code checked here.
+
+The commit that records this differs from 31b5d80 only in the two generated pages, `results/fault_matrix.md` and RESULTS.md (regenerated with `scripts/results_table.py --write`, which changed only the fault-matrix row), and this note.

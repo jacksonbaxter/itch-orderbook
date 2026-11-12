@@ -121,7 +121,7 @@ T-INV-2 is strict, and it fails on real data: books cross while a symbol is halt
 | T-TRADE-5 | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 4 arms | `f09ea44` | [results/trades_12302019.md](results/trades_12302019.md) |
 | PRINTS | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 4 arms | `f09ea44` | [results/trades_12302019.md](results/trades_12302019.md) |
 | T-URING-2 | 12302019 | debian | PASS | S4 lossless at 2,547,190 msg/s in 10 of 10 repetitions; S4's largest lossless rate in the bisection is 2,830,848 msg/s; gap +283,658 msg/s (+11.1%) against the target | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
-| Fault matrix | none | Darwin arm64 | 436 of 436 detected | all areas; controls: 66 commands, 0 failed | `b9a7d8e` | [results/fault_matrix.md](results/fault_matrix.md) |
+| Fault matrix | none | Darwin arm64 | 1061 of 1061 detected | all areas; controls: 196 commands, 0 failed | `31b5d80` | [results/fault_matrix.md](results/fault_matrix.md) |
 
 Throughput. These rows prove the harness on the stub book. They say nothing about a real book, and the two hosts are not to be compared.
 
