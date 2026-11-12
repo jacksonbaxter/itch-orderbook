@@ -2295,3 +2295,66 @@ Loopback runs the receive softirq on the sender's CPU, so everything here is a s
 - `rmem_max`. "The UDP replay's portable groundwork" (2026-11-10) computed its buffer depth from a 212,992-byte `rmem_max`. That figure is IU-45's assumption, a default seen on one Ubuntu system and marked as a placeholder until the host was read; no reading of `debian`'s value before this step was found. P-0901's smoke read it on `debian` on 2026-11-12 as 7,340,032, and `rmem_default` as 212,992. The value comes from outside this project: `/usr/lib/sysctl.d/30-syncthing.conf`, a file of the syncthing package, sets `net.core.rmem_max` and `net.core.wmem_max` to 7,340,032. dpkg last changed it on 2026-10-21. This project changed no sysctl.
 - `CONFIG_IRQ_TIME_ACCOUNTING` is not set in the running kernel, so softirq time may also show in the sender thread's system time. The CPU split counts softirq from `/proc/stat` per CPU and says the sum can count that work twice.
 - Kernel 6.12.116, `io_uring_disabled` 0, `io_uring_group` -1, `ulimit -l` 8,192 KiB, `lo`'s MTU 65,536, `ip_early_demux` 1, clock source `tsc`, `perf_event_paranoid` 2, governor `performance` on cores 4 and 6 under `measure.sh`, turbo and SMT on, no isolated core. Every file's header gives the mitigations, `pswpout` and uptime at the start and end, and each process's `measure.sh` load line. The feed step's first machine check read a five-minute load of 3.75; every sibling-idle check passed.
+
+## T-URING-1's small-packet arm on `debian`, 72 bytes a datagram, 2026-11-12
+
+Loopback runs the receive softirq on the sender's CPU, so everything here is a syscall-and-copy benchmark on one host, not a network benchmark (IU-47).
+
+**What ran, and why 72 bytes.** The comparison plan asks for the bisection at 64-byte and 1,400-byte payloads (io-uring-flamegraph.md, task 3), and IU-2 found the fastest receive call flipped with packet size. Only 1,400 bytes had run (P-0901, P-0902, above). The small arm runs at 72 bytes a datagram, header included, which is `mold::kSmallestDayCap`: 20 bytes of MoldUDP64 header, a 2-byte length and Net Order Imbalance's 50 bytes, the least cap under which every ITCH 5.0 message fits a packet alone. 64 bytes carries no message longer than 42, and the packer refuses one rather than drop or split it. A slice with no `I` does not rescue 64 either: Trade (`P`) is 44 bytes, and a scan of the day found 44-byte frames before its first `I`, which is frame 5,181,563 at 09:28:00. At 72 every frame of the day packs, the same frames the 1,400-byte arm sent. The prediction, P-0903, went in first, in 1843ac9, with the readings below. Every timed process ran from 1843ac9 as `debian_sync.sh` exported it, in a new release build, `build-uring3`, with Clang, mimalloc and liburing 2.15, where `test_udp` passed 37 of 37 and the probe set up every mode. The method is P-0902's: the same cores (sender 4, receiver 6, U5's SQ thread 2), each process a fresh `measure.sh taskset` one, the same 4 MiB receive buffer asked for, the same ring of 1,024 buffers of 2,048 bytes, the same loss rule (a ring run dry, ENOBUFS and a re-arm, counts as a loss), the same pace rule and the same search. One launcher ran the three steps with the common arguments of the 1,400-byte arm, `build-uring3` in place of `build-uring2`, and `--datagram 72`:
+
+| Step | Run | Arguments | Processes | Time, UTC |
+|---|---|---|---|---|
+| smoke | P-0903-20261112T165325Z | `--step smoke --smoke-frames 1000000 --smoke-rate 100000` | 9 functional runs, each PASS | 16:53 to 16:55 |
+| ceiling | P-0903-20261112T165458Z | `--step ceiling --repetitions 10 --frames-cap 50000000` | 10 | 16:55 to 17:28 |
+| bisect | P-0903-20261112T172808Z | `--step bisect --ceiling-from <ceiling run> --trial-seconds 30 --start-rate 1000000 --repetitions 10 --frames-cap 50000000` | 72 | 17:28 to 18:18 |
+
+`scripts/udp_report.py` wrote `results/udp_ceiling_72b_debian_12302019.md` and `results/udp_bisect_72b_debian_12302019.md`. The name carries the packet size, so the two arms never share a file, and `--check` refuses a name whose size is not the header's. There is no latency step, no feed step and no T-URING-2 at this size: T-URING-2 is judged at 1,400 bytes by P-0902, and the driver now runs no confirmation at any other cap (98db292), so the 72-byte bisect file carries no verdict and says where the verdict is. Each step's machine checks passed before and after it, every pin was read back, `perf_event_paranoid` read 2 throughout, and no process failed. Every run has its row in `results/run_log.md`.
+
+**Read before the prediction, untimed** (`build-uring2`, d847e87, whose C++ is 1843ac9's): `itch_loopback` passed for all nine modes at 72 bytes on the day's first 1,000,000 frames paced at 100,000 messages/s. At 72 bytes the first 50,000,000 messages pack into 43,278,343 packets and 2,424,482,595 bytes, 1.155 messages a data packet; at 1,400 bytes the first 1,000,000 make 47.1. That array is 3.46 GB with its entries. One S3 run over those 50,000,000 frames at 200,000 messages/s, under `heavy.sh`, peaked at 5,163,692 KiB resident by the kernel's rusage, on a host of 15.3 GiB; it was lossless. No timed process packed more than those 50,000,000 frames, and no trial ran a receiver on more than 7,296,240, so that reading bounds them; the timed processes' own peaks were not measured. No step packs the whole day at 72 bytes.
+
+**The sender's ceiling.** Alone and unpaced, the sender reached 270,232 messages/s, the median of 10, which is 233,904 packets/s. At 1,400 bytes it sent 225,530 packets/s, so a packet costs the sender about the same at either size, and the message rate falls with the messages a packet: 2.7% of the 1,400-byte ceiling's 9,863,736. The cap was 243,208 messages/s.
+
+**The bisection: the sender, not the receiver, set the limit.** No trial of any mode lost a datagram: failed sends, the sequence's gaps and lost messages, socket drops, `RcvbufErrors`, `InErrors` and softnet drops read zero on all 72 trials, and every book matched the file's. Every trial at the cap failed only because the sender fell behind the schedule, achieving 190,051 (S1) to 237,291 (S4) of the 243,208 messages/s asked. Each search then closed in on the highest rate at which the sender kept 0.99 of its pace with that mode receiving. One trial counted as a loss on the receive side: U4 at 223,023, whose ring ran dry 15 times, ENOBUFS and a re-arm each, with no datagram lost, which the rule counts as a loss.
+
+| Mode | Largest lossless msgs/s, 72 bytes | Stopped by | 1,400 bytes | 72 over 1,400 |
+|---|---|---|---|---|
+| S4 | at least 232,897 | the sender, at 235,433 | 2,830,848 | 8.2% |
+| S3 | at least 220,621 | the sender, at 223,023 | 2,735,896 | 8.1% |
+| U4 | 220,621 | its ring, run dry 15 times at 223,023 | 1,945,047 | 11.3% |
+| U1 | at least 218,244 | the sender, at 220,621 | 2,735,896 | 8.0% |
+| U2 | at least 218,244 | the sender, at 220,621 | 2,735,896 | 8.0% |
+| U3 | at least 215,893 | the sender, at 218,244 | 2,735,896 | 7.9% |
+| U5 | at least 213,568 | the sender, at 215,893 | 1,912,149 | 11.2% |
+| S1 | at least 191,646 | the sender, at 193,733 | 2,735,896 | 7.0% |
+| S2 | at least 187,539 | the sender, at 189,581 | 2,689,622 | 7.0% |
+
+- A figure stopped by the sender is a lower bound: the receiver's own limit was never reached. The report says "at least ..., sender limited" for it and names no winner over it (ca085dd). That rule was written during the bisection, after its first round showed every trial at the cap failing on the sender's pace alone; it reads the table's rows, changes nothing the driver did, and the 1,400-byte files render from their raw records unchanged under it. U2 over S3, the headline pair, is "both sender limited": 218,244 against 220,621, one step of the search apart, and neither a receiver's limit.
+- How fast the sender went depended on the mode receiving. All nine ran a trial at 204,513 messages/s. With seven modes the sender kept pace. With S1 and S2, the two that take one datagram a call, it fell behind, to 197,402 and 198,482, and the sender's core spent 51.5% and 47.7% of the run in softirq, against 27.7% (S4) to 34.5% (S3) with the others. On loopback the receive path runs in the sender's softirq (IU-39), so a receiver that blocks and is woken for nearly every datagram adds that work to the sender's core. The spinning receivers, S4, U4 and U5, are never woken, and S4's sender went fastest. That reading fits the numbers; no profile was taken to show it.
+- Against 1,400 bytes: S4 has the highest figure at both sizes, but at 72 bytes it is a lower bound. U4 and U5, last at 1,400 bytes where their rings ran dry, are mid-table at 72; U5's ring never ran dry here and U4's ran dry only at its top. S1 and S2, level with the batching modes at 1,400 bytes, are last at 72, 13% and 15% under S3. Each mode carries 7% to 11% of its 1,400-byte message rate.
+
+**P-0903 against what ran.**
+
+| Prediction | Predicted | Measured | |
+|---|---|---|---|
+| Ceiling, packets/s | 220,000 to 320,000 | 233,904 | held |
+| Ceiling, messages/s | 254,000 to 370,000 | 270,232 | held |
+| Packet rate over 1,400 bytes' | 0.98 to 1.42 | 1.037 | held |
+| Message rate as a share of 1,400 bytes' | 2.5% to 4% | 2.7% | held |
+| S1, S2, S3, S4, U1 lossless at the cap | each at least the cap | none at the cap: each sender limited below it, 187,539 to 232,897 | missed |
+| U2, U3, U4, U5 below the cap on a ring run dry | 0.3 to 0.95 of the cap, ring dry | 0.878 to 0.907 of it, but only U4's ring ran dry; U2, U3 and U5 were sender limited | missed for U2, U3, U5; held for U4 |
+| U4 and U5 the lowest two | lowest | S2 and S1 lowest; U4 and U5 mid-table | missed |
+| U2 over S3 | 0.30 to 0.95, S3 ahead | both sender limited, 218,244 and 220,621 | missed |
+| No single winner, S4's lead gone | a tie at the cap | no winner named, but S4 has the highest figure, 5.6% over S3's, as a lower bound | held for the winner, missed for S4 |
+| 72 bytes as a share of 1,400 bytes, per mode | 3% to 14% | 7.0% to 11.3% | held |
+| Counters zero on every lossless trial | yes | yes; zero on every trial | held |
+| Socket drops equal `RcvbufErrors` on a lossy trial | yes | no trial dropped a datagram, so not tested | |
+
+The prediction took the sender alone as the limit and gave the ring's 1,024 buffers, about 4 ms of 72-byte packets, as the receive side's. Neither held as written: a receiving mode slows its sender on loopback, and only U4's ring ran dry.
+
+**What went wrong, and what changed.**
+
+- `udp_report.py` had no way to say that a search stopped where the sender fell behind; it would have shown each figure as the receiver's largest lossless rate. ca085dd adds the rule above, with a test and two faults, `udp-report-behind-read-as-the-receiver-s` and `udp-report-winner-over-a-lower-bound`.
+- 98db292 taught the driver, the report and `results_table.py` the packet size: no confirmation off 1,400 bytes, a file name carrying any other size, no T-URING-2 section or verdict in such a file, and a "Packet size" column in RESULTS.md's T-URING-1 table, with eight faults. It made two faults stale, `udp-report-host-name-unchecked` and `udp-report-verdict-marks-uncounted`, whose old text moved; both now inject the same breakage into the new text and are detected.
+- The P-0901 smoke step's lesson held: the smoke runs at 72 bytes were paced, at 100,000 messages/s, and all nine passed.
+- One of the ten sender runs, `ceiling-sender-0005`, reached 259,721 messages/s against 267,770 to 271,519 for the other nine. The ceiling is their median, as at 1,400 bytes.
+- Nothing ran on `debian` between 10:30Z and 11:30Z, no limit or sysctl was changed, and nothing of this piece is left running there. The raw run directories stay outside the repository.
