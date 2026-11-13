@@ -17,9 +17,11 @@
 // Every write to what a level holds goes through write_level(), which reports the
 // level's identity to WriteObserver before changing anything. So does every write to the
 // structure that finds a level by price, which the level arm makes from inside
-// write_level() and reports as a move. That policy is part of the design, not a test
-// hook: the default is an empty inline call that costs nothing, and the oracle build
-// records the writes to prove what each message left alone.
+// write_level() and reports as a move. Each order slot and level slot a write goes
+// through, and each slot a pool hands out or takes back, is reported by the index the write
+// uses. That policy is part of the design, not a test hook: the default is an empty inline
+// call that costs nothing, and the oracle build records the writes to prove what each
+// message left alone.
 //
 // A message the book cannot apply leaves it unchanged and returns why. No wire content
 // can make apply() fail any other way.
@@ -293,7 +295,8 @@ class FastBook {
   // The write choke point. Nothing else changes a level's orders, shares or count, adds
   // or removes a level, or changes where a level sits in its side's price order. open and
   // close rewrite other levels' places, and the level arm reports each of those as a
-  // move before it makes it.
+  // move before it makes it. Each pool slot a write goes through is reported as well, by
+  // the index the write uses, so that a slot of another level is seen at once.
   void write_level(const LevelId& id, const LevelWrite& write) noexcept {
     observer_.on_level_write(id.locate, id.side, id.price);
     const auto moved = [this](std::uint32_t level) {
@@ -307,6 +310,7 @@ class FastBook {
       case LevelOp::unlink: unlink_order(write); break;
       case LevelOp::close: levels_.close(id, write.level, moved); break;
     }
+    observer_.on_level_slot(id, write.level, levels_);
     levels_.refresh(id);
   }
 
@@ -320,6 +324,7 @@ class FastBook {
     if (level.back == kNoIndex) {
       level.front = write.order;
     } else {
+      observer_.on_order_slot(write.level, level.back, orders_);
       orders_[level.back].newer = write.order;
     }
     level.back = write.order;
@@ -328,21 +333,25 @@ class FastBook {
   }
 
   void reduce_order(const LevelWrite& write) noexcept {
+    observer_.on_order_slot(write.level, write.order, orders_);
     orders_[write.order].shares -= write.shares;
     levels_[write.level].aggregate_shares -= write.shares;
   }
 
   void unlink_order(const LevelWrite& write) noexcept {
+    observer_.on_order_slot(write.level, write.order, orders_);
     const BookOrder& order = orders_[write.order];
     Level& level = levels_[write.level];
     if (order.older == kNoIndex) {
       level.front = order.newer;
     } else {
+      observer_.on_order_slot(write.level, order.older, orders_);
       orders_[order.older].newer = order.newer;
     }
     if (order.newer == kNoIndex) {
       level.back = order.older;
     } else {
+      observer_.on_order_slot(write.level, order.newer, orders_);
       orders_[order.newer].older = order.older;
     }
     level.aggregate_shares -= order.shares;
@@ -372,9 +381,11 @@ class FastBook {
     std::uint32_t level = place.level;
     if (!exists) {
       level = levels_.take();
+      observer_.on_level_take(level);
       write_level(id, {.op = LevelOp::open, .level = level, .place = place});
     }
     const std::uint32_t order = take_order();
+    observer_.on_order_take(order);
     write_level(id, {.op = LevelOp::append,
                      .level = level,
                      .order = order,
@@ -449,6 +460,7 @@ class FastBook {
     give_back_order(order);
     if (levels_[level].front == kNoIndex) {
       write_level(id, {.op = LevelOp::close, .level = level});
+      observer_.on_level_give_back(level);
       levels_.give_back(level);
     }
   }
@@ -509,6 +521,7 @@ class FastBook {
   }
 
   void give_back_order(std::uint32_t order) noexcept {
+    observer_.on_order_give_back(order);
     --live_orders_;
     orders_[order].newer = free_order_;
     free_order_ = order;

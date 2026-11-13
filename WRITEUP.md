@@ -237,7 +237,16 @@ The same `FastBook`, compiled to WebAssembly, replays one symbol in the browser 
 
 ### The oracle, and why it covers every message
 
-A deliberately simple reference book replays the day beside the fast book. After every message the oracle compares the state that message could change: every level it touched, in full, the best bid and offer, and the order's status. The fast book writes a level only through `write_level()`, which records each write, and the oracle checks that every write fell inside the touched set. The proof by induction that state outside that set cannot have diverged is in docs/NOTES.md, and a whole-book hash every 1,000,000 messages backs it up ([results/oracle_12302019.md](results/oracle_12302019.md)).
+A deliberately simple reference book replays the day beside the fast book. After every message the oracle compares the state that message could change: every level it touched, in full, the best bid and offer, and the order's status. The fast book stores into a level or an order slot only inside `write_level()` or its pools' hand-out and take-back, and reports each slot it goes through. The oracle checks, on every message:
+
+- **Write set:** each level written for is in the touched set.
+- **Slots:** each level and order slot a write or a pool goes through is live and holds the level or order it should, a slot handed out was free, one taken back was live, and every slot is inside its pool.
+- **Index:** each order reference the message names is found by the fast index exactly when the reference book holds it, at a live slot with the same shares and level.
+- **Arena**, on the flat arms: each side of the message's locate stays within its block, and a block it moves to is inside the arena and held by no other side.
+
+The proof by induction that state outside the touched set cannot have diverged is in docs/NOTES.md, with what each check covers and what it leaves to the whole-book hash. The slot, index and arena checks were added in the final review, after a reviewer showed that the earlier proof took on trust that a write stores only into its own level's slots: a freed order's link stored into the wrong field left a live slot on the free list. Such a store is still seen only on the message that takes that slot again, not on the one that made it. The whole-book hash every 1,000,000 messages backs all of it up ([results/oracle_12302019.md](results/oracle_12302019.md)).
+
+The counts below are the published runs', made before the slot, index and arena checks were added. The ten sessions are being run again under P-0504 at the code that ships; its result will change only the figures quoted from the oracle files.
 
 - On 12302019 it compared 268,744,780 messages, 240,658,248 touched levels and 372,604,158 choke-point writes; the count of write-set violations is 0, and of divergences 0 ([results/oracle_12302019.md](results/oracle_12302019.md)).
 - Over all ten sessions there were 0 divergences in 3,081,392,329 messages ([results/oracle_sessions.md](results/oracle_sessions.md)).
