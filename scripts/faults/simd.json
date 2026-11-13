@@ -671,6 +671,136 @@
         "signature": "simd_report: FAIL command-differs: the command shown does not run under 'measure\\.sh taskset -c 4'",
         "exit": 1
       }
+    },
+    {
+      "id": "simd-report-speed-up-on-ns",
+      "breaks": "Speed-up is the ratio of the ns medians again, not of the cycles the calls compare",
+      "check": "test_simd_report.py",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    metric = compared(experiment, events)\n    word = SHORT.get(metric, \"ns\")\n",
+          "new": "    metric = \"ns\"\n    word = SHORT.get(compared(experiment, events), \"ns\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_speed_up_is_on_the_cycles_the_calls_compare",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-speed-up-of-noise",
+      "breaks": "Speed-up prints a ratio where a range over the repetitions reaches zero",
+      "check": "test_simd_report.py",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    if base is None or base[metric][\"min\"] <= 0 or figure[metric][\"min\"] <= 0:\n",
+          "new": "    if base is None or base[metric][\"median\"] <= 0 or figure[metric][\"median\"] <= 0:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_speed_up_is_n_a_where_a_range_reaches_zero",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-precision-unchecked",
+      "breaks": "A file without the caveat on rounding the seconds passes --check",
+      "check": "test_simd_report.py",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    if precision not in (check_results.section(text, \"What this does not show\") or \"\").split(\"\\n\"):\n",
+          "new": "    if precision not in (check_results.section(text, \"What this does not show\") or \"\").split(\"\\n\") and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_caveats_bound_what_rounding_the_seconds_can_move",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-precision-bound-halved",
+      "breaks": "The rounding bound counts one mean of passes, not the two a paired figure is apart",
+      "check": "test_simd_report.py",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "        results = max(1000 / f[\"items\"] for f in figures.values())\n",
+          "new": "        results = max(500 / f[\"items\"] for f in figures.values())\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_caveats_bound_what_rounding_the_seconds_can_move",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-field-debian-noise-as-a-speed-up",
+      "breaks": "results/simd_field_debian_12302019.md prints avx2-w2's noise as a speed-up again",
+      "check": "simd_report.py --check",
+      "mutations": [
+        {
+          "file": "results/simd_field_debian_12302019.md",
+          "old": "| 3.000 | -0.000 | -0.000 | 0.000 | `scalar-w2` | n/a |",
+          "new": "| 3.000 | -0.000 | -0.000 | 0.000 | `scalar-w2` | 0.097 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/simd_report.py",
+        "--check",
+        "{tree}/results/simd_field_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "simd_report: FAIL results-differ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-parse-mac-precision-caveat-dropped",
+      "breaks": "results/simd_parse_mac_12302019.md loses the caveat that the rare types' last digit is not certain",
+      "check": "simd_report.py --check",
+      "mutations": [
+        {
+          "file": "results/simd_parse_mac_12302019.md",
+          "old": "; one in ns an op of a type by at most 0.011 ns, more than half the last printed place, so that digit is not certain.",
+          "new": "."
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/simd_report.py",
+        "--check",
+        "{tree}/results/simd_parse_mac_12302019.md"
+      ],
+      "expect": {
+        "signature": "simd_report: FAIL precision-unsaid",
+        "exit": 1
+      }
     }
   ]
 }
