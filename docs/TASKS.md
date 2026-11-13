@@ -248,7 +248,7 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [ ] Every Linux number cites its commit. Sync through `debian_sync.sh` from committed `HEAD`.
 - [ ] Final report
 - [x] The Linux sampler rule, fixed before any new number: `scripts/linux_sampler.py`, held by `backtest_driver.py`, `stamp_load.py` and `check_results.py` for every `debian` run from 2026-11-13T03:00Z; docs/NOTES.md, "The Linux sampler rule", and BENCHMARKS.md's method section. The other report checkers do not read it yet.
-- [x] P-0106: T-BT-3 on `debian` again under that rule, P-0104's schedule: 284.96 ns a message, inside neither earlier figure's band, so the prediction failed; `results/backtest_shadow_debian_12302019.md` is that run, with the miss's host reason (docs/NOTES.md, "P-0106: T-BT-3 on `debian` under the Linux sampler rule").
+- [x] P-0106: T-BT-3 on `debian` again under the Linux sampler rule, P-0104's schedule, gave 284.96 ns a message, inside neither earlier figure's band, so the prediction failed, and it is published as failed with T-BT-3 missed by 1.10 M messages/s (`results/backtest_shadow_debian_12302019.md`, with the miss's host reason; docs/NOTES.md, "P-0106: T-BT-3 on `debian` under the Linux sampler rule").
 - [x] T-BT-1 held in its bar's unit, engine events/s, with messages/s beside it; both T-BT-1 files rendered again from their raw records (docs/NOTES.md, "T-BT-1 in its bar's unit").
 
 ### Review finding r1-3: fuzz targets for the kernels, the packet builder and the look-ahead reader
