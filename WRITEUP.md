@@ -205,7 +205,7 @@ The backtester replays the real book and queues simulated orders among the real 
 - T-BT-3 is missed on `debian`: four symbols with 100,000 shadow orders in real FIFO queues at 3,354,119 messages/s, 1.26 M under the 4.61 M bar ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
 - That bar was set on a Mac, and the Mac meets it ([results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md)).
 
-The suspect was the walk over simulated levels and orders. A ladder of schedules timed it at 4.969 ns a step, and on T-BT-3's schedule the walk is 3.51% of a message's 323.88 ns ([results/walks_ladder_debian_12302019.md](results/walks_ladder_debian_12302019.md)). So the walk is not the cause, and the rest of the gap is not established. Neither run read counters.
+The suspect was the walk over simulated levels and orders. A ladder of schedules timed it at 4.969 ns a step, and on T-BT-3's schedule the walk is 3.51% of a message's 323.88 ns ([results/walks_ladder_debian_12302019.md](results/walks_ladder_debian_12302019.md)). So the walk is not the cause, and the rest of the gap is not established. The ladder's own time for that schedule differs from the published file's, and why is not established; neither run read counters.
 
 The market maker is Avellaneda-Stoikov, tuned on 10302019 and reported on 12302019, out of sample by day. Its PnL splits into spread capture, adverse selection and inventory, which sum exactly to the ledger's total, tested on integers ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
 
