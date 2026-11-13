@@ -334,4 +334,4 @@ Each benchmarked alone, then measured inside the book or backtester.
   - Rows 235 to 239 and 318 were given the kind their raw records support (5cbb02f).
   - The docstrings list the grammar's limits (1233b57).
   - Still 162 lines against 95772ae: the header and 161 rows of 349 runs. docs/NOTES.md, "Other programs given by their kind".
-- [ ] Under the check lock at the merge of 1233b57: every stage of `scripts/check.sh` but fault_matrix, then the building faults of each fault file changed since 3c720c0 and those among piece V's ids.
+- [x] Under the check lock at de0e39a, which merges piece V's branch at 1233b57: every stage of `scripts/check.sh` but fault_matrix passed, 18 stages, release first. Then 52 building faults were all detected, with 7 control commands and 0 failures: every building fault of the fault files changed since 3c720c0 (`bench.json`; `gates.json` has none). Piece V's ids hold no building fault.
