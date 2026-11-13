@@ -937,8 +937,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "| 4.57 M messages/s |",
-          "new": "| 4.75 M messages/s |"
+          "old": "| 4.68 M engine events/s (4.57 M messages/s) |",
+          "new": "| 4.86 M engine events/s (4.57 M messages/s) |"
         }
       ],
       "command": [

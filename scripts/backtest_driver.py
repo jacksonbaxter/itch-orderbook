@@ -21,7 +21,9 @@ pending. Figures are the median of the repetitions with min, max and CV beside i
 The quoting workload is T-BT-1 and the shadow workload T-BT-3. The file says what one event
 is, what the rate's denominator is beside the source's, and gives the target's verdict in
 words from check_results.py's fixed set. T-BT-1's bar was set on x86, so a macOS figure
-neither meets nor misses it; T-BT-3's was set on a Mac.
+neither meets nor misses it; T-BT-3's was set on a Mac. Each bar is held in the unit
+BENCHMARKS.md gives it: T-BT-1's in engine events/s (the Summary's "Engine events/s" row),
+with messages/s after it, labelled; T-BT-3's in ITCH messages/s.
 
 On Linux the Linux sampler rule applies to every process (docs/NOTES.md, "The Linux sampler
 rule"): scripts/linux_sampler.py runs beside the whole run, pinned to --sampler-cpu (by default
@@ -38,6 +40,17 @@ does. The file's load_rule field and Sampler section say what the rule saw.
 
 Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
 --raw-dir, which is not committed.
+
+    backtest_driver.py render --raw-dir DIR --published FILE --out FILE [--stderr FILE] \
+        [--rendered-again REASON]
+
+renders a published file again from its run's raw records in DIR, each repetition's record,
+and from measure.sh's stderr (DIR/stderr.txt unless --stderr names it), from which the load
+lines are stamped. What the run printed only into the file, its command, its run id and
+times, the machine check's output and the swap line, is taken from FILE. Nothing is run. The
+result passes check_results.py or is not written. REASON adds a line saying the file was
+rendered again from the run's own raw records, and why. A file with a Sampler section is
+refused: its sampler's verdicts are not in the records alone.
 
 Exit codes: 0 results written, 1 refused or failed, 2 bad usage, 128 + N stopped by
 signal N.
@@ -62,6 +75,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import linux_sampler  # noqa: E402
+import stamp_load  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
 Refused = bench_driver.Refused
@@ -102,6 +116,7 @@ WORKLOADS = {
     "quoting": {
         "target": "T-BT-1",
         "bar": 2.0,
+        "unit": "engine events/s",
         "x86": True,
         "title": "T-BT-1: the backtester with a quoting strategy",
         "host": ("T-BT-1's bar was set on an Intel Core i9-13900H, so a macOS figure neither "
@@ -131,6 +146,7 @@ WORKLOADS = {
     "shadow": {
         "target": "T-BT-3",
         "bar": 4.61,
+        "unit": "messages/s",
         "x86": False,
         "title": "T-BT-3: the backtester with queuetruth's shadow orders",
         "host": ("T-BT-3's bar was set on an Apple M1 Pro under macOS, in Low Power Mode, which "
@@ -313,26 +329,35 @@ def summary_rows(records):
 
 
 def verdict(workload, host, median_rate):
-    """T-BT-1's bar was set on x86; T-BT-3's on a Mac. Rates in millions of messages a second."""
+    """T-BT-1's bar was set on x86; T-BT-3's on a Mac. median_rate is in the bar's own unit
+    (WORKLOADS' unit): engine events a second for T-BT-1, messages a second for T-BT-3."""
     spec = WORKLOADS[workload]
     bar = spec["bar"]
     rate = median_rate / MEGA
     gap = rate - bar
     if spec["x86"] and host == check_results.MAC_HOST:
         return (f"host differs: a macOS figure against a bar set on an x86 laptop, neither a pass "
-                f"nor a fail; against the bar: {gap:+.2f} M messages/s")
+                f"nor a fail; against the bar: {gap:+.2f} M {spec['unit']}")
     if rate >= bar:
         return "met"
-    return f"missed: {-gap:.2f} M messages/s under the bar"
+    return f"missed: {-gap:.2f} M {spec['unit']} under the bar"
 
 
 def target_rows(records):
+    """Each bar in the unit BENCHMARKS.md sets it in. T-BT-1's is engine events/s, LobSim's
+    events, so its row gives the engine-events median and then, labelled, the messages median;
+    T-BT-3's is ITCH messages/s. Both medians are of the unrounded rates, rounded to print."""
     workload = records[0]["workload"]
     spec = WORKLOADS[workload]
     host = records[0]["header"]["host"]
-    median = statistics.median(message_rate(record) for record in records)
-    return [f"| {spec['target']} | ≥ {spec['bar']:.2f} M messages/s | "
-            f"{median / MEGA:.2f} M messages/s | {verdict(workload, host, median)} |"]
+    messages = statistics.median(message_rate(record) for record in records)
+    if spec["unit"] == "messages/s":
+        median, measured = messages, f"{messages / MEGA:.2f} M messages/s"
+    else:
+        median = statistics.median(engine_rate(record) for record in records)
+        measured = f"{median / MEGA:.2f} M {spec['unit']} ({messages / MEGA:.2f} M messages/s)"
+    return [f"| {spec['target']} | ≥ {spec['bar']:.2f} M {spec['unit']} | {measured} | "
+            f"{verdict(workload, host, median)} |"]
 
 
 def count_rows(record):
@@ -418,7 +443,8 @@ def header_lines(records, args, run_id, started, finished, sampled=None):
     return lines
 
 
-def render(records, args, run_id, started, finished, machine_output, command, sampled=None):
+def render(records, args, run_id, started, finished, machine_output, command, sampled=None,
+           again=None):
     first = records[0]
     spec = WORKLOADS[first["workload"]]
     host = first["header"]["host"]
@@ -426,8 +452,10 @@ def render(records, args, run_id, started, finished, machine_output, command, sa
     what, event = describe(records)
     lines = [f"# {spec['title']}, on {host}, {day}", "",
              "Generated by `scripts/backtest_driver.py` from raw records that are not committed. "
-             "Do not edit by hand.", "",
-             f"Host: **{host}**. Numbers from the two hosts are never mixed.", ""]
+             "Do not edit by hand.", ""]
+    if again:
+        lines += [f"Rendered again from the run's own raw records, unchanged: {again}", ""]
+    lines += [f"Host: **{host}**. Numbers from the two hosts are never mixed.", ""]
     if host == check_results.MAC_HOST:
         lines += [f"**{host} is not a pinned host.** macOS offers no way to pin a thread, so each "
                   "process ran wherever the scheduler put it, beside whatever else the machine "
@@ -559,7 +587,85 @@ def parse_args(argv):
     return args
 
 
+# render
+
+class PrintedSwap:
+    """The swap line as the published file printed it."""
+
+    def __init__(self, line):
+        self.text = line
+
+    def line(self):
+        return self.text
+
+
+def published_parts(text):
+    """What the run printed only into its file: its arguments, run id and times, the machine
+    check's output and the swap line."""
+    fields = check_results.parse_header(text)
+    command = (check_results.section(text, "Commands") or "").strip().strip("`").strip()
+    wrapped, found, words = command.partition("python3 -B scripts/backtest_driver.py ")
+    if not found:
+        raise Refused("published", "no backtest_driver.py command in its Commands section")
+    args = parse_args(shlex.split(words))
+    args.wrapped_by = wrapped.strip() or None
+    machine = (check_results.section(text, "machine_check output") or "").strip()
+    machine = machine.removeprefix("```").removesuffix("```").strip("\n")
+    swap = next((line for line in text.splitlines()
+                 if line.startswith(("The kernel's pswpout", "Swap-outs are not read"))), None)
+    return args, fields, machine, swap
+
+
+def render_again(raw_dir, published, stderr, again=None):
+    """The published file's run rendered again from its raw records, stamped."""
+    if check_results.section(published, "Sampler") is not None:
+        raise Refused("published", "its Sampler section's verdicts are not in the raw records")
+    args, fields, machine, swap = published_parts(published)
+    records = []
+    for index in range(1, args.repetitions + 1):
+        record = json.loads((raw_dir / f"{args.workload}-repetition-{index}.json").read_text(
+            encoding="utf-8"))
+        validate_run(record, args.workload)
+        records.append(record)
+    validate_together(records)
+    bench_driver.swap_watch = PrintedSwap(swap) if swap else None
+    try:
+        text = render(records, args, fields["run_id"], fields["run_started"],
+                      fields["run_finished"], machine, relative_command(args), again=again)
+    finally:
+        bench_driver.swap_watch = None
+    stamped = stamp_load.stamp(text, stderr)
+    violations = check_results.check_text(stamped)
+    if violations:
+        raise Refused("results", "; ".join(f"{code}: {detail}" for code, detail in violations))
+    return stamped
+
+
+def render_main(argv):
+    parser = argparse.ArgumentParser(prog="backtest_driver.py render",
+                                     description="render a published file again from raw")
+    parser.add_argument("--raw-dir", type=Path, required=True)
+    parser.add_argument("--published", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--stderr", type=Path, help="measure.sh's stderr, DIR/stderr.txt unless given")
+    parser.add_argument("--rendered-again", metavar="REASON")
+    args = parser.parse_args(argv)
+    try:
+        stderr = (args.stderr or args.raw_dir / "stderr.txt").read_text(encoding="utf-8")
+        text = render_again(args.raw_dir, args.published.read_text(encoding="utf-8"), stderr,
+                            args.rendered_again)
+    except (Refused, OSError, ValueError, KeyError) as error:
+        print(f"backtest_driver: render refused: {error}", file=sys.stderr)
+        return 1
+    args.out.write_text(text, encoding="utf-8")
+    print(f"backtest_driver: wrote {args.out}", file=sys.stderr)
+    return 0
+
+
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["render"]:
+        return render_main(argv[1:])
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)

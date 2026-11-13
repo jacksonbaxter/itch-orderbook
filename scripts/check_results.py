@@ -758,8 +758,22 @@ def check_backtest_target(text, fields):
         yield "target-verdict-invalid", f"{target} has {len(cells)} cells, not 4"
         return
     verdict = cells[3]
+    # Each bar in its own unit (BENCHMARKS.md): T-BT-1's engine events/s, after which its row
+    # gives messages/s, labelled; T-BT-3's ITCH messages/s.
+    unit, row_name = (("engine events/s", "Engine events/s") if workload == "quoting" else
+                      ("messages/s", "Replay rate, messages/s"))
+    summary = {row[0]: row for row in table_rows(text, "Summary")}
+    if cells[1] != f"≥ {bar:.2f} M {unit}" or \
+            not re.fullmatch(rf"[0-9.]+ M {re.escape(unit)}( \([0-9.]+ M messages/s\))?", cells[2]):
+        yield "target-unit-wrong", f"{target} is not held in {unit}: {cells[1]!r}, {cells[2]!r}"
+        return
+    messages = summary.get("Replay rate, messages/s")
+    if unit != "messages/s" and (messages is None or number(messages[1]) is None or
+                                 f"({number(messages[1]) / 1e6:.2f} M messages/s)" not in cells[2]):
+        yield "target-verdict-wrong", f"{target}'s messages/s, {cells[2]!r}, is not the summary's"
+        return
     measured = number(cells[2])
-    rate = {row[0]: row for row in table_rows(text, "Summary")}.get("Replay rate, messages/s")
+    rate = summary.get(row_name)
     if not (verdict == "met" or verdict.startswith(VERDICTS[1:])):
         yield "target-verdict-invalid", f"{target}: {verdict!r}"
     elif fields.get("host") == MAC_HOST and x86 and verdict.startswith(("met", "missed: ")):
@@ -770,7 +784,7 @@ def check_backtest_target(text, fields):
     elif (verdict == "met") != (number(rate[1]) / 1e6 >= bar) and not verdict.startswith(
             VERDICTS[2:]):
         yield "target-verdict-wrong", (f"{target} is {verdict.split(':')[0]} at {rate[1]} "
-                                       f"messages/s against {bar} M")
+                                       f"{unit} against {bar} M")
 
 
 def check_backtest(text, fields):
