@@ -28,12 +28,12 @@ Zen 1 limits what `debian` can show:
 
 ### How a number gets published
 
-1. A prediction is committed first, in [results/predictions.md](results/predictions.md), with what would refute it.
-2. `machine_check` refuses the run unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is resident in memory.
-3. Other work beside a timed process withdraws it. On the Mac a sampler reads every other process every 2 s, and a process during which another passed 20% CPU is withdrawn ([results/layout_mac_12302019.md](results/layout_mac_12302019.md)). That rule is why two Mac targets have no result.
-   On `debian` the same kind of rule started late in the project: a sampler reads /proc every 1 s and withdraws a process whose core, SMT sibling or other cores were busy; T-BT-3's rerun is the one published figure under it so far ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
-4. Every run, failed and withdrawn ones included, gets a row in [results/run_log.md](results/run_log.md), which is never edited.
-5. The fault matrix plants bugs in a scratch copy and requires the named check to catch each. Its last full run caught 1063 of 1063, after 196 control commands passed on the clean tree ([results/fault_matrix.md](results/fault_matrix.md)).
+- A prediction is committed first, in [results/predictions.md](results/predictions.md), with what would refute it.
+- `machine_check` refuses the run unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is resident in memory.
+- Other work beside a timed process withdraws it. On the Mac a sampler reads every other process every 2 s, and a process during which another passed 20% CPU is withdrawn ([results/layout_mac_12302019.md](results/layout_mac_12302019.md)). That rule is why two Mac targets have no result.
+  On `debian` the same kind of rule started late in the project: a sampler reads /proc every 1 s and withdraws a process whose core, SMT sibling or other cores were busy; T-BT-3's rerun is the one published figure under it so far ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
+- Every run, failed and withdrawn ones included, gets a row in [results/run_log.md](results/run_log.md), which is never edited.
+- The fault matrix plants bugs in a scratch copy and requires the named check to catch each. Its last full run caught 1063 of 1063, after 196 control commands passed on the clean tree ([results/fault_matrix.md](results/fault_matrix.md)).
 
 ## Data layout
 
@@ -64,11 +64,11 @@ Flat levels beat linked ones on either index by a wide margin, with fewer DRAM f
 - On 12302019, 57.27% of add searches pass one better level or none, and 10.75% pass 16 or more ([results/window_12302019.md](results/window_12302019.md)).
 - 8.337% of adds land 256 or more whole-cent ticks behind the best, so a fixed window of ticks, as some books use, would often overflow ([results/window_12302019.md](results/window_12302019.md)).
 
-Capping the linear search at 16 entries before a binary search made no difference, -0.18% with overlapping ranges. A pure binary search lost 4.09% and missed more branches, 2.808 a message against 2.027 ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)).
+Capping the linear search at 16 entries before a binary search made no difference, -0.18% with overlapping ranges. A pure binary search ran -4.09% and missed more branches, 2.808 a message against 2.027 ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)).
 
 ### The paged index against the hash
 
-The paged index is faster and pays in memory: `hash-flat` runs at 0.8381 of `paged-flat`'s rate in the layout run ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)), with far less book memory (the table above).
+The paged index is faster and pays in memory: in the layout run the hash index's rate is 0.8381 of the paged one's, `hash-flat` against the default ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)), with far less book memory (the table above).
 
 The lookup alone does not explain the gap:
 
@@ -86,7 +86,7 @@ Deletion, where open addressing shifts entries back, is the suspect, but no coun
 
 Messages that name an order (executes, cancels, deletes, replaces) were counted by that order's age, each figure the median of 2 processes of the 3 planned ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)):
 
-- A message naming an order under 1 ms old makes 0.0490 DRAM fills; one naming an order 1 s old or more makes 4.3729 ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)).
+- A message naming an order under 1 ms old makes 0.0490 DRAM fills; a message naming an order 1 s old or more makes 4.3729 ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)).
 - 54.5% of those messages name an order 1 s old or more, and they take 90.66% of the named messages' fills ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)).
 
 So most of the book's DRAM traffic is the first touch of an order whose lines have left a small L3. A larger cache would keep more of them; how much of the gap to the bars that is, is not measured, since no larger-cache x86 host was available.
@@ -97,7 +97,7 @@ Prefetching one structure at a time took 22.7% of the fills off the demand path 
 
 ### No allocation on the hot path
 
-`FastBook` has no allocator: its arrays are sized up front, and its links are 32-bit indices. A test counts every `operator new` after warm-up, all forms included, beside a control book that does allocate. Over the reference day the fast book made 0 allocations after warm-up in 268,744,780 messages, on all four arms ([results/oracle_12302019.md](results/oracle_12302019.md)). The counter sees `operator new`, not `malloc`.
+`FastBook` has no allocator: its arrays are sized up front, and its links are indices into them. A test counts every `operator new` after warm-up, all forms included, beside a control book that does allocate. Over the reference day the fast book made 0 allocations after warm-up in 268,744,780 messages, on all four arms ([results/oracle_12302019.md](results/oracle_12302019.md)). The counter sees `operator new`, not `malloc`.
 
 ### The allocator arms
 
@@ -105,12 +105,12 @@ T-ARENA-1 asks what the allocator alone is worth, so a separate linked-level boo
 
 With the pools on base pages, on `debian`:
 
-- Against malloc-fresh's throughput, `pool-index` ran 1.238 times, `pmr-pool` 1.195, `mimalloc` 1.128 and `malloc-aged` 0.901 ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)).
-- `pool-index` ran 2,513,655 messages a second and `malloc-fresh` 2,032,184 ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)).
-- Replace p99.9 is 58587.2 ns on `pool-index` against 69894.8 ns on `malloc-fresh` ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)).
+- Each arm's median ratio to malloc-fresh's throughput: pool-index 1.238, pmr-pool 1.195, malloc-aged 0.901; mimalloc's median ratio is 1.128 ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)).
+- Median throughput, messages/s: pool-index 2,513,655, malloc-fresh 2,032,184 ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)).
+- Replace p99.9: pool-index 58587.2 ns, malloc-fresh 69894.8 ns ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)).
 - `pool-index` holds 221.1 MiB of book against `malloc-fresh`'s 264.9 MiB ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)).
 
-On transparent huge pages, `pool-index` ran 1.390 times malloc-fresh, 2,834,723 messages a second ([results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md)). TLB reach is the obvious suspect, but no TLB counter was read, so the cause is not established.
+On transparent huge pages, pool-index's median ratio to malloc-fresh is 1.390; pool-index's median throughput is 2,834,723 messages/s ([results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md)). TLB reach is the obvious suspect, but no TLB counter was read, so the cause is not established.
 
 The index pool also narrows each link, so its lead over the pointer pool is not the allocator's alone. The fastest node book is still slower than both flat-level arms of `FastBook`: under a node design, arrays and indices matter more than any allocator.
 
@@ -157,7 +157,7 @@ ITCH fields are big-endian at fixed offsets, so a scalar parser is loads and byt
 
 On `debian`, decoding an Add Order alone, SSSE3 wins: 0.80 cycles against scalar's 9.94, with AVX2 at 1.78 ([results/simd_decode_debian_12302019.md](results/simd_decode_debian_12302019.md)). Why AVX2 trails SSSE3 on the same shuffle plan is not established; Zen 1's split 256-bit operations, clock changes and line-split stores were not tested apart.
 
-Over the whole parse the order reverses: scalar 35.099 cycles a message, SSSE3 46.282, AVX2 48.105, a speed-up over scalar, in cycles, of 0.758 for SSSE3 and 0.730 for AVX2 ([results/simd_parse_debian_12302019.md](results/simd_parse_debian_12302019.md)). A diagnostic counter run, recorded in docs/NOTES.md and not quoted here, put the loss in the work around the decode: the type dispatch and moving vector results back to integer registers.
+Over the whole parse the order reverses: scalar 35.099 cycles a message, SSSE3 46.282, AVX2 48.105, ; the speed-up over scalar in cycles is SSSE3 0.758 and AVX2 0.730 ([results/simd_parse_debian_12302019.md](results/simd_parse_debian_12302019.md)). A diagnostic counter run, recorded in docs/NOTES.md and not quoted here, put the loss in the work around the decode: the type dispatch and moving vector results back to integer registers.
 
 With the book behind it, the kernel does not matter: scalar 187.966 ns a message, SSSE3 188.132, AVX2 190.228 ([results/simd_book_debian_12302019.md](results/simd_book_debian_12302019.md)).
 
@@ -175,7 +175,18 @@ Two experiments could not run. AVX-512 VBMI needs a CPU neither host has; its te
 
 The ring has free-running indices, a cached copy of the other side's index, a mask instead of a modulo, and batched publishing, with acquire and release ordering only. On `debian`, with each thread pinned:
 
-- Round trips: atomic_queue 133.5 ns, moodycamel 169.3 ns, rigtorp 198.5 ns, folly 220.9 ns, this ring 229.3 ns, boost 264.5 ns, a mutex queue 781.3 ns ([results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md)).
+- Median round trips, in the table below: atomic_queue is fastest and a mutex queue slowest, with this ring (`project`) between folly and boost.
+
+| Queue | Median round trip, ns | File |
+|---|---|---|
+| atomic_queue | 133.5 | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
+| moodycamel | 169.3 | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
+| rigtorp | 198.5 | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
+| folly | 220.9 | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
+| project | 229.3 | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
+| boost | 264.5 | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
+| mutex | 781.3 | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
+
 - T-SPSC-1 is missed on all three comparisons: boost over this ring 1.15× against a bar of 1.16×, and this ring 1.35× moodycamel's and 1.16× rigtorp's where the bar is to match them ([results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md)).
 - T-SPSC-2, one technique removed at a time: the cached index gave 0.89× and 1.20× against bars of 3.90×, and the mask 1.60× and 1.19× against 4.20×; the bars were set on an i7-9700 under WSL2 ([results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md)).
 
@@ -188,13 +199,13 @@ Inside the replay the ring does its job. With the parser on one core and the boo
 A paced sender replays the day as MoldUDP64 over loopback on `debian`, which measures system calls and copies, not a network. Nine modes receive it: S1 to S4 on sockets, U1 to U5 on io_uring. Each mode's largest lossless rate was bisected at 1,400 bytes a datagram ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)):
 
 - S4, `recvmmsg` spinning, won at 2,830,848 msg/s ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
-- S1, S3, U1, U2 and U3 all reached 2,735,896, one bisection step, so blocking sockets and io_uring are not told apart here ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
-- U4 reached 1,945,047 and U5 1,912,149 ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)). Above that they lost no datagram, but their provided-buffer ring ran dry, which the rule fixed beforehand counts as a loss. A larger ring is untested.
+- S1, S3, U1, U2 and U3 all reached 2,735,896 msg/s, one bisection step, so blocking sockets and io_uring are not told apart here ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
+- U4 reached 1,945,047 msg/s and U5 1,912,149 msg/s ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)). Above that they lost no datagram, but their provided-buffer ring ran dry, which the rule fixed beforehand counts as a loss. A larger ring is untested.
 - T-URING-2 is met: S4 was lossless at 2,547,190 msg/s, Nasdaq's 1 ms peak, in 10 of 10 repetitions ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
 
 T-URING-1 has no bar: no published head-to-head of io_uring and `recvmmsg` for UDP was found. The sender alone reaches 9,863,736 msg/s, so the receivers set these limits ([results/udp_ceiling_debian_12302019.md](results/udp_ceiling_debian_12302019.md)).
 
-At a low rate the spinning modes answer far sooner, p50 6.06 µs for S4 against 32.56 µs for S1 ([results/udp_latency_debian_12302019.md](results/udp_latency_debian_12302019.md)): the cost of waking a blocked thread, which spinning pays for with a whole core.
+At a low rate the spinning modes answer far sooner, p50 for S4 6.06 µs against S1 32.56 µs ([results/udp_latency_debian_12302019.md](results/udp_latency_debian_12302019.md)): the cost of waking a blocked thread, which spinning pays for with a whole core.
 
 At 72 bytes a datagram, the sender was the limit for every mode but U4, which stopped at 220,621 msg/s when its ring ran dry, so no mode can be ranked there ([results/udp_bisect_72b_debian_12302019.md](results/udp_bisect_72b_debian_12302019.md)).
 
@@ -202,12 +213,12 @@ At 72 bytes a datagram, the sender was the limit for every mode but U4, which st
 
 The backtester replays the real book and queues simulated orders among the real ones by order reference: only depletion ahead of an order advances it. It models latency on market data and order entry, fees from a dated Nasdaq schedule, and partial fills.
 
-- T-BT-1 is met on `debian`: the whole day with a quoting strategy and its queue model at 4.68 M engine events/s, 4,570,542 messages/s, against a bar of 2.00 M engine events/s ([results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md)).
+- T-BT-1 is met on `debian`: the whole day with a quoting strategy and its queue model at 4.68 M engine events/s against a bar of 2.00 M engine events/s; its median replay rate is 4,570,542 messages/s ([results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md)).
 - T-BT-3 is missed on `debian`: four symbols with 100,000 shadow orders in real FIFO queues at 3,509,307 messages/s, 284.96 ns a message, 1.10 M under the 4.61 M bar ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
 - That bar was set on a Mac, and the Mac meets it ([results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md)).
 
 The suspect was the walk over simulated levels and orders. A ladder of schedules timed it at 4.969 ns a step, and on T-BT-3's schedule the walk is 3.51% of a message's 323.88 ns ([results/walks_ladder_debian_12302019.md](results/walks_ladder_debian_12302019.md)). So the walk is not the cause, and the rest of the gap is not established.
-Three runs of the same process took 298.14 ns a message (P-0104), 323.88 (P-0105, the ladder) and 284.96 (P-0106, published, the only one under the Linux sampler rule); the last is outside both bands P-0106 named, so that prediction failed, and why the runs differ is not established, since none read counters ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
+Three runs of the same process took a median of 298.14 ns a message (P-0104), 323.88 (P-0105) and 284.96 (P-0106); P-0105 is the ladder's, and P-0106 is the published run, the only one under the Linux sampler rule; it is outside both bands P-0106 named, so that prediction failed, and why the runs differ is not established, since none read counters ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
 
 The market maker is Avellaneda-Stoikov, tuned on 10302019 and reported on 12302019, out of sample by day. Its PnL splits into spread capture, adverse selection and inventory, which sum exactly to the ledger's total, tested on integers ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
 
@@ -228,7 +239,7 @@ The same `FastBook`, compiled to WebAssembly, replays one symbol in the browser 
 
 A deliberately simple reference book replays the day beside the fast book. After every message the oracle compares the state that message could change: every level it touched, in full, the best bid and offer, and the order's status. The fast book writes a level only through `write_level()`, which records each write, and the oracle checks that every write fell inside the touched set. The proof by induction that state outside that set cannot have diverged is in docs/NOTES.md, and a whole-book hash every 1,000,000 messages backs it up ([results/oracle_12302019.md](results/oracle_12302019.md)).
 
-- On 12302019 it compared 268,744,780 messages, 240,658,248 touched levels and 372,604,158 choke-point writes, with 0 write-set violations and 0 divergences ([results/oracle_12302019.md](results/oracle_12302019.md)).
+- On 12302019 it compared 268,744,780 messages, 240,658,248 touched levels and 372,604,158 choke-point writes; the count of write-set violations is 0, and of divergences 0 ([results/oracle_12302019.md](results/oracle_12302019.md)).
 - Over all ten sessions there were 0 divergences in 3,081,392,329 messages ([results/oracle_sessions.md](results/oracle_sessions.md)).
 
 Planted book bugs are caught, each a fault-matrix row. The oracle has one known limit: it walks each touched level's whole FIFO. On a much busier recent sample day it was stopped by hand after hours of CPU, nearly all in that walk; its row is in [results/run_log.md](results/run_log.md).
@@ -273,9 +284,9 @@ Each was measured and lost or did not help.
 - SSSE3 and AVX2 lost the whole parse on `debian`, at speed-ups of 0.758 and 0.730 over scalar in cycles, though SSSE3 wins the decode alone ([results/simd_parse_debian_12302019.md](results/simd_parse_debian_12302019.md)).
 - AVX2 lost to SSSE3 on the decode, 1.78 cycles against 0.80 ([results/simd_decode_debian_12302019.md](results/simd_decode_debian_12302019.md)).
 - NEON won the Mac's parse, 17.574 cycles against 18.790, by less than the bar for changing the default ([results/simd_parse_mac_12302019.md](results/simd_parse_mac_12302019.md)).
-- Over flat levels a capped linear search tied at -0.18%, and a binary search lost 4.09% ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)).
+- Over flat levels a capped linear search tied at -0.18%, and a binary search ran -4.09% ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)).
 - Linked levels lost to flat ones on either index: `paged-linked` ran 2,542,188 messages/s ([results/bench_book_paged-linked_ram_debian_12302019.md](results/bench_book_paged-linked_ram_debian_12302019.md)).
-- No hash caught the paged index: `hash-flat` ran at 0.8381 of its rate ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)).
+- No hash caught the paged index: the hash index's rate is 0.8381 of the paged one's, `hash-flat` against the default ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)).
 - The ring's cached index gave 1.20× against a bar of 3.90× ([results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md)).
 - io_uring's buffer-ring modes came last at 1,400 bytes, U5 at 1,912,149 msg/s, held down by their rings running dry ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
 - The pools still took page faults in timed passes, 136 on `pool-index` ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)).
@@ -291,7 +302,7 @@ Wrong predictions are kept beside their outcomes in [results/predictions.md](res
 
 ## Every target missed or not measured
 
-Generated by `scripts/results_table.py` from the results files; `scripts/check.sh` fails if it differs from a fresh run. The script refuses a row whose file no longer gives its verdict, and a BENCHMARKS.md target with no row that it does not list as met, held or without a bar. Only the "Why" words are written in the script, and they carry no figure. Bars are BENCHMARKS.md's, with the host each was set on. Book targets are the default arm's; [RESULTS.md](RESULTS.md) has every arm. A "not measured" row has no measured figure, so the number gate skips it, and its run count is from [results/run_log.md](results/run_log.md).
+Generated by `scripts/results_table.py` from the results files; `scripts/check.sh` fails if it differs from a fresh run. The script refuses a row whose file no longer gives its verdict, and a BENCHMARKS.md target with no row that it does not list as met, held or without a bar. Only the "Why" words are written in the script, and they carry no figure. Bars are BENCHMARKS.md's, with the host each was set on. Book targets are the default arm's; the Book targets table in [RESULTS.md](RESULTS.md) has every arm's, each with its verdict. A "not measured" row has no measured figure, so the number gate skips it, and its run count is from [results/run_log.md](results/run_log.md).
 
 <!-- missed targets: begin, generated by scripts/results_table.py, do not edit -->
 | Target | Bar | Measured | Gap | Host | Why | File |

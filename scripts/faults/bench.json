@@ -856,7 +856,7 @@
     },
     {
       "id": "bench-numbers-changed-demo-figure",
-      "breaks": "A demo page figure no longer matches any results file",
+      "breaks": "A demo page figure no longer matches the results file its line cites",
       "check": "gate_numbers.py on the fixture",
       "inputs": [
         {
@@ -874,7 +874,7 @@
         "{tree}/tests/fixtures/gate_numbers"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL docs/index\\.html:\\d+: 1,600 is in no results file",
+        "signature": "gate_numbers: FAIL docs/index\\.html:\\d+: 1,600 is not in results/bench_one\\.md",
         "exit": 1
       }
     },
@@ -4199,6 +4199,546 @@
       ],
       "expect": {
         "signature": "FAIL: test_the_command_shown_carries_the_core_and_its_sibling"
+      }
+    },
+    {
+      "id": "bench-book-verdict-unjudged",
+      "breaks": "A book target's verdict is never compared with its bar and figures",
+      "check": "test_bench_results.py test_a_verdict_the_figure_does_not_bear_out",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "            yield from check_book_target(text, fields, cells)\n",
+          "new": "            pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_verdict_the_figure_does_not_bear_out"
+      }
+    },
+    {
+      "id": "bench-book-miss-list-unchecked",
+      "breaks": "A book miss may name figures that meet the bar, or leave out one that misses",
+      "check": "test_bench_results.py test_a_verdict_the_figure_does_not_bear_out",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if None in gaps or not fails <= set(listed) or set(listed) & (passes | set(below)) or \\\n                not listed or listed != [name for name in names if name in listed]:\n",
+          "new": "        if None in gaps or not listed:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_verdict_the_figure_does_not_bear_out"
+      }
+    },
+    {
+      "id": "bench-book-gap-unchecked",
+      "breaks": "A book miss's gap need not be the figure's distance from its bar",
+      "check": "test_bench_results.py test_a_gap_that_is_not_the_figure_s_distance_from_its_bar",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "            if gap_bounds[0] > max(distance) or gap_bounds[1] < min(distance):\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_gap_that_is_not_the_figure_s_distance_from_its_bar"
+      }
+    },
+    {
+      "id": "bench-book-measured-untied",
+      "breaks": "A book target's measured figure need not be the file's own median",
+      "check": "test_bench_results.py test_a_measured_figure_that_is_not_the_file_s_median",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if source is None or source == BELOW_FLOOR or \\\n                bounds[0] > source[1] or bounds[1] < source[0]:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_measured_figure_that_is_not_the_file_s_median"
+      }
+    },
+    {
+      "id": "bench-book-below-floor-untied",
+      "breaks": "A figure the file's table resolves may be called below floor in the targets table",
+      "check": "test_bench_results.py test_a_figure_the_table_holds_called_below_floor",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "            if source != BELOW_FLOOR:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_figure_the_table_holds_called_below_floor"
+      }
+    },
+    {
+      "id": "bench-book-bar-cell-unchecked",
+      "breaks": "A book file's Bar cell may give another bar than BOOK_BARS",
+      "check": "test_bench_results.py test_a_bar_cell_that_is_not_the_bar",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if bar_cell != want:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_bar_cell_that_is_not_the_bar"
+      }
+    },
+    {
+      "id": "bench-book-delta-unchecked",
+      "breaks": "A macOS figure's distance from an x86 bar need not be its own",
+      "check": "test_bench_results.py test_a_distance_from_an_x86_bar_that_is_not_the_figure_s",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if given[0] > bounds[1] - bar or given[1] < bounds[0] - bar:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_distance_from_an_x86_bar_that_is_not_the_figure_s"
+      }
+    },
+    {
+      "id": "bench-book-host-differs-anywhere",
+      "breaks": "Host differs may stand for a bar the host can judge",
+      "check": "test_bench_results.py test_host_differs_where_the_bar_can_judge",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if not host_differs:\n        yield \"target-verdict-wrong\"",
+          "new": "    if False:\n        yield \"target-verdict-wrong\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_host_differs_where_the_bar_can_judge"
+      }
+    },
+    {
+      "id": "bench-book-spreads-unchecked",
+      "breaks": "A book table's median may lie outside its min and max",
+      "check": "test_bench_results.py test_a_median_outside_its_min_and_max",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "                if not low <= median <= high:\n",
+          "new": "                if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_median_outside_its_min_and_max"
+      }
+    },
+    {
+      "id": "bench-bars-compare-off",
+      "breaks": "A copied bar that BENCHMARKS.md's words do not give passes",
+      "check": "test_bench_results.py test_a_bar_changed_in_benchmarks_md_alone_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        elif words not in line:\n",
+          "new": "        elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_bar_changed_in_benchmarks_md_alone_is_refused"
+      }
+    },
+    {
+      "id": "bench-bars-benchmarks-moved",
+      "breaks": "T-BT-1's bar changes in BENCHMARKS.md and not in check_results.py",
+      "check": "check_results.py --bars BENCHMARKS.md",
+      "inputs": [
+        {
+          "file": "BENCHMARKS.md",
+          "op": "replace_text",
+          "old": "≥ 2.0 M events/s",
+          "new": "≥ 2.5 M events/s"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "--bars",
+        "{tree}/BENCHMARKS.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL bar-differs T-BT-1: BACKTEST_TARGETS quoting: ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-bars-backtest-copy-moved",
+      "breaks": "T-BT-3's bar changes in check_results.py and not in BENCHMARKS.md",
+      "check": "check_results.py --bars BENCHMARKS.md",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "\"shadow\": (\"T-BT-3\", 4.61, False)}",
+          "new": "\"shadow\": (\"T-BT-3\", 4.16, False)}"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "--bars",
+        "{tree}/BENCHMARKS.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL bar-differs T-BT-3: BACKTEST_TARGETS shadow: ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-bars-book-copy-moved",
+      "breaks": "T-LAT-2's p99.9 bar changes in BOOK_BARS and not in BENCHMARKS.md",
+      "check": "check_results.py --bars BENCHMARKS.md",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "(\"p99.9\", \"<=\", 874)",
+          "new": "(\"p99.9\", \"<=\", 847)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "--bars",
+        "{tree}/BENCHMARKS.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL bar-differs T-LAT-2: BOOK_BARS: ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-bars-spsc-copy-moved",
+      "breaks": "T-SPSC-3's bar changes in SPSC_COMPARISONS and not in BENCHMARKS.md",
+      "check": "check_results.py --bars BENCHMARKS.md",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "\"value\": PIPELINE_RATIO, \"op\": \"<=\", \"bar\": 1.31,",
+          "new": "\"value\": PIPELINE_RATIO, \"op\": \"<=\", \"bar\": 1.13,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "--bars",
+        "{tree}/BENCHMARKS.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL bar-differs T-SPSC-3: SPSC_COMPARISONS pipelined time / single-threaded time: ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stub-label-anywhere",
+      "breaks": "The stub's label anywhere in a book file, a quoting sentence included, spares it every book check (r7-5)",
+      "check": "test_bench_results.py test_the_label_quoted_in_a_sentence_spares_nothing",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    return not stub_line(text).startswith(f\"**{STUB_LABEL} \")\n",
+          "new": "    return STUB_LABEL not in text\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_label_quoted_in_a_sentence_spares_nothing"
+      }
+    },
+    {
+      "id": "bench-stub-book-fields-allowed",
+      "breaks": "A file labelled the stub may carry a book's design, input and top of book",
+      "check": "test_bench_results.py test_a_book_file_labelled_the_stub_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if present:\n        yield \"stub-label-on-a-book\"",
+          "new": "    if False:\n        yield \"stub-label-on-a-book\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_book_file_labelled_the_stub_is_refused"
+      }
+    },
+    {
+      "id": "bench-stub-book-name-allowed",
+      "breaks": "A bench_book_ file may be labelled the stub's",
+      "check": "test_bench_results.py test_a_stub_file_with_a_book_name_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if name is not None and name.startswith(\"bench_book_\"):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_stub_file_with_a_book_name_is_refused"
+      }
+    },
+    {
+      "id": "bench-prediction-after-run-unchecked",
+      "breaks": "A prediction committed after the tree its run measured passes (r7-4)",
+      "check": "test_check_predictions.py test_a_prediction_after_the_tree_its_run_measured",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "        elif git(root, \"merge-base\", \"--is-ancestor\", commit, resolved.strip()) is None:\n",
+          "new": "        elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_prediction_after_the_tree_its_run_measured",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-start-unchecked",
+      "breaks": "A prediction committed after its run began passes",
+      "check": "test_check_predictions.py test_a_prediction_committed_after_its_run_began",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "        if when > began.timestamp() or (measured is None and when == began.timestamp()):\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_prediction_committed_after_its_run_began",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-start-same-second-allowed",
+      "breaks": "With no measured commit, a prediction committed in its run's first second passes",
+      "check": "test_check_predictions.py test_with_no_measured_commit_the_same_second_does_not_order_them",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "(measured is None and when == began.timestamp())",
+          "new": "False"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_with_no_measured_commit_the_same_second_does_not_order_them",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-id-substring-allowed",
+      "breaks": "A run_id that is only words of the run log, such as published, passes (r7-4)",
+      "check": "test_check_predictions.py test_a_run_id_the_log_holds_only_as_words",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "run_id not in logged_runs(log_text)",
+          "new": "run_id not in log_text"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_run_id_the_log_holds_only_as_words",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-measured-commit-unknown-allowed",
+      "breaks": "A measured commit the history does not hold is read as HEAD, and passes",
+      "check": "test_check_predictions.py test_a_measured_commit_the_history_does_not_hold",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "        resolved = git(root, \"rev-parse\", \"--verify\", \"-q\", f\"{measured}^{{commit}}\")\n",
+          "new": "        resolved = git(root, \"rev-parse\", \"--verify\", \"-q\", f\"{measured}^{{commit}}\") or \\\n            git(root, \"rev-parse\", \"HEAD\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_measured_commit_the_history_does_not_hold",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-unplaced-allowed",
+      "breaks": "A result that gives neither its measured commit nor its run's start passes",
+      "check": "test_check_predictions.py test_a_result_that_places_its_run_nowhere",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "    if measured is None and RUN_START.match(run_id or \"\") is None:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_result_that_places_its_run_nowhere",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-no-git-bare-ok",
+      "breaks": "With no history read, the check still prints a bare ok (r7-4)",
+      "check": "test_check_predictions.py test_no_git_says_the_history_was_not_checked",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "    print(\"check_predictions: ok\" if use_git else f\"check_predictions: ok, {unchecked(root, args)}\")\n",
+          "new": "    print(\"check_predictions: ok\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_no_git_says_the_history_was_not_checked",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-design-ratio-each-map-required",
+      "breaks": "T-DESIGN-1's Measured cell must give the ratio over both map designs, so a run beside one map design is refused",
+      "check": "test_bench_results.py, the ratio over each map design that ran",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "                   \"each that ran\": True,\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_design_ratio_is_given_over_each_map_design_that_ran \\("
+      }
+    },
+    {
+      "id": "bench-design-ratio-any-order",
+      "breaks": "T-DESIGN-1's ratios may be given in any order or twice",
+      "check": "test_bench_results.py, the ratio over each map design that ran",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if spec.get(\"each that ran\") and listed and len(set(listed)) == len(listed) and \\\n            listed == [name for name in names if name in listed]:\n",
+          "new": "    if spec.get(\"each that ran\") and listed:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_design_ratio_is_given_over_each_map_design_that_ran \\("
       }
     },
     {

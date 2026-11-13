@@ -11,6 +11,7 @@ import contextlib
 import io
 import json
 import signal
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -163,6 +164,39 @@ class Matrix(unittest.TestCase):
         self.assertIn("1 of 1 detected", report)
         self.assertIn("Not run on this host: 1, for Linux only", report)
         self.assertIn("1 for another system not run", self.output)
+
+    def test_a_run_in_which_no_fault_ran_fails(self):
+        self.define(good_fault(id="linux", system="Linux"))
+        self.assertEqual(self.matrix("--system", "Darwin"), 1, self.output)
+        self.assert_verdict(fm.OTHER_HOST, "linux")
+        self.assertIn("fault matrix: FAIL no fault ran", self.output)
+
+    def test_a_later_edit_an_earlier_one_disturbed_is_stale(self):
+        # Each old text occurs once in the file, but the second is gone once the first is made.
+        self.define(good_fault(mutations=[
+            {"file": "payload.txt", "old": "good", "new": "bad"},
+            {"file": "payload.txt", "old": "good\n", "new": "worse\n"}]))
+        self.assertEqual(self.matrix(), 1, self.output)
+        self.assert_verdict(fm.STALE)
+        self.assertIn("occurs 0 times, not once, after the edits before it", self.output)
+
+    def test_a_later_edit_of_the_text_an_earlier_one_made_is_not_stale(self):
+        self.define(good_fault(mutations=[
+            {"file": "payload.txt", "old": "good", "new": "nearly so"},
+            {"file": "payload.txt", "old": "nearly so", "new": "bad"}]))
+        self.assertEqual(self.matrix(), 0, self.output)
+        self.assert_verdict(fm.DETECTED)
+
+    def test_an_input_after_a_mutation_of_its_file_is_tried_on_the_mutated_text(self):
+        self.define(good_fault(mutations=[{"file": "payload.txt", "old": "good", "new": "gone"}],
+                               inputs=[{"file": "payload.txt", "op": "replace_text",
+                                        "old": "good", "new": "bad"}]))
+        # The input's old text is gone once the mutation is made, so the fault is stale: had it
+        # not been found so, inject() would stop the run on it.
+        (fault,) = fm.load_faults(self.root / "faults")
+        self.assertIn("payload.txt: replace_text cannot apply", fm.find_stale(fault, self.root) or "")
+        self.assertEqual(self.matrix(), 1, self.output)
+        self.assert_verdict(fm.STALE)
 
     def test_a_fault_for_this_system_runs(self):
         self.define(good_fault(id="linux", system="Linux",
@@ -356,6 +390,28 @@ class CommittedFaults(unittest.TestCase):
         self.assertGreater(len(faults), 0)
         for fault in faults:
             self.assertIsNone(fm.find_stale(fault, fm.REPO_ROOT), fault.id)
+
+    def test_a_tool_that_only_fails_detects_no_tool_fault(self):
+        # Each mm-select and mm-cli fault breaks one rule of its tool; a tool that just exits 1
+        # breaks every case, and its output must match none of their signatures.
+        faults = [fault for fault in fm.load_faults(fm.REPO_ROOT / "scripts" / "faults")
+                  if fault.id.startswith(("mm-select-", "mm-cli-"))]
+        # Ten when this test was written; every one added since is held to the same rule.
+        self.assertGreaterEqual(len(faults), 10)
+        broken = "/usr/bin/false" if Path("/usr/bin/false").exists() else "/bin/false"
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as scratch:
+            outputs = {}
+            oracle = str(fm.REPO_ROOT / "tests" / "fixtures" / "oracle")
+            for prefix, script, extra in (("mm-select-", "test_select_cli.py", scratch),
+                                          ("mm-cli-", "test_mm_cli.py", oracle)):
+                done = subprocess.run([sys.executable, "-B", str(fm.REPO_ROOT / "tests" / script),
+                                       broken, extra], capture_output=True, text=True,
+                                      check=False, timeout=120)
+                self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+                outputs[prefix] = done.stdout + done.stderr
+        for fault in faults:
+            output = outputs["mm-select-" if fault.id.startswith("mm-select-") else "mm-cli-"]
+            self.assertNotEqual(fm.judge(fault, 1, output)[0], fm.DETECTED, fault.id)
 
     def test_the_six_required_parser_faults_exist(self):
         ids = {fault.id for fault in fm.load_faults(fm.REPO_ROOT / "scripts" / "faults")}

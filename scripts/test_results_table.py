@@ -262,6 +262,55 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn("6 verdicts in the file, 5 rows", output)
 
+    def test_every_book_target_reaches_the_book_targets_table(self):
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        books = sorted((self.root / "results").glob("bench_book_*.md"))
+        self.assertGreater(len(books), 0)
+        seen = 0
+        for path in books:
+            for cells in results_table.targets_table(path.name, path.read_text(encoding="utf-8")):
+                verdict = cells["Verdict"]
+                if verdict.startswith("missed: "):
+                    verdict = "**missed**: " + verdict.removeprefix("missed: ")
+                want = (f"| {cells['Target']} | ", f"| {cells['Bar']} | {cells['Bar set on']} | "
+                        f"{cells['Measured here'] or '–'} | {verdict} | ",
+                        f"(results/{path.name}) |")
+                rows = [line for line in output.splitlines()
+                        if line.startswith(want[0]) and want[1] in line and line.endswith(want[2])]
+                self.assertEqual(len(rows), 1, f"{path.name} {cells['Target']}")
+                seen += 1
+        self.assertEqual(seen, 10 * len(books))
+        self.assertIn("| **missed**: p50 by 19.14 ns, p99 by 288.86 ns, p99.9 by 598.00 ns |",
+                      output)
+
+    def test_a_book_miss_and_a_target_not_measured_keep_their_words(self):
+        name = "results/bench_book_paged-flat_ram_debian_12302019.md"
+        self.edit(name, "| missed: rate by 11.25 M msg/s |", "| missed: rate by 99.99 M msg/s |")
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        self.assertIn("| rate 5.15 M msg/s | **missed**: rate by 99.99 M msg/s |", output)
+        self.assertIn("| – | not measured in this run: needs the input mapped and the top of "
+                      "book tracked |", output)
+
+    def test_a_targets_verdict_no_row_took_up_is_refused(self):
+        name = "results/backtest_shadow_debian_12302019.md"
+        text = (self.root / name).read_text(encoding="utf-8")
+        row = re.search(r"^\| T-BT-3 \|.*\|$", text, re.MULTILINE)[0]
+        self.edit(name, row + "\n", row + "\n| T-BT-9 | ≥ 1 | 0 | missed: by 1 |\n")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL {name}: its targets table gives 2 verdicts, and the "
+                      "rows here take up 1", output)
+
+    def test_a_book_targets_row_with_a_cell_missing_is_refused(self):
+        name = "results/bench_book_paged-flat_ram_debian_12302019.md"
+        self.edit(name, "| T-BOOK-3 | ≤ 1.4 GB of book | a size, comparable on any host | "
+                        "book 0.69 GB | met |", "| T-BOOK-3 | ≤ 1.4 GB of book | met |")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("T-BOOK-3's row has 3 cells, its targets table 5", output)
+
     def test_a_trade_verdict_dropped_from_its_table_is_refused(self):
         self.edit(TRADES, "| T-TRADE-3 | **PASS** | 0 |\n", "")
         code, output = self.run_table()
@@ -275,6 +324,28 @@ class ResultsTable(unittest.TestCase):
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
         self.assertIn("- design:", output)
+
+    def test_a_harness_label_off_its_line_is_held_to_the_book_rules(self):
+        name = "results/bench_replay_stub_mac_12302019.md"
+        label = f"**{results_table.HARNESS_LABEL} "
+        text = (self.root / name).read_text(encoding="utf-8")
+        moved = text.replace(label, "**A result. ", 1).replace(
+            "Numbers from the two hosts", f"Not the {results_table.HARNESS_LABEL} Numbers from "
+            "the two hosts", 1)
+        self.assertNotEqual(moved, text)
+        (self.root / name).write_text(moved, encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("- design:", output)
+
+    def test_a_book_file_labelled_the_stub_is_refused(self):
+        stub = (self.root / "results/bench_replay_stub_mac_12302019.md").read_text(encoding="utf-8")
+        (self.root / "results/bench_book_planted_mac_12302019.md").write_text(stub,
+                                                                              encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("results/bench_book_planted_mac_12302019.md: a book file's name, labelled "
+                      "the stub's", output)
 
     def add_book(self, fixture=BOOK_FIXTURE):
         name = f"results/{BOOK}"
