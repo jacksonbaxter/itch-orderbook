@@ -560,6 +560,9 @@ class Driver(unittest.TestCase):
             lines, "2026-10-31T10:00:11Z", "2026-10-31T10:00:13Z") or "")
 
     def test_clocks_that_disagree_refuse_the_run(self):
+        # The run record the driver keeps the probe's output in; a refused check keeps none.
+        kept = []
+        record = argparse.Namespace(output=lambda name, text: kept.append(name))
         with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
             probe = Path(directory) / "probe.sh"
             for verdict, code in (("disagree: the offset is bounded away from 0", 1),
@@ -571,9 +574,10 @@ class Driver(unittest.TestCase):
                     "echo 'cross_core_backwards: 20 of 20'\n"
                     f"echo 'cross_core_verdict: {verdict}'\nexit {code}\n", encoding="utf-8")
                 probe.chmod(0o755)
-                args = argparse.Namespace(peer_core=6, core=4, probe=probe)
+                args = argparse.Namespace(peer_core=6, core=4, probe=probe, record=record)
                 with self.assertRaisesRegex(spsc_driver.Refused, verdict.split(":")[0]):
                     spsc_driver.cross_core_check(args)
+        self.assertEqual(kept, [])
         self.assertIsNone(spsc_driver.cross_core_check(argparse.Namespace(peer_core=None)))
 
     def test_two_repetitions_are_not_enough(self):
