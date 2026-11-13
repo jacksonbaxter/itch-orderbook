@@ -158,7 +158,7 @@ Hard means any mismatch fails. Each check needs an injected bug that trips it. C
 - [ ] Cboe per-tape check (T-TRADE-4): held. No Cboe data in this project until the user decides. Scripts do not fetch it, nothing depends on it, and no further joins are run.
 - [x] `B` reverses a stored match, hard on 10302019, fixtures otherwise.
 - [x] Match numbers unique across `E`, `C`, `P`, `Q`. Measure first. Measured on both days: unique across the print classes. A far-leg `C_N` shares its number with one print, by design, and is checked against it.
-- [ ] Surface class-level counts in the phase report: test symbols, zero-share `Q`, `C_N`, `P`, `B`.
+- [x] Surface class-level counts in the phase report: test symbols, zero-share `Q`, `C_N`, `P`, `B`. In section 2.6 of the Phase 3 report, accepted at 3f8bacd on 2026-11-13.
 
 ### Low-latency components
 Each benchmarked alone, then measured inside the book or backtester.
@@ -232,7 +232,7 @@ Each benchmarked alone, then measured inside the book or backtester.
 ### Write-up and iteration
 - [x] CI green on GitHub. The first run, at 2810183, failed both GCC jobs on a `-Wconversion` error only Linux shows, and the x86-64 Clang job on the LLVM archive's 1 GiB zstd window. Fixed, and every job passed at da1a707. docs/NOTES.md, "CI's first runs on GitHub".
 - [ ] docs/NOTES.md kept current, including what didn't help.
-- [ ] Phase 3 report, with the crossed-book findings and trade-print class counts.
+- [x] Phase 3 report, with the crossed-book findings and trade-print class counts. Accepted at 3f8bacd on 2026-11-13; the crossed-book findings and the class counts are in its section 2.6.
 
 ## Phase 4: Final review
 
