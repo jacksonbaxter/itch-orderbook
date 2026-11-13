@@ -2228,7 +2228,7 @@ Another project's sanitizer test suites ran at nice 5 throughout (no record from
 
 - **The line.** The least-squares line through the four medians gives 4.969 ns a walk step and 312.81 ns a message at none. It passes within 0.8 ns of every median.
 - **What the walk costs T-BT-3.** It takes 11.4 ns of a message, 3.5%. With that taken off, T-BT-3's schedule would run at 3.20 M messages/s, still 1.41 M under the 4.61 M bar.
-- **The verdict on T-BT-3's miss.** The walk is not why T-BT-3 misses on `debian`; the rest of the engine's work a message is. The walk only matters on deep sides: at 14,400 s, with sides 70.9 levels deep on average, it is 10.4% of a message. T-BT-3 does not need a price-keyed lookup for `find_sim_level`, so none was added.
+- **The verdict on T-BT-3's miss.** The walk is not why T-BT-3 misses on `debian`; the rest of the engine's work a message is. The walk only matters on deep sides: at 14,400 s, with sides 70.9 levels deep on average, it is 10.45% of a message. T-BT-3 does not need a price-keyed lookup for `find_sim_level`, so none was added.
 - **The counts.** Every count, event hash, fill and report matched the Mac's counts file for each schedule, with 0 queue anomalies in every process.
 
 **P-0105 is refuted, on one criterion.**
