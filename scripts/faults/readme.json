@@ -2461,8 +2461,8 @@
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "Of the findings, 139 are fixed,",
-          "new": "Of the findings, 138 are fixed,"
+          "old": "Of the findings, 154 are fixed,",
+          "new": "Of the findings, 153 are fixed,"
         }
       ],
       "command": [
@@ -2474,7 +2474,7 @@
         "WRITEUP.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 138 is not in results/final_review\\.md",
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 153 is not in results/final_review\\.md",
         "exit": 1
       }
     },
@@ -2485,8 +2485,8 @@
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "looked again at the fixes were 2 of 14,",
-          "new": "looked again at the fixes were 12 of 14,"
+          "old": "looked again at the fixes were 2 of 15,",
+          "new": "looked again at the fixes were 13 of 15,"
         }
       ],
       "command": [
@@ -2498,7 +2498,7 @@
         "WRITEUP.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 12 is not in results/final_review\\.md",
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 13 is not in results/final_review\\.md",
         "exit": 1
       }
     },
