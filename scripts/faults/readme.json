@@ -217,8 +217,8 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "            books.append(book_row(name, text))\n",
-          "new": "            book_row(name, text)\n"
+          "old": "            books.append(book)\n",
+          "new": ""
         }
       ],
       "command": [
@@ -252,13 +252,13 @@
     },
     {
       "id": "readme-backtest-file-unread",
-      "breaks": "A backtest results file gets no row, and a malformed one passes",
+      "breaks": "A backtest results file gets no row",
       "check": "test_results_table.py test_a_backtest_file_gets_a_row_of_its_own",
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "        elif name.startswith(\"backtest_\"):\n            backtests.append(backtest_row(name, text))\n",
-          "new": "        elif name.startswith(\"backtest_\"):\n            pass\n"
+          "old": "            backtests.append(backtest)\n",
+          "new": ""
         }
       ],
       "command": [

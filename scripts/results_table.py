@@ -595,14 +595,16 @@ def generate(root):
             throughput.append(throughput_row(name, text))
             rows = []
         elif name.startswith("bench_"):
-            books.append(book_row(name, text))
-            targets = book_target_rows(name, text, books[-1])
+            book = book_row(name, text)
+            books.append(book)
+            targets = book_target_rows(name, text, book)
             book_targets += targets
             taken = [(row[0], verdict_word(row[9].replace("**", ""))) for row in targets]
             rows = []
         elif name.startswith("backtest_"):
-            backtests.append(backtest_row(name, text))
-            taken = [(backtests[-1][1], verdict_word(backtests[-1][8].replace("**", "")))]
+            backtest = backtest_row(name, text)
+            backtests.append(backtest)
+            taken = [(backtest[1], verdict_word(backtest[8].replace("**", "")))]
             rows = []
         elif name.startswith("spsc_"):
             found = spsc_rows(name, text)
