@@ -17,6 +17,7 @@
     "docs",
     "README.md",
     "RESULTS.md",
+    "WRITEUP.md",
     "BENCHMARKS.md"
   ],
   "faults": [
