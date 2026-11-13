@@ -575,6 +575,46 @@
    "expect": {
     "signature": "FAIL: test_the_command_shown_carries_the_core_and_its_sibling"
    }
+  },
+  {
+   "id": "alloc-driver-peak-of-the-first-arm",
+   "breaks": "The header's peak_rss is the largest repetition of the first arm only, as it was before 2026-11-13, not the largest timed process over every arm",
+   "check": "test_alloc_results.py test_the_peak_rss_is_the_largest_timed_process_over_every_arm",
+   "mutations": [
+    {
+     "file": "scripts/alloc_driver.py",
+     "old": "              *peak_lines(runs),\n",
+     "new": "              *bench_driver.peak_lines(next(iter(runs.values()))),\n"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "{tree}/scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_the_peak_rss_is_the_largest_timed_process_over_every_arm"
+   }
+  },
+  {
+   "id": "alloc-driver-render-drops-the-swap-line",
+   "breaks": "Rendering a published file again from its raw records drops the swap line the run printed",
+   "check": "test_alloc_results.py test_a_published_file_renders_again_from_its_raw_records",
+   "mutations": [
+    {
+     "file": "scripts/alloc_driver.py",
+     "old": "    bench_driver.swap_watch = PrintedSwap(swap) if swap else None\n",
+     "new": "    bench_driver.swap_watch = None\n"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "{tree}/scripts/test_alloc_results.py"
+   ],
+   "expect": {
+    "signature": "FAIL: test_a_published_file_renders_again_from_its_raw_records"
+   }
   }
  ]
 }
