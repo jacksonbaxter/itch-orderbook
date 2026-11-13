@@ -371,7 +371,8 @@ class Stamp(unittest.TestCase):
             stderr.write_text(STDERR.replace("at=2026-10-31T10:00:10Z", "at=2026-10-31T10:00:06Z"),
                               encoding="utf-8")
             with contextlib.redirect_stderr(io.StringIO()):
-                code = stamp_load.main(["--results", str(results), "--stderr", str(stderr)])
+                code = stamp_load.main(["--results", str(results), "--stderr", str(stderr),
+                                        "--run-log", str(Path(directory) / "run_log.md")])
             self.assertEqual(code, 1)
             self.assertEqual(results.read_text(encoding="utf-8"), PENDING)
 
@@ -446,7 +447,8 @@ class Sampler(unittest.TestCase):
             sampler.write_text(sampler_log(foreign_at=6), encoding="utf-8")
             with contextlib.redirect_stderr(io.StringIO()):
                 code = stamp_load.main(["--results", str(results), "--stderr", str(stderr),
-                                        "--sampler", str(sampler)])
+                                        "--sampler", str(sampler),
+                                        "--run-log", str(Path(directory) / "run_log.md")])
             self.assertEqual(code, 1)
             self.assertEqual(results.read_text(encoding="utf-8"), self.pending)
 

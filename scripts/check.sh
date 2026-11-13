@@ -108,6 +108,7 @@ stage_bench() {
     python_test scripts/test_gate_numbers.py &&
     python_test scripts/test_check_predictions.py &&
     python_test scripts/test_bench_results.py &&
+    python_test scripts/test_driver_records.py &&
     python_test scripts/test_backtest_results.py &&
     python_test scripts/test_linux_sampler.py &&
     python_test scripts/test_spsc_results.py &&

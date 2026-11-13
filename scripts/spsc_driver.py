@@ -908,7 +908,7 @@ def main(argv=None):
         if sampler is not None:
             sampler.done.set()
     bench_driver.hold_signals()
-    bench_driver.append_log(args.run_log, run_id, args.prediction, commit, "published")
+    bench_driver.append_written(args.run_log, run_id, args.prediction, commit, [written])
     print(f"spsc_driver: wrote {written}, load lines pending. Now run scripts/stamp_load.py.",
           file=sys.stderr)
     return 0

@@ -697,7 +697,7 @@ def main(argv=None):
                                 f"failed: {error!r}")
         return 1
     bench_driver.hold_signals()
-    bench_driver.append_log(args.run_log, run_id, args.prediction, commit, "published")
+    bench_driver.append_written(args.run_log, run_id, args.prediction, commit, [written])
     print(f"backtest_driver: wrote {written}, load lines pending. Now run scripts/stamp_load.py.",
           file=sys.stderr)
     return 0

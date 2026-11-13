@@ -4260,6 +4260,69 @@
       "expect": {
         "signature": "FAIL: test_a_file_with_a_sampler_section"
       }
+    },
+    {
+      "id": "bench-driver-row-published-before-stamp",
+      "breaks": "A driver writes 'published' to the run log as soon as its file is written, before stamp_load.py applies the load rule (r5-3)",
+      "check": "test_driver_records.py test_no_driver_writes_published_before_the_stamp",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "               f\"{PENDING_ROW}: {names}; scripts/stamp_load.py appends each file's outcome, \"\n",
+          "new": "               f\"published: {names}; scripts/stamp_load.py appends each file's outcome, \"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_no_driver_writes_published_before_the_stamp",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stamp-load-writes-no-outcome-row",
+      "breaks": "stamp_load.py stamps a file and writes no outcome row, so the run log never says the run was published (r5-3)",
+      "check": "test_driver_records.py test_a_stamped_file_gets_its_published_row",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    elif row:\n        bench_driver.append_log(",
+          "new": "    elif False:\n        bench_driver.append_log("
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stamped_file_gets_its_published_row",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stamp-load-publishes-a-withdrawn-run",
+      "breaks": "stamp_load.py stamps a run it has already withdrawn, so a published row follows the withdrawn one (r5-3)",
+      "check": "test_driver_records.py test_a_refused_stamp_gets_its_withdrawn_row_and_stays_withdrawn",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    if row and settled(log_text, fields[\"run_id\"], name):\n",
+          "new": "    if row and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_refused_stamp_gets_its_withdrawn_row_and_stays_withdrawn",
+        "exit": 1
+      }
     }
   ]
 }

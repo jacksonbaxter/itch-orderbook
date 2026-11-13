@@ -424,7 +424,9 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             text = out.read_text(encoding="utf-8")
             self.assertEqual(codes(text), {"load-not-stamped"})
-            self.assertIn("| published |", log)
+            # The driver leaves the outcome to stamp_load.py (r5-3).
+            self.assertIn("| written, pending the load stamp: ", log)
+            self.assertNotIn("| published", log)
             raw = Path(directory) / "raw"
             self.assertTrue((raw / "alloc-pool-fifo-repetition-3-untimed.json").is_file())
             self.assertTrue((raw / "itch_map_compare-mimalloc.log").is_file())

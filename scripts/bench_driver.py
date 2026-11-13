@@ -38,8 +38,11 @@ and a design not so named must show one, or the run is refused.
 
 Every run gets a row in results/run_log.md, whatever became of it, a run stopped by
 SIGTERM, SIGINT or SIGHUP included: the driver passes the signal to the process running,
-waits for it, writes the row with where the run was, and exits 128 plus the signal.
-Raw output stays in --raw-dir, which is not committed.
+waits for it, writes the row with where the run was, and exits 128 plus the signal. A run
+that writes its files says "written, pending the load stamp", never "published": the load
+rule is applied after it, by scripts/stamp_load.py, which appends each file's outcome row,
+published or withdrawn with the reason. Raw output stays in --raw-dir, which is not
+committed.
 
 Exit codes: 0 results written, 1 refused or failed, 2 bad usage, 128 + N stopped by
 signal N.
@@ -986,7 +989,9 @@ def relative_command(args):
     return f"{args.wrapped_by} {text}" if args.wrapped_by else text
 
 
-def append_log(path, run_id, prediction, commit, outcome):
+def append_log(path, run_id, prediction, commit, outcome, system=None):
+    """One row. system is the OS the run ran on, platform.system()'s word for it, when the row
+    is written on another host than the run's."""
     new = not path.is_file()
     with open(path, "a", encoding="utf-8") as log:
         if new:
@@ -994,7 +999,23 @@ def append_log(path, run_id, prediction, commit, outcome):
                       "ones included. Rows are never changed or removed.\n\n"
                       "| Run | Prediction | Commit | OS | Outcome |\n|---|---|---|---|---|\n")
         outcome_text = outcome.replace("|", "/").replace("\n", " ")
-        log.write(f"| {run_id} | {prediction} | {commit} | {platform.system()} | {outcome_text} |\n")
+        log.write(f"| {run_id} | {prediction} | {commit} | {system or platform.system()} "
+                  f"| {outcome_text} |\n")
+
+
+# What a driver whose files leave its load lines pending writes when it has written them: not
+# "published", since scripts/stamp_load.py has still to apply the load rule (and, on a Mac, the
+# sampler rule), and may refuse. stamp_load.py appends each file's outcome row.
+PENDING_ROW = "written, pending the load stamp"
+
+
+def append_written(path, run_id, prediction, commit, written):
+    """The driver's row for a run whose results files are written with their load lines
+    pending."""
+    names = ", ".join(Path(out).name for out in written)
+    append_log(path, run_id, prediction, commit,
+               f"{PENDING_ROW}: {names}; scripts/stamp_load.py appends each file's outcome, "
+               "published or withdrawn with the reason")
 
 
 def run(args, run_id, started, commit):
@@ -1128,7 +1149,7 @@ def main(argv=None):
         append_log(args.run_log, run_id, args.prediction, commit, f"failed: {error!r}")
         return 1
     hold_signals()
-    append_log(args.run_log, run_id, args.prediction, commit, "published")
+    append_written(args.run_log, run_id, args.prediction, commit, written)
     for out in written:
         print(f"bench_driver: wrote {out}, load lines pending. Now run scripts/stamp_load.py.",
               file=sys.stderr)

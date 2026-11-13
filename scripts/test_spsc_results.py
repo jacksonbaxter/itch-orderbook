@@ -521,7 +521,9 @@ class EndToEnd(unittest.TestCase):
                 text = out.read_text(encoding="utf-8")
                 self.assertEqual({code for code, _ in check_results.check_text(text)},
                                  {"load-not-stamped"})
-                self.assertIn("| published |", log)
+                # The driver leaves the outcome to stamp_load.py (r5-3).
+                self.assertIn("| written, pending the load stamp: ", log)
+                self.assertNotIn("| published", log)
 
     def test_a_repetition_beside_another_busy_process_is_withdrawn_and_rerun(self):
         with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
@@ -531,7 +533,9 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("withdrawn: queues, repetition 1 on the Mac, exit 0; the CPU sampler "
                           "saw other_job at 50.0% CPU", log)
-            self.assertIn("| published |", log)
+            # The driver leaves the outcome to stamp_load.py (r5-3).
+            self.assertIn("| written, pending the load stamp: ", log)
+            self.assertNotIn("| published", log)
             text = out.read_text(encoding="utf-8")
             self.assertEqual(codes(text), {"load-not-stamped"})
             self.assertIn("; 1 withdrawn under the rule", text)

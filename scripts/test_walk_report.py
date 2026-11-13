@@ -378,7 +378,9 @@ class EndToEnd(unittest.TestCase):
                              {"load-not-stamped"})
             self.assertEqual(len(re.findall(r"^\| 3 \| (?:T-BT-3|100,000 orders)", text,
                                             re.MULTILINE)), len(LIVES))
-            self.assertIn("| published |", log)
+            # The driver leaves the outcome to stamp_load.py (r5-3).
+            self.assertIn("| written, pending the load stamp: ", log)
+            self.assertNotIn("| published", log)
 
     def test_a_timed_process_off_its_count_refuses_the_run(self):
         timed = {life: timed_record(life, 1.6) for life in LIVES}

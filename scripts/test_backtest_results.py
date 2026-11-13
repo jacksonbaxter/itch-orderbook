@@ -341,7 +341,9 @@ class EndToEnd(unittest.TestCase):
             text = out.read_text(encoding="utf-8")
             self.assertEqual({code for code, _ in check_results.check_text(text)},
                              {"load-not-stamped"})
-            self.assertIn("| published |", log)
+            # The driver leaves the outcome to stamp_load.py (r5-3).
+            self.assertIn("| written, pending the load stamp: ", log)
+            self.assertNotIn("| published", log)
 
     def test_a_bench_that_refuses_refuses_the_run(self):
         refused = copy.deepcopy(record())
