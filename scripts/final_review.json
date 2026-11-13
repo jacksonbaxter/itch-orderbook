@@ -206,7 +206,7 @@
   },
   {
    "id": "r13",
-   "read": "the parse-rate bench code, its driver and their tests, three times: the first version, its fixes, and the code that was measured with the first draft of prediction P-0029",
+   "read": "the parse-rate bench code, its driver and their tests, three times: the first version, its fixes, and the code that was measured, at edfc9b4: 1628ee1 with the first draft of prediction P-0029, since rewritten as e9d85a9, so edfc9b4 is in no branch and the record names 1628ee1",
    "commits": [
     "0b92e5e",
     "f6d6471",
@@ -2435,7 +2435,7 @@
    "severity": "FIX",
    "finding": "The parse-rate targets T-PARSE-1 to T-PARSE-3 have no measured number and no reason given",
    "outcome": "partly",
-   "detail": "T-PARSE-1 and T-PARSE-2 now have their measured number, gap and reason (cause not established) in `results/parse_rate_debian_12302019.md` and the pages. T-PARSE-3 has a number on 12302019 only, above a bar that is set on 10302019; the pages say so. Still to do, and left with the owner: T-PARSE-3 on its own day, which could not be measured on `debian`, since the machine check's input-resident condition failed and the run under P-0030 was refused before anything was timed.",
+   "detail": "T-PARSE-1 and T-PARSE-2 now have their measured number, gap and reason (cause not established) in `results/parse_rate_debian_12302019.md` and the pages. T-PARSE-3 has a number on 12302019 only, above a bar that is set on 10302019; the pages say so. Still to do, and left with the owner: T-PARSE-3 on its own day, which could not be measured on `debian`, since the standalone machine check failed input-resident each time, so P-0030's run was never started.",
    "commits": [
     "4890abb",
     "c3ecf81"
