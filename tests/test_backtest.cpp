@@ -475,7 +475,8 @@ struct TieOrder {
   template <class Context>
   void on_market(Context& context, const itch::backtest::MarketEvent& event) {
     const char type = static_cast<char>(event.payload[0]);
-    seen.push_back({'M', event.time, type, engine->stats().arrivals});
+    seen.push_back(
+        {.what = 'M', .time = event.time, .detail = type, .arrivals = engine->stats().arrivals});
     if (event.exchange_time == 1) {
       context.send({.locate = kLocate, .side = Side::bid, .price = k1000, .shares = 100});
       context.wake_at(5000);
@@ -486,12 +487,15 @@ struct TieOrder {
   }
   template <class Context>
   void on_report(Context& /*context*/, const Report& report) {
-    seen.push_back(
-        {'R', report.time, report.kind == ReportKind::fill ? 'f' : 'a', engine->stats().arrivals});
+    seen.push_back({.what = 'R',
+                    .time = report.time,
+                    .detail = report.kind == ReportKind::fill ? 'f' : 'a',
+                    .arrivals = engine->stats().arrivals});
   }
   template <class Context>
   void on_wake(Context& context) {
-    seen.push_back({'W', context.now(), ' ', engine->stats().arrivals});
+    seen.push_back(
+        {.what = 'W', .time = context.now(), .detail = ' ', .arrivals = engine->stats().arrivals});
   }
 
   const Engine<>* engine = nullptr;
