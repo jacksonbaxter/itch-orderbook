@@ -72,6 +72,20 @@ def c_at_shown_price():
     return s.data
 
 
+def c_resting_improved(behind):
+    """A printable C below the bid it executes: the resting order sold for less than it showed.
+    Behind, it executes R40 while R30 rests ahead of it."""
+    s = Stream()
+    opening(s)
+    opened(s)
+    s.add(LOCATE, 30, "B", 100, PRICE, SYMBOL)
+    if behind:
+        s.add(LOCATE, 40, "B", 100, PRICE, SYMBOL)
+    s.execute_price(LOCATE, 40 if behind else 30, 40, PRICE - 100)
+    closing(s)
+    return s.data
+
+
 def out_of_order_execution():
     """R30 then R40, and R40 executes first: behind in both orders."""
     s = Stream()
@@ -171,7 +185,11 @@ def main():
             ("late replace", late_replace(), "late_replaces 1"),
             ("late before open", late_before_open(), "late_adds_before_open 1"),
             ("c at shown price", c_at_shown_price(),
-             "c_printable_at_shown_price front 1 behind 0")):
+             "c_printable_at_shown_price front 1 behind 0"),
+            ("c resting improved", c_resting_improved(False),
+             "c_printable_resting_improved front 1 behind 0"),
+            ("c resting improved behind", c_resting_improved(True),
+             "c_printable_resting_improved front 0 behind 1")):
         path = write(name.replace(" ", "_") + ".itch", data)
         strict = run(path, "--strict")
         if strict.returncode != 1 or "strict FAIL" not in strict.stdout:

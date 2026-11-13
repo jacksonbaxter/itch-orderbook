@@ -1430,6 +1430,62 @@
       "expect": {
         "signature": "\\[  FAILED  \\] ItchEdges\\.S30HiddenTradeAtAnAsksPrice"
       }
+    },
+    {
+      "id": "backtester-queue-jumps-strict-blind-to-resting-improved",
+      "breaks": "--strict passes a day with a printable C below the bid it executes, where the resting order improved (r9-5)",
+      "check": "test_queue_jumps_cli.py c resting improved case",
+      "mutations": [
+        {
+          "file": "tools/itch_queue_jumps.cpp",
+          "old": "c_printable_[2] + c_printable_[3] + c_printable_[4] + c_printable_[5] == 0;",
+          "new": "c_printable_[2] + c_printable_[3] == 0;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_queue_jumps"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_queue_jumps_cli.py",
+        "{build}/tools/itch_queue_jumps",
+        "{build}/queue_jumps_fault"
+      ],
+      "expect": {
+        "signature": "queue jumps cli: FAIL c resting improved: --strict exit 0, not 1"
+      }
+    },
+    {
+      "id": "backtester-queue-jumps-strict-blind-to-resting-improved-behind",
+      "breaks": "--strict passes a day with such a C on an order behind the front of its level",
+      "check": "test_queue_jumps_cli.py c resting improved behind case",
+      "mutations": [
+        {
+          "file": "tools/itch_queue_jumps.cpp",
+          "old": "c_printable_[2] + c_printable_[3] + c_printable_[4] + c_printable_[5] == 0;",
+          "new": "c_printable_[2] + c_printable_[3] + c_printable_[4] == 0;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_queue_jumps"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_queue_jumps_cli.py",
+        "{build}/tools/itch_queue_jumps",
+        "{build}/queue_jumps_fault"
+      ],
+      "expect": {
+        "signature": "queue jumps cli: FAIL c resting improved behind: --strict exit 0, not 1"
+      }
     }
   ]
 }
