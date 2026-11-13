@@ -150,9 +150,9 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     return 0;
   }
   const auto input = std::as_bytes(std::span{data, size});
-  const unsigned asked = data[0] % kDistances;
+  const unsigned asked = static_cast<unsigned>(data[0]) % kDistances;
   const std::span<const std::byte> stream = input.subspan(2);
-  if ((data[1] & 1U) == 0) {
+  if ((static_cast<unsigned>(data[1]) & 1U) == 0) {
     check<itch::FastBook<>>(stream, asked);
   } else {
     check<itch::FastBook<itch::NoWriteObserver, itch::HashIndex, itch::LinkedLevels>>(stream,
