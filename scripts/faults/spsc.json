@@ -776,6 +776,162 @@
       "expect": {
         "signature": "FAIL: test_the_command_shown_carries_every_flag_that_ran"
       }
+    },
+    {
+      "id": "spsc-latency-columns-not-from-the-push",
+      "breaks": "spsc_driver labels the paced and burst latency columns p50 to max with nothing saying they are measured from the push, not from when the message was due (r4-2)",
+      "check": "test_spsc_results FromThePush",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "                      f\"{name} {check_results.SPSC_FROM_PUSH}\" for name, _ in PERCENTILES)\n",
+          "new": "                      name for name, _ in PERCENTILES)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "FromThePush"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_columns_say_they_are_from_the_push_and_what_that_leaves_out",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-latency-left-out-unsaid",
+      "breaks": "spsc_driver prints the paced and burst latencies without saying that the sender's schedule slip is left out and that this favours a queue with slow pushes (r4-2)",
+      "check": "test_spsc_results FromThePush",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "        lines += [\"\", check_results.SPSC_LEFT_OUT]\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "FromThePush"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_columns_say_they_are_from_the_push_and_what_that_leaves_out",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-check-latency-push-unchecked",
+      "breaks": "check_results accepts an SPSC latency table with no word that it is measured from the push (r4-2)",
+      "check": "test_spsc_results FromThePush",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        yield \"latency-push-unsaid\", (\"the latency columns are not labelled as measured from \"\n                                      \"the push, with what that leaves out under them\")\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "FromThePush"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_columns_say_they_are_from_the_push_and_what_that_leaves_out",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-late-share-over-the-samples",
+      "breaks": "spsc_driver gives a paced row's late share over its timed samples, though the late count covers the untimed tenth too (r4-2)",
+      "check": "test_spsc_results FromThePush",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    return row[\"late\"] / check_results.spsc_sends(row[\"protocol\"], row[\"latency\"][\"samples\"])\n",
+          "new": "    return row[\"late\"] / row[\"latency\"][\"samples\"]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "FromThePush"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_late_share_is_of_the_sends_the_count_covers",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-check-late-share-unchecked",
+      "breaks": "check_results accepts a late share that is not the row's late sends over the sends they cover (r4-2)",
+      "check": "test_spsc_results FromThePush",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if abs(share - late * 100 / sends) > abs(share) * 0.006 + 50 / sends:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "FromThePush"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_late_share_is_of_the_sends_the_count_covers",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-render-sampler-verdicts-unjudged",
+      "system": "Darwin",
+      "breaks": "spsc_driver render copies the Sampler section's verdicts without working them out again from the raw sampler.txt",
+      "check": "test_spsc_results EndToEnd",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "        if again != said:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "EndToEnd.test_a_published_file_renders_again_from_its_raw_records"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_published_file_renders_again_from_its_raw_records",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-render-command-unchecked",
+      "system": "Darwin",
+      "breaks": "spsc_driver render accepts a published command that this driver would not print for the run",
+      "check": "test_spsc_results EndToEnd",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    if relative_command(args) != command:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "EndToEnd.test_a_published_file_renders_again_from_its_raw_records"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_published_file_renders_again_from_its_raw_records",
+        "exit": 1
+      }
     }
   ]
 }

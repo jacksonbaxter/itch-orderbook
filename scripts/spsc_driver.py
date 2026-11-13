@@ -46,6 +46,18 @@ beside it. Every SPSC bar was set on x86, so a macOS file gives each the verdict
 differs` with the ratio and the bar in words; on debian the verdict is met or missed.
 The checks and the comparisons themselves are check_results.py's.
 
+A paced or burst latency is measured from the push, not from the time the message was due,
+so a wait behind earlier slow pushes is in no cell, only in the late count; the file labels
+its columns so and says what that leaves out, with each row's late share (r4-2).
+
+    spsc_driver.py render --raw-dir DIR --published results/FILE --stderr STDERR \\
+        --out-dir OUT [--rendered-again REASON]
+
+renders a published file again from its run's raw records: every figure from the records,
+every Sampler verdict worked out again from DIR/sampler.txt, and only what the run printed
+into the file alone (its command, run id and times, the machine check, the cross-core and
+swap lines) taken from it.
+
 Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
 --raw-dir, which is not committed.
 
@@ -60,6 +72,7 @@ import datetime
 import json
 import os
 import platform
+import re
 import shlex
 import signal
 import statistics
@@ -470,6 +483,11 @@ def median_cell(values):
     return check_results.BELOW_FLOOR if middle is None else f"{middle:,.1f}"
 
 
+def late_share(row):
+    """A row's late sends over the sends its late count covers, from the raw counts."""
+    return row["late"] / check_results.spsc_sends(row["protocol"], row["latency"]["samples"])
+
+
 def latency_rows(records):
     rows = []
     keyed = [rows_by_key(record) for record in records]
@@ -479,9 +497,10 @@ def latency_rows(records):
         cells = [median_cell([percentile_value(k[key], value) for k in keyed])
                  for _, value in PERCENTILES]
         late = statistics.median(k[key]["late"] for k in keyed)
+        share = statistics.median(late_share(k[key]) for k in keyed)
         samples = keyed[0][key]["latency"]["samples"]
         rows.append(f"| {key[0]} | {key[1]} | " + " | ".join(cells) +
-                    f" | {late:,.0f} | {samples:,} |")
+                    f" | {late:,.0f} | {check_results.share_cell(share)} | {samples:,} |")
     return sorted(rows, key=lambda row: (row.split(" | ")[1] != "burst", row))
 
 
@@ -679,22 +698,27 @@ def render(records, args, run_id, started, finished, machine_output, command, sa
                  "repetition's own, paired." if suite == "pipeline" else
                  "Each runs every row once, in a fresh queue, after its untimed start. An rtt "
                  "figure is the mean of one span over every round trip, a saturated figure the "
-                 "items over the span, and a mean one-way figure the mean of the histogram: of "
+                 "items over the span, and a mean one-way figure the mean of the histogram, "
+                 "measured from the push as the Latency section says: of "
                  "samples each a whole number of timer quanta, read on two cores, so a mean under "
                  "the floor is an average over many reads, not one the clock resolved."),
               "", "| Figure | Median | Min | Max | CV |", "|---|---|---|---|---|"]
     lines += summary
     if suite != "pipeline":
         lines += ["", "## Latency", "",
-                  "One-way, from the sender's clock read to the receiver's, in ns, each cell the "
+                  "One-way, measured from the push: from the sender's clock read just before it "
+                  "pushes the item to the receiver's just after it pops it, in ns, each cell the "
                   "median over the repetitions. The two reads are on two cores, so the pair cost "
                   "is not subtracted. `below floor` is under the timer's floor of "
                   f"{first['header']['floor']}, where this clock cannot resolve a figure. A send "
                   "is late when it goes a whole gap behind its time, or, in burst, after the next "
-                  "message was due.", "",
-                  "| Queue | Protocol | p50 | p90 | p99 | p99.9 | p99.99 | max | Late sends "
-                  "| Samples |", "|---|---|---|---|---|---|---|---|---|---|"]
+                  f"message was due. {check_results.SPSC_LATE_SHARE}", "",
+                  "| Queue | Protocol | " + " | ".join(
+                      f"{name} {check_results.SPSC_FROM_PUSH}" for name, _ in PERCENTILES)
+                  + " | Late sends | Late share | Samples |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|"]
         lines += latency_rows(records)
+        lines += ["", check_results.SPSC_LEFT_OUT]
     else:
         lines += [""] + pipeline_sections(records)[:-1]
     lines += ["", "## Targets", "",
@@ -869,7 +893,116 @@ def parse_args(argv):
     return args
 
 
+# render
+
+def published_sampled(published, raw_dir, every):
+    """The Sampler section's spans, each outcome worked out again from the raw sampler.txt,
+    refusing one the raw lines do not give back; None for a file with no Sampler section.
+    The log's stamps are to the second, so this gives back the run's own verdicts only for
+    a sampler that took at most one sample a second, as a run's, every 2 s, does."""
+    if check_results.section(published, "Sampler") is None:
+        return None
+    if every is None:
+        raise Refused("published", "a Sampler section with no interference field to say how "
+                                   "often the sampler ran")
+    path = raw_dir / "sampler.txt"
+    if not path.is_file():
+        raise Refused("raw", "the file has a Sampler section and the raw folder no sampler.txt")
+    lines = path.read_text(encoding="utf-8").splitlines()
+    sampled = {"every": every, "published": [], "withdrawn": []}
+    for cells in check_results.table_rows(published, "Sampler"):
+        if len(cells) != 4 or cells[0] == "Process":
+            continue
+        what, begin, end, said = cells
+        why = span_unquiet(lines, begin, end)
+        if what.startswith("repetition "):
+            again = span_summary(lines, begin, end) if why is None else f"unquiet: {why}"
+            sampled["published"].append((begin, end, again))
+        elif what.startswith("withdrawn "):
+            again = "quiet" if why is None else f"withdrawn: {why}"
+            sampled["withdrawn"].append((begin, end, why))
+        else:
+            raise Refused("published", f"a Sampler row of no repetition: {what!r}")
+        if again != said:
+            raise Refused("raw", f"{what}: sampler.txt gives {again!r}, the file {said!r}")
+    return sampled
+
+
+def render_again(raw_dir, published, stderr, again=None):
+    """The published file rendered again from its run's raw records, stamped. What the run
+    printed only into its file, its command, run id and times, the machine check's output,
+    the cross-core line and the swap line, is taken from it; every figure from the raw
+    records, and every sampler verdict from the raw sampler.txt."""
+    import stamp_load  # Here, since stamp_load imports bench_driver.
+
+    fields = check_results.parse_header(published)
+    command = (check_results.section(published, "Commands") or "").strip().split("\n```\n")[0]
+    command = command.strip().strip("`").strip()
+    wrapped, found, words = command.partition("python3 -B scripts/spsc_driver.py ")
+    if not found:
+        raise Refused("published", "no spsc_driver.py command in its Commands section")
+    args = parse_args(shlex.split(words))
+    args.wrapped_by = wrapped.strip() or None
+    if relative_command(args) != command:
+        raise Refused("published", "its command is not the one this driver prints for it")
+    records = []
+    for index in range(1, args.repetitions + 1):
+        record = bench_driver.raw_record(raw_dir, f"{args.suite}-repetition-{index}")
+        validate_run(record, args.suite)
+        records.append(record)
+    validate_together(records)
+    machine = (check_results.section(published, "machine_check output") or "").strip()
+    machine = machine.removeprefix("```").removesuffix("```").strip("\n")
+    swap = next((line for line in published.splitlines()
+                 if line.startswith(("The kernel's pswpout", "Swap-outs are not read"))), None)
+    # How often the sampler ran is not on the command line (--sample-every is for tests).
+    every = re.match(r"sampled every ([\d.]+) s ", fields.get("interference", ""))
+    sampled = published_sampled(published, raw_dir, float(every.group(1)) if every else None)
+    bench_driver.swap_watch = bench_driver.PrintedSwap(swap) if swap else None
+    try:
+        text = render(records, args, fields["run_id"], fields["run_started"],
+                      fields["run_finished"], machine, command, sampled=sampled,
+                      cross_core=fields.get("cross_core_timer"))
+    finally:
+        bench_driver.swap_watch = None
+    text = bench_driver.with_earlier_renders(text, published, again)
+    return Path(args.out).name, stamp_load.stamp(text, stderr)
+
+
+def render_main(argv):
+    parser = argparse.ArgumentParser(prog="spsc_driver.py render",
+                                     description="render a published file again from raw")
+    parser.add_argument("--raw-dir", type=Path, required=True)
+    parser.add_argument("--published", type=Path, required=True)
+    parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--stderr", type=Path, required=True, help="measure.sh's stderr")
+    parser.add_argument("--rendered-again", metavar="REASON")
+    args = parser.parse_args(argv)
+    try:
+        published = args.published.read_text(encoding="utf-8")
+        name, text = render_again(args.raw_dir, published,
+                                  args.stderr.read_text(encoding="utf-8"), args.rendered_again)
+        if name != args.published.name:
+            raise Refused("published", f"its command writes {name}, not {args.published.name}")
+        if text.split("\n", 1)[0] != published.split("\n", 1)[0]:
+            raise Refused("title", "the render's title is not the published one")
+        violations = check_results.check_text(text)
+        if violations:
+            raise Refused("results", f"{name}: " + "; ".join(
+                f"{code}: {detail}" for code, detail in violations))
+    except (Refused, OSError, ValueError, KeyError) as error:
+        print(f"spsc_driver: render refused: {error}", file=sys.stderr)
+        return 1
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    (args.out_dir / name).write_text(text, encoding="utf-8")
+    print(f"spsc_driver: wrote {args.out_dir / name}", file=sys.stderr)
+    return 0
+
+
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["render"]:
+        return render_main(argv[1:])
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)

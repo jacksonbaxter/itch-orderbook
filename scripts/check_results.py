@@ -40,7 +40,9 @@ and ran every pass.
 An SPSC file, one with a `suite` field (scripts/spsc_driver.py), has no counter table and
 no single percentile column. It is held to its suite's fields, the element and capacity
 every queue shared, a summary with each median inside its min and max, every latency cell
-at or above the floor or written `below floor`, a burst replayed at the day's own pace, the
+at or above the floor or written `below floor`, the latency columns labelled as measured from
+the push with SPSC_LEFT_OUT under them, saying what that leaves out, and each row's late
+share agreeing with its late sends, a burst replayed at the day's own pace, the
 book agreement of a pipeline file, the macOS note that unpinned cross-core latency is weak
 evidence, and a row for each of its suite's comparisons in SPSC_COMPARISONS: the ratio of
 the summary's medians as shown, the bar, and the verdict in the fixed words, consistent with
@@ -126,6 +128,36 @@ RTT_UNIT = "ns a round trip"
 RATE_UNIT = "M items/s"
 PIPELINE_RATIO = "Pipelined time over single-threaded time"
 SPSC_PERCENTILES = ("p50", "p90", "p99", "p99.9", "p99.99", "max")
+# The stamp is read as the push starts, not when the message was due (bench/spsc_protocols.hpp).
+SPSC_FROM_PUSH = "from the push"
+SPSC_LATE_SHARE = (
+    "The late share is of the sends the late count covers: in paced, the timed sends and the "
+    "tenth as many untimed before them, which the histogram leaves out; in burst, every "
+    "message. It is the median of the repetitions' own shares, rounded last.")
+SPSC_LEFT_OUT = (
+    "What these latencies leave out: each is measured from the push, not from the time the "
+    "message was due. A send held back behind an earlier slow push is stamped only when it "
+    "goes, so its wait is in no cell above; it shows only in the late count, and there only "
+    "once it reaches a whole gap, or in burst the next message's due time. In burst, messages "
+    "that share an ITCH timestamp share a due time, so one is late as soon as a tick passes "
+    "when the next shares its time, and the count cannot tell that from a wait behind slow "
+    "pushes. This favours a queue with slow pushes: the slower its pushes, the more of each "
+    "message's wait falls before its stamp, outside the figures.")
+
+
+def spsc_sends(protocol, samples):
+    """The sends a paced or burst row's late count covers: paced counts its untimed tenth
+    too (bench_spsc.cpp passes paced_items / 10 as the warm-up), burst every message."""
+    return samples + samples // 10 if protocol.startswith("paced") else samples
+
+
+def share_cell(share):
+    """A late share as a percentage to three significant figures, never in e notation."""
+    percent = share * 100
+    if percent == 0:
+        return "0%"
+    places = max(0, 2 - math.floor(math.log10(percent)))
+    return f"{percent:.{places}f}%"
 SPSC_MAC_NOTE = ("is not a pinned host.", "Unpinned cross-core latency on the Mac is weak evidence")
 SPSC_SAMPLER_RULE = (
     "The Mac's sampler rule was applied: a CPU sampler ran beside every repetition from before "
@@ -948,15 +980,32 @@ def check_spsc_summary(text):
 
 def check_spsc_latency(text, fields):
     floor = number(fields.get("floor", ""))
-    rows = [cells for cells in table_rows(text, "Latency") if cells[0] != "Queue"]
+    table = table_rows(text, "Latency")
+    heading = next((cells for cells in table if cells[0] == "Queue"), [])
+    labels = [f"{name} {SPSC_FROM_PUSH}" for name in SPSC_PERCENTILES]
+    if heading[2:2 + len(labels)] != labels or SPSC_LEFT_OUT not in (section(text, "Latency")
+                                                                    or ""):
+        yield "latency-push-unsaid", ("the latency columns are not labelled as measured from "
+                                      "the push, with what that leaves out under them")
+    rows = [cells for cells in table if cells[0] != "Queue"]
     if not rows:
         yield "latency-table-missing", "no latency row"
     for cells in rows:
-        if len(cells) != len(SPSC_PERCENTILES) + 4:
+        if len(cells) != len(SPSC_PERCENTILES) + 5:
             yield "latency-value-malformed", f"{cells[0]} has {len(cells)} cells"
             continue
         for name, value in zip(SPSC_PERCENTILES, cells[2:2 + len(SPSC_PERCENTILES)]):
             yield from check_value(f"{cells[0]} {cells[1]} {name}", value, floor)
+        late, share, samples = (number(cell.rstrip("%")) for cell in cells[-3:])
+        if None in (late, share, samples) or not cells[-2].endswith("%") or samples <= 0:
+            yield "late-share-wrong", f"{cells[0]} {cells[1]}: {cells[-3:]}"
+            continue
+        # The share has three significant figures and the late cell is rounded to a whole
+        # send, so the two may differ by both roundings.
+        sends = spsc_sends(cells[1], int(samples))
+        if abs(share - late * 100 / sends) > abs(share) * 0.006 + 50 / sends:
+            yield "late-share-wrong", (f"{cells[0]} {cells[1]}: {cells[-2]} is not "
+                                       f"{cells[-3]} of {sends:,} sends")
 
 
 def check_spsc_targets(text, fields, suite):

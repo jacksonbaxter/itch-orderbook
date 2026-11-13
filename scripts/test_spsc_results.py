@@ -22,6 +22,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import spsc_driver  # noqa: E402
 import stamp_load  # noqa: E402
@@ -321,6 +322,47 @@ class Files(unittest.TestCase):
         self.assertIn("checkpoint-empty", codes(replace(PIPELINE_FILE, "487 orders", "0 orders")))
 
 
+class FromThePush(unittest.TestCase):
+    """r4-2: each latency is from the push, not from when the message was due, and the file
+    says so, with each row's late share beside its late sends."""
+
+    def test_the_columns_say_they_are_from_the_push_and_what_that_leaves_out(self):
+        for text in (QUEUES_FILE, ABLATION_FILE):
+            self.assertIn("| p50 from the push | p90 from the push |", text)
+            self.assertIn(check_results.SPSC_LEFT_OUT, text)
+            self.assertIn("latency-push-unsaid", codes(replace(
+                text, check_results.SPSC_LEFT_OUT, "")))
+            self.assertIn("latency-push-unsaid", codes(replace(
+                text, "| p99 from the push |", "| p99 |")))
+        self.assertNotIn("## Latency", PIPELINE_FILE)
+
+    def test_the_late_share_is_of_the_sends_the_count_covers(self):
+        records = [record("queues", s) for s in (1.0, 0.98, 1.03)]
+        for index, one in enumerate(records):
+            for item in one["rows"]:
+                # Paced counts its untimed tenth as well: 2,200 of 220,000 sends.
+                if item["protocol"].startswith("paced"):
+                    item["late"] = 2_200 + index
+                elif item["protocol"] == "burst":
+                    item["late"] = 50_000 - index
+        text = rendered(records)
+        self.assertEqual(codes(text), set())
+        paced = re.search(r"^\| project \| paced-1000ns \|.*$", text, re.MULTILINE).group(0)
+        self.assertTrue(paced.endswith("| 2,201 | 1.00% | 200,000 |"), paced)
+        burst = re.search(r"^\| project \| burst \|.*$", text, re.MULTILINE).group(0)
+        self.assertTrue(burst.endswith("| 49,999 | 25.0% | 200,000 |"), burst)
+        for wrong in ("0.910%", "1.10%", "fast"):
+            self.assertIn("late-share-wrong", codes(replace(
+                text, paced, paced.replace("| 1.00% |", f"| {wrong} |"))))
+        self.assertIn("latency-value-malformed", codes(replace(
+            text, paced, paced.replace("| 1.00% ", ""))))
+
+    def test_a_share_is_three_figures_and_never_in_e_notation(self):
+        for share, cell in ((0, "0%"), (0.25226, "25.2%"), (0.000759, "0.0759%"),
+                            (1 / 3_000_000, "0.0000333%"), (1.0, "100%")):
+            self.assertEqual(check_results.share_cell(share), cell)
+
+
 class Debian(unittest.TestCase):
     """On debian, a verdict is met or missed by the ratio against the bar."""
 
@@ -478,17 +520,17 @@ class Driver(unittest.TestCase):
 
 @unittest.skipUnless(platform.system() == "Darwin", "machine_check enforces pinning on Linux")
 class EndToEnd(unittest.TestCase):
-    def run_driver(self, root, fake_record, code=0, busy_first=False):
+    def run_driver(self, root, fake_record, code=0, busy_first=False, every=0.2):
         """The driver on a fake bench. The sampler reads a fake ps, which shows another
         process at 50% CPU while `busy` exists; with busy_first, the first repetition makes
-        it for a second."""
+        it for a second, or for three samples when the sampler runs every second or more."""
         (root / "results").mkdir()
         (root / "results" / "predictions.md").write_text("## P-0301: x\n\nIt runs.\n",
                                                          encoding="utf-8")
         busy = ""
         if busy_first:
             busy = (f"if [ ! -f '{root}/once' ]; then touch '{root}/once' '{root}/busy'; "
-                    f"sleep 1; rm '{root}/busy'; fi\n")
+                    f"sleep {max(1, 3 * every):g}; rm '{root}/busy'; fi\n")
         bench = root / "bench.sh"
         bench.write_text(
             "#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = --out ] && out=$2; shift; done\n"
@@ -508,7 +550,7 @@ class EndToEnd(unittest.TestCase):
              "--prediction", "P-0301", "--raw-dir", str(root / "raw"), "--out", str(out),
              "--allow-dirty", "--predictions-root", str(root),
              "--run-log", str(root / "results" / "run_log.md"), "--ps", str(ps),
-             "--sample-every", "0.2"],
+             "--sample-every", f"{every:g}"],
             capture_output=True, text=True, timeout=120, check=False)
         return result, out, (root / "results" / "run_log.md").read_text(encoding="utf-8")
 
@@ -545,6 +587,39 @@ class EndToEnd(unittest.TestCase):
             self.assertTrue((raw / "queues-repetition-1-withdrawn-1.json").is_file())
             self.assertIn("FOREIGN 50.0 /usr/bin/other_job",
                           (raw / "sampler.txt").read_text(encoding="utf-8"))
+
+    def test_a_published_file_renders_again_from_its_raw_records(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            fake = record("queues")
+            fake["header"]["residency"] = "1 of 1 pages resident"
+            # At most one sample in any second of the stamps, as on a real run, which samples
+            # every 2 s, so that a span's samples are the same read at any time after it.
+            result, out, _ = self.run_driver(Path(directory), fake, busy_first=True, every=1.0)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            published = stamp_load.stamp(out.read_text(encoding="utf-8"), STDERR)
+            raw = Path(directory) / "raw"
+            name, again = spsc_driver.render_again(raw, published, STDERR)
+            self.assertEqual((name, again), (out.name, published))
+            name, again = spsc_driver.render_again(raw, published, STDERR, "a reason")
+            self.assertEqual(again, published.replace(
+                "Do not edit by hand.\n\n",
+                f"Do not edit by hand.\n\n{bench_driver.AGAIN}a reason\n\n", 1))
+            # A sampler verdict the raw sampler.txt does not give back is refused.
+            line = re.search(r"^\| withdrawn 1 \|.*$", published, re.MULTILINE).group(0)
+            with self.assertRaisesRegex(spsc_driver.Refused, "sampler.txt gives"):
+                spsc_driver.render_again(raw, replace(published, line, line.replace(
+                    "withdrawn: the CPU sampler saw", "withdrawn: it saw")), STDERR)
+            line = re.search(r"^\| repetition 1 \|.*$", published, re.MULTILINE).group(0)
+            with self.assertRaisesRegex(spsc_driver.Refused, "sampler.txt gives"):
+                spsc_driver.render_again(raw, replace(published, line, line.replace(
+                    "published: ", "published: 1 more, ")), STDERR)
+            # So is a command this driver would not print for the run.
+            with self.assertRaisesRegex(spsc_driver.Refused, "command"):
+                spsc_driver.render_again(raw, replace(
+                    published, "--repetitions 3", "--repetitions 3 --core 4"), STDERR)
+            (raw / "sampler.txt").unlink()
+            with self.assertRaisesRegex(spsc_driver.Refused, "no sampler.txt"):
+                spsc_driver.render_again(raw, published, STDERR)
 
     def test_a_bench_that_refuses_refuses_the_run(self):
         refused = record("queues")
