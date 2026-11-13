@@ -324,3 +324,13 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [x] The fixed kinds in `scripts/process_kinds.py`, with the map from names to kinds kept outside the repository and found through `$ITCH_PROCESS_KINDS` (eaf8baf). `results/run_log.md` reworded: 161 of 349 runs and the header line, no figure, time or verdict changed (940484d). `check_predictions.py` allows exactly the line changes in `scripts/run_log_rewordings.json`, and the gate `run-log-kinds` holds the rows to the kinds (44fb786). The tools give kinds through `process_kinds.kind_of` (5f4598f). The eight SIMD and two SPSC Mac files rendered again from their raw records (ae2726e). docs/NOTES.md reworded on 19 lines (8b4339a). docs/NOTES.md, "Other programs given by their kind".
 - [x] `tests/test_bench_cli.py` (its expected sampler words changed) run under ctest. Under the check lock at 37448c9, which merges piece V's branch, every stage of `scripts/check.sh` but fault_matrix passed, the bench stage's ctest among them. Then 102 building faults were all detected, with 29 control commands and 0 failures: those of each fault file changed since 95772ae, and those whose commands run a script piece V changed.
 - Any later render or run whose rows should give a kind other than "another process" needs `$ITCH_PROCESS_KINDS` set to the map.
+- [x] After review r14 (piece V, 6e3d711..1233b57, merged at 573c791 and ad8c229):
+  - A map that is set and cannot be used stops each of the 11 writers before it writes anything. The tool exits 2 with no path (6e3d711).
+  - A merge or commit that brings back a row as it was before a rewording is refused (`changed_back()`, ae92d41).
+  - The run log's grammar is closed. Rows 51, 86 and 262 had their words reordered, with one "at" added (4fa29bb).
+  - `scripts/run_log_rewordings.json` is pinned: its sha256, its 172 entries, and the three rewording steps (ecea6c4, b1bf7a8).
+  - Without the map, the SPSC render says the map is not set (a9e5a2d).
+  - Rows 235 to 239 and 318 were given the kind their raw records support (5cbb02f).
+  - The docstrings list the grammar's limits (1233b57).
+  - Still 162 lines against 95772ae: the header and 161 rows of 349 runs. docs/NOTES.md, "Other programs given by their kind".
+- [ ] Under the check lock at the merge of 1233b57: every stage of `scripts/check.sh` but fault_matrix, then the building faults of each fault file changed since 3c720c0 and those among piece V's ids.
