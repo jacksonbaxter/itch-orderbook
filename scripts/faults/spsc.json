@@ -474,7 +474,7 @@
         "scripts/test_spsc_results.py"
       ],
       "expect": {
-        "signature": "FAIL: test_a_hurried_burst"
+        "signature": "FAIL: test_a_hurried_burst \\("
       }
     },
     {

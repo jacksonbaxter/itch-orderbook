@@ -21,6 +21,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import gates  # noqa: E402
+import lint_workflows  # noqa: E402
 
 SCRATCH = gates.REPO_ROOT / "build"
 SCRATCH.mkdir(exist_ok=True)
@@ -158,6 +159,44 @@ class Gates(unittest.TestCase):
         for code in allowed:
             with self.subTest(code):
                 self.assert_passes("include/itch/wire.hpp", code)
+
+    def test_a_cast_to_a_struct_or_through_an_alias(self):
+        planted = [
+            "auto* h = (const Header*)src;\n",
+            "auto* h = (Header *) &buf[0];\n",
+            "auto* h = (const itch::wire::Header* const)(src + 4);\n",
+            "auto w = reinterpret_cast<WordPtr>(p);\n",
+            "auto w = reinterpret_cast<const WordPtr>(p);\n",
+        ]
+        for code in planted:
+            with self.subTest(code):
+                self.reset()
+                self.assert_only_gate_fails("wire-pointer-cast", "include/itch/wire.hpp", code)
+
+    def test_byte_casts_declarations_and_pointer_integers_are_allowed(self):
+        allowed = [
+            "auto* b = (const char*)src;\n",
+            "auto* b = (std::byte *) p;\n",
+            "auto n = reinterpret_cast<std::uintptr_t>(p);\n",
+            "void f(Header*) const;\n",
+            "auto s = sizeof(Header*);\n",
+        ]
+        for code in allowed:
+            with self.subTest(code):
+                self.reset()
+                self.assert_passes("include/itch/wire.hpp", code)
+
+    def test_a_yaml_workflow_is_read(self):
+        self.assert_only_gate_fails("pinned-actions", ".github/workflows/extra.yaml",
+                                    "steps:\n  - uses: actions/checkout@v4\n")
+        self.reset()
+        self.assert_only_gate_fails("toolchain-path", ".github/workflows/extra.yaml",
+                                    "run: ~/x/.tool" "chain/env.sh\n")
+
+    def test_actionlint_reads_a_yaml_workflow_too(self):
+        self.plant({".github/workflows/extra.yaml": "on: push\n"})
+        self.assertEqual(lint_workflows.workflow_files(self.root),
+                         [".github/workflows/ci.yml", ".github/workflows/extra.yaml"])
 
     def test_wire_cast_is_gated_in_tools_too(self):
         self.assert_only_gate_fails("wire-pointer-cast", "tools/tool.cpp",

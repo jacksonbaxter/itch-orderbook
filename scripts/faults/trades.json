@@ -7944,7 +7944,7 @@
         "^corpus_fuzz_crossstats$"
       ],
       "expect": {
-        "signature": "FUZZ_CHECK failed"
+        "signature": "FUZZ_CHECK failed: \\*again == table at \\S*fuzz_crossstats\\.cpp:\\d+"
       }
     },
     {
@@ -7972,7 +7972,7 @@
         "^corpus_fuzz_midas$"
       ],
       "expect": {
-        "signature": "FUZZ_CHECK failed"
+        "signature": "FUZZ_CHECK failed: (single\\.shares == first|summed\\.shares == first \\+ second) at \\S*fuzz_midas\\.cpp:\\d+"
       }
     },
     {

@@ -66,6 +66,151 @@
       ],
       "command": ["bash", "{tree}/scripts/check.sh", "--only", "gates", "--only", "corpus"],
       "expect": {"signature": "gates +FAIL[\\s\\S]*corpus +ok", "exit": 1}
+    },
+    {
+      "id": "check-toolchain-version-through-a-pipe",
+      "breaks": "The toolchain stage pipes each version into head, with no pipefail, so a missing compiler passes",
+      "check": "test_check_sh.py, a compiler that is not there",
+      "mutations": [
+        {
+          "file": "scripts/check.sh",
+          "old": "set -u -o pipefail\n",
+          "new": "set -u\n"
+        },
+        {
+          "file": "scripts/check.sh",
+          "old": "  version=$(\"${CXX:-c++}\" --version) || { echo \"the compiler ${CXX:-c++} does not run\"; return 1; }\n  echo \"${version%%$'\\n'*}\"\n",
+          "new": "  \"${CXX:-c++}\" --version | head -n 1\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_sh.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_compiler_that_is_not_there_fails_the_toolchain_stage \\("
+      }
+    },
+    {
+      "id": "check-ctest-list-unchecked",
+      "breaks": "A stage's ctest list is run as a regex without checking each name exists",
+      "check": "test_check_sh.py, a test ctest does not know",
+      "mutations": [
+        {
+          "file": "scripts/check.sh",
+          "old": "  ctest_listed \"$@\" || return 1\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_sh.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stage_that_names_a_test_ctest_does_not_know_fails \\("
+      }
+    },
+    {
+      "id": "check-ctest-name-matched-in-part",
+      "breaks": "A listed name counts as known when it is part of another test's name",
+      "check": "test_check_sh.py, names matched whole",
+      "mutations": [
+        {
+          "file": "scripts/check.sh",
+          "old": "      *$'\\n'\"$name\"$'\\n'*) ;;\n",
+          "new": "      *\"$name\"*) ;;\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_sh.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_test_name_is_matched_whole \\("
+      }
+    },
+    {
+      "id": "check-results-pattern-empty-passes",
+      "breaks": "A results pattern that matches no file passes, so its check reads nothing",
+      "check": "test_check_sh.py, a results pattern that matches nothing",
+      "mutations": [
+        {
+          "file": "scripts/check.sh",
+          "old": "    compgen -G \"results/$pattern\" || { echo \"no results file matches results/$pattern\" >&2; return 1; }\n",
+          "new": "    compgen -G \"results/$pattern\" || :\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_sh.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_results_pattern_that_matches_nothing_fails_the_bench_stage \\("
+      }
+    },
+    {
+      "id": "check-demo-without-browser-ok",
+      "breaks": "The demo stage passes with no browser named, without opening the page",
+      "check": "test_check_sh.py, the demo stage without a browser",
+      "mutations": [
+        {
+          "file": "scripts/check.sh",
+          "old": "  elif [ \"$without_browser\" -eq 0 ]; then\n",
+          "new": "  elif false; then\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_sh.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_demo_stage_fails_without_a_browser_and_says_how_to_name_one \\("
+      }
+    },
+    {
+      "id": "check-demo-partial-unsaid",
+      "breaks": "With --without-browser the demo stage does not say it left the page unopened",
+      "check": "test_check_sh.py, the summary says partial",
+      "mutations": [
+        {
+          "file": "scripts/check.sh",
+          "old": "    echo \"partial: the page was not opened\"\n",
+          "new": "    :\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_sh.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_without_a_browser_by_request_the_summary_says_partial \\("
+      }
+    },
+    {
+      "id": "check-summary-partial-read-as-ok",
+      "breaks": "The summary prints a bare ok for a stage that said it did only part of its work",
+      "check": "test_check_sh.py, the summary says partial",
+      "mutations": [
+        {
+          "file": "scripts/check.sh",
+          "old": "    note=$(grep -m 1 '^partial: ' \"$log\") || note=\"\"\n",
+          "new": "    note=\"\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_sh.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_without_a_browser_by_request_the_summary_says_partial \\("
+      }
     }
   ]
 }

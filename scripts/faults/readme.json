@@ -218,8 +218,8 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "            books.append(book_row(name, text))\n",
-          "new": "            book_row(name, text)\n"
+          "old": "            books.append(book)\n",
+          "new": ""
         }
       ],
       "command": [
@@ -253,13 +253,13 @@
     },
     {
       "id": "readme-backtest-file-unread",
-      "breaks": "A backtest results file gets no row, and a malformed one passes",
+      "breaks": "A backtest results file gets no row",
       "check": "test_results_table.py test_a_backtest_file_gets_a_row_of_its_own",
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "        elif name.startswith(\"backtest_\"):\n            backtests.append(backtest_row(root, name, text))\n",
-          "new": "        elif name.startswith(\"backtest_\"):\n            pass\n"
+          "old": "            backtests.append(backtest)\n",
+          "new": ""
         }
       ],
       "command": [
@@ -1166,6 +1166,680 @@
       ],
       "expect": {
         "signature": "FAIL: test_the_mac_figure_follows_its_file"
+      }
+    },
+    {
+      "id": "readme-book-target-misses-skipped",
+      "breaks": "The Book targets table leaves out every target a book file missed",
+      "check": "results_table.py --check, the guard on Targets-table verdicts",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    for cells in targets_table(name, text):\n        verdict = cells[\"Verdict\"]\n",
+          "new": "    for cells in targets_table(name, text):\n        verdict = cells[\"Verdict\"]\n        if verdict.startswith(\"missed\"):\n            continue\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL results/bench_book_[\\w-]+\\.md: its targets table gives 10 verdicts, and the rows here take up [0-9]: \\[\\(.T-[A-Z]+-[0-9]., .missed.\\)",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-targets-guard-off",
+      "breaks": "A Targets-table verdict that no row of RESULTS.md takes up passes",
+      "check": "test_results_table.py test_a_targets_verdict_no_row_took_up_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        if tabled != sorted(taken):\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_targets_verdict_no_row_took_up_is_refused"
+      }
+    },
+    {
+      "id": "readme-book-targets-table-dropped",
+      "breaks": "RESULTS.md has no Book targets table",
+      "check": "test_results_table.py test_every_book_target_reaches_the_book_targets_table",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if book_targets:\n",
+          "new": "    if not book_targets:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_book_target_reaches_the_book_targets_table"
+      }
+    },
+    {
+      "id": "readme-backtest-gap-dropped",
+      "breaks": "A backtest file's miss reaches RESULTS.md without its gap",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if word == \"missed\":\n        verdict = f\"**missed**: {detail}\"\n",
+          "new": "    verdict = word\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-book-headline-miss-called-met",
+      "breaks": "The headline book file says T-LAT-2 is met at p50 140.14 ns against p50 ≤ 121 (r7-1's plant)",
+      "check": "check_results.py on the book file",
+      "inputs": [
+        {
+          "file": "results/bench_book_paged-flat_ram_debian_12302019.md",
+          "op": "replace_text",
+          "old": "| missed: p50 by 19.14 ns, p99 by 288.86 ns, p99.9 by 598.00 ns |",
+          "new": "| met |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/results/bench_book_paged-flat_ram_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL target-verdict-wrong bench_book_paged-flat_ram_debian_12302019\\.md: T-LAT-2 is met, yet \\['p50', 'p99', 'p99\\.9'\\] miss",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-book-median-outside-its-range",
+      "breaks": "The headline book file's throughput median is moved outside its min and max (r7-1's plant)",
+      "check": "check_results.py on the book file",
+      "inputs": [
+        {
+          "file": "results/bench_book_paged-flat_ram_debian_12302019.md",
+          "op": "replace_text",
+          "old": "| Throughput, messages/s | 5,145,430 |",
+          "new": "| Throughput, messages/s | 9,145,430 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/results/bench_book_paged-flat_ram_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL summary-inconsistent bench_book_paged-flat_ram_debian_12302019\\.md: Summary, Throughput, messages/s: median 9,145,430 outside",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-harness-label-anywhere",
+      "breaks": "results_table files a book file quoting the stub's label as a harness proof, with no verdicts (r7-5)",
+      "check": "test_results_table.py test_a_harness_label_off_its_line_is_held_to_the_book_rules",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    return bool(lines) and lines[-1].startswith(f\"**{HARNESS_LABEL} \")\n",
+          "new": "    return HARNESS_LABEL in text\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_harness_label_off_its_line_is_held_to_the_book_rules"
+      }
+    },
+    {
+      "id": "readme-harness-book-name-allowed",
+      "breaks": "results_table files a bench_book_ file labelled the stub's as a harness proof",
+      "check": "test_results_table.py test_a_book_file_labelled_the_stub_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            if name.startswith(\"bench_book_\"):\n                raise TableError",
+          "new": "            if False:\n                raise TableError"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_book_file_labelled_the_stub_is_refused"
+      }
+    },
+    {
+      "id": "readme-gate-row-label-ignored",
+      "breaks": "gate_numbers.py never takes the label a clause names before a figure, so a figure moved to another row of the table passes",
+      "check": "test_gate_numbers.py test_a_figure_moved_to_another_row_fails",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "    return best[1] if best else None",
+          "new": "    return None"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_figure_moved_to_another_row_fails"
+      }
+    },
+    {
+      "id": "readme-gate-bracket-label-ignored",
+      "breaks": "gate_numbers.py ignores the label in brackets straight after a figure, so two bracketed figures swapped pass",
+      "check": "test_gate_numbers.py test_a_label_in_brackets_after_a_figure_is_its_label",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "    if after and after.group(1) in labels:",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_label_in_brackets_after_a_figure_is_its_label"
+      }
+    },
+    {
+      "id": "readme-gate-place-words-unshared",
+      "breaks": "gate_numbers.py holds a figure by any cell of the named row, whatever its column, so a figure from another column passes",
+      "check": "test_gate_numbers.py test_a_figure_from_another_column_of_its_row_fails",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "        if shares(words, figure.context) or (head and head == figure.head):",
+          "new": "        if True:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_figure_from_another_column_of_its_row_fails"
+      }
+    },
+    {
+      "id": "readme-gate-lists-unpaired",
+      "breaks": "gate_numbers.py gives listed figures no label each, so figures listed out of their labels' order pass",
+      "check": "test_gate_numbers.py test_listed_figures_out_of_order_fail",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "                    figure.label = label",
+          "new": "                    pass"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_listed_figures_out_of_order_fail"
+      }
+    },
+    {
+      "id": "readme-gate-key-line-ignored",
+      "breaks": "gate_numbers.py ignores the figures a key: value line the clause names gives a listed label, so a figure the line contradicts passes on a cell",
+      "check": "test_gate_numbers.py test_a_listed_figure_its_key_line_gives_otherwise_fails",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "        if given:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_listed_figure_its_key_line_gives_otherwise_fails"
+      }
+    },
+    {
+      "id": "readme-gate-sign-unread",
+      "breaks": "gate_numbers.py drops a figure's minus sign, so a dropped sign passes",
+      "check": "test_gate_numbers.py test_a_dropped_minus_sign_fails",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "    return (\"-\" + value) if sign in (\"-\", \"−\") else value",
+          "new": "    return value"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_dropped_minus_sign_fails"
+      }
+    },
+    {
+      "id": "readme-gate-dollar-sign-unread",
+      "breaks": "gate_numbers.py reads a results file's -$27.50 as 27.50, so a page that drops the sign passes",
+      "check": "test_gate_numbers.py test_a_dropped_minus_sign_fails",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "TOKEN = re.compile(r\"(?<![\\w.,/+−-])([-−+](?=\\$?\\d))?\\$?(",
+          "new": "TOKEN = re.compile(r\"(?<![\\w.,/+−-])([-−+](?=\\d))?("
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_dropped_minus_sign_fails"
+      }
+    },
+    {
+      "id": "readme-gate-uncited-prose-allowed",
+      "breaks": "gate_numbers.py lets a line of prose with a figure cite nothing and holds it to every file",
+      "check": "test_gate_numbers.py test_a_line_of_prose_with_a_figure_must_cite",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "        if figure.cited is None and not figure.row:",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_line_of_prose_with_a_figure_must_cite"
+      }
+    },
+    {
+      "id": "readme-gate-small-counts-unread",
+      "breaks": "gate_numbers.py reads no integer of one or two digits, so a count of sessions changed passes",
+      "check": "test_gate_numbers.py test_a_small_count_on_a_cited_line_is_read",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "                if short and (not cited_line or named(masked, match.start(2), digits)):",
+          "new": "                if short:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_small_count_on_a_cited_line_is_read"
+      }
+    },
+    {
+      "id": "readme-gate-clause-citation-ignored",
+      "breaks": "gate_numbers.py holds a figure to every file its line cites, not the one its clause cites",
+      "check": "test_gate_numbers.py test_a_figure_is_held_to_the_file_its_clause_cites",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "            cited = (unique(CITATION.findall(line[begin:end]))",
+          "new": "            cited = (cited_line or unique(CITATION.findall(line[begin:end]))"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_figure_is_held_to_the_file_its_clause_cites"
+      }
+    },
+    {
+      "id": "readme-gate-names-read",
+      "breaks": "gate_numbers.py reads the integer in a product name or a core count (Zen 1, 4 cores) as a figure",
+      "check": "test_gate_numbers.py test_names_days_and_titles_are_not_figures",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "NAMED_BEFORE = (\"Zen\", \"Ryzen\", \"GCC\", \"Clang\", \"Python\", \"Layer\")\nNAMED_AFTER = (\"cores\", \"threads\")",
+          "new": "NAMED_BEFORE = ()\nNAMED_AFTER = ()"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_names_days_and_titles_are_not_figures"
+      }
+    },
+    {
+      "id": "readme-gate-days-read",
+      "breaks": "gate_numbers.py reads an eight-digit day, 12302019, as a figure",
+      "check": "test_gate_numbers.py test_names_days_and_titles_are_not_figures",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "(?<![\\d,.]){DAY}(?!\\d|[.,]\\d)",
+          "new": "(?<![\\d,.]){DAY}x(?!\\d|[.,]\\d)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_names_days_and_titles_are_not_figures"
+      }
+    },
+    {
+      "id": "readme-gate-link-titles-read",
+      "breaks": "gate_numbers.py reads the title of a link to a URL, V8 on 4 GB of memory, as a figure",
+      "check": "test_gate_numbers.py test_names_days_and_titles_are_not_figures",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "|\\[[^\\]\\n]*\\]\\(https?://[^)\\n]*\\)|",
+          "new": "|"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_names_days_and_titles_are_not_figures"
+      }
+    },
+    {
+      "id": "readme-prose-sessions-count-edited",
+      "breaks": "The README's count of oracle sessions edited, 10 to 12 (the reviewer's r7-3 edit)",
+      "check": "gate_numbers.py on README.md and RESULTS.md",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "over 10 full trading sessions",
+          "new": "over 12 full trading sessions"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 12 is not in results/oracle_sessions\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-pool-faults-reordered",
+      "breaks": "The README's pool faults on base pages given to the wrong arms, 136 and 146 swapped (the reviewer's r7-3 edit)",
+      "check": "gate_numbers.py on README.md and RESULTS.md",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "take 136, 200 and 146 on base pages",
+          "new": "take 146, 200 and 136 on base pages"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 146 is not in any file it cites as pool-index's",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-pool-faults-zeroed",
+      "breaks": "The README's pool faults on transparent pages written as none, 4, 1 and 0 to 0, 0 and 0 (the reviewer's r7-3 edit)",
+      "check": "gate_numbers.py on README.md and RESULTS.md",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "and 4, 1 and 0 on transparent ones",
+          "new": "and 0, 0 and 0 on transparent ones"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 0 is not in any file it cites as pool-index's",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-udp-rates-swapped",
+      "breaks": "The README's UDP rates swapped between S4 and the U2/S3 pair (the reviewer's r7-3 edit)",
+      "check": "gate_numbers.py on README.md and RESULTS.md",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "with no loss, 2,830,848 messages/s; U2 and S3, the headline pair, tie at 2,735,896",
+          "new": "with no loss, 2,735,896 messages/s; U2 and S3, the headline pair, tie at 2,830,848"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 2,735,896 is not in results/udp_bisect_debian_12302019\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-udp-runs-edited",
+      "breaks": "The README's count of lossless runs at Nasdaq's peak edited, 10 to 9 (the reviewer's r7-3 edit)",
+      "check": "gate_numbers.py on README.md and RESULTS.md",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "in 10 runs of 10",
+          "new": "in 9 runs of 10"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 9 is not in results/udp_bisect_debian_12302019\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-results-minus-signs-dropped",
+      "breaks": "RESULTS.md's AMD AS Base row with its four minus signs dropped (the reviewer's r7-3 edit)",
+      "check": "gate_numbers.py on README.md and RESULTS.md",
+      "mutations": [
+        {
+          "file": "RESULTS.md",
+          "old": "| +15.90 | -27.50 | -14.36 | -25.96 | -2.435 |",
+          "new": "| +15.90 | 27.50 | 14.36 | 25.96 | 2.435 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "RESULTS\\.md:\\d+: 27\\.50 is not in results/mm_pnl_12302019\\.md[^\\n]*\\n[^\\n]*RESULTS\\.md:\\d+: 14\\.36 is not in [^\\n]*\\n[^\\n]*RESULTS\\.md:\\d+: 25\\.96 is not in [^\\n]*\\n[^\\n]*RESULTS\\.md:\\d+: 2\\.435 is not in results/mm_pnl_12302019\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "sources-unknown-only-runs-nothing",
+      "breaks": "check_benchmark_sources.py --only with an ID it does not check runs nothing and exits 0",
+      "check": "test_check_benchmark_sources.py, an unknown --only",
+      "mutations": [
+        {
+          "file": "scripts/check_benchmark_sources.py",
+          "old": "    if args.only is not None and args.only not in known:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_benchmark_sources.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_unknown_only_is_refused_before_anything_is_fetched \\("
+      }
+    },
+    {
+      "id": "sources-wasm-needles-bare",
+      "breaks": "T-WASM-1's source is checked for the bare numbers 1.55 and 1.45",
+      "check": "test_check_benchmark_sources.py, the WASM slowdowns",
+      "mutations": [
+        {
+          "file": "scripts/check_benchmark_sources.py",
+          "old": "            \"WebAssembly runs on average 1.55× slower in Chrome\",\n            \"and 1.45× slower in Firefox than native code\",\n            \"Slowdown: geomean – 1.55× 1.45×\",\n",
+          "new": "            \"1.55\",\n            \"1.45\",\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_benchmark_sources.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_wasm_slowdowns_are_named_with_their_browser \\("
+      }
+    },
+    {
+      "id": "sources-menkveld-needle-one-word",
+      "breaks": "The Menkveld decomposition is checked for the one word positioning",
+      "check": "test_check_benchmark_sources.py, the decomposition",
+      "mutations": [
+        {
+          "file": "scripts/check_benchmark_sources.py",
+          "old": "            \"a natural decomposition of its trading profit into a spread and a ‘positioning’ profit\",\n            \"The gross profit is decomposed into its two main components: positioning profit and net spread.\",\n",
+          "new": "            \"positioning\",\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_benchmark_sources.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_decomposition_is_named_whole \\("
+      }
+    },
+    {
+      "id": "sources-v1605b-memory-anywhere",
+      "breaks": "The V1605B's 2400 MT/s is checked as the number 2400 anywhere in the brief",
+      "check": "test_check_benchmark_sources.py, the V1605B row",
+      "mutations": [
+        {
+          "file": "scripts/check_benchmark_sources.py",
+          "old": "        [\"V1605B 12-25Wb 4/8 2.0 3.6 8 1.1 4 2M FP5 2400 10Gb\", \"(MT/s)\"],\n",
+          "new": "        [\"V1605B\", \"2400\"],\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_benchmark_sources.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_memory_rate_is_on_the_v1605b_row \\("
       }
     },
     {

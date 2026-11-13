@@ -25,14 +25,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fetch_tool  # noqa: E402
 
 
+def workflow_files(root):
+    """Every workflow GitHub runs, `*.yml` and `*.yaml`, relative to the root."""
+    folder = root / ".github" / "workflows"
+    return sorted(path.relative_to(root).as_posix()
+                  for path in [*folder.glob("*.yml"), *folder.glob("*.yaml")])
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=fetch_tool.REPO_ROOT)
     parser.add_argument("--tools-dir", type=Path, default=fetch_tool.DEFAULT_DIR)
     args = parser.parse_args(argv)
     root = args.root.resolve()
-    workflows = sorted(path.relative_to(root).as_posix()
-                       for path in (root / ".github" / "workflows").glob("*.yml"))
+    workflows = workflow_files(root)
     if not workflows:
         print("lint_workflows: FAIL no workflow under .github/workflows")
         return 1

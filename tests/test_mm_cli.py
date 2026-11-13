@@ -89,11 +89,16 @@ def main():
         fills[(model, queue, latency_off)] = field(out, "fills")
     if len(hashes) != 1:
         failures.append(("matrix", f"{len(hashes)} mark-path hashes, not one: {hashes}"))
-    if fills.get(("as", "exact", False)) == fills.get(("as", "exact", True)):
-        failures.append(("L-off", "zero latency changed no fill on S1"))
+    base, latency_off = fills.get(("as", "exact", False)), fills.get(("as", "exact", True))
+    if base is None or latency_off is None:
+        failures.append(("L-off", "a run gave no fill count to compare"))
+    elif base == latency_off:
+        failures.append(("L-off", f"zero latency changed no fill on S1: {base} fills both ways"))
     queues = {queue: field(maker("S4", "as", queue, False).stdout, "fills")
               for queue in ("exact", "conservative", "proportional")}
-    if queues["exact"] in (queues["conservative"], queues["proportional"]):
+    if None in queues.values():
+        failures.append(("Q-off", f"a run gave no fill count to compare: {queues}"))
+    elif queues["exact"] in (queues["conservative"], queues["proportional"]):
         failures.append(("Q-off", f"the queue rule changed no fill on S4: {queues}"))
 
     base = (session, "--symbol", "S1", "--model", "as", *MODEL)

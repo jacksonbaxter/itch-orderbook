@@ -1,6 +1,6 @@
 # itch-orderbook
 
-A feed handler and full-depth (L3) order book for Nasdaq TotalView-ITCH 5.0 in C++23, with an event-driven backtester, a market maker, a lock-free SPSC ring and a browser demo built on it. It is built to be measured on real data: every target in [BENCHMARKS.md](BENCHMARKS.md) has a published source, and every figure on this page and in [RESULTS.md](RESULTS.md) comes from a file in [results/](results/), the tables generated from them.
+A feed handler and full-depth (L3) order book for Nasdaq TotalView-ITCH 5.0 in C++23, with an event-driven backtester, a market maker, a lock-free SPSC ring and a browser demo built on it. It is built to be measured on real data: every target in [BENCHMARKS.md](BENCHMARKS.md) has a published source, and every measured figure on this page and in [RESULTS.md](RESULTS.md) comes from the file in [results/](results/) that its line cites, the tables generated from them.
 
 The fast book is compared with a deliberately simple reference book after every message, and over 10 full trading sessions, 3,081,392,329 messages, the two never diverged ([results/oracle_sessions.md](results/oracle_sessions.md)). A test counts every heap allocation, and the book makes none after warm-up.
 

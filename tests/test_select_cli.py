@@ -29,7 +29,8 @@ bid, and count only in regular hours, `E` and printable `C` alike.
   - With the window cut to 09:30:17, ASEV is one tick throughout and, at 9,000 shares, A's pick.
   - A day with no wide symbol has no B pick, and exits 1.
 
-A failure prints `select cli: FAIL <case>: <reason>`.
+A failure prints `select cli: FAIL <case>: <reason>`; for the day, the first line that differs,
+then every expected line missing and every line not expected.
 """
 
 import struct
@@ -196,6 +197,14 @@ def main():
             if have != want:
                 failures.append(("day", f"line {index + 2}: have {have!r}, want {want!r}"))
                 break
+        # Each line that should be there and is not, and each that is there and should not
+        # be, so a failure names the symbol and rule it is about.
+        for line in EXPECTED:
+            if body.count(line) < EXPECTED.count(line):
+                failures.append(("day", f"missing {line!r}"))
+        for line in body:
+            if body.count(line) > EXPECTED.count(line):
+                failures.append(("day", f"unexpected {line!r}"))
 
     cut = run(good, "--from", "09:30:10", "--to", "09:30:17")
     if "group A ASEV" not in cut.stdout.splitlines():
