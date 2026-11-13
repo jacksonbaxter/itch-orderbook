@@ -28,6 +28,9 @@ set -u -o pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 cd "$repo_root" || exit 2
+# On macOS every sanitizer and fuzz binary the check runs names the toolchain's symbolizer.
+# shellcheck source=scripts/symbolizer_env.sh
+source scripts/symbolizer_env.sh
 
 jobs=${ITCH_CHECK_JOBS:-6}
 log_dir=build/check-logs
@@ -114,7 +117,8 @@ stage_script_tests() {
     python_test scripts/test_fault_matrix.py &&
     python_test scripts/test_fetch_tool.py &&
     python_test scripts/test_check_sh.py &&
-    python_test scripts/test_check_benchmark_sources.py
+    python_test scripts/test_check_benchmark_sources.py &&
+    python_test scripts/test_sanitizer_tests.py
 }
 
 # RESULTS.md's tables and the README's headline against a fresh run over results/, and the
