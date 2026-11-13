@@ -18,9 +18,12 @@
 // cross message. Any crossed or locked observation in the population with no leftover in
 // force is a violation. No time limit enters this rule.
 //
-// Trading state comes from H, market hours from S, and symbols from R. A symbol with no
-// H yet has state '-'. Spec 1.2.2 says to treat such a symbol as halted, so it counts as
-// not in T, and it is shown apart so that reliance on the default stays visible.
+// Trading state comes from H, market hours from S, and symbols from R. Those fields, and
+// each message's time, are read here one byte at a time at the spec's offsets, as the
+// reference book reads its own, so that the decoder under test does not feed the
+// invariants. A symbol with no H yet has state '-'. Spec 1.2.2 says to treat such a symbol as
+// halted, so it counts as not in T, and it is shown apart so that reliance on the default stays
+// visible.
 #pragma once
 
 #include <algorithm>
@@ -98,17 +101,51 @@ class Invariants {
   void set_observation_log(std::FILE* log) noexcept { log_ = log; }
 
   // Before the books see the message, so that an observation sees its own state change.
+  // A payload of another length than its type's is not read: the frame reader never
+  // hands one over.
   void on_feed(std::span<const std::byte> payload) {
-    switch (read_char(payload.data())) {
-      case StockDirectory::kType: on_directory(StockDirectory::from_wire(payload.data())); break;
-      case StockTradingAction::kType:
-        on_trading_action(StockTradingAction::from_wire(payload.data()));
+    if (payload.empty()) {
+      return;
+    }
+    const auto type = static_cast<char>(field(payload, 0, 1));
+    const auto length = [&payload](std::size_t wanted) { return payload.size() == wanted; };
+    const auto locate = [&payload] { return static_cast<std::uint16_t>(field(payload, 1, 2)); };
+    switch (type) {
+      case 'R':
+        if (length(39)) {
+          Stock& stock = symbol_[locate()];
+          for (std::size_t i = 0; i < stock.size(); ++i) {
+            stock[i] = static_cast<char>(field(payload, 11 + i, 1));
+          }
+        }
         break;
-      case SystemEvent::kType: on_system_event(SystemEvent::from_wire(payload.data())); break;
-      case CrossTrade::kType: on_cross(CrossTrade::from_wire(payload.data()).header); break;
-      case OperationalHalt::kType: ++operational_halts_; break;
+      case 'H':
+        if (length(25)) {
+          on_trading_action(locate(), timestamp(payload), static_cast<char>(field(payload, 19, 1)));
+        }
+        break;
+      case 'S':
+        if (length(12)) {
+          on_system_event(static_cast<char>(field(payload, 11, 1)));
+        }
+        break;
+      case 'Q':
+        if (length(40)) {
+          on_cross(locate(), timestamp(payload));
+        }
+        break;
+      case 'h':
+        if (length(21)) {
+          ++operational_halts_;
+        }
+        break;
       default: break;
     }
+  }
+
+  // The message's time, bytes 5 to 10, for observe().
+  [[nodiscard]] static std::uint64_t timestamp(std::span<const std::byte> payload) {
+    return payload.size() < 11 ? 0 : field(payload, 5, 6);
   }
 
   // T-INV-1. Every refused message counts, in full, whatever its type.
@@ -214,12 +251,18 @@ class Invariants {
  private:
   static constexpr char kNoAction = '-';
 
-  void on_directory(const StockDirectory& m) { symbol_[m.header.stock_locate] = m.stock; }
+  [[nodiscard]] static std::uint64_t field(std::span<const std::byte> bytes, std::size_t offset,
+                                           std::size_t width) {
+    std::uint64_t value = 0;
+    for (std::size_t i = 0; i < width; ++i) {
+      value = (value << 8U) | std::to_integer<std::uint64_t>(bytes[offset + i]);
+    }
+    return value;
+  }
 
-  void on_trading_action(const StockTradingAction& m) {
-    const std::uint16_t locate = m.header.stock_locate;
-    if (m.trading_state == 'T' && state_[locate] != 'T' && state_[locate] != kNoAction) {
-      resumed_ns_[locate] = m.header.timestamp_ns;
+  void on_trading_action(std::uint16_t locate, std::uint64_t timestamp_ns, char trading_state) {
+    if (trading_state == 'T' && state_[locate] != 'T' && state_[locate] != kNoAction) {
+      resumed_ns_[locate] = timestamp_ns;
       window_open_[locate] = 1;
       ++windows_opened_;
       if (touching_[locate] != 0) {
@@ -227,20 +270,20 @@ class Invariants {
         ++inv3_opened_;
       }
     }
-    state_[locate] = m.trading_state;
+    state_[locate] = trading_state;
   }
 
-  void on_system_event(const SystemEvent& m) {
-    if (m.event_code == 'Q') {
+  void on_system_event(char event_code) {
+    if (event_code == 'Q') {
       market_open_ = true;
-    } else if (m.event_code == 'M') {
+    } else if (event_code == 'M') {
       market_open_ = false;
     }
   }
 
-  void on_cross(const Header& header) {
-    window_open_[header.stock_locate] = 0;
-    end_leftover(header.stock_locate, header.timestamp_ns, inv3_ended_by_cross_);
+  void on_cross(std::uint16_t locate, std::uint64_t timestamp_ns) {
+    window_open_[locate] = 0;
+    end_leftover(locate, timestamp_ns, inv3_ended_by_cross_);
   }
 
   void end_leftover(std::uint16_t locate, std::uint64_t timestamp_ns, std::uint64_t& ended) {

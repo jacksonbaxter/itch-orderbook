@@ -933,7 +933,10 @@ using Recorded = itch::FastBook<itch::oracle::WriteRecorder, Index, Levels>;
 // A recording book with room for every move, as the oracle makes it.
 template <class Index, class Levels>
 struct RecordedBook {
-  RecordedBook() { book.observer().reserve_moves(kSmall.levels); }
+  RecordedBook() {
+    book.observer().reserve_moves(kSmall.levels);
+    book.observer().reserve_slots(kSmall.orders, kSmall.levels);
+  }
   Recorded<Index, Levels> book{kSmall};
 };
 
@@ -1166,6 +1169,242 @@ TEST(OracleRun, RestartLeavesNothingOfTheLastStream) {
     used.finish();
     control.finish();
     expect_same_run(used, control);
+  });
+}
+
+// The slot checks. A misdirected store is made here by writing into the fast book's own
+// storage through the references it hands out, as a broken book would, and the run has to
+// name it on the message whose write goes through the wrong slot. The periodic hash is off,
+// so that nothing but the per-message checks can see it.
+constexpr itch::oracle::OracleConfig kSlotConfig{
+    .capacity = kRestartCapacity, .hash_every = 0, .exhaustive = false, .exhaustive_locates = {}};
+
+template <class T>
+T& broken(const T& held) {
+  return const_cast<T&>(held);  // NOLINT(cppcoreguidelines-pro-type-const-cast)
+}
+
+// Feeds each message while the run agrees, and returns the message number it stopped at,
+// or 0, and the divergences.
+template <class Run>
+std::uint64_t first_divergence(Run& run, const std::vector<wire::Bytes>& messages) {
+  std::uint64_t at = 0;
+  for (const wire::Bytes& message : messages) {
+    ++at;
+    if (!run.on_message(message)) {
+      return at;
+    }
+  }
+  return 0;
+}
+
+template <class Run>
+bool diverged_as(const Run& run, itch::oracle::DivergenceKind kind, std::string_view detail) {
+  return std::ranges::any_of(run.divergences(), [&](const itch::oracle::Divergence& d) {
+    return d.kind == kind && d.detail.find(detail) != std::string::npos;
+  });
+}
+
+// r2-2's fault, made by hand: a freed order's free link left pointing at a live order, so
+// the free list hands that order's slot out again. Every write is still reported for a
+// touched level; the take check sees the live slot on the add that takes it.
+TEST(SlotChecks, AnOrderSlotHandedOutWhileLiveIsCaughtOnThatMessage) {
+  for_each_arm([]<class Index, class Levels> {
+    itch::oracle::BasicOracleRun<Index, Levels> run{kSlotConfig};
+    ASSERT_EQ(
+        first_divergence(run, {wire::add(1, 1, 'B', 100, 1000), wire::add(1, 2, 'B', 200, 1000),
+                               wire::add(2, 3, 'B', 300, 500)}),
+        0U);
+    const std::uint32_t freed = run.fast().order_slot(1);
+    const std::uint32_t live = run.fast().order_slot(2);
+    ASSERT_EQ(first_divergence(run, {wire::erase(1, 1)}), 0U);
+    broken(run.fast().order_at(freed)).newer = live;
+    EXPECT_EQ(
+        first_divergence(run, {wire::add(2, 4, 'B', 400, 500), wire::add(3, 5, 'S', 500, 10)}), 2U);
+    EXPECT_TRUE(diverged_as(run, itch::oracle::DivergenceKind::order_slot,
+                            "order slot handed out while live"));
+  });
+}
+
+// A FIFO link into another level's order: the unlink of the order stores into it.
+TEST(SlotChecks, AFifoLinkIntoAnotherLevelsOrderIsCaughtOnTheStore) {
+  for_each_arm([]<class Index, class Levels> {
+    itch::oracle::BasicOracleRun<Index, Levels> run{kSlotConfig};
+    ASSERT_EQ(
+        first_divergence(run, {wire::add(1, 1, 'B', 100, 1000), wire::add(1, 2, 'B', 200, 1000),
+                               wire::add(1, 3, 'B', 300, 900)}),
+        0U);
+    broken(run.fast().order_at(run.fast().order_slot(2))).older = run.fast().order_slot(3);
+    EXPECT_EQ(first_divergence(run, {wire::erase(1, 2)}), 1U);
+    EXPECT_TRUE(diverged_as(run, itch::oracle::DivergenceKind::order_slot,
+                            "order slot is another level's"));
+  });
+}
+
+// The index naming a slot whose order has gone: the deduction uses a free slot.
+TEST(SlotChecks, AWriteThroughAFreeOrderSlotIsCaught) {
+  for_each_arm([]<class Index, class Levels> {
+    itch::oracle::BasicOracleRun<Index, Levels> run{kSlotConfig};
+    ASSERT_EQ(
+        first_divergence(run, {wire::add(1, 1, 'B', 100, 1000), wire::add(1, 2, 'B', 100, 1000)}),
+        0U);
+    const std::uint32_t gone = run.fast().order_slot(1);
+    ASSERT_EQ(first_divergence(run, {wire::erase(1, 1)}), 0U);
+    const auto& fast = run.fast();
+    broken(fast.index()).insert(1, gone, std::span{&fast.order_at(0), fast.order_capacity()});
+    EXPECT_EQ(first_divergence(run, {wire::execute(1, 1, 10)}), 1U);
+    EXPECT_TRUE(diverged_as(run, itch::oracle::DivergenceKind::order_slot,
+                            "order slot holds no live order"));
+    EXPECT_TRUE(diverged_as(run, itch::oracle::DivergenceKind::index, "reference=1 fast=slot"));
+  });
+}
+
+// A freed level's free link left pointing at a live level: the pool hands it out again.
+TEST(SlotChecks, ALevelSlotHandedOutWhileLiveIsCaughtOnThatMessage) {
+  for_each_arm([]<class Index, class Levels> {
+    itch::oracle::BasicOracleRun<Index, Levels> run{kSlotConfig};
+    ASSERT_EQ(
+        first_divergence(run, {wire::add(1, 1, 'B', 100, 1000), wire::add(1, 2, 'B', 100, 900)}),
+        0U);
+    const std::uint32_t live = run.fast().order_at(run.fast().order_slot(1)).level;
+    const std::uint32_t freed = run.fast().order_at(run.fast().order_slot(2)).level;
+    ASSERT_EQ(first_divergence(run, {wire::erase(1, 2)}), 0U);
+    auto& level = broken(run.fast().level_at(freed));
+    if constexpr (std::is_same_v<Levels, itch::LinkedLevels>) {
+      level.worse = live;
+    } else {
+      level.front = live;
+    }
+    EXPECT_EQ(
+        first_divergence(run, {wire::add(2, 3, 'S', 100, 800), wire::add(3, 4, 'S', 100, 700)}),
+        2U);
+    EXPECT_TRUE(diverged_as(run, itch::oracle::DivergenceKind::level_slot,
+                            "level slot handed out while live"));
+  });
+}
+
+// A flat side moved onto a block another side holds: the arena check sees it on the next
+// message for that side's locate.
+TEST(SlotChecks, AFlatSideOnAnotherSidesBlockIsCaught) {
+  for_each_arm([]<class Index, class Levels> {
+    if constexpr (!std::is_same_v<Levels, itch::LinkedLevels>) {
+      itch::oracle::BasicOracleRun<Index, Levels> run{kSlotConfig};
+      ASSERT_EQ(
+          first_divergence(run, {wire::add(1, 1, 'B', 100, 1000), wire::add(2, 2, 'B', 100, 900)}),
+          0U);
+      const auto sides = run.fast().sides();
+      broken(sides[itch::side_key(2, itch::Side::bid)]).base =
+          sides[itch::side_key(1, itch::Side::bid)].base;
+      EXPECT_EQ(first_divergence(run, {wire::add(2, 3, 'B', 100, 950)}), 1U);
+      EXPECT_TRUE(diverged_as(run, itch::oracle::DivergenceKind::arena, "holds entry"));
+    }
+  });
+}
+
+// An index entry left behind by a delete: the next message to name the reference sees the
+// fast index find it, and the reference not.
+TEST(SlotChecks, AnIndexEntryLeftForAGoneOrderIsCaughtWhenTheReferenceIsNamed) {
+  for_each_arm([]<class Index, class Levels> {
+    itch::oracle::BasicOracleRun<Index, Levels> run{kSlotConfig};
+    ASSERT_EQ(
+        first_divergence(run, {wire::add(1, 1, 'B', 100, 1000), wire::add(1, 2, 'B', 100, 1000)}),
+        0U);
+    const std::uint32_t slot = run.fast().order_slot(2);
+    ASSERT_EQ(first_divergence(run, {wire::erase(1, 2)}), 0U);
+    const auto& fast = run.fast();
+    broken(fast.index()).insert(2, slot, std::span{&fast.order_at(0), fast.order_capacity()});
+    // A message naming another reference does not look at it.
+    ASSERT_EQ(first_divergence(run, {wire::execute(1, 1, 10)}), 0U);
+    EXPECT_EQ(first_divergence(run, {wire::cancel(1, 2, 10)}), 1U);
+    EXPECT_TRUE(diverged_as(run, itch::oracle::DivergenceKind::index, "reference=2 fast=slot"));
+  });
+}
+
+// Each check of the recorder on its own, through the calls the book makes.
+TEST(SlotChecks, TheRecorderRefusesEachWrongSlot) {
+  using itch::oracle::SlotFault;
+  HashFlat book{kSmall};
+  ASSERT_EQ(book.apply(wire::add(1, 1, 'B', 100, 1000)), itch::ApplyStatus::applied);
+  ASSERT_EQ(book.apply(wire::add(1, 2, 'B', 100, 900)), itch::ApplyStatus::applied);
+  const std::uint32_t order1 = book.order_slot(1);
+  const std::uint32_t order2 = book.order_slot(2);
+  const std::uint32_t level1 = book.order_at(order1).level;
+  const std::uint32_t level2 = book.order_at(order2).level;
+  const itch::LevelId at_1000{.locate = 1, .side = itch::Side::bid, .price = 1000};
+  std::vector<itch::BookOrder> orders;
+  for (std::uint32_t at = 0; at < book.order_capacity(); ++at) {
+    orders.push_back(book.order_at(at));
+  }
+  const auto first = [](const itch::oracle::WriteRecorder& recorder) {
+    return recorder.first_fault().kind;
+  };
+  itch::oracle::WriteRecorder recorder;
+  recorder.reserve_slots(kSmall.orders, kSmall.levels);
+  recorder.on_order_take(order1);
+  recorder.on_order_take(order2);
+  recorder.on_level_take(level1);
+  recorder.on_level_take(level2);
+  recorder.on_order_slot(level1, order1, orders);
+  recorder.on_level_slot(at_1000, level1, book.levels());
+  EXPECT_EQ(recorder.faults(), 0U);
+  EXPECT_EQ(recorder.order_slot_checks(), 3U);
+  EXPECT_EQ(recorder.level_slot_checks(), 3U);
+
+  const auto expect = [&](SlotFault kind, const auto& call) {
+    recorder.clear();
+    call();
+    EXPECT_EQ(recorder.faults(), 1U) << to_string(kind);
+    EXPECT_EQ(first(recorder), kind) << to_string(kind);
+  };
+  expect(SlotFault::order_on_other_level, [&] { recorder.on_order_slot(level1, order2, orders); });
+  expect(SlotFault::order_outside_pool,
+         [&] { recorder.on_order_slot(level1, kSmall.orders, orders); });
+  expect(SlotFault::order_taken_live, [&] { recorder.on_order_take(order1); });
+  expect(SlotFault::level_of_other_price,
+         [&] { recorder.on_level_slot(at_1000, level2, book.levels()); });
+  expect(SlotFault::level_taken_live, [&] { recorder.on_level_take(level1); });
+  expect(SlotFault::level_outside_pool, [&] { recorder.on_level_take(itch::kNoIndex); });
+  expect(SlotFault::level_outside_pool,
+         [&] { recorder.on_level_slot(at_1000, kSmall.levels, book.levels()); });
+  expect(SlotFault::order_outside_pool, [&] { recorder.on_order_take(kSmall.orders); });
+  expect(SlotFault::order_outside_pool, [&] { recorder.on_order_give_back(kSmall.orders); });
+  expect(SlotFault::level_outside_pool, [&] { recorder.on_level_give_back(itch::kNoIndex); });
+  recorder.clear();
+  recorder.on_order_give_back(order2);
+  recorder.on_level_give_back(level2);
+  EXPECT_EQ(recorder.faults(), 0U);
+  expect(SlotFault::order_not_live, [&] { recorder.on_order_slot(level2, order2, orders); });
+  expect(SlotFault::order_freed_twice, [&] { recorder.on_order_give_back(order2); });
+  expect(SlotFault::level_not_live,
+         [&] { recorder.on_level_slot(at_1000, level2, book.levels()); });
+  expect(SlotFault::level_freed_twice, [&] { recorder.on_level_give_back(level2); });
+}
+
+// A cycled FIFO, which a misdirected link makes. The whole-book walks end at the pool's
+// capacity and say so, rather than run on until memory gives out.
+TEST(SlotChecks, ACycledFifoEndsTheWholeBookWalksAsADivergence) {
+  for_each_arm([]<class Index, class Levels> {
+    for (const bool exhaustive : {false, true}) {
+      itch::oracle::OracleConfig config = kSlotConfig;
+      config.exhaustive = exhaustive;
+      itch::oracle::BasicOracleRun<Index, Levels> run{config};
+      ASSERT_EQ(
+          first_divergence(run, {wire::add(1, 1, 'B', 100, 1000), wire::add(1, 2, 'B', 200, 1000),
+                                 wire::add(1, 3, 'S', 100, 1100)}),
+          0U);
+      broken(run.fast().order_at(run.fast().order_slot(2))).newer = run.fast().order_slot(1);
+      // A message on another side, which no per-message compare of this level sees.
+      if (exhaustive) {
+        EXPECT_EQ(first_divergence(run, {wire::execute(1, 3, 10)}), 1U);
+        EXPECT_TRUE(diverged_as(run, itch::oracle::DivergenceKind::exhaustive,
+                                "has a FIFO that does not end within its pool"));
+      } else {
+        EXPECT_EQ(first_divergence(run, {wire::execute(1, 3, 10)}), 0U);
+        run.finish();
+        EXPECT_TRUE(diverged_as(run, itch::oracle::DivergenceKind::final_hash,
+                                "fast book: locate=1 side=B price=1000 has a FIFO"));
+      }
+    }
   });
 }
 

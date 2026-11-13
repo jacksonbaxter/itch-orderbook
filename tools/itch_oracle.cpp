@@ -13,11 +13,13 @@
 // --prefetch D    walks the stream with itch/lookahead.hpp's reader, the fast book looking
 //                 D messages ahead. 0, the default, looks none. A distance the arm cannot
 //                 take is bad usage.
+// --max-orders, --max-levels  the pools' slots, each 1 to 2^32 - 1.
 // --max-pages, --index-bits  the paged index's pool and reach. --max-slots  the flat
 //                 levels' arena. Each arm reads only its own.
 //
 // Exit codes: 0 everything passed. 1 the diff, T-INV-1, T-INV-3 or the stream itself
-// failed. 2 bad usage or an unreadable file. 3 only T-INV-2 failed: that result is strict
+// failed. 2 bad usage, an unreadable file, or an observations file that could not be
+// written in full. 3 only T-INV-2 failed: that result is strict
 // and is reported as failing, and a separate code keeps it apart from a broken book. A
 // new cross in normal trading breaks T-INV-3, so it is a hard failure, never code 3.
 #include <charconv>
@@ -26,6 +28,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <exception>
+#include <limits>
 #include <optional>
 #include <print>
 #include <span>
@@ -99,10 +102,14 @@ struct Options {
       options.config.hash_every = *number;
     } else if (arg == "--prefetch") {
       options.prefetch = *number;
-    } else if (arg == "--max-orders") {
-      options.config.capacity.orders = static_cast<std::uint32_t>(*number);
-    } else if (arg == "--max-levels") {
-      options.config.capacity.levels = static_cast<std::uint32_t>(*number);
+    } else if (arg == "--max-orders" || arg == "--max-levels") {
+      // A pool of no slots, or more than a slot index can name, is bad usage: the hash
+      // indexes cannot be sized for 0 orders.
+      if (*number == 0 || *number > std::numeric_limits<std::uint32_t>::max()) {
+        return std::nullopt;
+      }
+      (arg == "--max-orders" ? options.config.capacity.orders : options.config.capacity.levels) =
+          static_cast<std::uint32_t>(*number);
     } else {
       return std::nullopt;
     }
@@ -161,6 +168,14 @@ void print_arm_counters(const Book& book) {
   }
 }
 
+// The flat arms' arena checks, which the linked arm has no arena for.
+template <class Run>
+void print_arena_checks(const Run& oracle) {
+  if constexpr (requires { oracle.fast().levels().relocations(); }) {
+    std::println("arena_checks {}", oracle.counters().arena_checks);
+  }
+}
+
 template <class Run>
 void print_counters(const Run& oracle, const itch::ReaderCounters& reader) {
   const itch::oracle::DiffCounters& c = oracle.counters();
@@ -181,6 +196,11 @@ void print_counters(const Run& oracle, const itch::ReaderCounters& reader) {
   std::println("move_reports {}", c.move_reports);
   std::println("moved_checks {}", c.moved_checks);
   std::println("empty_moved_checks {}", c.empty_moved_checks);
+  std::println("order_slot_checks {}", c.order_slot_checks);
+  std::println("level_slot_checks {}", c.level_slot_checks);
+  std::println("slot_violations {}", c.slot_violations);
+  std::println("index_checks {}", c.index_checks);
+  print_arena_checks(oracle);
   std::println("periodic_hash_checks {}", c.periodic_hash_checks);
   std::println("final_hash_checks {}", c.final_hash_checks);
   std::println("production_hash_checks {}", c.production_hash_checks);
@@ -220,7 +240,7 @@ int run(const Options& options) {
     std::println("oracle_max_pages {}", options.config.capacity.index_pages);
     std::println("oracle_index_bits {}", options.config.capacity.index_bits);
   }
-  if (options.arm.levels == itch::tools::LevelsArm::flat) {
+  if (options.arm.levels != itch::tools::LevelsArm::linked) {
     std::println("oracle_max_slots {}", options.config.capacity.level_slots);
   }
   std::println("bytes {}", file->bytes().size());
@@ -236,8 +256,13 @@ int run(const Options& options) {
     oracle.finish();
   }
   const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - started;
+  // A short observations file would pass for a complete one, so a failed close fails the
+  // run, after its report.
+  bool observations_lost = false;
   if (observations != nullptr) {
-    static_cast<void>(std::fclose(observations));  // NOLINT(cppcoreguidelines-owning-memory)
+    const bool unwritten = std::ferror(observations) != 0;
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    observations_lost = std::fclose(observations) != 0 || unwritten;
   }
 
   std::println("elapsed_seconds {:.1f}", elapsed.count());
@@ -272,6 +297,10 @@ int run(const Options& options) {
                oracle.invariants().crossed(), oracle.invariants().locked());
   std::println("verdict T-INV-3 {} violations={}", inv3_pass ? "PASS" : "FAIL",
                oracle.invariants().inv3_violations());
+  if (observations_lost) {
+    std::println(stderr, "itch_oracle: cannot finish writing {}", options.observations);
+    return 2;
+  }
   if (!oracle_pass || !inv1_pass || !inv3_pass) {
     return 1;
   }

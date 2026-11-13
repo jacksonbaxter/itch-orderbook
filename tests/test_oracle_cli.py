@@ -7,6 +7,8 @@ Each expected line was worked out by hand from scripts/gen_oracle_fixtures.py, n
 copied from the tool's output. A failure prints `oracle cli: FAIL <case>: <reason>`.
 """
 
+import resource
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -101,11 +103,19 @@ def main():
     # Every message type, every order path, a clean diff and an empty book. 28 touched
     # levels: 9 A, 1 F, 2 E, 1 C, 1 X, 9 D, and 5 from the 3 U, one of which keeps its
     # price. 11 of them are levels that message emptied.
+    #
+    # The slots: 13 orders taken (10 adds, 3 U) and 13 given back, 3 partial deductions,
+    # 2 appends behind an order (2 behind 1, 5 behind 1), and 15 uses in the 13 unlinks: each
+    # order itself, and 1's newer and 2's older. 46 order slots. 51 level writes, and 11 levels
+    # opened and closed, 73 level slots. Each of the 23 one-order messages names a reference,
+    # and each U two, 29 index checks.
     lifecycle = fixtures / "lifecycle.itch"
     lines = case("lifecycle", lifecycle, SMALL + ("--exhaustive",), 0,
                  "frames 51", "messages_diffed 51", "status_checks 51", "touched_checks 17",
                  "empty_touched_checks 11", "bbo_checks 102", "write_set_checks 51",
-                 "write_set_violations 0", "final_hash_checks 1", "exhaustive_checks 51",
+                 "write_set_violations 0", "order_slot_checks 46", "level_slot_checks 73",
+                 "slot_violations 0", "index_checks 29",
+                 "final_hash_checks 1", "exhaustive_checks 51",
                  "live_orders_end 0", "live_levels_end 0", "divergences 0",
                  "t_inv1_violations 0", "t_inv2_crossed 0", "t_inv2_locked 0",
                  "operational_halt_messages 1", "verdict T-ORACLE-1 PASS",
@@ -254,8 +264,15 @@ def main():
         failures.append("capacity: no status divergence")
 
     # Bad usage is not a pass.
+    # A pool of no slots, or one past what a slot index can name, is refused before any run:
+    # 2^32 would otherwise be taken as 0 and 2^32 + 1 as 1.
     for name, options in (("no file", None), ("bad option", ("--nonsense", "1")),
-                          ("bad number", ("--hash-every", "x"))):
+                          ("bad number", ("--hash-every", "x")),
+                          ("no orders", ("--index", "hash", "--max-orders", "0")),
+                          ("2^32 orders", ("--index", "hash", "--max-orders", "4294967296")),
+                          ("2^32 + 1 orders", ("--max-orders", "4294967297")),
+                          ("no levels", ("--max-levels", "0")),
+                          ("2^32 levels", ("--max-levels", "4294967296"))):
         if options is None:
             done = subprocess.run([tool], capture_output=True, text=True, check=False)
         else:
@@ -265,11 +282,24 @@ def main():
     if run(scratch / "no-such-file").returncode != 2:
         failures.append("missing file: not exit 2")
 
+    # An observations file that cannot be written in full fails the run: here the file may
+    # grow to 64 bytes, and crossed.itch logs 9 lines.
+    def small_files():
+        signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        resource.setrlimit(resource.RLIMIT_FSIZE, (64, 64))
+
+    short = scratch / "short_observations.txt"
+    done = subprocess.run([tool, str(crossed), *SMALL, "--observations", str(short)],
+                          capture_output=True, text=True, check=False, preexec_fn=small_files)
+    if done.returncode != 2 or "cannot finish writing" not in done.stderr:
+        failures.append(f"short observations: exit {done.returncode}, wanted 2: {done.stderr}")
+
     # Each arm on the fixtures, with the same verdicts as the default arm. The whole-book
     # hash is a canonical walk, so equal books hash equal and every arm ends on the same
     # last_hash. What T(m) and the BBO compare cover comes from the reference, so their
     # counts agree as well. What moves depends on the arm.
     shared = ("touched_checks", "empty_touched_checks", "bbo_checks", "write_set_writes",
+              "order_slot_checks", "level_slot_checks", "slot_violations", "index_checks",
               "periodic_hash_checks", "exhaustive_checks", "last_hash", "live_orders_end")
     for name, path, options, want_exit in (
             ("lifecycle", lifecycle, ("--exhaustive",), 0),
@@ -336,6 +366,14 @@ def main():
     values = dict(line.split(" ", 1) for line in lines if " " in line)
     if int(values.get("level_relocations", "0")) == 0 or int(values.get("moved_checks", "0")) == 0:
         failures.append("session flat moves: no block moved, or no moved level was compared")
+    # Each side's first block and each move to a bigger one is checked against the arena.
+    if int(values.get("arena_checks", "0")) <= int(values.get("level_relocations", "0")):
+        failures.append(f"session flat moves: {values.get('arena_checks')} arena checks for "
+                        f"{values.get('level_relocations')} relocations")
+    # Every flat arm reads the arena's size, so every one reports it.
+    for levels in ("flat-scan16", "flat-bisect"):
+        case(f"session {levels}", session, ARM_SMALL + ("--levels", levels), 0,
+             "oracle_max_slots 8192", "verdict T-ORACLE-1 PASS", "slot_violations 0")
     # An arena too small for the session refuses, the reference does not, and the diff
     # says so at once.
     lines = case("flat capacity", session,
