@@ -3,8 +3,9 @@
 // Each arm of the fast book takes a stream through the frame reader, every order path
 // included, in a window that starts straight after construction: it has no warm-up to
 // hide behind. The stream makes each arm take its rarer paths too: pages taken, given
-// back and run out, references past the paged index's reach, and flat arrays moving to
-// bigger blocks.
+// back and run out, references past the paged index's reach, flat arrays moving to
+// bigger blocks, and orders removed by an E, C or X of their whole remainder, which the
+// reference book counts.
 // The demo page's replay takes the same stream, through its timed call and through the
 // animation's step(), which also reads each print.
 // The backtester takes a synthetic market with a strategy trading on it, in the same kind
@@ -136,6 +137,29 @@ TEST(Allocation, TheFastBookAllocatesNothingAfterConstruction) {
   expect_no_allocation<itch::ChainedIndex, itch::FlatLevels>("chained, flat");
   expect_no_allocation<itch::PagedIndex<>, itch::Scan16FlatLevels>("paged, flat-scan16");
   expect_no_allocation<itch::PagedIndex<>, itch::BisectFlatLevels>("paged, flat-bisect");
+}
+
+// The stream every window here is built on removes orders by every message that can: an E,
+// a C or an X of an order's whole remainder, besides D and U. Counted by the reference book,
+// which shares no code with the fast book: the messages after which it holds one order fewer.
+TEST(Allocation, TheChurnStreamEmptiesOrdersByEveryExecutionAndCancel) {
+  const std::vector<std::byte> stream = build_stream();
+  itch::oracle::ReferenceBook reference;
+  std::array<std::uint64_t, 3> emptied{};
+  constexpr std::string_view kTypes = "ECX";
+  replay(stream, [&reference, &emptied, kTypes](std::span<const std::byte> payload) {
+    const std::size_t before = reference.live_orders();
+    static_cast<void>(reference.apply(payload));
+    const std::size_t at = kTypes.find(static_cast<char>(payload[0]));
+    if (at != std::string_view::npos && reference.live_orders() + 1 == before) {
+      ++emptied.at(at);
+    }
+  });
+  std::println("churn stream: orders emptied by E {}, by C {}, by X {}", emptied[0], emptied[1],
+               emptied[2]);
+  for (std::size_t at = 0; at < kTypes.size(); ++at) {
+    EXPECT_GE(emptied.at(at), 1000U) << "too few orders emptied by " << kTypes[at];
+  }
 }
 
 TEST(Allocation, TheFastBookLookingAheadAllocatesNothingAfterConstruction) {
