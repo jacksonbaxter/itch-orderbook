@@ -3257,7 +3257,9 @@
    "finding": "The author's proof of the rewording claims more than it checks",
    "outcome": "fixed",
    "detail": "The proof, kept outside the repository, now claims only what it checks and counts the names deleted; docs/NOTES.md gives the counts.",
-   "commits": [],
+   "commits": [
+    "de0e39a"
+   ],
    "tests": [],
    "faults": [],
    "notes": [

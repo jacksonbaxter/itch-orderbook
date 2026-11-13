@@ -49,12 +49,12 @@ DATA = {
     ],
     "to_come": [],
     "findings": [
-        finding("r1-1", "BLOCK", "fixed", tests=["Reader.CountsEveryFrame"],
+        finding("r1-1", "BLOCK", "fixed", commits=["1234567"], tests=["Reader.CountsEveryFrame"],
                 faults=["parser-frame-skipped"]),
         finding("r1-2", "FIX", "known limit", notes=[NOTE_SECTION]),
         finding("r1-3", "NOTE", "no change needed"),
-        finding("r12-1", "FIX", "fixed", tests=["test_a_page_line"]),
-        finding("r12-2", "NOTE", "fixed"),
+        finding("r12-1", "FIX", "fixed", commits=["1234567"], tests=["test_a_page_line"]),
+        finding("r12-2", "NOTE", "fixed", commits=["1234567"]),
     ],
 }
 
@@ -136,6 +136,25 @@ class ReviewReport(unittest.TestCase):
     def test_an_unknown_severity_is_refused(self):
         self.data["findings"][2]["severity"] = "MINOR"
         self.assertIn("r1-3: 'MINOR'", self.refused("severity"))
+
+    def test_a_fixed_finding_with_no_commit_is_refused_unless_it_says_why(self):
+        self.data["findings"][4]["commits"] = []
+        self.assertIn("r12-2: fixed with no commit", self.refused("evidence"))
+        self.data["findings"][4]["no_commit"] = "the fix was to a file kept outside the repository"
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        self.assertIn("No commit: the fix was to a file kept outside the repository.",
+                      self.out.read_text(encoding="utf-8"))
+
+    def test_a_known_limit_with_no_notes_section_is_refused(self):
+        self.data["findings"][1]["notes"] = []
+        self.assertIn("r1-2: a known limit with no docs/NOTES.md section", self.refused("evidence"))
+
+    def test_the_page_says_what_the_script_cannot_check(self):
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        self.assertIn("It cannot tell whether the evidence named is the right evidence",
+                      self.out.read_text(encoding="utf-8"))
 
     def test_an_id_given_twice_or_of_no_reviewer_is_refused(self):
         self.data["findings"][4]["id"] = "r12-1"

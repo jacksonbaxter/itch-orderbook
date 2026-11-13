@@ -19,6 +19,8 @@ be fixed) or NOTE. Its outcome is one of OUTCOMES. `write` refuses, and writes n
 - outcome: an outcome not in OUTCOMES;
 - id: a finding id that is not `<reviewer>-<number>` of a listed reviewer, or is given twice;
 - count: a reviewer whose findings, counted by severity, are not the counts its looks state;
+- evidence: a finding fixed with no commit, unless its `no_commit` says in words why there is
+  none, or a known limit with no docs/NOTES.md section for its reason;
 - complete: a record said to be complete while a finding is open, partly done or left for the
   owner, while a reviewer is still to come, or while a reviewer's fixes are on a branch not
   merged yet;
@@ -37,6 +39,11 @@ come; it says "complete" only when the data does and `write` lets it.
 - notes: a docs/NOTES.md section named is not a heading there;
 - commit: a commit named, or one an outcome was checked again at, is not in the history, checked only where git has the full history
   (not in a shallow clone, and not in a tree copied without .git, which it says).
+
+What neither step can check is that the evidence named is the right evidence: that a commit
+named fixed that finding, that a test or fault named holds it, or that a section named gives
+its reason. The record's author checked that for every finding against the tree, and the last
+reviewer sampled it; the page says so.
 
 The evidence of a reviewer whose fixes are on a branch not merged yet is not looked for in this
 tree; the record cannot be complete until that branch is merged.
@@ -76,10 +83,19 @@ WHAT_A_REVIEWER_IS = (
     "in the tree, and each docs/NOTES.md section named is there. `scripts/review_report.py check` "
     "checks them again each time it runs.")
 OUTCOME_WORDS = (
-    "Fixed: changed, with the commits, tests and faults named. Known limit: left as it is, with "
-    "the reason in the docs/NOTES.md section named. No change needed: checked, and the code was "
-    "right or the point was taken as it stands. Left for the owner: the owner decides. Partly: "
-    "part of it is still to do. Open: not done yet.")
+    "Fixed: changed, with the commit that changed it, and the tests and faults that hold the "
+    "fix where there are any. Known limit: left as it is, with the reason in the docs/NOTES.md "
+    "section named. No change needed: checked, and the code was right or the point was taken as "
+    "it stands. Left for the owner: the owner decides. Partly: part of it is still to do. Open: "
+    "not done yet.")
+WHAT_CHECK_CANNOT = (
+    "What the script checks, and what it cannot. `scripts/review_report.py` refuses a finding "
+    "fixed with no commit, unless it says in words why there is none, and a known limit with no "
+    "docs/NOTES.md section; and `check` refuses any commit, test, fault or section named that is "
+    "not in the tree. It cannot tell whether the evidence named is the right evidence: that the "
+    "commit fixed that finding, that the test or fault holds it, or that the section gives its "
+    "reason. The record's author checked that for every finding, against the tree at the commits "
+    "above, and the last reviewer checked a sample of them again.")
 
 
 class Refused(Exception):
@@ -163,6 +179,14 @@ def validate(data):
             raise Refused("severity", fid, f"{finding['severity']!r} is not one of {SEVERITIES}")
         if finding["outcome"] not in OUTCOMES:
             raise Refused("outcome", fid, f"{finding['outcome']!r} is not one of {OUTCOMES}")
+        no_commit = finding.get("no_commit", "")
+        if not isinstance(no_commit, str) or "|" in no_commit or "\n" in no_commit:
+            raise Refused("data", fid, "its no_commit is not one line of words")
+        if finding["outcome"] == "fixed" and not finding["commits"] and not no_commit:
+            raise Refused("evidence", fid, "fixed with no commit, and no words on why there is none")
+        if finding["outcome"] == "known limit" and not finding["notes"]:
+            raise Refused("evidence", fid, "a known limit with no docs/NOTES.md section for its "
+                          "reason")
         counted[match[1]][finding["severity"]] += 1
     for rid, stated in known.items():
         if counted[rid] != stated:
@@ -210,6 +234,8 @@ def evidence(finding):
     parts = [finding["detail"]] if finding["detail"] else []
     if finding["commits"]:
         parts.append(named("Commit", finding["commits"], ", ".join(finding["commits"])))
+    if finding.get("no_commit"):
+        parts.append(f"No commit: {finding['no_commit']}.")
     if finding["tests"]:
         parts.append(named("Test", finding["tests"], code_list(finding["tests"])))
     if finding["faults"]:
@@ -267,6 +293,8 @@ def render(data):
         WHAT_A_REVIEWER_IS,
         "",
         OUTCOME_WORDS,
+        "",
+        WHAT_CHECK_CANNOT,
         "",
         "## The reviewers",
         "",

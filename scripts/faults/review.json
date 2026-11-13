@@ -254,6 +254,50 @@
         "signature": "^FAIL: test_only_a_reviewer_with_more_than_one_look_is_said_to_have_looked_again",
         "exit": 1
       }
+    },
+    {
+      "id": "review-fixed-without-commit-taken",
+      "breaks": "review_report.py takes a finding marked fixed with no commit and no words on why it has none (r15-10)",
+      "check": "test_review_report.py ReviewReport.test_a_fixed_finding_with_no_commit_is_refused_unless_it_says_why",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        if finding[\"outcome\"] == \"fixed\" and not finding[\"commits\"] and not no_commit:\n",
+          "new": "        if finding[\"outcome\"] == \"fixed\" and not finding[\"commits\"] and no_commit:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_fixed_finding_with_no_commit_is_refused_unless_it_says_why"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_fixed_finding_with_no_commit_is_refused_unless_it_says_why",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-limit-without-notes-taken",
+      "breaks": "review_report.py takes a known limit with no docs/NOTES.md section for its reason (r15-10)",
+      "check": "test_review_report.py ReviewReport.test_a_known_limit_with_no_notes_section_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        if finding[\"outcome\"] == \"known limit\" and not finding[\"notes\"]:\n",
+          "new": "        if finding[\"outcome\"] == \"known_limit\" and not finding[\"notes\"]:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_known_limit_with_no_notes_section_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_known_limit_with_no_notes_section_is_refused",
+        "exit": 1
+      }
     }
   ]
 }
