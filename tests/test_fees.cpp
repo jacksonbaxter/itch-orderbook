@@ -128,6 +128,53 @@ TEST(Fees, S38UnderOneDollar) {
             (FeeBreakdown{.exchange = 3'000'000'000'000, .section31 = 0, .taf = 0, .cat = 0}));
 }
 
+// 38, at the boundary, where a taker cannot show it: at $1, $0.0030 a share and 0.30% of
+// notional are the same $3 on 1,000 shares. A maker's two rates differ. 1,000 shares at
+// exactly $1.0000 earn the per-share credit: on Tape C $0.0015, $1.50, in 2019 and $0.0013,
+// $1.30, in 2026, and on Tape A $0.0020, $2.00, in 2019, in and out of regular hours alike.
+// At $0.9999, one tick under, they are $999.90 of volume and earn the under-$1 credit:
+// nothing in regular hours on every date, and 5 bp outside them in 2026, $0.49995. A taker
+// at $0.9999 pays 0.30% of $999.90, $2.9997; at $1 outside regular hours in 2026 it pays $3,
+// not the 0.15% that applies under $1.
+TEST(Fees, S38AMakerAtExactlyOneDollarEarnsTheCredit) {
+  constexpr itch::Price4 kTickUnder = itch::kOneDollar - 1;
+  for (const std::uint32_t date : {20191030U, 20191230U}) {
+    for (const bool regular : {true, false}) {
+      EXPECT_EQ(
+          fees(date, terms(Tape::c, Liquidity::maker, Side::bid, itch::kOneDollar, 1000, regular)),
+          (FeeBreakdown{.exchange = -1'500'000'000'000, .section31 = 0, .taf = 0, .cat = 0}))
+          << date << " regular " << regular;
+      EXPECT_EQ(
+          fees(date, terms(Tape::a, Liquidity::maker, Side::bid, itch::kOneDollar, 1000, regular)),
+          (FeeBreakdown{.exchange = -2'000'000'000'000, .section31 = 0, .taf = 0, .cat = 0}))
+          << date << " regular " << regular;
+      EXPECT_EQ(fees(date, terms(Tape::c, Liquidity::maker, Side::bid, kTickUnder, 1000, regular)),
+                (FeeBreakdown{.exchange = 0, .section31 = 0, .taf = 0, .cat = 0}))
+          << date << " regular " << regular;
+    }
+    EXPECT_EQ(fees(date, terms(Tape::c, Liquidity::taker, Side::bid, kTickUnder, 1000)),
+              (FeeBreakdown{.exchange = 2'999'700'000'000, .section31 = 0, .taf = 0, .cat = 0}))
+        << date;
+  }
+  // 2026: the CAT fee, $0.000001 a share, is $0.001 on 1,000 shares on every fill.
+  for (const bool regular : {true, false}) {
+    EXPECT_EQ(fees(20260612,
+                   terms(Tape::c, Liquidity::maker, Side::bid, itch::kOneDollar, 1000, regular)),
+              (FeeBreakdown{
+                  .exchange = -1'300'000'000'000, .section31 = 0, .taf = 0, .cat = 1'000'000'000}))
+        << "regular " << regular;
+  }
+  EXPECT_EQ(fees(20260612, terms(Tape::c, Liquidity::maker, Side::bid, kTickUnder, 1000)),
+            (FeeBreakdown{.exchange = 0, .section31 = 0, .taf = 0, .cat = 1'000'000'000}));
+  EXPECT_EQ(
+      fees(20260612, terms(Tape::c, Liquidity::maker, Side::bid, kTickUnder, 1000, false)),
+      (FeeBreakdown{.exchange = -499'950'000'000, .section31 = 0, .taf = 0, .cat = 1'000'000'000}));
+  EXPECT_EQ(
+      fees(20260612, terms(Tape::c, Liquidity::taker, Side::bid, itch::kOneDollar, 1000, false)),
+      (FeeBreakdown{
+          .exchange = 3'000'000'000'000, .section31 = 0, .taf = 0, .cat = 1'000'000'000}));
+}
+
 // 39. Section 31 and TAF fall on a sell only. 100 shares sold at $50 is $5,000: Section 31
 // at $20.70 per $1M is $0.1035, and TAF at $0.000119 a share is $0.0119.
 TEST(Fees, S39SellsOnly) {

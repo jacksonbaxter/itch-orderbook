@@ -998,6 +998,62 @@
         "signature": "^FAIL: test_a_new_kind_record_names_a_foreign_process_by_kind_and_an_old_one_as_published",
         "exit": 1
       }
+    },
+    {
+      "id": "spsc-observe-relaxed",
+      "breaks": "The consumer reads the producer's index with relaxed, so it may read a slot before the slot's write is seen (r3-5)",
+      "check": "ThreadSanitizer on test_spsc's two threads, no recovery",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "kObserve = std::memory_order_acquire;",
+          "new": "kObserve = std::memory_order_relaxed;"
+        }
+      ],
+      "build": {
+        "preset": "tsan",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "tsan",
+        "-R",
+        "^test_spsc$"
+      ],
+      "expect": {
+        "signature": "ThreadSanitizer: data race"
+      }
+    },
+    {
+      "id": "spsc-return-relaxed",
+      "breaks": "The consumer returns its index with relaxed, so the producer may write over a slot whose read has not finished (r3-5)",
+      "check": "ThreadSanitizer on test_spsc's two threads, no recovery",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "kReturn = std::memory_order_release;",
+          "new": "kReturn = std::memory_order_relaxed;"
+        }
+      ],
+      "build": {
+        "preset": "tsan",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "tsan",
+        "-R",
+        "^test_spsc$"
+      ],
+      "expect": {
+        "signature": "ThreadSanitizer: data race"
+      }
     }
   ]
 }

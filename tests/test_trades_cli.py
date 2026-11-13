@@ -16,9 +16,12 @@ import sys
 from pathlib import Path
 
 SMALL = ("--max-orders", "4096", "--max-levels", "4096")
-# Every arm of the fast book, with the paged index's pool and reach small enough to fall
-# back on the fixture, and the flat arena small enough to move blocks.
-ARMS = (("hash", "linked"), ("hash", "flat"), ("paged", "linked"), ("paged", "flat"))
+# Every arm of the fast book the layout results publish, with the paged index's pool and
+# reach small enough to fall back on the fixture, and the flat arena small enough to move
+# blocks.
+ARMS = (("hash", "linked"), ("hash", "flat"), ("paged", "linked"), ("paged", "flat"),
+        ("identity", "flat"), ("chained", "flat"), ("paged", "flat-scan16"),
+        ("paged", "flat-bisect"))
 ARM_SMALL = ("--max-pages", "8", "--index-bits", "16", "--max-slots", "8192")
 DATE = ("--date", "20200106")
 PINNED_ROWS = ("--midas-rows", "4")

@@ -14,7 +14,8 @@ namespace itch::testing {
 
 // Churns a fixed pool of orders through every order path many times over, so that each
 // pool and index recycle, on a stream framed once before any window opens. One new
-// reference in five has bit 40 set.
+// reference in five has bit 40 set. An E, C or X takes one share, or, one time in four,
+// the order's whole remainder, which removes it from the book.
 [[nodiscard]] inline std::vector<std::byte> build_stream() {
   std::vector<std::byte> stream;
   namespace wire = oracle::wire;
@@ -32,6 +33,7 @@ namespace itch::testing {
   std::mt19937 random{20191230};
   constexpr std::uint32_t kPool = 512;
   std::vector<std::uint64_t> live;
+  std::vector<std::uint32_t> shares;  // Each live order's remainder.
   std::uint64_t next_reference = 1;
   const auto fresh = [&next_reference] {
     const std::uint64_t reference = next_reference++;
@@ -44,26 +46,42 @@ namespace itch::testing {
       put((step % 3 == 0 ? wire::add_attributed : wire::add)(
           1, reference, step % 2 == 0 ? 'B' : 'S', 300, price, 1));
       live.push_back(reference);
+      shares.push_back(300);
       continue;
     }
     const std::size_t pick = random() % live.size();
     const std::uint64_t reference = live[pick];
-    switch (random() % 5) {
-      case 0: put(wire::execute(1, reference, 1)); break;
-      case 1: put(wire::execute_with_price(1, reference, 1, 77)); break;
-      case 2: put(wire::cancel(1, reference, 1)); break;
-      case 3: {
-        const std::uint64_t replaced = fresh();
-        put(wire::replace(1, reference, replaced, 300, price));
-        live[pick] = replaced;
-        break;
+    const auto forget = [&live, &shares, pick] {
+      live[pick] = live.back();
+      live.pop_back();
+      shares[pick] = shares.back();
+      shares.pop_back();
+    };
+    const auto kind = static_cast<std::uint32_t>(random() % 5);
+    if (kind <= 2) {
+      const std::uint32_t taken = random() % 4 == 0 ? shares[pick] : 1;
+      if (kind == 0) {
+        put(wire::execute(1, reference, taken));
+      } else if (kind == 1) {
+        put(wire::execute_with_price(1, reference, taken, 77));
+      } else {
+        put(wire::cancel(1, reference, taken));
       }
-      default:
-        put(wire::erase(1, reference));
-        live[pick] = live.back();
-        live.pop_back();
-        break;
+      shares[pick] -= taken;
+      if (shares[pick] == 0) {
+        forget();
+      }
+      continue;
     }
+    if (kind == 3) {
+      const std::uint64_t replaced = fresh();
+      put(wire::replace(1, reference, replaced, 300, price));
+      live[pick] = replaced;
+      shares[pick] = 300;
+      continue;
+    }
+    put(wire::erase(1, reference));
+    forget();
   }
   return stream;
 }

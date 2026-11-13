@@ -639,6 +639,54 @@
       "expect": {
         "signature": "\\[  FAILED  \\] BookScenario/0\\.OrderMessagesAfterSystemEventEStillApply"
       }
+    },
+    {
+      "id": "parser-status-name-wrong",
+      "breaks": "A frame status prints under another name (r8-12)",
+      "check": "test_reader Reader.StatusNames",
+      "mutations": [
+        {
+          "file": "src/parser.cpp",
+          "old": "    case FrameStatus::zero_length: return \"zero_length\";",
+          "new": "    case FrameStatus::zero_length: return \"zero\";"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_reader"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_reader"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Reader\\.StatusNames"
+      }
+    },
+    {
+      "id": "parser-truncated-payload-counted-each-time",
+      "breaks": "A truncated payload is counted on every call to next(), not once (r8-12)",
+      "check": "test_reader Reader.TerminalStatesStayAndCountOnce",
+      "mutations": [
+        {
+          "file": "include/itch/reader.hpp",
+          "old": "      counters_.truncated_payload = 1;",
+          "new": "      ++counters_.truncated_payload;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_reader"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_reader"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Reader\\.TerminalStatesStayAndCountOnce"
+      }
     }
   ]
 }

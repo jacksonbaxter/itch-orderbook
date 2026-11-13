@@ -6,7 +6,8 @@ Usage: test_mm_cli.py <itch_mm> <oracle fixtures dir>
 session.itch is a seeded random session on symbols S1 to S6, in the first milliseconds after
 the open. The maker quotes S1 under every run of the evaluation's matrix: Base, Q-off under
 each rule, L-off, both off under each rule, and GLFT. Every check the tool prints must pass,
-with fills and no allocation after construction; S + A + I must equal the total and the
+with fills and no allocation after construction; every figure the checks read must be
+printed, as an integer; S + A + I must equal the total and the
 ledger's total, and the spread capture its gross line less the fees, all as integers; the
 mark-path hash must be the same in every run, while L-off changes S1's fills and Q-off S4's.
 Bad usage, an unreadable file and a day with no fee schedule exit 2. A failure prints
@@ -60,9 +61,15 @@ def main():
         for check in CHECKS:
             if f"check {check}: pass" not in out:
                 failures.append((case, f"no passing line for {check}"))
-        values = {name: int(field(out, name) or 0) for name in (
+        printed = {name: field(out, name) for name in (
             "gross_spread", "fees", "spread_capture", "adverse_selection", "inventory", "total",
             "ledger_total", "fills", "shares", "bought", "sold")}
+        unread = [f"{name} {value!r}" for name, value in printed.items()
+                  if value is None or not re.fullmatch(r"-?\d+", value)]
+        if unread:
+            failures.append((case, f"missing or not an integer: {', '.join(unread)}"))
+            continue
+        values = {name: int(value) for name, value in printed.items()}
         if values["fills"] < 5:
             failures.append((case, f"too few fills: {values['fills']}"))
         if values["spread_capture"] != values["gross_spread"] - values["fees"]:
