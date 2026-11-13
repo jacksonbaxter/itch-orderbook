@@ -987,8 +987,8 @@ MISSED = (
     ("T-TRADE-5", "trades_05302019.md", trade_row,
      "one `E` on ELTK, as with RBZ on the day above: [Correctness](#correctness)"),
     ("T-BT-3", "backtest_shadow_debian_12302019.md", missed_row,
-     "the bar was set on a Mac; the queue walk is not the cause, since without it the rate is "
-     "still under the bar; the rest is not established: [Beyond the book](#beyond-the-book)"),
+     "the bar was set on a Mac; the queue walk is a small share of a message's time, so it is "
+     "not the cause; the rest is not established: [Beyond the book](#beyond-the-book)"),
     ("T-MM-2", "mm_as_tables.md", spread_row,
      "the file traces it to the simulation's time grid, and other grids move it: "
      "[Beyond the book](#beyond-the-book)"),
