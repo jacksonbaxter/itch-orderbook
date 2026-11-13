@@ -7990,7 +7990,9 @@
         "{python}",
         "{tree}/scripts/gates.py",
         "--root",
-        "{tree}"
+        "{tree}",
+        "--only",
+        "no-abort-on-wire"
       ],
       "expect": {
         "signature": "gates: FAIL no-abort-on-wire tests/trades/midas\\.hpp:\\d+",
@@ -8012,7 +8014,9 @@
         "{python}",
         "{tree}/scripts/gates.py",
         "--root",
-        "{tree}"
+        "{tree}",
+        "--only",
+        "no-abort-on-wire"
       ],
       "expect": {
         "signature": "gates: FAIL no-abort-on-wire tests/trades/cross_stats\\.hpp:\\d+",
