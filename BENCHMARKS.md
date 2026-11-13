@@ -50,7 +50,7 @@ All on one thread, with the whole file resident before the clock starts, unless 
 - **Target:** ≥ 709 M msg/s, ~21.8 GB/s.
 - **Source:** [itch-book README](https://github.com/groovg/itch-book/blob/b502b002abf650760b79c010b3ae3a8f82896ae8/README.md), OSS-15.
 - **Measured:** Ryzen 7 9700X (Zen 5, 32 MB L3), 96 GB DDR5, Ubuntu 24.04, core isolated, SMT off, gcc 13.3 `-O3`. Full day 12302019 in RAM. One pinned thread. Counts every framed message, with no fields read. Best of 3.
-- **Comparability:** this measures memory bandwidth, as the README says. `debian` has far less of it. We report the median.
+- **Comparability:** itch-book's README says this walk measures memory bandwidth; that is its claim for its host, not something measured here. On `debian` the walk was not shown to be bound by bandwidth, and how much of the gap is the host's is not established (WRITEUP.md, "The parse rate"). We report the median.
 - **Status:** `VERIFIED`
 
 ### T-PARSE-2: decode of the book-affecting types
