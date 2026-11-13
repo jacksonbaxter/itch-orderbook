@@ -181,6 +181,25 @@ class BookResults(unittest.TestCase):
         self.assertTrue(check_results.is_book_file(quoted))
         self.assertIn("target-missing", codes(without_line(quoted, "| T-BOOK-1 |")))
 
+    def test_the_label_alone_marks_a_stub(self):
+        """bench_driver writes a --note of the label alone as **label**: a stub's line too."""
+        label = check_results.STUB_LABEL
+        line = f"**{label} Harness test fixture in the Phase 2 format, not a measurement.**"
+        alone = replace(MAC, line, f"**{label}**")
+        self.assertFalse(check_results.is_book_file(alone))
+        self.assertEqual(check_results.check_text(alone), [])
+
+    def test_a_design_file_without_the_label_gets_every_book_check(self):
+        """A bold line above the Header that is not the label, the label cut short among
+        them, leaves a design file a book file, with every book check its own."""
+        label = check_results.STUB_LABEL
+        broken = without_line(BOOK, "| T-BOOK-1 |")
+        for note in ("**A note.**", f"**{label[:-1]}**", f"**{label}x**"):
+            noted = replace(broken, "\n## Header\n", f"\n{note}\n\n## Header\n")
+            self.assertTrue(check_results.is_book_file(noted), note)
+            self.assertEqual(codes(noted), codes(broken), note)
+        self.assertIn("target-missing", codes(broken))
+
     def test_a_book_file_labelled_the_stub_is_refused(self):
         label = check_results.STUB_LABEL
         labelled = replace(BOOK, "\n## Header\n", f"\n**{label} A planted label.**\n\n## Header\n")

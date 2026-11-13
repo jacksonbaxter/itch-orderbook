@@ -4501,7 +4501,7 @@
       "mutations": [
         {
           "file": "scripts/check_results.py",
-          "old": "    return not stub_line(text).startswith(f\"**{STUB_LABEL} \")\n",
+          "old": "    return not (line == f\"**{STUB_LABEL}**\" or line.startswith(f\"**{STUB_LABEL} \"))\n",
           "new": "    return STUB_LABEL not in text\n"
         }
       ],
@@ -6612,6 +6612,27 @@
       ],
       "expect": {
         "signature": "^FAIL: test_check_says_ok_for_each_file_that_passes_after_one_that_fails ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stub-label-alone-read-as-a-book",
+      "breaks": "A stub whose note is the stub's label alone is read as a book file and held to every book check",
+      "check": "test_bench_results.py test_the_label_alone_marks_a_stub",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    return not (line == f\"**{STUB_LABEL}**\" or line.startswith(f\"**{STUB_LABEL} \"))\n",
+          "new": "    return not line.startswith(f\"**{STUB_LABEL} \")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_label_alone_marks_a_stub \\(",
         "exit": 1
       }
     }

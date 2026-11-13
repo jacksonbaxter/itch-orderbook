@@ -825,9 +825,11 @@ def stub_line(text):
 
 
 def is_book_file(text):
-    """A book file, unless the line just above its Header is the stub's label: the label
-    anywhere else in the file, a sentence that quotes it included, does not make it a stub."""
-    return not stub_line(text).startswith(f"**{STUB_LABEL} ")
+    """A book file, unless the line just above its Header is the stub's label, alone or
+    followed by more of the note: the label anywhere else in the file, a sentence that quotes
+    it included, does not make it a stub."""
+    line = stub_line(text)
+    return not (line == f"**{STUB_LABEL}**" or line.startswith(f"**{STUB_LABEL} "))
 
 
 def check_stub(text, fields, name=None):
