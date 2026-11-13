@@ -662,8 +662,53 @@
     },
     {
       "id": "oracle-off-touched",
-      "breaks": "The whole touched-level compare off, and D does not unlink, on hash with linked levels, where no move compare runs on the level first",
+      "breaks": "The whole touched-level compare off, and D does not unlink, on hash with linked levels, where no move compare runs on the level first, with the per-message index compare off, which would find the order D left behind first",
       "check": "the BBO compare or the hash",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    for (std::size_t i = 0; i < outcome.touched.count; ++i) {\n      compare_level(outcome.touched.levels[i]);\n    }\n",
+          "new": ""
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      return ApplyStatus::locate_mismatch;\n    }\n    remove_order(order);\n    return ApplyStatus::applied;\n  }\n\n  // The new order keeps",
+          "new": "      return ApplyStatus::locate_mismatch;\n    }\n    return ApplyStatus::applied;\n  }\n\n  // The new order keeps"
+        },
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_index(payload);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--index",
+        "hash",
+        "--levels",
+        "linked"
+      ],
+      "expect": {
+        "signature": "touched_checks 0\\n[\\s\\S]*DIVERGENCE kind=(bbo|periodic-hash) "
+      }
+    },
+    {
+      "id": "oracle-index-catches-d-not-unlinking",
+      "breaks": "The whole touched-level compare off, and D does not unlink, on hash with linked levels",
+      "check": "the index compare, on the first message that names the deleted reference",
       "mutations": [
         {
           "file": "tests/oracle/diff.hpp",
@@ -697,7 +742,7 @@
         "linked"
       ],
       "expect": {
-        "signature": "touched_checks 0\\n[\\s\\S]*DIVERGENCE kind=(bbo|periodic-hash) "
+        "signature": "DIVERGENCE kind=index message=\\d+ type=. reference=\\d+ "
       }
     },
     {
@@ -2536,8 +2581,48 @@
     },
     {
       "id": "oracle-paged-wrong-page",
-      "breaks": "The paged index looks a reference up on the page next to its own",
+      "breaks": "The paged index looks a reference up on the page next to its own, with the per-message index compare off, which would find the wrong page first",
       "check": "the status compare, on the paged arm",
+      "mutations": [
+        {
+          "file": "include/itch/book_index.hpp",
+          "old": "      const std::uint32_t page = directory_[static_cast<std::size_t>(reference >> PageBits)];\n      if (page != kNoIndex) {\n        const std::uint32_t order",
+          "new": "      const std::uint32_t page = directory_[static_cast<std::size_t>((reference >> PageBits) ^ 1U)];\n      if (page != kNoIndex) {\n        const std::uint32_t order"
+        },
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_index(payload);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--index",
+        "paged",
+        "--max-pages",
+        "64"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=status message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-index-catches-paged-wrong-page",
+      "breaks": "The paged index looks a reference up on the page next to its own",
+      "check": "the index compare, on the paged arm, on the first message that names the reference",
       "mutations": [
         {
           "file": "include/itch/book_index.hpp",
@@ -2566,7 +2651,7 @@
         "64"
       ],
       "expect": {
-        "signature": "DIVERGENCE kind=status message=\\d+ type=. "
+        "signature": "DIVERGENCE kind=index message=\\d+ type=. reference=\\d+ "
       }
     },
     {
