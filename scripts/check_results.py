@@ -1259,7 +1259,27 @@ def check_parse(text):
     # Imported here: parse_driver imports this module.
     import parse_driver  # noqa: PLC0415
 
-    return parse_driver.check_text(text)
+    return parse_driver.check_text(text) + parse_other_day_verdicts(text)
+
+
+def parse_other_day_verdicts(text):
+    """A bar set on a day other than the file's gets no verdict word: a verdict on a bar is a
+    verdict on its day, so a figure of another day may say only that it is above or under the
+    bar on the day measured, and that the bar's day was not measured there."""
+    day = parse_header(text).get("dataset", "").split(".")[0]
+    problems = []
+    for cells in table_rows(text, "Targets"):
+        bar_day = re.search(r", on (\d{8})$", cells[1]) if len(cells) == 4 else None
+        if bar_day is None or bar_day[1] == day:
+            continue
+        verdict = cells[3]
+        if verdict.split(";")[0].split(":")[0].strip() in ("met", "missed") or \
+                not verdict.startswith((f"above the bar on {day}, a day other than the bar's; ",
+                                        f"under the bar on {day} by ")):
+            problems.append(("parse-verdict-other-day",
+                             f"{cells[0]}'s bar is set on {bar_day[1]}, and this file of {day} "
+                             f"gives it {verdict!r}: another day's bar is not met or missed"))
+    return problems
 
 
 def check_backtest_summary(text, fields):

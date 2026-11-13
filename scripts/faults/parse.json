@@ -703,7 +703,7 @@
     },
     {
       "id": "parse-own-day-said-absent",
-      "breaks": "A file measured on Lunary's own day, 10302019, still says that day is not on this host",
+      "breaks": "A file measured on Lunary's own day, 10302019, still says that this run did not measure that day",
       "check": "test_parse_driver.py Figures.test_t_parse_3_is_judged_on_its_own_day",
       "mutations": [
         {
@@ -720,6 +720,72 @@
       ],
       "expect": {
         "signature": "FAIL: test_t_parse_3_is_judged_on_its_own_day",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-other-day-given-a-verdict-word",
+      "breaks": "A bar set on a day other than the day measured gets met or missed, a verdict on the bar's own day from a figure of another",
+      "check": "test_parse_driver.py Figures.test_the_verdicts",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    if other and other != day:\n        seen =",
+          "new": "    if False:\n        seen ="
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Figures.test_the_verdicts"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_verdicts",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-other-day-verdict-word-let-through",
+      "breaks": "check_results.py lets a parse file give met or missed to a bar set on a day other than the file's",
+      "check": "test_parse_driver.py Check.test_a_verdict_word_for_another_days_bar_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    return parse_driver.check_text(text) + parse_other_day_verdicts(text)\n",
+          "new": "    return parse_driver.check_text(text)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_a_verdict_word_for_another_days_bar_is_refused"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_verdict_word_for_another_days_bar_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-render-check-compares-nothing",
+      "breaks": "parse_driver.py render --check passes a published file that is not what its raw records render",
+      "check": "test_parse_driver.py RenderAgain.test_check_refuses_a_file_that_is_not_its_render",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "        if text != published:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "RenderAgain.test_check_refuses_a_file_that_is_not_its_render"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_refuses_a_file_that_is_not_its_render",
         "exit": 1
       }
     }

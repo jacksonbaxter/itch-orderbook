@@ -682,13 +682,16 @@ def run_rows(text):
 def parse_rows(name, text):
     """A parse-rate file (scripts/parse_driver.py): one row a pass, its target's median, min, max
     and CV in messages a second, its median in GB a second, its bar and the file's own verdict,
-    a miss with its gap and a bar set on another day with that day named, as the file words it."""
+    a miss with its gap and a bar set on another day with that day named, as the file words it.
+    A bar set on a day other than the file's is refused a verdict word: its figure is above or
+    under the bar on the day measured, never met or missed (other_day_words)."""
     host = header_field(text, "host", name)
     pinning = pinning_cell(text, name)
     commit = header_commit(text, name)
     rows = []
     for cells in targets_table(name, text):
         target = cells["Target"]
+        other_day_words(target, name, cells)
         label = find(rf"^\| ({re.escape(target)}, [^|]*), messages/s \|", text, name)[1]
         median, low, high, spread = table_row(f"{label}, messages/s", text, name)
         gbs = table_row(f"{label}, GB/s", text, name)[0]
@@ -838,12 +841,13 @@ def generate(root):
         lines += ["", "The parse rate. Each row is one pass of a parse-rate file over the whole day "
                       "held in memory on one pinned thread: its rate over every framed message, and "
                       "its GB a second over the file's bytes, length prefixes included, as both "
-                      "sources count; the verdict is on the median. T-PARSE-3's bar is set on "
-                      "10302019, and a file of another day says so in its verdict: the 12302019 "
-                      "file's words that 10302019 is not on this host were true when it ran, and "
-                      "the day was copied to `debian` afterwards, where the machine check's "
-                      "input-resident condition could not be met for it, so no run of it was timed "
-                      "(docs/NOTES.md, \"The parse rate on `debian`\").", ""]
+                      "sources count; the verdict is on the median. A bar set on a day other than "
+                      "the file's gets no verdict, met or missed: the row says whether the median "
+                      "is above or under the bar on the day measured, and that the bar's own day "
+                      "was not measured. T-PARSE-3's bar is set on 10302019; the run on that day "
+                      "on `debian` was refused by the machine check, at its input-resident "
+                      "condition, before anything was timed (docs/NOTES.md, \"The parse rate on "
+                      "`debian`\").", ""]
         lines += markdown_table(("Target", "Pass", "Day", "Host", "Pinning", "Median messages/s",
                                  "Min", "Max", "CV", "Median GB/s", "Bar", "Verdict", "Commit",
                                  "File"), parses)
@@ -1181,24 +1185,36 @@ def missed_row(target, name, text, comparison=None):
     return label, bar, measured, gap, host_label(text, name)
 
 
-def other_day_row(target, name, text):
-    """A target measured only on a day other than its bar's: the file's figure, said to be on its
-    own day and above or under a bar that is another day's, never a bare met or missed."""
-    cells = one_target_row(target, name, text)
+def other_day_words(target, name, cells):
+    """The bar's day, when a parse-rate file's bar is set on a day other than the file's, else
+    None. Such a bar gets no verdict word, since a verdict on a bar is a verdict on its day: the
+    file must say its figure is above or under the bar on the day measured, and met or missed is
+    refused, with or without words after it."""
     day = day_of(name)
     bar_day = re.search(r", on (\d{8})$", cells["Bar"])
     if bar_day is None or bar_day[1] == day:
+        return None
+    verdict = cells["Verdict"]
+    if verdict_word(verdict.split(";")[0]) in ("met", "missed") or not verdict.startswith(
+            (f"above the bar on {day}, a day other than the bar's; ",
+             f"under the bar on {day} by ")):
+        raise TableError(f"results/{name}: {target}'s bar is set on {bar_day[1]}, and the file, "
+                         f"of {day}, gives it {verdict!r}: another day's bar is not met or "
+                         "missed")
+    return bar_day[1]
+
+
+def other_day_row(target, name, text):
+    """A target measured only on a day other than its bar's: the file's figure, said to be on its
+    own day, and the file's words, above or under a bar that is another day's, never met or
+    missed."""
+    cells = one_target_row(target, name, text)
+    day = day_of(name)
+    if other_day_words(target, name, cells) is None:
         raise TableError(f"results/{name}: {target}'s bar is {cells['Bar']!r}, not one set on "
                          f"another day than {day}, and {WRITEUP_PAGE}'s table shows it so")
-    verdict = cells["Verdict"]
-    if not verdict.startswith(("met; measured on ", "missed: ")) or f"not the bar's {bar_day[1]}" \
-            not in verdict:
-        raise TableError(f"results/{name}: {target} is {verdict!r}, not a verdict on {day} that "
-                         f"names the bar's day, {bar_day[1]}")
-    where = "above" if verdict.startswith("met") else "under"
-    return (target, cells["Bar"], f"{cells['Measured']}, on {day}",
-            f"{where} the bar on {day}, a day other than the bar's; not measured on "
-            f"{bar_day[1]}", host_label(text, name))
+    return (target, cells["Bar"], f"{cells['Measured']}, on {day}", cells["Verdict"],
+            host_label(text, name))
 
 
 def fault_check_row(target, name, text):
@@ -1364,8 +1380,8 @@ MISSED = (
      "[The parse rate](#the-parse-rate)"),
     ("T-PARSE-2", PARSE_DEBIAN, missed_row, "as T-PARSE-1: [The parse rate](#the-parse-rate)"),
     ("T-PARSE-3", PARSE_DEBIAN, other_day_row,
-     "the bar is set on 10302019; on this host the machine check's input-resident condition could "
-     "not be met for that day, the kernel keeping other cached files over the day just read, so "
+     "the bar is set on 10302019; on this host the machine check refused that day at its "
+     "input-resident condition, the kernel keeping other cached files over the day just read, so "
      "P-0030's run was refused before anything was timed: [The parse rate](#the-parse-rate)"),
     ("T-BT-3", "backtest_shadow_debian_12302019.md", missed_row,
      "the bar was set on a Mac; the queue walk is a small share of a message's time, so it is "

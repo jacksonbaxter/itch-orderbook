@@ -249,6 +249,24 @@ class Check(unittest.TestCase):
         text = rendered().replace("missed: 400.10 M msg/s", "missed: 400.00 M msg/s")
         self.assertIn("parse-figure-differs", self.codes(text))
 
+    def test_a_verdict_word_for_another_days_bar_is_refused(self):
+        text = rendered()
+        under = ("under the bar on 12302019 by 27.87 M msg/s and 0.86 GB/s, a day other than the "
+                 "bar's; not measured on 10302019")
+        self.assertIn(f"| {under} |", text)
+        self.assertNotIn("parse-verdict-other-day", {c for c, _ in check_results.check_text(text)})
+        for words in ("missed: 27.87 M msg/s and 0.86 GB/s under the bar",
+                      "missed: 27.87 M msg/s and 0.86 GB/s under the bar; measured on 12302019, "
+                      "not the bar's 10302019: the two days are compared under Caveats",
+                      "met; measured on 12302019, not the bar's 10302019, which is not on this "
+                      "host: the two days are compared under Caveats",
+                      "met", "above the bar"):
+            found = check_results.check_text(text.replace(f"| {under} |", f"| {words} |"))
+            self.assertIn("parse-verdict-other-day", {code for code, _ in found}, words)
+        # A bar of the file's own day is held to met or missed as before, not to these words.
+        self.assertEqual(check_results.parse_other_day_verdicts(text.replace(
+            ", on 10302019 | 66.03 M", " | 66.03 M")), [])
+
     def test_rates_over_fewer_messages_than_every_frame(self):
         # The framing passes over no message at all, and the decode over the messages it
         # decoded: the file's own figures agree with its table, but not with the frame count.

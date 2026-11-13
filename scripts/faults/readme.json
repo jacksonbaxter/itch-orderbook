@@ -2477,6 +2477,28 @@
         "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 138 is not in results/final_review\\.md",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-parse-other-day-verdict-word-let-through",
+      "breaks": "results_table.py takes a parse-rate file's met or missed for a bar set on a day other than the file's",
+      "check": "test_results_table.py MissedTargets.test_a_verdict_word_for_another_days_bar_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if verdict_word(verdict.split(\";\")[0]) in (\"met\", \"missed\") or not verdict.startswith(\n",
+          "new": "    if False and not verdict.startswith(\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_a_verdict_word_for_another_days_bar_is_refused"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_verdict_word_for_another_days_bar_is_refused",
+        "exit": 1
+      }
     }
   ]
 }
