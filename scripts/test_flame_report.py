@@ -5,6 +5,8 @@ flamegraph.pl is stood in for by a few lines of Perl written here."""
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -49,7 +51,7 @@ def header(host="debian", flags=FP_FLAGS):
 
 def driver_file(median, flags):
     return (f"# Book design\n\n## Header\n\n- flags: {flags}\n- commit: 0123456789ab (exported)\n"
-            "- repetitions: 3\n\n## Summary\n\n| Measure | Median | Min | Max | CV |\n"
+            "- repetitions: 3\n- design: paged-flat: FastBook\n\n## Summary\n\n| Measure | Median | Min | Max | CV |\n"
             f"|---|---|---|---|---|\n| Throughput, messages/s | {median:,} | {median - 9:,} "
             f"| {median + 9:,} | 0.20% |\n")
 
@@ -79,11 +81,13 @@ class FlameReport(unittest.TestCase):
                                             encoding="utf-8")
         (self.root / "annotate.txt").write_text(" 40.00 :   mov (%rax),%rdx\n",
                                                 encoding="utf-8")
-        (self.root / "normal.md").write_text(driver_file(5_000_000, "-O3 -DNDEBUG"),
-                                             encoding="utf-8")
-        (self.root / "fp.md").write_text(driver_file(4_950_000, FP_FLAGS), encoding="utf-8")
         out = self.root / "results" / ("flamegraph_x_debian_12302019.md" if host == "debian"
                                        else "profile_x_mac_12302019.md")
+        # The two builds' files sit beside the graph, as in results/, where its table links them.
+        out.parent.mkdir(exist_ok=True)
+        (out.parent / "normal.md").write_text(driver_file(5_000_000, "-O3 -DNDEBUG"),
+                                              encoding="utf-8")
+        (out.parent / "fp.md").write_text(driver_file(4_950_000, FP_FLAGS), encoding="utf-8")
         args = ["render", "--folded", str(self.root / "stacks.folded"), "--flamegraph",
                 str(self.stub), "--record", str(self.root / "run.json"), "--source",
                 "perf" if host == "debian" else "sample", "--workload", "replay", "--day",
@@ -92,8 +96,8 @@ class FlameReport(unittest.TestCase):
         if host == "debian":
             args += ["--run-id", "P-0018-20261105T090000Z"]
             args += ["--annotate", str(self.root / "annotate.txt"), "--annotate-symbol", "apply",
-                     "--normal", str(self.root / "normal.md"), "--frame-pointer",
-                     str(self.root / "fp.md")]
+                     "--normal", str(out.parent / "normal.md"), "--frame-pointer",
+                     str(out.parent / "fp.md")]
         return flame_report.main(args), out
 
     def codes(self, path):
@@ -149,6 +153,26 @@ class FlameReport(unittest.TestCase):
         self.assertIn("- build: frame pointers", text)
         self.assertEqual(self.codes(out), [])
 
+    def test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said(self):
+        # Sixteen frames of 10 self each, then two instantiations of pass<> at 6 and 5:
+        # each is out of the top 15, merged at 11 they would rank first, and f14 would drop.
+        folded = "".join(f"main;f{i:02d} 10\n" for i in range(16))
+        folded += "main;pass<A> 6\nmain;pass<B> 5\nmain;pass<B>;g<A> 4\nmain;g<B> 3\n"
+        stacks = flame_report.read_folded(folded)
+        frames, total = flame_report.hottest(stacks)
+        self.assertEqual(total, 178)
+        self.assertNotIn("pass<A>", [frame for frame, _, _ in frames])
+        lines = flame_report.alike_lines(stacks)
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[1], "`pass<…>` has 2 instantiations, ranked apart at 3.37% and "
+                                   "2.81% self, neither in the list; merged, at 6.18% self and "
+                                   "8.43% total, it would rank 1st and `f14` would drop out of "
+                                   "the list.")
+        code, out = self.render(folded=folded)
+        self.assertEqual(code, 0)
+        self.assertIn(f"- {lines[1]}", out.read_text(encoding="utf-8"))
+        self.assertEqual(flame_report.alike_lines(flame_report.read_folded("main;a<x> 5\n")), [])
+
     def test_a_perf_graph_from_a_build_without_frame_pointers_is_refused(self):
         code, out = self.render(flags="-O3 -DNDEBUG")
         self.assertEqual(code, 2)
@@ -198,6 +222,96 @@ class FlameReport(unittest.TestCase):
         self.assertIn("annotate-missing", self.codes(out))
         out.write_text(text.replace("- run_id:", "- run:"), "utf-8")
         self.assertIn("run-id-missing", self.codes(out))
+
+    def test_check_works_the_shares_out_again_from_the_folded_stacks(self):
+        code, out = self.render(folded="main;apply 70\nmain;walk 20\nmain;apply;walk 10\n")
+        self.assertEqual(code, 0)
+        text = out.read_text(encoding="utf-8")
+        folded = out.with_suffix(".folded")
+        self.assertEqual(folded.read_text(encoding="utf-8"),
+                         "main;apply 70\nmain;apply;walk 10\nmain;walk 20\n")
+        self.assertIn("| `apply` | 70.00% | 80.00% |", text)
+        out.write_text(text.replace("| `apply` | 70.00% | 80.00% |",
+                                    "| `apply` | 70.00% | 85.00% |"), "utf-8")
+        self.assertEqual(self.codes(out), ["figures-differ"])
+        out.write_text(text.replace("at 70.00% self", "at 75.00% self"), "utf-8")
+        self.assertEqual(self.codes(out), ["figures-differ"])
+        out.write_text(text, "utf-8")
+        folded.write_text("main;apply 60\nmain;apply;walk 10\nmain;walk 30\n", "utf-8")
+        self.assertIn("figures-differ", self.codes(out))
+        folded.unlink()
+        self.assertEqual(self.codes(out), ["folded-missing"])
+
+    def test_check_works_the_ratio_out_again_from_the_two_builds(self):
+        code, out = self.render()
+        self.assertEqual(code, 0)
+        text = out.read_text(encoding="utf-8")
+        for old, new in (("- frame_pointer_ratio: 0.9900", "- frame_pointer_ratio: 0.9990"),
+                         ("ran at 0.9900 times", "ran at 0.9990 times"),
+                         ("| 4,950,000 |", "| 4,995,000 |")):
+            out.write_text(text.replace(old, new), "utf-8")
+            self.assertIn("figures-differ", self.codes(out), old)
+        out.write_text(text, "utf-8")
+        fp = out.parent / "fp.md"
+        fp.write_text(driver_file(4_995_000, FP_FLAGS), encoding="utf-8")
+        self.assertIn("figures-differ", self.codes(out))
+        fp.unlink()
+        self.assertIn("delta-unreadable", self.codes(out))
+
+    def test_every_frame_the_svg_draws_is_a_node_of_the_folded_stacks(self):
+        stacks = flame_report.parse_folded("main;a<b> 70\nmain;walk 20\nmain;a<b>;walk 10\n")
+        drawn = ("<title>all (100 samples, 100%)</title><title>main (100 samples, 100%)</title>"
+                 "<title>a&lt;b&gt; (80 samples, 80.00%)</title>"
+                 "<title>walk (20 samples, 20.00%)</title><title>walk (10 samples, 10.00%)</title>")
+        self.assertEqual(flame_report.svg_mismatches(drawn, stacks), [])
+        self.assertEqual(flame_report.svg_mismatches(drawn.replace("(80 samples", "(81 samples"),
+                                                     stacks), ["a<b> (81 samples)"])
+        self.assertEqual(flame_report.svg_mismatches(drawn + "<title>walk (20 samples, 20.00%)"
+                                                     "</title>", stacks), ["walk (20 samples)"])
+
+    def test_check_catches_a_private_name_in_the_folded_stacks(self):
+        code, out = self.render()
+        self.assertEqual(code, 0)
+        folded = out.with_suffix(".folded")
+        folded.write_text(folded.read_text(encoding="utf-8") + f"main;{PLANTED} 1\n", "utf-8")
+        os.environ["ITCH_PRIVATE_NAMES"] = PLANTED
+        self.assertIn("private-text", self.codes(out))
+
+    def test_the_summary_names_the_arm_the_two_builds_ran(self):
+        code, out = self.render()
+        self.assertEqual(code, 0)
+        self.assertIn("; the frame-pointer build at 0.9900 of the normal build's throughput, both "
+                      "measured on `paged-flat`", out.read_text(encoding="utf-8"))
+        fp = out.parent / "fp.md"
+        fp.write_text(fp.read_text(encoding="utf-8").replace("- design: paged-flat:",
+                                                             "- design: hash-flat:"), "utf-8")
+        self.assertIn("delta-unreadable", self.codes(out))
+        self.assertEqual(self.render()[0], 0)
+        fp.write_text(fp.read_text(encoding="utf-8").replace("- design: paged-flat:",
+                                                             "- design: hash-flat:"), "utf-8")
+        args = ["render", "--folded", str(self.root / "stacks.folded"), "--flamegraph",
+                str(self.stub), "--record", str(self.root / "run.json"), "--source", "perf",
+                "--workload", "replay", "--day", "12302019", "--command", "perf record -g",
+                "--prediction", "P-0018", "--notes", str(self.root / "notes.md"),
+                "--out", str(out), "--run-id", "P-0018-20261105T090000Z",
+                "--annotate", str(self.root / "annotate.txt"), "--annotate-symbol", "apply",
+                "--normal", str(out.parent / "normal.md"), "--frame-pointer", str(fp)]
+        self.assertEqual(flame_report.main(args), 2)
+
+    def test_check_says_ok_for_each_file_that_passes_after_one_that_fails(self):
+        code, out = self.render()
+        self.assertEqual(code, 0)
+        broken = out.with_name("flamegraph_y_debian_12302019.md")
+        broken.write_text(out.read_text(encoding="utf-8").replace("- samples: 100",
+                                                                  "- samples: 99"), "utf-8")
+        for suffix in (".svg", ".folded"):
+            broken.with_suffix(suffix).write_text(out.with_suffix(suffix).read_text("utf-8"),
+                                                  "utf-8")
+        printed = io.StringIO()
+        with contextlib.redirect_stdout(printed):
+            self.assertEqual(flame_report.run_check([broken, out]), 1)
+        self.assertIn(f"flame_report: ok {out.name}", printed.getvalue())
+        self.assertNotIn(f"flame_report: ok {broken.name}", printed.getvalue())
 
     def test_a_macos_profile_says_it_does_not_replace_perf(self):
         code, out = self.render(host="macOS (M4 Max)", flags="-O3 -DNDEBUG")

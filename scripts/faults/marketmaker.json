@@ -14,6 +14,7 @@
     "bench",
     "scripts",
     "results",
+    "BENCHMARKS.md",
     "README.md",
     "RESULTS.md"
   ],
