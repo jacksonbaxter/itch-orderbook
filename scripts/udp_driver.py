@@ -41,7 +41,8 @@ The steps:
   is that each mode delivers, not how fast. A reading that cannot be had is recorded as
   `unreadable: <why>`, never filled in, and no limit is changed.
 - ceiling: the sender alone, unpaced, --repetitions times (the comparison plan's task 2).
-  The manifest gets the median achieved messages/s and packets/s.
+  The manifest gets the median achieved messages/s and packets/s. A sender run that failed or
+  did not PASS refuses the step, with why in the run log, never left out of the median.
 - bisect: each mode's largest lossless message rate. A trial runs min(rate x
   --trial-seconds, --frames-cap) frames from --first. No trial runs above the cap, 0.9 x the
   sender's ceiling: a mode lossless at the cap is "at least the cap, sender limited". A trial
@@ -626,16 +627,30 @@ def step_smoke(run):
                              "loopback": smoke["loopback"]}
 
 
+def refuse_unpassed_sender(run, record, repetition):
+    """r5-14: the ceiling is the median of every sender run, so a run that failed or did not
+    PASS refuses the step, with why in the run log's row, and is never left out of it."""
+    if record is None:
+        entry = run.manifest["processes"][-1]
+        raise Refused("ceiling", f"sender run {repetition} ({entry['stem']}) failed: "
+                                 f"{entry['why']}; the ceiling is the median of every run, so "
+                                 "the step is refused, not taken from the rest")
+    if record.get("verdict") != "PASS":
+        stem = run.manifest["processes"][-1]["stem"]
+        raise Refused("ceiling", f"sender run {repetition} ({stem}) gave the verdict "
+                                 f"{record.get('verdict')!r}, not PASS; the ceiling is the "
+                                 "median of every run, so the step is refused, not taken from "
+                                 "the rest")
+
+
 def step_ceiling(run):
     args = run.args
     achieved, packets = [], []
     for repetition in range(1, args.repetitions + 1):
         record = run.timed("sender", "ceiling", slice_args(args, args.frames_cap), repetition)
-        if record is not None and record.get("verdict") == "PASS":
-            achieved.append(record["send"]["achieved_messages_per_s"])
-            packets.append(record["send"]["achieved_packets_per_s"])
-    if not achieved:
-        raise Refused("ceiling", "no sender run passed")
+        refuse_unpassed_sender(run, record, repetition)
+        achieved.append(record["send"]["achieved_messages_per_s"])
+        packets.append(record["send"]["achieved_packets_per_s"])
     run.manifest["ceiling"] = {"messages_per_s": ceiling_of(achieved),
                                "packets_per_s": ceiling_of(packets), "runs": len(achieved),
                                "source": f"run {run.run_id}, the median of {len(achieved)}"}

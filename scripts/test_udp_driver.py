@@ -57,6 +57,8 @@ if mode == os.environ.get("FAKE_BROKEN"):
     sys.exit(2)
 if mode == "sender":
     record = records.sender_record(float(os.environ.get("FAKE_CEILING", "3000000")))
+    if options["--out"].endswith(os.environ.get("FAKE_SENDER_FAIL", "none") + ".json"):
+        record["verdict"] = "FAIL"
 else:
     rate = int(options.get("--rate", "0"))
     ok = rate <= int(os.environ.get("FAKE_THRESHOLD", "1000000"))
@@ -500,6 +502,37 @@ class ProcessTest(unittest.TestCase):
             self.assertEqual(udp_driver.cap_of(3_100_000.4), 2_790_000)
             with self.assertRaises(udp_driver.Refused):
                 udp_driver.given_ceiling(arguments(folder, ceiling=None))
+
+    def test_a_sender_run_that_did_not_pass_refuses_the_ceiling_step(self):
+        """r5-14: never a median of the runs that passed; the step is refused, and the run
+        log's row says which run and why."""
+        with records.scratch() as folder:
+            folder = Path(folder)
+            self.stand_ins(folder)
+            (folder / "day.itch").write_bytes(b"a day")
+            argv = ["--step", "ceiling", "--prediction", "P-0901", "--raw-dir",
+                    str(folder / "raw"), "--input", str(folder / "day.itch"), "--dataset", "d",
+                    "--dataset-sha256", run_record.sha256_of(folder / "day.itch"), "--bench",
+                    str(folder / "bench_udp"), "--probe", str(folder / "bench_probe"),
+                    "--measure", str(folder / "measure.sh"), "--repetitions", "3",
+                    "--run-log", str(folder / "run_log.md"), "--allow-dirty"]
+            system, check = udp_driver.platform.system, simd_driver.machine_check
+            udp_driver.platform.system = lambda: "Linux"
+            simd_driver.machine_check = lambda args: "machine_check: passed"
+            try:
+                with Environment(FAKE_SENDER_FAIL="0002"):
+                    code = udp_driver.main(argv)
+            finally:
+                udp_driver.platform.system, simd_driver.machine_check = system, check
+            log = (folder / "run_log.md").read_text(encoding="utf-8")
+            manifest = json.loads(next((folder / "raw").glob("*/manifest.json")).read_text(
+                encoding="utf-8"))
+        self.assertEqual(code, 1)
+        self.assertIn("refused: udp ceiling: sender run 2 (ceiling-sender-0002) gave "
+                      "the verdict 'FAIL', not PASS; the ceiling is the median of every run, so "
+                      "the step is refused", log)
+        self.assertNotIn("ceiling", manifest)
+        self.assertEqual(len(manifest["processes"]), 2, "no run after the one that failed")
 
     def test_a_warning_heads_the_manifest_when_perf_is_closed(self):
         with records.scratch() as folder:
