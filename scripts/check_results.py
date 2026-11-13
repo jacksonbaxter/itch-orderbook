@@ -154,7 +154,10 @@ BOOK_BARS = {
                 "cell": "p50 ≤ {0}, p99 ≤ {1}, p99.9 ≤ {2} ns, raw",
                 "benchmarks": ("p50 ≤ {0} ns, p99 ≤ {1} ns, p99.9 ≤ {2} ns, with nothing "
                                "subtracted.",)},
+    # A run gives the ratio over each map design that ran beside the fast one, so the Measured
+    # cell may give either or both, in this order.
     "T-DESIGN-1": {"figures": (("over map-fresh", ">=", 4.0), ("over map-aged", ">=", 4.0)),
+                   "each that ran": True,
                    "cell": "≥ {0:.1f}× the map book's throughput, same run",
                    "benchmarks": ("≥ {0:.1f}× the throughput of a `std::map` plus "
                                   "`unordered_map` book",
@@ -883,7 +886,12 @@ def check_book_target(text, fields, cells):
         return
     parts = [BOOK_MEASURED.match(part) for part in measured_cell.split("; ")]
     names = [name for name, _, _ in figures]
-    if None in parts or [part[1] for part in parts] != names:
+    listed = None if None in parts else [part[1] for part in parts]
+    if spec.get("each that ran") and listed and len(set(listed)) == len(listed) and \
+            listed == [name for name in names if name in listed]:
+        figures = [figure for figure in figures if figure[0] in listed]
+        names = listed
+    if listed != names:
         yield "target-measured-malformed", f"{target}: {measured_cell!r} does not give {names}"
         return
     status = {}

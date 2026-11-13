@@ -306,6 +306,23 @@ class BookResults(unittest.TestCase):
             self.assertIn("target-verdict-wrong", codes(target_verdict(BOOK, target, verdict)),
                           (target, verdict))
 
+    def test_the_design_ratio_is_given_over_each_map_design_that_ran(self):
+        row = ("| over map-fresh 1.27×; over map-aged 0.72× | missed: over map-fresh by 2.73×, "
+               "over map-aged by 3.28× |")
+        self.assertIn(row, BOOK)
+        for kept in ("| over map-fresh 1.27× | missed: over map-fresh by 2.73× |",
+                     "| over map-aged 0.72× | missed: over map-aged by 3.28× |"):
+            self.assertEqual(codes(replace(BOOK, row, kept)), set(), kept)
+        for wrong in ("| over map-aged 0.72×; over map-fresh 1.27× | missed: over map-aged by "
+                      "3.28×, over map-fresh by 2.73× |",
+                      "| over map-fresh 1.27×; over map-fresh 1.27× | missed: over map-fresh by "
+                      "2.73×, over map-fresh by 2.73× |"):
+            self.assertIn("target-measured-malformed", codes(replace(BOOK, row, wrong)), wrong)
+
+    def test_every_figure_of_another_target_must_be_given(self):
+        broken = replace(BOOK, "| mean 46.85 ns; p99.9 below floor |", "| mean 46.85 ns |")
+        self.assertIn("target-measured-malformed", codes(broken))
+
     def test_a_gap_that_is_not_the_figure_s_distance_from_its_bar(self):
         broken = target_verdict(BOOK, "T-DESIGN-1",
                                 "missed: over map-fresh by 2.73×, over map-aged by 3.38×")

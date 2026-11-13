@@ -4700,6 +4700,46 @@
         "signature": "FAIL: test_no_git_says_the_history_was_not_checked",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-design-ratio-each-map-required",
+      "breaks": "T-DESIGN-1's Measured cell must give the ratio over both map designs, so a run beside one map design is refused",
+      "check": "test_bench_results.py, the ratio over each map design that ran",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "                   \"each that ran\": True,\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_design_ratio_is_given_over_each_map_design_that_ran \\("
+      }
+    },
+    {
+      "id": "bench-design-ratio-any-order",
+      "breaks": "T-DESIGN-1's ratios may be given in any order or twice",
+      "check": "test_bench_results.py, the ratio over each map design that ran",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if spec.get(\"each that ran\") and listed and len(set(listed)) == len(listed) and \\\n            listed == [name for name in names if name in listed]:\n",
+          "new": "    if spec.get(\"each that ran\") and listed:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_design_ratio_is_given_over_each_map_design_that_ran \\("
+      }
     }
   ]
 }
