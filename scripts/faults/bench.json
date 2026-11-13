@@ -4600,6 +4600,112 @@
         "signature": "FAIL: test_a_file_that_fails_its_own_check_is_not_written",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-chase-header-unchecked",
+      "breaks": "Runs whose headers differ are rendered under the first run's",
+      "check": "test_chase_report.py",
+      "mutations": [
+        {
+          "file": "scripts/chase_report.py",
+          "old": "        if len(values) != 1:\n            raise ValueError(f\"the records differ in {field}",
+          "new": "        if False:\n            raise ValueError(f\"the records differ in {field}"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_chase_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_runs_that_differ_in_their_header_are_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-record-other-commit",
+      "breaks": "One run of three was built at another commit",
+      "check": "chase_report.py header equality",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/run-2.json",
+          "op": "json_set",
+          "path": [
+            "header",
+            "commit"
+          ],
+          "value": "fedcba987654 (exported by debian_sync.sh)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--record",
+        "{tree}/tests/fixtures/chase/run-1.json",
+        "{tree}/tests/fixtures/chase/run-2.json",
+        "{tree}/tests/fixtures/chase/run-3.json",
+        "--load",
+        "{tree}/tests/fixtures/chase/run-1.err",
+        "{tree}/tests/fixtures/chase/run-2.err",
+        "{tree}/tests/fixtures/chase/run-3.err",
+        "--machine-check",
+        "{tree}/tests/fixtures/chase/check-1.out",
+        "{tree}/tests/fixtures/chase/check-2.out",
+        "{tree}/tests/fixtures/chase/check-3.out",
+        "--sysfs",
+        "{tree}/tests/fixtures/chase/sysfs_events.txt",
+        "--prediction",
+        "P-0002",
+        "--out",
+        "{tree}/tests/fixtures/chase/generated.md"
+      ],
+      "expect": {
+        "signature": "the records differ in commit",
+        "exit": 2
+      }
+    },
+    {
+      "id": "bench-counts-header-unchecked",
+      "breaks": "Count records whose headers differ are rendered under the first record's",
+      "check": "test_counts_report.py",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if len(values) != 1:\n            raise ReportError(f\"the records differ in {field}",
+          "new": "        if False:\n            raise ReportError(f\"the records differ in {field}"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_records_that_differ_in_their_header_are_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-plain-header-unchecked",
+      "breaks": "A record counted by type alone from another build sits beside the type-age records",
+      "check": "test_counts_report.py",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    same_header(records + list(plain or []))",
+          "new": "    same_header(records)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_records_that_differ_in_their_header_are_refused \\(__main__\\.CountsByAge",
+        "exit": 1
+      }
     }
   ]
 }

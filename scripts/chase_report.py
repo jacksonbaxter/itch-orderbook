@@ -15,8 +15,10 @@ last-level number is published.
 say more than the table under it. Given the raw records as well, it rebuilds the file and
 compares the two, so that a table cannot say more than the run.
 
-Each run's machine check must end `machine_check: passed` and hold no `FAIL`, or the run is
-refused; --check asks the same of the file, one passing check for each run.
+The header is the first run's, and every run must give the same host, CPU, kernel,
+compiler, flags, commit and dataset, or the runs are refused. Each run's machine check must
+end `machine_check: passed` and hold no `FAIL`, or the run is refused; --check asks the same
+of the file, one passing check for each run.
 
 Each violation prints as `chase_report: FAIL <code>: <detail>`.
 
@@ -55,6 +57,9 @@ FILLS_ABOVE_L3 = (0.90, 1.10)
 MISSES_BETWEEN = (0.70, 1.30)
 MARGIN_MIN = 0.50
 GAP_MAX = 0.001
+# What every run's header must give alike, as the other reports hold their records to.
+SAME_FIELDS = ("host", "cpu", "kernel", "compiler", "flags", "commit", "dataset",
+               "dataset_sha256")
 TABLE_ROW = re.compile(r"^\| (\d+ [KM]B) \| (.+) \|$")
 SYSFS_LINE = re.compile(r"^cache-misses: (\S+)$", re.MULTILINE)
 VERDICT = re.compile(r"^\*\*Verdict: (PASS|FAIL)\*\*", re.MULTILINE)
@@ -255,6 +260,10 @@ def render(records, stderrs, machine_checks, sysfs_text, prediction):
         failure = machine_check_failure(text)
         if failure is not None:
             raise ValueError(f"run {run}'s machine check did not pass: {failure}")
+    for field in SAME_FIELDS:
+        values = {record["header"][field] for record in records}
+        if len(values) != 1:
+            raise ValueError(f"the records differ in {field}: {sorted(values)}")
     summary = summarise(records)
     sysfs = read_sysfs(sysfs_text)
     raw_event = records[0]["raw_event"]

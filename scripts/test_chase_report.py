@@ -164,6 +164,13 @@ class Verdict(unittest.TestCase):
     def test_the_machine_hostname_never_reaches_the_file(self):
         self.assertNotIn("some-machine", build()[0])
 
+    def test_runs_that_differ_in_their_header_are_refused(self):
+        for field in chase_report.SAME_FIELDS:
+            records = copy.deepcopy(RECORDS)
+            records[1]["header"][field] = "something else"
+            with self.assertRaisesRegex(ValueError, f"the records differ in {field}:"):
+                build(records)
+
     def test_a_failed_machine_check_refuses_the_run(self):
         for broken in ("machine_check: record host: debian\n"
                        "machine_check: FAIL governor: core 4 runs schedutil\n"

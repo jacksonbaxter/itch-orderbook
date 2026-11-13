@@ -50,8 +50,10 @@ def record(scale=1):
     spans = 1000
     return {
         "header": {"host": "debian", "cpu": "AMD Ryzen Embedded V1605B with Radeon Vega Gfx",
+                   "kernel": "Linux 6.12.116+deb13-amd64", "compiler": "Clang 23.1.4",
+                   "flags": "-O3 -DNDEBUG -std=c++23",
                    "commit": "0123456789ab (exported by debian_sync.sh)",
-                   "dataset": "12302019.NASDAQ_ITCH50",
+                   "dataset": "12302019.NASDAQ_ITCH50", "dataset_sha256": "5d81c2e1" * 8,
                    "pinning": "pinned to core 4: pthread_setaffinity_np returned 0, read back [4]",
                    "governor": "performance",
                    "design": "paged-flat: FastBook, 4194304 orders and 2097152 levels"},
@@ -130,6 +132,17 @@ class CountsByAge(unittest.TestCase):
         bad["age_frames"] -= 1
         with self.assertRaises(counts_report.ReportError):
             self.render([bad])
+
+    def test_records_that_differ_in_their_header_are_refused(self):
+        for field in counts_report.SAME_FIELDS:
+            other, plain = age_record(), record()
+            other["header"][field] = plain["header"][field] = "something else"
+            with self.assertRaisesRegex(counts_report.ReportError,
+                                        f"the records differ in {field}:"):
+                self.render([age_record(), other])
+            with self.assertRaisesRegex(counts_report.ReportError,
+                                        f"the records differ in {field}:"):
+                self.render([age_record(), age_record()], [plain])
 
     def test_a_plain_record_among_the_aged_is_refused(self):
         with self.assertRaises(counts_report.ReportError):
@@ -245,6 +258,14 @@ class CountsReport(unittest.TestCase):
         text = self.render([record()])
         self.assertIn("| `A` | Add Order | 400 | 700.0000 | n/a, one process "
                       "| n/a, one process | 180.0000 | 520.0000 |", text)
+
+    def test_records_that_differ_in_their_header_are_refused(self):
+        for field in counts_report.SAME_FIELDS:
+            other = record()
+            other["header"][field] = "something else"
+            with self.assertRaisesRegex(counts_report.ReportError,
+                                        f"the records differ in {field}:"):
+                self.render([record(), other, record()])
 
     def test_spans_that_do_not_add_up_to_the_whole_pass_are_refused(self):
         broken = record()

@@ -20,6 +20,9 @@ says when each began against the run, and says so when the check after was not t
 P-0019 and P-0025 planned three processes a count. A file from fewer gives its count beside
 its figures and its summary, and one from a single process gives no min, max or median.
 
+The header is the first record's, and every record, by type alone too, must give the same
+host, CPU, kernel, compiler, flags, commit and dataset, or the records are refused.
+
 Each record is one fresh process. Its spans tile the pass, so by type they add up to the
 whole pass by rdpmc exactly. That is checked here in every record, again on the totals the
 file publishes, and a record where it does not hold is refused. The cost of counting, from
@@ -81,6 +84,9 @@ ONE = "n/a, one process"
 # A machine check that began more than this many seconds before the first repetition or after
 # the last one ended is not a check of the host as the run began or ended, and the file says so.
 CHECK_GAP = 300
+# What every record's header must give alike, as the other reports hold their records to.
+SAME_FIELDS = ("host", "cpu", "kernel", "compiler", "flags", "commit", "dataset",
+               "dataset_sha256")
 SOURCE = {"A": 1.16, "D": 0.58, "E": 0.79, "U": 2.30, "book": 0.983}
 VERDICT = re.compile(r"^- (T-PERF-[12]), .*?: \*\*(PASS|FAIL)\*\*\. Measured ([0-9.]+) raw",
                      re.MULTILINE)
@@ -292,12 +298,22 @@ def design_of(record):
     return record["header"]["design"].split(":", 1)[0]
 
 
+def same_header(records):
+    """The header is the first record's, so every record must give the same host, build and
+    day. ReportError if any differs."""
+    for field in SAME_FIELDS:
+        values = {record["header"][field] for record in records}
+        if len(values) != 1:
+            raise ReportError(f"the records differ in {field}: {sorted(values)}")
+
+
 def render(records, stderrs, machine_checks, prediction):
     summaries = [summarise_one(record) for record in records]
     designs = {design_of(record) for record in records}
     if len(designs) != 1:
         raise ReportError(f"the records are of more than one design: {sorted(designs)}")
     design = designs.pop()
+    same_header(records)
     lines = [load_lines(text) for text in stderrs]
     run_id = f"{prediction}-" + timestamp(lines[0][0]).replace(":", "").replace("-", "")
     header = records[0]["header"]
@@ -577,6 +593,7 @@ def render_ages(records, stderrs, machine_checks, prediction, plain=None, plain_
     if any(s["by_age"] for s in plain_summaries):
         raise ReportError("a type-age record given as counted by type alone")
     design = designs.pop()
+    same_header(records + list(plain or []))
     lines = [load_lines(text) for text in stderrs]
     plain_lines = [load_lines(text) for text in plain_stderrs]
     run_id = f"{prediction}-" + timestamp(lines[0][0]).replace(":", "").replace("-", "")
