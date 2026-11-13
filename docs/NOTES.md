@@ -1232,6 +1232,18 @@ T-INV-2 strict, crossed and locked observations, then those with the market open
 
 **At the merge into `jb-build`, 2026-11-10.** `results/oracle_sessions.md` now names P-0501, and `check_predictions.py` holds it to that prediction's history: committed before the file and never edited. It is a sum of other results files and no run, so it needs no run-log row. Each day's `oracle_*.md` and `trades_*.md` still names no prediction: 12302019's and 10302019's were written before predictions were kept, and none of them is a driver's run.
 
+**Against P-0501** (added 2026-11-13, from the final review). Missed on four parts: the message types (`N` on BX), the trade checks (T-TRADE-3 and T-TRADE-5), and BX's time and memory. Held on the rest. Each part against the raw logs of the eight new sessions and the results files as these runs first wrote them:
+
+- The fetch: held. Each pinned SHA-256 equals the one `scripts/data_manifest.json` records from carteret: both hashes on the six Nasdaq days it covers, the unpacked one on BX, and none for 01302020, where carteret gives none. Every census count equals the predicted one, from 82,841,542 to 423,285,709. That every `.md5sum` file still answered 404 is not compared: no response was kept, only the sentence above.
+- T-ORACLE-1: held. PASS on every session, 0 divergences, every message diffed; 3,081,392,329 messages over the ten sessions, 44,313,859 over the bar.
+- T-INV-1, T-INV-3, T-ALLOC-1 and the census: held. 0 violations, 0 unknown references, 0 fast-book allocations, and every census exact against the manifest.
+- The message types: missed. BX carried 8,301,264 `N`, a type neither reference day has. Otherwise as predicted: `B` (01302019 and BX) and `K` (four Nasdaq days), and no `h` or `O` on any day.
+- T-INV-2 strict: held. FAIL on each of the seven Nasdaq days, with 1,328 to 20,071 crossed observations against the 500 to 40,000 predicted. With the market open and the symbol in `T`, 20 to 790 crossed a day, inside 0 to 1,000, and every crossed observation in `T` came within 50 ms of a resumption. Every other one had the symbol out of `T` or the market not open. BX passed strict, 0 crossed and 0 locked.
+- The trade checks: missed. T-TRADE-3 failed on four Nasdaq days (03272019, 05302019, 08302019, 01302020) and T-TRADE-5 on two (03272019, 05302019), for the reasons in "What the new days showed" above. T-TRADE-1, PRINTS and T-TRADE-2 passed on every Nasdaq day. BX went as predicted: T-TRADE-1, T-TRADE-5 and PRINTS passed, T-TRADE-3 passed against MIDAS's `Boston` rows, and T-TRADE-2 was not available.
+- The map check: held, both heaps on every session.
+- Time, compared as wall time only, since these files' times are not measurements (the Mac was shared). The six Nasdaq days whose oracle was never stopped replayed in 374.6 to 625.5 s, 1.18 to 1.48 µs a message: held, inside 0.9 to 1.6 µs and 6 to 11 minutes. 01302020 is not compared: its oracle was stopped for 49 minutes, and its replay time includes the pause. BX: 28.7 s for 82,841,542 messages, 0.35 µs a message, under the band: missed.
+- Memory: the oracle's maximum RSS less the mapped file was 1.57 to 1.59 GiB on the seven Nasdaq days, inside 1.5 to 2.6 GiB: held. 01302020's counts, since `/usr/bin/time` reads the maximum RSS from `wait4` at exit, after the pause. BX: 1.36 GiB, under the band: missed.
+
 ## T-TRADE-2 on 10302019, 2026-11-10
 
 P-0503. `CrossStats20191030.txt` was pinned with P-0501's files and no check had read it, so 10302019's T-TRADE-2 stood as not available. It now ran: `scripts/check_real_day.sh --only trades --arms all 10302019` on `macOS (M4 Max)`, each `itch_trades` under `heavy.sh` and `/usr/bin/time -l`, the file checked against its pin by `fetch_data.py --verify-only` first.
