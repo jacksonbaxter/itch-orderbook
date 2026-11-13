@@ -308,6 +308,25 @@
       }
     },
     {
+      "id": "harness-fetch-fatal-error-keeps-workers-going",
+      "breaks": "fetch_data.py raises an error that is not a rejected chunk without stopping the other workers, which fetch every chunk left first",
+      "check": "test_fetch_data.py test_an_error_that_is_not_a_rejected_chunk_stops_every_worker",
+      "mutations": [
+        {
+          "file": "scripts/fetch_data.py",
+          "old": "                # workers stop before their next chunk, and it is raised as it came.\n                stop.set()\n                raise\n",
+          "new": "                # workers stop before their next chunk, and it is raised as it came.\n                raise\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/test_fetch_data.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_error_that_is_not_a_rejected_chunk_stops_every_worker"
+      }
+    },
+    {
       "id": "harness-skip-failure-hidden",
       "breaks": "a binary that failed with a test skipped beside the failure exits 77, so ctest shows the failure as Skipped (r4-3)",
       "check": "test_skips_cli.py",

@@ -75,8 +75,8 @@ struct ModeCounters {
   std::uint64_t timeouts = 0;
   std::uint64_t failures = 0;
   int last_error = 0;
-  // Filled by the Linux modes. MSG_TRUNC on a datagram (S2, S3, S4, U3), or a datagram
-  // that filled its whole buffer where the call cannot say (U1, U2, U4, U5); the
+  // Filled by the Linux modes. MSG_TRUNC on a datagram (S2, S3, S4, U3), or a datagram that
+  // filled its whole slot where the call cannot say (U2, U4, U5; U1's 64 KiB buffer cannot); the
   // multishot re-arms after a CQE without IORING_CQE_F_MORE; -ENOBUFS completions; and
   // the ring's CQ overflow count (IU-30, IU-43).
   std::uint64_t truncated = 0;

@@ -157,6 +157,19 @@ def main():
         code = subprocess.run([tool, *args], capture_output=True, check=False).returncode
         if code != 2:
             failures.append(f"usage {name}: exit {code}, wanted 2")
+    # A capacity of 0 or past 32 bits is bad usage, on every index: 0 orders gave the hash
+    # indexes one slot and a shift of 64, and 2^32 wrapped to 0. 1 is a capacity.
+    for flag, value in (("--max-orders", "0"), ("--max-orders", "4294967296"),
+                        ("--max-levels", "0"), ("--max-levels", "4294967297")):
+        for book in ([], ["--index", "hash"], ["--allocator", "pool-index"]):
+            code = subprocess.run([tool, str(session), *book, flag, value], capture_output=True,
+                                  check=False).returncode
+            if code != 2:
+                failures.append(f"capacity {flag} {value} {' '.join(book)}: exit {code}, "
+                                "wanted 2")
+    code = run(session, "--index", "hash", "--max-orders", "1", "--max-levels", "1").returncode
+    if code != 1:
+        failures.append(f"capacity of 1: exit {code}, wanted 1, the books refusing alike")
 
     # A pool whose pages were refused has no room, so the books part at the first add. Apple
     # silicon refuses every superpage (LC-57), so there an explicit request always is.

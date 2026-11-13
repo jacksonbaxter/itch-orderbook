@@ -1,0 +1,565 @@
+{
+  "area": "load",
+  "faults": [
+    {
+      "id": "load-judge-half-covered",
+      "breaks": "The judge takes a sample up to a gap after the span's start as covering it",
+      "check": "test_linux_sampler.py test_a_span_the_sampler_did_not_cover",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "    before = [moment for moment, _ in samples if moment <= begin]\n",
+          "new": "    before = [moment for moment, _ in samples\n              if moment <= begin + datetime.timedelta(seconds=LONGEST_GAP_S)]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_span_the_sampler_did_not_cover"
+      }
+    },
+    {
+      "id": "load-judge-gap-doubled",
+      "breaks": "The judge lets the sampler go twice the rule's 2.5 s without a sample",
+      "check": "test_linux_sampler.py test_a_gap",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "        if gap > LONGEST_GAP_S:\n            return f\"the sampler went",
+          "new": "        if gap > 2 * LONGEST_GAP_S:\n            return f\"the sampler went"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_gap"
+      }
+    },
+    {
+      "id": "load-judge-failed-sample-ignored",
+      "breaks": "The judge does not see a sample that failed inside the span",
+      "check": "test_linux_sampler.py test_a_failed_sample",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "        if len(words) > 1 and words[1] == \"failed\" and low < at(words[0]) <= high:\n",
+          "new": "        if len(words) > 1 and words[1] == \"fail\" and low < at(words[0]) <= high:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_failed_sample"
+      }
+    },
+    {
+      "id": "load-judge-core-wait-bar",
+      "breaks": "The measured core's run-queue wait is held to the sibling's 5% instead of 1%",
+      "check": "test_linux_sampler.py test_each_bar",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "                (\"wait\", CORE_WAIT_PCT, \"the measured core:",
+          "new": "                (\"wait\", SIBLING_PCT, \"the measured core:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_bar"
+      }
+    },
+    {
+      "id": "load-judge-sibling-bar",
+      "breaks": "The SMT sibling is held to the other cores' 20% instead of 5%",
+      "check": "test_linux_sampler.py test_each_bar",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "                (\"sibling\", SIBLING_PCT, \"the core's SMT sibling:",
+          "new": "                (\"sibling\", OTHERS_PCT, \"the core's SMT sibling:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_bar"
+      }
+    },
+    {
+      "id": "load-judge-others-bar",
+      "breaks": "The other cores together are allowed a point over 20% of a CPU",
+      "check": "test_linux_sampler.py test_each_bar",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "                (\"others\", OTHERS_PCT, \"the other cores:",
+          "new": "                (\"others\", OTHERS_PCT + 1, \"the other cores:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_bar"
+      }
+    },
+    {
+      "id": "load-judge-second-before-span",
+      "breaks": "The judge also holds the second that closes at the span's start, before the process ran",
+      "check": "test_linux_sampler.py test_the_seconds_either_side",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "    for moment, values in span[1:]:\n        for where, bar, what in (\n",
+          "new": "    for moment, values in span:\n        for where, bar, what in (\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_seconds_either_side"
+      }
+    },
+    {
+      "id": "load-judge-pid-unlooked",
+      "breaks": "The judge never checks that the sampler saw the measured process",
+      "check": "test_linux_sampler.py test_the_measured_process_unseen",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "    if pid is not None:\n        within = ",
+          "new": "    if pid is None:\n        within = "
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_measured_process_unseen"
+      }
+    },
+    {
+      "id": "load-reason-names-the-program",
+      "breaks": "A withdrawal's reason carries the other process's name, not only its kind",
+      "check": "test_linux_sampler.py test_each_bar",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "            return words[4].split(\":\", 1)[0]\n",
+          "new": "            return words[4]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_bar"
+      }
+    },
+    {
+      "id": "load-summary-bar-doubled",
+      "breaks": "check_results' reading of a Sampler summary allows twice each bar",
+      "check": "test_linux_sampler.py test_the_summary_and_its_check",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "        if value > bar:\n            return f\"{what}, {value:g}, is over the rule's {bar:g}\"\n",
+          "new": "        if value > 2 * bar:\n            return f\"{what}, {value:g}, is over the rule's {bar:g}\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_summary_and_its_check"
+      }
+    },
+    {
+      "id": "load-sampler-wait-wrong-field",
+      "breaks": "The sampler reads schedstat's run time, not its run-queue wait",
+      "check": "test_linux_sampler.py test_the_wait_of_the_measured_tree",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "            delays[int(tid)] = int(fields[1])\n",
+          "new": "            delays[int(tid)] = int(fields[0])\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_wait_of_the_measured_tree"
+      }
+    },
+    {
+      "id": "load-sampler-own-time-counted",
+      "breaks": "The sampler counts its own time on the other cores as other work",
+      "check": "test_linux_sampler.py test_a_quiet_second",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "        others = sum(max(0.0, value - own_on.get(cpu, 0.0)) for cpu, value in busy.items()\n",
+          "new": "        others = sum(max(0.0, value) for cpu, value in busy.items()\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_quiet_second"
+      }
+    },
+    {
+      "id": "load-kind-no-uid",
+      "breaks": "A process of another user is not told apart as a system service",
+      "check": "test_linux_sampler.py test_the_kinds",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "    if uid_of(proc, pid) != uid:\n        return SERVICE\n",
+          "new": "    if uid_of(proc, pid) is None:\n        return SERVICE\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_kinds"
+      }
+    },
+    {
+      "id": "load-kind-no-kernel-thread",
+      "breaks": "A kernel thread is not told apart from user work",
+      "check": "test_linux_sampler.py test_the_kinds",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "    if flags & PF_KTHREAD:\n        return KERNEL\n",
+          "new": "    if flags & 0x40:\n        return KERNEL\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_kinds"
+      }
+    },
+    {
+      "id": "load-check-rule-missing",
+      "breaks": "check_results passes a debian file from the rule's moment on that has no load_rule",
+      "check": "test_linux_sampler.py test_a_file_from_the_rule_on_with_no_sampler",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if fields.get(\"measure_load_start\") != PENDING:\n            yield \"load-rule-missing\"",
+          "new": "        if fields.get(\"measure_load_start\") == PENDING:\n            yield \"load-rule-missing\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_from_the_rule_on_with_no_sampler"
+      }
+    },
+    {
+      "id": "load-check-row-bars-unread",
+      "breaks": "check_results does not hold each published process's Sampler row to the bars",
+      "check": "test_linux_sampler.py test_a_published_process_over_a_bar",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if why:\n            yield \"load-rule-not-quiet\", f\"repetition {index}: {why}\"\n",
+          "new": "        if why and False:\n            yield \"load-rule-not-quiet\", f\"repetition {index}: {why}\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_published_process_over_a_bar"
+      }
+    },
+    {
+      "id": "load-check-row-missing",
+      "breaks": "check_results passes a repetition with no Sampler row",
+      "check": "test_linux_sampler.py test_a_repetition_with_no_sampler_row",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if cells is None or len(cells) != 4:\n            yield \"load-rule-not-quiet\", f\"repetition {index} has no quiet span in the Sampler\"\n            continue\n",
+          "new": "        if cells is None or len(cells) != 4:\n            continue\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_repetition_with_no_sampler_row"
+      }
+    },
+    {
+      "id": "load-check-withdrawn-count",
+      "breaks": "check_results passes a load_rule whose withdrawn count is not the Sampler's",
+      "check": "test_linux_sampler.py test_the_withdrawn_count_is_the_sections",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if len(withdrawn) != int(match.group(1)):\n",
+          "new": "    if len(withdrawn) < int(match.group(1)):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_withdrawn_count_is_the_sections"
+      }
+    },
+    {
+      "id": "load-stamp-no-sampler",
+      "breaks": "stamp_load stamps a debian run from the rule's moment on that had no sampler",
+      "check": "test_linux_sampler.py test_the_stamp_refuses_a_debian_run_without_its_sampler",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    elif check_results.needs_linux_rule(fields) and \"load_rule\" not in fields:\n",
+          "new": "    elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_stamp_refuses_a_debian_run_without_its_sampler"
+      }
+    },
+    {
+      "id": "load-stamp-verdict-ignored",
+      "breaks": "stamp_load stamps a run whose sampler log the judge refuses",
+      "check": "test_linux_sampler.py test_the_stamp_refuses_a_debian_run_without_its_sampler",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    if why is not None:\n        raise ValueError(f\"the Linux sampler rule refuses the run: {why}\")\n",
+          "new": "    if why is not None and False:\n        raise ValueError(f\"the Linux sampler rule refuses the run: {why}\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_stamp_refuses_a_debian_run_without_its_sampler"
+      }
+    },
+    {
+      "id": "load-driver-verdict-ignored",
+      "breaks": "The driver publishes a process the judge refused",
+      "check": "test_linux_sampler.py test_a_busy_process_is_withdrawn_and_run_again",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "        if why is None:\n            sampled[\"published\"]",
+          "new": "        if True:\n            sampled[\"published\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_busy_process_is_withdrawn_and_run_again"
+      }
+    },
+    {
+      "id": "load-driver-files-kept",
+      "breaks": "The driver leaves a withdrawn process's raw files where the published ones go",
+      "check": "test_linux_sampler.py test_a_busy_process_is_withdrawn_and_run_again",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "        if path.is_file():\n            path.rename(",
+          "new": "        if path.is_file() and False:\n            path.rename("
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_busy_process_is_withdrawn_and_run_again"
+      }
+    },
+    {
+      "id": "load-driver-in-a-row",
+      "breaks": "The driver tries a fourth time after three withdrawals in a row",
+      "check": "test_linux_sampler.py test_three_in_a_row_give_the_host_back",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "        if in_a_row >= args.most_in_a_row:\n",
+          "new": "        if in_a_row > args.most_in_a_row:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_three_in_a_row_give_the_host_back"
+      }
+    },
+    {
+      "id": "load-driver-withdrawn-in-all",
+      "breaks": "The driver does not stop at the most withdrawals in all",
+      "check": "test_linux_sampler.py test_too_many_withdrawn_in_all",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    if count > args.most_withdrawn:\n",
+          "new": "    if count > args.most_withdrawn + 1:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_too_many_withdrawn_in_all"
+      }
+    },
+    {
+      "id": "load-driver-no-quiet-wait",
+      "breaks": "The driver starts a process without waiting for quiet seconds",
+      "check": "test_linux_sampler.py test_a_host_that_never_quiets",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    while not watch.quiet_for(args.quiet_before):\n",
+          "new": "    while False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_host_that_never_quiets"
+      }
+    },
+    {
+      "id": "load-check-host-reason-unchecked",
+      "breaks": "check_results passes a debian T-BT-3 miss with no host reason (B6)",
+      "check": "test_linux_sampler.py test_a_miss_off_the_mac_gives_the_host",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    elif not x86 and fields.get(\"host\") != MAC_HOST and verdict.startswith(\"missed: \") and \\\n",
+          "new": "    elif False and not x86 and fields.get(\"host\") != MAC_HOST and verdict.startswith(\"missed: \") and \\\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_miss_off_the_mac_gives_the_host"
+      }
+    },
+    {
+      "id": "load-driver-host-reason-dropped",
+      "breaks": "The driver renders a debian T-BT-3 miss without its host reason",
+      "check": "test_linux_sampler.py test_a_miss_off_the_mac_gives_the_host",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    if reason:\n        lines += [\"\", reason]\n",
+          "new": "    if False:\n        lines += [\"\", reason]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_miss_off_the_mac_gives_the_host"
+      }
+    },
+    {
+      "id": "load-render-again-span-unjudged",
+      "breaks": "backtest_driver.py render keeps a published span that the raw sampler log no longer passes or summarises the same",
+      "check": "test_linux_sampler.py test_a_span_the_log_does_not_give",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "        if why is not None or again != printed:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_span_the_log_does_not_give"
+      }
+    }
+  ]
+}

@@ -952,6 +952,122 @@
       }
     },
     {
+      "id": "backtester-backtest-cut-file-passes",
+      "breaks": "itch_backtest replays a file cut mid-frame as a whole day: no framing check",
+      "check": "test_backtest_cli, cut",
+      "mutations": [
+        {
+          "file": "tools/itch_backtest.cpp",
+          "old": "  if (!itch::tools::framing_ends_cleanly(\"itch_backtest\", file->bytes())) {\n    return 1;\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_backtest"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_backtest_cli.py",
+        "{build}/tools/itch_backtest",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "backtest cli: FAIL cut: exit",
+        "exit": 1
+      }
+    },
+    {
+      "id": "backtester-queue-jumps-cut-file-passes",
+      "breaks": "itch_queue_jumps replays a file cut mid-frame as a whole day: no framing check",
+      "check": "test_queue_jumps_cli, cut",
+      "mutations": [
+        {
+          "file": "tools/itch_queue_jumps.cpp",
+          "old": "  if (!itch::tools::framing_ends_cleanly(\"itch_queue_jumps\", file->bytes())) {\n    return 1;\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_queue_jumps"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_queue_jumps_cli.py",
+        "{build}/tools/itch_queue_jumps",
+        "{build}/queue_jumps_fault"
+      ],
+      "expect": {
+        "signature": "queue jumps cli: FAIL cut: exit",
+        "exit": 1
+      }
+    },
+    {
+      "id": "backtester-framing-any-end-is-clean",
+      "breaks": "the tools' framing check takes any terminal status for the end of the input",
+      "check": "test_backtest_cli, cut",
+      "mutations": [
+        {
+          "file": "tools/framing.hpp",
+          "old": "  if (framing.end == FrameStatus::end_of_input) {\n",
+          "new": "  if (is_terminal(framing.end)) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_backtest"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_backtest_cli.py",
+        "{build}/tools/itch_backtest",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "backtest cli: FAIL cut: exit",
+        "exit": 1
+      }
+    },
+    {
+      "id": "backtester-framing-unknown-frames-not-counted",
+      "breaks": "the tools' framing message counts no frame of an unknown type among those skipped",
+      "check": "test_queue_jumps_cli, cut",
+      "mutations": [
+        {
+          "file": "tools/framing.hpp",
+          "old": "          .unknown_type = counters.unknown_type,\n",
+          "new": "          .unknown_type = 0,\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_queue_jumps"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_queue_jumps_cli.py",
+        "{build}/tools/itch_queue_jumps",
+        "{build}/queue_jumps_fault"
+      ],
+      "expect": {
+        "signature": "queue jumps cli: FAIL cut: exit 1: .*skipped frames 0 \\(unknown_type 0",
+        "exit": 1
+      }
+    },
+    {
       "id": "backtester-fees-dollar-boundary-strict",
       "breaks": "A fill at exactly $1.0000 is priced as under $1, so a maker there loses its per-share credit (r9-1)",
       "check": "test_fees S38AMakerAtExactlyOneDollarEarnsTheCredit",
