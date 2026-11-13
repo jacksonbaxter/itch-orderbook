@@ -49,8 +49,10 @@ and from measure.sh's stderr (DIR/stderr.txt unless --stderr names it), from whi
 lines are stamped. What the run printed only into the file, its command, its run id and
 times, the machine check's output and the swap line, is taken from FILE. Nothing is run. The
 result passes check_results.py or is not written. REASON adds a line saying the file was
-rendered again from the run's own raw records, and why. A file with a Sampler section is
-refused: its sampler's verdicts are not in the records alone.
+rendered again from the run's own raw records, and why. A file with a Sampler section needs
+the run's sampler.txt in DIR: each published process's span is judged again from it and must
+give the summary the file printed. --context FILE adds a section, with its own heading,
+before the machine check: what the run is weighed against.
 
 Exit codes: 0 results written, 1 refused or failed, 2 bad usage, 128 + N stopped by
 signal N.
@@ -86,6 +88,11 @@ MOST_WITHDRAWN = 20
 QUIET_BEFORE_S = 10
 QUIET_WAIT_S = 600
 last_pid = None  # The last bench_backtest process's, for the sampler's judge.
+# What each Linux host is, for a miss against a bar set on another host (BENCHMARKS.md, Hosts).
+HOST_REASONS = {
+    "debian": ("an AMD Ryzen Embedded V1605B, a Zen 1 part at a 2.0 GHz base clock with 4 MB of L3 "
+               "shared by its four cores and memory at 2400 MT/s"),
+}
 # Counts that every repetition must give exactly: the same day through the same engine.
 AGREED = ("messages", "deliveries", "arrivals", "decisions", "reports", "wakes", "fills",
           "filled_shares", "maker_fills", "taker_fills", "crossing_fills", "queue_anomalies",
@@ -360,6 +367,23 @@ def target_rows(records):
             f"{verdict(workload, host, median)} |"]
 
 
+def host_reason(records):
+    """T-BT-3's bar was set on an Apple M1 Pro, so a miss on any other host says what that
+    host is beside it."""
+    workload = records[0]["workload"]
+    spec = WORKLOADS[workload]
+    host = records[0]["header"]["host"]
+    median = statistics.median(message_rate(record) for record in records)
+    if spec["x86"] or host == check_results.MAC_HOST or \
+            not verdict(workload, host, median).startswith("missed: "):
+        return None
+    what = HOST_REASONS.get(host, records[0]["header"]["cpu"])
+    return (f"{check_results.HOST_MISS} {host}, {what}, against a bar set on an Apple M1 Pro "
+            "under macOS, in Low Power Mode. The bar stands, and the gap is this host's; "
+            "bench_backtest reads no counters, so how the gap splits between the clock, the "
+            "cache and the memory path is not measured.")
+
+
 def count_rows(record):
     rows = []
     for label, name in COUNT_ROWS:
@@ -444,7 +468,7 @@ def header_lines(records, args, run_id, started, finished, sampled=None):
 
 
 def render(records, args, run_id, started, finished, machine_output, command, sampled=None,
-           again=None):
+           again=None, context=None):
     first = records[0]
     spec = WORKLOADS[first["workload"]]
     host = first["header"]["host"]
@@ -475,6 +499,9 @@ def render(records, args, run_id, started, finished, machine_output, command, sa
               "## Targets", "",
               "| Target | Bar | Measured | Verdict |", "|---|---|---|---|"]
     lines += target_rows(records)
+    reason = host_reason(records)
+    if reason:
+        lines += ["", reason]
     lines += ["", "## Counts", "",
               "From the timed pass. Every repetition gave the same, and the driver refuses a run "
               "where one differs.", "", "| Count | Value |", "|---|---|"]
@@ -487,6 +514,8 @@ def render(records, args, run_id, started, finished, machine_output, command, sa
         lines += ["", bench_driver.swap_watch.line()]
     if sampled:
         lines += [""] + sampler_section(sampled)
+    if context:
+        lines += ["", context.strip()]
     lines += ["", "## machine_check output", "", "```", machine_output, "```", "",
               "## Commands", "", "```", command, "```", ""]
     return "\n".join(lines)
@@ -616,11 +645,43 @@ def published_parts(text):
     return args, fields, machine, swap
 
 
-def render_again(raw_dir, published, stderr, again=None):
-    """The published file's run rendered again from its raw records, stamped."""
-    if check_results.section(published, "Sampler") is not None:
-        raise Refused("published", "its Sampler section's verdicts are not in the raw records")
+def sampled_again(published, raw_dir, args):
+    """A sampled run's Sampler section, judged again from the sampler's log in the raw folder:
+    each published process's span must still pass the rule and give the summary the file
+    printed. Withdrawn rows are carried over as the run wrote them, with the run log's."""
+    path = raw_dir / "sampler.txt"
+    if not path.is_file():
+        raise Refused("published", "it has a Sampler section and the raw folder no sampler.txt")
+    lines = path.read_text(encoding="utf-8").splitlines()
+    first = next((line for line in lines if line.split()[1:2] == ["start"]), None)
+    if first is None:
+        raise Refused("published", "the sampler's log has no start line")
+    settings = dict(word.split("=", 1) for word in first.split()[2:])
+    sampled = {"every": float(settings["every"]), "cpu": int(settings["cpu"]), "published": [],
+               "withdrawn": []}
+    for cells in check_results.table_rows(published, "Sampler"):
+        if cells[0].startswith("withdrawn "):
+            sampled["withdrawn"].append((cells[0].split(", ", 1)[1], cells[1], cells[3]))
+            continue
+        if not cells[0].isdigit():
+            continue  # The table's head.
+        index, begin, end, printed = int(cells[0]), cells[1], cells[2], cells[3]
+        why = linux_sampler.judge(lines, begin, end)
+        again = linux_sampler.summary(lines, begin, end, args.core, args.sibling)
+        if why is not None or again != printed:
+            raise Refused("published", f"repetition {index}'s span is not what the sampler's "
+                                       f"log gives: {why or again}")
+        sampled["published"].append((index, begin, end, printed))
+    return sampled
+
+
+def render_again(raw_dir, published, stderr, again=None, context=None):
+    """The published file's run rendered again from its raw records, stamped. A sampled run's
+    Sampler section is judged again from the raw folder's sampler.txt."""
     args, fields, machine, swap = published_parts(published)
+    sampled = None
+    if check_results.section(published, "Sampler") is not None:
+        sampled = sampled_again(published, raw_dir, args)
     records = []
     for index in range(1, args.repetitions + 1):
         record = json.loads((raw_dir / f"{args.workload}-repetition-{index}.json").read_text(
@@ -631,7 +692,8 @@ def render_again(raw_dir, published, stderr, again=None):
     bench_driver.swap_watch = PrintedSwap(swap) if swap else None
     try:
         text = render(records, args, fields["run_id"], fields["run_started"],
-                      fields["run_finished"], machine, relative_command(args), again=again)
+                      fields["run_finished"], machine, relative_command(args), sampled,
+                      again=again, context=context)
     finally:
         bench_driver.swap_watch = None
     stamped = stamp_load.stamp(text, stderr)
@@ -649,11 +711,14 @@ def render_main(argv):
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--stderr", type=Path, help="measure.sh's stderr, DIR/stderr.txt unless given")
     parser.add_argument("--rendered-again", metavar="REASON")
+    parser.add_argument("--context", type=Path, metavar="FILE",
+                        help="a section, with its own heading, set before the machine check")
     args = parser.parse_args(argv)
     try:
         stderr = (args.stderr or args.raw_dir / "stderr.txt").read_text(encoding="utf-8")
+        context = args.context.read_text(encoding="utf-8") if args.context else None
         text = render_again(args.raw_dir, args.published.read_text(encoding="utf-8"), stderr,
-                            args.rendered_again)
+                            args.rendered_again, context)
     except (Refused, OSError, ValueError, KeyError) as error:
         print(f"backtest_driver: render refused: {error}", file=sys.stderr)
         return 1

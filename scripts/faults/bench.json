@@ -4243,7 +4243,7 @@
     },
     {
       "id": "bench-backtest-render-again-sampled",
-      "breaks": "backtest_driver.py render renders a file with a Sampler section again, whose verdicts are not in the records",
+      "breaks": "backtest_driver.py render renders a file with a Sampler section again without judging its spans from the raw sampler log",
       "check": "test_backtest_results.py test_a_file_with_a_sampler_section",
       "mutations": [
         {

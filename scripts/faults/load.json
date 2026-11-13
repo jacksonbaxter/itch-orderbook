@@ -500,6 +500,66 @@
       "expect": {
         "signature": "FAIL: test_a_host_that_never_quiets"
       }
+    },
+    {
+      "id": "load-check-host-reason-unchecked",
+      "breaks": "check_results passes a debian T-BT-3 miss with no host reason (B6)",
+      "check": "test_linux_sampler.py test_a_miss_off_the_mac_gives_the_host",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    elif not x86 and fields.get(\"host\") != MAC_HOST and verdict.startswith(\"missed: \") and \\\n",
+          "new": "    elif False and not x86 and fields.get(\"host\") != MAC_HOST and verdict.startswith(\"missed: \") and \\\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_miss_off_the_mac_gives_the_host"
+      }
+    },
+    {
+      "id": "load-driver-host-reason-dropped",
+      "breaks": "The driver renders a debian T-BT-3 miss without its host reason",
+      "check": "test_linux_sampler.py test_a_miss_off_the_mac_gives_the_host",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    if reason:\n        lines += [\"\", reason]\n",
+          "new": "    if False:\n        lines += [\"\", reason]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_miss_off_the_mac_gives_the_host"
+      }
+    },
+    {
+      "id": "load-render-again-span-unjudged",
+      "breaks": "backtest_driver.py render keeps a published span that the raw sampler log no longer passes or summarises the same",
+      "check": "test_linux_sampler.py test_a_span_the_log_does_not_give",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "        if why is not None or again != printed:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_span_the_log_does_not_give"
+      }
     }
   ]
 }
