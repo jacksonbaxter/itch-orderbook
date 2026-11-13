@@ -5,6 +5,7 @@
         --prediction P-NNNN --out results/counters_by_type_DESIGN_debian_DAY.md \\
         [--run-log results/run_log.md]
     counts_report.py --record AGE.json... --load STDERR... --machine-check BEFORE AFTER \\
+        --machine-check-load BEFORE.err AFTER.err \\
         [--plain-record RUN.json... --plain-load STDERR...] --prediction P-NNNN \\
         --out results/counters_by_age_DESIGN_debian_DAY.md [--run-log results/run_log.md]
     counts_report.py --check FILE [--record ... --load ... --machine-check ... --prediction ...]
@@ -12,7 +13,12 @@
 Records from `bench_counts --by type-age` make the second kind of file: the same counts
 charged to message type and to the age of the order each message names, with the same
 design counted by type alone (--plain-record) beside them to show what the age walk costs.
-It carries no verdict: T-PERF-1 and T-PERF-2 are judged on the files by type.
+It carries no verdict: T-PERF-1 and T-PERF-2 are judged on the files by type. Each of its
+machine checks is placed by the measure.sh line around it (--machine-check-load): the file
+says when each began against the run, and says so when the check after was not taken for it.
+
+P-0019 and P-0025 planned three processes a count. A file from fewer gives its count beside
+its figures and its summary, and one from a single process gives no min, max or median.
 
 Each record is one fresh process. Its spans tile the pass, so by type they add up to the
 whole pass by rdpmc exactly. That is checked here in every record, again on the totals the
@@ -36,6 +42,7 @@ unusable input, a refused record among them.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import re
 import statistics
@@ -67,6 +74,13 @@ TYPE_NAMES = {
     "O": "DLCR Price Discovery", "none": "frames walked past, not decoded"}
 T_PERF_1 = 0.623
 T_PERF_2 = 2.04
+# Fresh processes each count that P-0019 and P-0025 planned. A file from fewer gives its count
+# beside its figures, and one from a single process gives no min, max or median of it.
+PLANNED = 3
+ONE = "n/a, one process"
+# A machine check that began more than this many seconds before the first repetition or after
+# the last one ended is not a check of the host as the run began or ended, and the file says so.
+CHECK_GAP = 300
 SOURCE = {"A": 1.16, "D": 0.58, "E": 0.79, "U": 2.30, "book": 0.983}
 VERDICT = re.compile(r"^- (T-PERF-[12]), .*?: \*\*(PASS|FAIL)\*\*\. Measured ([0-9.]+) raw",
                      re.MULTILINE)
@@ -185,6 +199,35 @@ def fmt(value, places=4):
     return f"{value:,.{places}f}"
 
 
+def processes(count):
+    return "1 process" if count == 1 else f"{count} processes"
+
+
+def over(count, what="the repetitions"):
+    """How a figure over `count` processes is taken, with the plan beside it if they fall short."""
+    if count >= PLANNED:
+        return f"median over {what}"
+    if count == 1:
+        return f"from 1 process of the {PLANNED} planned, so no median, min or max"
+    return f"median over {count} processes of the {PLANNED} planned"
+
+
+def spread_text(values):
+    """A verdict's range, in words: the count beside it if it falls short of the plan, and no
+    range from a single process."""
+    if len(values) < 2:
+        return f"1 process of the {PLANNED} planned, so no range"
+    text = f"min {fmt(min(values), 3)}, max {fmt(max(values), 3)}"
+    return text if len(values) >= PLANNED else f"{text}, {len(values)} of the {PLANNED} planned"
+
+
+def spread(values, places=4):
+    """The min and max cells of a figure; a single process has neither."""
+    if len(values) < 2:
+        return [ONE, ONE]
+    return [fmt(min(values), places), fmt(max(values), places)]
+
+
 def headline(summaries, name):
     """Per book message and per message, raw, as (median, min, max) each."""
     book = [per(s["book"][name], s["book_messages"]) for s in summaries]
@@ -215,8 +258,8 @@ def type_table(summaries, name):
         share = median_of([per(s["types"][code]["sums"][name], s["whole"][name])
                            for s in summaries if code in s["types"]])
         rows.append(f"| {type_label(code)} | {TYPE_NAMES.get(code, 'unnamed')} | {spans:,} "
-                    f"| {fmt(median_of(figures))} | {fmt(min(figures))} | {fmt(max(figures))} "
-                    f"| {fmt(cost)} | {fmt(median_of(figures) - cost)} | {100 * share:.2f}% |")
+                    f"| {fmt(median_of(figures))} | " + " | ".join(spread(figures))
+                    + f" | {fmt(cost)} | {fmt(median_of(figures) - cost)} | {100 * share:.2f}% |")
     return rows
 
 
@@ -285,11 +328,11 @@ def render(records, stderrs, machine_checks, prediction):
             "## Verdicts", "",
             verdict_line("T-PERF-1", T_PERF_1, median_of(fills_book), fills_cost,
                          "`r0843:u` per book message, a floor on DRAM demand fills",
-                         f"min {fmt(min(fills_book), 3)}, max {fmt(max(fills_book), 3)}"),
+                         spread_text(fills_book)),
             verdict_line("T-PERF-2", T_PERF_2, median_of(branch_all), branch_cost,
                          "branch misses per message, against the floor BENCHMARKS.md states, "
                          "with no top-tier bar claimed",
-                         f"min {fmt(min(branch_all), 3)}, max {fmt(max(branch_all), 3)}"), "",
+                         spread_text(branch_all)), "",
             "T-PERF-1's bar is carteret's, on a Ryzen 9 5950X (Zen 3) with 32 MB of L3 to one "
             "core and its identity hash. This host is a Ryzen Embedded V1605B (Zen 1) with 4 MB "
             "of L3 shared by four cores, so far less of the book's working set stays on chip "
@@ -303,8 +346,8 @@ def render(records, stderrs, machine_checks, prediction):
             ("`r0843:u` per message, a floor on DRAM demand fills", fills_all, fills_cost),
             ("branch misses per book message", branch_book, branch_cost),
             ("branch misses per message", branch_all, branch_cost)):
-        out.append(f"| {label} | {fmt(median_of(values))} | {fmt(min(values))} "
-                   f"| {fmt(max(values))} | {fmt(cost)} | {fmt(median_of(values) - cost)} |")
+        out.append(f"| {label} | {fmt(median_of(values))} | " + " | ".join(spread(values))
+                   + f" | {fmt(cost)} | {fmt(median_of(values) - cost)} |")
     out += ["", "## Against the source by type", "",
             "`r0843:u` per message of each type, a floor on DRAM demand fills, beside carteret's "
             "figures for its book as shipped, on its host. Both are demand fills from DRAM on "
@@ -323,7 +366,7 @@ def render(records, stderrs, machine_checks, prediction):
                    f"| {SOURCE[code]} |")
     out += ["", "## The cost of counting", "",
             "What one empty span counts, the mean over each process's empty spans before and "
-            "after the pass, median over the repetitions. Every message's span holds one.", "",
+            f"after the pass, {over(len(summaries))}. Every message's span holds one.", "",
             "| Event | Before the pass | After the pass | Used beside the figures |",
             "|---|---|---|---|"]
     for name in EVENTS:
@@ -349,7 +392,7 @@ def render(records, stderrs, machine_checks, prediction):
                        f"| {summary['around_read'][name] - by_type:,} |")
     for name in EVENTS:
         out += ["", f"## Per message type: {name}", "",
-                "Each type's spans over its messages, median over the repetitions, with the "
+                f"Each type's spans over its messages, {over(len(summaries))}, with the "
                 "empty span's cost beside it and taken off in the column that says so.", ""]
         out += type_table(summaries, name)
     out += ["", "## Totals by type, repetition 1", "",
@@ -417,7 +460,7 @@ def age_rows(summaries, name):
                     for code in NAMING_TYPES) for s in summaries]
         figures = [per(value, count) for value, count in zip(sums, spans)]
         rows.append({"age": age, "messages": spans[0], "figure": median_of(figures),
-                     "min": min(figures), "max": max(figures),
+                     "spread": spread(figures),
                      "named_share": median_of([per(v, t) for v, t in zip(sums, named_total)]),
                      "pass_share": median_of([per(v, s["whole"][name])
                                               for v, s in zip(sums, summaries)])})
@@ -428,8 +471,8 @@ def age_table(summaries, name):
     rows = ["| Age of the order named | Messages | Per message | Min | Max | Share of the "
             "named messages' count | Share of the pass |", "|---|---|---|---|---|---|---|"]
     for row in age_rows(summaries, name):
-        rows.append(f"| {row['age']} | {row['messages']:,} | {fmt(row['figure'])} "
-                    f"| {fmt(row['min'])} | {fmt(row['max'])} | {100 * row['named_share']:.2f}% "
+        rows.append(f"| {row['age']} | {row['messages']:,} | {fmt(row['figure'])} | "
+                    + " | ".join(row["spread"]) + f" | {100 * row['named_share']:.2f}% "
                     f"| {100 * row['pass_share']:.2f}% |")
     return rows
 
@@ -474,6 +517,7 @@ def age_totals_table(summary, names):
 
 
 def age_summary(summaries):
+    """The file's one-line summary, with the count of processes if it falls short of the plan."""
     rows = {row["age"]: row for row in age_rows(summaries, FILLS)}
     young, old = rows.get(AGES[0]), rows.get(AGES[4])
     spans = {age: row["messages"] for age, row in rows.items()}
@@ -481,10 +525,48 @@ def age_summary(summaries):
     return (f"floor on DRAM demand fills a message naming an order: "
             f"{fmt(young['figure'] if young else 0.0, 3)} under 1 ms old, "
             f"{fmt(old['figure'] if old else 0.0, 3)} at 1 s and over; "
-            f"{100 * old_share:.1f}% of those messages name an order 1 s old or more")
+            f"{100 * old_share:.1f}% of those messages name an order 1 s old or more"
+            + (f"; {processes(len(summaries))} of the {PLANNED} planned"
+               if len(summaries) < PLANNED else ""))
 
 
-def render_ages(records, stderrs, machine_checks, prediction, plain=None, plain_stderrs=()):
+def check_times(check_loads, lines):
+    """When each machine check began, from measure.sh's start line around it, and how far it
+    falls from the first repetition's start and the last one's end. ReportError if the check
+    before does not come before the first repetition or the check after not after the last."""
+    if len(check_loads) != 2:
+        raise ReportError("wanted the measure.sh stderr of the machine check before and after "
+                          "(--machine-check-load)")
+    before, after = (timestamp(load_lines(text)[0]) for text in check_loads)
+    first = min(timestamp(start) for start, _ in lines)
+    last = max(timestamp(end) for _, end in lines)
+    lead, gap = seconds_between(before, first), seconds_between(last, after)
+    if lead < 0 or gap < 0:
+        raise ReportError(f"a machine check inside the run: before at {before}, after at {after}, "
+                          f"the run from {first} to {last}")
+    return before, lead, after, gap
+
+
+def seconds_between(earlier, later):
+    def instant(text):
+        return datetime.datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
+    return int((instant(later) - instant(earlier)).total_seconds())
+
+
+def check_placement(before, lead, after, gap):
+    """The machine check section's opening, said from when each check ran."""
+    text = (f"The check before began at {before}, {lead:,} s before the first repetition began. "
+            f"The check after began at {after}, {gap:,} s after the last repetition ended. Each "
+            "ran under `measure.sh taskset -c 4`.")
+    for which, seconds, when in (("before", lead, "began"), ("after", gap, "ended")):
+        if seconds > CHECK_GAP:
+            text += (f" The check {which} was not taken for this run: {seconds:,} s lie between "
+                     f"them, so it is not a check of the host as the run {when}.")
+    return text
+
+
+def render_ages(records, stderrs, machine_checks, prediction, plain=None, plain_stderrs=(),
+                check_loads=(), not_published=()):
     summaries = [summarise_one(record) for record in records]
     if not all(s["by_age"] for s in summaries):
         raise ReportError("a record counted by type alone among the type-age records")
@@ -498,6 +580,7 @@ def render_ages(records, stderrs, machine_checks, prediction, plain=None, plain_
     lines = [load_lines(text) for text in stderrs]
     plain_lines = [load_lines(text) for text in plain_stderrs]
     run_id = f"{prediction}-" + timestamp(lines[0][0]).replace(":", "").replace("-", "")
+    before, lead, after, gap = check_times(check_loads, lines + plain_lines)
     header = records[0]["header"]
     day = header.get("dataset", "").split(".", 1)[0]
     peak = max(record["peak_rss_bytes"] for record in records + list(plain or [])) / 1024 ** 3
@@ -520,27 +603,33 @@ def render_ages(records, stderrs, machine_checks, prediction, plain=None, plain_
             f"- measure_load_start: {lines[0][0]}", f"- measure_load_end: {lines[-1][1]}",
             f"- run_started: {timestamp(lines[0][0])}",
             f"- run_finished: {timestamp((plain_lines or lines)[-1][1])}",
+            f"- machine_check_before_at: {before}, {lead:,} s before the first repetition began",
+            f"- machine_check_after_at: {after}, {gap:,} s after the last repetition ended",
             f"- summary: {age_summary(summaries)}", "",
             "## How the counts are taken", "",
             METHOD.format(empty=records[0]["empty_before"]["spans"]), "", AGE_METHOD, "",
             "## What each counter can attribute", "", ATTRIBUTES, ""]
     for name in (FILLS, L2):
         out += [f"## By the age of the order named: {name}", "",
-                "E, C, X, D and U pooled, each age's spans over its messages, median over the "
-                "repetitions, raw: the empty span's cost is in the next section.", ""]
+                f"E, C, X, D and U pooled, each age's spans over its messages, "
+                f"{over(len(summaries))}, raw: the empty span's cost is in the next section.", ""]
         out += age_table(summaries, name)
         out += ["", f"## By type and age: {name}", "",
-                "Per message of each type and age, median over the repetitions, raw.", ""]
+                f"Per message of each type and age, {over(len(summaries))}, raw.", ""]
         out += type_age_table(summaries, name)
         out += ["", f"## By message type: {name}", "",
-                "Each type's spans over its messages, median over the repetitions, with the "
+                f"Each type's spans over its messages, {over(len(summaries))}, with the "
                 "empty span's cost beside it.", ""]
         out += type_table(summaries, name)
         out.append("")
     if plain_summaries:
         out += ["## What the age walk costs", "",
                 "The same arm counted by type alone, in the same session, against the type-age "
-                "processes: each event per book message, median over each one's repetitions.",
+                "processes: each event per book message, "
+                + (over(len(plain_summaries), "each one's repetitions") + "."
+                   if len(plain_summaries) >= PLANNED and len(summaries) >= PLANNED else
+                   f"by type alone {over(len(plain_summaries))}, and by type and age "
+                   f"{over(len(summaries))}."),
                 "", "| Event | By type alone | By type and age | Difference |", "|---|---|---|---|"]
         for name in EVENTS:
             alone = median_of(headline(plain_summaries, name)[0])
@@ -550,7 +639,7 @@ def render_ages(records, stderrs, machine_checks, prediction, plain=None, plain_
         out.append("")
     out += ["## The cost of counting", "",
             "What one empty span counts, the mean over each process's empty spans before and "
-            "after the pass, median over the type-age repetitions.", "",
+            f"after the pass, {over(len(summaries), 'the type-age repetitions')}.", "",
             "| Event | Before the pass | After the pass | Used beside the figures |",
             "|---|---|---|---|"]
     for name in EVENTS:
@@ -561,9 +650,14 @@ def render_ages(records, stderrs, machine_checks, prediction, plain=None, plain_
             "The integers the figures come from, so that the tiling can be checked from this "
             "file: each column's slots add up to its whole pass.", ""]
     out += age_totals_table(summaries[0], list(EVENTS))
-    out += ["", "## What this does not show", "", CAVEATS, AGE_CAVEATS, "",
-            "## machine_check output", "", "Before the first repetition and after the last, "
-            "each under `measure.sh taskset -c 4`.", "", "```"]
+    out += ["", "## What this does not show", "", CAVEATS, AGE_CAVEATS, ""]
+    if not_published:
+        out += ["## Processes of this arm not published", "",
+                "Each has its own run-log row. What keeps it out is the rule each row gives; a "
+                "process is never kept out for its figures.", ""]
+        out += [f"- {line}" for line in not_published]
+        out.append("")
+    out += ["## machine_check output", "", check_placement(before, lead, after, gap), "", "```"]
     out += [text.strip() for text in machine_checks]
     out += ["```", "", "## measure.sh load lines", "", "```"]
     out += [line for pair in lines + plain_lines for line in pair]
@@ -616,6 +710,76 @@ def check_ages(text):
         if age in figures and not said_near(summary, said, figures[age]):
             found.append(("summary-differs", f"{age}: the table gives {figures[age]}, the "
                                              f"summary says {summary!r}"))
+    return found + count_violations(text, fields) + placement_violations(text, fields)
+
+
+def count_violations(text, fields, by_age=True):
+    """A file from fewer processes than planned gives the count in every section that takes a
+    median (and, by age, in its summary), uses no wording that implies the plan was met, and
+    from a single process gives no min or max."""
+    found = []
+    try:
+        count = int(fields.get("repetitions", ""))
+        plain = int(fields.get("repetitions_by_type_alone", "0"))
+    except ValueError:
+        return [("count-unsaid", "no count of repetitions in the header")]
+    if count < PLANNED:
+        said = f"{processes(count)} of the {PLANNED} planned"
+        if by_age and said not in fields.get("summary", ""):
+            found.append(("count-unsaid", f"the summary does not say it rests on {said}"))
+        for line in text.splitlines():
+            if "median over the repetitions" in line or "median over the type-age" in line:
+                found.append(("count-unsaid", f"a median over {count} of the {PLANNED} "
+                                              f"processes planned, said as over all: {line!r}"))
+    if 0 < plain < PLANNED and (f"by type alone {over(plain)}"
+                                not in (check_results.section(text, "What the age walk costs")
+                                        or "")):
+        found.append(("count-unsaid", f"the age walk's cost rests on {plain} of the {PLANNED} "
+                                      "processes by type alone planned and does not say so"))
+    for line in text.splitlines():
+        if count < PLANNED and line.startswith("- T-PERF-") and (
+                f"of the {PLANNED} planned" not in line or (count == 1 and "(min " in line)):
+            found.append(("count-unsaid", f"a verdict from {count} of the {PLANNED} processes "
+                                          f"planned that does not say so: {line!r}"))
+        if count != 1 or not line.startswith("| "):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        # Where the min sits: the verdicts table's third cell, the age table's fourth, the type
+        # table's fifth.
+        at = (2 if len(cells) == 6 and cells[0].startswith(("`r0843", "branch misses")) else
+              3 if len(cells) == 7 and cells[0] in AGES else
+              4 if len(cells) == 9 and cells[0].startswith(("`", "none")) else None)
+        if at is not None and cells[at] != ONE:
+            found.append(("range-from-one", f"a min and max from one process: {line!r}"))
+    return found
+
+
+def placement_violations(text, fields):
+    """Each machine check is placed against the run, and one more than CHECK_GAP from it is
+    said not to be this run's."""
+    found = []
+    try:
+        first, last = fields["run_started"], fields["run_finished"]
+        before = fields["machine_check_before_at"].split(",")[0]
+        after = fields["machine_check_after_at"].split(",")[0]
+        lead, gap = seconds_between(before, first), seconds_between(last, after)
+    except (KeyError, ValueError) as error:
+        return [("machine-check-unplaced", f"no time for a machine check: {error!r}")]
+    if lead < 0 or gap < 0:
+        found.append(("machine-check-unplaced", f"a check inside the run: {before}, {after}"))
+    if (fields["machine_check_before_at"] != f"{before}, {lead:,} s before the first repetition "
+                                                "began"
+            or fields["machine_check_after_at"] != f"{after}, {gap:,} s after the last "
+                                                   "repetition ended"):
+        found.append(("machine-check-unplaced", "the header's gaps are not the times'"))
+    output = check_results.section(text, "machine_check output") or ""
+    for which, seconds in (("before", lead), ("after", gap)):
+        if (seconds > CHECK_GAP) != (f"The check {which} was not taken for this run" in output):
+            found.append(("machine-check-unplaced", f"the check {which} is {seconds:,} s from the "
+                                                    "run, and the file says otherwise"))
+    if "Before the first repetition and after the last" in output:
+        found.append(("machine-check-unplaced", "the old wording, which claims a check after "
+                                                "the run whatever its time"))
     return found
 
 
@@ -696,6 +860,7 @@ def check_published(text):
             if not total == listed == whole:
                 found.append(("not-tiled", f"{name}: types add up to {total:,}, the file says "
                                            f"{listed:,} and the whole pass {whole:,}"))
+    found += count_violations(text, fields, by_age=False)
     if "| NO |" in (check_results.section(text, "The whole pass") or ""):
         found.append(("not-tiled", "a repetition's spans do not add up to its whole pass"))
     if "Empty span" not in (check_results.section(text, "Per message type: " + FILLS) or ""):
@@ -748,7 +913,10 @@ def build(args):
                      for path in args.plain_load]
     if len(plain) != len(plain_stderrs):
         raise ReportError("wanted one --plain-load for each --plain-record")
-    return render_ages(records, stderrs, checks, args.prediction, plain, plain_stderrs)
+    check_loads = [path.read_text(encoding="utf-8", errors="replace")
+                   for path in args.machine_check_load]
+    return render_ages(records, stderrs, checks, args.prediction, plain, plain_stderrs,
+                       check_loads, args.not_published)
 
 
 def judge(text):
@@ -793,6 +961,8 @@ def main(argv=None):
     parser.add_argument("--machine-check", type=Path, nargs="+", default=[])
     parser.add_argument("--plain-record", type=Path, nargs="+", default=[])
     parser.add_argument("--plain-load", type=Path, nargs="+", default=[])
+    parser.add_argument("--machine-check-load", type=Path, nargs="+", default=[])
+    parser.add_argument("--not-published", action="append", default=[], metavar="TEXT")
     parser.add_argument("--prediction")
     parser.add_argument("--out", type=Path)
     parser.add_argument("--run-log", type=Path)

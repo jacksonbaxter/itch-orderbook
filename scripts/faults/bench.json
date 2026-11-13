@@ -4200,6 +4200,216 @@
       "expect": {
         "signature": "FAIL: test_the_command_shown_carries_the_core_and_its_sibling"
       }
+    },
+    {
+      "id": "bench-variants-count-unsaid",
+      "breaks": "variants_report prints a variant that ran in fewer processes than its prediction planned with its bare count, not set against the plan",
+      "check": "test_variants_report.py test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "    return str(reps) if reps >= PLANNED else f\"{reps} of {PLANNED} planned\"",
+          "new": "    return str(reps)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-variants-range-from-one-process",
+      "breaks": "variants_report prints a min, a max and a CV of 0.00% for a variant that ran in one process",
+      "check": "test_variants_report.py test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "    if f[\"reps\"] < 2:\n        return [ONE]",
+          "new": "    if False:\n        return [ONE]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-variants-check-ignores-short-variants",
+      "breaks": "variants_report --check no longer reads the counts from the table of passes, so a file that prints a figure from fewer processes than planned without its count, or a range from one process, passes",
+      "check": "test_variants_report.py test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "        if count >= PLANNED:\n            continue",
+          "new": "        if True:\n            continue"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-age-summary-count-unsaid",
+      "breaks": "counts_report's summary of a file by type and age from fewer processes than P-0025 planned leaves the count out",
+      "check": "test_counts_report.py test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "               if len(summaries) < PLANNED else \"\"))",
+          "new": "               if False else \"\"))"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-range-from-one-process",
+      "breaks": "counts_report prints a min and a max equal to the figure for a count from one process",
+      "check": "test_counts_report.py test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    if len(values) < 2:\n        return [ONE, ONE]",
+          "new": "    if False:\n        return [ONE, ONE]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-check-ignores-short-counts",
+      "breaks": "counts_report --check accepts a file from fewer processes than planned whose summary and medians do not say so",
+      "check": "test_counts_report.py test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    if count < PLANNED:\n        said = ",
+          "new": "    if False:\n        said = "
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-check-accepts-range-from-one",
+      "breaks": "counts_report --check accepts a min and max printed from one process",
+      "check": "test_counts_report.py test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if at is not None and cells[at] != ONE:",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-late-check-unsaid",
+      "breaks": "counts_report says nothing when the machine check after began long after the run ended, as P-0025's hash-flat check did",
+      "check": "test_counts_report.py test_each_machine_check_is_placed_against_the_run",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if seconds > CHECK_GAP:\n            text +=",
+          "new": "        if False:\n            text +="
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_machine_check_is_placed_against_the_run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-check-ignores-placement",
+      "breaks": "counts_report --check no longer holds each machine check to its time against the run",
+      "check": "test_counts_report.py test_each_machine_check_is_placed_against_the_run",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    return found + count_violations(text, fields) + placement_violations(text, fields)",
+          "new": "    return found + count_violations(text, fields)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_machine_check_is_placed_against_the_run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-check-inside-the-run",
+      "breaks": "counts_report accepts a machine check after that began before the run ended",
+      "check": "test_counts_report.py test_each_machine_check_is_placed_against_the_run",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    if lead < 0 or gap < 0:\n        raise",
+          "new": "    if False:\n        raise"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_machine_check_is_placed_against_the_run",
+        "exit": 1
+      }
     }
   ]
 }

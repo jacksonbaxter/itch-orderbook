@@ -45,7 +45,9 @@ Host: **debian**. Numbers from the two hosts are never mixed.
 - measure_load_end: measure.sh: end load1=1.04 exit=0 at=2026-11-10T15:28:49Z cpus=4 governor=performance freq_khz=cpu4:3015928 perf_event_paranoid=2
 - run_started: 2026-11-10T13:45:02Z
 - run_finished: 2026-11-10T15:35:52Z
-- summary: floor on DRAM demand fills a message naming an order: 0.049 under 1 ms old, 4.373 at 1 s and over; 54.5% of those messages name an order 1 s old or more
+- machine_check_before_at: 2026-11-10T13:44:58Z, 4 s before the first repetition began
+- machine_check_after_at: 2026-11-10T15:35:52Z, 0 s after the last repetition ended
+- summary: floor on DRAM demand fills a message naming an order: 0.049 under 1 ms old, 4.373 at 1 s and over; 54.5% of those messages name an order 1 s old or more; 2 processes of the 3 planned
 
 ## How the counts are taken
 
@@ -96,7 +98,7 @@ no lookup it would not make without it. A and F name no order, so they have no a
 
 ## By the age of the order named: r0843:u (a floor on DRAM demand fills)
 
-E, C, X, D and U pooled, each age's spans over its messages, median over the repetitions, raw: the empty span's cost is in the next section.
+E, C, X, D and U pooled, each age's spans over its messages, median over 2 processes of the 3 planned, raw: the empty span's cost is in the next section.
 
 | Age of the order named | Messages | Per message | Min | Max | Share of the named messages' count | Share of the pass |
 |---|---|---|---|---|---|---|
@@ -108,7 +110,7 @@ E, C, X, D and U pooled, each age's spans over its messages, median over the rep
 
 ## By type and age: r0843:u (a floor on DRAM demand fills)
 
-Per message of each type and age, median over the repetitions, raw.
+Per message of each type and age, median over 2 processes of the 3 planned, raw.
 
 | Type | under 1 ms | 1 to 10 ms | 10 to 100 ms | 100 ms to 1 s | 1 s and over |
 |---|---|---|---|---|---|
@@ -130,7 +132,7 @@ Messages of each type and age, repetition 1:
 
 ## By message type: r0843:u (a floor on DRAM demand fills)
 
-Each type's spans over its messages, median over the repetitions, with the empty span's cost beside it.
+Each type's spans over its messages, median over 2 processes of the 3 planned, with the empty span's cost beside it.
 
 | Type | Message | Messages | Per message, raw | Min | Max | Empty span | Per message, empty span taken off | Share of the pass |
 |---|---|---|---|---|---|---|---|---|
@@ -155,7 +157,7 @@ Each type's spans over its messages, median over the repetitions, with the empty
 
 ## By the age of the order named: cache-misses (L2 misses on Zen 1)
 
-E, C, X, D and U pooled, each age's spans over its messages, median over the repetitions, raw: the empty span's cost is in the next section.
+E, C, X, D and U pooled, each age's spans over its messages, median over 2 processes of the 3 planned, raw: the empty span's cost is in the next section.
 
 | Age of the order named | Messages | Per message | Min | Max | Share of the named messages' count | Share of the pass |
 |---|---|---|---|---|---|---|
@@ -167,7 +169,7 @@ E, C, X, D and U pooled, each age's spans over its messages, median over the rep
 
 ## By type and age: cache-misses (L2 misses on Zen 1)
 
-Per message of each type and age, median over the repetitions, raw.
+Per message of each type and age, median over 2 processes of the 3 planned, raw.
 
 | Type | under 1 ms | 1 to 10 ms | 10 to 100 ms | 100 ms to 1 s | 1 s and over |
 |---|---|---|---|---|---|
@@ -189,7 +191,7 @@ Messages of each type and age, repetition 1:
 
 ## By message type: cache-misses (L2 misses on Zen 1)
 
-Each type's spans over its messages, median over the repetitions, with the empty span's cost beside it.
+Each type's spans over its messages, median over 2 processes of the 3 planned, with the empty span's cost beside it.
 
 | Type | Message | Messages | Per message, raw | Min | Max | Empty span | Per message, empty span taken off | Share of the pass |
 |---|---|---|---|---|---|---|---|---|
@@ -214,7 +216,7 @@ Each type's spans over its messages, median over the repetitions, with the empty
 
 ## What the age walk costs
 
-The same arm counted by type alone, in the same session, against the type-age processes: each event per book message, median over each one's repetitions.
+The same arm counted by type alone, in the same session, against the type-age processes: each event per book message, by type alone median over 2 processes of the 3 planned, and by type and age median over 2 processes of the 3 planned.
 
 | Event | By type alone | By type and age | Difference |
 |---|---|---|---|
@@ -226,7 +228,7 @@ The same arm counted by type alone, in the same session, against the type-age pr
 
 ## The cost of counting
 
-What one empty span counts, the mean over each process's empty spans before and after the pass, median over the type-age repetitions.
+What one empty span counts, the mean over each process's empty spans before and after the pass, median over 2 processes of the 3 planned.
 
 | Event | Before the pass | After the pass | Used beside the figures |
 |---|---|---|---|
@@ -305,9 +307,19 @@ The integers the figures come from, so that the tiling can be checked from this 
   cores. A larger L3 keeps more of the old orders' lines, so the age at which fills rise is
   this host's, not the book's alone.
 
+## Processes of this arm not published
+
+Each has its own run-log row. What keeps it out is the rule each row gives; a process is never kept out for its figures.
+
+- P-0025-20261110T151358Z, by type alone, process 1 (15:13:58Z to 15:15:38Z): no sampler of the host's other processes covered it, and other projects were active on the host: their work had started by 13:51Z, when load1 reached 6.95, and pswpout had risen from 599,210 to 942,162 pages by 15:13:57Z. The rule withdraws a process that ran unsampled while other projects were active.
+- P-0025-20261110T151539Z, by type and age, process 2 (15:15:39Z to 15:18:20Z): kept out by the same rule, for the same reason; the host's sampler logged no other processes until 15:21:19Z. Its run-log row also sets its fills and L2 misses for orders 1 s old or more against the other two processes. That is not a reason to withdraw a process, and was not needed: the rule alone keeps it out.
+- P-0025-20261110T155201Z, by type and age, top-up process t3: stopped by hand while measure.sh waited for the lock; it never ran.
+- P-0025-20261110T202336Z, by type and age, top-up process t5 (to 20:26:22Z): the sampler saw the host's backup at 178.4% CPU from its first second.
+- Published, each having passed the rule: processes 2 and 3 by type alone and 3 by type and age ran from 15:24:51Z to 15:35:52Z, and every sample in their spans saw no other process above 20% CPU and pswpout unmoved. Process 1 by type and age ran from 13:45:02Z to 13:47:28Z, before the sampler began, at load1 0.97 to 1.04 with pswpout unmoved at 599,210, before the other projects' work started.
+
 ## machine_check output
 
-Before the first repetition and after the last, each under `measure.sh taskset -c 4`.
+The check before began at 2026-11-10T13:44:58Z, 4 s before the first repetition began. The check after began at 2026-11-10T15:35:52Z, 0 s after the last repetition ended. Each ran under `measure.sh taskset -c 4`.
 
 ```
 machine_check: record host: debian

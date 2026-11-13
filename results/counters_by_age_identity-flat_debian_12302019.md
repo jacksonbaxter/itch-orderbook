@@ -45,7 +45,9 @@ Host: **debian**. Numbers from the two hosts are never mixed.
 - measure_load_end: measure.sh: end load1=1.05 exit=0 at=2026-11-10T15:34:19Z cpus=4 governor=performance freq_khz=cpu4:3014375 perf_event_paranoid=2
 - run_started: 2026-11-10T15:31:44Z
 - run_finished: 2026-11-10T15:34:19Z
-- summary: floor on DRAM demand fills a message naming an order: 0.461 under 1 ms old, 5.086 at 1 s and over; 54.5% of those messages name an order 1 s old or more
+- machine_check_before_at: 2026-11-10T13:44:58Z, 6,406 s before the first repetition began
+- machine_check_after_at: 2026-11-10T15:35:52Z, 93 s after the last repetition ended
+- summary: floor on DRAM demand fills a message naming an order: 0.461 under 1 ms old, 5.086 at 1 s and over; 54.5% of those messages name an order 1 s old or more; 1 process of the 3 planned
 
 ## How the counts are taken
 
@@ -96,19 +98,19 @@ no lookup it would not make without it. A and F name no order, so they have no a
 
 ## By the age of the order named: r0843:u (a floor on DRAM demand fills)
 
-E, C, X, D and U pooled, each age's spans over its messages, median over the repetitions, raw: the empty span's cost is in the next section.
+E, C, X, D and U pooled, each age's spans over its messages, from 1 process of the 3 planned, so no median, min or max, raw: the empty span's cost is in the next section.
 
 | Age of the order named | Messages | Per message | Min | Max | Share of the named messages' count | Share of the pass |
 |---|---|---|---|---|---|---|
-| under 1 ms | 16,907,347 | 0.4611 | 0.4611 | 0.4611 | 1.66% | 1.18% |
-| 1 to 10 ms | 9,600,178 | 0.4578 | 0.4578 | 0.4578 | 0.93% | 0.67% |
-| 10 to 100 ms | 14,833,077 | 0.6394 | 0.6394 | 0.6394 | 2.02% | 1.44% |
-| 100 ms to 1 s | 24,427,069 | 1.9634 | 1.9634 | 1.9634 | 10.19% | 7.28% |
-| 1 s and over | 78,842,810 | 5.0862 | 5.0862 | 5.0862 | 85.20% | 60.87% |
+| under 1 ms | 16,907,347 | 0.4611 | n/a, one process | n/a, one process | 1.66% | 1.18% |
+| 1 to 10 ms | 9,600,178 | 0.4578 | n/a, one process | n/a, one process | 0.93% | 0.67% |
+| 10 to 100 ms | 14,833,077 | 0.6394 | n/a, one process | n/a, one process | 2.02% | 1.44% |
+| 100 ms to 1 s | 24,427,069 | 1.9634 | n/a, one process | n/a, one process | 10.19% | 7.28% |
+| 1 s and over | 78,842,810 | 5.0862 | n/a, one process | n/a, one process | 85.20% | 60.87% |
 
 ## By type and age: r0843:u (a floor on DRAM demand fills)
 
-Per message of each type and age, median over the repetitions, raw.
+Per message of each type and age, from 1 process of the 3 planned, so no median, min or max, raw.
 
 | Type | under 1 ms | 1 to 10 ms | 10 to 100 ms | 100 ms to 1 s | 1 s and over |
 |---|---|---|---|---|---|
@@ -130,44 +132,44 @@ Messages of each type and age, repetition 1:
 
 ## By message type: r0843:u (a floor on DRAM demand fills)
 
-Each type's spans over its messages, median over the repetitions, with the empty span's cost beside it.
+Each type's spans over its messages, from 1 process of the 3 planned, so no median, min or max, with the empty span's cost beside it.
 
 | Type | Message | Messages | Per message, raw | Min | Max | Empty span | Per message, empty span taken off | Share of the pass |
 |---|---|---|---|---|---|---|---|---|
-| `A` | Add Order | 117,145,568 | 1.5901 | 1.5901 | 1.5901 | 0.0000 | 1.5901 | 28.28% |
-| `F` | Add Order with MPID | 1,485,888 | 1.0815 | 1.0815 | 1.0815 | 0.0000 | 1.0815 | 0.24% |
-| `E` | Order Executed | 5,722,824 | 2.7651 | 2.7651 | 2.7651 | 0.0000 | 2.7651 | 2.40% |
-| `C` | Order Executed With Price | 99,917 | 1.5538 | 1.5538 | 1.5538 | 0.0000 | 1.5538 | 0.02% |
-| `X` | Order Cancel | 2,787,676 | 1.0685 | 1.0685 | 1.0685 | 0.0000 | 1.0685 | 0.45% |
-| `D` | Order Delete | 114,360,997 | 3.1964 | 3.1964 | 3.1964 | 0.0000 | 3.1964 | 55.49% |
-| `U` | Order Replace | 21,639,067 | 3.9807 | 3.9807 | 3.9807 | 0.0000 | 3.9807 | 13.08% |
-| `P` | Trade, non-cross | 1,218,602 | 0.0349 | 0.0349 | 0.0349 | 0.0000 | 0.0349 | 0.01% |
-| `Q` | Cross Trade | 17,836 | 0.0782 | 0.0782 | 0.0782 | 0.0000 | 0.0782 | 0.00% |
-| `H` | Stock Trading Action | 8,966 | 0.0022 | 0.0022 | 0.0022 | 0.0000 | 0.0022 | 0.00% |
-| `I` | Net Order Imbalance | 4,024,315 | 0.0431 | 0.0431 | 0.0431 | 0.0000 | 0.0431 | 0.03% |
-| `J` | LULD Auction Collar | 34 | 0.2059 | 0.2059 | 0.2059 | 0.0000 | 0.2059 | 0.00% |
-| `K` | IPO Quoting Period | 3 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | -0.0000 | 0.00% |
-| `L` | Market Participant Position | 215,161 | 0.0001 | 0.0001 | 0.0001 | 0.0000 | 0.0001 | 0.00% |
-| `R` | Stock Directory | 8,906 | 0.0002 | 0.0002 | 0.0002 | 0.0000 | 0.0002 | 0.00% |
-| `S` | System Event | 6 | 1.8333 | 1.8333 | 1.8333 | 0.0000 | 1.8333 | 0.00% |
-| `V` | MWCB Decline Level | 1 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | -0.0000 | 0.00% |
-| `Y` | Reg SHO Restriction | 9,013 | 0.0003 | 0.0003 | 0.0003 | 0.0000 | 0.0003 | 0.00% |
+| `A` | Add Order | 117,145,568 | 1.5901 | n/a, one process | n/a, one process | 0.0000 | 1.5901 | 28.28% |
+| `F` | Add Order with MPID | 1,485,888 | 1.0815 | n/a, one process | n/a, one process | 0.0000 | 1.0815 | 0.24% |
+| `E` | Order Executed | 5,722,824 | 2.7651 | n/a, one process | n/a, one process | 0.0000 | 2.7651 | 2.40% |
+| `C` | Order Executed With Price | 99,917 | 1.5538 | n/a, one process | n/a, one process | 0.0000 | 1.5538 | 0.02% |
+| `X` | Order Cancel | 2,787,676 | 1.0685 | n/a, one process | n/a, one process | 0.0000 | 1.0685 | 0.45% |
+| `D` | Order Delete | 114,360,997 | 3.1964 | n/a, one process | n/a, one process | 0.0000 | 3.1964 | 55.49% |
+| `U` | Order Replace | 21,639,067 | 3.9807 | n/a, one process | n/a, one process | 0.0000 | 3.9807 | 13.08% |
+| `P` | Trade, non-cross | 1,218,602 | 0.0349 | n/a, one process | n/a, one process | 0.0000 | 0.0349 | 0.01% |
+| `Q` | Cross Trade | 17,836 | 0.0782 | n/a, one process | n/a, one process | 0.0000 | 0.0782 | 0.00% |
+| `H` | Stock Trading Action | 8,966 | 0.0022 | n/a, one process | n/a, one process | 0.0000 | 0.0022 | 0.00% |
+| `I` | Net Order Imbalance | 4,024,315 | 0.0431 | n/a, one process | n/a, one process | 0.0000 | 0.0431 | 0.03% |
+| `J` | LULD Auction Collar | 34 | 0.2059 | n/a, one process | n/a, one process | 0.0000 | 0.2059 | 0.00% |
+| `K` | IPO Quoting Period | 3 | 0.0000 | n/a, one process | n/a, one process | 0.0000 | -0.0000 | 0.00% |
+| `L` | Market Participant Position | 215,161 | 0.0001 | n/a, one process | n/a, one process | 0.0000 | 0.0001 | 0.00% |
+| `R` | Stock Directory | 8,906 | 0.0002 | n/a, one process | n/a, one process | 0.0000 | 0.0002 | 0.00% |
+| `S` | System Event | 6 | 1.8333 | n/a, one process | n/a, one process | 0.0000 | 1.8333 | 0.00% |
+| `V` | MWCB Decline Level | 1 | 0.0000 | n/a, one process | n/a, one process | 0.0000 | -0.0000 | 0.00% |
+| `Y` | Reg SHO Restriction | 9,013 | 0.0003 | n/a, one process | n/a, one process | 0.0000 | 0.0003 | 0.00% |
 
 ## By the age of the order named: cache-misses (L2 misses on Zen 1)
 
-E, C, X, D and U pooled, each age's spans over its messages, median over the repetitions, raw: the empty span's cost is in the next section.
+E, C, X, D and U pooled, each age's spans over its messages, from 1 process of the 3 planned, so no median, min or max, raw: the empty span's cost is in the next section.
 
 | Age of the order named | Messages | Per message | Min | Max | Share of the named messages' count | Share of the pass |
 |---|---|---|---|---|---|---|
-| under 1 ms | 16,907,347 | 2.7027 | 2.7027 | 2.7027 | 3.13% | 2.16% |
-| 1 to 10 ms | 9,600,178 | 4.0344 | 4.0344 | 4.0344 | 2.66% | 1.83% |
-| 10 to 100 ms | 14,833,077 | 7.9578 | 7.9578 | 7.9578 | 8.09% | 5.58% |
-| 100 ms to 1 s | 24,427,069 | 14.6709 | 14.6709 | 14.6709 | 24.57% | 16.93% |
-| 1 s and over | 78,842,810 | 11.3872 | 11.3872 | 11.3872 | 61.55% | 42.41% |
+| under 1 ms | 16,907,347 | 2.7027 | n/a, one process | n/a, one process | 3.13% | 2.16% |
+| 1 to 10 ms | 9,600,178 | 4.0344 | n/a, one process | n/a, one process | 2.66% | 1.83% |
+| 10 to 100 ms | 14,833,077 | 7.9578 | n/a, one process | n/a, one process | 8.09% | 5.58% |
+| 100 ms to 1 s | 24,427,069 | 14.6709 | n/a, one process | n/a, one process | 24.57% | 16.93% |
+| 1 s and over | 78,842,810 | 11.3872 | n/a, one process | n/a, one process | 61.55% | 42.41% |
 
 ## By type and age: cache-misses (L2 misses on Zen 1)
 
-Per message of each type and age, median over the repetitions, raw.
+Per message of each type and age, from 1 process of the 3 planned, so no median, min or max, raw.
 
 | Type | under 1 ms | 1 to 10 ms | 10 to 100 ms | 100 ms to 1 s | 1 s and over |
 |---|---|---|---|---|---|
@@ -189,32 +191,32 @@ Messages of each type and age, repetition 1:
 
 ## By message type: cache-misses (L2 misses on Zen 1)
 
-Each type's spans over its messages, median over the repetitions, with the empty span's cost beside it.
+Each type's spans over its messages, from 1 process of the 3 planned, so no median, min or max, with the empty span's cost beside it.
 
 | Type | Message | Messages | Per message, raw | Min | Max | Empty span | Per message, empty span taken off | Share of the pass |
 |---|---|---|---|---|---|---|---|---|
-| `A` | Add Order | 117,145,568 | 5.5428 | 5.5428 | 5.5428 | 0.0001 | 5.5427 | 30.67% |
-| `F` | Add Order with MPID | 1,485,888 | 5.5152 | 5.5152 | 5.5152 | 0.0001 | 5.5151 | 0.39% |
-| `E` | Order Executed | 5,722,824 | 6.7660 | 6.7660 | 6.7660 | 0.0001 | 6.7659 | 1.83% |
-| `C` | Order Executed With Price | 99,917 | 7.0291 | 7.0291 | 7.0291 | 0.0001 | 7.0291 | 0.03% |
-| `X` | Order Cancel | 2,787,676 | 4.3559 | 4.3559 | 4.3559 | 0.0001 | 4.3558 | 0.57% |
-| `D` | Order Delete | 114,360,997 | 9.3997 | 9.3997 | 9.3997 | 0.0001 | 9.3997 | 50.78% |
-| `U` | Order Replace | 21,639,067 | 15.3471 | 15.3471 | 15.3471 | 0.0001 | 15.3470 | 15.69% |
-| `P` | Trade, non-cross | 1,218,602 | 0.2476 | 0.2476 | 0.2476 | 0.0001 | 0.2475 | 0.01% |
-| `Q` | Cross Trade | 17,836 | 0.3421 | 0.3421 | 0.3421 | 0.0001 | 0.3420 | 0.00% |
-| `H` | Stock Trading Action | 8,966 | 0.0155 | 0.0155 | 0.0155 | 0.0001 | 0.0154 | 0.00% |
-| `I` | Net Order Imbalance | 4,024,315 | 0.0878 | 0.0878 | 0.0878 | 0.0001 | 0.0877 | 0.02% |
-| `J` | LULD Auction Collar | 34 | 0.4118 | 0.4118 | 0.4118 | 0.0001 | 0.4117 | 0.00% |
-| `K` | IPO Quoting Period | 3 | 0.6667 | 0.6667 | 0.6667 | 0.0001 | 0.6666 | 0.00% |
-| `L` | Market Participant Position | 215,161 | 0.0113 | 0.0113 | 0.0113 | 0.0001 | 0.0112 | 0.00% |
-| `R` | Stock Directory | 8,906 | 0.0158 | 0.0158 | 0.0158 | 0.0001 | 0.0157 | 0.00% |
-| `S` | System Event | 6 | 18.1667 | 18.1667 | 18.1667 | 0.0001 | 18.1666 | 0.00% |
-| `V` | MWCB Decline Level | 1 | 0.0000 | 0.0000 | 0.0000 | 0.0001 | -0.0001 | 0.00% |
-| `Y` | Reg SHO Restriction | 9,013 | 0.0132 | 0.0132 | 0.0132 | 0.0001 | 0.0131 | 0.00% |
+| `A` | Add Order | 117,145,568 | 5.5428 | n/a, one process | n/a, one process | 0.0001 | 5.5427 | 30.67% |
+| `F` | Add Order with MPID | 1,485,888 | 5.5152 | n/a, one process | n/a, one process | 0.0001 | 5.5151 | 0.39% |
+| `E` | Order Executed | 5,722,824 | 6.7660 | n/a, one process | n/a, one process | 0.0001 | 6.7659 | 1.83% |
+| `C` | Order Executed With Price | 99,917 | 7.0291 | n/a, one process | n/a, one process | 0.0001 | 7.0291 | 0.03% |
+| `X` | Order Cancel | 2,787,676 | 4.3559 | n/a, one process | n/a, one process | 0.0001 | 4.3558 | 0.57% |
+| `D` | Order Delete | 114,360,997 | 9.3997 | n/a, one process | n/a, one process | 0.0001 | 9.3997 | 50.78% |
+| `U` | Order Replace | 21,639,067 | 15.3471 | n/a, one process | n/a, one process | 0.0001 | 15.3470 | 15.69% |
+| `P` | Trade, non-cross | 1,218,602 | 0.2476 | n/a, one process | n/a, one process | 0.0001 | 0.2475 | 0.01% |
+| `Q` | Cross Trade | 17,836 | 0.3421 | n/a, one process | n/a, one process | 0.0001 | 0.3420 | 0.00% |
+| `H` | Stock Trading Action | 8,966 | 0.0155 | n/a, one process | n/a, one process | 0.0001 | 0.0154 | 0.00% |
+| `I` | Net Order Imbalance | 4,024,315 | 0.0878 | n/a, one process | n/a, one process | 0.0001 | 0.0877 | 0.02% |
+| `J` | LULD Auction Collar | 34 | 0.4118 | n/a, one process | n/a, one process | 0.0001 | 0.4117 | 0.00% |
+| `K` | IPO Quoting Period | 3 | 0.6667 | n/a, one process | n/a, one process | 0.0001 | 0.6666 | 0.00% |
+| `L` | Market Participant Position | 215,161 | 0.0113 | n/a, one process | n/a, one process | 0.0001 | 0.0112 | 0.00% |
+| `R` | Stock Directory | 8,906 | 0.0158 | n/a, one process | n/a, one process | 0.0001 | 0.0157 | 0.00% |
+| `S` | System Event | 6 | 18.1667 | n/a, one process | n/a, one process | 0.0001 | 18.1666 | 0.00% |
+| `V` | MWCB Decline Level | 1 | 0.0000 | n/a, one process | n/a, one process | 0.0001 | -0.0001 | 0.00% |
+| `Y` | Reg SHO Restriction | 9,013 | 0.0132 | n/a, one process | n/a, one process | 0.0001 | 0.0131 | 0.00% |
 
 ## The cost of counting
 
-What one empty span counts, the mean over each process's empty spans before and after the pass, median over the type-age repetitions.
+What one empty span counts, the mean over each process's empty spans before and after the pass, from 1 process of the 3 planned, so no median, min or max.
 
 | Event | Before the pass | After the pass | Used beside the figures |
 |---|---|---|---|
@@ -295,7 +297,7 @@ The integers the figures come from, so that the tiling can be checked from this 
 
 ## machine_check output
 
-Before the first repetition and after the last, each under `measure.sh taskset -c 4`.
+The check before began at 2026-11-10T13:44:58Z, 6,406 s before the first repetition began. The check after began at 2026-11-10T15:35:52Z, 93 s after the last repetition ended. Each ran under `measure.sh taskset -c 4`. The check before was not taken for this run: 6,406 s lie between them, so it is not a check of the host as the run began.
 
 ```
 machine_check: record host: debian
