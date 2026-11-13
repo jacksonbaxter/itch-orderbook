@@ -255,6 +255,21 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [x] P-0106: T-BT-3 on `debian` again under the Linux sampler rule, P-0104's schedule, gave 284.96 ns a message, inside neither earlier figure's band, so the prediction failed, and it is published as failed with T-BT-3 missed by 1.10 M messages/s (`results/backtest_shadow_debian_12302019.md`, with the miss's host reason; docs/NOTES.md, "P-0106: T-BT-3 on `debian` under the Linux sampler rule").
 - [x] T-BT-1 held in its bar's unit, engine events/s, with messages/s beside it; both T-BT-1 files rendered again from their raw records (docs/NOTES.md, "T-BT-1 in its bar's unit").
 
+### Review findings r1-1, r4-1, r4-2, r4-6 and r5: the drivers and their records
+- [x] r5-1: `simd_driver` withdraws and reruns a process only under the sampler rule; any other failure refuses the run with a run-log row (d3beb3b).
+- [x] r5-3: a driver writes "written, pending the load stamp", and `stamp_load` appends each file's outcome row, published or withdrawn with the reason (a484b48); `scripts/test_driver_records.py` in the bench stage.
+- [x] r5-8: all eight drivers catch `Exception` last and still write the run's row (0752554).
+- [x] r5-4: the Commands line holds every argument that reaches a child process; 28 bench files rendered again (c9670a9).
+- [x] r5-2: the 13 Mac files from before the sampler rule say so; the Mac rule inside the bench and backtest drivers (`scripts/mac_rule.py`, `scripts/mac_sampler.sh`); the `linux-sampler-rule` gate (d2f0720).
+- [x] r4-1: the per-message means through `rdpmc` say they hold the counter reads; 13 `debian` files rendered again; `bench/replay.hpp`'s comment preprocesses to the same code (11f241e).
+- [x] r4-2: the SPSC paced and burst latencies are labelled as measured from the push (47293c6).
+- [x] r5-6, r5-9, r5-13: every driver writes its run into a raw folder named by the run id, with `run.json` (`scripts/run_record.py`), and the renders refuse an incomplete one (f6f6880).
+- [x] r1-1, r4-6: `simd_driver` refuses `avx512vbmi` for the passes it does not guard (df8ac92). r5-14, r5-12, r5-11, r5-10: 3444f85, 736e548, 3658d5e (6 UDP files rendered again), 786af1d.
+- [x] The Mac's sampler rule names another process by its kind, in new files and refusals (19766da).
+- [x] A stub whose note is the label alone is a stub to `check_results` (0c4c61a).
+- [x] Tests that drive a Mac driver give it a stand-in process table, and a file made with one says so and is refused as published (671db79); docs/NOTES.md, "Tests that drove a Mac driver read the Mac's own process table".
+- [x] Every stage but fault_matrix, then the faults that build of the bench, spsc and simd areas, of the testing piece and of the files both branches changed, under the check lock: the merge check of this merge. The faults that build nothing ran without the lock. The toolchain symbolizer change reaches every sanitizer build; the other faults that build are covered by the whole matrix in the full check that follows.
+
 ### Review finding r1-3: fuzz targets for the kernels, the packet builder and the look-ahead reader
 - [x] `fuzz_kernels`: every kernel the host runs against the scalar kernel and `decode_book_op`, through `parse_ops` inside `run()` and message by message, each input in an exact-size heap block and each message with only its kernel's `kOverread` after it. Seeds, faults in `simd.json`.
 - [x] `fuzz_packets`: `mold::build_packets` on a fuzzer-chosen plan against a model of the plan, and back through the decoder and a `FeedHandler` to the stream's frames. Seeds, faults in `udp.json`.
