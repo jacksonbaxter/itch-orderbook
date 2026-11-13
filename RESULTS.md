@@ -167,7 +167,7 @@ The backtester. Each row is one workload's results file: T-BT-1 replays the whol
 |---|---|---|---|---|---|---|---|---|---|---|
 | quoting | T-BT-1 | 12302019 | debian | pinned to core 4 | 4,570,542 | 0.98% | 4,677,511 | met | `c8ca2e2dd09b` | [results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md) |
 | quoting | T-BT-1 | 12302019 | macOS (M4 Max) | not pinned | 16,792,852 | 2.06% | 17,185,873 | host differs | `4fa6701df1cf` | [results/backtest_quoting_mac_12302019.md](results/backtest_quoting_mac_12302019.md) |
-| shadow | T-BT-3 | 12302019 | debian | pinned to core 4 | 3,354,119 | 2.06% | 7,160,445 | missed | `c8ca2e2dd09b` | [results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md) |
+| shadow | T-BT-3 | 12302019 | debian | pinned to core 4 | 3,509,307 | 0.25% | 7,491,744 | missed | `22fe2d6542a1` | [results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md) |
 | shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | 7,804,654 | 0.24% | 16,661,541 | met | `55978750888d` | [results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md) |
 
 The browser demo's replay of one symbol's extract, in a browser and natively on the same Mac, the same C++ on each side. Rates come from whole replays only: the browser cannot time one message. The bar was set in Google Chrome, so another browser neither meets nor misses it.
@@ -646,4 +646,5 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0903-20261112T172808Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
 | `P-0903-20261112T165458Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
 | `P-0903-20261112T172808Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
+| `P-0106-20261113T040315Z` | `P-0106` | `22fe2d6542a1` | Linux | `published` |
 <!-- results table: end -->

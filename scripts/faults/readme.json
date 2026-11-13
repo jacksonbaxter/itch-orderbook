@@ -566,8 +566,8 @@
       "mutations": [
         {
           "file": "results/backtest_shadow_debian_12302019.md",
-          "old": "| Replay rate, messages/s | 3,354,119 |",
-          "new": "| Replay rate, messages/s | 3,354,120 |"
+          "old": "| Replay rate, messages/s | 3,509,307 |",
+          "new": "| Replay rate, messages/s | 3,509,308 |"
         }
       ],
       "command": [

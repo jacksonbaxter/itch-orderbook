@@ -489,7 +489,7 @@ class ResultsTable(unittest.TestCase):
 
     def test_a_stale_results_page_fails_and_both_pages_are_checked(self):
         self.edit("results/backtest_shadow_debian_12302019.md",
-                  "| Replay rate, messages/s | 3,354,119 |", "| Replay rate, messages/s | 3,354,120 |")
+                  "| Replay rate, messages/s | 3,509,307 |", "| Replay rate, messages/s | 3,509,308 |")
         self.edit("README.md", "| 5.15 M msg/s; `paged-flat`", "| 16.5 M msg/s; `paged-flat`")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)

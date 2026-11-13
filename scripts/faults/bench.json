@@ -4260,6 +4260,26 @@
       "expect": {
         "signature": "FAIL: test_a_file_with_a_sampler_section"
       }
+    },
+    {
+      "id": "bench-predictions-rerun-dated-by-first-version",
+      "breaks": "check_predictions dates a result file run again under a later prediction by the file's first commit, so a rerun can never pass",
+      "check": "test_check_predictions.py test_a_file_run_again_under_a_later_prediction",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "        if text is not None and dict(FIELD.findall(text)).get(\"prediction\") == identifier:\n",
+          "new": "        if text is not None:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_run_again_under_a_later_prediction"
+      }
     }
   ]
 }
