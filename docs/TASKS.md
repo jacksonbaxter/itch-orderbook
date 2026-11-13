@@ -257,3 +257,13 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [x] `fuzz_lookahead`, its own target: `LookaheadReader` against `FrameReader` at a fuzzer-chosen distance on a real book, with its prefetch schedule. Seeds, faults in `bookvariants.json`.
 - [x] A 5-minute first run of each, under `heavy.sh`, on the Mac.
 - [ ] The 30-minute runs of all nine targets at the final code (the Phase 4 item above). The x86-64 kernels were only compiled here; their first replay is CI's.
+
+### Review findings r2-1, r2-3, r2-5, r3-1, r3-9 and r10-8: the tools' input checks
+- [x] r2-1: `itch_alloc`, `itch_trades` and `itch_map_compare` refuse a capacity of 0 or past 32 bits (c995a9d, `tools/capacity.hpp`); the index headers state the precondition in a comment that preprocesses to the same code.
+- [x] r2-3: `itch_window` counts a U's add search after its old order has gone (9ca0d3a); `results/window_12302019.md` rendered again under P-0027, only the add-search buckets moved, as predicted (docs/NOTES.md, "Against P-0027").
+- [x] r2-5: an `itch_trades --symbols` file that cannot be opened, written or closed fails the run (21d3f28).
+- [x] r3-1: `itch_backtest`, `itch_mm`, `itch_select`, `itch_calibrate` and `itch_queue_jumps` exit 1 unless the file's framing ends on `end_of_input`, naming the status and the skipped frames (c50b472, `tools/framing.hpp`).
+- [x] r3-9: `itch_as_tables` and `itch_calibrate` parse numbers whole with `from_chars`, inside bounds (75b227e).
+- [x] r10-8: `fetch_data.py` stops every worker on any error and raises it (c507d29).
+- [x] P-0028, the published outputs of these tools run again: missed as worded, 24 of 72 differ from their raw logs, every local one identical from the base's binaries (docs/NOTES.md, "Against P-0028").
+- [ ] `itch_queue_jumps` ignores `fclose`'s result for `--details`; left as it is, no published file affected (docs/NOTES.md, "Found by the final review and left as it is").
