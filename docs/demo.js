@@ -6,6 +6,7 @@
 // leaves once the extract has played. With ?bench=N it runs T-WASM-1's
 // browser side instead: a warm-up replay and N timed ones, each on a fresh book, then posts
 // the record to the server that serves it (scripts/wasm_bench.py). Nothing else is timed there.
+// Either posts only to the page's own origin: a post= URL on any other is ignored.
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -19,6 +20,17 @@ const STATUS_NAMES = ["applied", "no_book_effect", "unknown_order", "locate_mism
 const EXTRACT_STATUS = ["ok", "no_symbol", "many_symbols", "bad_framing"];
 
 class Missing extends Error {}
+
+// Where the page may post: the URL, resolved against the page, when it is on the page's own
+// origin, else null. What the page posts holds the extract's book and tape.
+const ownOrigin = (url) => {
+  try {
+    const resolved = new URL(url, location.href);
+    return resolved.origin === location.origin ? resolved.href : null;
+  } catch {
+    return null;
+  }
+};
 
 const now = () => performance.now();
 const hex = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -225,9 +237,10 @@ class Player {
   // With ?play&post=URL, the page as it stands once the whole extract has played, for
   // scripts/test_demo_engine.py, which cannot look at a headless browser's screen.
   finished() {
-    if (params.has("play") && params.get("post")) {
-      fetch(params.get("post"), { method: "POST", headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ dom: document.documentElement.outerHTML }) });
+    const post = params.get("post") ? ownOrigin(params.get("post")) : null;
+    if (params.has("play") && post) {
+      fetch(post, { method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ dom: document.documentElement.outerHTML }) });
     }
   }
 
@@ -415,7 +428,7 @@ async function interactive() {
 
 // T-WASM-1's browser side. The record goes to the server, which writes it and ends the run.
 async function benchmark(runs) {
-  const post = params.get("post") || "/result";
+  const post = ownOrigin(params.get("post") || "/result");
   const record = { engine: "wasm", user_agent: navigator.userAgent,
                    cross_origin_isolated: crossOriginIsolated, refusals: [] };
   try {
@@ -450,8 +463,10 @@ async function benchmark(runs) {
     record.refusals.push(`the page failed: ${error.message}`);
   }
   document.body.dataset.bench = "done";
-  await fetch(post, { method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify(record) });
+  if (post) {
+    await fetch(post, { method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(record) });
+  }
 }
 
 loadNumbers();

@@ -213,6 +213,37 @@ class Page(Scratch):
                          [tuple(p[:3]) for p in prints])
 
 
+    def test_post_takes_only_the_page_s_own_origin(self):
+        page = "http://127.0.0.1:8000/index.html"
+        urls = ["/result", "result", "http://127.0.0.1:8000/x", "http://127.0.0.1:8001/result",
+                "https://127.0.0.1:8000/result", "http://localhost:8000/result",
+                "//elsewhere.example/result", "http://elsewhere.example/result",
+                "javascript:alert(1)", "data:text/plain,x", "http://[bad"]
+        got = self.page(f"{json.dumps(urls)}.map(ownOrigin)", f"{page}?play&post=/result")
+        self.assertEqual(got, ["http://127.0.0.1:8000/result", "http://127.0.0.1:8000/result",
+                               "http://127.0.0.1:8000/x"] + [None] * 8)
+
+    def test_a_played_page_posts_its_dom_only_to_its_own_origin(self):
+        page = "http://127.0.0.1:8000/index.html"
+        for post, want in (("/result", [{"url": "http://127.0.0.1:8000/result",
+                                         "method": "POST"}]),
+                           ("http://elsewhere.example/collect", []),
+                           ("//elsewhere.example/collect", [])):
+            with self.subTest(post=post):
+                self.assertEqual(self.page("(new Player(null, null).finished(), fetched)",
+                                           f"{page}?play&post={post}"), want)
+
+    def test_bench_posts_its_record_only_to_its_own_origin(self):
+        page = "http://127.0.0.1:8000/index.html"
+        for query, want in (("?bench=3", [{"url": "http://127.0.0.1:8000/result",
+                                           "method": "POST"}]),
+                            ("?bench=3&post=/elsewhere", [{"url": "http://127.0.0.1:8000/elsewhere",
+                                                           "method": "POST"}]),
+                            ("?bench=3&post=http://elsewhere.example/collect", [])):
+            with self.subTest(query=query):
+                self.assertEqual(self.page("benchmark(3).then(() => fetched)", page + query), want)
+
+
 # Stand-ins for bench_demo and the browser, written into the scratch folder at test time.
 FAKE_BENCH = textwrap.dedent("""\
     #!{python}

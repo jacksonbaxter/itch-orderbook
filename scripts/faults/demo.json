@@ -636,6 +636,66 @@
       "expect": {
         "signature": "FAIL: test_a_hidden_order_print_shows_no_side"
       }
+    },
+    {
+      "id": "demo-page-posts-its-dom-anywhere",
+      "breaks": "A played page posts its DOM, the extract's book and tape, to any URL given as post=",
+      "check": "test_demo.py",
+      "mutations": [
+        {
+          "file": "docs/demo.js",
+          "old": "const post = params.get(\"post\") ? ownOrigin(params.get(\"post\")) : null;",
+          "new": "const post = params.get(\"post\");"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_played_page_posts_its_dom_only_to_its_own_origin"
+      }
+    },
+    {
+      "id": "demo-page-bench-posts-anywhere",
+      "breaks": "The bench mode posts its record to any URL given as post=",
+      "check": "test_demo.py",
+      "mutations": [
+        {
+          "file": "docs/demo.js",
+          "old": "const post = ownOrigin(params.get(\"post\") || \"/result\");",
+          "new": "const post = params.get(\"post\") || \"/result\";"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_bench_posts_its_record_only_to_its_own_origin"
+      }
+    },
+    {
+      "id": "demo-page-any-origin-is-its-own",
+      "breaks": "The page takes any origin as its own",
+      "check": "test_demo.py",
+      "mutations": [
+        {
+          "file": "docs/demo.js",
+          "old": "return resolved.origin === location.origin ? resolved.href : null;",
+          "new": "return resolved.href;"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_post_takes_only_the_page_s_own_origin"
+      }
     }
   ]
 }
