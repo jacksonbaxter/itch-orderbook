@@ -306,6 +306,306 @@
       "expect": {
         "signature": "FUZZ_CHECK failed: (again == buffer|std::ranges::equal)"
       }
+    },
+    {
+      "id": "harness-skip-failure-hidden",
+      "breaks": "a binary that failed with a test skipped beside the failure exits 77, so ctest shows the failure as Skipped (r4-3)",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/support/gtest_main.cpp",
+          "old": "  if (!under_ctest || result != 0) {\n",
+          "new": "  if (!under_ctest) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL probe Probe\\.SkipsWithAReason:Probe\\.Fails: exit 77, not 1"
+      }
+    },
+    {
+      "id": "harness-skip-without-reason-skips",
+      "breaks": "a bare GTEST_SKIP() with no reason shows as Skipped instead of failing (r4-3)",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/support/gtest_main.cpp",
+          "old": "      unexplained += reason.empty() ? 1 : 0;\n",
+          "new": "      unexplained += 0;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL probe Probe\\.SkipsWithNoReason: exit 77, not 1"
+      }
+    },
+    {
+      "id": "harness-skip-empty-filter-passes",
+      "breaks": "an entry whose filter matches no test passes, checking nothing (r4-3)",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/support/gtest_main.cpp",
+          "old": "  if (unit.test_to_run_count() == 0) {\n",
+          "new": "  if (unit.test_to_run_count() < 0) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL probe Nothing\\.Matches: exit 0, not 1"
+      }
+    },
+    {
+      "id": "harness-skip-shows-as-passed",
+      "breaks": "a binary that passed with a test skipped exits 0, so ctest shows the skip as Passed (r4-3, r9-13)",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/support/gtest_main.cpp",
+          "old": "  return kSkipCode;\n",
+          "new": "  return kSkipCode * 0;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL probe Probe\\.Passes:Probe\\.SkipsWithAReason: exit 0, not 77"
+      }
+    },
+    {
+      "id": "harness-skip-regex-on-the-kernels",
+      "breaks": "the kernel entries take any [  SKIPPED ] line as Skipped again, a failing binary's included (r4-3)",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/CMakeLists.txt",
+          "old": "set_tests_properties(test_kernels_${kernel} PROPERTIES FAIL_REGULAR_EXPRESSION \"Running 0 tests\")",
+          "new": "set_tests_properties(test_kernels_${kernel} PROPERTIES FAIL_REGULAR_EXPRESSION \"Running 0 tests\"\n    SKIP_REGULAR_EXPRESSION \"\\\\[  SKIPPED \\\\]\")"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL test_kernels_\\w+: has a skip regex"
+      }
+    },
+    {
+      "id": "harness-skip-return-code-unset",
+      "breaks": "the GoogleTest entries have no SKIP_RETURN_CODE, so a skipping binary's 77 fails the entry (r4-3)",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/CMakeLists.txt",
+          "old": "  set_tests_properties(${entry} PROPERTIES LABELS unit SKIP_RETURN_CODE 77\n",
+          "new": "  set_tests_properties(${entry} PROPERTIES LABELS unit\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL test_\\w+: SKIP_RETURN_CODE is None"
+      }
+    },
+    {
+      "id": "harness-skip-environment-unset",
+      "breaks": "ctest no longer sets ITCH_CTEST_SKIPS, so every skip shows as Passed (r4-3)",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/CMakeLists.txt",
+          "old": "    ENVIRONMENT ITCH_CTEST_SKIPS=1)\n",
+          "new": "    )\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL test_\\w+: ctest does not set ITCH_CTEST_SKIPS"
+      }
+    },
+    {
+      "id": "harness-skip-cross-core-inside-its-binary",
+      "breaks": "the cross-core clock test skips inside test_bench_platform's entry again, which shows Passed on a hypervisor (r4-4)",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/CMakeLists.txt",
+          "old": "itch_add_test(test_bench_platform test_bench_platform.cpp\n  SKIPS test_bench_platform_cross_core BenchCrossCore.TheLiveClocksAgreeAcrossTwoThreads)",
+          "new": "itch_add_test(test_bench_platform test_bench_platform.cpp)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL test_bench_platform_cross_core: no such entry"
+      }
+    },
+    {
+      "id": "harness-skip-cache-line-inside-its-binary",
+      "breaks": "the SPSC cache-line test skips inside test_spsc's entry again, which shows Passed (r9-13)",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/CMakeLists.txt",
+          "old": "itch_add_test(test_spsc test_spsc.cpp\n  SKIPS test_spsc_cache_line SpscRing.PaddingConstantIsTheHardwareLine)",
+          "new": "itch_add_test(test_spsc test_spsc.cpp)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL test_spsc_cache_line: no such entry"
+      }
+    },
+    {
+      "id": "harness-skip-main-entry-runs-them-too",
+      "breaks": "a binary's main entry runs the tests that have entries of their own as well, so their skip shows that entry Skipped",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/CMakeLists.txt",
+          "old": "    itch_gtest_entry(${name} ${name} \"--gtest_filter=-${apart}\")\n",
+          "new": "    itch_gtest_entry(${name} ${name})\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL test_\\w+: \\w+'s own entry runs \\S+ too"
+      }
     }
   ]
 }

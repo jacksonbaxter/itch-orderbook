@@ -1020,6 +1020,68 @@
       "expect": {
         "signature": "\\[  FAILED  \\] MoldSequence\\.OneMessageAtTheTopIsAdmittedOnlyBelowTheLastSequence"
       }
+    },
+    {
+      "id": "udp-ring-mode-tests-never-skip",
+      "breaks": "the multishot io_uring tests count S1 as a ring mode, so with none built they pass over none instead of skipping (r1-2)",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/test_udp.cpp",
+          "old": "  return id.starts_with('U') && id != \"U1\";\n",
+          "new": "  return id != \"U1\";\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL test_udp_ring_modes: exit 0, not 77"
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "udp-slot-mode-test-never-skips",
+      "breaks": "the slot test counts any built mode as one with slots, so with none built it passes over none instead of skipping (r1-2)",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/test_udp.cpp",
+          "old": "  if (none_built(udp::uses_slots)) {\n",
+          "new": "  if (none_built(udp::mode_built)) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL test_udp_slot_modes: exit 0, not 77"
+      },
+      "system": "Darwin"
     }
   ]
 }
