@@ -4710,7 +4710,7 @@
     {
       "id": "bench-counts-figures-unrecomputed",
       "breaks": "--check takes the figures as printed and never works them out again from the totals",
-      "check": "test_counts_report.py",
+      "check": "test_counts_report.py test_a_median_and_verdict_typed_in_together_are_caught",
       "mutations": [
         {
           "file": "scripts/counts_report.py",
@@ -4731,7 +4731,7 @@
     {
       "id": "bench-counts-one-repetition-published",
       "breaks": "Only repetition 1's totals are published again",
-      "check": "test_counts_report.py",
+      "check": "test_counts_report.py test_a_clean_report_passes_its_own_check",
       "mutations": [
         {
           "file": "scripts/counts_report.py",
@@ -4752,7 +4752,7 @@
     {
       "id": "bench-counts-plain-totals-unpublished",
       "breaks": "A type-age file leaves out the totals of the records by type alone beside it",
-      "check": "test_counts_report.py",
+      "check": "test_counts_report.py test_a_clean_report_passes_its_own_check",
       "mutations": [
         {
           "file": "scripts/counts_report.py",
@@ -4773,7 +4773,7 @@
     {
       "id": "bench-counts-repetition-count-unchecked",
       "breaks": "--check accepts a file missing a repetition's totals",
-      "check": "test_counts_report.py",
+      "check": "test_counts_report.py test_check_works_every_figure_out_again_from_each_repetition",
       "mutations": [
         {
           "file": "scripts/counts_report.py",
@@ -4794,7 +4794,7 @@
     {
       "id": "bench-counts-header-figures-unchecked",
       "breaks": "--check leaves the header's counts and the age summary unchecked against the totals",
-      "check": "test_counts_report.py",
+      "check": "test_counts_report.py test_check_works_every_figure_out_again_from_each_repetition",
       "mutations": [
         {
           "file": "scripts/counts_report.py",
@@ -4815,7 +4815,7 @@
     {
       "id": "bench-flame-report-shares-unrecomputed",
       "breaks": "--check takes the hottest frames' shares as printed",
-      "check": "test_flame_report.py",
+      "check": "test_flame_report.py test_check_works_the_shares_out_again_from_the_folded_stacks",
       "mutations": [
         {
           "file": "scripts/flame_report.py",
@@ -4836,7 +4836,7 @@
     {
       "id": "bench-flame-report-ratio-unrecomputed",
       "breaks": "--check takes the frame-pointer ratio as printed",
-      "check": "test_flame_report.py",
+      "check": "test_flame_report.py test_check_works_the_ratio_out_again_from_the_two_builds",
       "mutations": [
         {
           "file": "scripts/flame_report.py",
@@ -4857,7 +4857,7 @@
     {
       "id": "bench-flame-report-delta-section-unrecomputed",
       "breaks": "--check takes the frame-pointer build's table and sentence as printed",
-      "check": "test_flame_report.py",
+      "check": "test_flame_report.py test_check_works_the_ratio_out_again_from_the_two_builds",
       "mutations": [
         {
           "file": "scripts/flame_report.py",
@@ -4878,7 +4878,7 @@
     {
       "id": "bench-flame-report-summary-unrecomputed",
       "breaks": "--check takes the summary as printed",
-      "check": "test_flame_report.py",
+      "check": "test_flame_report.py test_check_works_the_shares_out_again_from_the_folded_stacks",
       "mutations": [
         {
           "file": "scripts/flame_report.py",
@@ -4899,7 +4899,7 @@
     {
       "id": "bench-flame-report-svg-unmatched",
       "breaks": "Frames the SVG draws are never held to the folded stacks",
-      "check": "test_flame_report.py",
+      "check": "test_flame_report.py test_every_frame_the_svg_draws_is_a_node_of_the_folded_stacks",
       "mutations": [
         {
           "file": "scripts/flame_report.py",
@@ -4920,7 +4920,7 @@
     {
       "id": "bench-flame-report-folded-unwritten",
       "breaks": "render leaves the folded stacks out, so nothing can be worked out again",
-      "check": "test_flame_report.py",
+      "check": "test_flame_report.py test_a_debian_graph_renders_and_passes_its_own_check",
       "mutations": [
         {
           "file": "scripts/flame_report.py",
@@ -4941,7 +4941,7 @@
     {
       "id": "bench-flame-report-folded-private-unchecked",
       "breaks": "--check never looks for private text in the folded stacks",
-      "check": "test_flame_report.py",
+      "check": "test_flame_report.py test_check_catches_a_private_name_in_the_folded_stacks",
       "mutations": [
         {
           "file": "scripts/flame_report.py",
@@ -4962,7 +4962,7 @@
     {
       "id": "bench-counts-load-end-from-the-type-age-processes",
       "breaks": "A type-age file's end load line is the last type-age process's, not the run's last",
-      "check": "test_counts_report.py",
+      "check": "test_counts_report.py test_the_load_lines_bracket_every_process",
       "mutations": [
         {
           "file": "scripts/counts_report.py",
@@ -4983,7 +4983,7 @@
     {
       "id": "bench-counts-load-line-unplaced-unchecked",
       "breaks": "--check takes load lines that do not bracket the run",
-      "check": "test_counts_report.py",
+      "check": "test_counts_report.py test_the_load_lines_bracket_every_process",
       "mutations": [
         {
           "file": "scripts/counts_report.py",
@@ -5004,7 +5004,7 @@
     {
       "id": "bench-flame-report-arm-unnamed",
       "breaks": "The summary gives the frame-pointer ratio as the graph's own build's",
-      "check": "test_flame_report.py",
+      "check": "test_flame_report.py test_the_summary_names_the_arm_the_two_builds_ran",
       "mutations": [
         {
           "file": "scripts/flame_report.py",
@@ -5025,7 +5025,7 @@
     {
       "id": "bench-flame-report-arms-unmatched",
       "breaks": "A delta from builds of two different arms is published",
-      "check": "test_flame_report.py",
+      "check": "test_flame_report.py test_the_summary_names_the_arm_the_two_builds_ran",
       "mutations": [
         {
           "file": "scripts/flame_report.py",
@@ -5046,7 +5046,7 @@
     {
       "id": "bench-flame-report-no-ok-after-a-failure",
       "breaks": "--check prints no ok for any file after one that fails",
-      "check": "test_flame_report.py",
+      "check": "test_flame_report.py test_check_says_ok_for_each_file_that_passes_after_one_that_fails",
       "mutations": [
         {
           "file": "scripts/flame_report.py",
