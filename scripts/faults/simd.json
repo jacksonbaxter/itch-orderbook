@@ -672,6 +672,250 @@
         "signature": "simd_report: FAIL command-differs: the command shown does not run under 'measure\\.sh taskset -c 4'",
         "exit": 1
       }
+    },
+    {
+      "id": "simd-report-speed-up-on-ns",
+      "breaks": "Speed-up is the ratio of the ns medians again, not of the cycles the calls compare",
+      "check": "test_simd_report.py",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    metric = compared(experiment, events)\n    word = SHORT.get(metric, \"ns\")\n",
+          "new": "    metric = \"ns\"\n    word = SHORT.get(compared(experiment, events), \"ns\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_speed_up_is_on_the_cycles_the_calls_compare",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-speed-up-of-noise",
+      "breaks": "Speed-up prints a ratio where a range over the repetitions reaches zero",
+      "check": "test_simd_report.py",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    if base is None or base[metric][\"min\"] <= 0 or figure[metric][\"min\"] <= 0:\n",
+          "new": "    if base is None or base[metric][\"median\"] <= 0 or figure[metric][\"median\"] <= 0:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_speed_up_is_n_a_where_a_range_reaches_zero",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-precision-unchecked",
+      "breaks": "A file without the caveat on rounding the seconds passes --check",
+      "check": "test_simd_report.py",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "    if precision not in (check_results.section(text, \"What this does not show\") or \"\").split(\"\\n\"):\n",
+          "new": "    if precision not in (check_results.section(text, \"What this does not show\") or \"\").split(\"\\n\") and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_caveats_bound_what_rounding_the_seconds_can_move",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-precision-bound-halved",
+      "breaks": "The rounding bound counts one mean of passes, not the two a paired figure is apart",
+      "check": "test_simd_report.py",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "        results = max(1000 / f[\"items\"] for f in figures.values())\n",
+          "new": "        results = max(500 / f[\"items\"] for f in figures.values())\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_caveats_bound_what_rounding_the_seconds_can_move",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-field-debian-noise-as-a-speed-up",
+      "breaks": "results/simd_field_debian_12302019.md prints avx2-w2's noise as a speed-up again",
+      "check": "simd_report.py --check",
+      "mutations": [
+        {
+          "file": "results/simd_field_debian_12302019.md",
+          "old": "| 3.000 | -0.000 | -0.000 | 0.000 | `scalar-w2` | n/a |",
+          "new": "| 3.000 | -0.000 | -0.000 | 0.000 | `scalar-w2` | 0.097 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/simd_report.py",
+        "--check",
+        "{tree}/results/simd_field_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "simd_report: FAIL results-differ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-parse-mac-precision-caveat-dropped",
+      "breaks": "results/simd_parse_mac_12302019.md loses the caveat that the rare types' last digit is not certain",
+      "check": "simd_report.py --check",
+      "mutations": [
+        {
+          "file": "results/simd_parse_mac_12302019.md",
+          "old": "; one in ns an op of a type by at most 0.011 ns, more than half the last printed place, so that digit is not certain.",
+          "new": "."
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/simd_report.py",
+        "--check",
+        "{tree}/results/simd_parse_mac_12302019.md"
+      ],
+      "expect": {
+        "signature": "simd_report: FAIL precision-unsaid",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-fuzz-kernels-corpus-replay",
+      "breaks": "Every vector kernel reads an Order Replace's shares a byte early: the plan they share moves, the scalar kernel's reads do not",
+      "check": "corpus_fuzz_kernels, each kernel's parse_ops against the scalar kernel's",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/layout.hpp",
+          "old": "Field{.at = 27, .width = 4, .to = kOpShares}",
+          "new": "Field{.at = 26, .width = 4, .to = kOpShares}"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_kernels"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_kernels$"
+      ],
+      "expect": {
+        "signature": "fuzz_kernels: kernel \\w+ differs\\s+FUZZ_CHECK failed: got(\\.ops)? == scalar"
+      }
+    },
+    {
+      "id": "simd-fuzz-kernels-tail-count",
+      "breaks": "parse_ops gives the scalar kernel an op with exactly kOverread bytes after it, and counts it in the tail",
+      "check": "corpus_fuzz_kernels, the tail against the ops the walk finds within kOverread of the end",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/parse.hpp",
+          "old": "    if (after >= Kernel::kOverread) {\n",
+          "new": "    if (after > Kernel::kOverread) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_kernels"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_kernels$"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: totals\\.tail == want->tail\\(K::kOverread\\)"
+      }
+    },
+    {
+      "id": "simd-fuzz-kernels-neon-overread",
+      "breaks": "Each NEON window load also reads the byte after its window, past the message at the input's end, and changes no value",
+      "check": "corpus_fuzz_kernels under ASan, the input flush against the end of an exact-size heap block",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/neon.hpp",
+          "old": "  uint8x16_t v{};\n  std::memcpy(&v, p, sizeof(v));\n  return v;\n",
+          "new": "  uint8x16_t v{};\n  std::memcpy(&v, p, sizeof(v));\n  static_cast<void>(*static_cast<const volatile std::byte*>(p + sizeof(v)));\n  return v;\n"
+        }
+      ],
+      "build": {
+        "preset": "asan-ubsan",
+        "targets": [
+          "fuzz_kernels"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "asan-ubsan",
+        "-R",
+        "^corpus_fuzz_kernels$"
+      ],
+      "expect": {
+        "signature": "AddressSanitizer: heap-buffer-overflow"
+      }
+    },
+    {
+      "id": "simd-fuzz-kernels-oracle",
+      "breaks": "parse_ops hands on an empty op for an Order Cancel of one share count no seed has, on every kernel alike",
+      "check": "fuzz_kernels under libFuzzer, parse_ops against the walk with decode_book_op, which the kernels' agreement cannot stand in for",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/parse.hpp",
+          "old": "    if (after >= Kernel::kOverread) {\n",
+          "new": "    if (type == 'X' && read_be<std::uint32_t>(m + 19) == 0xC0FFEE11U) {\n      sink(BookOp{});\n    } else if (after >= Kernel::kOverread) {\n"
+        }
+      ],
+      "build": {
+        "preset": "fuzz",
+        "targets": [
+          "fuzz_kernels"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{build}/fuzz/fuzz_kernels",
+        "-seed=1",
+        "-max_total_time=60",
+        "-artifact_prefix={build}/fuzz/artifacts/",
+        "{build}/fuzz/corpus/fuzz_kernels",
+        "{tree}/fuzz/corpus/fuzz_kernels"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: got\\.ops == want->ops"
+      }
     }
   ]
 }

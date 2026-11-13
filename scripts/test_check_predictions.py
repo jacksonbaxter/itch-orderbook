@@ -187,6 +187,38 @@ class History(unittest.TestCase):
         self.commit("predictions.md")
         self.assert_fails("prediction-after-result")
 
+    def run_again(self, prediction_first):
+        """bench_fixture.md run again under P-0002, its prediction committed first or after."""
+        self.in_order()
+        predictions = self.results / "predictions.md"
+        fixture = self.results / "bench_fixture.md"
+        log = self.results / "run_log.md"
+
+        def predict():
+            predictions.write_text(predictions.read_text(encoding="utf-8") +
+                                   "\n## P-0002: again\n\n- Prediction: it runs again.\n",
+                                   encoding="utf-8")
+            self.commit("predictions.md")
+        if prediction_first:
+            predict()
+        fixture.write_text("# A fixture result\n\n- prediction: P-0002\n"
+                           "- run_id: P-0002-20261101T100005Z\n", encoding="utf-8")
+        log.write_text(log.read_text(encoding="utf-8") +
+                       "| P-0002-20261101T100005Z | P-0002 | abc (clean) | Darwin | published |\n",
+                       encoding="utf-8")
+        self.commit("bench_fixture.md", "run_log.md")
+        if not prediction_first:
+            predict()
+
+    def test_a_file_run_again_under_a_later_prediction(self):
+        self.run_again(prediction_first=True)
+        code, output = check(self.root)
+        self.assertEqual(code, 0, output)
+
+    def test_a_file_run_again_before_its_prediction(self):
+        self.run_again(prediction_first=False)
+        self.assert_fails("prediction-after-result")
+
     def test_prediction_never_committed(self):
         self.copy("run_log.md", "bench_fixture.md")
         self.commit("run_log.md", "bench_fixture.md")

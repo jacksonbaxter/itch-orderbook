@@ -37,6 +37,7 @@ class ResultsTable(unittest.TestCase):
         shutil.copytree(REPO_ROOT / "results", self.root / "results")
         shutil.copy(REPO_ROOT / "README.md", self.root / "README.md")
         shutil.copy(REPO_ROOT / "RESULTS.md", self.root / "RESULTS.md")
+        shutil.copy(REPO_ROOT / "BENCHMARKS.md", self.root / "BENCHMARKS.md")
 
     def run_table(self, *extra):
         out = io.StringIO()
@@ -103,6 +104,8 @@ class ResultsTable(unittest.TestCase):
         row = self.row("T-TRADE-3", "10302019")
         self.assertIn("| **FAIL** | trade_shares wrong on PLAB, trades wrong on PLAB; "
                       "equal_shares 5766 of 5767, equal_prints 5766 of 5767;", row)
+        # Every failing row carries the pinned window's share count, odd lots wrong or not.
+        self.assertRegex(row, r"; shares equal on [\d,]+ of [\d,]+;")
         self.assertNotIn("odd-lot", row)
 
     def test_a_day_of_another_venue_keeps_its_suffix_and_says_why_t_trade_2_did_not_run(self):
@@ -173,6 +176,27 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(len(shown), len(runs))
         self.assertIn("| `P-0601-20261106T031311Z_scalar-w2-1` |", output)
         self.assertIn("| `P-0024-window-12302019` |", output)
+
+    def test_of_the_rows_with_one_run_id_the_last_stands(self):
+        path = self.root / "results" / "run_log.md"
+        log = path.read_text(encoding="utf-8")
+        lines = log.splitlines()
+        rows = [number for number, line in enumerate(lines, 1)
+                if line.startswith("| P-0023-20261110T103318Z |")]
+        self.assertEqual(len(rows), 2)
+        _, output = self.run_table()
+        shown = [line for line in output.splitlines()
+                 if line.startswith("| `P-0023-20261110T103318Z` |")]
+        self.assertEqual([line.rsplit(" | ", 1)[1] for line in shown],
+                         [f"no: `run_log.md:{rows[1]}` stands |", "yes |"])
+        # A row appended for the run takes its place, and both earlier rows name it.
+        path.write_text(log + "| P-0023-20261110T103318Z | P-0023 | abc | Darwin | withdrawn: "
+                              "a test |\n", encoding="utf-8")
+        _, output = self.run_table()
+        shown = [line for line in output.splitlines()
+                 if line.startswith("| `P-0023-20261110T103318Z` |")]
+        self.assertEqual([line.rsplit(" | ", 1)[1] for line in shown],
+                         [f"no: `run_log.md:{len(lines) + 1}` stands |"] * 2 + ["yes |"])
 
     def test_a_run_row_the_table_cannot_place_is_refused(self):
         path = self.root / "results" / "run_log.md"
@@ -385,8 +409,8 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 0, output)
         rows = [line for line in output.splitlines() if f"(results/{name})" in line]
         self.assertEqual(len(rows), 1, output)
-        self.assertIn("| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | 5,425,845 |",
-                      rows[0])
+        self.assertIn("| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | ≥ 4.61 M "
+                      "messages/s | 5,425,845 messages/s |", rows[0])
         self.assertIn("| met | `abc` |", rows[0])
         path = self.root / "results" / name
         path.write_text(test_backtest_results.SHADOW.replace("| Engine events/s |", "| x |"),
@@ -531,11 +555,35 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| p50 140.14 ns; p99 840.86 ns; p99.9 1,472.00 ns; `paged-flat`, file in "
                       "memory, top of book not tracked | debian,", latency)
         self.assertIn("| **missed**: p50 by 19.14 ns,", latency)
-        self.assertIn("| ≥ 2.00 M messages/s | 4.57 M messages/s | debian, AMD Ryzen Embedded "
-                      "V1605B, pinned to core 4 | met |", backtest)
+        self.assertIn("| ≥ 2.00 M engine events/s | 4.68 M engine events/s (4.57 M messages/s) | "
+                      "debian, AMD Ryzen Embedded V1605B, pinned to core 4 | met |", backtest)
         self.assertIn("| ≤ 1.31×, set on Ryzen 9 5950X, Linux, pinned | 0.95×, pipelined time / "
                       "single-threaded time | debian, AMD Ryzen Embedded V1605B, pinned to cores 4 "
                       "and 6 | met |", spsc)
+
+    def test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar(self):
+        # The backtest table reads the Summary's Engine events/s median.
+        self.edit(HEADLINE_BACKTEST, "| Engine events/s | 4,677,511 |",
+                  "| Engine events/s | 4,677,512 |")
+        code, output = self.run_table()
+        self.assertIn("| ≥ 2.00 M engine events/s | 4,677,512 engine events/s | 0.98% | "
+                      "4,570,542 messages/s | met |", output)
+        self.edit(HEADLINE_BACKTEST, "| Engine events/s | 4,677,512 |",
+                  "| Engine events/s | 4,677,511 |")
+        # A file whose bar is not BENCHMARKS.md's is refused.
+        self.edit("BENCHMARKS.md", "- **Target:** ≥ 2.0 M events/s on one thread",
+                  "- **Target:** ≥ 2.5 M events/s on one thread")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL {HEADLINE_BACKTEST}: T-BT-1's bar is '≥ 2.00 M "
+                      "engine events/s', and BENCHMARKS.md's is ≥ 2.50 M engine events/s", output)
+        # A bar whose unit in BENCHMARKS.md is not the one compared is refused.
+        self.edit("BENCHMARKS.md", "- **Target:** ≥ 2.5 M events/s on one thread",
+                  "- **Target:** ≥ 2.0 M messages/s on one thread")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL BENCHMARKS.md: T-BT-1's bar is in messages/s, and this "
+                      "script compares it in engine events/s", output)
 
     def test_a_second_thread_pinned_elsewhere_is_named_as_such(self):
         self.edit("results/spsc_pipeline_debian_12302019.md",
@@ -560,7 +608,7 @@ class ResultsTable(unittest.TestCase):
 
     def test_a_stale_results_page_fails_and_both_pages_are_checked(self):
         self.edit("results/backtest_shadow_debian_12302019.md",
-                  "| Replay rate, messages/s | 3,354,119 |", "| Replay rate, messages/s | 3,354,120 |")
+                  "| Replay rate, messages/s | 3,509,307 |", "| Replay rate, messages/s | 3,509,308 |")
         self.edit("README.md", "| 5.15 M msg/s; `paged-flat`", "| 16.5 M msg/s; `paged-flat`")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
@@ -590,8 +638,8 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("results_table: FAIL the headline shows no missed target", output)
 
     def test_a_headline_row_with_no_verdict_is_refused(self):
-        self.edit(HEADLINE_BACKTEST, "| 4.57 M messages/s | met |",
-                  "| 4.57 M messages/s | host differs: a macOS figure |")
+        self.edit(HEADLINE_BACKTEST, "(4.57 M messages/s) | met |",
+                  "(4.57 M messages/s) | host differs: a macOS figure |")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
         self.assertIn(f"results_table: FAIL {HEADLINE_BACKTEST}: T-BT-1's verdict is 'host "
@@ -608,7 +656,7 @@ class ResultsTable(unittest.TestCase):
         self.edit(HEADLINE_BACKTEST, "| T-BT-1 | ≥ 2.00 M", "| T-BT-9 | ≥ 2.00 M")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
-        self.assertIn("0 T-BT-1 rows in its targets table, not 1", output)
+        self.assertIn("T-BT-9 is not a backtest target this script knows the unit of", output)
 
     def test_an_arm_that_allocated_misses_the_alloc_headline(self):
         self.edit(ORACLE, "| `paged_flat` | PASS | PASS | FAIL, 18,958 crossed and 1,018 locked | "

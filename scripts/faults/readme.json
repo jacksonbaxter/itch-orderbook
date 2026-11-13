@@ -1,6 +1,7 @@
 {
   "area": "readme",
   "tree": [
+    "BENCHMARKS.md",
     "README.md",
     "RESULTS.md",
     "results",
@@ -566,8 +567,8 @@
       "mutations": [
         {
           "file": "results/backtest_shadow_debian_12302019.md",
-          "old": "| Replay rate, messages/s | 3,354,119 |",
-          "new": "| Replay rate, messages/s | 3,354,120 |"
+          "old": "| Replay rate, messages/s | 3,509,307 |",
+          "new": "| Replay rate, messages/s | 3,509,308 |"
         }
       ],
       "command": [
@@ -937,8 +938,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "| 4.57 M messages/s |",
-          "new": "| 4.75 M messages/s |"
+          "old": "| 4.68 M engine events/s (4.57 M messages/s) |",
+          "new": "| 4.86 M engine events/s (4.57 M messages/s) |"
         }
       ],
       "command": [
@@ -1839,6 +1840,228 @@
       ],
       "expect": {
         "signature": "^FAIL: test_the_memory_rate_is_on_the_v1605b_row \\("
+      }
+    },
+    {
+      "id": "readme-backtest-t-bt-1-in-messages",
+      "breaks": "T-BT-1 is compared in messages/s, not in events/s, the unit of its bar",
+      "check": "test_results_table.py test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "\"T-BT-1\": (\"Engine events/s\", \"engine events/s\"),",
+          "new": "\"T-BT-1\": (\"Replay rate, messages/s\", \"engine events/s\"),"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-backtest-bar-unheld",
+      "breaks": "a results file whose T-BT-1 bar is not BENCHMARKS.md's passes",
+      "check": "test_results_table.py test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if shown != f\"≥ {bar:.2f} M {unit}\":\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-backtest-unit-unheld",
+      "breaks": "a bar whose unit in BENCHMARKS.md is not the one compared passes",
+      "check": "test_results_table.py test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if compared.split(\" \")[-1] != unit:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-t-trade-3-shares-clause-only-with-odd-lots",
+      "breaks": "a T-TRADE-3 row that failed outside the odd lots drops the pinned window's share count",
+      "check": "test_results_table.py test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    parts.append(pinned_shares(text, name))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-run-table-every-row-stands",
+      "breaks": "RESULTS.md's run table says every row stands, so a published row later withdrawn reads as standing",
+      "check": "test_results_table.py test_of_the_rows_with_one_run_id_the_last_stands",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        stands = \"yes\" if last[run] == number else",
+          "new": "        stands = \"yes\" if True else"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_of_the_rows_with_one_run_id_the_last_stands",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-run-table-first-row-stands",
+      "breaks": "the run table takes a run's first row as the one that stands, not its last",
+      "check": "test_results_table.py test_of_the_rows_with_one_run_id_the_last_stands",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    last = {cells[0]: number for number, cells in found}\n",
+          "new": "    last = {cells[0]: number for number, cells in reversed(found)}\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_of_the_rows_with_one_run_id_the_last_stands",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-file-median-typed-in",
+      "breaks": "A published counters file's T-PERF-1 median and verdict typed in together",
+      "check": "counts_report.py --check figures-differ",
+      "inputs": [
+        {
+          "file": "results/counters_by_type_paged-flat_debian_12302019.md",
+          "op": "replace_text",
+          "old": "against ≤ 0.623: **FAIL**. Measured 2.002 raw (min 2.001, max 2.013), missing it by 1.379;",
+          "new": "against ≤ 0.623: **PASS**. Measured 0.600 raw (min 2.001, max 2.013);"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/counts_report.py",
+        "--check",
+        "{tree}/results/counters_by_type_paged-flat_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "counts_report: FAIL figures-differ: line 3 of the figures",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-flame-file-share-edited",
+      "breaks": "A published flamegraph file's hottest frame share edited by hand",
+      "check": "flame_report.py --check figures-differ",
+      "inputs": [
+        {
+          "file": "results/flamegraph_paged-flat_debian_12302019.md",
+          "op": "replace_text",
+          "old": "| `itch::FastBook<…>::apply` | 42.14%",
+          "new": "| `itch::FastBook<…>::apply` | 12.00%"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/flame_report.py",
+        "--check",
+        "{tree}/results/flamegraph_paged-flat_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "flame_report: FAIL figures-differ flamegraph_paged-flat_debian_12302019.md: the Hottest frames section",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-flame-file-ratio-edited",
+      "breaks": "A published flamegraph file's frame-pointer ratio edited by hand",
+      "check": "flame_report.py --check figures-differ",
+      "inputs": [
+        {
+          "file": "results/flamegraph_paged-flat_debian_12302019.md",
+          "op": "replace_text",
+          "old": "- frame_pointer_ratio: 0.9755",
+          "new": "- frame_pointer_ratio: 0.9990"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/flame_report.py",
+        "--check",
+        "{tree}/results/flamegraph_paged-flat_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "flame_report: FAIL figures-differ flamegraph_paged-flat_debian_12302019.md: frame_pointer_ratio",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-flame-file-svg-edited",
+      "breaks": "A published flamegraph's SVG draws a frame with samples its stacks do not have",
+      "check": "flame_report.py --check svg-differs",
+      "inputs": [
+        {
+          "file": "results/flamegraph_paged-flat_debian_12302019.svg",
+          "op": "replace_text",
+          "old": "(741 samples, 0.71%)",
+          "new": "(742 samples, 0.71%)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/flame_report.py",
+        "--check",
+        "{tree}/results/flamegraph_paged-flat_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "flame_report: FAIL svg-differs flamegraph_paged-flat_debian_12302019.md",
+        "exit": 1
       }
     }
   ]

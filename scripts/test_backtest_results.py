@@ -252,6 +252,32 @@ class Driver(unittest.TestCase):
         self.assertEqual(backtest_driver.verdict("shadow", mac, 4.61e6), "met")
         self.assertTrue(backtest_driver.verdict("shadow", mac, 4.6e6).startswith("missed: "))
 
+    def test_t_bt_1_is_held_in_engine_events(self):
+        # 1.99 M messages/s is 2.05 M engine events/s: under the bar in messages, over it in
+        # engine events, the unit BENCHMARKS.md gives T-BT-1's bar.
+        records = [record(seconds=135.0) for _ in range(3)]
+        for one in records:
+            one["header"]["host"] = "debian"
+        self.assertEqual(backtest_driver.target_rows(records), [
+            "| T-BT-1 | ≥ 2.00 M engine events/s | 2.05 M engine events/s (1.99 M messages/s) "
+            "| met |"])
+        self.assertIn("| T-BT-1 | ≥ 2.00 M engine events/s | ", QUOTING)
+        self.assertIn("M engine events/s (5.37 M messages/s) | host differs: ", QUOTING)
+        self.assertIn("against the bar: +3.53 M engine events/s |", QUOTING)
+        self.assertIn("| T-BT-3 | ≥ 4.61 M messages/s | 5.43 M messages/s | met |", SHADOW)
+
+    def test_a_target_in_another_unit(self):
+        row = re.search(r"^\| T-BT-1 \|.*$", QUOTING, re.MULTILINE).group(0)
+        old = row.replace("engine events/s (5.37 M messages/s)", "messages/s").replace(
+            "M engine events/s", "M messages/s")
+        self.assertIn("target-unit-wrong", codes(replace(QUOTING, row, old)))
+        self.assertIn("target-verdict-wrong", codes(replace(QUOTING, " (5.37 M messages/s)", "")))
+        self.assertIn("target-verdict-wrong", codes(replace(QUOTING, "(5.37 M messages/s)",
+                                                            "(5.38 M messages/s)")))
+        self.assertIn("target-unit-wrong", codes(replace(
+            SHADOW, "| ≥ 4.61 M messages/s | 5.43 M messages/s |",
+            "| ≥ 4.61 M engine events/s | 5.43 M engine events/s |")))
+
     def test_the_rates(self):
         one = record(seconds=2.0)
         self.assertEqual(backtest_driver.message_rate(one), 268_744_780 / 2.0)
@@ -325,6 +351,50 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertFalse(out.exists())
             self.assertIn("refused at repetition 1: exited 3: no simulated order traded", log)
+
+
+class RenderAgain(unittest.TestCase):
+    """backtest_driver.py render: a published file rendered again from its raw records."""
+
+    def setUp(self):
+        self.scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.raw = Path(self.scratch.name)
+        self.records = [record(seconds=value) for value in (50.0, 49.0, 51.0)]
+        for index, one in enumerate(self.records, start=1):
+            (self.raw / f"quoting-repetition-{index}.json").write_text(json.dumps(one),
+                                                                      encoding="utf-8")
+        args = backtest_driver.parse_args(
+            ["--bench", "b", "--probe", "p", "--input", "i", "--workload", "quoting", "--date",
+             "20191230", "--prediction", "P-0101", "--raw-dir", "<raw>", "--out",
+             "results/backtest_quoting_mac_12302019.md"])
+        self.published = stamp_load.stamp(backtest_driver.render(
+            self.records, args, "P-0101-x", "2026-10-31T10:00:01Z", "2026-10-31T10:00:09Z",
+            MACHINE, backtest_driver.relative_command(args)), STDERR)
+
+    def tearDown(self):
+        self.scratch.cleanup()
+
+    def test_the_same_records_give_the_same_file(self):
+        self.assertEqual(check_results.check_text(self.published), [])
+        self.assertEqual(backtest_driver.render_again(self.raw, self.published, STDERR),
+                         self.published)
+        again = backtest_driver.render_again(self.raw, self.published, STDERR, "the reason")
+        self.assertIn("\n\nRendered again from the run's own raw records, unchanged: the reason"
+                      "\n\nHost: ", again)
+
+    def test_the_figures_come_from_the_records(self):
+        self.records[1]["timed"]["ns"] = 45e9
+        self.records[1]["warmup"]["ns"] = 45e9
+        (self.raw / "quoting-repetition-2.json").write_text(json.dumps(self.records[1]),
+                                                           encoding="utf-8")
+        again = backtest_driver.render_again(self.raw, self.published, STDERR)
+        self.assertIn("| 2 | 5,972,106 |", again)
+        self.assertNotEqual(again, self.published)
+
+    def test_a_file_with_a_sampler_section(self):
+        with self.assertRaisesRegex(backtest_driver.Refused, "Sampler"):
+            backtest_driver.render_again(self.raw, self.published.replace(
+                "## Commands", "## Sampler\n\nx\n\n## Commands"), STDERR)
 
 
 if __name__ == "__main__":

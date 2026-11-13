@@ -171,6 +171,123 @@ def mold_seeds(fixtures):
     }
 
 
+OP_FIXTURES = ("kAddOrder", "kAddOrderAttributed", "kOrderExecuted", "kOrderExecutedWithPrice",
+               "kOrderCancel", "kOrderDelete", "kOrderReplace")
+
+
+def kernel_seeds(fixtures):
+    """Streams for fuzz_kernels, each op type also the final frame, flush against the end."""
+    stream = reader_seeds(fixtures)["stream-all-types"]
+    add = frame(fixtures["kAddOrder"])
+    seeds = {}
+    for name in OP_FIXTURES:
+        message = fixtures[name]
+        seeds[f"frame-{seed_name(message)}"] = frame(message)
+        seeds[f"ends-with-{seed_name(message)}"] = add + frame(message)
+    ops = b"".join(frame(fixtures[name]) for name in OP_FIXTURES)
+    seeds.update(
+        {
+            "stream-all-types": stream,
+            "stream-ops-twice": ops + ops,
+            "stream-unknown-and-bad-length": (frame(b"z\x01\x02") + frame(fixtures["kOrderDelete"][:-1])
+                                              + frame(fixtures["kOrderDelete"])),
+            "stream-truncated-payload": stream[:-1],
+            "stream-truncated-op": ops[:-1],
+            "stream-empty": b"",
+        }
+    )
+    return seeds
+
+
+def with_time(message, ts):
+    """The message with its 6-byte timestamp, at 5, set to ts."""
+    return message[:5] + ts.to_bytes(6, "big") + message[11:]
+
+
+def with_reference(message, reference, at=11):
+    return message[:at] + reference.to_bytes(8, "big") + message[at + 8:]
+
+
+def packet_plan(cap=1400, messages=65534, first_frame=0, limit=255, flush_gap=0,
+                heartbeat_gap=1_000_000_000, first_sequence=1):
+    """fuzz_packets' 22-byte plan."""
+    return struct.pack(">HHBBIIQ", cap, messages, first_frame, limit, flush_gap, heartbeat_gap,
+                       first_sequence)
+
+
+def packet_seeds(fixtures):
+    """A plan and a stream for fuzz_packets. No seed has seven messages a packet, which a fault
+    needs the fuzzer to find."""
+    stream = reader_seeds(fixtures)["stream-all-types"]
+    system = fixtures["kSystemEvent"]
+
+    def timed(*times):
+        return b"".join(frame(with_time(system, ts)) for ts in times)
+
+    odd = (frame(system) + b"\x00\x00" + frame(b"z\x01\x02\x03")
+           + frame(fixtures["kAddOrder"][:-1]) + frame(system))
+    return {
+        "default-all-types": packet_plan() + stream,
+        "smallest-day-cap": packet_plan(cap=72) + stream,
+        "cap-under-the-largest": packet_plan(cap=71) + stream,
+        "exact-fit": packet_plan(cap=20 + 3 * 14, heartbeat_gap=0) + timed(*range(10)),
+        "one-a-packet": packet_plan(messages=1, heartbeat_gap=0) + stream,
+        "three-a-packet": packet_plan(messages=3) + stream,
+        "slice": packet_plan(first_frame=5, limit=7, first_sequence=101) + stream,
+        "slice-past-the-end": packet_plan(first_frame=200) + stream,
+        "slice-of-none": packet_plan(limit=0) + stream,
+        "heartbeats": packet_plan(heartbeat_gap=1000) + timed(100, 150, 5000, 5050, 20000, 20000, 10),
+        "flush-gap": packet_plan(flush_gap=100) + timed(100, 150, 400, 450),
+        "odd-frames": packet_plan(cap=80) + odd,
+        "truncated": packet_plan() + stream[:-1],
+        "truncated-before-the-slice": packet_plan(first_frame=30) + stream[:-1],
+        "truncated-after-the-slice": packet_plan(limit=3) + stream[:-1],
+        "bad-plan-cap-low": packet_plan(cap=21) + stream,
+        "bad-plan-cap-high": packet_plan(cap=65508) + stream,
+        "bad-plan-no-messages": packet_plan(messages=0) + stream,
+        "bad-plan-count-too-high": packet_plan(messages=65535) + stream,
+        "bad-plan-sequence-overflows": packet_plan(first_sequence=0xFFFFFFFFFFFFFFF0) + stream,
+        "high-sequence": packet_plan(first_sequence=0xFFFFFFFFFFFFFFFF - len(stream)) + stream,
+        "plan-only": packet_plan(),
+        "empty": b"",
+    }
+
+
+def lookahead_seeds(fixtures):
+    """A distance byte, an arm byte (0 paged-flat, 1 hash-linked) and a stream for
+    fuzz_lookahead. The order flow names live orders, so that the book's stages find them."""
+    stream = reader_seeds(fixtures)["stream-all-types"]
+    flow = b""
+    for reference in range(1, 9):
+        flow += frame(with_reference(fixtures["kAddOrder"], reference))
+        flow += frame(with_reference(fixtures["kAddOrderAttributed"], reference + 100))
+    for reference in range(1, 9):
+        flow += frame(with_reference(fixtures["kOrderExecuted"], reference))
+        flow += frame(with_reference(fixtures["kOrderCancel"], reference + 100))
+        replace = with_reference(fixtures["kOrderReplace"], reference)
+        flow += frame(with_reference(replace, reference + 200, at=19))
+        flow += frame(with_reference(fixtures["kOrderDelete"], reference + 200))
+    odd = frame(fixtures["kSystemEvent"]) + b"\x00\x00" + frame(b"z\x01") + frame(b"A\x00")
+    seeds = {}
+    for distance in (0, 1, 3, 4, 9, 16, 64, 65, 71):
+        for arm, arm_name in ((0, "paged"), (1, "hash")):
+            seeds[f"d{distance:02d}-{arm_name}-all-types"] = bytes((distance, arm)) + stream
+    seeds.update(
+        {
+            "d16-paged-order-flow": b"\x10\x00" + flow,
+            "d04-paged-order-flow": b"\x04\x00" + flow,
+            "d03-hash-order-flow": b"\x03\x01" + flow,
+            "d64-hash-order-flow": b"\x40\x01" + flow,
+            "d08-paged-truncated": b"\x08\x00" + flow + b"\x00",
+            "d05-hash-odd-frames": b"\x05\x01" + odd + odd,
+            "stream-empty": b"\x04\x00",
+            "short": b"\x04",
+            "empty": b"",
+        }
+    )
+    return seeds
+
+
 CROSS_HEADER = ("Date      ,Symbol,ListingMarket,OpeningCross,ClosingCross,IntradayCross,\r\n"
                 "----------,------,-------------,------------,------------,-------------,\r\n")
 CROSS_ROWS = ("12/30/2019,AAA   ,Q            ,          13,           0,            0,\r\n"
@@ -245,6 +362,9 @@ TARGETS = {
     "fuzz_crossstats": cross_stats_seeds,
     "fuzz_midas": midas_seeds,
     "fuzz_mold": mold_seeds,
+    "fuzz_kernels": kernel_seeds,
+    "fuzz_packets": packet_seeds,
+    "fuzz_lookahead": lookahead_seeds,
 }
 
 

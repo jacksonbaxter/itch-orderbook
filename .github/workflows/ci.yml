@@ -12,6 +12,9 @@
 #   Emscripten            Emscripten 6.0.13, the parser library and its smoke test, and the
 #                         demo's engine, itch_demo, with its smoke test in node.
 #
+# Test replays every fuzz target's committed seeds, corpus_fuzz_*, on each compiler, so
+# fuzz_kernels holds the runner's vector kernels to the scalar kernel there too.
+#
 # scripts/check.sh runs actionlint over this file locally. The sanitizers, clang-tidy, the
 # fuzz smoke runs and the fault matrix run there, not here, and so does the demo page: no job
 # has a browser, so CI runs the demo's engine in node but never opens docs/ in a browser, and
@@ -84,7 +87,8 @@ jobs:
       - name: Test
         run: ctest --preset release
       # ctest prints no output for a test that passes, so this shows which kernels the
-      # runner's CPU ran and which it skipped, and the CPU features that decided it.
+      # runner's CPU ran and which it skipped, and the CPU features that decided it, in the
+      # kernels' tests and in fuzz_kernels' corpus replay.
       - name: The kernels this CPU ran or skipped
         run: |
           if [ -r /proc/cpuinfo ]; then
@@ -95,7 +99,7 @@ jobs:
           else
             sysctl -n machdep.cpu.brand_string
           fi
-          ctest --preset release -R '^test_kernels_' --verbose
+          ctest --preset release -R '^(test_kernels_|corpus_fuzz_kernels$)' --verbose
 
   wasm:
     name: Emscripten

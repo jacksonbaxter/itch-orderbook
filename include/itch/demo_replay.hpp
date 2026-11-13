@@ -29,8 +29,8 @@
 
 namespace itch::demo {
 
-// One print, as the page draws it. side is the side of the order that traded, 'B' or
-// 'S', from the book for an execution and from the message for a P; a cross has none.
+// One print. side: the executed order's, from the book, for an E or a C; a P's own field, which
+// Nasdaq has set to 'B' on every P since 2014-07-14, so the page shows none; ' ' for a cross.
 struct Print {
   std::uint64_t timestamp_ns;
   std::uint64_t shares;
