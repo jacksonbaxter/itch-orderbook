@@ -914,6 +914,62 @@
         "signature": "bench_udp cli: FAIL S2 not built: said "
       },
       "system": "Darwin"
+    },
+    {
+      "id": "udp-feed-test-blind-to-content",
+      "breaks": "Every packet's first Add carries a price one tick of 10^-4 off, which leaves every status as it was (r8-3)",
+      "check": "test_mold MoldFeed.TheBookAfterTheFeedIsTheBookAfterTheFile",
+      "mutations": [
+        {
+          "file": "include/itch/mold_packets.hpp",
+          "old": "          std::memcpy(array.bytes_.data() + at + kHeaderBytes, blocks.data(), blocks.size());\n",
+          "new": "          std::memcpy(array.bytes_.data() + at + kHeaderBytes, blocks.data(), blocks.size());\n          if (blocks.size() > 37 && blocks[2] == std::byte{'A'}) {\n            array.bytes_[at + kHeaderBytes + 37] ^= std::byte{1};\n          }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldFeed.TheBookAfterTheFeedIsTheBookAfterTheFile"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldFeed\\.TheBookAfterTheFeedIsTheBookAfterTheFile"
+      }
+    },
+    {
+      "id": "udp-loopback-end-hash-unprinted",
+      "breaks": "itch_loopback prints neither path's end hash, so the test compared two missing lines as equal (r8-9)",
+      "check": "test_loopback_cli.py, both paths' lines present",
+      "mutations": [
+        {
+          "file": "tools/itch_loopback.cpp",
+          "old": "  std::println(\"loopback_{}_end_hash {:016x}\", path, summary.end_hash);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_loopback"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_loopback_cli.py",
+        "{build}/tools/itch_loopback",
+        "{build}/loopback_fault",
+        "{tree}/tests/fixtures/oracle",
+        "{tree}/tests/fixtures/trades"
+      ],
+      "expect": {
+        "signature": "loopback cli: FAIL \\S+ default: no line loopback_file_end_hash or loopback_udp_end_hash"
+      }
     }
   ]
 }

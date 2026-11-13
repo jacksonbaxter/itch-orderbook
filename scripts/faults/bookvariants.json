@@ -793,6 +793,31 @@
       "expect": {
         "signature": "\\[  FAILED  \\] BenchReplay\\.EveryArmNameBuildsTheTypesItNames"
       }
+    },
+    {
+      "id": "bookvariants-threaded-built-false",
+      "breaks": "kThreadedBuilt is false where [[clang::musttail]] exists, so bench_variants refuses the threaded form it could run (r8-8)",
+      "check": "test_book_variants DispatchForms.TheThreadedFormIsBuiltOnlyWhereATailCallIsGuaranteed",
+      "mutations": [
+        {
+          "file": "bench/dispatch.hpp",
+          "old": "#if __has_cpp_attribute(clang::musttail)\ninline constexpr bool kThreadedBuilt = true;",
+          "new": "#if __has_cpp_attribute(clang::musttail)\ninline constexpr bool kThreadedBuilt = false;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book_variants"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book_variants",
+        "--gtest_filter=DispatchForms.*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] DispatchForms\\.TheThreadedFormIsBuiltOnlyWhereATailCallIsGuaranteed"
+      }
     }
   ]
 }

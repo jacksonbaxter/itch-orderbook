@@ -8429,6 +8429,30 @@
       "expect": {
         "signature": "FAIL: test_an_arm_is_held_to_the_hard_checks_on_its_own"
       }
+    },
+    {
+      "id": "trades-midas-header-failure-line-zero",
+      "breaks": "A MIDAS file whose header fails says line 0, the whole file, not line 1 (r8-12)",
+      "check": "test_reference_files Midas.ReportsTheLineOfAFailure",
+      "mutations": [
+        {
+          "file": "tests/trades/midas.hpp",
+          "old": "    return fail(columns.error(), 1);",
+          "new": "    return fail(columns.error(), 0);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_reference_files"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_reference_files"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Midas\\.ReportsTheLineOfAFailure"
+      }
     }
   ]
 }

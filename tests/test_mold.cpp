@@ -21,6 +21,7 @@
 #include "itch/mold_feed.hpp"
 #include "itch/mold_packets.hpp"
 #include "itch/reader.hpp"
+#include "oracle/canonical.hpp"
 #include "support/churn.hpp"
 #include "support/fixtures.hpp"
 
@@ -666,7 +667,8 @@ TEST(MoldFeed, AMalformedPacketIsCountedAndHandsOnNothing) {
   EXPECT_EQ(recorder.payloads.size(), 1U);
 }
 
-// The book after the feed is the book after the file.
+// The book after the feed is the book after the file: each message has the same status, and
+// the two books are the same word for word, every level and order in FIFO order.
 TEST(MoldFeed, TheBookAfterTheFeedIsTheBookAfterTheFile) {
   const Bytes stream = itch::testing::build_stream();
   constexpr itch::BookCapacity kCapacity{
@@ -690,6 +692,13 @@ TEST(MoldFeed, TheBookAfterTheFeedIsTheBookAfterTheFile) {
   }
   EXPECT_EQ(feed_statuses, file_statuses);
   EXPECT_GT(file_statuses.size(), 200000U);
+  itch::oracle::WordList file_words;
+  itch::oracle::WordList feed_words;
+  itch::oracle::emit_fast(by_file, file_words);
+  itch::oracle::emit_fast(by_feed, feed_words);
+  EXPECT_EQ(feed_words.words(), file_words.words());
+  // The churn leaves at least 255 orders live, two words each besides their levels'.
+  EXPECT_GT(file_words.words().size(), 510U) << "the book after the file is nearly empty";
 }
 
 }  // namespace

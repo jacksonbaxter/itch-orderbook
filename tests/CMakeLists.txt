@@ -163,6 +163,13 @@ if(ITCH_BUILD_BENCH)
 endif()
 
 if(ITCH_BUILD_TOOLS)
+  # Whether the tools that run the node book have its mimalloc arm, so that a CLI test can
+  # tell a build without it from a tool that has lost it.
+  if(TARGET itch::mimalloc)
+    set(itch_mimalloc_built with-mimalloc)
+  else()
+    set(itch_mimalloc_built without-mimalloc)
+  endif()
   add_test(NAME test_census_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_census_cli.py"
             "$<TARGET_FILE:itch_census>" "${CMAKE_CURRENT_BINARY_DIR}/census_cli"
@@ -179,7 +186,7 @@ if(ITCH_BUILD_TOOLS)
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_map_compare_cli.py"
             "$<TARGET_FILE:itch_map_compare>" "${CMAKE_CURRENT_BINARY_DIR}/map_compare_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle"
-            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades")
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades" "${itch_mimalloc_built}")
   add_test(NAME test_backtest_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_backtest_cli.py"
             "$<TARGET_FILE:itch_backtest>" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle")

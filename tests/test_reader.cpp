@@ -212,6 +212,26 @@ TEST(Reader, TerminalStatesStayAndCountOnce) {
   }
   EXPECT_EQ(reader.counters().truncated_prefix, 1U);
   EXPECT_EQ(reader.consumed(), 0U);
+  // A whole frame, then a prefix asking for 12 bytes where 2 are left.
+  Bytes cut = frames_of({kSystem});
+  cut.insert(cut.end(), {std::byte{0x00}, std::byte{0x0C}, std::byte{'S'}, std::byte{0x00}});
+  FrameReader short_payload{cut};
+  EXPECT_EQ(short_payload.next().status, FrameStatus::message);
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_EQ(short_payload.next().status, FrameStatus::truncated_payload);
+  }
+  EXPECT_EQ(short_payload.counters().truncated_payload, 1U);
+  EXPECT_EQ(short_payload.counters().truncated_prefix, 0U);
+  EXPECT_EQ(short_payload.consumed(), 14U);
+  const Bytes one = frames_of({kSystem});
+  FrameReader whole{one};
+  EXPECT_EQ(whole.next().status, FrameStatus::message);
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_EQ(whole.next().status, FrameStatus::end_of_input);
+  }
+  EXPECT_EQ(whole.counters().frames, 1U);
+  EXPECT_EQ(whole.counters().messages, 1U);
+  EXPECT_EQ(whole.consumed(), 14U);
 }
 
 // Exact-size heap copies, so that ASan sees any read past the cut.
@@ -308,8 +328,17 @@ TEST(Reader, OrderMessagesAfterEndOfSystemHoursAreOrdinaryFrames) {
   EXPECT_EQ(reader.next().status, FrameStatus::end_of_input);
 }
 
+// Every name, as the tools print them.
 TEST(Reader, StatusNames) {
+  EXPECT_EQ(itch::to_string(FrameStatus::message), "message");
+  EXPECT_EQ(itch::to_string(FrameStatus::unknown_type), "unknown_type");
+  EXPECT_EQ(itch::to_string(FrameStatus::bad_length), "bad_length");
+  EXPECT_EQ(itch::to_string(FrameStatus::zero_length), "zero_length");
+  EXPECT_EQ(itch::to_string(FrameStatus::end_of_input), "end_of_input");
+  EXPECT_EQ(itch::to_string(FrameStatus::truncated_prefix), "truncated_prefix");
   EXPECT_EQ(itch::to_string(FrameStatus::truncated_payload), "truncated_payload");
+  EXPECT_EQ(itch::to_string(itch::DecodeError::empty_payload), "empty_payload");
+  EXPECT_EQ(itch::to_string(itch::DecodeError::unknown_type), "unknown_type");
   EXPECT_EQ(itch::to_string(itch::DecodeError::bad_length), "bad_length");
 }
 

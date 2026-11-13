@@ -370,6 +370,34 @@
       "expect": {
         "signature": "map compare cli: FAIL \\S+ hash linked aged: ager_allocations None"
       }
+    },
+    {
+      "id": "mapbook-mimalloc-arm-lost",
+      "breaks": "itch_map_compare says it has no mimalloc in a build that links it, and the test skipped the arm in silence (r8-11)",
+      "check": "test_map_compare_cli.py, the mimalloc arm",
+      "mutations": [
+        {
+          "file": "tools/alloc_arms.hpp",
+          "old": "#ifdef ITCH_HAVE_MIMALLOC\n      return run.template operator()<NodeBook<MimallocArm>>();",
+          "new": "#ifdef ITCH_HAVE_MIMALLOC_LOST\n      return run.template operator()<NodeBook<MimallocArm>>();"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_map_compare"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_map_compare_cli$"
+      ],
+      "expect": {
+        "signature": "map compare cli: FAIL \\S+ node mimalloc: the build has mimalloc, and the tool says not"
+      }
     }
   ]
 }
