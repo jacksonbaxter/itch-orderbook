@@ -1238,7 +1238,7 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "    verdict = f\"**missed**: {detail}\" if word == \"missed\" else target[2]\n",
+          "old": "    if word == \"missed\":\n        verdict = f\"**missed**: {detail}\"\n",
           "new": "    verdict = word\n"
         }
       ],
