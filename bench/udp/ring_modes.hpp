@@ -27,9 +27,9 @@
 // without IORING_CQE_F_MORE says so: the next wait() arms it again, after the batch's buffers have
 // gone back, and counts a re-arm (IU-30). While it is down, datagrams queue on the socket,
 // so a mode that re-arms often is measuring buffer starvation, which the counters show.
-// RECV cannot say a datagram was cut short, so U1, U2, U4 and U5 count one that filled its
-// whole buffer as truncated; the tools refuse a packing whose largest datagram does not fit
-// with a byte to spare. U3 reads MSG_TRUNC from the kernel's own header.
+// RECV cannot say a datagram was cut short, so U2, U4 and U5 count one that filled its slot as
+// truncated; the tools refuse a packing whose largest datagram does not fit with a byte to spare.
+// U1 counts none: its 64 KiB buffer holds any IPv4 datagram. U3 reads MSG_TRUNC from the kernel.
 //
 // Waiting. U1 to U3 enter the kernel with GETEVENTS and the idle timeout (EXT_ARG), which
 // under DEFER_TASKRUN is also what runs the receive's completions (IU-21). U4 never sleeps:

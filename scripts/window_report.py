@@ -75,7 +75,8 @@ CAVEATS = """\
   its figures and carteret's differ in definition as well as in book, and neither bounds the
   other.
 - A price is placed against the side's best before the message applies. A U's new order is
-  placed against the book with its old order still in it.
+  placed against the book with its old order still in it; its search is counted as
+  `FlatLevels` makes it, after the old order has gone.
 - One day, 12302019. A day with wider spreads or more sub-penny prices moves every figure."""
 
 

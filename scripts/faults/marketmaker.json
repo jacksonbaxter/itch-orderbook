@@ -14,6 +14,7 @@
     "bench",
     "scripts",
     "results",
+    "BENCHMARKS.md",
     "README.md",
     "RESULTS.md"
   ],
@@ -1558,8 +1559,8 @@
       "mutations": [
         {
           "file": "scripts/mm_report.py",
-          "old": "        if figures[\"checks\"].get(name) != \"pass\":\n",
-          "new": "        if figures[\"checks\"].get(name) not in (\"pass\", \"FAIL\"):\n"
+          "old": "        if result != \"pass\":\n",
+          "new": "        if result not in (\"pass\", \"FAIL\"):\n"
         }
       ],
       "command": [
@@ -1758,6 +1759,387 @@
       ],
       "expect": {
         "signature": "^(FAIL|ERROR): test_the_matrix_runs_and_its_file_holds",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-report-sigma-in-dollars",
+      "breaks": "The parameters table gives σ in dollars per √second, not ticks",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "| σ, ticks/√s |",
+          "new": "| σ, $/√s |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_sigma_is_in_ticks_per_root_second"
+      }
+    },
+    {
+      "id": "mm-pnl-sigma-unit-edited",
+      "breaks": "results/mm_pnl_12302019.md gives σ in dollars per √second again",
+      "check": "mm_report.py check",
+      "mutations": [
+        {
+          "file": "results/mm_pnl_12302019.md",
+          "old": "| σ, ticks/√s |",
+          "new": "| σ, $/√s |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/mm_report.py",
+        "check",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "mm_report: FAIL differs-from-output mm_pnl_12302019\\.md: line 16",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-report-only-committed-checks-read",
+      "breaks": "A failed check under a name the report does not list is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "    for name, result in figures[\"checks\"].items():\n        if result != \"pass\":\n",
+          "new": "    for name, result in figures[\"checks\"].items():\n        if result != \"pass\" and name in CHECK_LINES:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_failed_check_the_report_does_not_know"
+      }
+    },
+    {
+      "id": "mm-report-check-names-not-held",
+      "breaks": "A run missing a committed check line is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "    if missing or unknown:\n",
+          "new": "    if unknown:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_committed_check_missing"
+      }
+    },
+    {
+      "id": "mm-report-duplicate-check-overwrites",
+      "breaks": "A second line for one check overwrites the first, so a FAIL followed by a pass reads as a pass",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "            if name in run[\"checks\"]:\n",
+          "new": "            if name in run[\"checks\"] and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_two_lines_for_one_check_are_unusable"
+      }
+    },
+    {
+      "id": "mm-report-run-exit-status-unread",
+      "breaks": "A run whose exit status the check lines do not explain is published",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "            if failed != (done.returncode == 1):\n",
+          "new": "            if failed != (done.returncode == 1) and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_exit_status_the_check_lines_do_not_explain"
+      }
+    },
+    {
+      "id": "mm-pnl-unlisted-check-failed",
+      "breaks": "results/mm_pnl_12302019.md carries a failed check under a name the report does not list",
+      "check": "mm_report.py check",
+      "mutations": [
+        {
+          "file": "results/mm_pnl_12302019.md",
+          "old": "check identity: pass\n27.04 real        18.41 user         1.52 sys\n",
+          "new": "check identity: pass\ncheck queue position sane: FAIL\n27.04 real        18.41 user         1.52 sys\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/mm_report.py",
+        "check",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "mm_report: FAIL tool-check-failed AMD, AS Base: check queue position sane: FAIL",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-report-render-ignores-raw-dir",
+      "breaks": "render --raw-dir renders from the file's own blocks, not the raw records",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "        outputs = (raw_outputs(evaluation, args.raw_dir, text) if args.raw_dir\n",
+          "new": "        outputs = (raw_outputs(evaluation, args.raw_dir, text) if False\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_tool_output_comes_from_the_raw_records"
+      }
+    },
+    {
+      "id": "mm-cli-cut-file-passes",
+      "breaks": "itch_mm replays a file cut mid-frame as a whole day: no framing check",
+      "check": "test_mm_cli, cut",
+      "mutations": [
+        {
+          "file": "tools/itch_mm.cpp",
+          "old": "  if (!itch::tools::framing_ends_cleanly(\"itch_mm\", file->bytes())) {\n    return 1;\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_mm"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_mm_cli.py",
+        "{build}/tools/itch_mm",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "mm cli: FAIL cut: exit",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-select-cut-file-passes",
+      "breaks": "itch_select replays a file cut mid-frame as a whole day: no framing check",
+      "check": "test_select_cli, cut",
+      "mutations": [
+        {
+          "file": "tools/itch_select.cpp",
+          "old": "  if (!itch::tools::framing_ends_cleanly(\"itch_select\", file->bytes())) {\n    return 1;\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_select"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_select_cli.py",
+        "{build}/tools/itch_select",
+        "{build}/select_fault"
+      ],
+      "expect": {
+        "signature": "select cli: FAIL cut: exit",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-cut-file-passes",
+      "breaks": "itch_calibrate replays a file cut mid-frame as a whole day: no framing check",
+      "check": "test_calibrate_cli, cut",
+      "mutations": [
+        {
+          "file": "tools/itch_calibrate.cpp",
+          "old": "  if (!itch::tools::framing_ends_cleanly(\"itch_calibrate\", file->bytes())) {\n    return 1;\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL cut: exit",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-as-tables-trailing-characters-read",
+      "breaks": "itch_as_tables reads the number at the front of an argument and ignores the rest, as stoi did",
+      "check": "test_tools_cli, itch_as_tables's numbers",
+      "mutations": [
+        {
+          "file": "tools/itch_as_tables.cpp",
+          "old": "  return error == std::errc{} && end == text.data() + text.size();\n",
+          "new": "  return error == std::errc{};\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_alloc",
+          "itch_as_tables",
+          "itch_window"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_tools_cli.py",
+        "{build}/tools/itch_alloc",
+        "{build}/tools/itch_as_tables",
+        "{build}/tools/itch_window",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "tools cli: FAIL as_tables trailing gamma: exit 0, wanted 2",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-as-tables-gamma-not-positive",
+      "breaks": "itch_as_tables takes a gamma of 0, below 0 or not finite, which gives NaN quotes",
+      "check": "test_tools_cli, itch_as_tables's numbers",
+      "mutations": [
+        {
+          "file": "tools/itch_as_tables.cpp",
+          "old": "  const bool in_range = gamma > 0.0 && gamma < 1e12;  // False for NaN too.\n",
+          "new": "  const bool in_range = true;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_alloc",
+          "itch_as_tables",
+          "itch_window"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_tools_cli.py",
+        "{build}/tools/itch_alloc",
+        "{build}/tools/itch_as_tables",
+        "{build}/tools/itch_window",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "tools cli: FAIL as_tables gamma 0: exit 0, wanted 2",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-trailing-characters-read",
+      "breaks": "itch_calibrate reads the number at the front of an argument and ignores the rest, as stoll did",
+      "check": "test_calibrate_cli, trailing characters",
+      "mutations": [
+        {
+          "file": "tools/itch_calibrate.cpp",
+          "old": "  return error == std::errc{} && end == text.data() + text.size() && out != 0 && out <= most;\n",
+          "new": "  return error == std::errc{} && out != 0 && out <= most;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL trailing characters: exit 0, not 2",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-clock-past-nanoseconds",
+      "breaks": "itch_calibrate takes a clock whose milliseconds overflow a count of nanoseconds",
+      "check": "test_calibrate_cli, past nanoseconds",
+      "mutations": [
+        {
+          "file": "tools/itch_calibrate.cpp",
+          "old": "constexpr std::uint64_t kMostMillis = UINT64_MAX / kNanosPerMilli;\n",
+          "new": "constexpr std::uint64_t kMostMillis = UINT64_MAX;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL past nanoseconds: exit 0, not 2",
         "exit": 1
       }
     }

@@ -20,15 +20,15 @@ never share a file. Only a bisection at 1,400 bytes carries T-URING-2's verdict;
 another size says where the verdict is instead, and a confirmation run in it is refused.
 
 Every figure comes from the file's own table of every process, so --check rebuilds the
-sender's ceiling, each mode's largest lossless rate, T-URING-1's ratios, T-URING-2's
-verdict, the feed's pass and fail, the latency medians, the CPU split and the summary from
-that table, and fails on any difference. The sender's ceiling and the CPU split are worked out
-from each record's unrounded rates and shares, and rounded only to print, so --check, which
-has only the table's rounded cells, holds each of those figures to the range the cells leave
-(check_results.py, "Figures computed from unrounded values"). The cap a bisection ran at is
-the one its driver worked out when it ran, 0.9 x the ceiling it had then, rounded down; where
-that ceiling is not the one the file prints, the rate_cap field names it. It also fails on a
-file without the sentence
+sender's ceiling, each mode's largest lossless rate, T-URING-1's ratios, T-URING-2's verdict,
+the feed's pass and fail, the latency medians, the CPU split and the summary from that table,
+and fails on any difference. The sender's ceiling, the latency medians and the CPU split are
+worked out from each record's unrounded rates, times and shares, and rounded only to print, so
+--check, which has only the table's rounded cells, holds each of those figures to the range
+the cells leave (check_results.py, "Figures computed from unrounded values"). The cap a
+bisection ran at is the one its driver worked out when it ran, 0.9 x the ceiling it had then,
+rounded down; where that ceiling is not the one the file prints, the rate_cap field names it.
+It also fails on a file without the sentence
 
     Loopback runs the receive softirq on the sender's CPU, so this is a syscall-and-copy
     benchmark on one host, not a network benchmark (IU-47).
@@ -43,12 +43,15 @@ in one at a packet size other than 1,400 bytes; on a name whose packet size is n
 header's; on a load line that is not measure.sh's; and on anything private.
 
 How a trial counts, as the driver counts it: lossless, verdict PASS and the sender kept pace,
-achieving at least 0.99 x the target. The largest lossless rate is the largest such trial's
-rate; when that is the cap, the mode is "at least" the cap, sender limited. So is a mode
-whose search stopped where the sender fell behind: when every trial at the lowest lossy rate
-above its figure lost nothing, was PASS and failed only on pace, the receiver's own limit was
-never reached, and the figure is "at least" it, sender limited, whatever the cap. A mode
-wins only if no other mode's figure is such a lower bound.
+achieving at least 0.99 x the target, a test of the record's unrounded rate. --check has the
+rate printed whole; where that cell leaves the pace either way, it tries the row both ways,
+and passes the file when one reading of every such row gives it (at most ten such rows, or
+pace-unreadable). The largest lossless rate is the largest such trial's rate; when that is the
+cap, the mode is "at least" the cap, sender limited. So is a mode whose search stopped where
+the sender fell behind: when every trial at the lowest lossy rate above its figure lost
+nothing, was PASS and failed only on pace, the receiver's own limit was never reached, and the
+figure is "at least" it, sender limited, whatever the cap. A mode wins only if no other mode's
+figure is such a lower bound.
 
 The header's prediction and run_id are the file's own step's run, as check_predictions.py
 reads them; predictions and runs list every run the file draws on. --rendered-again REASON
@@ -70,6 +73,7 @@ unusable input.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import re
 import statistics
@@ -308,7 +312,7 @@ def row_of(entry, record, cores):
                        ("max", "max_ns")):
         row[key] = latency[field] / 1000 if field in latency else None
     row.update(cpu_cells(record, cores))
-    row["raw"].update({key: row[key] for key in CPU_KEYS})
+    row["raw"].update({key: row[key] for key in (*CPU_KEYS, *LATENCY_KEYS)})
     return row
 
 
@@ -367,10 +371,35 @@ def row_lossless(row):
     return all(row[name] in (0, None) for name in udp_driver.OPTIONAL_COUNTERS)
 
 
+def kept_pace(row):
+    """Whether the sender achieved at least 0.99 x the target, as the driver asks it of the
+    record's unrounded rate. A row read back from a file has only the rate printed whole: the
+    answer is the one its cell leaves, or, where the cell leaves both, the one check_published
+    gives the row in "pace", and None when it has given none."""
+    target = udp_driver.PACE * row["target"]
+    if "raw" in row:
+        return row["raw"]["achieved"] >= target
+    low, high = check_results.printed_range(row["achieved"], PLACES["int"])
+    if low >= target or high < target:
+        return low >= target
+    return row.get("pace")
+
+
+def pace_open(row):
+    """A row whose printed rate leaves its pace either way, where the pace decides how the
+    trial counts: lossless, PASS and rate-paced."""
+    return "raw" not in row and bool(row["lossless"]) and row["verdict"] == "PASS" and \
+        row["target"] is not None and "pace" not in row and kept_pace(row) is None
+
+
 def valid_lossless(row):
     """A trial as the driver counts it: lossless, PASS, the sender kept pace."""
-    return bool(row["lossless"]) and row["verdict"] == "PASS" and row["target"] is not None \
-        and row["achieved"] >= udp_driver.PACE * row["target"]
+    if not (bool(row["lossless"]) and row["verdict"] == "PASS" and row["target"] is not None):
+        return False
+    pace = kept_pace(row)
+    if pace is None:
+        raise ReportError(f"{row['run']}: its printed rate leaves its pace either way")
+    return pace
 
 
 def by_mode(rows, role):
@@ -384,7 +413,7 @@ def by_mode(rows, role):
 def behind_only(row):
     """A trial that lost nothing and failed only because the sender fell behind the schedule."""
     return row_lossless(row) and bool(row["lossless"]) and row["verdict"] == "PASS" and \
-        row["target"] is not None and row["achieved"] < udp_driver.PACE * row["target"]
+        row["target"] is not None and not valid_lossless(row)
 
 
 def largest_lossless(rows, cap):
@@ -426,11 +455,6 @@ def rate_words(one):
     if sender_limited(one):
         return f"at least {one['rate']:,} msg/s, sender limited"
     return f"{rate_text(one)} msg/s"
-
-
-def median_or_none(values):
-    values = [value for value in values if value is not None]
-    return statistics.median(values) if values else None
 
 
 def whole(value):
@@ -480,7 +504,10 @@ def shown_cells(text):
     cpu = {cells[0]: cells[2:8]
            for cells in check_results.table_rows(text, "CPU split at the common rate")
            if cells[0] != "Mode" and len(cells) >= 8}
-    return {"ceiling": ceiling, "cpu": cpu}
+    latency = {(cells[0], cells[1]): cells[4:8]
+               for cells in check_results.table_rows(text, "Latency")
+               if cells[0] != "Mode" and len(cells) >= 8}
+    return {"ceiling": ceiling, "cpu": cpu, "latency": latency}
 
 
 def lossless_lines(found):
@@ -614,7 +641,12 @@ def role_order(role):
     return (1, float(role.split("-", 1)[1]))
 
 
-def latency_lines(rows):
+LATENCY_KEYS = ("p50", "p99", "p99_9", "max")
+
+
+def latency_lines(rows, shown=None):
+    """The Latency section, each median from the unrounded times; `shown` is the file's own
+    cells by mode and role, which check gives."""
     groups = {}
     for row in rows:
         if row["role"].startswith("latency-"):
@@ -629,8 +661,12 @@ def latency_lines(rows):
                                                        role_order(pair[1]))):
         runs = groups[(mode, role)]
         rates = sorted({row["target"] for row in runs})
-        values = [cell("us", median_or_none([row[key] for row in runs]))
-                  for key in ("p50", "p99", "p99_9", "max")]
+        cells = (shown or {}).get((mode, role)) or [None] * len(LATENCY_KEYS)
+        values = []
+        for given, key in zip(cells, LATENCY_KEYS):
+            times = [value_range(row, key) for row in runs if row[key] is not None]
+            values.append(NONE if not times else check_results.shown_within(
+                given, check_results.median_range(times), lambda value: cell("us", value)))
         lines.append(f"| {mode} | {role} | {', '.join(f'{r:,}' for r in rates)} | {len(runs)} | "
                      + " | ".join(values) + " |")
     return lines
@@ -741,7 +777,7 @@ def derived(fields, rows, failed, printed=None):
         passed = sum(line.count("pass,") for line in lines)
         cells = sum(line.count(" lossless |") for line in lines)
         summary.append(f"feed-shaped replay {passed} of {cells} mode-schedules lossless")
-    lines = latency_lines(rows)
+    lines = latency_lines(rows, printed.get("latency"))
     if lines is not None:
         sections["Latency"] = lines
         summary.append(f"latency at {len(lines) - 4} mode-rates")
@@ -1198,22 +1234,47 @@ def check_published(text, name=None):
         return found + [("table-missing", "no process in the table")]
     shown = shown_cells(text)
     found += check_rows(rows, fields)
-    try:
-        sections, summary = derived(fields, rows, failed, shown)
-    except (ReportError, KeyError, ValueError, ZeroDivisionError, statistics.StatisticsError) \
-            as error:
-        return found + [("table-unusable", repr(error))]
-    for title, lines in sections.items():
-        if check_results.section(text, title) != "\n" + "\n".join(lines) + "\n\n":
-            found.append(("derived-differs", f"{title} is not what the table gives"))
-    if fields.get("summary") != summary:
-        found.append(("summary-differs", f"{fields.get('summary')!r} against {summary!r}"))
+    found += derived_violations(text, fields, rows, failed, shown)
     marks = len(results_table.VERDICT_MARK.findall(text))
     expected = 1 if fields.get("step") == "bisect" and \
         datagram_of(fields) == TURING2_DATAGRAM else 0
     if marks != expected:
         found.append(("verdict-marks", f"{marks} verdict marks, wanted {expected}"))
     return found
+
+
+MOST_OPEN = 10  # The most rows whose pace the printed rates leave either way that check tries.
+
+
+def derived_violations(text, fields, rows, failed, shown):
+    """The sections and the summary the table gives, against the file's. A row whose printed
+    rate leaves its pace either way is tried both ways, and the file passes when one reading
+    of them all gives it; the readings are tried with the printed rate's own answer first,
+    whose differences are the ones reported when none gives the file."""
+    open_rows = [row for row in rows if pace_open(row)]
+    if len(open_rows) > MOST_OPEN:
+        return [("pace-unreadable", f"{len(open_rows)} rows whose printed rate leaves their "
+                                    f"pace either way, more than {MOST_OPEN}")]
+    first = None
+    for reading in itertools.product((True, False), repeat=len(open_rows)):
+        for row, pace in zip(open_rows, reading):
+            row["pace"] = pace if row["achieved"] >= udp_driver.PACE * row["target"] else not pace
+        try:
+            sections, summary = derived(fields, rows, failed, shown)
+        except (ReportError, KeyError, ValueError, ZeroDivisionError,
+                statistics.StatisticsError) as error:
+            found = [("table-unusable", repr(error))]
+        else:
+            found = [("derived-differs", f"{title} is not what the table gives")
+                     for title, lines in sections.items()
+                     if check_results.section(text, title) != "\n" + "\n".join(lines) + "\n\n"]
+            if fields.get("summary") != summary:
+                found.append(("summary-differs", f"{fields.get('summary')!r} against "
+                                                 f"{summary!r}"))
+        if not found:
+            return []
+        first = found if first is None else first
+    return first
 
 
 def check_rows(rows, fields):

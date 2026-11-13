@@ -12,6 +12,8 @@ import http.client
 import io
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -146,6 +148,102 @@ class Server(Scratch):
             self.assertEqual(response.getheader("Cross-Origin-Opener-Policy"), "same-origin")
             self.assertEqual(response.getheader("Cross-Origin-Embedder-Policy"), "require-corp")
             connection.close()
+
+
+# docs/demo.js in node, its definitions evaluated in a context that stands in for the page's
+# window, up to the entry point, which is left out. The expression, run in that context, gives
+# what the test reads back; fetch records each call instead of making it.
+PAGE_HARNESS = """\
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+const [page, href, expression] = process.argv.slice(2);
+const source = readFileSync(page, "utf8");
+const entry = source.lastIndexOf("\\nloadNumbers();\\n");
+if (entry < 0) throw new Error("no entry point in the page's script");
+const fetched = [];
+const context = vm.createContext({
+  location: new URL(href), URL, URLSearchParams, performance, console, fetched,
+  fetch: async (url, options) => { fetched.push({ url: String(url), method: options?.method ?? "GET" }); return { ok: false }; },
+  document: { getElementById: () => null, body: { dataset: {} },
+              documentElement: { outerHTML: "<html></html>" } },
+  navigator: { userAgent: "node" }, crossOriginIsolated: false,
+});
+vm.runInContext(source.slice(0, entry), context);
+console.log(JSON.stringify(await vm.runInContext(`(async () => (${expression}))()`, context)));
+"""
+
+# A stand-in for the engine's linear memory: one Print a call to _demo_print(n) points at, laid
+# out as src/demo_engine.hpp gives it, 24 bytes: timestamp, shares, price, kind, side.
+FAKE_PRINTS = """((prints) => {
+  const memory = new ArrayBuffer(64 + 32 * prints.length);
+  const u8 = new Uint8Array(memory);
+  const u32 = new Uint32Array(memory);
+  prints.forEach(([ns, shares, price, kind, side], i) => {
+    const w = (64 + 32 * i) >>> 2;
+    u32[w] = ns; u32[w + 2] = shares; u32[w + 4] = price;
+    u8[64 + 32 * i + 20] = kind.charCodeAt(0); u8[64 + 32 * i + 21] = side.charCodeAt(0);
+  });
+  const engine = new Engine({ HEAPU8: u8, HEAPU32: u32, _demo_prints: () => prints.length,
+                              _demo_print: (n) => 64 + 32 * n });
+  return prints.map((_, n) => engine.print(n));
+})(PRINTS)"""
+
+
+class Page(Scratch):
+    """docs/demo.js itself, in node."""
+
+    def page(self, expression, href="http://127.0.0.1:8000/index.html"):
+        harness = self.write("page.mjs", PAGE_HARNESS)
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "node is needed to run the page's script")
+        done = subprocess.run([node, str(harness), str(demo.REPO_ROOT / "docs" / "demo.js"), href,
+                               expression], capture_output=True, text=True, check=False,
+                              timeout=120)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return json.loads(done.stdout)
+
+    def test_a_hidden_order_print_shows_no_side(self):
+        # Nasdaq sends "B" as every P's side since 2014-07-14, whatever the hidden order's
+        # side, so the engine's P carries "B" or "S" from the message and the page drops it.
+        prints = [[9000, 100, 1000000, "E", "B"], [10000, 50, 1000100, "C", "S"],
+                  [12000, 70, 1000150, "P", "B"], [13000, 30, 1000150, "P", "S"],
+                  [18000, 900, 1000050, "Q", " "]]
+        got = self.page(FAKE_PRINTS.replace("PRINTS", json.dumps(prints)))
+        self.assertEqual([(p["kind"], p["side"]) for p in got],
+                         [("E", "B"), ("C", "S"), ("P", " "), ("P", " "), ("Q", " ")])
+        self.assertEqual([(p["ns"], p["shares"], p["price"]) for p in got],
+                         [tuple(p[:3]) for p in prints])
+
+
+    def test_post_takes_only_the_page_s_own_origin(self):
+        page = "http://127.0.0.1:8000/index.html"
+        urls = ["/result", "result", "http://127.0.0.1:8000/x", "http://127.0.0.1:8001/result",
+                "https://127.0.0.1:8000/result", "http://localhost:8000/result",
+                "//elsewhere.example/result", "http://elsewhere.example/result",
+                "javascript:alert(1)", "data:text/plain,x", "http://[bad"]
+        got = self.page(f"{json.dumps(urls)}.map(ownOrigin)", f"{page}?play&post=/result")
+        self.assertEqual(got, ["http://127.0.0.1:8000/result", "http://127.0.0.1:8000/result",
+                               "http://127.0.0.1:8000/x"] + [None] * 8)
+
+    def test_a_played_page_posts_its_dom_only_to_its_own_origin(self):
+        page = "http://127.0.0.1:8000/index.html"
+        for post, want in (("/result", [{"url": "http://127.0.0.1:8000/result",
+                                         "method": "POST"}]),
+                           ("http://elsewhere.example/collect", []),
+                           ("//elsewhere.example/collect", [])):
+            with self.subTest(post=post):
+                self.assertEqual(self.page("(new Player(null, null).finished(), fetched)",
+                                           f"{page}?play&post={post}"), want)
+
+    def test_bench_posts_its_record_only_to_its_own_origin(self):
+        page = "http://127.0.0.1:8000/index.html"
+        for query, want in (("?bench=3", [{"url": "http://127.0.0.1:8000/result",
+                                           "method": "POST"}]),
+                            ("?bench=3&post=/elsewhere", [{"url": "http://127.0.0.1:8000/elsewhere",
+                                                           "method": "POST"}]),
+                            ("?bench=3&post=http://elsewhere.example/collect", [])):
+            with self.subTest(query=query):
+                self.assertEqual(self.page("benchmark(3).then(() => fetched)", page + query), want)
 
 
 # Stand-ins for bench_demo and the browser, written into the scratch folder at test time.

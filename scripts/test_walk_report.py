@@ -200,6 +200,17 @@ class Counts(unittest.TestCase):
         with self.assertRaises(walk_report.Refused):
             walk_report.validate_record(refused)
 
+    def test_records_that_differ_in_their_header_or_extract_are_refused(self):
+        for field in walk_report.SAME_FIELDS:
+            records = [count_record(life) for life in LIVES]
+            records[2]["header"][field] = "something else"
+            with self.assertRaisesRegex(walk_report.Refused, f"the records differ in {field}:"):
+                walk_report.render_counts(records, "python3 x")
+        records = [count_record(life) for life in LIVES]
+        records[1]["symbols"] = "AAPL MSFT"
+        with self.assertRaisesRegex(walk_report.Refused, "different extracts"):
+            walk_report.render_counts(records, "python3 x")
+
     def test_percentiles_are_nearest_rank(self):
         self.assertEqual(walk_report.percentile_bucket([1, 1], 50), 0)
         self.assertEqual(walk_report.percentile_bucket([1, 1], 51), 1)

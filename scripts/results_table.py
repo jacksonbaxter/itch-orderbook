@@ -27,6 +27,14 @@ beside it: its bar, what was measured, the host and the verdict all come from th
 headline row whose file gives it no verdict of met or missed is refused, and so is a
 headline with no missed target in it.
 
+A backtest target is compared in its bar's unit. T-BT-1's bar is in events a second, engine
+events/s in the results files, and T-BT-3's in ITCH messages a second. The bar and its unit
+are read from BENCHMARKS.md; a unit there other than BACKTEST_UNITS', or a results file whose
+targets table gives another bar, is refused. The backtest table's median in that unit comes
+from the file's Summary row (`Engine events/s` or `Replay rate, messages/s`), with the other
+rate labelled beside it; the headline's T-BT-1 row is the file's own targets row. That row's
+figures and verdict are held to the Summary by check_results.py.
+
 Each violation prints as `results_table: FAIL <place>: <detail>`.
 
 Exit codes: 0 passed, 1 a page differs or a results file cannot be read, 2 bad usage.
@@ -173,11 +181,15 @@ def sessions_row(name, text):
 def odd_lot_detail(text, name):
     symbols = sorted(set(re.findall(r"^- `t3_odd_lots .*symbol=(\S+)", text, re.MULTILINE)))
     equal, total = find(r"^- equal_odd_lots (\d+) of (\d+) symbols", text, name).groups()
+    return f"odd-lot columns wrong on {' and '.join(symbols)}, equal on {equal} of {total} symbols"
+
+
+def pinned_shares(text, name):
+    """How many compared symbols agree with MIDAS on shares in the pinned window."""
     window = find(r"Pinned window: `(\w+)`", text, name)[1]
     shares = table_row(window, text, name)[0]
     compared = table_row("Symbols compared", text, name)[0]
-    return (f"odd-lot columns wrong on {' and '.join(symbols)}, equal on {equal} of {total} "
-            f"symbols; shares equal on {shares} of {compared}")
+    return f"shares equal on {shares} of {compared}"
 
 
 def t3_failure_detail(text, name):
@@ -193,6 +205,8 @@ def t3_failure_detail(text, name):
                      + "; " + ", ".join(f"{key} {have} of {of}" for key, have, of in equal))
     if not other or any(check.startswith("t3_odd") for check, _ in found):
         parts.append(odd_lot_detail(text, name))
+    # Every failing row ends with the pinned window's share count, whatever failed.
+    parts.append(pinned_shares(text, name))
     return "; ".join(parts)
 
 
@@ -367,18 +381,78 @@ def book_row(name, text):
             f"`{commit}`", source(name))
 
 
-def backtest_row(name, text):
-    """One backtester run: its workload, its rate and its target's verdict."""
+# Each backtest target's bar is in the unit BENCHMARKS.md gives it: T-BT-1's in events a
+# second, which the results files give as engine events/s, T-BT-3's in ITCH messages a second.
+# Here, the row of a results file's Summary that holds the median in that unit, and the unit
+# as the files print it. backtest_bar holds the unit to BENCHMARKS.md.
+BACKTEST_UNITS = {"T-BT-1": ("Engine events/s", "engine events/s"),
+                  "T-BT-3": ("Replay rate, messages/s", "messages/s")}
+BENCHMARKS_PAGE = "BENCHMARKS.md"
+BACKTEST_SECOND = {"Engine events/s": ("Replay rate, messages/s", "messages/s"),
+                   "Replay rate, messages/s": ("Engine events/s", "engine events/s")}
+
+
+def backtest_bar(root, target):
+    """A backtest target's bar from BENCHMARKS.md, in millions, and its unit as the results
+    files print it; TableError if the unit there is not the one BACKTEST_UNITS compares the
+    target in."""
+    path = root / BENCHMARKS_PAGE
+    if not path.is_file():
+        raise TableError(f"{BENCHMARKS_PAGE}: not there, and {target}'s bar is read from it")
+    match = re.search(rf"^### {re.escape(target)}: .*\n- \*\*Target:\*\* ≥ ([0-9.]+) M "
+                      r"(?:ITCH )?(events|messages)/s\b", path.read_text(encoding="utf-8"),
+                      re.MULTILINE)
+    if match is None:
+        raise TableError(f"{BENCHMARKS_PAGE}: no bar in M events/s or M messages/s for {target}")
+    unit = f"{match[2]}/s"
+    compared = BACKTEST_UNITS.get(target, ("", "no unit"))[1]
+    if compared.split(" ")[-1] != unit:
+        raise TableError(f"{BENCHMARKS_PAGE}: {target}'s bar is in {unit}, and this script "
+                         f"compares it in {compared}")
+    return float(match[1]), compared
+
+
+def backtest_judged(root, name, text):
+    """A backtest file's target, the bar its targets table gives, held to BENCHMARKS.md's bar
+    and unit, and the Summary row and median in that unit. The file's verdict and its row's
+    figures are held to its Summary by check_results.py, not here."""
+    cells = find(r"^\| (T-BT-\d) \| ([^|]+) \| [^|]+ \| [^|]+ \|$", text, name)
+    target, shown = cells[1], cells[2].strip()
+    if target not in BACKTEST_UNITS:
+        raise TableError(f"results/{name}: {target} is not a backtest target this script "
+                         "knows the unit of")
+    bar, unit = backtest_bar(root, target)
+    if shown != f"≥ {bar:.2f} M {unit}":
+        raise TableError(f"results/{name}: {target}'s bar is {shown!r}, and BENCHMARKS.md's "
+                         f"is ≥ {bar:.2f} M {unit}")
+    label = BACKTEST_UNITS[target][0]
+    return target, shown, label, summary_median(text, label, name)
+
+
+def backtest_row(root, name, text):
+    """One backtester run: its workload, its bar, the median in the bar's unit with its CV,
+    the other rate labelled beside it, and the target's verdict."""
     workload = header_field(text, "workload", name)
     host = header_field(text, "host", name)
     pinning = pinning_cell(text, name)
-    rate = summary_median(text, "Replay rate, messages/s", name)
-    spread = table_row("Replay rate, messages/s", text, name)[3]
-    events = summary_median(text, "Engine events/s", name)
-    target = find(r"^\| (T-BT-\d) \| [^|]+ \| [^|]+ \| ([^|:]+)", text, name)
+    target, bar, label, median = backtest_judged(root, name, text)
+    verdict = find(r"^\| T-BT-\d \| [^|]+ \| [^|]+ \| ([^|:]+)", text, name)[1].strip()
+    spread = table_row(label, text, name)[3]
+    other_label, other_unit = BACKTEST_SECOND[label]
+    other = f"{summary_median(text, other_label, name)} {other_unit}"
     commit = header_commit(text, name)
-    return (workload, target[1], day_of(name), host, pinning, rate, spread, events,
-            target[2].strip(), f"`{commit}`", source(name))
+    return (workload, target, day_of(name), host, pinning, bar,
+            f"{median} {BACKTEST_UNITS[target][1]}", spread, other, verdict, f"`{commit}`",
+            source(name))
+
+
+def backtest_headline(target, name, text, root):
+    """T-BT-1's headline row, the file's own targets row, once its bar is held to
+    BENCHMARKS.md's bar and unit."""
+    found = backtest_judged(root, name, text)[0]
+    if found != target:
+        raise TableError(f"results/{name}: its targets table is {found}'s, not {target}'s")
+    return targets_headline(target, name, text)
 
 
 def spsc_rows(name, text):
@@ -480,8 +554,13 @@ def udp_rows(name, text):
 
 def run_rows(text):
     """A row for every line of the log's table. A line of it that is not the head, the rule
-    or a run with its five cells is refused, never skipped, so no run drops out unseen."""
-    rows = []
+    or a run with its five cells is refused, never skipped, so no run drops out unseen.
+
+    The log is never edited, so a run's later row says what became of it: withdrawn after
+    it was published, or published again from the same records. Of the rows with one run
+    id, the last stands, and each earlier one names the line of the log that does, in a code
+    span, since a line number is not a measured figure."""
+    found = []
     for number, line in enumerate(text.splitlines(), 1):
         if not line.strip().startswith("|"):
             continue
@@ -491,9 +570,13 @@ def run_rows(text):
         if len(cells) != 5 or not re.fullmatch(RUN_ID, cells[0]):
             raise TableError(f"results/run_log.md:{number}: a line of the table that is not a "
                              f"run with five cells: {line.strip()[:80]}")
-        run, prediction, commit, system, outcome = cells
+        found.append((number, cells))
+    last = {cells[0]: number for number, cells in found}
+    rows = []
+    for number, (run, prediction, commit, system, outcome) in found:
+        stands = "yes" if last[run] == number else f"no: `run_log.md:{last[run]}` stands"
         rows.append((f"`{run}`", f"`{prediction}`", f"`{commit.split()[0]}`", system,
-                     f"`{outcome.split(':')[0]}`"))
+                     f"`{outcome.split(':')[0]}`", stands))
     return rows
 
 
@@ -544,7 +627,7 @@ def generate(root):
             books.append(book_row(name, text))
             rows = []
         elif name.startswith("backtest_"):
-            backtests.append(backtest_row(name, text))
+            backtests.append(backtest_row(root, name, text))
             rows = []
         elif name.startswith("spsc_"):
             spsc += spsc_rows(name, text)
@@ -591,9 +674,12 @@ def generate(root):
         lines += ["", "The backtester. Each row is one workload's results file: T-BT-1 replays the "
                       "whole day with a quoting strategy, T-BT-3 queuetruth's four symbols with "
                       "its shadow orders. Each file says what one event is and what its rate is "
-                      "over, beside its source's.", ""]
-        lines += markdown_table(("Workload", "Target", "Day", "Host", "Pinning",
-                                 "Median messages/s", "CV", "Engine events/s", "Verdict",
+                      "over, beside its source's. Each bar is in the unit BENCHMARKS.md gives it, "
+                      "T-BT-1's in events a second and T-BT-3's in ITCH messages a second, and "
+                      "the verdict compares the median in that unit, which the CV is of; the "
+                      "other rate is beside it, labelled.", ""]
+        lines += markdown_table(("Workload", "Target", "Day", "Host", "Pinning", "Bar",
+                                 "Median, in the bar's unit", "CV", "The other rate", "Verdict",
                                  "Commit", "File"), backtests)
     if browsers:
         lines += ["", "The browser demo's replay of one symbol's extract, in a browser and natively "
@@ -647,8 +733,10 @@ def generate(root):
         lines += markdown_table(("Symbol", "Run", "Fills", "Shares", "S, $", "A, $", "I, $",
                                  "Total, $", "Total, ticks a share", "File"), pnl)
     lines += ["", "Every benchmark run, failed ones included, from "
-                  "[results/run_log.md](results/run_log.md).", ""]
-    lines += markdown_table(RUN_HEADS, run_rows(run_log))
+                  "[results/run_log.md](results/run_log.md). The log is never edited, so a run "
+                  "with more than one row has a later one saying what became of it: of the "
+                  "rows with one run id, the last stands.", ""]
+    lines += markdown_table(RUN_HEADS + ("Stands",), run_rows(run_log))
     return lines
 
 
@@ -758,7 +846,7 @@ HEADLINE = (
      "Every symbol's L3 book rebuilt over a whole day"),
     ("T-LAT-2", "bench_book_paged-flat_ram_debian_12302019.md", book_headline,
      "Latency of one book update, over every message of the day"),
-    ("T-BT-1", "backtest_quoting_debian_12302019.md", targets_headline,
+    ("T-BT-1", "backtest_quoting_debian_12302019.md", backtest_headline,
      "The backtester replaying the whole day with a quoting strategy and its queue model"),
     ("T-SPSC-3", "spsc_pipeline_debian_12302019.md", targets_headline,
      "Parser and book on two cores through the SPSC ring, against one thread doing both"),
@@ -784,7 +872,11 @@ def headline(root, chosen=HEADLINE, unjudged=UNJUDGED):
         if not path.is_file():
             raise TableError(f"results/{name}: the headline's {target} row names it, and it is "
                              "not there")
-        bar, measured, host, verdict, gap = reader(target, name, path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        # The backtester's bar and its unit come from BENCHMARKS.md, under the root.
+        bar, measured, host, verdict, gap = (reader(target, name, text, root)
+                                             if reader is backtest_headline else
+                                             reader(target, name, text))
         if verdict not in ("met", "missed"):
             raise TableError(f"results/{name}: {target}'s verdict is {verdict!r}, neither met "
                              "nor missed, so it cannot be in the headline")

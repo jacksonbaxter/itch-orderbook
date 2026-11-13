@@ -297,6 +297,11 @@ def download_chunks(url, remote, chunks, parts_dir, jobs, transport, sleep=time.
                 if attempt < max_attempts:
                     sleep(backoff(attempt))
                 continue
+            except BaseException:
+                # Anything else, a full disk or a failed fsync or rename, is fatal: the other
+                # workers stop before their next chunk, and it is raised as it came.
+                stop.set()
+                raise
             now = time.monotonic()
             with done_lock:
                 done["chunks"] += 1

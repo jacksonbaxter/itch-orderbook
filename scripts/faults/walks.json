@@ -820,6 +820,48 @@
         "exit": 1
       },
       "system": "Darwin"
+    },
+    {
+      "id": "walks-counts-header-unchecked",
+      "breaks": "Count records whose headers differ are rendered under the first record's",
+      "check": "test_walk_report.py",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "        if len(values) != 1:\n            raise Refused(f\"the records differ in {field}",
+          "new": "        if False:\n            raise Refused(f\"the records differ in {field}"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_records_that_differ_in_their_header_or_extract_are_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-counts-extract-unchecked",
+      "breaks": "Count records of different extracts are rendered under the first record's",
+      "check": "test_walk_report.py",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "    if len({record[\"symbols\"] for record in records}) != 1:",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_records_that_differ_in_their_header_or_extract_are_refused",
+        "exit": 1
+      }
     }
   ]
 }

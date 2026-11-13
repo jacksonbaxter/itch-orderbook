@@ -11,6 +11,18 @@ records that do not replay the same extract, reach the same digest, or come from
 and one host, and, under the Mac's sampler rule, a side whose CPU sampler did not cover its
 whole span with no gap over 5 s, or saw another process above 20% CPU in it.
 
+The span is the record's own, run_started to run_finished, and not measure.sh's start and end
+lines, which simd_report.py and variants_report.py hold their samplers to. There measure.sh
+runs the benchmark itself, under /usr/bin/time, and the sampler runs outside it, so the
+benchmark's span is measure.sh's lines. Here measure.sh runs the driver, `measure.sh
+/usr/bin/time -l scripts/wasm_bench.py`, and the sampler is a thread of the driver: it takes
+its first sample before the driver stamps run_started, and its last after run_finished.
+Everything a side measures runs between the two: bench_demo, or the browser and the page,
+start after run_started and have ended by run_finished. What measure.sh's lines hold beyond
+that is the interpreter starting the driver and leaving it, which no figure is taken from.
+So each report holds its sampler to the whole span of the process its figures come from, which
+is the rule (docs/NOTES.md, "The Mac rule for other work"; "The span the sampler is held to").
+
 check holds a written file to itself, with no raw record: every header field present; the
 host macOS on Darwin and the browser named; each side's sampler line quiet and the rule
 stated; each summary figure the median, min, max and CV of the repetitions table; the ratio the browser's median over native's; the verdict in a word

@@ -279,6 +279,8 @@ LINUX_RULE = re.compile(r"the Linux sampler rule was applied: sampled every [\d.
                         r"by scripts/linux_sampler\.py on cpu\d+, over each process's whole "
                         r"span; every published process quiet; (\d+) withdrawn under the rule")
 LINUX_RULE_WHOLE = "quiet: the Linux sampler rule was applied over the whole run: "
+# T-BT-3's bar was set on an Apple M1 Pro: a miss on another host says what that host is.
+HOST_MISS = "The miss is measured on"
 
 HOME_PATH = re.compile(r"/(?:Users|home)/[A-Za-z0-9._-]+/|[A-Za-z]:\\Users\\[A-Za-z0-9._-]+")
 ADDRESS = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
@@ -933,6 +935,10 @@ def check_backtest_target(text, fields):
             VERDICTS[2:]):
         yield "target-verdict-wrong", (f"{target} is {verdict.split(':')[0]} at {rate[1]} "
                                        f"{unit} against {bar} M")
+    elif not x86 and fields.get("host") != MAC_HOST and verdict.startswith("missed: ") and \
+            HOST_MISS not in (section(text, "Targets") or ""):
+        yield "target-host-reason-missing", (f"{target} is missed on {fields.get('host')} with no "
+                                             "host reason")
 
 
 def check_backtest(text, fields):

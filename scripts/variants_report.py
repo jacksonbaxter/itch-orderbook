@@ -12,7 +12,12 @@ wrote around it, in the same order. On debian the machine check before and after
 host's state at the start and end (uptime, perf_event_paranoid, nice), are required. On
 macOS, where nothing pins the benchmark and nothing holds other work off the cores, the log
 of a CPU sampler that ran beside it is required, and a process is published only if the
-sampler ran over its whole span and saw no other process above 20% CPU in it.
+sampler ran over its whole span and saw no other process above 20% CPU in it. The span is
+measure.sh's start and end lines around the process: measure.sh runs bench_variants itself,
+under /usr/bin/time, and the sampler runs outside it, so those lines bracket the whole
+process. wasm_report.py holds its sampler to the record's own span instead, since there
+measure.sh runs the driver and the sampler is the driver's own thread (docs/NOTES.md, "The
+span the sampler is held to").
 
   lookup    the order lookup apart from the rest of the message: per arm, the check passes
             less the answer passes over the same day (bench/lookup_script.hpp).
@@ -100,6 +105,11 @@ STRUCTURES = {
     "all:all": "every stage, every kind: E8's look-ahead",
 }
 BOTTLENECK_SHARE = 0.40
+# Fresh processes a variant that each prediction this script writes up planned (P-0020 to
+# P-0026). A variant that ran in fewer has its count beside every figure of it, and one that
+# ran in a single process has no range, no CV and no comparison of ranges.
+PLANNED = 3
+ONE = "n/a, one process"
 E8_GAIN = 0.10
 E7_FLAT = 0.05
 SAMPLE_GAP = 5  # seconds: the sampler writes a line every 2 s, so a longer gap is a stop
@@ -350,6 +360,37 @@ def fmt(value, places=3):
     return f"{value:,.{places}f}"
 
 
+def reps_cell(reps):
+    """The Repetitions cell: the count, and the plan beside it when the count falls short."""
+    return str(reps) if reps >= PLANNED else f"{reps} of {PLANNED} planned"
+
+
+def spread_cells(f, low, high, cv_text):
+    """Min, max and (if given) CV cells; a single process has none of them."""
+    if f["reps"] < 2:
+        return [ONE] * (3 if cv_text is not None else 2)
+    return [low, high] + ([cv_text] if cv_text is not None else [])
+
+
+def processes(reps):
+    return "1 process" if reps == 1 else f"{reps} processes"
+
+
+def named(name, figures):
+    """`name`, with its count beside it if it ran in fewer processes than planned."""
+    reps = figures[name]["reps"]
+    if reps >= PLANNED:
+        return f"`{name}`"
+    return f"`{name}` ({processes(reps)} of the {PLANNED} planned)"
+
+
+def short_note(figures, names=None):
+    """For a summary: each variant among `names` that ran in fewer processes than planned."""
+    short = [name for name in (names if names is not None else figures)
+             if figures[name]["reps"] < PLANNED]
+    return ", ".join(f"{name} {figures[name]['reps']} of {PLANNED} processes" for name in short)
+
+
 def grouped(rows):
     out = {}
     for row in rows:
@@ -419,15 +460,28 @@ def layout_section(names, figures, heads):
            "| Arm | Repetitions | Median messages/s | Min | Max | CV | ns a message | Against "
            "| Over it | " + " | ".join(f"{head}, a message" for head in heads) + " |",
            "|---|---|---|---|---|---|---|---|---|" + "---|" * len(heads)]
+    out[2:2] = planned_lines(names, figures)
     for name in names:
         f = figures[name]
         base = LAYOUT_BASE.get(name)
         ratio = (f"{f['rate'] / figures[base]['rate']:.4f}" if base in figures else "n/a")
-        out.append(f"| `{name}` | {f['reps']} | {f['rate']:,.0f} | {f['min']:,.0f} "
-                   f"| {f['max']:,.0f} | {f['cv'] * 100:.2f}% | {fmt(f['ns'], 2)} "
+        spread = spread_cells(f, f"{f['min']:,.0f}", f"{f['max']:,.0f}", f"{f['cv'] * 100:.2f}%")
+        out.append(f"| `{name}` | {reps_cell(f['reps'])} | {f['rate']:,.0f} | "
+                   + " | ".join(spread) + f" | {fmt(f['ns'], 2)} "
                    f"| {f'`{base}`' if base else 'n/a'} | {ratio} | "
                    + " | ".join(fmt(v, 4) for v in f["counts"]) + " |")
     return out
+
+
+def planned_lines(names, figures):
+    """A paragraph before the table, only when some variant ran in fewer processes than planned."""
+    short = [name for name in names if figures[name]["reps"] < PLANNED]
+    if not short:
+        return []
+    return [f"The prediction planned {PLANNED} fresh processes a variant; "
+            + ", ".join(f"`{name}` has {figures[name]['reps']}" for name in short)
+            + ". Each such row gives its count against the plan beside its figures, and a "
+            "variant with one process has no range and no CV.", ""]
 
 
 def structure_section(names, figures, events, heads):
@@ -440,12 +494,13 @@ def structure_section(names, figures, events, heads):
            + " | ".join(f"{head}, a message" for head in heads)
            + " | Taken off the demand path, `r0843:u`, floor on DRAM demand fills | Share |",
            "|---|---|---|---|---|" + "---|" * len(heads) + "---|---|"]
+    out[2:2] = planned_lines(names, figures)
     for name in names:
         f = figures[name]
         drop = base - f["counts"][at]
         taken = "n/a" if name == "D=0" else fmt(drop, 4)
         share = "n/a" if name == "D=0" else f"{drop / base * 100:.1f}%"
-        out.append(f"| `{name}` | {STRUCTURES[name]} | {f['reps']} | {f['rate']:,.0f} "
+        out.append(f"| `{name}` | {STRUCTURES[name]} | {reps_cell(f['reps'])} | {f['rate']:,.0f} "
                    f"| {fmt(f['ns'], 2)} | " + " | ".join(fmt(v, 4) for v in f["counts"])
                    + f" | {taken} | {share} |")
     return out
@@ -470,12 +525,14 @@ def results_section(experiment, rows, events, host):
                "Lookup, ns a lookup | Min | Max | Lookup, ns a message | Share of the check "
                "pass | " + " | ".join(f"{head}, a lookup" for head in heads) + " |",
                "|---|---|---|---|---|---|---|---|---|" + "---|" * len(heads)]
+        out[2:2] = planned_lines(names, figures)
         for name in names:
             f = figures[name]
-            out.append(f"| `{name}` | {f['lookups']:,} | {fmt(f['check_ns'], 2)} "
-                       f"| {fmt(f['answer_ns'], 2)} | {fmt(f['per_lookup'], 2)} "
-                       f"| {fmt(f['min'], 2)} | {fmt(f['max'], 2)} | {fmt(f['per_message'], 2)} "
-                       f"| {f['share'] * 100:.1f}% | "
+            arm = f"`{name}`" if f["reps"] >= PLANNED else f"`{name}`, {reps_cell(f['reps'])}"
+            out.append(f"| {arm} | {f['lookups']:,} | {fmt(f['check_ns'], 2)} "
+                       f"| {fmt(f['answer_ns'], 2)} | {fmt(f['per_lookup'], 2)} | "
+                       + " | ".join(spread_cells(f, fmt(f["min"], 2), fmt(f["max"], 2), None))
+                       + f" | {fmt(f['per_message'], 2)} | {f['share'] * 100:.1f}% | "
                        + " | ".join(fmt(v, 3) for v in f["counts"]) + " |")
         return out, figures
     figures = replay_figures(rows, events)
@@ -486,11 +543,13 @@ def results_section(experiment, rows, events, host):
            f"| {label} | Repetitions | Median messages/s | Min | Max | CV | ns a message | "
            f"Over `{base}` | " + " | ".join(f"{head}, a message" for head in heads) + " |",
            "|---|---|---|---|---|---|---|---|" + "---|" * len(heads)]
+    out[2:2] = planned_lines(names, figures)
     for name in names:
         f = figures[name]
         ratio = f["rate"] / figures[base]["rate"] if base in figures else float("nan")
-        out.append(f"| `{name}` | {f['reps']} | {f['rate']:,.0f} | {f['min']:,.0f} "
-                   f"| {f['max']:,.0f} | {f['cv'] * 100:.2f}% | {fmt(f['ns'], 2)} "
+        spread = spread_cells(f, f"{f['min']:,.0f}", f"{f['max']:,.0f}", f"{f['cv'] * 100:.2f}%")
+        out.append(f"| `{name}` | {reps_cell(f['reps'])} | {f['rate']:,.0f} | "
+                   + " | ".join(spread) + f" | {fmt(f['ns'], 2)} "
                    f"| {ratio:.4f} | " + " | ".join(fmt(v, 4) for v in f["counts"]) + " |")
     return out, figures
 
@@ -503,11 +562,23 @@ def layout_finding(figures, events):
         a, b = figures[arm], figures[base]
         gain = a["rate"] / b["rate"] - 1
         apart = a["min"] > b["max"] or a["max"] < b["min"]
+        single = [name for name in (arm, base) if figures[name]["reps"] < 2]
+        if a["reps"] >= PLANNED and b["reps"] >= PLANNED:
+            rates = f"({a['rate']:,.0f} against {b['rate']:,.0f} messages/s)"
+        else:
+            rates = (f"({a['rate']:,.0f} messages/s{rate_count(a)}{',' if rate_count(a) else ''}"
+                     f" against {b['rate']:,.0f}{rate_count(b)})")
+        if single:
+            ranges = (" and ".join(f"`{name}`" for name in single)
+                      + (" ran in one process, so it has no range" if len(single) == 1 else
+                         " each ran in one process, so neither has a range")
+                      + " and the two are not compared by range")
+        elif apart:
+            ranges = "their ranges over the repetitions do not overlap"
+        else:
+            ranges = "their ranges over the repetitions overlap, so the two are not told apart"
         line = (f"- {label.capitalize()}: `{arm}` {gain * 100:+.2f}% against `{base}` "
-                f"({a['rate']:,.0f} against {b['rate']:,.0f} messages/s); "
-                + ("their ranges over the repetitions do not overlap"
-                   if apart else "their ranges over the repetitions overlap, so the two are "
-                                 "not told apart") + ".")
+                f"{rates}; {ranges}.")
         at = events.index("instructions") if "instructions" in events else None
         if at is not None and FILLS not in events:
             line += (f" Instructions a message, user and kernel: {fmt(a['counts'][at], 1)} "
@@ -522,9 +593,21 @@ def layout_finding(figures, events):
                          f"{fmt(b['counts'][l2], 3)}; instructions {fmt(a['counts'][instr], 1)} "
                          f"against {fmt(b['counts'][instr], 1)}; branch misses "
                          f"{fmt(a['counts'][branch], 3)} against {fmt(b['counts'][branch], 3)}.")
+        note = short_note(figures, (arm, base))
         parts.append(f"{label} {gain * 100:+.2f}% ({arm} over {base}"
-                     + ("" if apart else ", ranges overlap") + ")")
+                     + (f"; {note}" if note else "")
+                     + (", one process has no range" if single else
+                        "" if apart else ", ranges overlap") + ")")
     return lines, "; ".join(parts)
+
+
+def rate_count(f):
+    """After a rate in a finding: how many processes it rests on, if fewer than planned."""
+    if f["reps"] >= PLANNED:
+        return ""
+    if f["reps"] == 1:
+        return f", 1 process of the {PLANNED} planned"
+    return f", the median of {f['reps']} processes of the {PLANNED} planned"
 
 
 def structure_finding(figures, events):
@@ -532,27 +615,27 @@ def structure_finding(figures, events):
     base = figures["D=0"]["counts"][at]
     singles = {name: base - f["counts"][at] for name, f in figures.items()
                if name not in ("D=0", "all:all")}
-    lines = [f"- `D=0` makes {fmt(base, 3)} `r0843:u` a message, a floor on DRAM demand fills."]
+    lines = [f"- {named('D=0', figures)} makes {fmt(base, 3)} `r0843:u` a message, a floor on DRAM demand fills."]
     for name, drop in sorted(singles.items(), key=lambda item: -item[1]):
-        lines.append(f"- `{name}`, {STRUCTURES[name]}: {fmt(drop, 3)} a message taken off the "
-                     f"demand path, {drop / base * 100:.1f}% of `D=0`'s.")
+        lines.append(f"- {named(name, figures)}, {STRUCTURES[name]}: {fmt(drop, 3)} a message taken off the "
+                     f"demand path, {drop / base * 100:.1f}% of {named('D=0', figures)}'s.")
     if "all:all" in figures:
         left = figures["all:all"]["counts"][at]
         lines.append(f"- The single stages together take {fmt(sum(singles.values()), 3)} a "
-                     f"message; every stage at once (`all:all`) takes {fmt(base - left, 3)}, "
-                     f"and leaves {fmt(left, 3)}, {left / base * 100:.1f}% of `D=0`'s, on "
+                     f"message; every stage at once ({named('all:all', figures)}) takes {fmt(base - left, 3)}, "
+                     f"and leaves {fmt(left, 3)}, {left / base * 100:.1f}% of {named('D=0', figures)}'s, on "
                      "lines no stage reaches or reaches in time.")
     largest = max(singles, key=singles.get)
     share = singles[largest] / base
     if share >= BOTTLENECK_SHARE:
         lines.append(f"- The rule fixed before the run names a bottleneck only at 40% or more "
-                     f"of the fills: **{STRUCTURES[largest]}** (`{largest}`) takes "
+                     f"of the fills: **{STRUCTURES[largest]}** ({named(largest, figures)}) takes "
                      f"{share * 100:.1f}%, so it is the bottleneck by that rule.")
         verdict = f"bottleneck by the 40% rule: {STRUCTURES[largest]}"
     else:
         lines.append(f"- The rule fixed before the run names a bottleneck only at 40% or more "
                      f"of the fills: no single structure reaches it. The largest, "
-                     f"{STRUCTURES[largest]} (`{largest}`), takes {share * 100:.1f}%, so no "
+                     f"{STRUCTURES[largest]} ({named(largest, figures)}), takes {share * 100:.1f}%, so no "
                      "bottleneck is claimed.")
         verdict = "no structure reaches the 40% rule, no bottleneck claimed"
     summary = (f"largest single structure {STRUCTURES[largest]} at {share * 100:.1f}% of the "
@@ -564,6 +647,12 @@ def finding(experiment, figures, events, host):
     """The finding, worked from the figures alone, and a one-line summary of it."""
     if experiment == "layout":
         return layout_finding(figures, events)
+    lines, summary = experiment_finding(experiment, figures, events)
+    note = short_note(figures)
+    return lines, summary + (f"; fewer processes than planned: {note}" if note else "")
+
+
+def experiment_finding(experiment, figures, events):
     if experiment == "structure":
         return structure_finding(figures, events)
     if experiment == "prefetch":
@@ -571,29 +660,30 @@ def finding(experiment, figures, events, host):
         gains = {name: f["rate"] / base - 1 for name, f in figures.items() if name != "D=0"}
         best = max(gains, key=gains.get)
         refuted = gains[best] < E8_GAIN
-        lines = [f"- Best look-ahead: `{best}`, {gains[best] * 100:+.2f}% over `D=0` "
+        lines = [f"- Best look-ahead: {named(best, figures)}, {gains[best] * 100:+.2f}% over "
+                 f"{named('D=0', figures)} "
                  f"({figures[best]['rate']:,.0f} against {base:,.0f} messages/s).",
-                 "- Every look-ahead against `D=0`: " + ", ".join(
-                     f"`{name}` {gain * 100:+.2f}%" for name, gain in
+                 f"- Every look-ahead against {named('D=0', figures)}: " + ", ".join(
+                     f"{named(name, figures)} {gain * 100:+.2f}%" for name, gain in
                      sorted(gains.items(), key=lambda item: int(item[0][2:]))) + ".",
                  f"- E8's kill criterion, refuted if under {E8_GAIN * 100:.0f}% gain at any D: "
                  + ("**refuted**: no look-ahead gains 10%." if refuted else
-                    f"**not refuted**: `{best}` gains {gains[best] * 100:.2f}%.")]
+                    f"**not refuted**: {named(best, figures)} gains {gains[best] * 100:.2f}%.")]
         summary = (f"best look-ahead {best} at {gains[best] * 100:+.2f}% over D=0; E8 "
                    + ("refuted (under 10% at every D)" if refuted else "not refuted"))
         return lines, summary
     if experiment == "dispatch":
         base = figures["switch"]["rate"]
-        lines = ["- Against `switch`: " + ", ".join(
-            f"`{name}` {(f['rate'] / base - 1) * 100:+.2f}%" for name, f in
+        lines = [f"- Against {named('switch', figures)}: " + ", ".join(
+            f"{named(name, figures)} {(f['rate'] / base - 1) * 100:+.2f}%" for name, f in
             sorted(figures.items(), key=lambda item: FORMS.index(item[0])) if name != "switch")
             + "."]
         book = [name for name in BOOK_FORMS if name in figures]
         floor = figures.get("predicate")
         if floor is not None:
-            lines.append(f"- The floor, `predicate`: {fmt(floor['ns'], 2)} ns a message; the "
+            lines.append(f"- The floor, {named('predicate', figures)}: {fmt(floor['ns'], 2)} ns a message; the "
                          "book forms stand " + ", ".join(
-                             f"`{name}` {fmt(figures[name]['ns'] - floor['ns'], 2)}"
+                             f"{named(name, figures)} {fmt(figures[name]['ns'] - floor['ns'], 2)}"
                              for name in book) + " ns a message above it.")
         if "branch-misses" in events:
             at = events.index("branch-misses")
@@ -601,7 +691,7 @@ def finding(experiment, figures, events, host):
             spread = max(misses.values()) - min(misses.values())
             refuted = spread < E7_FLAT
             lines.append("- Branch misses a message: " + ", ".join(
-                f"`{name}` {fmt(value, 4)}" for name, value in misses.items())
+                f"{named(name, figures)} {fmt(value, 4)}" for name, value in misses.items())
                 + f"; spread {fmt(spread, 4)}.")
             lines.append(f"- E7's kill criterion, refuted if the mispredict count is flat "
                          f"across forms, within {E7_FLAT} a message: "
@@ -620,8 +710,10 @@ def finding(experiment, figures, events, host):
         return lines, summary
     lines = []
     for name, f in sorted(figures.items(), key=lambda item: DESIGNS.index(item[0])):
-        lines.append(f"- `{name}`: the lookups cost {fmt(f['per_lookup'], 2)} ns each "
-                     f"(min {fmt(f['min'], 2)}, max {fmt(f['max'], 2)}), "
+        spread = ("" if f["reps"] < 2 else
+                  f" (min {fmt(f['min'], 2)}, max {fmt(f['max'], 2)})")
+        lines.append(f"- {named(name, figures)}: the lookups cost {fmt(f['per_lookup'], 2)} ns "
+                     f"each{spread}, "
                      f"{fmt(f['per_message'], 2)} ns a message, {f['share'] * 100:.1f}% of "
                      "the check pass.")
     if "paged-flat" in figures and "hash-flat" in figures:
@@ -866,6 +958,49 @@ def check_published(text, name=None):
         found.append(("finding-differs", "the finding is not what the table of passes gives"))
     if fields.get("summary") != summary:
         found.append(("summary-differs", f"{fields.get('summary')!r} against {summary!r}"))
+    return found + count_violations(text, rows, fields.get("summary", ""))
+
+
+def count_violations(text, rows, summary):
+    """What a file says of a variant that ran in fewer processes than planned, read from its
+    table of passes alone: every row and finding line that names it must give its count, the
+    summary must too, and one with a single process must claim no range, no CV and no
+    comparison of ranges."""
+    reps = {}
+    for row in rows:
+        reps[row["variant"]] = max(reps.get(row["variant"], 0), row["repetition"])
+    found = []
+    results = (check_results.section(text, "Results") or "").splitlines()
+    finding_lines = (check_results.section(text, "Finding") or "").splitlines()
+    head = next((line for line in results if line.startswith("| ") and "---" not in line), "")
+    columns = [cell.strip() for cell in head.strip("|").split("|")]
+    spread = [at for at, cell in enumerate(columns) if cell in ("Min", "Max", "CV")]
+    for name, count in sorted(reps.items()):
+        if count >= PLANNED:
+            continue
+        for line in results:
+            if not line.startswith(f"| `{name}`"):
+                continue
+            if f"{count} of {PLANNED} planned" not in line:
+                found.append(("count-unsaid", f"`{name}`'s row in Results rests on {count} of "
+                                              f"the {PLANNED} processes planned and does not say so"))
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if count == 1 and any(at >= len(cells) or cells[at] != ONE for at in spread):
+                found.append(("range-from-one", f"`{name}`'s row in Results gives a min, max or "
+                                                "CV from one process"))
+        for line in finding_lines:
+            if f"`{name}`" not in line:
+                continue
+            if f"{processes(count)} of the {PLANNED} planned" not in line:
+                found.append(("count-unsaid", f"a finding names `{name}`, which rests on "
+                                              f"{count} of the {PLANNED} processes planned, "
+                                              f"without saying so: {line!r}"))
+            if count == 1 and re.search(r"overlap|\(min |\bCV\b", line):
+                found.append(("range-from-one", f"a finding claims a range for `{name}` from "
+                                                f"one process: {line!r}"))
+        if f"{name} {count} of {PLANNED} processes" not in summary:
+            found.append(("count-unsaid", f"the summary does not say `{name}` rests on {count} "
+                                          f"of the {PLANNED} processes planned"))
     return found
 
 

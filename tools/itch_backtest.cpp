@@ -15,7 +15,11 @@
 //   - the engine refused no real message, its view book refused no delivered one, no ring
 //     overflowed and no fee failed.
 //
-// Exit codes: 0 every check passed, 1 a check failed, 2 bad usage or an unreadable file.
+// The file's framing must end on a frame boundary (tools/framing.hpp), or the run stops before
+// it starts, since the engine's walk ends a file cut mid-frame as it ends a whole one.
+//
+// Exit codes: 0 every check passed, 1 a check failed or the framing did not end cleanly, 2 bad
+// usage or an unreadable file.
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -29,6 +33,7 @@
 #include <vector>
 
 #include "backtest/joiner.hpp"
+#include "framing.hpp"
 #include "itch/backtest.hpp"
 #include "itch/book.hpp"
 #include "itch/reader.hpp"
@@ -128,6 +133,9 @@ int run(const std::optional<Options>& options) {
   if (!file) {
     std::println(stderr, "itch_backtest: cannot read {}", options->path);
     return 2;
+  }
+  if (!itch::tools::framing_ends_cleanly("itch_backtest", file->bytes())) {
+    return 1;
   }
   itch::backtest::Config config;
   config.date = options->date;

@@ -105,6 +105,21 @@ def decode_records(neon_work=0.115):
     return out
 
 
+def decode_with_cycles(neon_cycles):
+    """decode_records(), neon's work passes given these cycles, one value a repetition."""
+    out = []
+    for repetition, cycles in zip((1, 2, 3), neon_cycles, strict=True):
+        out.append(paired("decode", "scalar", "scalar", repetition, 0.130 + 0.001 * repetition))
+        out.append(paired("decode", "neon", "neon", repetition, 0.115 + 0.001 * repetition,
+                          work_cycles=cycles))
+    return out
+
+
+def row_of(text, name):
+    return next(line for line in text.splitlines() if line.startswith(f"| `{name}` | NEON")
+                or line.startswith(f"| `{name}` | scalar:"))
+
+
 class SimdReportTest(unittest.TestCase):
     def render(self, experiment, records, withdrawn=(), foreign_at=None):
         stderrs = [stderr_for(i) for i in range(len(records))]
@@ -239,6 +254,50 @@ class SimdReportTest(unittest.TestCase):
         self.assertIn("table-unusable", self.violations(text.replace(row, wrong, 1)))
         said = text.replace("**not refuted**", "**refuted**", 1)
         self.assertIn("finding-differs", self.violations(said))
+
+    def test_speed_up_is_on_the_cycles_the_calls_compare(self):
+        # scalar: (0.132 s x 4 GHz - 400 M) over 300,000 = 426.667 cycles, 106.667 ns; neon:
+        # (500 M - 400 M) over 300,000 = 333.333 cycles, 0.017 s over 300,000 = 56.667 ns. On
+        # cycles 426.667 / 333.333 = 1.280; on ns it would be 1.882.
+        text, _ = self.render("decode", decode_with_cycles((500e6, 500e6, 500e6)))
+        self.assertTrue(row_of(text, "neon").endswith("| `scalar` | 1.280 |"), row_of(text, "neon"))
+        self.assertTrue(row_of(text, "scalar").endswith("| `scalar` | 1.000 |"))
+        self.assertIn("Speed-up is the baseline's operation in cycles over this one's", text)
+        self.assertEqual(self.violations(text), [])
+
+    def test_speed_up_is_n_a_where_a_range_reaches_zero(self):
+        # neon's cycles an Add Order are -33.333, 33.333 and 66.667: the median is above zero,
+        # the range is not, so the ratio would be noise.
+        text, _ = self.render("decode", decode_with_cycles((390e6, 410e6, 420e6)))
+        self.assertTrue(row_of(text, "neon").endswith("| `scalar` | n/a |"), row_of(text, "neon"))
+        self.assertTrue(row_of(text, "scalar").endswith("| `scalar` | 1.000 |"))
+        self.assertEqual(self.violations(text), [])
+
+    def test_a_speed_up_typed_over_is_caught(self):
+        text, _ = self.render("decode", decode_records())
+        row = row_of(text, "neon")
+        self.assertTrue(row.endswith("| `scalar` | 1.882 |"), row)
+        edited = text.replace(row, row.replace("| 1.882 |", "| 1.900 |"), 1)
+        self.assertIn("results-differ", self.violations(edited))
+
+    def test_the_caveats_bound_what_rounding_the_seconds_can_move(self):
+        # Two means of passes apart, each off by up to half a microsecond, over 300,000 items:
+        # 1,000 ns / 300,000 = 0.00333 ns, rounded up to 0.0034.
+        text, _ = self.render("decode", decode_records())
+        line = next(line for line in text.splitlines() if "Seconds to the microsecond" in line)
+        self.assertIn("Rounding alone moves a figure in ns an item by at most 0.0034 ns, more "
+                      "than half the last printed place, so that digit is not certain.", line)
+        self.assertEqual(self.violations(text), [])
+        self.assertIn("precision-unsaid", self.violations(text.replace(line + "\n", "")))
+
+    def test_a_file_rendered_again_says_so(self):
+        records = decode_records()
+        text, _ = simd_report.render(manifest("decode", records), records,
+                                     [stderr_for(i) for i in range(len(records))],
+                                     sampler(len(records)), "on a day, by the fixed script.")
+        self.assertIn("Do not edit by hand.\n\nRendered again from the run's own raw records, "
+                      "unchanged: on a day, by the fixed script.\n\nHost:", text)
+        self.assertEqual(self.violations(text), [])
 
     def test_names_isa_sampler_rule_and_privacy(self):
         text, _ = self.render("decode", decode_records())

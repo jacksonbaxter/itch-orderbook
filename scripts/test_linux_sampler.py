@@ -478,6 +478,66 @@ class DebianFiles(unittest.TestCase):
         self.assertIn("load-rule-not-quiet", codes(broken))
 
 
+class RenderAgain(unittest.TestCase):
+    """backtest_driver.py render on a sampled debian run: the Sampler section judged again
+    from the raw folder's sampler.txt, and T-BT-3's miss with its host reason (B6)."""
+
+    def setUp(self):
+        self.scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.raw = Path(self.scratch.name)
+        self.records = [debian_record(value) for value in (2.0, 2.1, 1.9)]
+        for index, one in enumerate(self.records, start=1):
+            (self.raw / f"shadow-repetition-{index}.json").write_text(
+                __import__("json").dumps(one), encoding="utf-8")
+        self.log = "\n".join(log(*steady(0, 60))) + "\n"
+        (self.raw / "sampler.txt").write_text(self.log, encoding="utf-8")
+        self.args = backtest_driver.parse_args(
+            ["--bench", "b", "--probe", "p", "--input", "i", "--workload", "shadow", "--date",
+             "20191230", "--prediction", "P-0106", "--raw-dir", "<raw>", "--out",
+             "results/backtest_shadow_debian_12302019.md", "--core", "4", "--sibling", "5"])
+        self.stderr = stderr_for(*RULE_DAY)
+        self.sampled = {"every": 1.0, "cpu": 0, "published": published(),
+                        "withdrawn": [("repetition 2", stamp(1), "the sampler saw x")]}
+        self.published = stamp_load.stamp(backtest_driver.render(
+            self.records, self.args, "P-0106-x", *RULE_DAY, test_backtest_results.MACHINE,
+            backtest_driver.relative_command(self.args), self.sampled), self.stderr)
+
+    def tearDown(self):
+        self.scratch.cleanup()
+
+    def test_a_miss_off_the_mac_gives_the_host(self):
+        self.assertEqual(check_results.check_text(self.published), [])
+        self.assertIn("| T-BT-3 | ≥ 4.61 M messages/s | 2.71 M messages/s | missed: ",
+                      self.published)
+        self.assertIn("The miss is measured on debian, an AMD Ryzen Embedded V1605B, a Zen 1 "
+                      "part at a 2.0 GHz base clock", self.published)
+        broken = re.sub(r"^The miss is measured on .*\n", "", self.published, flags=re.MULTILINE)
+        self.assertIn("target-host-reason-missing", codes(broken))
+        met = debian_file()
+        self.assertNotIn("The miss is measured on", met)
+
+    def test_the_sampler_section_is_judged_again(self):
+        again = backtest_driver.render_again(self.raw, self.published, self.stderr)
+        self.assertEqual(again, self.published)
+        context = "## Earlier answers\n\nP-0104 and P-0105."
+        with_context = backtest_driver.render_again(self.raw, self.published, self.stderr,
+                                                    "why", context)
+        self.assertIn("\n\n## Earlier answers\n\nP-0104 and P-0105.\n\n## machine_check output",
+                      with_context)
+        self.assertEqual(check_results.check_text(with_context), [])
+
+    def test_a_span_the_log_does_not_give(self):
+        busy = self.log.replace(f"{stamp(25)} sample dt=1.000 wait=0.0 sibling=0.0 others=0.0",
+                                f"{stamp(25)} sample dt=1.000 wait=0.0 sibling=0.0 others=50")
+        self.assertNotEqual(busy, self.log)
+        (self.raw / "sampler.txt").write_text(busy, encoding="utf-8")
+        with self.assertRaisesRegex(backtest_driver.Refused, "repetition 2's span"):
+            backtest_driver.render_again(self.raw, self.published, self.stderr)
+        (self.raw / "sampler.txt").unlink()
+        with self.assertRaisesRegex(backtest_driver.Refused, "no sampler.txt"):
+            backtest_driver.render_again(self.raw, self.published, self.stderr)
+
+
 class FakeWatch:
     """A Watch whose log is a list the test fills, one span at a time."""
 
