@@ -1041,6 +1041,7 @@ def render_main(argv):
 
 
 def main(argv=None):
+    process_kinds.check_map("spsc_driver")  # Stops here on a map set and unusable.
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["render"]:
         return render_main(argv[1:])

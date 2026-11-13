@@ -580,6 +580,90 @@
       "expect": {
         "signature": "^FAIL: test_a_map_with_a_kind_outside_the_fixed_set_is_refused \\("
       }
+    },
+    {
+      "id": "gates-process-kinds-map-error-a-refusal",
+      "breaks": "An unusable name-to-kind map raises a ValueError, which a tool's refusal handler writes into a run-log row",
+      "check": "test_process_kinds.py",
+      "mutations": [
+        {
+          "file": "scripts/process_kinds.py",
+          "old": "class MapError(Exception):\n",
+          "new": "class MapError(ValueError):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_process_kinds.py",
+        "UnusableMap"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_unusable_map_is_no_refusal_and_gives_no_path \\("
+      }
+    },
+    {
+      "id": "gates-process-kinds-map-error-gives-its-path",
+      "breaks": "An unusable name-to-kind map's message gives the map's path, which can reach a row or a log",
+      "check": "test_process_kinds.py",
+      "mutations": [
+        {
+          "file": "scripts/process_kinds.py",
+          "old": "    unusable = f\"{MAP_ENV}: the name-to-kind map it gives\"\n",
+          "new": "    unusable = f\"{MAP_ENV}: the name-to-kind map {path}\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_process_kinds.py",
+        "UnusableMap"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_unusable_map_is_no_refusal_and_gives_no_path \\("
+      }
+    },
+    {
+      "id": "gates-process-kinds-map-error-runs-on",
+      "breaks": "A tool whose name-to-kind map is set and unusable carries on past the map instead of stopping before it writes a row",
+      "check": "test_process_kinds.py",
+      "mutations": [
+        {
+          "file": "scripts/process_kinds.py",
+          "old": "            raise SystemExit(2) from None\n",
+          "new": "            raise\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_process_kinds.py",
+        "UnusableMap"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_kind_of_with_an_unusable_map_stops_and_raises_nothing_a_tool_catches \\("
+      }
+    },
+    {
+      "id": "gates-process-kinds-stamp-load-map-unchecked",
+      "breaks": "stamp_load.py does not check the name-to-kind map before it reads a run, so an unusable map is met only inside the sampler rule",
+      "check": "test_process_kinds.py",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    process_kinds.check_map(\"stamp_load\")  # Stops here on a map set and unusable.\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_process_kinds.py",
+        "UnusableMap"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_writer_stops_before_it_writes_anything \\("
+      }
     }
   ]
 }

@@ -54,6 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import linux_sampler  # noqa: E402
+import process_kinds  # noqa: E402
 import run_record  # noqa: E402
 
 START = re.compile(r"^measure\.sh: start .*$", re.MULTILINE)
@@ -103,7 +104,6 @@ def sampler_line(sampler_text, start, end):
     if inside:
         # The reason goes into the run log's row, so the first is given by its kind
         # (process_kinds), with its share and time; the sampler's log keeps its command.
-        import process_kinds  # noqa: PLC0415
         stamp, _, cpu, command = (inside[0].split(None, 3) + ["", ""])[:4]
         raise ValueError(f"the sampler saw {len(inside)} other busy processes in the run, the "
                          f"first {process_kinds.kind_of(command)} at {cpu}% CPU at {stamp}")
@@ -207,6 +207,7 @@ def outcome(fields, name, why, sampler_given):
 
 
 def main(argv=None):
+    process_kinds.check_map("stamp_load")  # Stops here on a map set and unusable.
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--results", type=Path, required=True)
     parser.add_argument("--stderr", type=Path, required=True)

@@ -458,6 +458,7 @@ def parse_args(argv):
 
 
 def main(argv=None):
+    process_kinds.check_map("wasm_bench")  # Stops here on a map set and unusable.
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)
