@@ -1251,6 +1251,48 @@
         "signature": "FAIL: test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-run-table-every-row-stands",
+      "breaks": "RESULTS.md's run table says every row stands, so a published row later withdrawn reads as standing",
+      "check": "test_results_table.py test_of_the_rows_with_one_run_id_the_last_stands",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        stands = \"yes\" if last[run] == number else",
+          "new": "        stands = \"yes\" if True else"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_of_the_rows_with_one_run_id_the_last_stands",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-run-table-first-row-stands",
+      "breaks": "the run table takes a run's first row as the one that stands, not its last",
+      "check": "test_results_table.py test_of_the_rows_with_one_run_id_the_last_stands",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    last = {cells[0]: number for number, cells in found}\n",
+          "new": "    last = {cells[0]: number for number, cells in reversed(found)}\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_of_the_rows_with_one_run_id_the_last_stands",
+        "exit": 1
+      }
     }
   ]
 }

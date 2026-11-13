@@ -177,6 +177,27 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| `P-0601-20261106T031311Z_scalar-w2-1` |", output)
         self.assertIn("| `P-0024-window-12302019` |", output)
 
+    def test_of_the_rows_with_one_run_id_the_last_stands(self):
+        path = self.root / "results" / "run_log.md"
+        log = path.read_text(encoding="utf-8")
+        lines = log.splitlines()
+        rows = [number for number, line in enumerate(lines, 1)
+                if line.startswith("| P-0023-20261110T103318Z |")]
+        self.assertEqual(len(rows), 2)
+        _, output = self.run_table()
+        shown = [line for line in output.splitlines()
+                 if line.startswith("| `P-0023-20261110T103318Z` |")]
+        self.assertEqual([line.rsplit(" | ", 1)[1] for line in shown],
+                         [f"no: `run_log.md:{rows[1]}` stands |", "yes |"])
+        # A row appended for the run takes its place, and both earlier rows name it.
+        path.write_text(log + "| P-0023-20261110T103318Z | P-0023 | abc | Darwin | withdrawn: "
+                              "a test |\n", encoding="utf-8")
+        _, output = self.run_table()
+        shown = [line for line in output.splitlines()
+                 if line.startswith("| `P-0023-20261110T103318Z` |")]
+        self.assertEqual([line.rsplit(" | ", 1)[1] for line in shown],
+                         [f"no: `run_log.md:{len(lines) + 1}` stands |"] * 2 + ["yes |"])
+
     def test_a_run_row_the_table_cannot_place_is_refused(self):
         path = self.root / "results" / "run_log.md"
         path.write_text(path.read_text(encoding="utf-8")
