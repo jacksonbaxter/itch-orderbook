@@ -173,6 +173,25 @@ class BookResults(unittest.TestCase):
         self.assertTrue(check_results.is_book_file(BOOK))
         self.assertFalse(check_results.is_book_file(MAC))
 
+    def test_the_label_quoted_in_a_sentence_spares_nothing(self):
+        label = check_results.STUB_LABEL
+        quoted = replace(BOOK, "Numbers from the two hosts are never mixed.",
+                         f"Not the {label} (see P-0001) Numbers from the two hosts are never "
+                         "mixed.")
+        self.assertTrue(check_results.is_book_file(quoted))
+        self.assertIn("target-missing", codes(without_line(quoted, "| T-BOOK-1 |")))
+
+    def test_a_book_file_labelled_the_stub_is_refused(self):
+        label = check_results.STUB_LABEL
+        labelled = replace(BOOK, "\n## Header\n", f"\n**{label} A planted label.**\n\n## Header\n")
+        self.assertFalse(check_results.is_book_file(labelled))
+        self.assertIn("stub-label-on-a-book", codes(labelled))
+
+    def test_a_stub_file_with_a_book_name_is_refused(self):
+        self.assertEqual(check_results.check_text(MAC, "bench_replay_stub_mac_12302019.md"), [])
+        self.assertIn("stub-label-on-a-book",
+                      {code for code, _ in check_results.check_text(MAC, "bench_book_x_mac.md")})
+
     def test_every_book_field_dropped_in_turn(self):
         for name in check_results.BOOK_FIELDS:
             self.assertIn("header-field-missing", codes(without_line(BOOK, f"- {name}: ")), name)

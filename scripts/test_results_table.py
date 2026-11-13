@@ -300,6 +300,28 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn("- design:", output)
 
+    def test_a_harness_label_off_its_line_is_held_to_the_book_rules(self):
+        name = "results/bench_replay_stub_mac_12302019.md"
+        label = f"**{results_table.HARNESS_LABEL} "
+        text = (self.root / name).read_text(encoding="utf-8")
+        moved = text.replace(label, "**A result. ", 1).replace(
+            "Numbers from the two hosts", f"Not the {results_table.HARNESS_LABEL} Numbers from "
+            "the two hosts", 1)
+        self.assertNotEqual(moved, text)
+        (self.root / name).write_text(moved, encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("- design:", output)
+
+    def test_a_book_file_labelled_the_stub_is_refused(self):
+        stub = (self.root / "results/bench_replay_stub_mac_12302019.md").read_text(encoding="utf-8")
+        (self.root / "results/bench_book_planted_mac_12302019.md").write_text(stub,
+                                                                              encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("results/bench_book_planted_mac_12302019.md: a book file's name, labelled "
+                      "the stub's", output)
+
     def add_book(self, fixture=BOOK_FIXTURE):
         name = f"results/{BOOK}"
         shutil.copy(BOOK_FIXTURES / fixture, self.root / name)

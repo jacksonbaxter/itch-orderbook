@@ -4493,6 +4493,66 @@
         "signature": "check_results: FAIL bar-differs T-SPSC-3: SPSC_COMPARISONS pipelined time / single-threaded time: ",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-stub-label-anywhere",
+      "breaks": "The stub's label anywhere in a book file, a quoting sentence included, spares it every book check (r7-5)",
+      "check": "test_bench_results.py test_the_label_quoted_in_a_sentence_spares_nothing",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    return not stub_line(text).startswith(f\"**{STUB_LABEL} \")\n",
+          "new": "    return STUB_LABEL not in text\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_label_quoted_in_a_sentence_spares_nothing"
+      }
+    },
+    {
+      "id": "bench-stub-book-fields-allowed",
+      "breaks": "A file labelled the stub may carry a book's design, input and top of book",
+      "check": "test_bench_results.py test_a_book_file_labelled_the_stub_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if present:\n        yield \"stub-label-on-a-book\"",
+          "new": "    if False:\n        yield \"stub-label-on-a-book\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_book_file_labelled_the_stub_is_refused"
+      }
+    },
+    {
+      "id": "bench-stub-book-name-allowed",
+      "breaks": "A bench_book_ file may be labelled the stub's",
+      "check": "test_bench_results.py test_a_stub_file_with_a_book_name_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if name is not None and name.startswith(\"bench_book_\"):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_stub_file_with_a_book_name_is_refused"
+      }
     }
   ]
 }

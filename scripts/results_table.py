@@ -14,8 +14,10 @@ neither can drop out unseen. A verdict is a **PASS**, **FAIL** or **NOT_AVAILABL
 a row of the file's Targets table, counted by its target and its verdict's words: each book
 file's whole targets table becomes rows of the Book targets table, misses with their gaps,
 figures no bar on their host can judge and targets the run did not measure with the reason
-included. A book benchmark file missing a field its row needs is
-refused as well. An oracle or trades file runs each arm of the fast book, and a
+included. A book benchmark file missing a field its row needs is refused as well. A
+stub-book harness proof is known by its label on the line just above its Header, where
+bench_driver.py writes it, not by the words anywhere in the file, and a `bench_book_` file so
+labelled is refused. An oracle or trades file runs each arm of the fast book, and a
 row says whether every arm gave its verdict. An arm that gave another one makes the row a
 failure that names it. A UDP replay file gives a T-URING-2 row when it
 holds a bisection at 1,400 bytes a datagram, T-URING-2's packet size, and a verdict in a file
@@ -317,6 +319,14 @@ def throughput_row(name, text):
             f"`{commit}`", source(name))
 
 
+def harness_proof(text):
+    """A stub-book harness proof: its label is the line just above its Header, where
+    bench_driver.py writes it, not the words anywhere in the file."""
+    above = text.split("\n## Header\n", 1)[0] if "\n## Header\n" in text else ""
+    lines = [line for line in above.splitlines() if line.strip()]
+    return bool(lines) and lines[-1].startswith(f"**{HARNESS_LABEL} ")
+
+
 def header_field(text, field, name):
     return find(rf"^- {field}: (.*)$", text, name)[1]
 
@@ -579,7 +589,9 @@ def generate(root):
         elif name == "fault_matrix.md":
             faults.append(fault_row(name, text))
             rows = []
-        elif name.startswith("bench_") and HARNESS_LABEL in text:
+        elif name.startswith("bench_") and harness_proof(text):
+            if name.startswith("bench_book_"):
+                raise TableError(f"results/{name}: a book file's name, labelled the stub's")
             throughput.append(throughput_row(name, text))
             rows = []
         elif name.startswith("bench_"):

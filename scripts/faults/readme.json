@@ -1298,6 +1298,46 @@
         "signature": "check_results: FAIL summary-inconsistent bench_book_paged-flat_ram_debian_12302019\\.md: Summary, Throughput, messages/s: median 9,145,430 outside",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-harness-label-anywhere",
+      "breaks": "results_table files a book file quoting the stub's label as a harness proof, with no verdicts (r7-5)",
+      "check": "test_results_table.py test_a_harness_label_off_its_line_is_held_to_the_book_rules",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    return bool(lines) and lines[-1].startswith(f\"**{HARNESS_LABEL} \")\n",
+          "new": "    return HARNESS_LABEL in text\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_harness_label_off_its_line_is_held_to_the_book_rules"
+      }
+    },
+    {
+      "id": "readme-harness-book-name-allowed",
+      "breaks": "results_table files a bench_book_ file labelled the stub's as a harness proof",
+      "check": "test_results_table.py test_a_book_file_labelled_the_stub_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            if name.startswith(\"bench_book_\"):\n                raise TableError",
+          "new": "            if False:\n                raise TableError"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_book_file_labelled_the_stub_is_refused"
+      }
     }
   ]
 }

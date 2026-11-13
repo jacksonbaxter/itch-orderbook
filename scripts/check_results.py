@@ -21,10 +21,12 @@ with the median and the bar: T-BT-1's bar was set on x86, so a macOS file may no
 met or missed, while T-BT-3's was set on a Mac. Its command passes each sibling the machine
 check read as idle.
 
-A book file, any other file not labelled as the Phase 2 stub-book harness proof, is held to more:
-the design, input and top-of-book fields, a statement of how the run read the day beside
-itch-book's two methods, the latency table with its pair-subtracted
-column, the per-operation table, the book's memory, the summary's service and batch
+A book file, any other file not labelled as the Phase 2 stub-book harness proof, is held to
+more. The label counts only as the line just above the Header section, where bench_driver.py
+writes it, and a file so labelled may carry no book field and no `bench_book_` name. A book
+file is held to the design, input and top-of-book fields, a statement of how the run read the
+day beside itch-book's two methods, the latency table with its pair-subtracted column, the
+per-operation table, the book's memory, the summary's service and batch
 means, the top of book when it was tracked, the design comparison, and a verdict for every
 target in words from a fixed set. On macOS, a bar set on x86 Linux may not be called met
 or missed. Each measured target is held to its bar in BOOK_BARS: its Bar cell gives that
@@ -609,8 +611,29 @@ def check_private(text, fields):
             yield "private-text", f"{name}: {match.group(0)}"
 
 
+def stub_line(text):
+    """The line just above the Header section, where bench_driver.py puts a stub file's label,
+    or "" for a file with no line there."""
+    above = text.split("\n## Header\n", 1)[0] if "\n## Header\n" in text else ""
+    lines = [line for line in above.splitlines() if line.strip()]
+    return lines[-1] if lines else ""
+
+
 def is_book_file(text):
-    return STUB_LABEL not in text
+    """A book file, unless the line just above its Header is the stub's label: the label
+    anywhere else in the file, a sentence that quotes it included, does not make it a stub."""
+    return not stub_line(text).startswith(f"**{STUB_LABEL} ")
+
+
+def check_stub(text, fields, name=None):
+    """A file labelled the stub's harness proof names no book design and is no book file."""
+    if is_book_file(text):
+        return
+    present = [field for field in BOOK_FIELDS if field in fields]
+    if present:
+        yield "stub-label-on-a-book", f"a stub harness proof with the book's fields {present}"
+    if name is not None and name.startswith("bench_book_"):
+        yield "stub-label-on-a-book", f"{name} is a book file's name, labelled the stub's"
 
 
 def table_rows(text, title):
@@ -1306,8 +1329,9 @@ def check_book(text, fields):
         yield from found
 
 
-def check_text(text):
-    """Every violation in one results file, as (code, detail) pairs."""
+def check_text(text, name=None):
+    """Every violation in one results file, as (code, detail) pairs. name is the file's name,
+    which a book file's must not share with a stub's."""
     fields = parse_header(text)
     if not fields:
         return [("header-missing", "no Header section")]
@@ -1333,6 +1357,7 @@ def check_text(text):
         return violations
     violations.extend(check_percentiles(text, fields))
     violations.extend(check_counters(text))
+    violations.extend(check_stub(text, fields, name))
     if is_book_file(text):
         violations.extend(check_book(text, fields))
     return violations
@@ -1356,7 +1381,7 @@ def main(argv=None):
             print(f"check_results: ok, {len(list(bar_copies()))} copied bars agree with "
                   f"{args.bars.name}")
     for path in args.files:
-        violations = check_text(path.read_text(encoding="utf-8"))
+        violations = check_text(path.read_text(encoding="utf-8"), path.name)
         for code, detail in violations:
             print(f"check_results: FAIL {code} {path.name}: {detail}")
         if violations:
