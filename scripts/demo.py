@@ -3,7 +3,7 @@
 numbers it shows.
 
     demo.py build   [--build-dir DIR]
-    demo.py extract --day FILE --symbol SYMBOL [--tool PATH]
+    demo.py extract --day FILE --symbol SYMBOL [--tool PATH] [--root DIR]
     demo.py serve   [--port N]
     demo.py numbers [--check] [--root DIR]
 
@@ -13,7 +13,10 @@ build    builds the wasm preset's itch_demo with em++ (EMSDK must be set), -O3 -
 extract  runs tools/itch_extract, from the release preset, on a day already fetched by
          scripts/fetch_data.py, and writes docs/local/extract.itch and extract.json. The
          extract is Nasdaq's data, cut from its sample file: docs/local/ is gitignored, and
-         nothing in it is committed or deployed.
+         nothing in it is committed or deployed. extract.json's day_sha256 is hashed from the
+         day file itch_extract reads, never copied from scripts/data_manifest.json, and a day
+         that hashes to anything but the manifest's pin for it is refused (r5-6);
+         day_sha256_of says so. --root writes under DIR's docs/local/ instead.
 serve    serves docs/ on 127.0.0.1 with the standard library alone, adding the headers that
          make the page cross-origin isolated. The page needs a server: file:// cannot load
          its module.
@@ -110,6 +113,19 @@ def day_manifest(day):
     return {}
 
 
+def day_hash(day):
+    """The day file's sha256, hashed from the file, and what it was checked against: refused if
+    scripts/data_manifest.json pins another (r5-6)."""
+    digest = sha256_of(day)
+    pin = day_manifest(day).get("unpacked_sha256")
+    if pin is not None and pin != digest:
+        raise DemoError(f"{day.name} hashes to {digest}, not the {pin} that "
+                        "scripts/data_manifest.json pins")
+    return digest, ("the day file itch_extract read, hashed by scripts/demo.py extract; " +
+                    ("it matches its pin in scripts/data_manifest.json" if pin else
+                     "not pinned in scripts/data_manifest.json"))
+
+
 def extract(args):
     tool = args.tool or REPO_ROOT / "build" / "release" / "tools" / "itch_extract"
     if not tool.is_file():
@@ -117,7 +133,8 @@ def extract(args):
                         "cmake --build --preset release --target itch_extract")
     if not args.day.is_file():
         raise DemoError(f"no {args.day}: fetch the day with scripts/fetch_data.py")
-    local = REPO_ROOT / LOCAL
+    day_sha256, day_sha256_of = day_hash(args.day)
+    local = args.root / LOCAL
     local.mkdir(parents=True, exist_ok=True)
     partial = local / "extract.itch.partial"
     result = subprocess.run([str(tool), str(args.day), args.symbol, str(partial)],
@@ -127,10 +144,10 @@ def extract(args):
         partial.unlink(missing_ok=True)
         raise DemoError(f"itch_extract exited {result.returncode}")
     summary = json.loads(result.stdout)
-    pinned = day_manifest(args.day)
     summary.update({
         "day": args.day.name,
-        "day_sha256": pinned.get("unpacked_sha256", "not pinned in scripts/data_manifest.json"),
+        "day_sha256": day_sha256,
+        "day_sha256_of": day_sha256_of,
         "extract_file": "extract.itch",
         "extract_sha256": sha256_of(partial),
         "made_by": "scripts/demo.py extract",
@@ -291,6 +308,7 @@ def main(argv=None):
     cut.add_argument("--day", type=Path, required=True)
     cut.add_argument("--symbol", required=True)
     cut.add_argument("--tool", type=Path)
+    cut.add_argument("--root", type=Path, default=REPO_ROOT)
     served = sub.add_parser("serve")
     served.add_argument("--port", type=int, default=8000)
     shown = sub.add_parser("numbers")

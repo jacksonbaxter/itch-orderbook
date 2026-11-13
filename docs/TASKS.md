@@ -299,3 +299,4 @@ Each benchmarked alone, then measured inside the book or backtester.
 
 ### The review's part-done findings, closed (piece K)
 - [x] r1-1, r4-6: E5 (`batch`) needs no avx512vbmi refusal: its pass reads Add Orders only through `batch4`, inside each; docs/NOTES.md, "The review's part-done findings, closed", and the r1-1 paragraph corrected. Test `Built/KernelTest.BatchOfFourStaysInsideEachAddOrder`; fault `simd-neon-batch-reads-past-the-add-order`.
+- [x] r5-6, the demo's part: `demo.py extract` hashes the day it reads and refuses one that is not its pin, and `wasm_report` refuses a new run whose extract did not; the published WASM file's `day_sha256` is the manifest's pin, as NOTES says. Tests in `scripts/test_demo.py`; faults `demo-extract-day-hash-from-the-manifest`, `demo-extract-day-pin-unchecked`, `demo-wasm-report-day-hash-copied`.

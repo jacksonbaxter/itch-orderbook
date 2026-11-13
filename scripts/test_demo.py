@@ -479,6 +479,43 @@ def records(browser_name="Google Chrome for Testing 153.0.8010.12", wasm_ms=None
     return native, browser, stderr
 
 
+FAKE_EXTRACT = """#!{python}
+import json, sys
+open(sys.argv[3], "wb").write(b"frames")
+print(json.dumps({{"symbol": sys.argv[2], "messages": 1, "bytes": 6,
+                  "digest": "00000000000000aa"}}))
+"""
+
+
+class Extract(Scratch):
+    """demo.py extract with a stand-in for itch_extract, under a scratch root (r5-6)."""
+
+    def setUp(self):
+        super().setUp()
+        self.tool = self.write("itch_extract", FAKE_EXTRACT.format(python=sys.executable))
+        os.chmod(self.tool, 0o755)
+
+    def cut(self, day):
+        return quietly(demo.main, ["extract", "--day", str(day), "--symbol", "TEST",
+                                   "--tool", str(self.tool), "--root", str(self.root)])
+
+    def test_extract_hashes_the_day_it_reads(self):
+        day = self.write("days/00000000.NASDAQ_ITCH50", "a day of 26 bytes, made up")
+        code, output = self.cut(day)
+        self.assertEqual(code, 0, output)
+        summary = json.loads((self.root / "docs" / "local" / "extract.json").read_text())
+        self.assertEqual(summary["day_sha256"], demo.sha256_of(day))
+        self.assertIn("hashed by scripts/demo.py extract; not pinned", summary["day_sha256_of"])
+
+    def test_extract_refuses_a_day_that_is_not_its_pin(self):
+        # The review's reproducer: a made-up file under the real day's name.
+        day = self.write("days/12302019.NASDAQ_ITCH50", "a day of 26 bytes, made up")
+        code, output = self.cut(day)
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"hashes to {demo.sha256_of(day)}, not the 5d81c2e1", output)
+        self.assertFalse((self.root / "docs" / "local" / "extract.json").exists())
+
+
 class Report(unittest.TestCase):
     LOG = "P-0401-20261105T100000Z_native P-0401-20261105T100100Z_browser"
 
@@ -618,6 +655,17 @@ class Report(unittest.TestCase):
         native, browser, stderr = records()
         with self.assertRaisesRegex(wasm_report.ReportError, "exit=0"):
             wasm_report.render(native, browser, stderr.replace("exit=0", "exit=1"), stderr)
+
+    def test_a_new_run_takes_only_a_day_hash_extract_hashed(self):
+        native, browser, stderr = records()
+        with self.assertRaisesRegex(wasm_report.ReportError, "not one scripts/demo.py extract"):
+            wasm_report.render(native, browser, stderr, stderr, new_kind=True)
+        native["extract_manifest"]["day_sha256_of"] = "the day file itch_extract read, hashed"
+        text = wasm_report.render(native, browser, stderr, stderr, new_kind=True)
+        self.assertIn("- day_sha256: " + "cd" * 32 + "\n", text)
+        # A run of the kind made before renders as it did.
+        native, browser, stderr = records()
+        self.assertEqual(wasm_report.render(native, browser, stderr, stderr), self.render())
 
     def test_the_committed_files_pass(self):
         code, output = quietly(wasm_report.main, ["check"])

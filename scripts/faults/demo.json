@@ -664,6 +664,72 @@
       }
     },
     {
+      "id": "demo-extract-day-hash-from-the-manifest",
+      "breaks": "demo.py extract writes the day's sha256 from data_manifest.json, not from the file it read (r5-6)",
+      "check": "test_demo.py Extract.test_extract_hashes_the_day_it_reads",
+      "mutations": [
+        {
+          "file": "scripts/demo.py",
+          "old": "        \"day_sha256\": day_sha256,\n",
+          "new": "        \"day_sha256\": day_manifest(args.day).get(\"unpacked_sha256\", \"not pinned in scripts/data_manifest.json\"),\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py",
+        "Extract"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_extract_hashes_the_day_it_reads",
+        "exit": 1
+      }
+    },
+    {
+      "id": "demo-extract-day-pin-unchecked",
+      "breaks": "demo.py extract cuts a day that hashes to something other than the manifest's pin for it (r5-6)",
+      "check": "test_demo.py Extract.test_extract_refuses_a_day_that_is_not_its_pin",
+      "mutations": [
+        {
+          "file": "scripts/demo.py",
+          "old": "    if pin is not None and pin != digest:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py",
+        "Extract"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_extract_refuses_a_day_that_is_not_its_pin",
+        "exit": 1
+      }
+    },
+    {
+      "id": "demo-wasm-report-day-hash-copied",
+      "breaks": "wasm_report renders a new run whose extract copied the day's sha256 from the manifest (r5-6)",
+      "check": "test_demo.py Report.test_a_new_run_takes_only_a_day_hash_extract_hashed",
+      "mutations": [
+        {
+          "file": "scripts/wasm_report.py",
+          "old": "    if new_kind and \"day_sha256_of\" not in manifest:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py",
+        "Report"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_new_run_takes_only_a_day_hash_extract_hashed",
+        "exit": 1
+      }
+    },
+    {
       "id": "demo-page-hidden-print-takes-the-message-side",
       "breaks": "The page colours a P print by its side field, which Nasdaq sends as B on every P",
       "check": "test_demo.py",

@@ -36,6 +36,12 @@ figure to the range those printed times leave (check_results.py, "Figures comput
 unrounded values"). --rendered-again REASON adds a line saying the file was rendered again
 from the run's own raw records, and why.
 
+day_sha256 is the extract's: for a run of the new kind (scripts/run_record.py), render refuses
+an extract.json whose day hash scripts/demo.py extract did not hash from the day it read
+(day_sha256_of, r5-6). In a run of the kind made before, it is the hash
+scripts/data_manifest.json pins for the day, copied by extract, as in
+results/wasm_replay_mac_12302019.md.
+
 T-WASM-1's bar, 1.55 times native, is Jangda et al.'s geomean in Google Chrome. A run in any
 other browser neither meets nor misses it: its verdict is `browser differs: <browser>, not
 Google Chrome`, with the figure against the bar beside it.
@@ -188,7 +194,7 @@ def gib(value):
     return f"{value / 1024 ** 3:.2f} GiB"
 
 
-def render(native, browser, native_stderr, browser_stderr, again=None):
+def render(native, browser, native_stderr, browser_stderr, again=None, new_kind=False):
     for record, side in ((native, "native"), (browser, "browser")):
         if record.get("side") != side:
             raise ReportError(f"the {side} record is of side {record.get('side')!r}")
@@ -204,6 +210,11 @@ def render(native, browser, native_stderr, browser_stderr, again=None):
     if header["host"] != MAC_HOST:
         raise ReportError(f"host {header['host']!r}: T-WASM-1 runs on the Mac")
     manifest = native["extract_manifest"]
+    # r5-6: from the run record's new kind on, the day's hash is one demo.py extract hashed from
+    # the day it read. Before, extract.json copied the manifest's pin, as the published file's is.
+    if new_kind and "day_sha256_of" not in manifest:
+        raise ReportError("the extract's day_sha256 is not one scripts/demo.py extract hashed "
+                          "from the day it read: cut the extract again")
     messages = manifest["messages"]
     # Every figure comes from the raw times, rounded only when it is printed.
     native_ms = [repetition["ns"] / 1e6 for repetition in native["repetitions"]]
@@ -434,7 +445,8 @@ def main(argv=None):
         text = render(json.loads(args.native.read_text(encoding="utf-8")),
                       json.loads(args.browser.read_text(encoding="utf-8")),
                       args.native_stderr.read_text(encoding="utf-8"),
-                      args.browser_stderr.read_text(encoding="utf-8"), args.rendered_again)
+                      args.browser_stderr.read_text(encoding="utf-8"), args.rendered_again,
+                      run_record.is_new_kind(args.native.parent))
     except (ReportError, run_record.Incomplete, KeyError, ValueError) as error:
         print(f"wasm_report: FAIL refused: {error!r}")
         return 1
