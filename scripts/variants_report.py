@@ -12,7 +12,12 @@ wrote around it, in the same order. On debian the machine check before and after
 host's state at the start and end (uptime, perf_event_paranoid, nice), are required. On
 macOS, where nothing pins the benchmark and nothing holds other work off the cores, the log
 of a CPU sampler that ran beside it is required, and a process is published only if the
-sampler ran over its whole span and saw no other process above 20% CPU in it.
+sampler ran over its whole span and saw no other process above 20% CPU in it. The span is
+measure.sh's start and end lines around the process: measure.sh runs bench_variants itself,
+under /usr/bin/time, and the sampler runs outside it, so those lines bracket the whole
+process. wasm_report.py holds its sampler to the record's own span instead, since there
+measure.sh runs the driver and the sampler is the driver's own thread (docs/NOTES.md, "The
+span the sampler is held to").
 
   lookup    the order lookup apart from the rest of the message: per arm, the check passes
             less the answer passes over the same day (bench/lookup_script.hpp).
