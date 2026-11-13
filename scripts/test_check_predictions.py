@@ -406,6 +406,49 @@ class History(unittest.TestCase):
                 self.assertIn("is back as it was", output)
                 self.git("checkout", "-q", old)
 
+    def test_a_line_reworded_twice(self):
+        """r14-2: a line reworded by the kinds and then again by the grammar's order. A branch
+        from before both merges cleanly into the trunk that holds the last form; a merge that
+        keeps either earlier form while a parent holds the last is refused."""
+        moved = self.KIND.replace("withdrawn: the sampler", "withdrawn: then the sampler")
+        self.copy("predictions.md")
+        self.commit("predictions.md")
+        log = self.results / "run_log.md"
+        self.copy("run_log.md", "bench_fixture.md")
+        base = log.read_text(encoding="utf-8").replace(self.REFUSED, self.NAMED)
+        log.write_text(base, encoding="utf-8")
+        self.commit("run_log.md", "bench_fixture.md")
+        side = "| P-0001-side | P-0001 | abc | Darwin | published |\n"
+        old = self.git("rev-parse", "--abbrev-ref", "HEAD").strip()
+        self.git("checkout", "-q", "-b", "side")
+        log.write_text(base + side, encoding="utf-8")
+        self.commit("run_log.md")
+        self.git("checkout", "-q", old)
+        (self.root / "scripts").mkdir(exist_ok=True)
+        (self.root / check_predictions.REWORDINGS).write_text(json.dumps({"lines": {
+            check_predictions.digest(self.NAMED): check_predictions.digest(self.KIND),
+            check_predictions.digest(self.KIND): check_predictions.digest(moved)}}),
+            encoding="utf-8")
+        log.write_text(base.replace(self.NAMED, self.KIND), encoding="utf-8")
+        self.commit("run_log.md")
+        log.write_text(base.replace(self.NAMED, moved), encoding="utf-8")
+        trunk = self.commit("run_log.md")
+        self.git("merge", "-q", "--no-ff", "--no-commit", "-s", "ours", "side")
+        log.write_text(base.replace(self.NAMED, moved) + side, encoding="utf-8")
+        self.commit("run_log.md")
+        code, output = check(self.root)
+        self.assertEqual(code, 0, output)
+        for kept in (self.NAMED, self.KIND):
+            with self.subTest(kept=kept):
+                self.git("checkout", "-q", "--detach", trunk)
+                self.git("merge", "-q", "--no-ff", "--no-commit", "-s", "ours", "side")
+                log.write_text(base.replace(self.NAMED, kept) + side, encoding="utf-8")
+                self.commit("run_log.md")
+                code, output = check(self.root)
+                self.assertEqual(code, 1, output)
+                self.assertIn("is back as it was", output)
+                self.git("checkout", "-q", old)
+
     def test_require_before_a_run(self):
         code, output = check(self.root, "--require", "P-0001")
         self.assertEqual(code, 1, output)

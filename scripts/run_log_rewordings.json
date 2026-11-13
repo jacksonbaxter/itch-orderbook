@@ -1,5 +1,5 @@
 {
-  "about": "results/run_log.md's lines changed on 2026-11-13, when each program that is not this project's, named in a row's outcome, was given by its kind (scripts/process_kinds.py), every figure, time and verdict kept; and its header line, which says so. Each key is the sha256 of a line as it was, its value the sha256 of the line it became. check_predictions.py allows these changes to the log's history and no other.",
+  "about": "results/run_log.md's lines changed on 2026-11-13, when each program that is not this project's, named in a row's outcome, was given by its kind (scripts/process_kinds.py), every figure, time and verdict kept; and its header line, which says so; and, the same day, three outcomes whose words were put in the order the run log's grammar reads, with the header again (r14-2), each such line keyed by the line it was before then. Each key is the sha256 of a line as it was, its value the sha256 of the line it became. check_predictions.py allows these changes to the log's history and no other.",
   "lines": {
     "6bab7f8c7b50b63c9daecec3f73b533a1b723b198e01b0068c39090fc35b45cf": "f5e1430ee16b1aa248c8ef95484040dc5c9940afa736428e33376af611607721",
     "fdb016ec51f8b92276f476a5b307efae946d110e254aaa41bc2d79c4a61b9c98": "92644575557452d7a369ac0f74d7dbfacb766616b055c50e56324d1f6bffab7f",
@@ -162,6 +162,10 @@
     "c53df9c2b212ea1dc283a22720979f14df3fcd4bb1b344a719fdce2d05ab8ec7": "b048cbc82d2e52406a22afb7e0c1bce0a1eb7dbcdf0d752e92cb3fafb86981e9",
     "aaa9efd9953fb9e7ffb8d8b25a2dece0e220e122ba23c77bf22595df1a6eaa91": "0c90294759a5184617718d501a546285cd1dab3b81bc548d8da307c26fc6811a",
     "aef6f080923444aee77aa01dadef4302fc4821b6d416d0b94d1f3f4caa6c83fd": "8f68901c2271b737f0ea59ccb2fe48d5fd0decd5523f239804b3f521fbc9b58d",
-    "932975c002ad54c575dd21e6f0eca5b1220072f2bebce566667790624837f62b": "72997b588d46d59131caaeafc9043cf4eb9194dabfdd9d72793be174acb0ba78"
+    "932975c002ad54c575dd21e6f0eca5b1220072f2bebce566667790624837f62b": "72997b588d46d59131caaeafc9043cf4eb9194dabfdd9d72793be174acb0ba78",
+    "f5e1430ee16b1aa248c8ef95484040dc5c9940afa736428e33376af611607721": "ad344b0e6a461a565f5acb28d74cb82460df35989521011b0cf618359aae1bdc",
+    "b1bb9bf7903215a800ed888946d6ee61a410ace18dc3394651bc14d1c9902646": "bdd9eda18bacdbde1826cb9dc0b5ebd63ba9fb2b17d068eca9347f4f71cbc41b",
+    "ac3a59ad7a543448671675c011978c2e23a478fdcdb559c3b0673a41f0047f91": "6a02ba0b1508d230c29ef8b8bfa2f2488e913c168d287b18f6b3e597368e6da5",
+    "fe76eb45bf744311c5db2524d53ed3e82f87b7d39fa1cd7eb7e8d1f3d24a08f3": "d046be250ec51cf0c210f3f07e1b966fdd5b5f7bb2eebe3241935c8c9efde0e8"
   }
 }

@@ -952,8 +952,8 @@
       "mutations": [
         {
           "file": "scripts/check_predictions.py",
-          "old": "    return (all(old == new or reworded.get(digest(old)) == digest(new)\n",
-          "new": "    return (all(True or reworded.get(digest(old)) == digest(new)\n"
+          "old": "    return (all(old == new or digest(new) in later(digest(old), reworded)\n",
+          "new": "    return (all(True or digest(new) in later(digest(old), reworded)\n"
         }
       ],
       "command": [
@@ -973,7 +973,7 @@
       "mutations": [
         {
           "file": "scripts/check_predictions.py",
-          "old": "    found = digest(line)\n    return reworded.get(found, found)\n",
+          "old": "    found = digest(line)\n    return (later(found, reworded) or [found])[-1]\n",
           "new": "    found = digest(line)\n    return found\n"
         }
       ],
@@ -6780,6 +6780,27 @@
       ],
       "expect": {
         "signature": "FAIL: test_a_merge_that_undoes_a_rewording",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-log-rewording-chain-cut",
+      "breaks": "A run-log line reworded twice is read only as the line it first became, so a merge of a branch from before both rewordings counts its row as dropped",
+      "check": "test_check_predictions.py test_a_line_reworded_twice",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "    while found in reworded and reworded[found] not in chain and reworded[found] != found:\n",
+          "new": "    if found in reworded and reworded[found] not in chain and reworded[found] != found:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_line_reworded_twice",
         "exit": 1
       }
     }

@@ -22,10 +22,13 @@ tried in that order. A map whose kinds are not all in KINDS is refused. A map th
 cannot be used stops the tool that reads it (check_map, default_map), before it writes a row, and
 no message gives the map's path.
 
-cause_breaks() is the run log's grammar. Wherever a row's cause gives a process with its CPU
-share ("saw X at 41.2% CPU", "the first, X, at 100.0%", "X ran at 92% to 100% CPU", "(X, 28.4%)"),
-or as the busiest other work ("the most of it X"), X must be a kind. It holds no name of any
-program: it knows only the kinds.
+cause_breaks() is the run log's grammar, and it is closed. Every CPU share in a row's outcome
+must sit in a known form: a process form, whose subject is one of KINDS, with its share and,
+where a tool wrote it ("saw X at 41.2% CPU at <time>", "the first, X, at 100.0% at <time>", the
+Linux sampler's "the most of it X, at 38.5% of a CPU"), its time; or a figure form, a share that
+is about no process (the rule's bar, a share of a pass). Anything else is refused, and so is a
+kind the sampler saw with no share. It holds no name of any program: it knows only the kinds
+and the forms. A name in prose with no share is beyond it.
 
 A library, not a command.
 """
@@ -163,56 +166,84 @@ def reworded(reason, kinds=None):
     return NAMED_REASON.sub(lambda match: f"saw {kind_of(match.group(1), kinds)} at ", reason)
 
 
-# The run log's grammar.
+# The run log's grammar. It is closed: every CPU share in an outcome must sit in one of the
+# forms below, and anything else is refused. A process form gives a process by one of KINDS,
+# with its share, and where a tool wrote it (the sampler's "saw", "the first"), with its time;
+# a figure form is a share that is about no process. Nothing here names a program.
 
-def _core(phrase):
-    """A kind without its article, so that "its backup tool" reads as "a backup tool"."""
-    return re.sub(r"^(?:a|an|the|its)\s+", "", phrase.strip())
-
-
-KIND_CORES = frozenset(_core(kind) for kind in KINDS) | {UNNAMED.split(",")[0]}
-SHARE = re.compile(r"(?<![\w.+-])(\d+(?:\.\d+)?)%")
-# What may stand between a process and its share: "X at 41.2%", "X at up to 193.1%",
-# "X up to 199.2%", "X ran at", "X were seen at", "the first, X, at".
-BEFORE_SHARE = re.compile(r"(?:,?\s+(?:ran|were seen|were running|was seen|was running))?"
-                          r",?\s+(?:at up to|at|up to)\s*$")
-# Where the words that give a process begin.
-CLAUSE_START = re.compile(r".*(?:[;:,(]|\b(?:saw|ran|and|because|while)\b|\bthe first\b)\s*",
-                          re.DOTALL)
-MOST_OF_IT = re.compile(r"\bthe most of it ([^,;|]+)")
+def _kinds(kinds):
+    return "|".join(re.escape(kind) for kind in sorted(kinds, key=len, reverse=True))
 
 
-def _subject(text):
-    """The words that give a process, from the end of text back to where its clause starts."""
-    text = text.rstrip().rstrip(")").rstrip()
-    match = CLAUSE_START.match(text)
-    subject = text[match.end():] if match else text
-    return subject.strip().strip("`").strip()
-
-
-def cited(cause):
-    """Every phrase in a cause that gives a process with its CPU share, or as the busiest
-    other work, in order."""
-    found = []
-    for match in SHARE.finditer(cause):
-        before, after = cause[:match.start()], cause[match.end():]
-        if after.startswith(" of") or re.search(r"\babove\s*$", before):
-            continue  # A share of something else, or the rule's bar.
-        if re.search(r"\(\s*[^()]*,\s*$", before) and after.startswith(")"):
-            found.append(_subject(before.rstrip().rstrip(",")))  # "(X, 28.4%)"
-            continue
-        if re.search(r"%\s+to\s*$", before):
-            continue  # The top of a range: the process came with its bottom.
-        trimmed = BEFORE_SHARE.sub("", before)
-        if trimmed != before:
-            found.append(_subject(trimmed))
-    found += [match.group(1).strip() for match in MOST_OF_IT.finditer(cause)]
-    return found
+KIND = f"(?:{_kinds(KINDS)})"
+# "a backup tool and its file-sync tool": two kinds, the second by "its".
+KIND_PAIR = (f"{KIND} and its (?:{_kinds(re.sub(r'^(?:a|an|the) ', '', kind) for kind in KINDS)})")
+SHARE = r"\d+(?:\.\d+)?%"
+SHARES = rf"{SHARE}(?: to {SHARE})?"
+ISO = r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z"
+HMS = r"\d\d:\d\d:\d\d UTC"
+# When a process was seen, after its share.
+WHEN = (rf"(?: CPU)?(?: at {ISO}| inside its span| inside it| in it| during it"
+        rf"(?: \(sampler, \d\d:\d\d:\d\d and {HMS}\))?| at its first second| from its first second"
+        rf"| from {HMS}| \({HMS}\)| in every \d+ s sample of the other piece's CPU sampler from "
+        rf"\d\d:\d\d:\d\d to {HMS})")
+VERB = r"(?: at| at up to| up to| ran at| ran at up to| were seen at| were running at)"
+# The Linux sampler's: what was busy at a moment, and the most of it, by kind, at its own share.
+LINUX_WHAT = (rf"(?:the measured core: its process waited {SHARE} of a second on the run queue"
+              rf"|the core's SMT sibling: {SHARE} busy|the other cores: {SHARE} of a CPU busy)")
+PROCESS_FORMS = (
+    # A tool's: the sampler saw a kind at its share and time.
+    rf"\bsaw {KIND} at {SHARE}{WHEN}",
+    rf"\bthe first, {KIND}, at {SHARE}{WHEN}",
+    rf"\bthe first {KIND} at {SHARE}{WHEN}",
+    rf"\bsaw {LINUX_WHAT} at {ISO}, the most of it (?:{KIND}, at {SHARE} of a CPU|{KIND}"
+    rf"|{re.escape(UNNAMED)})",
+    # Typed rows' lists and clauses: a kind, or two, right after where a clause starts.
+    rf"(?:[;:,] |\band |\bbecause |\bthe host's backup timer ran )(?:{KIND_PAIR}|{KIND})"
+    rf"{VERB} {SHARES}{WHEN}?",
+)
+FIGURE_FORMS = (
+    # The sampler rule's bar.
+    rf"\b(?:no|any|\d+) other process(?:es)? (?:went )?above {SHARE} CPU",
+    rf"\blogged other processes above {SHARE} CPU",
+    rf"\bat most {SHARE} run-queue wait on core \d+, {SHARE} busy on cpu\d+, {SHARE} of a CPU on "
+    r"the other cores",
+    # Shares of a pass, of a floor, of messages, of a run's speed.
+    rf"\b{SHARE} of the pass\b",
+    rf"\bat {SHARE} of the floor\b",
+    rf"\breaches the {SHARE} rule\b",
+    rf"; {SHARE} of those messages name\b",
+    rf"[+-]{SHARE} over D=\d+",
+    rf"\bunder {SHARE} at every D\b",
+    rf"[+-]{SHARE} \([\w-]+ over [\w-]+(?:, ranges overlap)?\)",
+    rf"\bwindow of \d+ ticks {SHARE}, of [\d,]+ {SHARE} \(carteret {SHARE} and {SHARE}\); "
+    rf"sub-cent {SHARE}; add searches past \d+ or fewer better levels {SHARE}, past \d+ or more "
+    rf"{SHARE}",
+    rf"\bcpu\d+ and cpu\d+ each {SHARE} busy\b",
+    rf"\brun about {SHARE} and {SHARE} above the other\b",
+)
+_PROCESS = [re.compile(form) for form in PROCESS_FORMS]
+_FIGURE = [re.compile(form) for form in FIGURE_FORMS]
+# Any share at all, as written: "41.2%", "41.2 %", "41.2 percent".
+ANY_SHARE = re.compile(r"(?<![\w.])\d+(?:\.\d+)?\s*(?:%|percent\b)")
+# A kind the sampler saw, or the first or the most of it, must come with its share: a kind
+# here outside a process form is refused.
+SEEN = re.compile(rf"\b(?:saw|the first,?|the most of it) ({KIND})")
 
 
 def cause_breaks(cause):
-    """Each phrase in a run-log cause that gives a process by something other than a kind."""
-    return [subject for subject in cited(cause) if _core(subject) not in KIND_CORES]
+    """What in a run-log outcome breaks the grammar: each share in no known form, with the
+    words before it, and each kind seen by the sampler with no share and time."""
+    covered = []
+    for form in (*_PROCESS, *_FIGURE):
+        covered += [match.span() for match in form.finditer(cause)]
+    def inside(span):
+        return any(begin <= span[0] and span[1] <= end for begin, end in covered)
+    breaks = [f"{cause[max(0, match.start() - 40):match.end()].strip()!r}: a share in no form"
+              for match in ANY_SHARE.finditer(cause) if not inside(match.span())]
+    breaks += [f"{cause[match.start():match.end() + 30].strip()!r}: a kind seen with no share "
+               "and time" for match in SEEN.finditer(cause) if not inside(match.span())]
+    return breaks
 
 
 def run_log_rows(text):

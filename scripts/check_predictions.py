@@ -160,10 +160,20 @@ def rewordings(root):
     return json.loads(path.read_text(encoding="utf-8"))["lines"]
 
 
+def later(found, reworded):
+    """Every digest a line's digest became, in order, through the listed rewordings: a line
+    reworded twice, by the kinds and then by the grammar's order (r14-2), became two lines."""
+    chain = []
+    while found in reworded and reworded[found] not in chain and reworded[found] != found:
+        found = reworded[found]
+        chain.append(found)
+    return chain
+
+
 def settled(line, reworded):
-    """A line by its digest, a reworded line by the digest of the line it became."""
+    """A line by its digest, a reworded line by the digest of the last line it became."""
     found = digest(line)
-    return reworded.get(found, found)
+    return (later(found, reworded) or [found])[-1]
 
 
 def dropped_rows(earlier, text, reworded=None):
@@ -175,14 +185,14 @@ def dropped_rows(earlier, text, reworded=None):
 
 
 def extends(earlier, text, reworded):
-    """Whether text starts with earlier, a line listed in reworded read as the line it
-    became, and only that line."""
+    """Whether text starts with earlier, a line listed in reworded read as a line it became,
+    and only such a line."""
     if text.startswith(earlier):
         return True
     before, after = earlier.split("\n"), text.split("\n")
     if len(after) < len(before):
         return False
-    return (all(old == new or reworded.get(digest(old)) == digest(new)
+    return (all(old == new or digest(new) in later(digest(old), reworded)
                 for old, new in zip(before[:-1], after))
             and after[len(before) - 1].startswith(before[-1]))
 
@@ -191,8 +201,8 @@ def changed_back(earlier, text, reworded):
     """The lines of text that are a listed line as it was while the earlier log holds the line
     it became: a rewording undone, which dropped_rows(), reading both as the line it became,
     does not see (r14-1)."""
-    became = {digest(line) for line in earlier.splitlines()} & set(reworded.values())
-    return [line for line in text.splitlines() if reworded.get(digest(line)) in became]
+    held = {digest(line) for line in earlier.splitlines()}
+    return [line for line in text.splitlines() if held & set(later(digest(line), reworded))]
 
 
 def check_log_history(root):
