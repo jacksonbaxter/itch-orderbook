@@ -247,3 +247,10 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [ ] Full-repo review. For each problem: file and line, why it's wrong, how to show it fails, then fix it.
 - [ ] Every Linux number cites its commit. Sync through `debian_sync.sh` from committed `HEAD`.
 - [ ] Final report
+
+### Review finding r1-3: fuzz targets for the kernels, the packet builder and the look-ahead reader
+- [x] `fuzz_kernels`: every kernel the host runs against the scalar kernel and `decode_book_op`, through `parse_ops` inside `run()` and message by message, each input in an exact-size heap block and each message with only its kernel's `kOverread` after it. Seeds, faults in `simd.json`.
+- [x] `fuzz_packets`: `mold::build_packets` on a fuzzer-chosen plan against a model of the plan, and back through the decoder and a `FeedHandler` to the stream's frames. Seeds, faults in `udp.json`.
+- [x] `fuzz_lookahead`, its own target: `LookaheadReader` against `FrameReader` at a fuzzer-chosen distance on a real book, with its prefetch schedule. Seeds, faults in `bookvariants.json`.
+- [x] A 5-minute first run of each, under `heavy.sh`, on the Mac.
+- [ ] The 30-minute runs of all nine targets at the final code (the Phase 4 item above). The x86-64 kernels were only compiled here; their first replay is CI's.
