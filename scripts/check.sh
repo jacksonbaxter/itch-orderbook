@@ -120,7 +120,8 @@ stage_script_tests() {
     python_test scripts/test_check_benchmark_sources.py &&
     python_test scripts/test_sanitizer_tests.py &&
     python_test scripts/test_fuzz_report.py &&
-    python_test scripts/test_process_kinds.py
+    python_test scripts/test_process_kinds.py &&
+    python_test scripts/test_review_report.py
 }
 
 # RESULTS.md's tables and the README's headline against a fresh run over results/, and the

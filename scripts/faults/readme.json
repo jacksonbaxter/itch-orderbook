@@ -2407,6 +2407,52 @@
       "expect": {
         "signature": "FAIL: test_a_failing_trade_check_gives_its_size_from_its_file"
       }
+    },
+    {
+      "id": "readme-final-review-row-dropped",
+      "breaks": "results_table.py reads results/final_review.md and gives it no row, so RESULTS.md's row for the final review is stale",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        elif name == \"final_review.md\":\n            faults.append(review_row(name, text))\n",
+          "new": "        elif name == \"final_review.md\":\n            review_row(name, text)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-final-review-row-frozen",
+      "breaks": "results_table.py gives the final review's row a findings count that does not follow its file",
+      "check": "test_results_table.py test_the_final_review_has_a_row_that_follows_its_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    findings = find(r\"^- Findings: (\\d+)$\", text, name)[1]\n",
+          "new": "    findings = str(len(re.findall(r\"^\\| r\\d+-\\d+ \\| (?:BLOCK|FIX) \\|\", text, re.MULTILINE)))\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "ResultsTable.test_the_final_review_has_a_row_that_follows_its_file"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_final_review_has_a_row_that_follows_its_file",
+        "exit": 1
+      }
     }
   ]
 }

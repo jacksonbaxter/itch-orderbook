@@ -213,6 +213,16 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("results/fuzz_30min_mac.md: WRITEUP.md's table accounts Fuzzing met, and "
                       "the file does not show every target clean", output)
 
+    def test_the_final_review_has_a_row_that_follows_its_file(self):
+        row = self.row("Final review", "none")
+        self.assertIn("| none | not complete: 1 open,", row)
+        self.assertIn("| 14 reviewers, 168 findings (2 BLOCK, 67 FIX, 99 NOTE); 138 fixed,", row)
+        self.edit("results/final_review.md", "- Findings: 168\n", "- Findings: 167\n")
+        self.assertIn("| 14 reviewers, 167 findings (", self.row("Final review", "none"))
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL RESULTS.md:", output)
+
     def test_a_run_row_the_table_cannot_place_is_refused(self):
         path = self.root / "results" / "run_log.md"
         path.write_text(path.read_text(encoding="utf-8")

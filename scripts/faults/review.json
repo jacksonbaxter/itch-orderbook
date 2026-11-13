@@ -1,0 +1,237 @@
+{
+  "area": "review",
+  "tree": [
+    "scripts",
+    "results",
+    "docs",
+    "tests",
+    "fuzz",
+    "bench",
+    "tools"
+  ],
+  "faults": [
+    {
+      "id": "review-unknown-outcome-taken",
+      "breaks": "review_report.py writes a finding whose outcome is not one of its six words",
+      "check": "test_review_report.py ReviewReport.test_an_unknown_outcome_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        if finding[\"outcome\"] not in OUTCOMES:\n",
+          "new": "        if not finding[\"outcome\"]:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_an_unknown_outcome_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_unknown_outcome_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-unknown-severity-taken",
+      "breaks": "review_report.py writes a finding whose severity is not BLOCK, FIX or NOTE, counting it as a NOTE",
+      "check": "test_review_report.py ReviewReport.test_an_unknown_severity_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        if finding[\"severity\"] not in SEVERITIES:\n            raise Refused(\"severity\", fid, f\"{finding['severity']!r} is not one of {SEVERITIES}\")\n",
+          "new": "        if finding[\"severity\"] not in SEVERITIES:\n            finding[\"severity\"] = \"NOTE\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_an_unknown_severity_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_unknown_severity_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-open-rendered-complete",
+      "breaks": "review_report.py renders the record complete while a finding is open, partly done or left for the owner",
+      "check": "test_review_report.py ReviewReport.test_an_open_finding_cannot_be_rendered_complete",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        unsettled = [f[\"id\"] for f in findings if f[\"outcome\"] in UNSETTLED]\n        if unsettled:\n",
+          "new": "        unsettled = [f[\"id\"] for f in findings if f[\"outcome\"] in UNSETTLED]\n        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_an_open_finding_cannot_be_rendered_complete"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_open_finding_cannot_be_rendered_complete",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-counts-not-held-to-the-rows",
+      "breaks": "review_report.py writes a reviewer whose stated counts are not its rows",
+      "check": "test_review_report.py ReviewReport.test_counts_that_are_not_the_rows_are_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        if counted[rid] != stated:\n",
+          "new": "        if sum(counted[rid].values()) > sum(stated.values()):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_counts_that_are_not_the_rows_are_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_counts_that_are_not_the_rows_are_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-reviewer-counted-by-prefix",
+      "breaks": "review_report.py counts r12's findings under r1 too, matching a reviewer by the start of the finding's id",
+      "check": "test_review_report.py ReviewReport.test_the_counts_are_the_rows",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    rows = [(r[\"id\"], *tally([f for f in findings if reviewer_of(f) == r[\"id\"]]))\n",
+          "new": "    rows = [(r[\"id\"], *tally([f for f in findings if f[\"id\"].startswith(r[\"id\"])]))\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_the_counts_are_the_rows"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_counts_are_the_rows",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-check-skips-the-render",
+      "breaks": "review_report.py check passes a results/final_review.md edited by hand",
+      "check": "test_review_report.py ReviewReport.test_a_hand_edit_is_caught",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    if not out.is_file() or out.read_text(encoding=\"utf-8\") != text:\n",
+          "new": "    if not out.is_file():\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_hand_edit_is_caught"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_hand_edit_is_caught",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-fault-ids-unchecked",
+      "breaks": "review_report.py check passes a finding whose fault is in no scripts/faults file",
+      "check": "test_review_report.py ReviewReport.test_evidence_not_in_the_tree_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "            if fault not in faults:\n",
+          "new": "            if not fault:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_evidence_not_in_the_tree_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_evidence_not_in_the_tree_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-test-names-unchecked",
+      "breaks": "review_report.py check passes a finding whose test is in no file of the tree",
+      "check": "test_review_report.py ReviewReport.test_evidence_not_in_the_tree_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "            if not found:\n",
+          "new": "            if found is None:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_evidence_not_in_the_tree_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_evidence_not_in_the_tree_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-notes-sections-unchecked",
+      "breaks": "review_report.py check passes a finding whose docs/NOTES.md section is not a heading there",
+      "check": "test_review_report.py ReviewReport.test_evidence_not_in_the_tree_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "            if not re.search(rf\"^## {re.escape(section)}(?:, \\d{{4}}-\\d{{2}}-\\d{{2}})?$\", notes,\n                             re.MULTILINE):\n",
+          "new": "            if not notes:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_evidence_not_in_the_tree_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_evidence_not_in_the_tree_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-file-figure-edited",
+      "breaks": "A figure in results/final_review.md is typed over by hand",
+      "check": "review_report.py check",
+      "inputs": [
+        {
+          "file": "results/final_review.md",
+          "op": "replace_text",
+          "old": "- Findings: 168\n",
+          "new": "- Findings: 167\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/review_report.py",
+        "check",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "review_report: FAIL stale results/final_review\\.md: not what write makes",
+        "exit": 1
+      }
+    }
+  ]
+}
