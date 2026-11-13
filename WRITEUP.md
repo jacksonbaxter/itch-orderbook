@@ -30,8 +30,9 @@ Zen 1 limits what `debian` can show:
 
 - A prediction is committed first, in [results/predictions.md](results/predictions.md), with what would refute it.
 - `machine_check` refuses the run unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is resident in memory.
-- Other work beside a timed process withdraws it. On the Mac a sampler reads every other process every 2 s, and a process during which another passed 20% CPU is withdrawn ([results/layout_mac_12302019.md](results/layout_mac_12302019.md)). That rule is why two Mac targets have no result.
+- Other work beside a timed process withdraws it. On the Mac a sampler reads every other process every 2 s, and a process during which another passed 20% CPU is withdrawn ([results/layout_mac_12302019.md](results/layout_mac_12302019.md)). That rule is why two Mac targets have no result. Mac runs made before it, the book designs' and the backtester's among them, had no sampler beside them.
   On `debian` the same kind of rule started late in the project: a sampler reads /proc every 1 s and withdraws a process whose core, SMT sibling or other cores were busy; T-BT-3's rerun is the one published figure under it so far ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
+- Each driver now writes a record of its run beside the raw output: the commit and tree state, each binary's hash, the dataset's hash and an untouched copy of every tool output the file quotes. Files published before that have no such record, and docs/NOTES.md lists what each lacks.
 - Every run, failed and withdrawn ones included, gets a row in [results/run_log.md](results/run_log.md), which is never edited.
 - The fault matrix plants bugs in a scratch copy and requires the named check to catch each. Its last full run caught 1063 of 1063, after 196 control commands passed on the clean tree ([results/fault_matrix.md](results/fault_matrix.md)).
 
@@ -53,7 +54,10 @@ The baseline is the book most people would start with: `std::map` levels and an 
 | `map-fresh` | 2,028,642 | 294.0 | 695.420 | 5.287 | [results/bench_book_map-fresh_ram_debian_12302019.md](results/bench_book_map-fresh_ram_debian_12302019.md) |
 | `map-aged` | 1,832,255 | 393.0 | 683.516 | 5.711 | [results/bench_book_map-aged_ram_debian_12302019.md](results/bench_book_map-aged_ram_debian_12302019.md) |
 
-This table is the main finding. The four fast arms run almost the same instructions a message, and their speed follows their DRAM fills: they differ in how long they wait, not in how much they do. On the Mac the six designs rank the same way ([results/bench_book_paged-flat_ram_mac_12302019.md](results/bench_book_paged-flat_ram_mac_12302019.md) and the files beside it), but the Mac read no cache counters, so why the hosts differ so much is not established.
+The two counter columns are per-message means through `rdpmc`: each span runs from one read to the next, so it holds the counter reads, and no empty span is taken off ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+For scale, that file quotes the empty span measured on this host and design, one read of every event and nothing else, at instructions 308.0001, and at 0.0000 on the floor on DRAM demand fills, so the instruction column is not `apply()`'s own count ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+
+This table is the main finding. The four fast arms run almost the same instructions a message, counter reads included, and their speed follows their DRAM fills: they differ in how long they wait, not in how much they do. On the Mac the six designs rank the same way ([results/bench_book_paged-flat_ram_mac_12302019.md](results/bench_book_paged-flat_ram_mac_12302019.md) and the files beside it), but the Mac read no cache counters, so why the hosts differ so much is not established. Those Mac runs were made before the sampler rule, and no sampler ran beside them, so nothing is known about other load during them.
 
 The profile shows where the waiting is. `FastBook::apply` is the widest frame at 42.14% self, and about four fifths of its samples sit on three instructions, each just after a load that depends on the one before ([results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md)). Nothing outside the book, no allocation or system call, shows above 0.1% ([results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md)).
 
@@ -203,6 +207,8 @@ A paced sender replays the day as MoldUDP64 over loopback on `debian`, which mea
 - U4 reached 1,945,047 msg/s and U5 1,912,149 msg/s ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)). Above that they lost no datagram, but their provided-buffer ring ran dry, which the rule fixed beforehand counts as a loss. A larger ring is untested.
 - T-URING-2 is met: S4 was lossless at 2,547,190 msg/s, Nasdaq's 1 ms peak, in 10 of 10 repetitions ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
 
+Each run's machine check covered core 4 with its sibling 5 only; not checked, so not known to have been idle: the receiver's core 6, and for U5 the SQ thread's core 2 ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
+
 T-URING-1 has no bar: no published head-to-head of io_uring and `recvmmsg` for UDP was found. The sender alone reaches 9,863,736 msg/s, so the receivers set these limits ([results/udp_ceiling_debian_12302019.md](results/udp_ceiling_debian_12302019.md)).
 
 At a low rate the spinning modes answer far sooner, p50 for S4 6.06 µs against S1 32.56 µs ([results/udp_latency_debian_12302019.md](results/udp_latency_debian_12302019.md)): the cost of waking a blocked thread, which spinning pays for with a whole core.
@@ -215,7 +221,7 @@ The backtester replays the real book and queues simulated orders among the real 
 
 - T-BT-1 is met on `debian`: the whole day with a quoting strategy and its queue model at 4.68 M engine events/s against a bar of 2.00 M engine events/s; its median replay rate is 4,570,542 messages/s ([results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md)).
 - T-BT-3 is missed on `debian`: four symbols with 100,000 shadow orders in real FIFO queues at 3,509,307 messages/s, 284.96 ns a message, 1.10 M under the 4.61 M bar ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
-- That bar was set on a Mac, and the Mac meets it ([results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md)).
+- That bar was set on a Mac, and the Mac meets it, in a run made before the sampler rule with no sampler beside it ([results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md)).
 
 The suspect was the walk over simulated levels and orders. A ladder of schedules timed it at 4.969 ns a step, and on T-BT-3's schedule the walk is 3.51% of a message's 323.88 ns ([results/walks_ladder_debian_12302019.md](results/walks_ladder_debian_12302019.md)). So the walk is not the cause, and the rest of the gap is not established.
 Three runs of the same process took a median of 298.14 ns a message (P-0104), 323.88 (P-0105) and 284.96 (P-0106); P-0105 is the ladder's, and P-0106 is the published run, the only one under the Linux sampler rule; it is outside both bands P-0106 named, so that prediction failed, and why the runs differ is not established, since none read counters ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
