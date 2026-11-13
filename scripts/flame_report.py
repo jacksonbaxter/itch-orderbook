@@ -17,8 +17,9 @@ stackcollapse-perf.pl cuts a name at its first parenthesis, which splits
 `(anonymous namespace)` templates, and weights each sample by its period. render scrubs
 the stacks of home paths, IP addresses and the names of this machine and its user, has
 FlameGraph's flamegraph.pl draw them with fixed colours, and writes the results file beside
-the SVG: where the samples came from, the hottest frames, the perf annotate excerpt for the
-hottest function on Linux, what the graph cannot show, and on Linux the frame-pointer
+the SVG: where the samples came from, the hottest frames (each one function, so a template's
+instantiations, which the table prints alike, are ranked apart, and where merging them would
+change the list it says so), the perf annotate excerpt for the hottest function on Linux, what the graph cannot show, and on Linux the frame-pointer
 build's throughput against the normal build, read from the two bench_driver files.
 
 --check reads each results file and the SVG beside it: nothing private in either, the
@@ -282,6 +283,52 @@ def hottest(stacks):
     return [(frame, own[frame] / total, inclusive[frame] / total) for frame in ranked], total
 
 
+def ordinal(number):
+    tail = "th" if 10 <= number % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+    return f"{number}{tail}"
+
+
+def alike_lines(stacks):
+    """A sentence for each name the table prints alike for several instantiations, when the
+    instantiations merged would stand in the table: each row is one function, so they are
+    ranked apart, and the reader is told what merging them would give."""
+    total = sum(stacks.values())
+    own, kinds = Counter(), {}
+    for stack, count in stacks.items():
+        frames = stack.split(";")
+        own[frames[-1]] += count
+        for frame in frames:
+            kinds.setdefault(brief(frame), set()).add(frame)
+    ranked = sorted(own, key=lambda frame: (-own[frame], frame))
+    listed = ranked[:TOP_FRAMES]
+    lines = []
+    for name in sorted(kinds):
+        members = sorted(kinds[name], key=lambda frame: (-own[frame], frame))
+        if len(members) < 2:
+            continue
+        merged_own = sum(own[frame] for frame in members)
+        merged_total = sum(count for stack, count in stacks.items()
+                           if any(frame in kinds[name] for frame in stack.split(";")))
+        others = [frame for frame in ranked if frame not in kinds[name]]
+        rank = 1 + sum(1 for frame in others if (-own[frame], frame) < (-merged_own, name))
+        if rank > TOP_FRAMES:
+            continue
+        shares = " and ".join(f"{100 * own[frame] / total:.2f}%" for frame in members)
+        inside = [frame for frame in members if frame in listed]
+        where = ("neither in the list" if len(members) == 2 else "none in the list") \
+            if not inside else f"{len(inside)} of them in the list"
+        line = (f"`{name}` has {len(members)} instantiations, ranked apart at {shares} self, "
+                f"{where}; merged, at {100 * merged_own / total:.2f}% self and "
+                f"{100 * merged_total / total:.2f}% total, it would rank {ordinal(rank)}")
+        if not inside:
+            line += f" and `{brief(listed[-1])}` would drop out of the list"
+        lines.append(line + ".")
+    if lines:
+        lines.insert(0, "Each row is one function, so the instantiations of a template, which "
+                        "the table prints alike, are ranked apart:")
+    return lines
+
+
 ANNOTATE_LINE = re.compile(r"^\s*([0-9]+\.[0-9]+)\s*:")
 
 
@@ -394,6 +441,9 @@ def render(args):
             "| Frame | Self | Total |", "|---|---|---|"]
     out += [f"| `{brief(frame)}` | {100 * own:.2f}% | {100 * inclusive:.2f}% |"
             for frame, own, inclusive in frames]
+    alike = alike_lines(stacks)
+    if alike:
+        out += ["", alike[0], ""] + [f"- {line}" for line in alike[1:]]
     if args.annotate:
         excerpt = annotate_excerpt(scrub(args.annotate.read_text(encoding="utf-8",
                                                                  errors="replace")))

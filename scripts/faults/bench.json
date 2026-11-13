@@ -4410,6 +4410,69 @@
         "signature": "FAIL: test_each_machine_check_is_placed_against_the_run",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-flame-report-alike-unsaid",
+      "breaks": "a flamegraph's table ranks a template's instantiations apart without saying that merged they would enter the list",
+      "check": "test_flame_report.py test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    alike = alike_lines(stacks)\n",
+          "new": "    alike = []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-alike-merge-takes-one",
+      "breaks": "the merged instantiations are ranked by the largest one's samples alone, so a merge that would enter the list goes unsaid",
+      "check": "test_flame_report.py test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "        merged_own = sum(own[frame] for frame in members)\n",
+          "new": "        merged_own = own[members[0]]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-alike-drops-the-wrong-frame",
+      "breaks": "the sentence names the hottest frame, not the last, as the one a merge would push out of the list",
+      "check": "test_flame_report.py test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "`{brief(listed[-1])}` would drop",
+          "new": "`{brief(listed[0])}` would drop"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+        "exit": 1
+      }
     }
   ]
 }

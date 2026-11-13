@@ -149,6 +149,26 @@ class FlameReport(unittest.TestCase):
         self.assertIn("- build: frame pointers", text)
         self.assertEqual(self.codes(out), [])
 
+    def test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said(self):
+        # Sixteen frames of 10 self each, then two instantiations of pass<> at 6 and 5:
+        # each is out of the top 15, merged at 11 they would rank first, and f14 would drop.
+        folded = "".join(f"main;f{i:02d} 10\n" for i in range(16))
+        folded += "main;pass<A> 6\nmain;pass<B> 5\nmain;pass<B>;g<A> 4\nmain;g<B> 3\n"
+        stacks = flame_report.read_folded(folded)
+        frames, total = flame_report.hottest(stacks)
+        self.assertEqual(total, 178)
+        self.assertNotIn("pass<A>", [frame for frame, _, _ in frames])
+        lines = flame_report.alike_lines(stacks)
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[1], "`pass<…>` has 2 instantiations, ranked apart at 3.37% and "
+                                   "2.81% self, neither in the list; merged, at 6.18% self and "
+                                   "8.43% total, it would rank 1st and `f14` would drop out of "
+                                   "the list.")
+        code, out = self.render(folded=folded)
+        self.assertEqual(code, 0)
+        self.assertIn(f"- {lines[1]}", out.read_text(encoding="utf-8"))
+        self.assertEqual(flame_report.alike_lines(flame_report.read_folded("main;a<x> 5\n")), [])
+
     def test_a_perf_graph_from_a_build_without_frame_pointers_is_refused(self):
         code, out = self.render(flags="-O3 -DNDEBUG")
         self.assertEqual(code, 2)

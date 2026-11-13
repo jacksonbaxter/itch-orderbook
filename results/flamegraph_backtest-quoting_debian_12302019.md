@@ -34,19 +34,30 @@ Host: **debian**. Numbers from the two hosts are never mixed.
 
 The backtester on T-BT-1's workload, `bench_backtest --workload quoting`, the whole day
 through the exchange-side book (`paged-flat`) with the quoting strategy, in one process
-pinned to core 4.
+pinned to core 4. Self is a frame's samples at the top of the stack; total adds every
+frame it called.
 
 - **The book is the backtester's cost.** `Engine::apply_real` holds 91.62% of the samples
-  and the exchange book's `FastBook::apply` under it 81.22%, with the same frames below it
-  as the plain replay: `apply` 38.53% self, `write_level` 16.13%, `rest_order` 13.20%,
-  `replace_order` 6.11%.
+  in total, and the exchange book's `FastBook::apply` under it 78.73%, with the same frames
+  below it as the plain replay. The table's `FastBook`, `PagedIndex` and `FlatLevels` rows
+  hold the samples of both of the engine's books, the exchange book and the strategy's
+  view of it, which are one instantiation: `apply` at 81.22% total is 78.73% under
+  `apply_real`, 2.07% under `dispatch`, which applies each delayed message to the view
+  book, and 0.41% directly under `feed`, with no frame between to say which book it is.
+  Its self share is 38.53%, and below it `write_level` holds 16.13% self, `rest_order`
+  13.20% and `replace_order` 6.11%.
 - **The strategy is small.** The quoter's own frames (`Quoter::on_market` and `quote`)
-  hold 0.25% of the samples and the engine's dispatch to it 2.64%: most messages are on
-  symbols the strategy does not trade. Everything under the engine that is not
-  `apply_real` is 7.79%.
-- **The same three loads.** The annotate excerpt below is the exchange book's `apply`,
-  and its hottest instructions are the ones the replay's graph shows, at nearly the same
-  shares: the backtester inherits the book's memory behaviour unchanged.
+  hold 0.23% of the samples self and 0.25% in total. The engine's `dispatch`, which hands
+  each delayed message to the view book and then to the quoter, holds 2.64% in total,
+  2.07% of it the view book's `apply`: most messages are on symbols the strategy does not
+  trade. Under `Engine::run`, everything that is not `apply_real` is 7.31% of the samples,
+  in total. Counting the engine's frames outside `run` too it is 7.79%: the constructor,
+  0.17%, most of it in `FastBook`'s constructor, and 0.31% in `feed` on stacks where `run`
+  does not appear between it and `run_pass`.
+- **The same three loads.** The annotate excerpt below is `FastBook::apply`, the symbol
+  both books share, 96.94% of whose samples are under `apply_real`. Its hottest
+  instructions are the ones the replay's graph shows, at nearly the same shares: the
+  backtester inherits the book's memory behaviour unchanged.
 
 ## Hottest frames
 

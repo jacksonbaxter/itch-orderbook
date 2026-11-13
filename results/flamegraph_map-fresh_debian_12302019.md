@@ -76,6 +76,10 @@ The 15 frames with the most samples at the top of the stack. Self is the share o
 | `[libc.so.6]` | 1.07% | 98.79% |
 | `cfree` | 0.94% | 0.94% |
 
+Each row is one function, so the instantiations of a template, which the table prints alike, are ranked apart:
+
+- `itch::bench::throughput_pass<…>` has 2 instantiations, ranked apart at 0.86% and 0.47% self, neither in the list; merged, at 1.33% self and 95.40% total, it would rank 13th and `cfree` would drop out of the list.
+
 ## perf annotate, the hottest function
 
 `perf annotate --stdio` on `MapBook::rest_order`, the lines with the most samples and the code around them. The percentages are of that symbol's samples.
