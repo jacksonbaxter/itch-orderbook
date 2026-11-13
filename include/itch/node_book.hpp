@@ -75,7 +75,8 @@ struct NodeCapacity {
   PageRequest pages = PageRequest::huge_if_offered;  // Read by the pool arms only.
 };
 
-// Reference to order, linear probing, backward-shift deletion, keyed as HashIndex is.
+// Reference to order, linear probing, backward-shift deletion, keyed as HashIndex is. orders
+// must be at least 1, as for HashIndex: for 0 the shift is 64.
 template <class Handle>
 class NodeIndex {
  public:

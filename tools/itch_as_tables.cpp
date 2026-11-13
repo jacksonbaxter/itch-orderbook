@@ -3,6 +3,9 @@
 //
 //     itch_as_tables [--paths N] [--seed S] [--gamma G]...
 //
+// N is a whole number of at least 2, S a whole number from 0 to 2^64 - 1, and each G a number
+// above 0 and below 10^12, every one of them all of its argument.
+//
 // The defaults are the paper's: s = 100, T = 1, σ = 2, dt = 0.005, q = 0, k = 1.5, A = 140, 1000
 // paths, and γ = 0.1, 0.01 and 1, one table each. Each table starts its own mt19937_64 from the
 // same seed, so the tables see the same paths, and one set of draws drives both strategies of a
@@ -21,6 +24,7 @@
 // paths, and those of q_T. Standard deviations divide by N − 1.
 //
 // Exit codes: 0 done, 2 bad usage.
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -28,8 +32,8 @@
 #include <print>
 #include <random>
 #include <span>
-#include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include "itch/mm/quoting.hpp"
@@ -47,6 +51,26 @@ struct Settings {
   std::uint64_t seed = 20'080'401;
   std::vector<double> gammas;
 };
+
+template <class T>
+[[nodiscard]] bool parse_number(std::string_view text, T& out) {
+  const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), out);
+  return error == std::errc{} && end == text.data() + text.size();
+}
+
+// γ: above 0, so that ln(1 + γ/k) and 2/γ are finite, and finite itself.
+[[nodiscard]] bool parse_gamma(std::string_view text, std::vector<double>& gammas) {
+  double gamma = 0;
+  if (!parse_number(text, gamma)) {
+    return false;
+  }
+  const bool in_range = gamma > 0.0 && gamma < 1e12;  // False for NaN too.
+  if (!in_range) {
+    return false;
+  }
+  gammas.push_back(gamma);
+  return true;
+}
 
 // The top 53 bits of a 64-bit draw, as a double in [0, 1): the same on every platform, which
 // std::uniform_real_distribution does not promise.
@@ -174,14 +198,15 @@ void table(const Settings& settings, double gamma) {
 int run(std::span<const char* const> args) {
   Settings settings;
   bool valid = true;
-  for (std::size_t i = 0; i < args.size(); ++i) {
+  for (std::size_t i = 0; i < args.size() && valid; ++i) {
     const std::string_view arg = args[i];
-    if (arg == "--paths" && i + 1 < args.size()) {
-      settings.paths = std::stoi(args[++i]);
-    } else if (arg == "--seed" && i + 1 < args.size()) {
-      settings.seed = std::stoull(args[++i]);
-    } else if (arg == "--gamma" && i + 1 < args.size()) {
-      settings.gammas.push_back(std::stod(args[++i]));
+    const bool has_value = i + 1 < args.size();
+    if (arg == "--paths" && has_value) {
+      valid = parse_number(args[++i], settings.paths);
+    } else if (arg == "--seed" && has_value) {
+      valid = parse_number(args[++i], settings.seed);
+    } else if (arg == "--gamma" && has_value) {
+      valid = parse_gamma(args[++i], settings.gammas);
     } else {
       valid = false;
     }

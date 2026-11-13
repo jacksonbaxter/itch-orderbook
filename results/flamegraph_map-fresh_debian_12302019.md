@@ -28,7 +28,7 @@ Host: **debian**. Numbers from the two hosts are never mixed.
 - prediction: P-0018
 - run_id: P-0018-20261105T081041Z
 - frame_pointer_ratio: 0.9755
-- summary: 243,786 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::rest_order` at 22.63% self; the frame-pointer build at 0.9755 of the normal build's throughput
+- summary: 243,786 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::rest_order` at 22.63% self; the frame-pointer build at 0.9755 of the normal build's throughput, both measured on `paged-flat`
 
 ## What it shows
 
@@ -75,6 +75,10 @@ The 15 frames with the most samples at the top of the stack. Self is the share o
 | `itch::bench::count_mix` | 1.18% | 1.18% |
 | `[libc.so.6]` | 1.07% | 98.79% |
 | `cfree` | 0.94% | 0.94% |
+
+Each row is one function, so the instantiations of a template, which the table prints alike, are ranked apart:
+
+- `itch::bench::throughput_pass<…>` has 2 instantiations, ranked apart at 0.86% and 0.47% self, neither in the list; merged, at 1.33% self and 95.40% total, it would rank 13th and `cfree` would drop out of the list.
 
 ## perf annotate, the hottest function
 

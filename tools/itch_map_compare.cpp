@@ -17,7 +17,8 @@
 //
 // --heap aged runs the map book on a heap aged as include/itch/heap_ager.hpp says, with
 // --seed, --warm-blocks and --ring-blocks as its knobs. fresh, the default, does not.
-// --index, --levels and the capacities pick the fast book's arm, as in itch_oracle.
+// --index, --levels and the capacities pick the fast book's arm, as in itch_oracle, but for
+// --max-orders and --max-levels, which take 1 to 2^32 - 1 (capacity.hpp).
 //
 // --allocator compares the fast book with the node book on one of T-ARENA-1's allocator
 // arms (tools/alloc_arms.hpp) in place of the map book, with the same checks, its pools on
@@ -44,6 +45,7 @@
 
 #include "alloc_arms.hpp"
 #include "book_arms.hpp"
+#include "capacity.hpp"
 #include "itch/book.hpp"
 #include "itch/heap_ager.hpp"
 #include "itch/map_book.hpp"
@@ -86,12 +88,6 @@ struct Options {
     options.ageing.ring_blocks = static_cast<std::size_t>(value);
   } else if (flag == "--hash-every") {
     options.hash_every = value;
-  } else if (flag == "--max-orders") {
-    options.capacity.orders = static_cast<std::uint32_t>(value);
-    options.node_capacity.orders = options.capacity.orders;
-  } else if (flag == "--max-levels") {
-    options.capacity.levels = static_cast<std::uint32_t>(value);
-    options.node_capacity.levels = options.capacity.levels;
   } else {
     return false;
   }
@@ -99,6 +95,22 @@ struct Options {
 }
 
 enum class Taken : std::uint8_t { yes, bad_value, not_this };
+
+// --max-orders and --max-levels, which size both books.
+[[nodiscard]] Taken take_capacity_option(std::string_view arg, std::string_view value,
+                                         Options& options) {
+  switch (itch::tools::parse_capacity_option(arg, value, options.capacity)) {
+    case itch::tools::CapacityOption::taken: break;
+    case itch::tools::CapacityOption::bad_value: return Taken::bad_value;
+    case itch::tools::CapacityOption::not_a_capacity: return Taken::not_this;
+  }
+  if (arg == "--max-orders") {
+    options.node_capacity.orders = options.capacity.orders;
+  } else {
+    options.node_capacity.levels = options.capacity.levels;
+  }
+  return Taken::yes;
+}
 
 // --heap, --allocator and --pages: which book is compared, and on what memory.
 [[nodiscard]] Taken take_book_option(std::string_view arg, std::string_view value,
@@ -150,6 +162,11 @@ enum class Taken : std::uint8_t { yes, bad_value, not_this };
       case itch::tools::ArmOption::taken: continue;
       case itch::tools::ArmOption::bad_value: return std::nullopt;
       case itch::tools::ArmOption::not_an_arm_option: break;
+    }
+    switch (take_capacity_option(arg, value, options)) {
+      case Taken::yes: continue;
+      case Taken::bad_value: return std::nullopt;
+      case Taken::not_this: break;
     }
     const auto number = parse_number(value);
     if (!number || !take_number(options, arg, *number)) {

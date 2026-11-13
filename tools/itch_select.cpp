@@ -28,8 +28,9 @@
 // locate. It prints the counts behind the universe, each group's top N (default 10) with every
 // figure, and one line `group A SYM` and one `group B SYM`.
 //
-// Exit codes: 0 both groups have a pick, 1 a group is empty or the book refused a message,
-// 2 bad usage or an unreadable file.
+// Exit codes: 0 both groups have a pick, 1 a group is empty, the book refused a message or the
+// file's framing did not end on a frame boundary (tools/framing.hpp), 2 bad usage or an
+// unreadable file.
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -46,6 +47,7 @@
 #include <system_error>
 #include <vector>
 
+#include "framing.hpp"
 #include "itch/book.hpp"
 #include "itch/messages.hpp"
 #include "itch/reader.hpp"
@@ -377,6 +379,9 @@ int run(std::span<const char* const> args) {
   if (!file) {
     std::println(stderr, "itch_select: cannot read {}", options->path);
     return 2;
+  }
+  if (!itch::tools::framing_ends_cleanly("itch_select", file->bytes())) {
+    return 1;
   }
   auto selector = std::make_unique<Selector>(options->from, options->to);
   if (!replay(file->bytes(), *selector)) {
