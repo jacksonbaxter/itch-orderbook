@@ -8458,6 +8458,35 @@
       "expect": {
         "signature": "trades cli: FAIL capacity --max-orders 0 --index hash: exit"
       }
+    },
+    {
+      "id": "trades-symbols-file-unwritable-ignored",
+      "breaks": "itch_trades says it cannot write the --symbols file and still exits on the verdicts",
+      "check": "test_trades_cli, symbols unwritable",
+      "mutations": [
+        {
+          "file": "tools/itch_trades.cpp",
+          "old": "      std::println(stderr, \"itch_trades: cannot write {}\", options.symbols);\n      return kExitUsage;\n",
+          "new": "      std::println(stderr, \"itch_trades: cannot write {}\", options.symbols);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_trades"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_trades_cli.py",
+        "{build}/tools/itch_trades",
+        "{tree}/build/trades-cli-scratch",
+        "{tree}/tests/fixtures/trades"
+      ],
+      "expect": {
+        "signature": "trades cli: FAIL symbols unwritable: exit 0, wanted 2"
+      }
     }
   ]
 }

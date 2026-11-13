@@ -316,6 +316,12 @@ def main():
     text = symbols.read_text(encoding="ascii")
     if "symbol ZTST locate=5 test=1" not in text or "broken=100" not in text:
         failures.append("symbols: ZTST's line is wrong")
+    # A symbol file that cannot be written fails the run, before the day is replayed.
+    unwritable = run(extra=DATE + PINNED_ROWS + ("--symbols", str(scratch / "no-such-dir/s.txt")))
+    if unwritable.returncode != 2 or "cannot write" not in unwritable.stderr \
+            or "messages_checked" in unwritable.stdout:
+        failures.append(f"symbols unwritable: exit {unwritable.returncode}, wanted 2 before the "
+                        "replay")
 
     # Bad usage and unreadable files.
     for name, args, wanted in (
