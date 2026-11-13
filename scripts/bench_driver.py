@@ -525,6 +525,37 @@ def per_message_rows(records):
     return rows
 
 
+def empty_span_note(records, results_dir):
+    """The empty span bench_counts measured on this host and design, as its counters_by_type
+    file gives it, for scale beside the per-message table; or why there is none. Quoted from
+    that file, which works it out from its own raw records, never from this run's."""
+    header = records[0]["header"]
+    design = header.get("design", "").split(":")[0]
+    day = header.get("dataset", "").split(".")[0]
+    name = f"counters_by_type_{design}_{header.get('host')}_{day}.md"
+    path = results_dir / name
+    fields = check_results.parse_header(path.read_text(encoding="utf-8")) \
+        if design and path.is_file() else {}
+    if fields.get("host") != header.get("host") or \
+            fields.get("design", "").split(":")[0] != design:
+        return (" No `counters_by_type` file is on record for this host and design, so no "
+                "measured empty span is quoted.")
+    if fields.get("flags") != header.get("flags"):
+        return (f" The `counters_by_type` file for this host and design, [{name}]({name}), is "
+                f"of the build with flags `{fields.get('flags')}`, not this one's, so its empty "
+                "span is not quoted.")
+    rows = {cells[0]: cells[3] for cells in check_results.table_rows(
+        path.read_text(encoding="utf-8"), "The cost of counting") if len(cells) == 4}
+    events = [entry["name"] for entry in records[0]["counters"]["per_message"]]
+    if any(event not in rows for event in events):
+        raise Refused("counts", f"{name} gives no empty span for every event of this run")
+    quoted = ", ".join(f"{event} {rows[event]}" for event in events)
+    return (f" For scale only: `bench_counts` measured an empty span on this host and design, "
+            f"one read of every event and an addition with nothing else, at {quoted} "
+            f"([{name}]({name}), \"The cost of counting\"). Its spans are not this pass's, so "
+            "nothing here is taken off by it.")
+
+
 def agreement_rows(records):
     """rdpmc against read() over the whole pass, event by event, with the widest gap seen."""
     rows = []
@@ -939,7 +970,7 @@ def host_note(records):
 
 
 def render(records, args, run_id, started, finished, machine_output, command, runs=None,
-           sampled=None):
+           sampled=None, results_dir=REPO_ROOT / "results"):
     design = design_of(records[0]) if "design" in records[0]["header"] else ""
     title = (args.title or f"bench_replay on {args.input.name}").replace("{design}", design)
     host = records[0]["header"]["host"]
@@ -1005,12 +1036,13 @@ def render(records, args, run_id, started, finished, machine_output, command, ru
         lines += ["", "Per-message means, through `rdpmc`:", "",
                   "| Event | Median | Min | Max | CV |", "|---|---|---|---|---|"]
         lines += per_message
+        lines += ["", check_results.RDPMC_CAVEAT + empty_span_note(records, results_dir)]
     agreement = agreement_rows(records)
     if agreement:
         lines += ["", "`rdpmc` against `read()` over the whole pass, median counts with the "
-                  "widest gap of any repetition, and the per-message deltas summed, which leave "
-                  "out the frame walk:", "",
-                  "| Event | read() | rdpmc | Widest gap | Gap | Sum over apply() |",
+                  "widest gap of any repetition, and the per-message spans summed, which hold "
+                  "the counter reads, as the means above do, and leave out the frame walk:", "",
+                  "| Event | read() | rdpmc | Widest gap | Gap | Sum of the per-message spans |",
                   "|---|---|---|---|---|---|"]
         lines += agreement
     lines += ["", "## Repetitions", "",

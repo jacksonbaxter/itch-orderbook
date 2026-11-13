@@ -576,6 +576,20 @@ def check_linux_rule(text, fields):
                                       f"load_rule says {match.group(1)}")
 
 
+# Under the per-message table of a bench file's counters (r4-1): what each figure holds.
+RDPMC_CAVEAT = (
+    "Each event's mean runs from that event's own `rdpmc` before `apply()` to its own `rdpmc` "
+    "after it, so beside `apply()` it holds the reads of the events after it in the first "
+    "group of reads and before it in the second, and the loop between them. No empty span is "
+    "measured in this pass, and none is taken off, so these are not `apply()`'s own counts.")
+
+
+def check_rdpmc_caveat(text):
+    """A per-message table through rdpmc says what its figures hold."""
+    if "Per-message means, through `rdpmc`:" in text and RDPMC_CAVEAT not in text:
+        yield "rdpmc-caveat-missing", "the per-message table does not say it holds the reads"
+
+
 # The kinds of results file whose drivers can write the Linux sampler rule's line:
 # backtest_driver.py applies it to each process, and the bench, SPSC, allocator and ladder
 # drivers' runs are stamped through stamp_load.py --sampler.
@@ -1191,6 +1205,7 @@ def check_text(text):
         return violations
     violations.extend(check_percentiles(text, fields))
     violations.extend(check_counters(text))
+    violations.extend(check_rdpmc_caveat(text))
     if is_book_file(text):
         violations.extend(check_book(text, fields))
     return violations

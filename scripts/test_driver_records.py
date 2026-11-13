@@ -456,6 +456,74 @@ class DriverSamplerCheck(unittest.TestCase):
         self.assertIn("sampler-missing", self.codes(text))
 
 
+class RdpmcCaveat(unittest.TestCase):
+    """r4-1: the per-message means through rdpmc hold the counter reads, and the file says so,
+    with the empty span bench_counts measured on the same host, design and build quoted for
+    scale from its counters_by_type file, and nothing taken off."""
+
+    def records(self, flags=None):
+        records = []
+        for index in (1, 2, 3):
+            record = bench_driver.merged(raw_record("hash-flat", 100.0 + index),
+                                         raw_record("hash-flat", untimed=True), index)
+            record["header"]["dataset"] = "12302019.NASDAQ_ITCH50"
+            record["counters"]["per_message_published"] = True
+            record["counters"]["per_message"] = [
+                {"name": "cycles", "mean": 900.0 + index, "p50": 1, "p99": 2, "sum": 9000},
+                {"name": "instructions", "mean": 580.0, "p50": 1, "p99": 2, "sum": 5800}]
+            record["counters"]["agreement_events"] = [
+                {"name": "cycles", "read": 10000, "rdpmc": 9990},
+                {"name": "instructions", "read": 6000, "rdpmc": 6000}]
+            records.append(record)
+        return records
+
+    def text(self, results_dir):
+        args = bench_driver.parse_args([*BENCH_BASE, "--design", "hash-flat", *STUB_NOTE])
+        records = self.records()
+        return bench_driver.render(records, args, RUN_ID, "2026-10-31T10:00:01Z",
+                                   "2026-10-31T10:00:09Z", MACHINE, "command",
+                                   {"hash-flat": records}, results_dir=results_dir)
+
+    def counts_file(self, directory, flags):
+        name = "counters_by_type_hash-flat_macOS (M4 Max)_12302019.md"
+        (directory / name).write_text(
+            f"# Counts\n\n## Header\n\n- host: {HEADER['host']}\n- flags: {flags}\n"
+            "- design: hash-flat: a fixture\n\n## The cost of counting\n\n"
+            "| Event | Before the pass | After the pass | Used beside the figures |\n"
+            "|---|---|---|---|\n| cycles | 444.0745 | 444.0757 | 444.0739 |\n"
+            "| instructions | 308.0001 | 308.0001 | 308.0001 |\n", encoding="utf-8")
+        return name
+
+    def test_the_table_says_what_it_holds_and_quotes_the_empty_span(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            root = Path(directory)
+            text = self.text(root)
+            self.assertIn(check_results.RDPMC_CAVEAT + " No `counters_by_type` file is on "
+                          "record for this host and design", text)
+            self.assertIn("| Event | read() | rdpmc | Widest gap | Gap | Sum of the per-message "
+                          "spans |", text)
+            self.assertNotIn("Sum over apply()", text)
+            self.assertEqual({code for code, _ in check_results.check_text(text)},
+                             {"load-not-stamped"})
+            name = self.counts_file(root, "-O3 -DNDEBUG -std=c++23 -g")
+            self.assertIn("is of the build with flags `-O3 -DNDEBUG -std=c++23 -g`, not this "
+                          "one's, so its empty span is not quoted.", self.text(root))
+            self.counts_file(root, HEADER["flags"])
+            quoted = self.text(root)
+            self.assertIn(f"at cycles 444.0739, instructions 308.0001 ([{name}]({name}), "
+                          "\"The cost of counting\"). Its spans are not this pass's, so nothing "
+                          "here is taken off by it.", quoted)
+            # The means are the raw ones: nothing is taken off.
+            self.assertIn("| cycles | 902.000 | 901.000 | 903.000 |", quoted)
+
+    def test_a_table_without_the_caveat_is_refused(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            text = self.text(Path(directory))
+        dropped = text.replace(check_results.RDPMC_CAVEAT, "")
+        self.assertIn("rdpmc-caveat-missing",
+                      {code for code, _ in check_results.check_text(dropped)})
+
+
 class MacSamplerScript(unittest.TestCase):
     """r5-2: scripts/mac_sampler.sh, the sampler the published variants runs on the Mac used,
     now in the repository: its log as variants_report.py reads it."""

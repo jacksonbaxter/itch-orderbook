@@ -591,10 +591,12 @@ class MemoryHighWater {
 inline constexpr std::uint64_t kMemorySampleEvery = std::uint64_t{1} << 20U;
 
 // The untimed pass of per-message hardware counts: an rdpmc of every event on each side
-// of apply(), and the difference handed to the sink after the second read. Group gives
-// read_fast(span) and event_count(), sink push(event, count). The same pass samples the
-// process's memory every kMemorySampleEvery messages and once at the end, outside the
-// reads, and takes a heap-ageing book's steps outside them too.
+// of apply(), and the difference handed to the sink after the second read. Each event's
+// difference runs from its own read before apply() to its own read after it, so it also
+// holds the other events' reads that fall between and the loop; no empty span is taken off.
+// Group gives read_fast(span) and event_count(), sink push(event, count). The same pass
+// samples memory every kMemorySampleEvery messages and at the end, outside the reads, and
+// takes a heap-ageing book's steps outside them too.
 template <class Group, class Book, class Sink, class Memory>
 [[nodiscard]] std::uint64_t counts_pass(std::span<const std::byte> input, Book& book, Group& group,
                                         Sink& sink, Memory& memory) {

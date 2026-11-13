@@ -4793,6 +4793,72 @@
         "signature": "^FAIL: test_it_names_every_other_busy_process_and_no_measured_one",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-rdpmc-caveat-dropped",
+      "breaks": "bench_driver prints the per-message means through rdpmc with nothing saying they hold the counter reads and that no empty span is taken off (r4-1)",
+      "check": "test_driver_records.py test_the_table_says_what_it_holds_and_quotes_the_empty_span",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "        lines += [\"\", check_results.RDPMC_CAVEAT + empty_span_note(records, results_dir)]\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RdpmcCaveat"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_table_says_what_it_holds_and_quotes_the_empty_span",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-rdpmc-caveat-unchecked",
+      "breaks": "check_results accepts a per-message table through rdpmc without its caveat (r4-1)",
+      "check": "test_driver_records.py test_a_table_without_the_caveat_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if \"Per-message means, through `rdpmc`:\" in text and RDPMC_CAVEAT not in text:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RdpmcCaveat"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_table_without_the_caveat_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-rdpmc-empty-span-of-another-build",
+      "breaks": "bench_driver quotes the empty span of a counters_by_type file of another build (r4-1)",
+      "check": "test_driver_records.py test_the_table_says_what_it_holds_and_quotes_the_empty_span",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if fields.get(\"flags\") != header.get(\"flags\"):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RdpmcCaveat"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_table_says_what_it_holds_and_quotes_the_empty_span",
+        "exit": 1
+      }
     }
   ]
 }
