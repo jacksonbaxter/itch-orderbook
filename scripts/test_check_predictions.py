@@ -568,8 +568,8 @@ class Rewordings(unittest.TestCase):
     one), the history half is skipped and says so, and the pin on the file's bytes still holds."""
 
     # (the commit before, the rewording commit): the kinds (2026-11-13), then the grammar's
-    # order (r14-2, the same day).
-    STEPS = (("95772ae", "940484d"), ("731ae85", "4fa29bb"))
+    # order (r14-2), then six kinds the raw records support (r14-9), the same day.
+    STEPS = (("95772ae", "940484d"), ("731ae85", "4fa29bb"), ("a9e5a2d", "5cbb02f"))
     SHA256 = "efd5e3d9b7634e192bdb8dfbadfe0eeee4cc972e71940eb5056198694a7104a4"
     ENTRIES = 172
 
