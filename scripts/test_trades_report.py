@@ -8,8 +8,12 @@ something would miss.
 
 import contextlib
 import copy
+import hashlib
 import io
 import json
+import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -26,6 +30,7 @@ SCRATCH.mkdir(exist_ok=True)
 GOOD_DAY = {
     "name": "day.bin",
     "unpacked_sha256": "ab",
+    "unpacked_bytes": 3041,
     "messages": 89,
     "per_type_counts": {"A": 15, "B": 1, "C": 12, "D": 7, "E": 12, "F": 1, "H": 8, "P": 5,
                         "Q": 13, "R": 6, "S": 6, "U": 1, "X": 2},
@@ -416,11 +421,101 @@ class TradesReport(unittest.TestCase):
         self.replace("verdict T-TRADE-2 PASS violations=0",
                      "verdict T-TRADE-2 NOT_AVAILABLE violations=0")
         self.assert_fails("T-TRADE-2 verdict is NOT_AVAILABLE")
+        # Said so on a day whose manifest pins no CrossStats file: not available, and a pass.
         self.flags = ["--no-cross-file"]
         code, output = self.run_report()
         self.assertEqual(code, 0, output)
         written = (self.root / "out.md").read_text(encoding="utf-8")
         self.assertIn("T-TRADE-2 is not available on 01062020", written)
+        # A Nasdaq day whose CrossStats file is pinned has one, so saying so is refused.
+        self.references = {"crossstats_20200106": {"filename": "CrossStats20200106.txt"}}
+        code, output = self.run_report()
+        self.assertEqual(code, 2, output)
+        self.assertIn("--no-cross-file on 01062020, whose CrossStats file the manifest pins as "
+                      "crossstats_20200106", output)
+
+    def test_gnu_time_lines_are_read_and_a_missing_figure_is_unavailable(self):
+        mac = ("        9.00 real         8.00 user         1.00 sys\n"
+               "          1073741824  maximum resident set size\n"
+               "          2147483648  peak memory footprint\n")
+        self.replace(mac, "\tCommand being timed: \"itch_trades data/day.bin\"\n"
+                          "\tUser time (seconds): 340.56\n\tSystem time (seconds): 3.84\n"
+                          "\tElapsed (wall clock) time (h:mm:ss or m:ss): 1:05:51.09\n"
+                          "\tMaximum resident set size (kbytes): 2097152\n\tExit status: 0\n")
+        code, output = self.run_report()
+        self.assertEqual(code, 0, output)
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("- Elapsed: 0.0 s in the replay, 3951.1 s real including any wait for the "
+                      "machine, 340.6 s user", written)
+        self.assertIn("- Maximum RSS: 2.00 GiB, which counts resident pages of the mapped file",
+                      written)
+        self.assertIn("- Peak memory footprint: unavailable\n", written)
+        self.assertIn("| 89 | 0.0 | 2.00 | unavailable | `log` |", written)
+        # No timer at all: every figure unavailable, none 0.
+        self.log = GOOD_LOG.replace(mac, "").replace("elapsed_seconds 0.0\n", "")
+        code, output = self.run_report()
+        self.assertEqual(code, 0, output)
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("- Elapsed: replay time unavailable, real time unavailable, user time "
+                      "unavailable", written)
+        self.assertIn("- Maximum RSS: unavailable\n", written)
+        self.assertIn("| 89 | unavailable | unavailable | unavailable | `log` |", written)
+        self.assertNotIn("0.00 GiB", written)
+
+    def test_the_test_symbol_line_sums_what_it_says(self):
+        self.replace("class C_Y count=3 shares=160 zero_share=0 test_count=0 test_shares=0",
+                     "class C_Y count=3 shares=160 zero_share=0 test_count=1 test_shares=60")
+        self.replace("class C_N count=9 shares=1210 zero_share=0 test_count=0 test_shares=0",
+                     "class C_N count=9 shares=1210 zero_share=0 test_count=2 test_shares=200")
+        self.replace("class P count=5 shares=1429 zero_share=0 test_count=0 test_shares=0",
+                     "class P count=5 shares=1429 zero_share=0 test_count=1 test_shares=29")
+        code, output = self.run_report()
+        self.assertEqual(code, 0, output)
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        # E 1 of 100 shares, C_Y 1 of 60 and P 1 of 29; Q_O 1 of 40, and Q_C 1 of none.
+        self.assertIn("Test symbols: 3 prints of `E + C_Y + P` with 189 shares, and 2 `Q` crosses "
+                      "with 40 shares. They are checked per message, and left out of both "
+                      "external comparisons. Their `C_N`, 2 with 200 shares, are in neither "
+                      "count: a `C_N` is not a print, and its shares are those of the print or "
+                      "cross beside it.", written)
+
+    def test_the_log_must_have_replayed_the_manifest_s_bytes(self):
+        self.replace("bytes 3041", "bytes 3040")
+        self.assert_fails("bytes 3040, manifest unpacked_bytes 3041")
+        self.log = GOOD_LOG
+        del self.day["unpacked_bytes"]
+        code, output = self.run_report()
+        self.assertEqual(code, 2, output)
+        self.assertIn("the manifest pins no unpacked_bytes for the day", output)
+
+    def test_each_published_figure_names_its_source(self):
+        for day, rows in report.PUBLISHED.items():
+            for label, source, _, _ in rows:
+                self.assertRegex(source, r"\(BENCHMARKS\.md, T-TRADE-\d\)", label)
+                self.assertNotIn("research", source, label)
+                if label.startswith(("CrossStats", "MIDAS")):
+                    self.assertTrue(source.endswith(": a re-parse"), label)
+        # The section says what a re-parse is.
+        report.PUBLISHED["01062020"] = [("Deletes", report.KAREEM, 7, "t1_orders_deleted")]
+        self.addCleanup(report.PUBLISHED.pop, "01062020")
+        code, output = self.run_report()
+        self.assertEqual(code, 0, output)
+        written = (self.root / "out.md").read_text(encoding="utf-8")
+        self.assertIn("| Deletes | KareemJandali census (BENCHMARKS.md, T-TRADE-1) | 7 | 7 | +0 |",
+                      written)
+        self.assertIn("A re-parse sets the figure read from a file beside the tool's reading of "
+                      "the same file, so it tests the parse, not the book.", written)
+
+    def test_each_published_figure_is_in_the_target_it_names(self):
+        benchmarks = report.REPO_ROOT / "BENCHMARKS.md"
+        if not benchmarks.is_file():
+            self.skipTest("no BENCHMARKS.md in this tree")
+        text = benchmarks.read_text(encoding="utf-8")
+        for rows in report.PUBLISHED.values():
+            for label, source, claim, _ in rows:
+                target = source.split("(BENCHMARKS.md, ", 1)[1].split(")", 1)[0]
+                section = text.split(f"### {target}:", 1)[1].split("\n### ", 1)[0]
+                self.assertIn(f"{claim:,}", section, label)
 
     def test_a_cross_file_on_a_day_said_to_have_none_fails(self):
         self.flags = ["--no-cross-file"]
@@ -530,6 +625,90 @@ class TradesReport(unittest.TestCase):
         with contextlib.redirect_stderr(out):
             code = report.main(["--day", "01012000", "--log", str(log)])
         self.assertEqual(code, 2)
+
+
+class CheckRealDayCrossFile(unittest.TestCase):
+    """check_real_day.sh's trade step on a pinned CrossStats file, in a tree of its own where
+    cmake, itch_trades, extract_midas.py and trades_report.py are stand-ins, and fetch_data.py
+    and the script are the real ones."""
+
+    CROSS = b"Date      ,Symbol,ListingMarket,OpeningCross,ClosingCross,IntradayCross,\n"
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.addCleanup(self.dir.cleanup)
+        self.tree = Path(self.dir.name)
+        scripts = self.tree / "scripts"
+        scripts.mkdir()
+        for name in ("check_real_day.sh", "fetch_data.py"):
+            shutil.copy(report.REPO_ROOT / "scripts" / name, scripts / name)
+        stub = "import json, sys\nopen(sys.argv[0] + '.args', 'w').write(json.dumps(sys.argv[1:]))\n"
+        for name in ("extract_midas.py", "trades_report.py", "oracle_report.py"):
+            (scripts / name).write_text(stub, encoding="utf-8")
+        tools = self.tree / "build" / "release" / "tools"
+        tools.mkdir(parents=True)
+        (tools / "itch_trades").write_text('#!/bin/sh\necho "$@" > "$0.args"\n',
+                                           encoding="utf-8")
+        (tools / "itch_trades").chmod(0o755)
+        bin_dir = self.tree / "bin"
+        bin_dir.mkdir()
+        (bin_dir / "cmake").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        (bin_dir / "cmake").chmod(0o755)
+        (self.tree / "data").mkdir()
+        self.references = {"midas_2020q1": {"nasdaq_rows": {"20200106": 4}},
+                           "crossstats_20200106": {
+                               "filename": "CrossStats20200106.txt", "format": "text",
+                               "bytes": len(self.CROSS),
+                               "sha256": hashlib.sha256(self.CROSS).hexdigest()}}
+
+    def run_day(self):
+        (self.tree / "scripts" / "data_manifest.json").write_text(json.dumps(
+            {"days": {"01062020": GOOD_DAY}, "references": self.references}), encoding="utf-8")
+        env = dict(os.environ, PATH=f"{self.tree / 'bin'}{os.pathsep}{os.environ['PATH']}",
+                   ITCH_REAL_DAY_LOGS=str(self.tree / "logs"))
+        done = subprocess.run(["bash", str(self.tree / "scripts" / "check_real_day.sh"),
+                               "--only", "trades", "01062020"], capture_output=True, text=True,
+                              env=env, check=False, timeout=60)
+        return done.returncode, done.stdout + done.stderr
+
+    def tool_args(self):
+        path = self.tree / "build" / "release" / "tools" / "itch_trades.args"
+        return path.read_text(encoding="utf-8") if path.exists() else None
+
+    def report_args(self):
+        path = self.tree / "scripts" / "trades_report.py.args"
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
+    def test_a_pinned_cross_file_is_verified_and_given_to_the_tool(self):
+        (self.tree / "data" / "CrossStats20200106.txt").write_bytes(self.CROSS)
+        code, output = self.run_day()
+        self.assertEqual(code, 0, output)
+        self.assertIn("--crossstats data/CrossStats20200106.txt", self.tool_args())
+        self.assertNotIn("--no-cross-file", self.report_args())
+
+    def test_a_pinned_cross_file_that_is_missing_fails_the_day(self):
+        code, output = self.run_day()
+        self.assertEqual(code, 1, output)
+        self.assertIn("real day: 01062020 has no cross file data/CrossStats20200106.txt, and the "
+                      "manifest pins crossstats_20200106", output)
+        self.assertIsNone(self.tool_args())
+        self.assertIsNone(self.report_args())
+
+    def test_a_cross_file_that_is_not_the_pinned_one_fails_the_day(self):
+        (self.tree / "data" / "CrossStats20200106.txt").write_bytes(self.CROSS.replace(b"D", b"d"))
+        code, output = self.run_day()
+        self.assertEqual(code, 1, output)
+        self.assertIn("real day: 01062020's cross file data/CrossStats20200106.txt is not the one "
+                      "the manifest pins", output)
+        self.assertIsNone(self.tool_args())
+
+    def test_a_day_with_no_pinned_cross_file_is_reported_not_available(self):
+        del self.references["crossstats_20200106"]
+        code, output = self.run_day()
+        self.assertEqual(code, 0, output)
+        self.assertIn("has no cross file in the manifest, so T-TRADE-2 is not available", output)
+        self.assertNotIn("--crossstats", self.tool_args())
+        self.assertIn("--no-cross-file", self.report_args())
 
 
 if __name__ == "__main__":
