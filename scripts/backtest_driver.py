@@ -23,6 +23,19 @@ is, what the rate's denominator is beside the source's, and gives the target's v
 words from check_results.py's fixed set. T-BT-1's bar was set on x86, so a macOS figure
 neither meets nor misses it; T-BT-3's was set on a Mac.
 
+On Linux the Linux sampler rule applies to every process (docs/NOTES.md, "The Linux sampler
+rule"): scripts/linux_sampler.py runs beside the whole run, pinned to --sampler-cpu (by default
+the lowest CPU that is neither --core nor --sibling), and a process is published only if the
+sampler covered its whole span with no gap over 2.5 s and saw, in every second of it, the
+measured process wait on the run queue for at most 1% of the second, the SMT sibling at most
+5% busy and the other cores together at most 20% of a CPU busy. Otherwise it is withdrawn, its
+raw files set aside, with its own row in the run log giving the other work by kind, and run
+again; never for its numbers. A process withdrawn --most-in-a-row times running (3 unless
+told) ends the run, refused, so that a busy host is given back and the run is tried again
+later. Each process first waits until the sampler has seen --quiet-before seconds (10) that
+pass the rule, for at most --quiet-wait seconds (600), and the run is refused if it never
+does. The file's load_rule field and Sampler section say what the rule saw.
+
 Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
 --raw-dir, which is not committed.
 
@@ -35,22 +48,30 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import shlex
 import signal
 import statistics
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
+import linux_sampler  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
 Refused = bench_driver.Refused
 Stopped = bench_driver.Stopped
 MEGA = 1e6
+MOST_IN_A_ROW = 3
+MOST_WITHDRAWN = 20
+QUIET_BEFORE_S = 10
+QUIET_WAIT_S = 600
+last_pid = None  # The last bench_backtest process's, for the sampler's judge.
 # Counts that every repetition must give exactly: the same day through the same engine.
 AGREED = ("messages", "deliveries", "arrivals", "decisions", "reports", "wakes", "fills",
           "filled_shares", "maker_fills", "taker_fills", "crossing_fills", "queue_anomalies",
@@ -155,6 +176,8 @@ def run_process(args, index, commit, digest):
     with open(log_path, "w", encoding="utf-8") as log:
         bench_driver.current_child = subprocess.Popen(command, stdout=log,
                                                       stderr=subprocess.STDOUT)
+        global last_pid
+        last_pid = bench_driver.current_child.pid
         code = bench_driver.current_child.wait()
         bench_driver.current_child = None
     if bench_driver.swap_watch is not None:
@@ -165,6 +188,70 @@ def run_process(args, index, commit, digest):
     if code != 0 or record["refusals"]:
         raise Refused(where, f"exited {code}: {'; '.join(record['refusals']) or 'no reason given'}")
     return record
+
+
+def wait_for_quiet(watch, args):
+    """Until the sampler has seen --quiet-before seconds that pass the rule."""
+    if args.quiet_before <= 0:
+        return
+    bench_driver.set_stage("waiting for the host to be quiet")
+    give_up = time.monotonic() + args.quiet_wait
+    while not watch.quiet_for(args.quiet_before):
+        if time.monotonic() >= give_up:
+            raise Refused("waiting for the host to be quiet",
+                          f"the sampler never saw {args.quiet_before:g} s that pass the Linux "
+                          f"sampler rule in {args.quiet_wait:g} s")
+        time.sleep(watch.every)
+
+
+def withdraw(args, index, host, begin, why, sampled, commit):
+    """A process the rule does not publish: its files set aside and its own row."""
+    sampled["withdrawn"].append((f"repetition {index}", begin, why))
+    count = len(sampled["withdrawn"])
+    for suffix in (".json", ".log"):
+        path = args.raw_dir / f"{args.workload}-repetition-{index}{suffix}"
+        if path.is_file():
+            path.rename(args.raw_dir / f"{args.workload}-repetition-{index}-withdrawn-{count}"
+                                       f"{suffix}")
+    target = WORKLOADS[args.workload]["target"]
+    run_id = f"{args.prediction}-{begin[:19].replace(':', '').replace('-', '')}Z"
+    bench_driver.append_log(
+        args.run_log, run_id, args.prediction, commit,
+        f"withdrawn: {target}, repetition {index} on {host}, exit 0; {why}, inside its span, so "
+        f"the Linux sampler rule does not publish it; nothing from it is published, and it is "
+        f"rerun under {args.prediction}; the row was written by the driver")
+    print(f"backtest_driver: repetition {index} withdrawn: {why}", file=sys.stderr)
+    if count > args.most_withdrawn:
+        raise Refused(f"repetition {index}", f"{count} processes withdrawn under the Linux "
+                                             f"sampler rule, over the {args.most_withdrawn} allowed")
+
+
+def judged_process(args, index, commit, digest, watch, sampled):
+    """One repetition, run again until the Linux sampler rule publishes it. With no sampler,
+    on macOS, the process is the repetition."""
+    in_a_row = 0
+    while True:
+        if watch is not None:
+            wait_for_quiet(watch, args)
+        begin = linux_sampler.utc_now()
+        record = run_process(args, index, commit, digest)
+        validate_run(record, args.workload)
+        if watch is None:
+            return record
+        end = linux_sampler.utc_now()
+        watch.wait_past(end)
+        lines = watch.lines()
+        why = linux_sampler.judge(lines, begin, end, last_pid)
+        if why is None:
+            sampled["published"].append((index, begin, end, linux_sampler.summary(
+                lines, begin, end, args.core, args.sibling)))
+            return record
+        withdraw(args, index, record["header"]["host"], begin, why, sampled, commit)
+        in_a_row += 1
+        if in_a_row >= args.most_in_a_row:
+            raise Refused(f"repetition {index}",
+                          f"withdrawn {in_a_row} times in a row under the Linux sampler rule, "
+                          "so the host is given back and the run is tried again later")
 
 
 def validate_run(record, workload):
@@ -280,7 +367,34 @@ def describe(records):
     return spec["what"].format(**values), spec["event"].format(**values)
 
 
-def header_lines(records, args, run_id, started, finished):
+def load_rule_line(sampled):
+    return (f"- load_rule: the Linux sampler rule was applied: sampled every "
+            f"{sampled['every']:g} s from /proc by scripts/linux_sampler.py on cpu"
+            f"{sampled['cpu']}, over each process's whole span; every published process quiet; "
+            f"{len(sampled['withdrawn'])} withdrawn under the rule")
+
+
+def sampler_section(sampled):
+    lines = ["## Sampler", "",
+             "The Linux sampler rule was applied (docs/NOTES.md, \"The Linux sampler rule\"): "
+             f"`scripts/linux_sampler.py` ran beside the driver on cpu{sampled['cpu']}, reading "
+             f"/proc every {sampled['every']:g} s, and a process is published only if the sampler "
+             f"covered its whole span with no gap over {linux_sampler.LONGEST_GAP_S:g} s and saw, "
+             "in every second of it, the measured process wait on the run queue for at most "
+             f"{linux_sampler.CORE_WAIT_PCT:g}% of the second, the core's SMT sibling at most "
+             f"{linux_sampler.SIBLING_PCT:g}% busy, and the other cores together at most "
+             f"{linux_sampler.OTHERS_PCT:g}% of a CPU busy. A process that failed the rule was "
+             "withdrawn, with its own row in results/run_log.md, and run again; none was "
+             "withdrawn for its numbers.", "",
+             "| Process | From | To | The sampler |", "|---|---|---|---|"]
+    for index, begin, end, text in sampled["published"]:
+        lines.append(f"| {index} | {begin} | {end} | {text} |")
+    for count, (what, begin, why) in enumerate(sampled["withdrawn"], start=1):
+        lines.append(f"| withdrawn {count}, {what} | {begin} | | {why} |")
+    return lines
+
+
+def header_lines(records, args, run_id, started, finished, sampled=None):
     first = records[0]
     header = dict(first["header"])
     latency = first["latency_ns"]
@@ -292,6 +406,7 @@ def header_lines(records, args, run_id, started, finished):
               f"ns, L_resp {latency['response']:,} ns, L_compute {latency['compute']:,} ns",
               f"- measure_load_start: {check_results.PENDING}",
               f"- measure_load_end: {check_results.PENDING}",
+              *([load_rule_line(sampled)] if sampled else []),
               *bench_driver.peak_lines(records),
               f"- prediction: {args.prediction}",
               f"- run_id: {run_id}",
@@ -303,7 +418,7 @@ def header_lines(records, args, run_id, started, finished):
     return lines
 
 
-def render(records, args, run_id, started, finished, machine_output, command):
+def render(records, args, run_id, started, finished, machine_output, command, sampled=None):
     first = records[0]
     spec = WORKLOADS[first["workload"]]
     host = first["header"]["host"]
@@ -319,7 +434,7 @@ def render(records, args, run_id, started, finished, machine_output, command):
                   "was doing under `measure.sh`'s lock. Every figure here is a macOS figure. "
                   + spec["host"], ""]
     lines += [what, "", "## Header", ""]
-    lines += header_lines(records, args, run_id, started, finished)
+    lines += header_lines(records, args, run_id, started, finished, sampled)
     lines += ["", "## Summary", "",
               "Each repetition is a fresh process: one warm-up pass, excluded from every figure "
               "here, then one timed pass on a fresh engine and strategy, which must agree with "
@@ -342,6 +457,8 @@ def render(records, args, run_id, started, finished, machine_output, command):
     lines += repetition_rows(records)
     if bench_driver.swap_watch is not None:
         lines += ["", bench_driver.swap_watch.line()]
+    if sampled:
+        lines += [""] + sampler_section(sampled)
     lines += ["", "## machine_check output", "", "```", machine_output, "```", "",
               "## Commands", "", "```", command, "```", ""]
     return "\n".join(lines)
@@ -379,15 +496,24 @@ def run(args, run_id, started, commit):
         raise Refused("prediction", code.stdout.strip())
     bench_driver.set_stage("machine_check")
     machine_output = bench_driver.machine_check(args)
-    records = []
-    for index in range(1, args.repetitions + 1):
-        record = run_process(args, index, commit, digest)
-        validate_run(record, args.workload)
-        records.append(record)
+    watch, sampled = None, None
+    if platform.system() == "Linux":
+        if args.core is None or args.sibling is None:
+            raise Refused("sampler", "the Linux sampler rule needs --core and --sibling")
+        bench_driver.set_stage("starting the sampler")
+        watch, cpu = linux_sampler.Watch.start(args.raw_dir / "sampler.txt", args.core,
+                                               args.sibling, args.sampler_cpu)
+        sampled = {"every": watch.every, "cpu": cpu, "published": [], "withdrawn": []}
+    try:
+        records = [judged_process(args, index, commit, digest, watch, sampled)
+                   for index in range(1, args.repetitions + 1)]
+    finally:
+        if watch is not None:
+            watch.stop()
     validate_together(records)
     bench_driver.set_stage("rendering the results file")
     text = render(records, args, run_id, started, bench_driver.utc_now(), machine_output,
-                  relative_command(args))
+                  relative_command(args), sampled)
     violations = [found for found in check_results.check_text(text)
                   if found[0] != "load-not-stamped"]
     if violations:
@@ -415,6 +541,11 @@ def parse_args(argv):
     parser.add_argument("--wrapped-by", help="what the run was started under, for the record")
     parser.add_argument("--allow-dirty", action="store_true", help="for tests, not for a report")
     parser.add_argument("--bench-arg", action="append", default=[], metavar="ARG")
+    parser.add_argument("--sampler-cpu", type=int, help="Linux: the CPU the sampler runs on")
+    parser.add_argument("--quiet-before", type=float, default=QUIET_BEFORE_S, metavar="S")
+    parser.add_argument("--quiet-wait", type=float, default=QUIET_WAIT_S, metavar="S")
+    parser.add_argument("--most-in-a-row", type=int, default=MOST_IN_A_ROW)
+    parser.add_argument("--most-withdrawn", type=int, default=MOST_WITHDRAWN)
     parser.add_argument("--predictions-root", type=Path, default=REPO_ROOT, help=argparse.SUPPRESS)
     parser.add_argument("--run-log", type=Path, default=REPO_ROOT / "results" / "run_log.md",
                         help=argparse.SUPPRESS)

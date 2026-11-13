@@ -21,6 +21,13 @@ process other than the measured ones above 20% CPU. The run is stamped only if t
 sampler's lines bracket measure.sh's start and end with no gap over 5 s between them and
 no FOREIGN line falls inside: otherwise the run is refused, to be withdrawn and rerun.
 
+A debian run from 2026-11-13T03:00Z on is held to the Linux sampler rule. A driver that
+applies it to each process (backtest_driver.py) writes the file's load_rule field itself; any
+other run needs the log of scripts/linux_sampler.py, started beside measure.sh with --watch
+naming measure.sh's process, and is stamped only if linux_sampler.judge() finds the whole run,
+from measure.sh's start to a second past its end, clean: otherwise it is refused, to be
+withdrawn and rerun.
+
 Exit codes: 0 stamped and the file passes check_results.py, 1 refused, 2 bad usage.
 """
 
@@ -35,6 +42,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_results  # noqa: E402
+import linux_sampler  # noqa: E402
 
 START = re.compile(r"^measure\.sh: start .*$", re.MULTILINE)
 END = re.compile(r"^measure\.sh: end .*$", re.MULTILINE)
@@ -86,6 +94,23 @@ def sampler_line(sampler_text, start, end):
             "and no other process went above 20% CPU in it")
 
 
+def linux_rule_line(sampler_text, start, end):
+    """The load_rule value for a Linux sampler that saw the whole run clean. Raises ValueError
+    if it did not. measure.sh's times are whole seconds, so the span runs to a second past its
+    end line."""
+    lines = sampler_text.splitlines()
+    begin = start[:-1] + ".000000Z"
+    finish = linux_sampler.stamp_of(linux_sampler.at(end[:-1] + ".000000Z") +
+                                    datetime.timedelta(seconds=1))
+    why = linux_sampler.judge(lines, begin, finish)
+    if why is not None:
+        raise ValueError(f"the Linux sampler rule refuses the run: {why}")
+    first = next(line for line in lines if line.split()[1:2] == ["start"])
+    settings = dict(word.split("=", 1) for word in first.split()[2:])
+    return check_results.LINUX_RULE_WHOLE + linux_sampler.summary(
+        lines, begin, finish, settings["core"], settings["sibling"])
+
+
 def stamp(results_text, stderr_text, sampler_text=None):
     """The results text with the lines stamped in. Raises ValueError to refuse."""
     fields = check_results.parse_header(results_text)
@@ -95,11 +120,18 @@ def stamp(results_text, stderr_text, sampler_text=None):
     start = HOST.sub(f"host={host}", one_line(START, stderr_text, "start"))
     end = HOST.sub(f"host={host}", one_line(END, stderr_text, "end"))
     sampler = None
+    linux = None
     if sampler_text is not None:
         opened, closed = check_results.TIMESTAMP.search(start), check_results.TIMESTAMP.search(end)
         if opened is None or closed is None:
             raise ValueError("the measure.sh lines carry no time to hold the sampler to")
-        sampler = sampler_line(sampler_text, opened.group(1), closed.group(1))
+        if host == "debian":
+            linux = linux_rule_line(sampler_text, opened.group(1), closed.group(1))
+        else:
+            sampler = sampler_line(sampler_text, opened.group(1), closed.group(1))
+    elif check_results.needs_linux_rule(fields) and "load_rule" not in fields:
+        raise ValueError("a debian run from 2026-11-13T03:00Z on needs the Linux sampler's log "
+                         "(--sampler), or a driver that applied the rule to each process")
     elif check_results.needs_sampler(fields):
         raise ValueError("a macOS run from 2026-11-05 on needs the CPU sampler's log (--sampler)")
 
@@ -112,6 +144,11 @@ def stamp(results_text, stderr_text, sampler_text=None):
     if sampler is not None:
         results_text = results_text.replace(f"- measure_load_end: {end}",
                                             f"- measure_load_end: {end}\n- sampler: {sampler}")
+    if linux is not None:
+        if "load_rule" in fields:
+            raise ValueError("the file's driver applied the Linux sampler rule already")
+        results_text = results_text.replace(f"- measure_load_end: {end}",
+                                            f"- measure_load_end: {end}\n- load_rule: {linux}")
     for name, pattern, note in (("peak_rss", MAX_RSS, ", the largest process in the run"),
                                 ("peak_footprint", FOOTPRINT,
                                  ", of the driver alone: time sees its direct child")):
@@ -126,7 +163,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--results", type=Path, required=True)
     parser.add_argument("--stderr", type=Path, required=True)
-    parser.add_argument("--sampler", type=Path, help="the CPU sampler's log, for a macOS run")
+    parser.add_argument("--sampler", type=Path,
+                        help="the CPU sampler's log: a macOS run's, or linux_sampler.py's")
     parser.add_argument("--out", type=Path, help="default: stamp --results in place")
     args = parser.parse_args(argv)
     try:
