@@ -252,8 +252,10 @@ A deliberately simple reference book replays the day beside the fast book. After
 
 The proof by induction that state outside the touched set cannot have diverged is in docs/NOTES.md, with what each check covers and what it leaves to the whole-book hash. The slot, index and arena checks were added in the final review, after a reviewer showed that the earlier proof took on trust that a write stores only into its own level's slots: a freed order's link stored into the wrong field left a live slot on the free list. Such a store is still seen only on the message that takes that slot again, not on the one that made it. The whole-book hash every 1,000,000 messages backs all of it up ([results/oracle_12302019.md](results/oracle_12302019.md)).
 
-The counts below are the published runs', made before the slot, index and arena checks were added. The ten sessions are being run again under P-0504 at the code that ships; its result will change only the figures quoted from the oracle files.
+The counts below are from the ten sessions run again under P-0504 at the code that ships, with the slot, index and arena checks. P-0504 predicted, before the run, that every verdict and count the published oracle and trade files print would come out the same, on every arm, that each raw log would differ only by the new lines, and that the new checks would find nothing; it held on every part (docs/NOTES.md, "Against P-0504").
 
+- On 12302019 the slot checks went through 460,327,312 level slots and 649,396,127 order slots, with a count of slot violations of 0 ([results/oracle_12302019.md](results/oracle_12302019.md)).
+- The index check looked up 284,881,004 references named, each in both books: one for every reference the day's messages name ([results/oracle_12302019.md](results/oracle_12302019.md)).
 - On 12302019 it compared 268,744,780 messages, 240,658,248 touched levels and 372,604,158 choke-point writes; the count of write-set violations is 0, and of divergences 0 ([results/oracle_12302019.md](results/oracle_12302019.md)).
 - Over all ten sessions there were 0 divergences in 3,081,392,329 messages ([results/oracle_sessions.md](results/oracle_sessions.md)).
 
