@@ -160,6 +160,8 @@ class FakeServer:
             body, code, stderr = body[:1], 18, "partial file"
         elif fault == "exit":
             code, stderr = 56, "reset"
+        elif fault == "disk full":
+            raise OSError(28, "No space left on device")
         Path(body_path).write_bytes(body)
         Path(header_path).write_text(
             f"{status}\r\nContent-Range: {content_range}\r\nETag: {etag}\r\n\r\n")
@@ -216,6 +218,20 @@ class Download(Scratch):
         faults = {(0, attempt): "200" for attempt in range(1, 4)}
         with self.assertRaisesRegex(fd.FetchError, "failed 3 attempts"):
             self.run_download(FakeServer(self.data, faults), max_attempts=3)
+
+    def test_an_error_that_is_not_a_rejected_chunk_stops_every_worker(self):
+        # One worker, so that what was asked for after the error is exact: nothing.
+        server = FakeServer(self.data, {(0, 1): "disk full"})
+        fd.prepare_parts(self.parts, self.state)
+        with self.assertRaisesRegex(OSError, "No space left on device"):
+            fd.download_chunks(URL, server.remote, self.chunks, self.parts, 1, server,
+                               sleep=lambda _: None)
+        self.assertEqual(server.calls, [0])
+        # Two workers: the error still comes out as it came, and the run stops short.
+        server = FakeServer(self.data, {(0, 1): "disk full"})
+        with self.assertRaisesRegex(OSError, "No space left on device"):
+            self.run_download(server)
+        self.assertLess(len(server.calls), len(self.chunks))
 
     def test_nothing_assembles_with_a_chunk_missing(self):
         server = FakeServer(self.data)
