@@ -253,8 +253,9 @@ def number(text):
 # raw value is the range (value, value), which gives the figure itself.
 
 def printed_range(cell, places):
-    """The values a cell printed to `places` decimals can stand for."""
-    value = cell_value(cell)
+    """The values a cell printed to `places` decimals can stand for, the cell given as
+    printed or as the number it reads as."""
+    value = cell if isinstance(cell, (int, float)) else cell_value(cell)
     # A hair over half a unit, so that the binary value of a printed decimal is never left out.
     half = 0.5 * 10 ** -places * (1 + 1e-9)
     return value - half, value + half
@@ -292,7 +293,8 @@ def cv_range(ranges):
     mean, stdev = statistics.fmean(middles), statistics.stdev(middles)
     mean_half = statistics.fmean(halves)
     stdev_half = math.sqrt(sum(half * half for half in halves) / (len(ranges) - 1))
-    return max(0.0, stdev - stdev_half) / (mean + mean_half), (stdev + stdev_half) / (mean - mean_half)
+    return (max(0.0, stdev - stdev_half) / (mean + mean_half),
+            (stdev + stdev_half) / (mean - mean_half))
 
 
 def shown_within(shown, bounds, fmt):

@@ -22,7 +22,13 @@ another size says where the verdict is instead, and a confirmation run in it is 
 Every figure comes from the file's own table of every process, so --check rebuilds the
 sender's ceiling, each mode's largest lossless rate, T-URING-1's ratios, T-URING-2's
 verdict, the feed's pass and fail, the latency medians, the CPU split and the summary from
-that table, and fails on any difference. It also fails on a file without the sentence
+that table, and fails on any difference. The sender's ceiling and the CPU split are worked out
+from each record's unrounded rates and shares, and rounded only to print, so --check, which
+has only the table's rounded cells, holds each of those figures to the range the cells leave
+(check_results.py, "Figures computed from unrounded values"). The cap a bisection ran at is
+the one its driver worked out when it ran, 0.9 x the ceiling it had then, rounded down; where
+that ceiling is not the one the file prints, the rate_cap field names it. It also fails on a
+file without the sentence
 
     Loopback runs the receive softirq on the sender's CPU, so this is a syscall-and-copy
     benchmark on one host, not a network benchmark (IU-47).
@@ -45,7 +51,8 @@ never reached, and the figure is "at least" it, sender limited, whatever the cap
 wins only if no other mode's figure is such a lower bound.
 
 The header's prediction and run_id are the file's own step's run, as check_predictions.py
-reads them; predictions and runs list every run the file draws on.
+reads them; predictions and runs list every run the file draws on. --rendered-again REASON
+adds a line saying the file was rendered again from the runs' own raw records, and why.
 
 Each violation prints as `udp_report: FAIL <code>: <detail>`.
 
@@ -115,6 +122,9 @@ COLUMNS = (
     ("Softirq, sender's CPU %", "softirq_sender", "pct"),
     ("Softirq, receiver's CPU %", "softirq_receiver", "pct"), ("Pins", "pins", "text"),
     ("Verdict", "verdict", "text"))
+KINDS = {key: kind for _, key, kind in COLUMNS}
+PLACES = {"int": 0, "us": 2, "pct": 1}  # The places each kind of cell is printed to.
+RAN_CAP = re.compile(r"^[0-9,]+ msg/s, what the trials ran at: 0\.9 × ([0-9,.]+) msg/s")
 FAILED_COLUMNS = (("Run", "run"), ("Mode", "mode"), ("Role", "role"), ("Exit", "exit"),
                   ("Why", "why"))
 BISECTION = ("Each mode's largest lossless rate by bisection on the message rate, one trial a "
@@ -277,6 +287,8 @@ def row_of(entry, record, cores):
            "messages": record["plan"]["messages"],
            "achieved": round(send["achieved_messages_per_s"]),
            "packets": round(send["achieved_packets_per_s"]),
+           "raw": {"achieved": send["achieved_messages_per_s"],
+                   "packets": send["achieved_packets_per_s"]},
            "late_max": send["late_max_ns"] / 1000,
            "delivered": record.get("delivered") if receive else None,
            "rearms": record["receive"]["mode"]["rearms"] if receive else None,
@@ -288,7 +300,16 @@ def row_of(entry, record, cores):
                        ("max", "max_ns")):
         row[key] = latency[field] / 1000 if field in latency else None
     row.update(cpu_cells(record, cores))
+    row["raw"].update({key: row[key] for key in CPU_KEYS})
     return row
+
+
+def value_range(row, key, printed=False):
+    """A row's value as a range: the record's own unrounded value when the row has it and
+    `printed` is not asked for, and otherwise what the table's rounded cell stands for."""
+    if not printed and "raw" in row:
+        return check_results.exact(row["raw"][key])
+    return check_results.printed_range(row[key], PLACES[KINDS[key]])
 
 
 def row_cells(row):
@@ -404,20 +425,54 @@ def median_or_none(values):
     return statistics.median(values) if values else None
 
 
-def ceiling_lines(rows):
+def whole(value):
+    return f"{value:,.0f}"
+
+
+def ceiling_range(rows, key="achieved", printed=False):
+    """The median of the sender rows, as a range, or None in a file with none."""
+    senders = [row for row in rows if row["role"] == "ceiling"]
+    if not senders:
+        return None
+    return check_results.median_range([value_range(row, key, printed) for row in senders])
+
+
+def ceiling_lines(rows, shown=None):
+    """The Sender ceiling section, and the ceiling as it prints. `shown` is the file's own
+    cells, {"Messages/s": median, "Packets/s": median, "cap": cap}, which check gives."""
     senders = [row for row in rows if row["role"] == "ceiling"]
     if not senders:
         return None, None
-    messages = [row["achieved"] for row in senders]
-    packets = [row["packets"] for row in senders]
-    lines = ["| | Median | Min | Max | Runs |", "|---|---|---|---|---|",
-             f"| Messages/s | {udp_driver.ceiling_of(messages):,} | {min(messages):,} "
-             f"| {max(messages):,} | {len(senders)} |",
-             f"| Packets/s | {udp_driver.ceiling_of(packets):,} | {min(packets):,} "
-             f"| {max(packets):,} | {len(senders)} |", "",
-             f"- The cap: {udp_driver.cap_of(udp_driver.ceiling_of(messages)):,} msg/s, 0.9 × "
-             "the median. No trial runs above it."]
-    return lines, udp_driver.ceiling_of(messages)
+    shown = shown or {}
+    lines = ["| | Median | Min | Max | Runs |", "|---|---|---|---|---|"]
+    medians = {}
+    for label, key in (("Messages/s", "achieved"), ("Packets/s", "packets")):
+        medians[label] = check_results.shown_within(shown.get(label),
+                                                    ceiling_range(rows, key), whole)
+        printed = [row[key] for row in senders]
+        # Rounding keeps the order, so the least and greatest cells are the raw ones rounded.
+        lines.append(f"| {label} | {medians[label]} | {min(printed):,} | {max(printed):,} "
+                     f"| {len(senders)} |")
+    low, high = ceiling_range(rows)
+    cap = check_results.shown_within(shown.get("cap"), (udp_driver.cap_of(low),
+                                                        udp_driver.cap_of(high)), whole)
+    lines += ["", f"- The cap: {cap} msg/s, 0.9 × the median. No trial runs above it."]
+    return lines, medians["Messages/s"]
+
+
+def shown_cells(text):
+    """The cells of a published file that are worked out from unrounded values: the sender's
+    ceiling and its cap, and the CPU split by mode."""
+    ceiling = {cells[0]: cells[1] for cells in check_results.table_rows(text, "Sender ceiling")
+               if len(cells) > 1}
+    match = re.search(r"^- The cap: ([0-9,]+) msg/s", check_results.section(text, "Sender ceiling")
+                      or "", re.MULTILINE)
+    if match:
+        ceiling["cap"] = match.group(1)
+    cpu = {cells[0]: cells[2:8]
+           for cells in check_results.table_rows(text, "CPU split at the common rate")
+           if cells[0] != "Mode" and len(cells) >= 8}
+    return {"ceiling": ceiling, "cpu": cpu}
 
 
 def lossless_lines(found):
@@ -576,7 +631,9 @@ def latency_lines(rows):
 CPU_KEYS = ("cpu_sender", "cpu_receiver", "cpu_sq", "softirq_sender", "softirq_receiver")
 
 
-def cpu_lines(rows, irq_accounting):
+def cpu_lines(rows, irq_accounting, shown=None):
+    """The CPU split, each median and the sum of the medians from the unrounded shares;
+    `shown` is the file's own cells by mode, which check gives."""
     groups = by_mode(rows, "cpu")
     if not groups:
         return None
@@ -588,12 +645,19 @@ def cpu_lines(rows, irq_accounting):
              "Softirq, sender's CPU % | Softirq, receiver's CPU % | Sum % | Note |",
              "|---|---|---|---|---|---|---|---|---|"]
     for mode, runs in groups.items():
-        medians = [median_or_none([row[key] for row in runs]) for key in CPU_KEYS]
-        total = sum(value for value in medians if value is not None)
+        cells = (shown or {}).get(mode) or [None] * (len(CPU_KEYS) + 1)
+        medians = []
+        for key in CPU_KEYS:
+            ranges = [value_range(row, key) for row in runs if row[key] is not None]
+            medians.append(check_results.median_range(ranges) if ranges else None)
+        known = [one for one in medians if one is not None]
+        total = (sum(low for low, _ in known), sum(high for _, high in known))
+        shares = [NONE if one is None else check_results.shown_within(
+            given, one, lambda value: cell("pct", value)) for given, one in zip(cells, medians)]
+        summed = check_results.shown_within(cells[-1], total, lambda value: f"{value:.1f}")
         rates = sorted({row["target"] for row in runs})
         lines.append(f"| {mode} | {', '.join(f'{r:,}' for r in rates)} | "
-                     + " | ".join(cell("pct", value) for value in medians)
-                     + f" | {total:.1f} | {SPIN_NOTE.get(mode, '')} |")
+                     + " | ".join(shares) + f" | {summed} | {SPIN_NOTE.get(mode, '')} |")
     lines += ["", "- On loopback the receive softirq runs on the sender's CPU (IU-39), so the "
                   "sender's CPU softirq share is the kernel's receive work for every mode.",
               "- Without IRQ time accounting, softirq ticks may also appear in the sender "
@@ -621,14 +685,16 @@ def feed_speedups(fields):
     return out
 
 
-def derived(fields, rows, failed):
-    """Every section worked out from the table, by title, and the summary."""
+def derived(fields, rows, failed, printed=None):
+    """Every section worked out from the table, by title, and the summary. `printed` is
+    shown_cells() of the file being checked."""
+    printed = printed or {}
     sections = {}
     summary = []
-    lines, ceiling = ceiling_lines(rows)
+    lines, ceiling = ceiling_lines(rows, printed.get("ceiling"))
     if lines is not None:
         sections["Sender ceiling"] = lines
-        summary.append(f"sender ceiling {ceiling:,} msg/s")
+        summary.append(f"sender ceiling {ceiling} msg/s")
     cap = check_results.number(fields.get("rate_cap", "")) if fields.get("rate_cap") else None
     cap = None if cap is None else int(cap)
     shown = check_results.number(fields.get("sender_ceiling", "")) \
@@ -671,7 +737,8 @@ def derived(fields, rows, failed):
     if lines is not None:
         sections["Latency"] = lines
         summary.append(f"latency at {len(lines) - 4} mode-rates")
-    lines = cpu_lines(rows, fields.get("irq_time_accounting", "not read: no smoke run given"))
+    lines = cpu_lines(rows, fields.get("irq_time_accounting", "not read: no smoke run given"),
+                      printed.get("cpu"))
     if lines is not None:
         sections["CPU split at the common rate"] = lines
         summary.append("CPU split at the common rate")
@@ -749,20 +816,46 @@ def smoke_fields(smoke):
 
 
 def ceiling_field(manifests, rows):
-    """The sender's ceiling, from the file's own sender rows if it has them."""
-    _, from_rows = ceiling_lines(rows)
+    """The sender's ceiling, from the file's own sender rows if it has them, unrounded, and
+    where it comes from. A ceiling a run was given must be one the rows' cells allow: the
+    median of the unrounded rates, or, before 2026-11-13, of the rates rounded first."""
+    from_rows = ceiling_range(rows)
     given = [m["ceiling"] for m in manifests if "ceiling" in m]
     if from_rows is not None:
+        low, high = ceiling_range(rows, printed=True)
         for one in given:
-            if one["messages_per_s"] != from_rows:
+            if not low <= one["messages_per_s"] <= high:
                 raise ReportError(f"a run used a ceiling of {one['messages_per_s']:,}, the "
-                                  f"sender rows give {from_rows:,}")
-        return from_rows, "the median of the sender rows below"
+                                  f"sender rows give {whole(from_rows[0])}")
+        return from_rows[0], "the median of the sender rows below"
     if not given:
         return None, None
     if len({one["messages_per_s"] for one in given}) != 1:
         raise ReportError("the runs used different ceilings")
     return given[0]["messages_per_s"], given[0]["source"]
+
+
+def cap_field(manifests, ceiling):
+    """The cap and the rate_cap field: what the trials ran at, from the driver, when any did,
+    and otherwise 0.9 x the ceiling, rounded down."""
+    ran = [m for m in manifests if "rate_cap" in m]
+    for manifest in ran:
+        if manifest["rate_cap"] != udp_driver.cap_of(manifest["ceiling"]["messages_per_s"]):
+            raise ReportError(f"run {manifest['run_id']} capped at {manifest['rate_cap']}, not "
+                              f"0.9 × its ceiling {manifest['ceiling']['messages_per_s']:,}")
+    if len({m["rate_cap"] for m in ran}) > 1:
+        raise ReportError("the runs ran at different caps")
+    if ran:
+        cap, used = ran[0]["rate_cap"], ran[0]["ceiling"]["messages_per_s"]
+        if whole(used) != whole(ceiling):
+            return cap, (f"{cap:,} msg/s, what the trials ran at: 0.9 × {used:,} msg/s, the "
+                         "sender's ceiling as the driver worked it out when they ran, rounded "
+                         "down")
+        return cap, f"{cap:,} msg/s, 0.9 × the sender's ceiling"
+    if ceiling is None:
+        return None, "not in this file"
+    cap = udp_driver.cap_of(ceiling)
+    return cap, f"{cap:,} msg/s, 0.9 × the sender's ceiling"
 
 
 def check_bisections(manifests, found):
@@ -801,7 +894,7 @@ def feed_fields(manifests):
                             "window, each run's idle timeout above it at its speed")]
 
 
-def render(timed, smoke, name):
+def render(timed, smoke, name, again=None):
     match = FILE_NAME.match(name)
     if match is None:
         raise ReportError(f"{name} is not udp_STEP_debian_DAY.md")
@@ -844,11 +937,12 @@ def render(timed, smoke, name):
         failed += lost
     if len({row["run"] for row in rows}) != len(rows):
         raise ReportError("two processes share a name: two runs of one step")
-    ceiling, source = ceiling_field(manifests, rows)
-    cap = udp_driver.cap_of(ceiling) if ceiling is not None else None
-    for manifest in manifests:
-        if "rate_cap" in manifest and manifest["rate_cap"] != cap:
-            raise ReportError(f"run {manifest['run_id']} capped at {manifest['rate_cap']}")
+    # The rows as the table prints them, each with its record's unrounded values beside it.
+    parsed = parse_runs_table("## Every process\n\n" + "\n".join(runs_table(rows)) + "\n")
+    for one, row in zip(parsed, rows):
+        one["raw"] = row["raw"]
+    ceiling, source = ceiling_field(manifests, parsed)
+    cap, cap_text = cap_field(manifests, ceiling)
     check_bisections(manifests, largest_lossless(rows, cap) if cap is not None else {})
     pinned = sum(1 for row in rows if "not pinned" not in row["pins"])
     before = manifests[0]["readings_before"]
@@ -883,10 +977,9 @@ def render(timed, smoke, name):
                ("first_frame", distinct(f"{r['plan']['first_frame']:,}" for r in records
                                         if r.get("schedule", {}).get("kind") != "feed")
                 or NONE),
-               ("sender_ceiling", f"{ceiling:,} msg/s, {source}" if ceiling is not None
+               ("sender_ceiling", f"{whole(ceiling)} msg/s, {source}" if ceiling is not None
                 else "not in this file"),
-               ("rate_cap", f"{cap:,} msg/s, 0.9 × the sender's ceiling" if cap is not None
-                else "not in this file")]
+               ("rate_cap", cap_text)]
     fields += smoke_fields(smoke)
     fields += feed_fields(manifests)
     fields += [("machine_checks", f"{passed} of {len(checks)} passed, before and after each "
@@ -904,15 +997,16 @@ def render(timed, smoke, name):
                ("measure_load_start", first_load), ("measure_load_end", last_load),
                ("run_started", stamp_of(first_load)), ("run_finished", stamp_of(last_load))]
     as_dict = dict(fields)
-    parsed = parse_runs_table("## Every process\n\n" + "\n".join(runs_table(rows)) + "\n")
     sections, summary = derived(as_dict, parsed, failed)
     fields.append(("summary", summary))
     title = f"T-URING-1 and T-URING-2, {TITLES[step]}" if datagram == TURING2_DATAGRAM else \
         f"T-URING-1 at {datagram:,} bytes a datagram, {TITLES[step]}"
     out = [f"# {title}, {host_file}, {day}", "",
            "Generated by `scripts/udp_report.py` from raw records that are not committed. "
-           "Do not edit by hand.", "",
-           f"Host: **{DEBIAN}**. Numbers from the two hosts are never mixed.", "",
+           "Do not edit by hand.", ""]
+    if again:
+        out += [f"Rendered again from the runs' own raw records, unchanged: {again}", ""]
+    out += [f"Host: **{DEBIAN}**. Numbers from the two hosts are never mixed.", "",
            COMPARABILITY, ""]
     if "warning" in as_dict:
         out += [f"**Warning: {as_dict['warning']}.**", ""]
@@ -1010,9 +1104,10 @@ def check_published(text, name=None):
         return found + [("table-unusable", repr(error))]
     if not rows:
         return found + [("table-missing", "no process in the table")]
+    shown = shown_cells(text)
     found += check_rows(rows, fields)
     try:
-        sections, summary = derived(fields, rows, failed)
+        sections, summary = derived(fields, rows, failed, shown)
     except (ReportError, KeyError, ValueError, ZeroDivisionError, statistics.StatisticsError) \
             as error:
         return found + [("table-unusable", repr(error))]
@@ -1050,13 +1145,27 @@ def check_rows(rows, fields):
     ceiling = fields.get("sender_ceiling", "")
     cap_text = fields.get("rate_cap", "")
     if ceiling[:1].isdigit():
-        shown = int(check_results.number(ceiling))
-        if not cap_text[:1].isdigit() or int(check_results.number(cap_text)) != \
-                udp_driver.cap_of(shown):
-            found.append(("above-ceiling", f"cap {cap_text!r} is not 0.9 × {shown:,}"))
-        _, from_rows = ceiling_lines(rows)
-        if from_rows is not None and from_rows != shown:
-            found.append(("ceiling-differs", f"{shown:,} against the rows' {from_rows:,}"))
+        shown = ceiling.split(" ")[0]
+        from_rows = ceiling_range(rows)
+        if from_rows is not None and \
+                check_results.shown_within(shown, from_rows, whole) != shown:
+            found.append(("ceiling-differs", f"{shown} against the rows' "
+                                             f"{whole(from_rows[0])} to {whole(from_rows[1])}"))
+        # The ceiling the cap came from: the one the trials ran at, when the field names it,
+        # and otherwise the ceiling shown, which stands for any value its rounding allows.
+        ran = RAN_CAP.match(cap_text)
+        if ran:
+            used = check_results.cell_value(ran.group(1))
+            if from_rows is not None and not from_rows[0] <= used <= from_rows[1]:
+                found.append(("ceiling-differs", f"the trials ran at 0.9 × {used:,}, which "
+                                                 "the sender rows do not give"))
+            caps = (udp_driver.cap_of(used),) * 2
+        else:
+            low, high = from_rows or check_results.printed_range(shown, 0)
+            caps = (udp_driver.cap_of(low), udp_driver.cap_of(high))
+        cap = cap_text.split(" ")[0]
+        if not cap_text[:1].isdigit() or check_results.shown_within(cap, caps, whole) != cap:
+            found.append(("above-ceiling", f"cap {cap_text!r} is not 0.9 × {shown}"))
     if cap_text[:1].isdigit():
         cap = int(check_results.number(cap_text))
         for row in rows:
@@ -1090,6 +1199,7 @@ def main(argv=None):
     parser.add_argument("--out", type=Path)
     parser.add_argument("--run-log", type=Path)
     parser.add_argument("--check", type=Path)
+    parser.add_argument("--rendered-again", metavar="REASON")
     args = parser.parse_args(argv)
     if args.check is None and (not args.run_dir or args.out is None):
         parser.error("wanted --check FILE, or --run-dir and --out")
@@ -1102,7 +1212,7 @@ def main(argv=None):
             print(f"udp_report: ok {args.check.name}")
             return 0
         timed, smoke = read_runs(args.run_dir)
-        text, summary = render(timed, smoke, args.out.name)
+        text, summary = render(timed, smoke, args.out.name, args.rendered_again)
         violations = check_published(text, args.out.name)
         if violations:
             return report_violations(violations)

@@ -644,4 +644,6 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0903-20261112T172808Z` | `P-0903` | `1843ac9d69ec` | Linux | `recorded` |
 | `P-0903-20261112T165458Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
 | `P-0903-20261112T172808Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
+| `P-0903-20261112T165458Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
+| `P-0903-20261112T172808Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
 <!-- results table: end -->

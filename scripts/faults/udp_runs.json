@@ -239,7 +239,7 @@
       "mutations": [
         {
           "file": "scripts/udp_report.py",
-          "old": "        if from_rows is not None and from_rows != shown:\n",
+          "old": "        if from_rows is not None and \\\n                check_results.shown_within(shown, from_rows, whole) != shown:\n",
           "new": "        if False:\n"
         }
       ],
@@ -838,6 +838,69 @@
       ],
       "expect": {
         "signature": "^FAIL: test_a_search_stopped_by_the_sender_falling_behind_is_sender_limited |^ERROR: test_a_search_stopped_by_the_sender_falling_behind_is_sender_limited ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-ceiling-from-rounded-rates",
+      "breaks": "The sender's ceiling is the median of the sender rows' rates as the table rounds them, not of the records' unrounded rates",
+      "check": "test_udp_report.py test_the_ceiling_is_the_median_of_the_unrounded_rates",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    return check_results.median_range([value_range(row, key, printed) for row in senders])\n",
+          "new": "    return check_results.median_range([value_range(row, key, True) for row in senders])\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_ceiling_is_the_median_of_the_unrounded_rates ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-cpu-sum-of-rounded-cells",
+      "breaks": "The CPU split's medians and their sum are worked out from the shares as the table rounds them, not from the records' unrounded shares",
+      "check": "test_udp_report.py test_the_cpu_split_sums_the_unrounded_shares",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "            ranges = [value_range(row, key) for row in runs if row[key] is not None]\n",
+          "new": "            ranges = [value_range(row, key, True) for row in runs if row[key] is not None]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_cpu_split_sums_the_unrounded_shares ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-driver-ceiling-rounded-first",
+      "breaks": "The driver's ceiling rounds each sender run's rate to whole messages/s before it takes the median",
+      "check": "test_udp_driver.py test_the_ceiling_and_its_cap",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "first, as the results file shows it.\"\"\"\n    return statistics.median(values)\n",
+          "new": "first, as the results file shows it.\"\"\"\n    return int(round(statistics.median([round(value) for value in values])))\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_ceiling_and_its_cap ",
         "exit": 1
       }
     }

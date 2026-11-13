@@ -461,6 +461,59 @@ class UdpReportTest(unittest.TestCase):
         self.assertIn("ceiling-differs", self.codes(edit_cell(text, run, "Achieved msgs/s",
                                                               "2,000,000")))
 
+    def test_the_ceiling_is_the_median_of_the_unrounded_rates(self):
+        # The rows print 1,000,000 twice and 1,000,001 twice, whose median rounds to 1,000,000;
+        # the unrounded rates' median is 1,000,000.9, so the ceiling is 1,000,001.
+        achieved = (1_000_000.4, 1_000_001.4, 1_000_000.4, 1_000_001.4)
+        name = "udp_ceiling_debian_12302019.md"
+        with scratch() as folder:
+            root = Path(folder)
+            text = self.render([ceiling_run(root / "ceiling", achieved=achieved)], name)[0]
+            # A bisection that ran at 0.9 x the ceiling its driver rounded first, 1,000,000.
+            bisect = bisect_run(root / "bisect", ceiling=1_000_000, thresholds={"S3": 2_000_000})
+            ran = self.render([ceiling_run(root / "ceiling", achieved=achieved), bisect])[0]
+        self.assertIn("| Messages/s | 1,000,001 | 1,000,000 | 1,000,001 | 4 |", text)
+        self.assertIn("| Packets/s | 25,000 | 25,000 | 25,000 | 4 |", text)
+        self.assertIn("- The cap: 900,000 msg/s, 0.9 × the median.", text)
+        fields = udp_report.check_results.parse_header(text)
+        self.assertEqual(fields["sender_ceiling"],
+                         "1,000,001 msg/s, the median of the sender rows below")
+        self.assertEqual(fields["rate_cap"], "900,000 msg/s, 0.9 × the sender's ceiling")
+        self.assertEqual(udp_report.check_published(text, name), [])
+        fields = udp_report.check_results.parse_header(ran)
+        self.assertEqual(fields["sender_ceiling"],
+                         "1,000,001 msg/s, the median of the sender rows below")
+        self.assertEqual(fields["rate_cap"], "900,000 msg/s, what the trials ran at: 0.9 × "
+                                             "1,000,000 msg/s, the sender's ceiling as the "
+                                             "driver worked it out when they ran, rounded down")
+        self.assertEqual(udp_report.check_published(ran, NAME), [])
+        self.assertIn("ceiling-differs", self.codes(ran.replace("0.9 × 1,000,000 msg/s",
+                                                                "0.9 × 1,000,010 msg/s")))
+        self.assertIn("above-ceiling", self.codes(ran.replace("- rate_cap: 900,000",
+                                                              "- rate_cap: 900,001")))
+
+    def test_the_cpu_split_sums_the_unrounded_shares(self):
+        # Sender 0.8008 s of 2 s, 40.04%; receiver 0.6008 s, 30.04%; softirq 30.0% and 1.0%.
+        # Each cell prints a hundredth low, so the cells sum to 101.0; the shares to 101.08.
+        with scratch() as folder:
+            root = Path(folder)
+            run = Written(root / "latency", manifest(
+                "latency", "P-0702-20261111T120000Z",
+                ceiling={"messages_per_s": 3_000_000, "source": "run P-0700-20261111T090000Z"},
+                rate_cap=2_700_000))
+            for repetition in (1, 2, 3):
+                record = receive_record("S3", 500_000)
+                record["cpu"]["sender"]["user_us"] = 300_800
+                record["cpu"]["receiver"]["user_us"] = 200_800
+                run.add("S3", "cpu", record, target=500_000, repetition=repetition)
+            name = "udp_latency_debian_12302019.md"
+            text = self.render([smoke_run(root / "smoke"), run.save()], name)[0]
+        cpu = udp_report.check_results.section(text, "CPU split at the common rate")
+        self.assertIn("| S3 | 500,000 | 40.0 | 30.0 | – | 30.0 | 1.0 | 101.1 |  |", cpu)
+        self.assertEqual(udp_report.check_published(text, name), [])
+        self.assertIn("derived-differs", self.codes(text.replace("| 101.1 |", "| 101.3 |"),
+                                                    name))
+
     def test_check_refuses_anything_private(self):
         text = self.bisect_text()
         planted = "/" + "home" + "/someone/raw"  # In two pieces, so that the gate passes.

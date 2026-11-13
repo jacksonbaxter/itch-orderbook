@@ -150,9 +150,11 @@ class BisectionTest(unittest.TestCase):
         self.assertIsNone(udp_driver.best_mode({"S1": {"result": "below", "rate": 1}}))
 
     def test_the_ceiling_and_its_cap(self):
-        self.assertEqual(udp_driver.ceiling_of([3_000_000.4, 2_999_999.6, 1.0]), 3_000_000)
-        self.assertEqual(udp_driver.ceiling_of([10.4, 11.4]), 10)
+        # The median of the unrounded rates: rounding each first would give 3,000,000 and 10.
+        self.assertEqual(udp_driver.ceiling_of([3_000_000.4, 2_999_999.6, 1.0]), 2_999_999.6)
+        self.assertEqual(udp_driver.ceiling_of([10.25, 11.5]), 10.875)
         self.assertEqual(udp_driver.cap_of(3_000_001), 2_700_000)
+        self.assertEqual(udp_driver.cap_of(2_999_999.6), 2_699_999)
         self.assertEqual(udp_driver.frames_for(2_547_190, 60, 50_000_000), 50_000_000)
         self.assertEqual(udp_driver.frames_for(1_000, 60, 50_000_000), 60_000)
 
@@ -458,11 +460,12 @@ class ProcessTest(unittest.TestCase):
             with Environment(FAKE_CEILING=3_100_000.4):
                 run = udp_driver.Run(args, "P-0700-20261111T090000Z", "0123456789ab (clean)")
                 udp_driver.step_ceiling(run)
-            self.assertEqual(run.manifest["ceiling"]["messages_per_s"], 3_100_000)
+            self.assertEqual(run.manifest["ceiling"]["messages_per_s"], 3_100_000.4)
             self.assertEqual(run.manifest["ceiling"]["runs"], 3)
             self.assertEqual([p["mode"] for p in run.manifest["processes"]], ["sender"] * 3)
             later = arguments(folder, ceiling=None, ceiling_from=run.dir)
-            self.assertEqual(udp_driver.given_ceiling(later)["messages_per_s"], 3_100_000)
+            self.assertEqual(udp_driver.given_ceiling(later)["messages_per_s"], 3_100_000.4)
+            self.assertEqual(udp_driver.cap_of(3_100_000.4), 2_790_000)
             with self.assertRaises(udp_driver.Refused):
                 udp_driver.given_ceiling(arguments(folder, ceiling=None))
 

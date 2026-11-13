@@ -336,3 +336,5 @@ One row for every run of `scripts/bench_driver.py`, failed ones included. Rows a
 | P-0903-20261112T172808Z | P-0903 | 1843ac9d69ec (exported by debian_sync.sh) | Linux | recorded: udp bisect, 72 processes, each under measure.sh taskset, the machine checks before and after in the manifest; for scripts/udp_report.py |
 | P-0903-20261112T165458Z_report | P-0903 | 1843ac9d69ec (exported by debian_sync.sh) | Linux | published: sender ceiling 270,232 msg/s |
 | P-0903-20261112T172808Z_report | P-0903 | 1843ac9d69ec (exported by debian_sync.sh) | Linux | published: sender ceiling 270,232 msg/s; U2 at least 218,244, sender limited against S3 at least 220,621, sender limited msg/s; no T-URING-2 verdict at 72 bytes a datagram |
+| P-0903-20261112T165458Z_report | P-0903 | 1843ac9d69ec (exported by debian_sync.sh) | Linux | published: sender ceiling 270,231 msg/s |
+| P-0903-20261112T172808Z_report | P-0903 | 1843ac9d69ec (exported by debian_sync.sh) | Linux | published: sender ceiling 270,231 msg/s; U2 at least 218,244, sender limited against S3 at least 220,621, sender limited msg/s; no T-URING-2 verdict at 72 bytes a datagram |

@@ -162,14 +162,14 @@ def trial_lossless(record, target):
 
 
 def ceiling_of(values):
-    """The sender's ceiling: the median of the runs' achieved rates, each rounded to whole
-    messages/s, as the results file shows them."""
-    return int(round(statistics.median([round(value) for value in values])))
+    """The sender's ceiling: the median of the runs' achieved rates, unrounded. Before
+    2026-11-13 each rate was rounded to whole messages/s first, as the results file shows it."""
+    return statistics.median(values)
 
 
 def cap_of(ceiling):
     """The highest rate a trial may run at: 0.9 x the sender's ceiling, rounded down."""
-    return ceiling * 9 // 10
+    return int(ceiling * 9 // 10)
 
 
 def frames_for(rate, seconds, frames_cap):
