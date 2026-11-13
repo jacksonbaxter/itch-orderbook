@@ -678,6 +678,50 @@
         "signature": "FAIL: test_no_row_carries_the_maps_path_or_a_name",
         "exit": 1
       }
+    },
+    {
+      "id": "parse-bar-day-not-named",
+      "breaks": "A file measured on 10302019 gives T-PARSE-1 and T-PARSE-2's bars without their own day, 12302019, as if met or missed on the day measured",
+      "check": "test_parse_driver.py Figures.test_t_parse_3_is_judged_on_its_own_day",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "        if \"{day}\" in check_results.PARSE_BENCHMARKS[target] or BAR_DAY[target] != day:\n",
+          "new": "        if \"{day}\" in check_results.PARSE_BENCHMARKS[target]:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Figures.test_t_parse_3_is_judged_on_its_own_day"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_parse_3_is_judged_on_its_own_day",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-own-day-said-absent",
+      "breaks": "A file measured on Lunary's own day, 10302019, still says that day is not on this host",
+      "check": "test_parse_driver.py Figures.test_t_parse_3_is_judged_on_its_own_day",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    if BAR_DAY[\"T-PARSE-3\"] == day:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Figures.test_t_parse_3_is_judged_on_its_own_day"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_parse_3_is_judged_on_its_own_day",
+        "exit": 1
+      }
     }
   ]
 }

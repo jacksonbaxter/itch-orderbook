@@ -154,6 +154,49 @@ class Figures(unittest.TestCase):
         text = rendered()
         self.assertIn("compared under Caveats", text)
 
+    def test_t_parse_3_is_judged_on_its_own_day(self):
+        # 10302019, Lunary's day: its manifest counts, the same made-up seconds.
+        messages, size = 293_989_079, 9_035_016_843
+        ten = (6 + 8_887 + 127_214_649 + 1_423_908 + 7_316_703 + 129_729 + 3_568_735 +
+               123_296_742 + 25_513_651 + 1_525_363)
+        records = []
+        for index in (1, 2, 3):
+            day = record(index)
+            day["header"]["dataset"] = "10302019.NASDAQ_ITCH50"
+            day["bytes"] = size
+            day["reference"].update(frames=messages, messages=messages, decode_types=ten,
+                                    consumed=size)
+            for totals_of in [*day["warmup"].values(), *(p["totals"] for p in day["passes"])]:
+                totals_of.update(messages=messages, stopped_at=size)
+                if totals_of["decoded"]:
+                    totals_of["decoded"] = ten if totals_of["decoded"] == TEN else messages
+            records.append(day)
+        text = rendered(records)
+        self.assertEqual(check_results.check_text(text), [])
+        targets = rows(text, "Targets")
+        # 293,989,079 messages and 9,035,016,843 bytes over the strict pass's median 4.07 s:
+        # 72.23 M msg/s and 2.220 GB/s, judged on the bar's own day, with no other day named.
+        self.assertIn("| T-PARSE-3 | ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | 72.23 M msg/s, "
+                      "2.220 GB/s, the median | missed: 21.67 M msg/s and 0.67 GB/s under the "
+                      "bar |", targets)
+        off = ("; measured on 10302019, not the bar's 12302019, on which it is judged, in "
+               "results/parse_rate_debian_12302019.md: the two days are compared under Caveats |")
+        for target, bar in (("T-PARSE-1", "≥ 709 M msg/s and 21.8 GB/s, on 12302019"),
+                            ("T-PARSE-2", "≥ 199 M msg/s and 6.1 GB/s, on 12302019")):
+            line = next(line for line in targets if line.startswith(f"| {target} |"))
+            self.assertTrue(line.startswith(f"| {target} | {bar} |"), line)
+            self.assertTrue(line.endswith(off), line)
+        caveats = rows(text, "Caveats")
+        self.assertIn("| | 12302019, the bar's day | 10302019, measured |", caveats)
+        self.assertIn("| Bytes a message | 30.704 | 30.732 |", caveats)
+        self.assertTrue(any(line.endswith("Lunary's bar is on 10302019, the day measured here.")
+                            for line in caveats))
+        self.assertIn("- T-PARSE-1 and T-PARSE-2's bars were set on 12302019, itch-book's day, on "
+                      "which it is judged, in results/parse_rate_debian_12302019.md; this file "
+                      "gives their passes on 10302019 beside it; the days' sizes and each type's "
+                      "share of their messages, from scripts/data_manifest.json:", caveats)
+        self.assertNotIn("not on this host", text)
+
     def test_the_header_says_what_was_counted(self):
         fields = check_results.parse_header(rendered())
         self.assertEqual(fields["bytes"], "8,251,407,909, the whole file, length prefixes included")

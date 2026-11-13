@@ -94,7 +94,12 @@ PASSES = (
     ("strict", "T-PARSE-3", "the strict decode of every field", 93.9, 2.89),
 )
 TEN_TYPES = "SRAFECXDUP"
-BAR_DAY = {"T-PARSE-3": "10302019"}  # A bar set on another day than the one measured.
+# The day each bar was set on (BENCHMARKS.md): itch-book's two on 12302019, Lunary's on 10302019.
+BAR_DAY = {"T-PARSE-1": "12302019", "T-PARSE-2": "12302019", "T-PARSE-3": "10302019"}
+# What a file measured on another day says of a bar's own day: 10302019's words are the ones
+# results/parse_rate_debian_12302019.md was written with, when 10302019 was not on debian.
+OFF_DAY = {"10302019": "which is not on this host",
+           "12302019": "on which it is judged, in results/parse_rate_debian_12302019.md"}
 PARSE_FIELD = "parse_passes"
 PASS_ROW = re.compile(r"^\| (\d+) \| (\d+) \| (framing|decode|strict) \| ([\d.]+) \| ([\d,]+) \| "
                       r"[\d,]+ \| [\d.]+ \| ([\d,]+) \|$")
@@ -141,8 +146,8 @@ def verdict(target, msgs_median, gbs_median, bar_msgs, bar_gbs, day):
     text = "met" if not short else f"missed: {' and '.join(short)} under the bar"
     other = BAR_DAY.get(target)
     if other and other != day:
-        text += (f"; measured on {day}, not the bar's {other}, which is not on this host: the "
-                 "two days are compared under Caveats")
+        text += (f"; measured on {day}, not the bar's {other}, {OFF_DAY[other]}: the two days "
+                 "are compared under Caveats")
     return text
 
 
@@ -567,7 +572,8 @@ def target_rows(passes, file_bytes, day):
         msgs = statistics.median(found[name]["msgs"])
         gbs = statistics.median(found[name]["gbs"])
         bar = f"≥ {bar_msgs:g} M msg/s and {bar_gbs:g} GB/s"
-        if target in BAR_DAY:
+        # A bar names its day where BENCHMARKS.md's words do, or where it is not the day measured.
+        if "{day}" in check_results.PARSE_BENCHMARKS[target] or BAR_DAY[target] != day:
             bar += f", on {BAR_DAY[target]}"
         rows.append(f"| {target} | {bar} | {msgs / MEGA:,.2f} M msg/s, {gbs:.3f} GB/s, the "
                     f"median | {verdict(target, msgs, gbs, bar_msgs, bar_gbs, day)} |")
@@ -626,7 +632,14 @@ def caveat_lines(day, loops):
              "itch-book does, reads a copy into anonymous memory before the warm-up, and every "
              "page of it was found resident before and after each timed pass; bench_parse "
              "counts no page faults. Lunary's bar is on "
-             f"{BAR_DAY['T-PARSE-3']}, which is not on this host"]
+             f"{BAR_DAY['T-PARSE-3']}, {OFF_DAY[BAR_DAY['T-PARSE-3']]}"]
+    if BAR_DAY["T-PARSE-3"] == day:
+        itch_book = BAR_DAY["T-PARSE-1"]
+        lines[-1] = (f"{lines[-1].rsplit(' Lunary', 1)[0]} Lunary's bar is on {day}, the day "
+                     "measured here.")
+        lines.append(f"- T-PARSE-1 and T-PARSE-2's bars were set on {itch_book}, itch-book's "
+                     f"day, {OFF_DAY[itch_book]}; this file gives their passes on {day} beside "
+                     "it")
     table = caveat_rows(day)
     if table:
         lines[-1] += ("; the days' sizes and each type's share of their messages, from "
