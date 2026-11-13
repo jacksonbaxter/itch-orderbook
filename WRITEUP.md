@@ -196,6 +196,8 @@ The ring has free-running indices, a cached copy of the other side's index, a ma
 
 No counters were read on the queue runs, so why this ring is slower here, and why the techniques are worth so much less, is not established.
 
+The queue files also give one-way latencies of paced and burst sends, and this write-up quotes none of them. Each is measured from the push, not from the time the message was due, so a send held back behind a slow push has its wait in no latency figure, which favours a queue with slow pushes. No latency from the due time was measured: it needs the due time carried in each item, a change to the benchmark's measured code that no run has had (BENCHMARKS.md, "What the paced and burst latencies measure").
+
 Inside the replay the ring does its job. With the parser on one core and the book on another, the day takes 0.954 of the single-threaded time against a bar of at most 1.31, so T-SPSC-3 is met; the single-threaded runs varied with a CV of 6.25%, so the saving is small beside the noise ([results/spsc_pipeline_debian_12302019.md](results/spsc_pipeline_debian_12302019.md)).
 
 ### UDP receive: sockets against io_uring

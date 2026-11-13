@@ -799,7 +799,11 @@ def generate(root):
                       "table: a ratio of two of its medians, or for T-SPSC-3 the median of paired "
                       "ratios, against BENCHMARKS.md's bar. Every bar was set on x86, so a macOS "
                       "row says the host differs, and an unpinned Mac's cross-core figures are "
-                      "weak evidence.", ""]
+                      "weak evidence. The files' paced and burst latencies, which no row here "
+                      "uses, are measured from the push, not from the time each message was due; "
+                      "no latency from the due time is measured, since that needs the due time "
+                      "carried in each item, a change to measured code that no run has had "
+                      "(BENCHMARKS.md, \"What the paced and burst latencies measure\").", ""]
         lines += markdown_table(("Target", "Comparison", "Day", "Host", "Pinning", "Measured",
                                  "Bar", "Verdict", "Commit", "File"), spsc)
     if turing1:
