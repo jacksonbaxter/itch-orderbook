@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Black-box tests of what three tools accept and count, apart from their own runs.
 
-Usage: test_tools_cli.py <itch_alloc> <oracle fixtures dir>
+Usage: test_tools_cli.py <itch_alloc> <itch_as_tables> <oracle fixtures dir>
 
 itch_alloc's runs are tested in test_oracle_cli.py; this holds its capacities: --max-orders
-and --max-levels of 0 or past 32 bits are bad usage on every book it can run. A failure
-prints `tools cli: FAIL <case>: <reason>`.
+and --max-levels of 0 or past 32 bits are bad usage on every book it can run.
+itch_as_tables's tables are held by scripts/as_tables_report.py check; this holds its numbers:
+each is all of its argument, and γ is above 0 and finite. A failure prints
+`tools cli: FAIL <case>: <reason>`.
 """
 
 import subprocess
@@ -32,10 +34,33 @@ def alloc_failures(alloc, session):
     return failures
 
 
+def as_tables_failures(as_tables):
+    """stoi and stod read "5abc" as 5 and "0.1x" as 0.1, stoull "-1" as 2^64 - 1, and γ of 0,
+    below it or not finite gave NaN quotes."""
+    failures = []
+    for name, args in (("trailing paths", ["--paths", "5abc"]),
+                       ("trailing gamma", ["--paths", "5", "--gamma", "0.1x"]),
+                       ("trailing seed", ["--paths", "5", "--seed", "7x"]),
+                       ("negative seed", ["--paths", "5", "--seed", "-1"]),
+                       ("paths past int", ["--paths", "99999999999"]),
+                       ("one path", ["--paths", "1"])) + tuple(
+            (f"gamma {value}", ["--paths", "5", "--gamma", value])
+            for value in ("0", "-1", "nan", "inf", "1e12")):
+        done = subprocess.run([as_tables, *args], capture_output=True, text=True, check=False)
+        if done.returncode != 2 or "nan" in done.stdout:
+            failures.append(f"as_tables {name}: exit {done.returncode}, wanted 2")
+    done = subprocess.run([as_tables, "--paths", "5", "--seed", "7", "--gamma", "0.1"],
+                          capture_output=True, text=True, check=False)
+    if done.returncode != 0 or "as_tables paths 5 seed 7 " not in done.stdout \
+            or "table gamma 0.1" not in done.stdout or "nan" in done.stdout:
+        failures.append(f"as_tables good numbers: exit {done.returncode}: {done.stdout}")
+    return failures
+
+
 def main():
-    alloc, oracle_fixtures = sys.argv[1:3]
+    alloc, as_tables, oracle_fixtures = sys.argv[1:4]
     session = Path(oracle_fixtures) / "session.itch"
-    failures = alloc_failures(alloc, session)
+    failures = alloc_failures(alloc, session) + as_tables_failures(as_tables)
     for failure in failures:
         print(f"tools cli: FAIL {failure}")
     if failures:

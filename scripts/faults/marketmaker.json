@@ -1825,6 +1825,128 @@
         "signature": "calibrate cli: FAIL cut: exit",
         "exit": 1
       }
+    },
+    {
+      "id": "mm-as-tables-trailing-characters-read",
+      "breaks": "itch_as_tables reads the number at the front of an argument and ignores the rest, as stoi did",
+      "check": "test_tools_cli, itch_as_tables's numbers",
+      "mutations": [
+        {
+          "file": "tools/itch_as_tables.cpp",
+          "old": "  return error == std::errc{} && end == text.data() + text.size();\n",
+          "new": "  return error == std::errc{};\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_alloc",
+          "itch_as_tables"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_tools_cli.py",
+        "{build}/tools/itch_alloc",
+        "{build}/tools/itch_as_tables",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "tools cli: FAIL as_tables trailing gamma: exit 0, wanted 2",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-as-tables-gamma-not-positive",
+      "breaks": "itch_as_tables takes a gamma of 0, below 0 or not finite, which gives NaN quotes",
+      "check": "test_tools_cli, itch_as_tables's numbers",
+      "mutations": [
+        {
+          "file": "tools/itch_as_tables.cpp",
+          "old": "  if (!parse_number(text, gamma) || !(gamma > 0.0 && gamma < 1e12)) {\n",
+          "new": "  if (!parse_number(text, gamma)) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_alloc",
+          "itch_as_tables"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_tools_cli.py",
+        "{build}/tools/itch_alloc",
+        "{build}/tools/itch_as_tables",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "tools cli: FAIL as_tables gamma 0: exit 0, wanted 2",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-trailing-characters-read",
+      "breaks": "itch_calibrate reads the number at the front of an argument and ignores the rest, as stoll did",
+      "check": "test_calibrate_cli, trailing characters",
+      "mutations": [
+        {
+          "file": "tools/itch_calibrate.cpp",
+          "old": "  return error == std::errc{} && end == text.data() + text.size() && out != 0 && out <= most;\n",
+          "new": "  return error == std::errc{} && out != 0 && out <= most;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL trailing characters: exit 0, not 2",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-clock-past-nanoseconds",
+      "breaks": "itch_calibrate takes a clock whose milliseconds overflow a count of nanoseconds",
+      "check": "test_calibrate_cli, past nanoseconds",
+      "mutations": [
+        {
+          "file": "tools/itch_calibrate.cpp",
+          "old": "constexpr std::uint64_t kMostMillis = UINT64_MAX / kNanosPerMilli;\n",
+          "new": "constexpr std::uint64_t kMostMillis = UINT64_MAX;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL past nanoseconds: exit 0, not 2",
+        "exit": 1
+      }
     }
   ]
 }

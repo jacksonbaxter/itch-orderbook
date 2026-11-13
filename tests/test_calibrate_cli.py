@@ -229,6 +229,20 @@ def main():
         if done.returncode != 2:
             failures.append((name, f"exit {done.returncode}, not 2"))
 
+    # Numbers are all of their argument and inside their bounds: stoll read "5abc" as 5, and a
+    # clock past what nanoseconds hold wrapped.
+    for name, flag, value in (("trailing characters", "--interval-ms", "5abc"),
+                              ("negative", "--interval-ms", "-5"),
+                              ("a fraction", "--tick", "1.5"),
+                              ("past nanoseconds", "--sample-ms", "18446744073710"),
+                              ("trailing depth", "--max-depth-ticks", "20x")):
+        done = run(good, "--symbols", "AAA", flag, value)
+        if done.returncode != 2:
+            failures.append((name, f"exit {done.returncode}, not 2"))
+    done = run(good, "--symbols", "AAA", "--sample-ms", "18446744073709")
+    if done.returncode != 0:
+        failures.append(("largest clock", f"exit {done.returncode}, not 0"))
+
     # The day after a frame of a type the spec does not define, cut inside its last frame: the
     # replay would end it like a whole day, so the framing check refuses it before the run.
     cut = scratch / "cut.itch"

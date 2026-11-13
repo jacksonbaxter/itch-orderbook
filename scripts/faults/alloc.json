@@ -630,7 +630,8 @@
    "build": {
     "preset": "release",
     "targets": [
-     "itch_alloc"
+     "itch_alloc",
+     "itch_as_tables"
     ]
    },
    "command": [
@@ -638,6 +639,7 @@
     "-B",
     "{tree}/tests/test_tools_cli.py",
     "{build}/tools/itch_alloc",
+    "{build}/tools/itch_as_tables",
     "{tree}/tests/fixtures/oracle"
    ],
    "expect": {
@@ -659,7 +661,8 @@
    "build": {
     "preset": "release",
     "targets": [
-     "itch_alloc"
+     "itch_alloc",
+     "itch_as_tables"
     ]
    },
    "command": [
@@ -667,6 +670,7 @@
     "-B",
     "{tree}/tests/test_tools_cli.py",
     "{build}/tools/itch_alloc",
+    "{build}/tools/itch_as_tables",
     "{tree}/tests/fixtures/oracle"
    ],
    "expect": {

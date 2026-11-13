@@ -4,6 +4,10 @@
 //     itch_calibrate FILE --symbols SYM[,SYM...] [--interval-ms N] [--sample-ms N]
 //                    [--tick N] [--max-depth-ticks N]
 //
+// Each N is a whole number above 0, all of its argument, and at most its bound: for the two
+// clocks the most milliseconds a count of nanoseconds holds, 1,000,000 for --tick and 10,000
+// for --max-depth-ticks.
+//
 // --interval-ms   Δ, the interval for A and k (default 100, as MK-21).
 // --sample-ms     S, the clock for σ (default 1000).
 // --tick          τ in Price4 (default 100, one cent).
@@ -17,6 +21,7 @@
 // is not in the day's directory or the file's framing did not end on a frame boundary
 // (tools/framing.hpp), 2 bad usage or an unreadable file.
 #include <algorithm>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -28,6 +33,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include "framing.hpp"
@@ -43,6 +49,8 @@ using itch::mm::CalibrationSettings;
 using itch::mm::Calibrator;
 
 constexpr std::uint64_t kNanosPerMilli = 1'000'000;
+// The most milliseconds that still fit a count of nanoseconds.
+constexpr std::uint64_t kMostMillis = UINT64_MAX / kNanosPerMilli;
 
 [[nodiscard]] std::string name_of(const itch::Stock& stock) {
   std::string name{stock.begin(), stock.end()};
@@ -88,13 +96,10 @@ void print(const Calibrator& c, const CalibrationSettings& settings) {
   }
 }
 
-[[nodiscard]] bool positive(const std::string& text, std::uint64_t& out) {
-  const long long value = std::stoll(text);
-  if (value <= 0) {
-    return false;
-  }
-  out = static_cast<std::uint64_t>(value);
-  return true;
+// A whole number from 1 to most, all of text.
+[[nodiscard]] bool positive(std::string_view text, std::uint64_t most, std::uint64_t& out) {
+  const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), out);
+  return error == std::errc{} && end == text.data() + text.size() && out != 0 && out <= most;
 }
 
 // The comma-separated list, each name one to eight characters.
@@ -126,14 +131,13 @@ struct Usage {
     std::uint64_t value = 0;
     if (arg == "--symbols" && has_value) {
       valid = split_symbols(args[++i], usage.symbols);
-    } else if (arg == "--interval-ms" && has_value && positive(args[++i], value)) {
+    } else if (arg == "--interval-ms" && has_value && positive(args[++i], kMostMillis, value)) {
       usage.settings.interval = value * kNanosPerMilli;
-    } else if (arg == "--sample-ms" && has_value && positive(args[++i], value)) {
+    } else if (arg == "--sample-ms" && has_value && positive(args[++i], kMostMillis, value)) {
       usage.settings.sample = value * kNanosPerMilli;
-    } else if (arg == "--tick" && has_value && positive(args[++i], value) && value <= 1'000'000) {
+    } else if (arg == "--tick" && has_value && positive(args[++i], 1'000'000, value)) {
       usage.settings.tick = static_cast<itch::Price4>(value);
-    } else if (arg == "--max-depth-ticks" && has_value && positive(args[++i], value) &&
-               value <= 10'000) {
+    } else if (arg == "--max-depth-ticks" && has_value && positive(args[++i], 10'000, value)) {
       usage.settings.max_depth_ticks = static_cast<std::int64_t>(value);
     } else if (!arg.starts_with("--") && usage.path == nullptr) {
       usage.path = args[i];
