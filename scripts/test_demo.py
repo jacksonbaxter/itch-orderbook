@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import demo  # noqa: E402
 import run_record  # noqa: E402
+import test_driver_records  # noqa: E402
 import wasm_bench  # noqa: E402
 import wasm_report  # noqa: E402
 
@@ -245,7 +246,7 @@ class Bench(Scratch):
         self.assertEqual(folder.name, record["run_id"])
         needs = ("machine_check.txt", "native.sampler.txt")
         self.assertEqual(run_record.missing(folder, needs, record["run_id"]),
-                         ["measure.stderr, untouched"])
+                         test_driver_records.untold_tree_state() + ["measure.stderr, untouched"])
         kept = json.loads((folder / "run.json").read_text())
         probe = self.root / "probe"
         self.assertEqual(kept["binaries"], {str(bench): demo.sha256_of(bench),
@@ -258,7 +259,8 @@ class Bench(Scratch):
             "--browser", str(folder / "native.json"), "--browser-stderr", str(stderr),
             "--out", str(self.root / "out.md")])
         self.assertEqual(code, 1, output)
-        self.assertIn("lacks measure.stderr, untouched", output)
+        self.assertIn("measure.stderr, untouched", output)
+        self.assertIn("refused: Incomplete('the raw record", output)
 
     def test_a_foreign_process_withdraws_the_run(self):
         self.foreign = [(999_999, 1, 97.5, "build/fuzz/bin/some_fuzzer -max_total_time=300")]

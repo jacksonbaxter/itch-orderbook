@@ -622,6 +622,8 @@ class EndToEnd(unittest.TestCase):
             raw, _ = test_driver_records.assert_run_record(
                 self, root / "raw", published, (root / "bench.sh", machine / "fake_probe.sh"),
                 (bench_driver.MACHINE_CHECK, "sampler.txt"), machine / "input.bin")
+            test_driver_records.state_the_tree(
+                self, raw, lambda: spsc_driver.render_again(raw, published, STDERR))
             name, again = spsc_driver.render_again(raw, published, STDERR)
             self.assertEqual((name, again), (out.name, published))
             name, again = spsc_driver.render_again(raw, published, STDERR, "a reason")

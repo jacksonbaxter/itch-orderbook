@@ -679,6 +679,29 @@ def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def untold_tree_state():
+    """[] where the tests run in a checkout, or the gap run_record.missing() names where they
+    run in a copy with no git and no COMMIT file, such as the fault matrix's, whose drivers
+    cannot say whether the tree was clean."""
+    commit = bench_driver.git_commit(bench_driver.REPO_ROOT, True)
+    return [] if commit.endswith(("(clean)", "(with uncommitted changes)",
+                                  "(exported by debian_sync.sh)")) else \
+        ["whether the tree was clean"]
+
+
+def state_the_tree(test, folder, render):
+    """Where untold_tree_state() is not empty, shows the render refusing the record for it,
+    then gives the record a tree state so that the rest of the test can run."""
+    if not untold_tree_state():
+        return
+    with test.assertRaisesRegex(run_record.Incomplete, "whether the tree was clean"):
+        render()
+    path = Path(folder) / run_record.RECORD_NAME
+    kept = json.loads(path.read_text(encoding="utf-8"))
+    kept["commit"] = "000000000000 (exported by debian_sync.sh)"
+    path.write_text(json.dumps(kept, indent=1) + "\n", encoding="utf-8")
+
+
 def assert_run_record(test, parent, results_text, binaries, needs, dataset=None):
     """The run's raw folder holds the record of the new kind (gate item 8): named by the run
     id, with its commit and tree state, each binary's hash, the dataset hashed, and each tool
@@ -689,18 +712,22 @@ def assert_run_record(test, parent, results_text, binaries, needs, dataset=None)
     record = json.loads((folder / "run.json").read_text(encoding="utf-8"))
     test.assertEqual(record["version"], run_record.RECORD_VERSION)
     test.assertEqual(record["run_id"], run_id)
-    test.assertRegex(record["commit"], r"^[0-9a-f]{12} \((clean|with uncommitted changes)\)$")
+    # As the driver read it from the tree it ran in: in a copy with no git and no COMMIT file,
+    # such as the fault matrix's, it is unavailable, and the record lacks the tree state.
+    test.assertEqual(record["commit"], bench_driver.git_commit(bench_driver.REPO_ROOT, True))
+    untold = untold_tree_state()
     test.assertEqual(record["binaries"], {str(path): sha256(path) for path in binaries})
     if dataset is not None:
         test.assertEqual(record["dataset"]["name"], Path(dataset).name)
         test.assertEqual(record["dataset"]["sha256"], sha256(dataset))
     for name in needs:
         test.assertIn(name, record["outputs"])
-    test.assertEqual(run_record.missing(folder, needs, run_id), ["measure.stderr, untouched"])
+    test.assertEqual(run_record.missing(folder, needs, run_id),
+                     untold + ["measure.stderr, untouched"])
     stderr = Path(parent).parent / "measure.stderr"
     stderr.write_text(STDERR, encoding="utf-8")
     run_record.add_measure_stderr(folder, run_id, stderr)
-    test.assertEqual(run_record.missing(folder, needs, run_id), [])
+    test.assertEqual(run_record.missing(folder, needs, run_id), untold)
     return folder, record
 
 

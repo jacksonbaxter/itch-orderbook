@@ -517,13 +517,23 @@ class ProcessTest(unittest.TestCase):
                     "--measure", str(folder / "measure.sh"), "--repetitions", "3",
                     "--run-log", str(folder / "run_log.md"), "--allow-dirty"]
             system, check = udp_driver.platform.system, udp_driver.machine_checks
+            run = udp_driver.subprocess.run
+
+            def on_record(words, **kwargs):
+                # The prediction on record, in a tree with or without results/, such as the
+                # fault matrix's copy; every other process runs.
+                if any(str(word).endswith("check_predictions.py") for word in words):
+                    return udp_driver.subprocess.CompletedProcess(words, 0, "", "")
+                return run(words, **kwargs)
             udp_driver.platform.system = lambda: "Linux"
             udp_driver.machine_checks = lambda args: ("machine_check: passed", [[4, 5], [6, 7]])
+            udp_driver.subprocess.run = on_record
             try:
                 with Environment(FAKE_SENDER_FAIL="0002"):
                     code = udp_driver.main(argv)
             finally:
                 udp_driver.platform.system, udp_driver.machine_checks = system, check
+                udp_driver.subprocess.run = run
             log = (folder / "run_log.md").read_text(encoding="utf-8")
             manifest = json.loads(next((folder / "raw").glob("*/manifest.json")).read_text(
                 encoding="utf-8"))
