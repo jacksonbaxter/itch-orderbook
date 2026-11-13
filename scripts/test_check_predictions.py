@@ -3,6 +3,7 @@
 
 import contextlib
 import io
+import os
 import shutil
 import subprocess
 import sys
@@ -35,20 +36,35 @@ class History(unittest.TestCase):
         self.root = Path(self.directory.name)
         self.results = self.root / "results"
         self.results.mkdir()
+        # Every commit is a minute after the last, from 08:00 on the fixture run's day, so
+        # each comes before the fixture run, which began at 10:00:05.
+        self.clock = 1793433600
         self.git("init", "-q")
 
-    def git(self, *args):
-        subprocess.run(["git", "-C", str(self.root), "-c", "user.name=fixture",
-                        "-c", "user.email=fixture@example.org", "-c", "commit.gpgsign=false",
-                        *args], check=True, capture_output=True)
+    def git(self, *args, at=None):
+        when = {} if at is None else {"GIT_AUTHOR_DATE": f"@{at} +0000",
+                                       "GIT_COMMITTER_DATE": f"@{at} +0000"}
+        return subprocess.run(["git", "-C", str(self.root), "-c", "user.name=fixture",
+                               "-c", "user.email=fixture@example.org", "-c",
+                               "commit.gpgsign=false", *args], check=True, capture_output=True,
+                              text=True, env={**os.environ, **when}).stdout
 
     def copy(self, *names):
         for name in names:
             shutil.copy(FIXTURE / name, self.results / name)
 
-    def commit(self, *names):
+    def commit(self, *names, at=None):
+        """Commits the files, at the next minute of the clock or at the time given, and
+        returns the commit."""
+        self.clock += 60
         self.git("add", *[f"results/{name}" for name in names])
-        self.git("commit", "-q", "-m", "fixture")
+        self.git("commit", "-q", "--allow-empty", "-m", "fixture",
+                 at=self.clock if at is None else at)
+        return self.git("rev-parse", "HEAD").strip()
+
+    def result(self, *lines):
+        (self.results / "bench_fixture.md").write_text(
+            "# A fixture result\n\n" + "".join(f"{line}\n" for line in lines), encoding="utf-8")
 
     def in_order(self):
         self.copy("predictions.md")
@@ -254,6 +270,95 @@ class History(unittest.TestCase):
         self.commit("predictions.md")
         code, output = check(self.root, "--require", "P-0001")
         self.assertEqual(code, 0, output)
+
+    def test_a_prediction_after_the_tree_its_run_measured(self):
+        # r7-4: the run measured C0 and was logged; the prediction came after it, and the
+        # result after that. The file was still first committed after the prediction.
+        measured = self.commit()
+        self.copy("run_log.md")
+        self.commit("run_log.md")
+        self.copy("predictions.md")
+        self.commit("predictions.md")
+        self.result("- commit: " + measured[:12] + " (clean)", "- prediction: P-0001",
+                    "- run_id: P-0001-20261101T000000Z")
+        self.commit("bench_fixture.md")
+        code, output = check(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"FAIL prediction-after-run results/bench_fixture.md: ", output)
+        self.assertIn(f"is not in the tree the run measured, {measured[:12]}", output)
+
+    def test_a_prediction_in_the_tree_its_run_measured(self):
+        self.copy("predictions.md")
+        self.commit("predictions.md")
+        measured = self.commit()
+        self.copy("run_log.md")
+        self.result("- commit: " + measured[:12] + " (exported by debian_sync.sh)",
+                    "- prediction: P-0001", "- run_id: P-0001-20261031T100005Z")
+        self.commit("run_log.md", "bench_fixture.md")
+        code, output = check(self.root)
+        self.assertEqual(code, 0, output)
+
+    def test_a_measured_commit_the_history_does_not_hold(self):
+        self.in_order()
+        self.result("- commit: 0123456789ab (clean)", "- prediction: P-0001",
+                    "- run_id: P-0001-20261031T100005Z")
+        self.assert_fails("measured-commit-unknown")
+
+    def test_a_prediction_committed_after_its_run_began(self):
+        began = 1793440805  # 2026-10-31T10:00:05Z, the fixture run's start.
+        self.copy("predictions.md")
+        self.commit("predictions.md", at=began + 1)
+        self.copy("run_log.md", "bench_fixture.md")
+        self.commit("run_log.md", "bench_fixture.md", at=began + 60)
+        code, output = check(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("FAIL prediction-after-run results/bench_fixture.md: ", output)
+        self.assertIn("not before the run began, 20261031T100005Z", output)
+
+    def test_with_no_measured_commit_the_same_second_does_not_order_them(self):
+        began = 1793440805
+        self.copy("predictions.md")
+        self.commit("predictions.md", at=began)
+        self.copy("run_log.md", "bench_fixture.md")
+        self.commit("run_log.md", "bench_fixture.md", at=began + 60)
+        self.assert_fails("prediction-after-run")
+
+    def test_with_the_measured_commit_its_ancestry_orders_them(self):
+        began = 1793440805
+        self.copy("predictions.md")
+        measured = self.commit("predictions.md", at=began)
+        self.copy("run_log.md")
+        self.result("- commit: " + measured[:12] + " (clean)", "- prediction: P-0001",
+                    "- run_id: P-0001-20261031T100005Z")
+        self.commit("run_log.md", "bench_fixture.md", at=began + 60)
+        code, output = check(self.root)
+        self.assertEqual(code, 0, output)
+
+    def test_a_run_id_the_log_holds_only_as_words(self):
+        self.in_order()
+        self.result("- prediction: P-0001", "- run_id: published")
+        self.assert_fails("run-missing-from-log")
+        self.result("- prediction: P-0001", "- run_id: P-0001-20261031T10")
+        self.assert_fails("run-missing-from-log")
+
+    def test_a_result_that_places_its_run_nowhere(self):
+        self.in_order()
+        with open(self.results / "run_log.md", "a", encoding="utf-8") as log:
+            log.write("| P-0001-first | P-0001 | abc | Darwin | published |\n")
+        self.result("- prediction: P-0001", "- run_id: P-0001-first")
+        self.assert_fails("run-unplaced")
+
+    def test_no_git_says_the_history_was_not_checked(self):
+        self.copy("predictions.md", "run_log.md", "bench_fixture.md")
+        code, output = check(self.root, "--no-git")
+        self.assertEqual(code, 0, output)
+        self.assertIn("check_predictions: ok, history not checked: --no-git was given", output)
+        shutil.rmtree(self.root / ".git")
+        code, output = check(self.root)
+        self.assertEqual(code, 0, output)
+        self.assertIn(f"check_predictions: ok, history not checked: {self.root.resolve()} has no "
+                      ".git", output)
+        self.assertNotIn("check_predictions: ok\n", output)
 
     def test_no_git_still_needs_the_prediction_on_record(self):
         self.copy("predictions.md", "run_log.md", "bench_fixture.md")
