@@ -352,7 +352,7 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             text = out.read_text(encoding="utf-8")
             self.assertEqual({code for code, _ in check_results.check_text(text)},
-                             {"load-not-stamped"})
+                             {"load-not-stamped", "sampler-stand-in"})
             # The driver leaves the outcome to stamp_load.py (r5-3).
             self.assertIn("| written, pending the load stamp: ", log)
             self.assertNotIn("| published", log)
@@ -376,7 +376,7 @@ class EndToEnd(unittest.TestCase):
                           "saw a system process at 50.0% CPU", log)
             text = out.read_text(encoding="utf-8")
             self.assertEqual({code for code, _ in check_results.check_text(text)},
-                             {"load-not-stamped"})
+                             {"load-not-stamped", "sampler-stand-in"})
             self.assertIn("; 1 withdrawn under the rule", text)
             self.assertTrue((test_driver_records.run_folder_of(Path(directory) / "raw") /
                              "shadow-repetition-1-withdrawn-1.json").is_file())

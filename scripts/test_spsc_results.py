@@ -631,7 +631,7 @@ class EndToEnd(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 text = out.read_text(encoding="utf-8")
                 self.assertEqual({code for code, _ in check_results.check_text(text)},
-                                 {"load-not-stamped"})
+                                 {"load-not-stamped", "sampler-stand-in"})
                 # The driver leaves the outcome to stamp_load.py (r5-3).
                 self.assertIn("| written, pending the load stamp: ", log)
                 self.assertNotIn("| published", log)
@@ -648,7 +648,7 @@ class EndToEnd(unittest.TestCase):
             self.assertIn("| written, pending the load stamp: ", log)
             self.assertNotIn("| published", log)
             text = out.read_text(encoding="utf-8")
-            self.assertEqual(codes(text), {"load-not-stamped"})
+            self.assertEqual(codes(text), {"load-not-stamped", "sampler-stand-in"})
             self.assertIn("; 1 withdrawn under the rule", text)
             self.assertRegex(text, r"\| withdrawn 1 \| .* \| withdrawn: the CPU sampler saw "
                                    r"a system process at 50.0% CPU")

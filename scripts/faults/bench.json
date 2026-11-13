@@ -6635,6 +6635,90 @@
         "signature": "^FAIL: test_the_label_alone_marks_a_stub \\(",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-sampler-stand-in-unsaid",
+      "breaks": "A driver whose sampler read a test's stand-in for ps writes a Sampler section that does not say so",
+      "check": "test_driver_records.py test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    return f\"{rule} {STAND_IN_SAMPLER}\" if sampled.get(\"stand_in\") else rule\n",
+          "new": "    return rule\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not \\(",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-check-stand-in-unchecked",
+      "breaks": "check_results takes a file whose sampler read a stand-in for ps as a result",
+      "check": "test_driver_records.py test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if STAND_IN_SAMPLER in text:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not \\(",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-sampler-stand-in-unmarked",
+      "breaks": "The sampler given a stand-in for ps does not mark itself, so the file reads as the Mac's",
+      "check": "test_driver_records.py test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "        self.stand_in = ps != \"ps\"\n",
+          "new": "        self.stand_in = False\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not \\(",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-sampler-no-design-drops-processes",
+      "breaks": "A run given no --design keeps none of its sampled processes in its file, so the Mac's rule refuses it",
+      "check": "test_driver_records.py test_a_run_of_no_design_keeps_every_process_it_sampled",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    return of_design(design if args.design else \"\")\n",
+          "new": "    return of_design(design)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_run_of_no_design_keeps_every_process_it_sampled \\(",
+        "exit": 1
+      }
     }
   ]
 }

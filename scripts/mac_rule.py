@@ -106,7 +106,8 @@ def interference_line(sampled, mine=lambda what: True):
 def sampler_section(sampled, mine=lambda what: True):
     """The Sampler section: the rule, then each process the file publishes and each one
     withdrawn, of those mine() picks."""
-    lines = ["## Sampler", "", check_results.DRIVER_SAMPLER_RULE, "",
+    rule = check_results.sampler_rule(check_results.DRIVER_SAMPLER_RULE, sampled)
+    lines = ["## Sampler", "", rule, "",
              "| Process | Started | Finished | Outcome |", "|---|---|---|---|"]
     for what, begin, end, said in sampled["published"]:
         if mine(what):

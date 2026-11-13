@@ -173,6 +173,8 @@ class Sampler(wasm_bench.Sampler):
         super().__init__(path)
         self.ps = ps
         self.every = every
+        # A test's stand-in for `ps` (--ps): the file says so (check_results.STAND_IN_SAMPLER).
+        self.stand_in = ps != "ps"
 
     def sample(self):
         try:
@@ -688,7 +690,8 @@ def pipeline_sections(records):
 
 def sampler_sections(sampled):
     """Every repetition's span and what the sampler rule made of it, withdrawn ones too."""
-    lines = ["## Sampler", "", check_results.SPSC_SAMPLER_RULE, "",
+    rule = check_results.sampler_rule(check_results.SPSC_SAMPLER_RULE, sampled)
+    lines = ["## Sampler", "", rule, "",
              "| Process | Started | Finished | Outcome |", "|---|---|---|---|"]
     for index, (begin, end, said) in enumerate(sampled["published"], start=1):
         lines.append(f"| repetition {index} | {begin} | {end} | {said} |")
@@ -834,7 +837,7 @@ def run(args, run_id, started, commit, sampler):
     cross_core = cross_core_check(args)
     records = []
     sampled = None if sampler is None else {
-        "every": sampler.every, "published": [], "withdrawn": []}
+        "every": sampler.every, "stand_in": sampler.stand_in, "published": [], "withdrawn": []}
     while len(records) < args.repetitions:
         index = len(records) + 1
         wait_for_quiet(sampler, args.quiet_before, args.quiet_wait)
@@ -864,7 +867,7 @@ def run(args, run_id, started, commit, sampler):
     text = render(records, args, run_id, started, bench_driver.utc_now(), machine_output,
                   relative_command(args), sampled=sampled, cross_core=cross_core)
     violations = [found for found in check_results.check_text(text)
-                  if found[0] != "load-not-stamped"]
+                  if found[0] not in check_results.LEFT_TO_STAMP]
     if violations:
         raise Refused("results", f"{args.out.name}: " + "; ".join(
             f"{code}: {detail}" for code, detail in violations))
@@ -933,7 +936,8 @@ def published_sampled(published, raw_dir, every):
     lines = path.read_text(encoding="utf-8").splitlines()
     # A record of the new kind named a foreign process by kind; one made before, by name.
     by_kind = run_record.is_new_kind(raw_dir)
-    sampled = {"every": every, "published": [], "withdrawn": []}
+    sampled = {"every": every, "stand_in": check_results.STAND_IN_SAMPLER in published,
+               "published": [], "withdrawn": []}
     for cells in check_results.table_rows(published, "Sampler"):
         if len(cells) != 4 or cells[0] == "Process":
             continue

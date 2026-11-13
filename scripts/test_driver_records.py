@@ -540,6 +540,49 @@ class RdpmcCaveat(unittest.TestCase):
                       {code for code, _ in check_results.check_text(dropped)})
 
 
+class StandInSampler(unittest.TestCase):
+    """A test gives a driver a stand-in for `ps` (--ps), so that its result does not hang on
+    what else the Mac is doing; the file says so, and check_results refuses it as a result,
+    so that no run can have the rule switched off without a word."""
+
+    def test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            path = Path(directory) / "sampler.txt"
+            self.assertFalse(spsc_driver.Sampler(path, "ps", 2.0).stand_in)
+            self.assertTrue(spsc_driver.Sampler(path, "/a/stand-in/ps.sh", 2.0).stand_in)
+        quiet = "published: 3 samples, the longest gap 2 s, no other process above 20% CPU"
+        for stand_in in (False, True):
+            sampled = {"every": 2.0, "stand_in": stand_in, "withdrawn": [], "published": [
+                ("repetition 1, timed process", "2026-11-13T04:00:02Z", "2026-11-13T04:00:03Z",
+                 quiet)]}
+            sections = {"bench and backtest": "\n".join(bench_driver_section(sampled)),
+                        "spsc": "\n".join(spsc_driver.sampler_sections(
+                            {**sampled, "published": [entry[1:] for entry in
+                                                      sampled["published"]]})),
+                        "alloc": "\n".join(alloc_driver.sampler_rows(sampled))}
+            for name, section in sections.items():
+                self.assertEqual(check_results.STAND_IN_SAMPLER in section, stand_in, name)
+                found = dict(check_results.check_stand_in(section))
+                self.assertEqual("sampler-stand-in" in found, stand_in, name)
+
+    def test_a_run_of_no_design_keeps_every_process_it_sampled(self):
+        """A run given no --design names its processes by repetition alone, though its records
+        name bench_replay's default design: its one file takes them all."""
+        given = bench_driver.parse_args([*BENCH_BASE])
+        both = bench_driver.parse_args([*BENCH_BASE, "--design", "paged-flat"])
+        mine = bench_driver.sampled_for(given, "paged-flat")
+        self.assertTrue(mine("repetition 1, timed process"))
+        theirs = bench_driver.sampled_for(both, "paged-flat")
+        self.assertTrue(theirs("paged-flat, repetition 1, timed process"))
+        self.assertFalse(theirs("map-fresh, repetition 1, timed process"))
+
+
+def bench_driver_section(sampled):
+    import mac_rule  # noqa: PLC0415  As bench_driver and backtest_driver do.
+
+    return mac_rule.sampler_section(sampled)
+
+
 class MacSamplerScript(unittest.TestCase):
     """r5-2: scripts/mac_sampler.sh, the sampler the published variants runs on the Mac used,
     now in the repository: its log as variants_report.py reads it."""
@@ -641,7 +684,7 @@ class MacSampler(unittest.TestCase):
             for design in ("paged-flat", "map-fresh"):
                 text = (results / f"bench_{design}.md").read_text(encoding="utf-8")
                 self.assertEqual({code for code, _ in check_results.check_text(text)},
-                                 {"load-not-stamped"}, design)
+                                 {"load-not-stamped", "sampler-stand-in"}, design)
                 self.assertIn(f"- interference: {check_results.driver_interference(0.2)}; 0 "
                               "withdrawn under the rule\n", text)
                 self.assertEqual(text.count(f"| {design}, repetition "), 6)
@@ -657,7 +700,7 @@ class MacSampler(unittest.TestCase):
                           "the CPU sampler saw a system process at 50.0% CPU", log)
             text = (results / "bench_paged-flat.md").read_text(encoding="utf-8")
             self.assertEqual({code for code, _ in check_results.check_text(text)},
-                             {"load-not-stamped"})
+                             {"load-not-stamped", "sampler-stand-in"})
             self.assertIn("; 1 withdrawn under the rule", text)
             other = (results / "bench_map-fresh.md").read_text(encoding="utf-8")
             self.assertIn("; 0 withdrawn under the rule", other)

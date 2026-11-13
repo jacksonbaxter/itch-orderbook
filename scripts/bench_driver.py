@@ -607,6 +607,13 @@ def of_design(design):
     return lambda what: not design or what.startswith(f"{design}, ")
 
 
+def sampled_for(args, design):
+    """of_design for a file of this run: a run given no --design names its processes by
+    repetition alone, whatever design bench_replay's default is, so its one file takes every
+    process the sampler judged."""
+    return of_design(design if args.design else "")
+
+
 def header_lines(records, args, run_id, started, finished, sampled=None):
     header = dict(records[0]["header"])
     lines = [f"- {name}: {header[name]}" for name in HEADER_ORDER if name in header]
@@ -614,8 +621,8 @@ def header_lines(records, args, run_id, started, finished, sampled=None):
     if sampled is not None:
         import mac_rule  # noqa: PLC0415
 
-        lines.append(mac_rule.interference_line(sampled, of_design(header.get("design", "")
-                                                                   .split(":")[0])))
+        lines.append(mac_rule.interference_line(
+            sampled, sampled_for(args, header.get("design", "").split(":")[0])))
     lines += [f"- measure_load_start: {check_results.PENDING}",
               f"- measure_load_end: {check_results.PENDING}",
               *peak_lines(records),
@@ -1059,7 +1066,7 @@ def render(records, args, run_id, started, finished, machine_output, command, ru
     if sampled is not None:
         import mac_rule  # noqa: PLC0415
 
-        lines += [""] + mac_rule.sampler_section(sampled, of_design(design))
+        lines += [""] + mac_rule.sampler_section(sampled, sampled_for(args, design))
     lines += ["", "## machine_check output", "", "```", machine_output, "```", "",
               "## Commands", "", "```", command, "```", ""]
     return "\n".join(lines)
@@ -1157,8 +1164,8 @@ def run(args, run_id, started, commit, sampler=None):
     machine_output = machine_check(args)
     args.record.output(MACHINE_CHECK, machine_output)
     designs = args.design or [None]
-    sampled = None if sampler is None else {"every": sampler.every, "published": [],
-                                            "withdrawn": []}
+    sampled = None if sampler is None else {"every": sampler.every, "stand_in": sampler.stand_in,
+                                            "published": [], "withdrawn": []}
     runs = {}
     for index in range(1, args.repetitions + 1):
         for design in designs:
@@ -1174,7 +1181,7 @@ def run(args, run_id, started, commit, sampler=None):
         texts[out] = render(records, args, run_id, started, finished, machine_output,
                             relative_command(args), runs, sampled)
         violations = [found for found in check_results.check_text(texts[out])
-                      if found[0] != "load-not-stamped"]
+                      if found[0] not in check_results.LEFT_TO_STAMP]
         if violations:
             raise Refused("results", f"{out.name}: " + "; ".join(
                 f"{code}: {detail}" for code, detail in violations))

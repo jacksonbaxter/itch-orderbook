@@ -496,7 +496,7 @@ class EndToEnd(unittest.TestCase):
             result, out, log = self.run_driver(Path(directory))
             self.assertEqual(result.returncode, 0, result.stderr)
             text = out.read_text(encoding="utf-8")
-            self.assertEqual(codes(text), {"load-not-stamped"})
+            self.assertEqual(codes(text), {"load-not-stamped", "sampler-stand-in"})
             # The driver leaves the outcome to stamp_load.py (r5-3).
             self.assertIn("| written, pending the load stamp: ", log)
             self.assertNotIn("| published", log)
@@ -516,7 +516,7 @@ class EndToEnd(unittest.TestCase):
             self.assertIn("withdrawn: alloc arms, malloc-fresh, repetition 1 on the Mac, exit 0; "
                           "the CPU sampler saw a system process at 50.0% CPU", log)
             text = out.read_text(encoding="utf-8")
-            self.assertEqual(codes(text), {"load-not-stamped"})
+            self.assertEqual(codes(text), {"load-not-stamped", "sampler-stand-in"})
             self.assertIn("; 1 withdrawn under the rule", text)
             self.assertRegex(text, r"\| withdrawn 1: malloc-fresh, repetition 1 \| .* \| "
                                    r"withdrawn: the CPU sampler saw a system process at 50.0% CPU")

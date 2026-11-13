@@ -260,6 +260,11 @@ DRIVER_SAMPLER_RULE = (
     "covered its whole span with no gap over 5 s and saw no other process above 20% CPU in it. "
     "A process that failed the rule was withdrawn, with its own row in results/run_log.md, and "
     "run again; none was withdrawn for its numbers.")
+# What a driver's Sampler section says when its sampler read a stand-in for `ps`, as a test
+# gives it (--ps) so that its result does not hang on what else the Mac is doing. Such a file
+# read no real process table, so check_stand_in refuses it as a result.
+STAND_IN_SAMPLER = ("The sampler read a stand-in process table given by --ps, not the Mac's: "
+                    "no other process's load was read, so this file is a test's, not a result.")
 DRIVER_INTERFERENCE = re.compile(r"sampled every [\d.]+ s by the driver over each process's "
                                  r"whole span; no other process above 20% CPU in any published "
                                  r"process; \d+ withdrawn under the rule")
@@ -807,6 +812,23 @@ def check_machine(text):
     failures = re.findall(r"^machine_check: FAIL .*$", output, re.MULTILINE)
     for line in failures:
         yield "machine-check-failed", line
+
+
+# What a driver's own check before writing leaves to stamp_load.py: the load stamp, and a
+# stand-in sampler's file, which stamp_load.py then refuses, so it is never published.
+LEFT_TO_STAMP = ("load-not-stamped", "sampler-stand-in")
+
+
+def sampler_rule(rule, sampled):
+    """A Sampler section's rule paragraph, saying so when the sampler read a stand-in."""
+    return f"{rule} {STAND_IN_SAMPLER}" if sampled.get("stand_in") else rule
+
+
+def check_stand_in(text):
+    """A file whose sampler read a stand-in process table is a test's, never a result."""
+    if STAND_IN_SAMPLER in text:
+        yield "sampler-stand-in", ("its sampler read a stand-in process table given by --ps, "
+                                   "so no other process's load was read")
 
 
 def check_private(text, fields):
@@ -1588,7 +1610,7 @@ def check_text(text, name=None):
                   check_residency(fields), check_warmup(fields), check_statistics(text),
                   check_load(fields), check_sampler(fields), check_driver_sampler(text, fields),
                   check_linux_rule(text, fields),
-                  check_machine(text),
+                  check_machine(text), check_stand_in(text),
                   check_private(text, fields)):
         violations.extend(found)
     if is_walks_file(fields):

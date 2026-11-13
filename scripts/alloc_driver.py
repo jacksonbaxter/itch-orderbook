@@ -410,7 +410,8 @@ def repetition_rows(runs):
 
 
 def sampler_rows(sampled):
-    lines = ["## Sampler", "", check_results.ALLOC_SAMPLER_RULE, "",
+    rule = check_results.sampler_rule(check_results.ALLOC_SAMPLER_RULE, sampled)
+    lines = ["## Sampler", "", rule, "",
              "| Process | Started | Finished | Outcome |", "|---|---|---|---|"]
     for what, begin, end, said in sampled["published"]:
         lines.append(f"| {what} | {begin} | {end} | {said} |")
@@ -614,8 +615,8 @@ def run(args, run_id, started, commit, sampler):
     bench_driver.set_stage("machine_check")
     machine_output = bench_driver.machine_check(args)
     args.record.output(bench_driver.MACHINE_CHECK, machine_output)
-    sampled = None if sampler is None else {"every": sampler.every, "published": [],
-                                            "withdrawn": []}
+    sampled = None if sampler is None else {"every": sampler.every, "stand_in": sampler.stand_in,
+                                            "published": [], "withdrawn": []}
     runs = {arm: [] for arm in args.arm}
     for index in range(1, args.repetitions + 1):
         for arm in rotated(args.arm, index):
@@ -635,7 +636,7 @@ def run(args, run_id, started, commit, sampler):
     text = render(runs, checks, args, run_id, started, bench_driver.utc_now(), machine_output,
                   relative_command(args), sampled)
     violations = [found for found in check_results.check_text(text)
-                  if found[0] != "load-not-stamped"]
+                  if found[0] not in check_results.LEFT_TO_STAMP]
     if violations:
         raise Refused("results", f"{args.out.name}: " + "; ".join(
             f"{code}: {detail}" for code, detail in violations))

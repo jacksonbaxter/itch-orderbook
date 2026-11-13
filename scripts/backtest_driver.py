@@ -599,7 +599,8 @@ def run(args, run_id, started, commit):
     if platform.system() == "Darwin":
         bench_driver.set_stage("starting the sampler")
         mac = mac_rule.start(args)
-        sampled = {"every": mac.every, "mac": True, "published": [], "withdrawn": []}
+        sampled = {"every": mac.every, "mac": True, "stand_in": mac.stand_in, "published": [],
+                   "withdrawn": []}
     elif platform.system() == "Linux":
         if args.core is None or args.sibling is None:
             raise Refused("sampler", "the Linux sampler rule needs --core and --sibling")
@@ -620,7 +621,7 @@ def run(args, run_id, started, commit):
     text = render(records, args, run_id, started, bench_driver.utc_now(), machine_output,
                   relative_command(args), sampled)
     violations = [found for found in check_results.check_text(text)
-                  if found[0] != "load-not-stamped"]
+                  if found[0] not in check_results.LEFT_TO_STAMP]
     if violations:
         raise Refused("results", f"{args.out.name}: " + "; ".join(
             f"{code}: {detail}" for code, detail in violations))
