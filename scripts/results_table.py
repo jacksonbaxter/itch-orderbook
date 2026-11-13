@@ -25,7 +25,9 @@ at any other size is refused. Each bisection, at either size, gives each mode's 
 lossless rate to the T-URING-1 table, which has no verdict, each row labelled with its
 packet size. The fuzzers' long run, a `fuzz_` file from scripts/fuzz_report.py, gives a row
 beside the fault matrix's, and WRITEUP.md's table counts the Fuzzing target met only while the
-file MET_BY_FILE names shows every target clean. predictions.md is not a result, and
+file MET_BY_FILE names shows every target clean. The final review's record,
+`final_review.md` from scripts/review_report.py, gives a row there too: its reviewers, findings
+and outcomes, and whether it is complete. predictions.md is not a result, and
 run_log.md gets its own table, every row of it, failed runs included; a line of its table that
 is not a run is refused. Each row cites its file, so scripts/gate_numbers.py holds the
 row's figures to that file.
@@ -339,6 +341,20 @@ def fuzz_row(name, text):
     return ("Fuzzing", "none", host_label(text, name), result,
             f"every target {seconds} s, exit 0 and 0 crashes", f"`{header_commit(text, name)}`",
             source(name))
+
+
+def review_row(name, text):
+    """The final review's record, a check beside the fault matrix: scripts/review_report.py
+    writes it from scripts/final_review.json, and its result says complete only when every
+    finding is settled and every reviewer has reported."""
+    result = find(r"^- Result: (.*)$", text, name)[1]
+    reviewers = find(r"^- Reviewers: (\d+)$", text, name)[1]
+    findings = find(r"^- Findings: (\d+)$", text, name)[1]
+    severities = find(r"^- Severities: (.*)$", text, name)[1]
+    outcomes = find(r"^- Outcomes: (.*)$", text, name)[1]
+    return ("Final review", "none", "none", result,
+            f"{reviewers} reviewers, {findings} findings ({severities}); {outcomes}",
+            f"`{header_commit(text, name)}`", source(name))
 
 
 def sampler_note(text):
@@ -708,6 +724,9 @@ def generate(root):
             rows = []
         elif name.startswith("fuzz_"):
             faults.append(fuzz_row(name, text))
+            rows = []
+        elif name == "final_review.md":
+            faults.append(review_row(name, text))
             rows = []
         elif name.startswith("bench_") and harness_proof(text):
             if name.startswith("bench_book_"):
