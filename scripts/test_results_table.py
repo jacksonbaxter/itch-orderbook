@@ -507,67 +507,6 @@ class ResultsTable(unittest.TestCase):
         self.assertRegex(output, r"results_table: FAIL RESULTS\.md:\d+: differs from a fresh run")
         self.assertRegex(output, r"results_table: FAIL README\.md:\d+: differs from a fresh run")
 
-    def missed(self):
-        code, output = self.run_table()
-        self.assertEqual(code, 0, output)
-        return output.split("WRITEUP.md:\n", 1)[1]
-
-    def test_the_writeup_table_has_every_miss_each_from_its_file(self):
-        table = self.missed()
-        self.assertIn("| T-BT-3 | ≥ 4.61 M messages/s | 3.35 M messages/s | 1.26 M messages/s under "
-                      "the bar | debian |", table)
-        for line in table.splitlines()[2:]:
-            if line.startswith("|"):
-                self.assertTrue(line.endswith(results_table.NOT_MEASURED_MARK)
-                                or "](results/" in line.split(" | ")[-1], line)
-        self.assertIn("| T-BOOK-4 |", table)
-        self.assertIn("3 runs logged under P-0502, none published: 2 withdrawn, 1 stopped or "
-                      "refused", table)
-
-    def test_a_writeup_row_typed_over_fails(self):
-        self.edit("WRITEUP.md", "| 3.35 M messages/s | 1.26 M", "| 3.36 M messages/s | 1.26 M")
-        code, output = self.run_table("--check")
-        self.assertEqual(code, 1, output)
-        self.assertRegex(output, r"results_table: FAIL WRITEUP\.md:\d+: differs from a fresh run")
-
-    def test_a_missed_row_whose_file_calls_it_met_is_refused(self):
-        self.edit("results/backtest_shadow_debian_12302019.md",
-                  "| missed: 1.26 M messages/s under the bar |", "| met |")
-        code, output = self.run_table("--check")
-        self.assertEqual(code, 1, output)
-        self.assertIn("T-BT-3 is 'met', not missed, and WRITEUP.md's table names it as a miss",
-                      output)
-
-    def test_a_benchmark_target_with_no_row_or_account_is_refused(self):
-        with open(self.root / "BENCHMARKS.md", "a", encoding="utf-8") as benchmarks:
-            benchmarks.write("\n### T-NEW-1: a target no row names\n\n- **Target:** none.\n")
-        code, output = self.run_table("--check")
-        self.assertEqual(code, 1, output)
-        self.assertIn("BENCHMARKS.md: ['T-NEW-1'] in no row or account", output)
-
-    def test_a_not_measured_target_with_a_published_run_is_refused(self):
-        with open(self.root / "results" / "run_log.md", "a", encoding="utf-8") as log:
-            log.write("| P-0502-20991231T000000Z | P-0502 | 000000000000 (clean) | Darwin | "
-                      "published: a run planted by the test |\n")
-        code, output = self.run_table("--check")
-        self.assertEqual(code, 1, output)
-        self.assertIn("P-0502 has a published run or none, and WRITEUP.md's table says T-BOOK-4 "
-                      "was never measured", output)
-
-    def test_a_parse_target_a_prediction_names_is_refused(self):
-        with open(self.root / "results" / "predictions.md", "a", encoding="utf-8") as predictions:
-            predictions.write("\n## P-9999: T-PARSE-1 planted by the test\n")
-        code, output = self.run_table("--check")
-        self.assertEqual(code, 1, output)
-        self.assertIn("P-9999 names T-PARSE-1, which WRITEUP.md's table says no run measured",
-                      output)
-
-    def test_a_missing_writeup_marker_fails(self):
-        self.edit("WRITEUP.md", results_table.MISS_END + "\n", "")
-        code, output = self.run_table("--check")
-        self.assertEqual(code, 1, output)
-        self.assertIn("results_table: FAIL WRITEUP.md: the two marker lines", output)
-
     def test_a_missing_results_page_fails(self):
         (self.root / "RESULTS.md").unlink()
         code, output = self.run_table("--check")
@@ -664,6 +603,76 @@ class ResultsTable(unittest.TestCase):
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
         self.assertIn(f"results_table: FAIL {UNJUDGED_BOOK}: its host is debian", output)
+
+
+class MissedTargets(unittest.TestCase):
+    """WRITEUP.md's table of every target missed or not measured."""
+
+    setUp = ResultsTable.setUp
+    run_table = ResultsTable.run_table
+    edit = ResultsTable.edit
+
+    def missed(self):
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        return output.split("WRITEUP.md:\n", 1)[1]
+
+    def test_the_writeup_table_has_every_miss_each_from_its_file(self):
+        table = self.missed()
+        self.assertIn("| T-BT-3 | ≥ 4.61 M messages/s | 3.35 M messages/s | 1.26 M messages/s under "
+                      "the bar | debian |", table)
+        for line in table.splitlines()[2:]:
+            if line.startswith("|"):
+                self.assertTrue(line.endswith(results_table.NOT_MEASURED_MARK)
+                                or "](results/" in line.split(" | ")[-1], line)
+        self.assertIn("| T-BOOK-4 |", table)
+        self.assertIn("3 runs logged under P-0502, none published: 2 withdrawn, 1 stopped or "
+                      "refused", table)
+
+    def test_a_writeup_row_typed_over_fails(self):
+        self.edit("WRITEUP.md", "| 3.35 M messages/s | 1.26 M", "| 3.36 M messages/s | 1.26 M")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertRegex(output, r"results_table: FAIL WRITEUP\.md:\d+: differs from a fresh run")
+
+    def test_a_missed_row_whose_file_calls_it_met_is_refused(self):
+        self.edit("results/backtest_shadow_debian_12302019.md",
+                  "| missed: 1.26 M messages/s under the bar |", "| met |")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("T-BT-3 is 'met', not missed, and WRITEUP.md's table names it as a miss",
+                      output)
+
+    def test_a_benchmark_target_with_no_row_or_account_is_refused(self):
+        with open(self.root / "BENCHMARKS.md", "a", encoding="utf-8") as benchmarks:
+            benchmarks.write("\n### T-NEW-1: a target no row names\n\n- **Target:** none.\n")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("BENCHMARKS.md: ['T-NEW-1'] in no row or account", output)
+
+    def test_a_not_measured_target_with_a_published_run_is_refused(self):
+        with open(self.root / "results" / "run_log.md", "a", encoding="utf-8") as log:
+            log.write("| P-0502-20991231T000000Z | P-0502 | 000000000000 (clean) | Darwin | "
+                      "published: a run planted by the test |\n")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("P-0502 has a published run or none, and WRITEUP.md's table says T-BOOK-4 "
+                      "was never measured", output)
+
+    def test_a_parse_target_a_prediction_names_is_refused(self):
+        with open(self.root / "results" / "predictions.md", "a", encoding="utf-8") as predictions:
+            predictions.write("\n## P-9999: T-PARSE-1 planted by the test\n")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("P-9999 names T-PARSE-1, which WRITEUP.md's table says no run measured",
+                      output)
+
+    def test_a_missing_writeup_marker_fails(self):
+        self.edit("WRITEUP.md", results_table.MISS_END + "\n", "")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL WRITEUP.md: the two marker lines", output)
+
 
 if __name__ == "__main__":
     unittest.main()
