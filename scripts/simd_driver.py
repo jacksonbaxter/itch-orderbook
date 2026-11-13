@@ -69,6 +69,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
+import process_kinds  # noqa: E402
 import run_record  # noqa: E402
 import wasm_bench  # noqa: E402
 
@@ -360,6 +361,7 @@ def parse_args(argv):
 
 
 def main(argv=None):
+    process_kinds.check_map("simd_driver")  # Stops here on a map set and unusable.
     args = parse_args(argv)
     stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
     run_id = f"{args.prediction}-{stamp}"

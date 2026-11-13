@@ -28,6 +28,7 @@ import spsc_driver  # noqa: E402
 import run_record  # noqa: E402
 import stamp_load  # noqa: E402
 import test_driver_records  # noqa: E402
+import process_kinds  # noqa: E402
 from test_process_kinds import process_map  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -431,6 +432,12 @@ class ForeignByKind(unittest.TestCase):
                             with self.assertRaisesRegex(spsc_driver.Refused, "sampler.txt gives"):
                                 spsc_driver.published_sampled(published.replace(
                                     said.format(kind), other), raw, 2.0)
+                        # r14-4: with no map the refusal says the map is what is missing.
+                        with self.assertRaises(spsc_driver.Refused) as refused:
+                            spsc_driver.published_sampled(published.replace(
+                                said.format(kind), others[0]), raw, 2.0)
+                        self.assertEqual(f"{process_kinds.MAP_ENV} is not set" in
+                                         str(refused.exception), found is None)
                     with self.assertRaisesRegex(ValueError, f"the first {kind} at 31.0% CPU at "
                                                             "2026-11-05T09:00:02Z$"):
                         stamp_load.sampler_line("\n".join(lines), begin, end)

@@ -955,7 +955,11 @@ def published_sampled(published, raw_dir, every):
         else:
             raise Refused("published", f"a Sampler row of no repetition: {what!r}")
         if again != process_kinds.reworded(said):
-            raise Refused("raw", f"{what}: sampler.txt gives {again!r}, the file {said!r}")
+            unset = ("" if os.environ.get(process_kinds.MAP_ENV) else
+                     f"; ${process_kinds.MAP_ENV} is not set, and a file that gives a kind other "
+                     "than another process is held to its raw log only with the name-to-kind map "
+                     "its kinds came from")
+            raise Refused("raw", f"{what}: sampler.txt gives {again!r}, the file {said!r}{unset}")
     return sampled
 
 
@@ -1041,6 +1045,7 @@ def render_main(argv):
 
 
 def main(argv=None):
+    process_kinds.check_map("spsc_driver")  # Stops here on a map set and unusable.
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["render"]:
         return render_main(argv[1:])

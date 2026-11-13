@@ -1020,6 +1020,7 @@ def report_violations(violations):
 
 
 def main(argv=None):
+    process_kinds.check_map("simd_report")  # Stops here on a map set and unusable.
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--run-dir", type=Path)
     parser.add_argument("--out", type=Path)

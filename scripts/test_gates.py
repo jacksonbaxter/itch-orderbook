@@ -455,6 +455,19 @@ class Gates(unittest.TestCase):
         "withdrawn: the sampler saw this piece's own read (frobd, 28.4%) at its first second",
         "withdrawn: the sampler saw the other cores: 25.00% of a CPU busy at "
         "2026-11-10T10:34:28.000000Z, the most of it frobd",
+        # r14-2: forms the grammar did not know, each passed before it was closed.
+        "withdrawn: the sampler saw frobd (a browser) at 41.2% CPU at 2026-11-05T15:15:58Z",
+        "withdrawn: the sampler saw 3 other processes, the first `frobd`, a browser, at 21.7% at "
+        "2026-11-10T10:34:28Z",
+        "withdrawn: the sampler saw frobd (41.2% CPU) at 2026-11-05T15:15:58Z",
+        "withdrawn: the sampler saw frobd at 41.2 % CPU at 2026-11-05T15:15:58Z",
+        "withdrawn: frobd used 41.2% CPU at 2026-11-05T15:15:58Z",
+        "withdrawn: frobd took 41.2% of a core at 2026-11-05T15:15:58Z",
+        "withdrawn: frobd: 41.2% CPU at 2026-11-05T15:15:58Z",
+        "withdrawn: 25.00% of a CPU busy, most of it frobd",
+        "withdrawn: the sampler saw a browser inside its span",
+        "withdrawn: the sampler saw the core's SMT sibling: 41.00% busy at "
+        "2026-11-13T17:00:02.000000Z, the most of it frobd, at 38.5% of a CPU, inside its span",
     )
     KIND_FORMS = (
         "withdrawn: the CPU sampler saw a macOS system daemon at 41.2% CPU at 2026-11-05T15:15:58Z",
@@ -469,14 +482,38 @@ class Gates(unittest.TestCase):
         "withdrawn: a backup tool and its file-sync tool at 22% to 165%",
         "withdrawn: 8 other processes, a browser at 66.1% from 19:21:41 UTC and the system "
         "indexer up to 199.2%",
-        "withdrawn: the sampler saw this piece's own read (a system tool, 28.4%) at its first second",
+        "withdrawn: the sampler saw a system tool at 28.4% at its first second, this session's "
+        "own page-cache read, and a VPN daemon at 27.5% inside it, serving a status poll",
+        "withdrawn: the sampler saw a system tool at 44.7% CPU at 2026-11-05T15:14:35Z, this "
+        "piece's own read of the day before it, inside its span",
         "withdrawn: the sampler saw the other cores: 25.00% of a CPU busy at "
         "2026-11-10T10:34:28.000000Z, the most of it a kernel thread",
         "withdrawn: the sampler saw the other cores: 30.00% of a CPU busy at "
         "2026-11-10T10:34:29.000000Z, the most of it no process to name, so kernel or "
         "interrupt work",
         "published: paged-flat lookup 8.95 ns, 19.6% of the pass; best look-ahead D=4 at "
-        "-18.01% over D=0, hash policy +3.12%, adds outside a window 8.337%",
+        "-18.01% over D=0; E8 refuted (under 10% at every D)",
+        "published: hash policy +3.12% (identity-flat over hash-flat); search window of 16 "
+        "-0.18% (paged-flat-scan16 over paged-flat, ranges overlap)",
+        "published: adds outside a window of 256 ticks 8.337%, of 2,048 1.493% (carteret 4.90% "
+        "and 1.03%); sub-cent 0.468%; add searches past 1 or fewer better levels 57.10%, past 16 "
+        "or more 10.79%",
+        "published: largest single structure level record at 22.7% of the floor on DRAM demand "
+        "fills; no structure reaches the 40% rule; 54.5% of those messages name an order",
+        # scripts/parse_driver.py's withdrawal (the Linux sampler's words, the kind at its share).
+        "withdrawn: T-PARSE-1 to T-PARSE-3, repetition 1, exit 0; the sampler saw the core's SMT "
+        "sibling: 41.00% busy at 2026-11-13T17:00:02.000000Z, the most of it another project's "
+        "process, at 38.5% of a CPU, inside its span, so the Linux sampler rule does not publish "
+        "it",
+        "withdrawn: T-PARSE-1 to T-PARSE-3, repetition 2, exit 0; the sampler saw the measured "
+        "core: its process waited 7.50% of a second on the run queue at "
+        "2026-11-13T17:00:04.000000Z, the most of it no process to name, so kernel or interrupt "
+        "work, inside its span",
+        "withdrawn: the sampler saw 2 other busy processes in the run, the first a browser at "
+        "31.0% CPU at 2026-11-05T09:00:02Z",
+        "published: 12 samples from 2026-11-13T17:00:00.000000Z to 2026-11-13T17:00:22.000000Z, "
+        "the longest gap 2.00 s; at most 1.00% run-queue wait on core 4, 2.50% busy on cpu10, "
+        "40.00% of a CPU on the other cores",
         "withdrawn: no other process above 20% CPU; cpu5 and cpu7 each 100% busy over 1 s",
     )
 

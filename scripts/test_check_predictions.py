@@ -2,6 +2,7 @@
 """check_predictions.py on a real, throwaway git history (criterion 31)."""
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -372,6 +373,83 @@ class History(unittest.TestCase):
         code, output = check(self.root)
         self.assertEqual(code, 0, output)
 
+    def test_a_merge_that_undoes_a_rewording(self):
+        """r14-1: the branch from before the rewording merges the reworded trunk and keeps its
+        own log, the line as it was: the rewording is undone, and that is refused, whichever
+        parent is first."""
+        self.copy("predictions.md")
+        self.commit("predictions.md")
+        log = self.results / "run_log.md"
+        self.copy("run_log.md", "bench_fixture.md")
+        base = log.read_text(encoding="utf-8").replace(self.REFUSED, self.NAMED)
+        log.write_text(base, encoding="utf-8")
+        self.commit("run_log.md", "bench_fixture.md")
+        side = "| P-0001-side | P-0001 | abc | Darwin | published |\n"
+        old = self.git("rev-parse", "--abbrev-ref", "HEAD").strip()
+        self.git("checkout", "-q", "-b", "trunk")
+        log.write_text(base.replace(self.NAMED, self.KIND), encoding="utf-8")
+        self.commit("run_log.md")
+        self.git("checkout", "-q", old)
+        log.write_text(base + side, encoding="utf-8")
+        self.commit("run_log.md")
+        (self.root / "scripts").mkdir(exist_ok=True)
+        (self.root / check_predictions.REWORDINGS).write_text(json.dumps({"lines": {
+            check_predictions.digest(self.NAMED): check_predictions.digest(self.KIND)}}),
+            encoding="utf-8")
+        for first, second in ((old, "trunk"), ("trunk", old)):
+            with self.subTest(first=first):
+                self.git("checkout", "-q", "--detach", first)
+                self.git("merge", "-q", "--no-ff", "--no-commit", "-s", "ours", second)
+                log.write_text(base + side, encoding="utf-8")
+                self.commit("run_log.md")
+                code, output = check(self.root)
+                self.assertEqual(code, 1, output)
+                self.assertIn("is back as it was", output)
+                self.git("checkout", "-q", old)
+
+    def test_a_line_reworded_twice(self):
+        """r14-2: a line reworded by the kinds and then again by the grammar's order. A branch
+        from before both merges cleanly into the trunk that holds the last form; a merge that
+        keeps either earlier form while a parent holds the last is refused."""
+        moved = self.KIND.replace("withdrawn: the sampler", "withdrawn: then the sampler")
+        self.copy("predictions.md")
+        self.commit("predictions.md")
+        log = self.results / "run_log.md"
+        self.copy("run_log.md", "bench_fixture.md")
+        base = log.read_text(encoding="utf-8").replace(self.REFUSED, self.NAMED)
+        log.write_text(base, encoding="utf-8")
+        self.commit("run_log.md", "bench_fixture.md")
+        side = "| P-0001-side | P-0001 | abc | Darwin | published |\n"
+        old = self.git("rev-parse", "--abbrev-ref", "HEAD").strip()
+        self.git("checkout", "-q", "-b", "side")
+        log.write_text(base + side, encoding="utf-8")
+        self.commit("run_log.md")
+        self.git("checkout", "-q", old)
+        (self.root / "scripts").mkdir(exist_ok=True)
+        (self.root / check_predictions.REWORDINGS).write_text(json.dumps({"lines": {
+            check_predictions.digest(self.NAMED): check_predictions.digest(self.KIND),
+            check_predictions.digest(self.KIND): check_predictions.digest(moved)}}),
+            encoding="utf-8")
+        log.write_text(base.replace(self.NAMED, self.KIND), encoding="utf-8")
+        self.commit("run_log.md")
+        log.write_text(base.replace(self.NAMED, moved), encoding="utf-8")
+        trunk = self.commit("run_log.md")
+        self.git("merge", "-q", "--no-ff", "--no-commit", "-s", "ours", "side")
+        log.write_text(base.replace(self.NAMED, moved) + side, encoding="utf-8")
+        self.commit("run_log.md")
+        code, output = check(self.root)
+        self.assertEqual(code, 0, output)
+        for kept in (self.NAMED, self.KIND):
+            with self.subTest(kept=kept):
+                self.git("checkout", "-q", "--detach", trunk)
+                self.git("merge", "-q", "--no-ff", "--no-commit", "-s", "ours", "side")
+                log.write_text(base.replace(self.NAMED, kept) + side, encoding="utf-8")
+                self.commit("run_log.md")
+                code, output = check(self.root)
+                self.assertEqual(code, 1, output)
+                self.assertIn("is back as it was", output)
+                self.git("checkout", "-q", old)
+
     def test_require_before_a_run(self):
         code, output = check(self.root, "--require", "P-0001")
         self.assertEqual(code, 1, output)
@@ -480,6 +558,43 @@ class History(unittest.TestCase):
         code, output = check(self.root, "--no-git")
         self.assertEqual(code, 1)
         self.assertIn("prediction-missing", output)
+
+
+class Rewordings(unittest.TestCase):
+    """r14-5: scripts/run_log_rewordings.json is pinned, so that no entry added later lets an
+    edit of the log through unseen. Its entries are exactly the lines that changed between the
+    log before and after each rewording commit, below; the file's sha256 is pinned too, so that
+    any change to it is a change to this test. In a clone without those commits (a shallow
+    one), the history half is skipped and says so, and the pin on the file's bytes still holds."""
+
+    # (the commit before, the rewording commit): the kinds (2026-11-13), then the grammar's
+    # order (r14-2), then six kinds the raw records support (r14-9), the same day.
+    STEPS = (("95772ae", "940484d"), ("731ae85", "4fa29bb"), ("a9e5a2d", "5cbb02f"))
+    SHA256 = "efd5e3d9b7634e192bdb8dfbadfe0eeee4cc972e71940eb5056198694a7104a4"
+    ENTRIES = 172
+
+    def test_the_file_is_pinned(self):
+        path = REPO_ROOT / check_predictions.REWORDINGS
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), self.SHA256)
+        self.assertEqual(len(check_predictions.rewordings(REPO_ROOT)), self.ENTRIES)
+
+    def test_the_entries_are_the_rewording_commits_changes(self):
+        def log(commit):
+            found = subprocess.run(["git", "-C", str(REPO_ROOT), "show",
+                                    f"{commit}:{check_predictions.RUN_LOG}"],
+                                   capture_output=True, text=True, check=False)
+            return found.stdout if found.returncode == 0 else None
+        expected = {}
+        for before, after in self.STEPS:
+            old, new = log(before), log(after)
+            if old is None or new is None:
+                self.skipTest(f"this clone does not hold {before} and {after} (a shallow one?), "
+                              "so only the pin on the file's bytes is checked")
+            old, new = old.split("\n"), new.split("\n")
+            self.assertEqual(len(old), len(new))
+            expected.update({check_predictions.digest(a): check_predictions.digest(b)
+                             for a, b in zip(old, new) if a != b})
+        self.assertEqual(check_predictions.rewordings(REPO_ROOT), expected)
 
 
 if __name__ == "__main__":

@@ -87,6 +87,7 @@ import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import linux_sampler  # noqa: E402
 import mac_rule  # noqa: E402
+import process_kinds  # noqa: E402
 import run_record  # noqa: E402
 import stamp_load  # noqa: E402
 
@@ -782,6 +783,7 @@ def render_main(argv):
 
 
 def main(argv=None):
+    process_kinds.check_map("backtest_driver")  # Stops here on a map set and unusable.
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["render"]:
         return render_main(argv[1:])

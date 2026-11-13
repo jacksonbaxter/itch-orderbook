@@ -63,6 +63,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_results  # noqa: E402
+import process_kinds  # noqa: E402
 import run_record  # noqa: E402
 import wasm_bench  # noqa: E402
 
@@ -427,6 +428,7 @@ MACHINE_CHECK = "machine_check.txt"
 
 
 def main(argv=None):
+    process_kinds.check_map("wasm_report")  # Stops here on a map set and unusable.
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="step", required=True)
     made = sub.add_parser("render")
