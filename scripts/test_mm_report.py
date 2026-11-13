@@ -140,7 +140,8 @@ class Render(unittest.TestCase):
         self.assertIn("| GLFT against AS, both Base | 100 → 106 |", self.text)
 
     def test_the_fixed_sentences_and_labels(self):
-        self.assertIn("One symbol-day. No edge is claimed. 2 symbols, AMD and BYND, are traded, "
+        self.assertNotIn("One symbol-day", self.text)
+        self.assertIn("## What this is\n\nNo edge is claimed. 2 symbols, AMD and BYND, are traded, "
                       "each on one day, 12302019", self.text)
         self.assertIn("Tuned on 10302019, an FOMC day; reported on 12302019, a late-December "
                       "session: out of sample by day.", self.text)
