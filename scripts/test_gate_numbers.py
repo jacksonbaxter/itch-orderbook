@@ -135,6 +135,34 @@ class Gate(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn("RESULTS.md:5: 20,677,836 is not in results/bench_one.md", output)
 
+    def test_the_writeup_is_gated_without_being_named(self):
+        page = self.root / "WRITEUP.md"
+        page.write_text("It reached 20,677,835 messages/s ([results/bench_one.md](results/bench_one.md)).\n",
+                        encoding="utf-8")
+        code, output = run(self.root)
+        self.assertEqual(code, 0, output)
+        self.assertIn("figures across 4 pages", output)
+        page.write_text("It reached 20,677,836 messages/s ([results/bench_one.md](results/bench_one.md)).\n",
+                        encoding="utf-8")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("WRITEUP.md:1: 20,677,836 is not in results/bench_one.md", output)
+
+    def test_a_wrong_figure_in_a_copy_of_the_writeup_is_caught(self):
+        tree = Path(self.directory.name) / "repo"
+        shutil.copytree(REPO_ROOT / "results", tree / "results")
+        text = (REPO_ROOT / "WRITEUP.md").read_text(encoding="utf-8")
+        (tree / "WRITEUP.md").write_text(text, encoding="utf-8")
+        code, output = run(tree, "--page", "WRITEUP.md")
+        self.assertEqual(code, 0, output)
+        line = next(number for number, line in enumerate(text.splitlines(), 1)
+                    if "4,570,542" in line)
+        (tree / "WRITEUP.md").write_text(text.replace("4,570,542", "4,570,543"), encoding="utf-8")
+        code, output = run(tree, "--page", "WRITEUP.md")
+        self.assertEqual(code, 1, output)
+        self.assertIn("4,570,543 is not in results/backtest_quoting_debian_12302019.md", output)
+        self.assertIn(f"WRITEUP.md:{line}:", output)
+
     def test_no_pages_at_all_passes_and_says_so(self):
         (self.root / "README.md").unlink()
         (self.root / "RESULTS.md").unlink()

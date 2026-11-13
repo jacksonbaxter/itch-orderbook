@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""results_table.py on a copy of the real results: what RESULTS.md and the README's headline
-must show, and what each must refuse."""
+"""results_table.py on a copy of the real results: what RESULTS.md, the README's headline and
+WRITEUP.md's table of missed targets must show, and what each must refuse."""
 
 import contextlib
 import io
@@ -37,6 +37,8 @@ class ResultsTable(unittest.TestCase):
         shutil.copytree(REPO_ROOT / "results", self.root / "results")
         shutil.copy(REPO_ROOT / "README.md", self.root / "README.md")
         shutil.copy(REPO_ROOT / "RESULTS.md", self.root / "RESULTS.md")
+        shutil.copy(REPO_ROOT / "WRITEUP.md", self.root / "WRITEUP.md")
+        shutil.copy(REPO_ROOT / "BENCHMARKS.md", self.root / "BENCHMARKS.md")
 
     def run_table(self, *extra):
         out = io.StringIO()
@@ -382,7 +384,8 @@ class ResultsTable(unittest.TestCase):
         path.write_text(wasm_report.render(native, browser, stderr, stderr), encoding="utf-8")
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
-        rows = [line for line in output.splitlines() if f"(results/{name})" in line]
+        results_page = output.split("README.md:\n", 1)[0]
+        rows = [line for line in results_page.splitlines() if f"(results/{name})" in line]
         self.assertEqual(len(rows), 1, output)
         self.assertIn("| T-WASM-1 | TEST | 12302019 | macOS (M4 Max) | Google Chrome for Testing "
                       "153.0.8010.12 | 24,875,622 | 19,083,969 | 1.30× | browser differs: Google "
@@ -398,7 +401,14 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| **FAIL** | average spread 1.4918, 1.3490, 3.0317 against the paper's "
                       "1.49, 1.35, 3.02: 2 of 3 match at two decimals;", row)
         self.edit("results/mm_as_tables.md", "**Verdict: FAIL**", "**Verdict: PASS**")
-        self.assertIn("| PASS |", self.row("T-MM-2", "none"))
+        rows = [line for line in results_table.generate(self.root)
+                if line.startswith("| T-MM-2 | none |")]
+        self.assertEqual(len(rows), 1)
+        self.assertIn("| PASS |", rows[0])
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL results/mm_as_tables.md: T-MM-2 is PASS, and "
+                      "WRITEUP.md's table names it as a miss", output)
         self.edit("results/mm_as_tables.md", "| 0.01 | 1.35 | 1.3490 |", "| 0.01 | 1.35 | x |")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
@@ -431,6 +441,7 @@ class ResultsTable(unittest.TestCase):
                 header = None
                 continue
             header = header or line
+            line = line.removesuffix(" " + results_table.NOT_MEASURED_MARK)
             if line.startswith("| T-"):
                 self.assertEqual(len(re.findall(r" \| ", line)),
                                  len(re.findall(r" \| ", header)), line)
@@ -441,7 +452,7 @@ class ResultsTable(unittest.TestCase):
     def headline(self):
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
-        lines = output[output.index("README.md:\n"):].splitlines()[1:]
+        lines = output[output.index("README.md:\n"):output.index("WRITEUP.md:\n")].splitlines()[1:]
         return [line for line in lines if line.startswith("| T-")]
 
     def test_the_headline_has_its_targets_in_order_each_from_its_file(self):
@@ -495,6 +506,67 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertRegex(output, r"results_table: FAIL RESULTS\.md:\d+: differs from a fresh run")
         self.assertRegex(output, r"results_table: FAIL README\.md:\d+: differs from a fresh run")
+
+    def missed(self):
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        return output.split("WRITEUP.md:\n", 1)[1]
+
+    def test_the_writeup_table_has_every_miss_each_from_its_file(self):
+        table = self.missed()
+        self.assertIn("| T-BT-3 | ≥ 4.61 M messages/s | 3.35 M messages/s | 1.26 M messages/s under "
+                      "the bar | debian |", table)
+        for line in table.splitlines()[2:]:
+            if line.startswith("|"):
+                self.assertTrue(line.endswith(results_table.NOT_MEASURED_MARK)
+                                or "](results/" in line.split(" | ")[-1], line)
+        self.assertIn("| T-BOOK-4 |", table)
+        self.assertIn("3 runs logged under P-0502, none published: 2 withdrawn, 1 stopped or "
+                      "refused", table)
+
+    def test_a_writeup_row_typed_over_fails(self):
+        self.edit("WRITEUP.md", "| 3.35 M messages/s | 1.26 M", "| 3.36 M messages/s | 1.26 M")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertRegex(output, r"results_table: FAIL WRITEUP\.md:\d+: differs from a fresh run")
+
+    def test_a_missed_row_whose_file_calls_it_met_is_refused(self):
+        self.edit("results/backtest_shadow_debian_12302019.md",
+                  "| missed: 1.26 M messages/s under the bar |", "| met |")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("T-BT-3 is 'met', not missed, and WRITEUP.md's table names it as a miss",
+                      output)
+
+    def test_a_benchmark_target_with_no_row_or_account_is_refused(self):
+        with open(self.root / "BENCHMARKS.md", "a", encoding="utf-8") as benchmarks:
+            benchmarks.write("\n### T-NEW-1: a target no row names\n\n- **Target:** none.\n")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("BENCHMARKS.md: ['T-NEW-1'] in no row or account", output)
+
+    def test_a_not_measured_target_with_a_published_run_is_refused(self):
+        with open(self.root / "results" / "run_log.md", "a", encoding="utf-8") as log:
+            log.write("| P-0502-20991231T000000Z | P-0502 | 000000000000 (clean) | Darwin | "
+                      "published: a run planted by the test |\n")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("P-0502 has a published run or none, and WRITEUP.md's table says T-BOOK-4 "
+                      "was never measured", output)
+
+    def test_a_parse_target_a_prediction_names_is_refused(self):
+        with open(self.root / "results" / "predictions.md", "a", encoding="utf-8") as predictions:
+            predictions.write("\n## P-9999: T-PARSE-1 planted by the test\n")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("P-9999 names T-PARSE-1, which WRITEUP.md's table says no run measured",
+                      output)
+
+    def test_a_missing_writeup_marker_fails(self):
+        self.edit("WRITEUP.md", results_table.MISS_END + "\n", "")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL WRITEUP.md: the two marker lines", output)
 
     def test_a_missing_results_page_fails(self):
         (self.root / "RESULTS.md").unlink()

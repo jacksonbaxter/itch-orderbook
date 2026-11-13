@@ -837,11 +837,11 @@ def targets_rows(name, text):
 def host_label(text, name):
     """debian or macOS, from the file's header: a Mac figure is never shown as Linux."""
     host = find(r"^- [Hh]ost: (.*?)(?:\. |$)", text, name)[1]
-    if host == "debian":
-        return "debian"
     if host.startswith(("Darwin", "macOS")):
         return "macOS"
-    raise TableError(f"results/{name}: host {host!r} is neither debian nor macOS")
+    if host != "debian":
+        raise TableError(f"results/{name}: host {host!r} is neither debian nor macOS")
+    return "debian"
 
 
 def one_target_row(target, name, text, comparison=None):
@@ -907,7 +907,10 @@ def perf_row(target, name, text):
 
 def spread_row(target, name, text):
     """T-MM-2: the paper's average spreads against the simulation's."""
-    find(rf"^## {target}: .*\n\n\*\*Verdict: FAIL\*\*", text, name)
+    verdict = find(rf"^## {target}: .*\n\n\*\*Verdict: (\w+)\*\*", text, name)[1]
+    if verdict != "FAIL":
+        raise TableError(f"results/{name}: {target} is {verdict}, and {WRITEUP_PAGE}'s table "
+                         "names it as a miss")
     rows = re.findall(r"^\| ([0-9.]+) \| ([0-9.]+) \| ([0-9.]+) \| ([0-9.]+) \| (matches|does not "
                       r"match) \|$", text, re.MULTILINE)
     if not rows or all(verdict == "matches" for *_, verdict in rows):

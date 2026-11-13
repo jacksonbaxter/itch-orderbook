@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_PAGES = ("README.md", "RESULTS.md", "docs/index.html")
+DEFAULT_PAGES = ("README.md", "RESULTS.md", "WRITEUP.md", "docs/index.html")
 NOT_RESULTS = {"predictions.md", "run_log.md"}
 HEADER_ONLY = {"fault_matrix.md"}
 EXEMPT = ("ITCH 5.0", "C++23", "BinaryFILE 1.0")
