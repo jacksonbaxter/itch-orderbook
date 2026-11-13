@@ -1738,6 +1738,93 @@
         "signature": "mm_report: FAIL total-not-ledger AMD, AS Base",
         "exit": 1
       }
+    },
+    {
+      "id": "mm-cli-cut-file-passes",
+      "breaks": "itch_mm replays a file cut mid-frame as a whole day: no framing check",
+      "check": "test_mm_cli, cut",
+      "mutations": [
+        {
+          "file": "tools/itch_mm.cpp",
+          "old": "  if (!itch::tools::framing_ends_cleanly(\"itch_mm\", file->bytes())) {\n    return 1;\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_mm"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_mm_cli.py",
+        "{build}/tools/itch_mm",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "mm cli: FAIL cut: exit",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-select-cut-file-passes",
+      "breaks": "itch_select replays a file cut mid-frame as a whole day: no framing check",
+      "check": "test_select_cli, cut",
+      "mutations": [
+        {
+          "file": "tools/itch_select.cpp",
+          "old": "  if (!itch::tools::framing_ends_cleanly(\"itch_select\", file->bytes())) {\n    return 1;\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_select"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_select_cli.py",
+        "{build}/tools/itch_select",
+        "{build}/select_fault"
+      ],
+      "expect": {
+        "signature": "select cli: FAIL cut: exit",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-calibrate-cut-file-passes",
+      "breaks": "itch_calibrate replays a file cut mid-frame as a whole day: no framing check",
+      "check": "test_calibrate_cli, cut",
+      "mutations": [
+        {
+          "file": "tools/itch_calibrate.cpp",
+          "old": "  if (!itch::tools::framing_ends_cleanly(\"itch_calibrate\", file->bytes())) {\n    return 1;\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_calibrate"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_calibrate_cli.py",
+        "{build}/tools/itch_calibrate",
+        "{build}/calibrate_fault"
+      ],
+      "expect": {
+        "signature": "calibrate cli: FAIL cut: exit",
+        "exit": 1
+      }
     }
   ]
 }

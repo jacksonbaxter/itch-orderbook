@@ -13,8 +13,9 @@
 // and λ, and the fit of log λ on δ with its number of points and R². Units are ticks and
 // seconds. It reads the market tape only, never a strategy's fills.
 //
-// Exit codes: 0 every symbol was found and calibrated, 1 the book refused a message or a
-// symbol is not in the day's directory, 2 bad usage or an unreadable file.
+// Exit codes: 0 every symbol was found and calibrated, 1 the book refused a message, a symbol
+// is not in the day's directory or the file's framing did not end on a frame boundary
+// (tools/framing.hpp), 2 bad usage or an unreadable file.
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -29,6 +30,7 @@
 #include <string_view>
 #include <vector>
 
+#include "framing.hpp"
 #include "itch/book.hpp"
 #include "itch/messages.hpp"
 #include "itch/mm/calibration.hpp"
@@ -181,6 +183,9 @@ int run(std::span<const char* const> args) {
   if (!file) {
     std::println(stderr, "itch_calibrate: cannot read {}", usage->path);
     return 2;
+  }
+  if (!itch::tools::framing_ends_cleanly("itch_calibrate", file->bytes())) {
+    return 1;
   }
   const CalibrationSettings& settings = usage->settings;
   std::vector<Calibrator> calibrators;
