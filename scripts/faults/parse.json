@@ -1,0 +1,249 @@
+{
+  "area": "parse",
+  "faults": [
+    {
+      "id": "parse-decode-skips-a-type",
+      "breaks": "T-PARSE-2's decode leaves Trade (P), one of itch-book's ten types, undecoded",
+      "check": "test_parse_passes ParsePasses.TheDecodeFoldsItchBooksFieldsOfEachOfItsTenTypes",
+      "mutations": [
+        {
+          "file": "bench/parse_passes.hpp",
+          "old": "      case Trade::kType: {\n        const Trade trade = Trade::from_wire(m);\n        fold += trade.match_number + trade.shares;\n        break;\n      }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_parse_passes"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_parse_passes"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ParsePasses\\.TheDecodeFoldsItchBooksFieldsOfEachOfItsTenTypes",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-decode-reads-no-field",
+      "breaks": "T-PARSE-2's decode folds nothing, so the compiler need read no field",
+      "check": "test_parse_passes ParsePasses.TheDecodeMatchesThePlainReferenceOnASession",
+      "mutations": [
+        {
+          "file": "bench/parse_passes.hpp",
+          "old": "  totals.fold = fold;\n  return totals;\n}\n\n// The sum of every field",
+          "new": "  totals.fold = 0;\n  return totals;\n}\n\n// The sum of every field"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_parse_passes"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_parse_passes"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ParsePasses\\.TheDecodeMatchesThePlainReferenceOnASession",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-strict-skips-a-field",
+      "breaks": "T-PARSE-3's strict decode leaves a Trade's match number out of its sum",
+      "check": "test_parse_passes ParsePasses.TheStrictDecodeReadsEveryByteOfEveryType",
+      "mutations": [
+        {
+          "file": "bench/parse_passes.hpp",
+          "old": "           m.price + m.match_number;\n",
+          "new": "           m.price;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_parse_passes"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_parse_passes"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ParsePasses\\.TheStrictDecodeReadsEveryByteOfEveryType",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-walk-skips-empty-frames",
+      "breaks": "T-PARSE-1's walk counts a frame only if it has a payload",
+      "check": "test_parse_passes ParsePasses.TheWalkCountsEveryFrameToTheEnd",
+      "mutations": [
+        {
+          "file": "bench/parse_passes.hpp",
+          "old": "  totals.stopped_at = walk_frames(bytes, [&](const std::byte*, std::size_t) { ++totals.messages; });\n",
+          "new": "  totals.stopped_at = walk_frames(bytes, [&](const std::byte*, std::size_t length) {\n    totals.messages += length != 0 ? 1U : 0U;\n  });\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_parse_passes"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_parse_passes"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ParsePasses\\.TheWalkCountsEveryFrameToTheEnd",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-bench-cut-file-not-refused",
+      "breaks": "bench_parse publishes a file its frame reader could not walk to the end",
+      "check": "test_bench_parse_cli.py, the cut file",
+      "mutations": [
+        {
+          "file": "bench/bench_parse.cpp",
+          "old": "  if (!ref.whole || ref.consumed != bytes.size()) {",
+          "new": "  if (false) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_parse"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_parse_cli.py",
+        "{build}/bench/bench_parse",
+        "{build}/fault_bench_parse_cli",
+        "{tree}/tests/fixtures/oracle/session.itch"
+      ],
+      "expect": {
+        "signature": "bench parse cli: FAIL cut: exit 0, not 3",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-rate-payload-bytes-only",
+      "breaks": "The GB/s counts the payloads alone, without the length prefixes the sources count",
+      "check": "test_parse_driver.py Figures.test_the_summary_is_the_median_pass",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "        out[p[\"pass\"]][\"gbs\"].append(gb_rate(file_bytes, p[\"seconds\"]))",
+          "new": "        out[p[\"pass\"]][\"gbs\"].append(gb_rate(file_bytes - 2 * p[\"messages\"], p[\"seconds\"]))"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Figures.test_the_summary_is_the_median_pass"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_summary_is_the_median_pass",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-rate-decoded-messages",
+      "breaks": "The rate's denominator is the messages a pass decoded, not every framed message",
+      "check": "test_parse_driver.py Figures.test_every_pass_is_counted_over_every_frame_and_the_whole_file",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "\"seconds\": p[\"seconds\"], \"messages\": p[\"totals\"][\"messages\"],",
+          "new": "\"seconds\": p[\"seconds\"], \"messages\": p[\"totals\"][\"decoded\"],"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Figures.test_every_pass_is_counted_over_every_frame_and_the_whole_file"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_pass_is_counted_over_every_frame_and_the_whole_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-summary-best-as-median",
+      "breaks": "The summary's Median column gives the best pass",
+      "check": "test_parse_driver.py Figures.test_the_summary_is_the_median_pass",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    median, low, high, cv = bench_driver.spread(values)\n    return median, low, high, cv * 100\n",
+          "new": "    median, low, high, cv = bench_driver.spread(values)\n    return high, low, high, cv * 100\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Figures.test_the_summary_is_the_median_pass"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_summary_is_the_median_pass",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-check-skips-the-summary",
+      "breaks": "parse_driver.py --check no longer works the Summary again from the passes",
+      "check": "test_parse_driver.py Check.test_a_summary_figure_that_is_not_the_passes",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "                        (\"Summary\", summary_rows(passes, file_bytes)),\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_a_summary_figure_that_is_not_the_passes"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_summary_figure_that_is_not_the_passes",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-results-not-routed",
+      "breaks": "check_results.py holds a parse rate file to a book file's rules, not the driver's check",
+      "check": "test_parse_driver.py Figures.test_the_file_passes_both_checks",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    return \"parse_passes\" in fields\n",
+          "new": "    return \"parse_rates\" in fields\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Figures.test_the_file_passes_both_checks"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_file_passes_both_checks",
+        "exit": 1
+      }
+    }
+  ]
+}

@@ -15,6 +15,10 @@ whose figures, or whose Sampler section's figures for every repetition, are unde
 bars, scripts/linux_sampler.py), machine_check's output present and passing, and nothing private. scripts/bench_driver.py and scripts/stamp_load.py run the same checks, so that
 a file failing them is never written as finished.
 
+A parse rate file, one with a `parse_passes` field (scripts/parse_driver.py), has no latency
+or counter tables: every figure in it is worked again from its table of timed passes by that
+driver's check_text().
+
 A backtest file, one with a `workload` field (scripts/backtest_driver.py), has no latency
 or counter tables. It is held instead to its workload's fields, the summary's three rates
 with each median inside its min and max and matching the median of the repetitions table,
@@ -1235,6 +1239,18 @@ def check_walks(text):
     return walk_report.check_text(text)
 
 
+def is_parse_file(fields):
+    """scripts/parse_driver.py's parse rate, T-PARSE-1 to T-PARSE-3."""
+    return "parse_passes" in fields
+
+
+def check_parse(text):
+    # Imported here: parse_driver imports this module.
+    import parse_driver  # noqa: PLC0415
+
+    return parse_driver.check_text(text)
+
+
 def check_backtest_summary(text, fields):
     rows = {cells[0]: cells for cells in table_rows(text, "Summary")}
     for label in BACKTEST_SUMMARY:
@@ -1616,6 +1632,9 @@ def check_text(text, name=None):
     if is_walks_file(fields):
         violations.extend(check_walks(text))
         violations.extend(check_command_siblings(text))
+        return violations
+    if is_parse_file(fields):
+        violations.extend(check_parse(text))
         return violations
     if is_backtest_file(fields):
         violations.extend(check_backtest(text, fields))

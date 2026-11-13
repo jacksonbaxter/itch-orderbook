@@ -168,6 +168,7 @@ stage_bench() {
     python_test scripts/test_driver_records.py &&
     python_test scripts/test_backtest_results.py &&
     python_test scripts/test_linux_sampler.py &&
+    python_test scripts/test_parse_driver.py &&
     python_test scripts/test_spsc_results.py &&
     python_test scripts/test_alloc_results.py &&
     python_test scripts/test_chase_report.py &&
