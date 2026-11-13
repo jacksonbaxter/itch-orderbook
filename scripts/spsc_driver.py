@@ -208,7 +208,10 @@ def stamp_of(moment):
 
 def span_lines(lines, begin, end):
     """The sampler's lines from its last sample at or before begin to its first at or after
-    end: the span and the samples either side of it, which is what the rule judges."""
+    end: the span and the sample either side of it. The edge samples are kept to show the
+    span covered, and for its gaps; wasm_bench.unquiet judges FOREIGN and failed lines only
+    where they are stamped inside [begin, end], so a FOREIGN line at an edge sample outside
+    the span withdraws nothing (r5-10)."""
     stamps = [wasm_bench.at(line.split()[0]) for line in lines
               if line.split()[1:2] == ["sample"]]
     before = [t for t in stamps if t <= wasm_bench.at(begin)]

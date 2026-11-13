@@ -365,6 +365,25 @@ class FromThePush(unittest.TestCase):
             self.assertEqual(check_results.share_cell(share), cell)
 
 
+class EdgeSamples(unittest.TestCase):
+    def test_the_edge_samples_are_kept_and_not_judged(self):
+        """r5-10, as the docstrings now say: span_lines keeps the sample either side of the
+        span, and a FOREIGN line there withdraws nothing; one inside the span does. The same
+        in stamp_load's sampler line."""
+        lines = [f"2026-11-05T09:00:{s:02d}Z sample" for s in (0, 2, 4, 6, 8)]
+        edge = lines[:4] + ["2026-11-05T09:00:06Z FOREIGN 31.0 /usr/bin/a-backup"] + lines[4:]
+        begin, end = "2026-11-05T09:00:01Z", "2026-11-05T09:00:05Z"
+        kept = spsc_driver.span_lines(edge, begin, end)
+        self.assertEqual(kept[0], lines[0])
+        self.assertIn("2026-11-05T09:00:06Z FOREIGN 31.0 /usr/bin/a-backup", kept)
+        self.assertIsNone(spsc_driver.span_unquiet(edge, begin, end))
+        stamp_load.sampler_line("\n".join(edge), begin, end)
+        inside = lines[:2] + ["2026-11-05T09:00:02Z FOREIGN 31.0 /usr/bin/a-backup"] + lines[2:]
+        self.assertIn("a-backup", spsc_driver.span_unquiet(inside, begin, end))
+        with self.assertRaises(ValueError):
+            stamp_load.sampler_line("\n".join(inside), begin, end)
+
+
 class Debian(unittest.TestCase):
     """On debian, a verdict is met or missed by the ratio against the bar."""
 

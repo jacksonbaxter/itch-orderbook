@@ -215,8 +215,10 @@ def run_one(args, run_dir, name, extra, repetition, commit):
 
 
 def judge(args, stem, code, sampler):
-    """None if the process is published, else why the sampler rule withdraws it. Raises Refused
-    for anything else: a process that exited other than 0 (run_one has retried measure.sh's
+    """None if the process is published, else why the sampler rule withdraws it: through
+    wasm_bench.unquiet, the span covered with no gap over 5 s and no FOREIGN line stamped
+    inside measure.sh's start and end; one at an edge sample outside them is not judged
+    (r5-10). Raises Refused for anything else: a process that exited other than 0 (run_one has retried measure.sh's
     75 already), left no record, or has no measure.sh lines refuses the run, never a rerun."""
     err = Path(f"{stem}.err").read_text(encoding="utf-8", errors="replace")
     if code != 0:

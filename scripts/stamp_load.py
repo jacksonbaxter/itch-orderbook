@@ -82,7 +82,9 @@ def seconds(stamp_text):
 
 def sampler_line(sampler_text, start, end):
     """The header value for a sampler that kept watch from start to end. Raises ValueError
-    if it did not cover the span or saw another process busy in it."""
+    if it did not cover the span, from its last sample at or before start to its first at or
+    after end with no gap over SAMPLE_GAP, or has a FOREIGN line stamped inside [start, end].
+    A FOREIGN line at an edge sample outside the span is not judged (r5-10)."""
     samples, foreign = [], []
     for line in sampler_text.splitlines():
         match = SAMPLE.match(line)

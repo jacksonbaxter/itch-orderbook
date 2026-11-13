@@ -222,7 +222,11 @@ def at(stamp):
 
 
 def unquiet(lines, started, finished):
-    """Why the sampler does not show the span from started to finished quiet, or None."""
+    """Why the sampler does not show the span from started to finished quiet, or None. The
+    span is covered if a sample falls at or before started and one at or after finished, with
+    no gap over LONGEST_GAP_S between any two of the samples given; it is quiet if no FOREIGN or
+    failed line is stamped inside [started, finished]. Lines outside it, the edge samples
+    included, are not judged (r5-10)."""
     samples = [at(line.split()[0]) for line in lines if line.split()[1:2] == ["sample"]]
     begin, end = at(started), at(finished)
     if not samples or samples[0] > begin or samples[-1] < end:
