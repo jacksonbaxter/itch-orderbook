@@ -200,6 +200,27 @@
       "expect": {
         "signature": "^FAIL: test_a_run_in_which_no_fault_ran_fails \\("
       }
+    },
+    {
+      "id": "matrix-tree-lacks-writeup",
+      "breaks": "The matrix area's tree drops WRITEUP.md, which readme faults edit, so its control fails hours into a full run",
+      "check": "test_fault_matrix.py, every file a committed fault edits or reads is in the matrix area's tree",
+      "mutations": [
+        {
+          "file": "scripts/faults/matrix.json",
+          "old": "    \"RESULTS.md\",\n    \"WRITEUP.md\",\n",
+          "new": "    \"RESULTS.md\",\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_matrix_area_copies_every_file_a_fault_injects_into \\(",
+        "exit": 1
+      }
     }
   ]
 }

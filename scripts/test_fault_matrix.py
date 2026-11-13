@@ -391,6 +391,19 @@ class CommittedFaults(unittest.TestCase):
         for fault in faults:
             self.assertIsNone(fm.find_stale(fault, fm.REPO_ROOT), fault.id)
 
+    def test_the_matrix_area_copies_every_file_a_fault_injects_into(self):
+        # The test above runs again in the matrix area's copy, as that area's control, and a
+        # file a fault edits or reads that the copy lacks fails it only hours into a full run.
+        faults = fm.load_faults(fm.REPO_ROOT / "scripts" / "faults")
+        trees = {fault.tree for fault in faults if fault.area == "matrix"}
+        self.assertEqual(len(trees), 1)
+        tree = trees.pop()
+        for fault in faults:
+            for name in [m["file"] for m in fault.mutations] + [i["file"] for i in fault.inputs]:
+                inside = any(name == entry or name.startswith(entry.rstrip("/") + "/")
+                             for entry in tree)
+                self.assertTrue(inside, f"{fault.id}: {name} is not in the matrix area's tree")
+
     def test_a_tool_that_only_fails_detects_no_tool_fault(self):
         # Each mm-select and mm-cli fault breaks one rule of its tool; a tool that just exits 1
         # breaks every case, and its output must match none of their signatures.
