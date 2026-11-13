@@ -339,6 +339,11 @@ SPSC_BENCHMARKS = {
     ("T-SPSC-3", "pipelined time / single-threaded time"):
         "takes {op} {0:g}× the single-threaded replay",
 }
+# The words of T-PARSE-1 to T-PARSE-3's Target lines, for the bars scripts/parse_driver.py
+# holds its medians to: {0} M msg/s, {1} GB/s, {day} the day a bar was set on.
+PARSE_BENCHMARKS = {"T-PARSE-1": "≥ {0:g} M msg/s, ~{1:g} GB/s",
+                    "T-PARSE-2": "≥ {0:g} M msg/s and ≥ ~{1:g} GB/s",
+                    "T-PARSE-3": "≥ {0:g} M msg/s and ≥ {1:g} GB/s on {day}"}
 SYMBOLS = {">=": "≥", "<=": "≤"}
 
 
@@ -370,6 +375,12 @@ def bar_copies():
             words = None
         yield key[0], f"SPSC_COMPARISONS {key[1]}", \
             words and words.format(spec["bar"], op=SYMBOLS[spec["op"]])
+    # Imported here: parse_driver imports this module.
+    import parse_driver  # noqa: PLC0415
+
+    for name, target, _, bar_msgs, bar_gbs in parse_driver.PASSES:
+        yield target, f"parse_driver.PASSES {name}", PARSE_BENCHMARKS[target].format(
+            bar_msgs, bar_gbs, day=parse_driver.BAR_DAY.get(target, ""))
 
 
 def bar_disagreements(benchmarks):

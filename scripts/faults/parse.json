@@ -8,7 +8,7 @@
       "mutations": [
         {
           "file": "bench/parse_passes.hpp",
-          "old": "      case Trade::kType: {\n        const Trade trade = Trade::from_wire(m);\n        fold += trade.match_number + trade.shares;\n        break;\n      }\n",
+          "old": "          case Trade::kType: {\n            const Trade trade = Trade::from_wire(m);\n            fold += trade.match_number + trade.shares;\n            break;\n          }\n",
           "new": ""
         }
       ],
@@ -80,14 +80,40 @@
       }
     },
     {
-      "id": "parse-walk-skips-empty-frames",
-      "breaks": "T-PARSE-1's walk counts a frame only if it has a payload",
+      "id": "parse-walk-past-an-empty-frame",
+      "breaks": "T-PARSE-1's and T-PARSE-2's walk goes on past a zero-length frame, where itch-book's parse() stops",
+      "check": "test_parse_passes ParsePasses.TheWalkAndTheDecodeStopAtAnEmptyFrame",
+      "mutations": [
+        {
+          "file": "bench/parse_passes.hpp",
+          "old": "      at += kPrefix;\n      break;\n",
+          "new": "      at += kPrefix;\n      continue;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_parse_passes"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_parse_passes"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ParsePasses\\.TheWalkAndTheDecodeStopAtAnEmptyFrame",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-walk-reads-no-type",
+      "breaks": "T-PARSE-1's walk takes each frame's length for its type's, so it counts every frame a message, doing less than itch-book's scan()",
       "check": "test_parse_passes ParsePasses.TheWalkCountsEveryFrameToTheEnd",
       "mutations": [
         {
           "file": "bench/parse_passes.hpp",
-          "old": "  totals.stopped_at = walk_frames(bytes, [&](const std::byte*, std::size_t) { ++totals.messages; });\n",
-          "new": "  totals.stopped_at = walk_frames(bytes, [&](const std::byte*, std::size_t length) {\n    totals.messages += length != 0 ? 1U : 0U;\n  });\n"
+          "old": "    const std::size_t want = message_length(type);\n",
+          "new": "    const std::size_t want = length;\n"
         }
       ],
       "build": {
@@ -106,14 +132,48 @@
       }
     },
     {
+      "id": "parse-strict-visits-through-a-table",
+      "breaks": "T-PARSE-3's strict decode reaches FieldSum through std::visit's table of functions, an indirect call a message inside the timed loop",
+      "check": "parse_driver.py --inline-check on the built bench_parse",
+      "mutations": [
+        {
+          "file": "bench/parse_passes.hpp",
+          "old": "    fold += field_sum(*message);\n",
+          "new": "    fold += std::visit(FieldSum{}, *message);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_parse"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/parse_driver.py",
+        "--inline-check",
+        "{build}/bench/bench_parse"
+      ],
+      "expect": {
+        "signature": "parse_driver: FAIL inline strict_decode: ",
+        "exit": 1
+      }
+    },
+    {
       "id": "parse-bench-cut-file-not-refused",
-      "breaks": "bench_parse publishes a file its frame reader could not walk to the end",
+      "breaks": "bench_parse publishes a file its frame reader could not walk to the end: the reader's check gone, and each warm-up held to where the reader stopped, not to the input's end",
       "check": "test_bench_parse_cli.py, the cut file",
       "mutations": [
         {
           "file": "bench/bench_parse.cpp",
           "old": "  if (!ref.whole || ref.consumed != bytes.size()) {",
           "new": "  if (false) {"
+        },
+        {
+          "file": "bench/bench_parse.cpp",
+          "old": "    if (warm.messages != ref.frames || warm.stopped_at != bytes.size()) {",
+          "new": "    if (warm.messages != ref.frames || warm.stopped_at != ref.consumed) {"
         }
       ],
       "build": {
@@ -242,6 +302,204 @@
       ],
       "expect": {
         "signature": "FAIL: test_the_file_passes_both_checks",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-check-any-message-count",
+      "breaks": "parse_driver.py --check takes rates over any message count, not only over every framed message",
+      "check": "test_parse_driver.py Check.test_rates_over_fewer_messages_than_every_frame",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "        wrong = sorted({p[\"messages\"] for p in passes} - {frames})\n",
+          "new": "        wrong = []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_rates_over_fewer_messages_than_every_frame"
+      ],
+      "expect": {
+        "signature": "FAIL: test_rates_over_fewer_messages_than_every_frame",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-check-any-size",
+      "breaks": "parse_driver.py --check takes a file's bytes without the manifest's size of the day",
+      "check": "test_parse_driver.py Check.test_a_frame_count_or_size_that_is_not_the_manifests",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    if pinned is not None and file_bytes != pinned[\"unpacked_bytes\"]:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_a_frame_count_or_size_that_is_not_the_manifests"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_frame_count_or_size_that_is_not_the_manifests",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-check-any-day",
+      "breaks": "parse_driver.py --check takes a day the manifest does not pin",
+      "check": "test_parse_driver.py Check.test_a_day_the_manifest_does_not_pin",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    if pinned is None:\n        problems.append((\"parse-day-unpinned\"",
+          "new": "    if False:\n        problems.append((\"parse-day-unpinned\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_a_day_the_manifest_does_not_pin"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_day_the_manifest_does_not_pin",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-check-skips-the-caveats",
+      "breaks": "parse_driver.py --check no longer works the caveats' table of the two days again from the manifest",
+      "check": "test_parse_driver.py Check.test_a_caveat_figure_changed",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "                        (\"Caveats\", caveat_rows(day) or [])):",
+          "new": "                        ):"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_a_caveat_figure_changed"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_caveat_figure_changed",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-bars-not-copied",
+      "breaks": "check_results.py --bars no longer holds the driver's three T-PARSE bars to BENCHMARKS.md",
+      "check": "test_parse_driver.py Check.test_a_driver_bar_that_is_not_benchmarks_md",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    for name, target, _, bar_msgs, bar_gbs in parse_driver.PASSES:\n",
+          "new": "    for name, target, _, bar_msgs, bar_gbs in ():\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_a_driver_bar_that_is_not_benchmarks_md"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_driver_bar_that_is_not_benchmarks_md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-inline-misses-arm64-calls",
+      "breaks": "--inline-check knows only x86-64's call, so an arm64 bl or blr in a timed loop passes",
+      "check": "test_parse_driver.py Inline.test_arm64_calls_and_branches",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "CALLS = re.compile(r\"^(call[lqw]?|bl|blr|blraaz?|blrabz?)$\")\n",
+          "new": "CALLS = re.compile(r\"^(call[lqw]?)$\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Inline.test_arm64_calls_and_branches"
+      ],
+      "expect": {
+        "signature": "FAIL: test_arm64_calls_and_branches",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-inline-misses-tail-jumps",
+      "breaks": "--inline-check lets a jump to another function through, a call by another name",
+      "check": "test_parse_driver.py Inline.test_a_jump_to_another_function_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "        elif BRANCHES.match(mnemonic) and target and target.group(1) != symbol:\n",
+          "new": "        elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Inline.test_a_jump_to_another_function_is_refused"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_jump_to_another_function_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-shortfall-printed-as-zero",
+      "breaks": "A miss under a hundredth of its unit is printed as a miss of 0.00",
+      "check": "test_parse_driver.py Figures.test_the_verdicts",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    return text if text != \"0.00\" else f\"{bar - value:.2g}\"\n",
+          "new": "    return text\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Figures.test_the_verdicts"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_verdicts",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-best-of-three-label",
+      "breaks": "The best pass is labelled best of 3, as itch-book's are, not best of every pass the run timed",
+      "check": "test_parse_driver.py Figures.test_the_best_pass_is_the_fastest",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    each = len(passes) // len(PASSES)\n",
+          "new": "    each = 3\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Figures.test_the_best_pass_is_the_fastest"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_best_pass_is_the_fastest",
         "exit": 1
       }
     }

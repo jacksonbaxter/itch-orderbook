@@ -1,12 +1,16 @@
 // The three parse passes of T-PARSE-1 to T-PARSE-3, each over a whole buffer of BinaryFILE
 // frames, each as its target's source defines the pass:
 //
-//   frame_walk     T-PARSE-1, itch-book's framing tier: every frame counted by its 2-byte
-//                  length prefix alone. No payload byte is read, the type byte included.
-//   book_decode    T-PARSE-2, itch-book's decode tier: each frame's type checked against its
-//                  length, and the ten types its Checksum handler takes (S, R, A, F, E, C, X,
-//                  D, U and P) decoded, the fields that handler adds folded into a sum. As in
-//                  its build, a field the sum does not use need not be read.
+//   frame_walk     T-PARSE-1, itch-book's framing tier, its scan(): the loop of its parse()
+//                  (include/itch/parser.hpp in the source), with a handler that takes nothing.
+//                  Per frame, the length prefix, a stop at a zero-length frame, the type byte,
+//                  the type's length looked up and compared with the frame's, and one of three
+//                  counters: a message, an unknown type, a wrong length.
+//   book_decode    T-PARSE-2, itch-book's decode tier: the same loop, with the ten types its
+//                  Checksum handler takes (S, R, A, F, E, C, X, D, U and P) decoded and the
+//                  fields that handler adds folded into a sum. As in its build, a field the sum
+//                  does not use need not be read. One more add a message than the source does:
+//                  the count of messages decoded, which bench_parse holds to the frame reader's.
 //   strict_decode  T-PARSE-3, Lunary's full decode: itch::decode() on every frame, which checks
 //                  the length against the type before any field, and every field of each of the
 //                  23 types, header included, folded into a sum.
@@ -14,6 +18,14 @@
 // Every pass counts every frame: that is the denominator of each target's rate. A sum of
 // fields changes whenever any one field does, so a field the pass did not read, or a type it
 // skipped, shows in the fold (tests/test_parse_passes.cpp).
+//
+// Each pass is one function, never inlined into its caller, with everything it calls inlined
+// into it: so a timed span holds one call, to the pass, and the pass's loop holds none, as
+// itch-book's template loop inlines its handler. gnu::flatten does that alone in GCC, which
+// inlines the calls that inlining brings in as well; Clang inlines only the calls written in
+// the flattened function's own body, so each function a pass hands work to is always_inline
+// and flatten too, its lambda included. scripts/parse_driver.py --inline-check reads the
+// built binary's code of the three and refuses a call in any.
 #pragma once
 
 #include <array>
@@ -52,8 +64,9 @@ template <std::size_t N>
   return static_cast<unsigned char>(c);
 }
 
-// The walk all three passes share: each frame's length prefix, then the frame's payload, or
-// none for a zero-length frame. It stops at a prefix that asks for more bytes than remain.
+// The walk the strict decode makes: each frame's length prefix, then the frame's payload, or
+// none for a zero-length frame, which decode() refuses. It stops at a prefix that asks for
+// more bytes than remain.
 template <class OnFrame>
 [[gnu::always_inline]] inline std::size_t walk_frames(std::span<const std::byte> bytes,
                                                       OnFrame on_frame) {
@@ -72,70 +85,106 @@ template <class OnFrame>
   return at;
 }
 
-// T-PARSE-1.
-[[nodiscard]] inline Totals frame_walk(std::span<const std::byte> bytes) noexcept {
+// itch-book's parse() loop, transcribed: a zero-length frame ends the walk, past it, as the
+// end of the session; a frame whose length is its type's goes to on_message and is counted a
+// message, any other is counted an unknown type or a wrong length. Every frame before the
+// stop is in `messages`, as the source's rate counts them.
+template <class OnMessage>
+[[gnu::always_inline]] inline Totals scan_frames(std::span<const std::byte> bytes,
+                                                 OnMessage on_message) {
+  constexpr std::size_t kPrefix = FrameReader::kLengthPrefix;
+  const std::byte* const data = bytes.data();
+  const std::size_t size = bytes.size();
+  std::size_t at = 0;
+  std::uint64_t messages = 0;
+  std::uint64_t unknown = 0;
+  std::uint64_t malformed = 0;
+  while (size - at >= kPrefix) {
+    const std::size_t length = read_be<std::uint16_t>(data + at);
+    if (length == 0) {
+      at += kPrefix;
+      break;
+    }
+    if (length > size - at - kPrefix) {
+      break;
+    }
+    const std::byte* const m = data + at + kPrefix;
+    const char type = read_char(m);
+    const std::size_t want = message_length(type);
+    if (want == length) {
+      on_message(type, m);
+      ++messages;
+    } else if (want == 0) {
+      ++unknown;
+    } else {
+      ++malformed;
+    }
+    at += kPrefix + length;
+  }
   Totals totals;
-  totals.stopped_at = walk_frames(bytes, [&](const std::byte*, std::size_t) { ++totals.messages; });
+  totals.messages = messages + unknown + malformed;
+  totals.rejected = unknown + malformed;
+  totals.stopped_at = at;
   return totals;
 }
 
+// T-PARSE-1.
+[[gnu::noinline, gnu::flatten, nodiscard]] inline Totals frame_walk(
+    std::span<const std::byte> bytes) noexcept {
+  return scan_frames(bytes, [](char, const std::byte*) __attribute__((always_inline)) {});
+}
+
 // T-PARSE-2: what itch-book's Checksum handler adds for each of its ten types.
-[[nodiscard]] inline Totals book_decode(std::span<const std::byte> bytes) noexcept {
-  Totals totals;
+[[gnu::noinline, gnu::flatten, nodiscard]] inline Totals book_decode(
+    std::span<const std::byte> bytes) noexcept {
   std::uint64_t fold = 0;
   std::uint64_t decoded = 0;
-  std::uint64_t rejected = 0;
-  totals.stopped_at = walk_frames(bytes, [&](const std::byte* m, std::size_t length) {
-    ++totals.messages;
-    if (length == 0 || message_length(read_char(m)) != length) {
-      ++rejected;
-      return;
-    }
-    switch (read_char(m)) {
-      case SystemEvent::kType: fold += char_value(SystemEvent::from_wire(m).event_code); break;
-      case StockDirectory::kType: fold += StockDirectory::from_wire(m).round_lot_size; break;
-      case AddOrder::kType: {
-        const AddOrder add = AddOrder::from_wire(m);
-        fold += add.order_reference + add.price + add.shares;
-        break;
-      }
-      case AddOrderAttributed::kType: {
-        const AddOrderAttributed add = AddOrderAttributed::from_wire(m);
-        fold += add.order_reference + add.price + add.shares;
-        break;
-      }
-      case OrderExecuted::kType: {
-        const OrderExecuted executed = OrderExecuted::from_wire(m);
-        fold += executed.order_reference + executed.executed_shares + executed.match_number;
-        break;
-      }
-      case OrderExecutedWithPrice::kType: {
-        const OrderExecutedWithPrice executed = OrderExecutedWithPrice::from_wire(m);
-        fold += executed.order_reference + executed.execution_price;
-        break;
-      }
-      case OrderCancel::kType: {
-        const OrderCancel cancel = OrderCancel::from_wire(m);
-        fold += cancel.order_reference + cancel.cancelled_shares;
-        break;
-      }
-      case OrderDelete::kType: fold += OrderDelete::from_wire(m).order_reference; break;
-      case OrderReplace::kType: {
-        const OrderReplace replace = OrderReplace::from_wire(m);
-        fold += replace.original_order_reference + replace.new_order_reference + replace.price;
-        break;
-      }
-      case Trade::kType: {
-        const Trade trade = Trade::from_wire(m);
-        fold += trade.match_number + trade.shares;
-        break;
-      }
-      default: return;
-    }
-    ++decoded;
-  });
+  Totals totals = scan_frames(
+      bytes, [&](char type, const std::byte* m) __attribute__((always_inline, flatten)) {
+        switch (type) {
+          case SystemEvent::kType: fold += char_value(SystemEvent::from_wire(m).event_code); break;
+          case StockDirectory::kType: fold += StockDirectory::from_wire(m).round_lot_size; break;
+          case AddOrder::kType: {
+            const AddOrder add = AddOrder::from_wire(m);
+            fold += add.order_reference + add.price + add.shares;
+            break;
+          }
+          case AddOrderAttributed::kType: {
+            const AddOrderAttributed add = AddOrderAttributed::from_wire(m);
+            fold += add.order_reference + add.price + add.shares;
+            break;
+          }
+          case OrderExecuted::kType: {
+            const OrderExecuted executed = OrderExecuted::from_wire(m);
+            fold += executed.order_reference + executed.executed_shares + executed.match_number;
+            break;
+          }
+          case OrderExecutedWithPrice::kType: {
+            const OrderExecutedWithPrice executed = OrderExecutedWithPrice::from_wire(m);
+            fold += executed.order_reference + executed.execution_price;
+            break;
+          }
+          case OrderCancel::kType: {
+            const OrderCancel cancel = OrderCancel::from_wire(m);
+            fold += cancel.order_reference + cancel.cancelled_shares;
+            break;
+          }
+          case OrderDelete::kType: fold += OrderDelete::from_wire(m).order_reference; break;
+          case OrderReplace::kType: {
+            const OrderReplace replace = OrderReplace::from_wire(m);
+            fold += replace.original_order_reference + replace.new_order_reference + replace.price;
+            break;
+          }
+          case Trade::kType: {
+            const Trade trade = Trade::from_wire(m);
+            fold += trade.match_number + trade.shares;
+            break;
+          }
+          default: return;
+        }
+        ++decoded;
+      });
   totals.decoded = decoded;
-  totals.rejected = rejected;
   totals.fold = fold;
   return totals;
 }
@@ -236,23 +285,61 @@ struct FieldSum {
   }
 };
 
-// T-PARSE-3. Not noexcept: std::visit may throw on a variant without a value, which decode()
-// never returns.
-[[nodiscard]] inline Totals strict_decode(std::span<const std::byte> bytes) {
+// The sum of the fields of whichever type a decoded message holds, by a switch on the
+// variant's index: std::visit would reach FieldSum through its table of functions, an
+// indirect call a message.
+[[gnu::always_inline, gnu::flatten]] inline std::uint64_t field_sum(
+    const Message& message) noexcept {
+  static_assert(std::variant_size_v<Message> == 23);
+  const FieldSum sum;
+  switch (message.index()) {
+    case 0: return sum(*std::get_if<0>(&message));
+    case 1: return sum(*std::get_if<1>(&message));
+    case 2: return sum(*std::get_if<2>(&message));
+    case 3: return sum(*std::get_if<3>(&message));
+    case 4: return sum(*std::get_if<4>(&message));
+    case 5: return sum(*std::get_if<5>(&message));
+    case 6: return sum(*std::get_if<6>(&message));
+    case 7: return sum(*std::get_if<7>(&message));
+    case 8: return sum(*std::get_if<8>(&message));
+    case 9: return sum(*std::get_if<9>(&message));
+    case 10: return sum(*std::get_if<10>(&message));
+    case 11: return sum(*std::get_if<11>(&message));
+    case 12: return sum(*std::get_if<12>(&message));
+    case 13: return sum(*std::get_if<13>(&message));
+    case 14: return sum(*std::get_if<14>(&message));
+    case 15: return sum(*std::get_if<15>(&message));
+    case 16: return sum(*std::get_if<16>(&message));
+    case 17: return sum(*std::get_if<17>(&message));
+    case 18: return sum(*std::get_if<18>(&message));
+    case 19: return sum(*std::get_if<19>(&message));
+    case 20: return sum(*std::get_if<20>(&message));
+    case 21: return sum(*std::get_if<21>(&message));
+    case 22: return sum(*std::get_if<22>(&message));
+    default: return 0;
+  }
+}
+
+// T-PARSE-3.
+[[gnu::noinline, gnu::flatten, nodiscard]] inline Totals strict_decode(
+    std::span<const std::byte> bytes) noexcept {
   Totals totals;
+  std::uint64_t frames = 0;
   std::uint64_t fold = 0;
   std::uint64_t decoded = 0;
   std::uint64_t rejected = 0;
-  totals.stopped_at = walk_frames(bytes, [&](const std::byte* m, std::size_t length) {
-    ++totals.messages;
-    const auto message = decode(std::span<const std::byte>{m, length});
-    if (!message) {
-      ++rejected;
-      return;
-    }
-    fold += std::visit(FieldSum{}, *message);
-    ++decoded;
-  });
+  totals.stopped_at = walk_frames(
+      bytes, [&](const std::byte* m, std::size_t length) __attribute__((always_inline, flatten)) {
+        ++frames;
+        const auto message = decode(std::span<const std::byte>{m, length});
+        if (!message) {
+          ++rejected;
+          return;
+        }
+        fold += field_sum(*message);
+        ++decoded;
+      });
+  totals.messages = frames;
   totals.decoded = decoded;
   totals.rejected = rejected;
   totals.fold = fold;

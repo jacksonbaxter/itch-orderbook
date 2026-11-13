@@ -1,6 +1,7 @@
-// bench_parse's three passes (bench/parse_passes.hpp): the framing walk counts every frame,
-// the decode folds what itch-book's Checksum handler folds for its ten types and nothing
-// else, and the strict decode reads every byte of every one of the 23 types.
+// bench_parse's three passes (bench/parse_passes.hpp): the framing walk counts every frame
+// and reads its type, as itch-book's scan() does, and stops where it stops, the decode folds
+// what itch-book's Checksum handler folds for its ten types and nothing else, and the strict
+// decode reads every byte of every one of the 23 types.
 //
 // The decode is held to a plain reference written here from the spec's offsets, with no
 // decoder: the bytes at each field's offset, read big-endian. A pass that skips a type,
@@ -111,14 +112,28 @@ Bytes read_fixture(const std::string& name) {
 
 TEST(ParsePasses, TheWalkCountsEveryFrameToTheEnd) {
   Bytes stream = itch::fixtures::all_messages_stream();
-  append_frame(stream, Bytes{});                              // zero length
   append_frame(stream, Bytes{std::byte{'Z'}, std::byte{0}});  // unknown type
   append_frame(stream, Bytes(5, std::byte{'A'}));             // Add Order, wrong length
   const parse::Totals walk = parse::frame_walk(stream);
-  EXPECT_EQ(walk.messages, 23U + 1U + 3U);
+  EXPECT_EQ(walk.messages, 23U + 1U + 2U);
+  EXPECT_EQ(walk.rejected, 2U);  // Each frame's type read and its length compared.
   EXPECT_EQ(walk.stopped_at, stream.size());
   EXPECT_EQ(walk.decoded, 0U);
   EXPECT_EQ(walk.fold, 0U);
+}
+
+// As itch-book's parse() does: a zero-length frame ends the session, so the walk stops past
+// it and counts nothing after it.
+TEST(ParsePasses, TheWalkAndTheDecodeStopAtAnEmptyFrame) {
+  Bytes stream = itch::fixtures::all_messages_stream();
+  const std::size_t empty_at = stream.size();
+  append_frame(stream, Bytes{});
+  append_frame(stream, itch::fixtures::to_bytes(itch::fixtures::kSystemEvent));
+  for (const parse::Totals& totals : {parse::frame_walk(stream), parse::book_decode(stream)}) {
+    EXPECT_EQ(totals.messages, 24U);
+    EXPECT_EQ(totals.rejected, 0U);
+    EXPECT_EQ(totals.stopped_at, empty_at + 2);
+  }
 }
 
 TEST(ParsePasses, TheWalkStopsAtATruncatedFrame) {
@@ -187,14 +202,14 @@ TEST(ParsePasses, TheDecodeReadsEveryByteOfEachFieldItFolds) {
 
 TEST(ParsePasses, TheDecodeRejectsWhatItsLengthCheckRefuses) {
   Bytes stream;
-  append_frame(stream, Bytes{});
   append_frame(stream, Bytes{std::byte{'Z'}, std::byte{0}});
   append_frame(stream, Bytes(5, std::byte{'A'}));
   const parse::Totals decode = parse::book_decode(stream);
-  EXPECT_EQ(decode.messages, 3U);
-  EXPECT_EQ(decode.rejected, 3U);
+  EXPECT_EQ(decode.messages, 2U);
+  EXPECT_EQ(decode.rejected, 2U);
   EXPECT_EQ(decode.decoded, 0U);
   EXPECT_EQ(decode.fold, 0U);
+  EXPECT_EQ(decode.stopped_at, stream.size());
 }
 
 TEST(ParsePasses, TheStrictDecodeReadsEveryByteOfEveryType) {

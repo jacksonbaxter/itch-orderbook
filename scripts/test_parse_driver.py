@@ -26,7 +26,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRATCH = REPO_ROOT / "build" / "parse_driver_test"
 MESSAGES = 268_744_780
 BYTES = 8_251_407_909
-TEN = 117_145_568 + 1_485_888 + 5_722_824 + 99_917 + 114_360_997 + 21_639_067 + 1_218_602
+# The day's messages of S, R, A, F, E, C, X, D, U and P.
+TEN = (6 + 8_906 + 117_145_568 + 1_485_888 + 5_722_824 + 99_917 + 2_787_676 + 114_360_997 +
+       21_639_067 + 1_218_602)
+LOOPS = ["frame_walk: 20 instructions, no call and no jump to another function"]
 MACHINE = "machine_check: pass input-resident: 1 of 1 pages\nmachine_check: passed"
 HEADER = dict(test_linux_sampler.DEBIAN, dataset="12302019.NASDAQ_ITCH50",
               counters="unavailable: bench_parse reads no counters",
@@ -77,7 +80,7 @@ def sampled():
 def rendered(records=None):
     records = records or [record(index) for index in (1, 2, 3)]
     text = parse_driver.render(records, args_for(), "P-0029-x", *test_linux_sampler.RULE_DAY,
-                               MACHINE, "python3 -B scripts/parse_driver.py", sampled())
+                               MACHINE, "python3 -B scripts/parse_driver.py", sampled(), LOOPS)
     return stamp_load.stamp(text, test_linux_sampler.stderr_for(*test_linux_sampler.RULE_DAY))
 
 
@@ -104,6 +107,7 @@ class Figures(unittest.TestCase):
 
     def test_the_best_pass_is_the_fastest(self):
         best = rows(rendered(), "Best pass")
+        self.assertIn("| Target | Best of 15 passes, messages/s | Best of 15 passes, GB/s |", best)
         self.assertIn("| T-PARSE-1 | 335,930,975 | 10.314 |", best)
         self.assertIn("| T-PARSE-2 | 111,976,992 | 3.438 |", best)
         self.assertIn("| T-PARSE-3 | 67,186,195 | 2.063 |", best)
@@ -127,6 +131,22 @@ class Figures(unittest.TestCase):
                          "met")
         self.assertEqual(parse_driver.verdict("T-PARSE-2", 200e6, 6.0, 199.0, 6.1, "12302019"),
                          "missed: 0.10 GB/s under the bar")
+        # A miss too small for two decimals is still a miss, and never printed as 0.00.
+        self.assertEqual(parse_driver.verdict("T-PARSE-1", 708.999e6, 22.0, 709.0, 21.8,
+                                              "12302019"),
+                         "missed: 0.001 M msg/s under the bar")
+
+    def test_the_caveats_set_the_two_days_side_by_side(self):
+        caveats = rows(rendered(), "Caveats")
+        self.assertIn("| | 10302019, the bar's day | 12302019, measured |", caveats)
+        self.assertIn("| Bytes | 9,035,016,843 | 8,251,407,909 |", caveats)
+        self.assertIn("| Messages | 293,989,079 | 268,744,780 |", caveats)
+        self.assertIn("| Bytes a message | 30.732 | 30.704 |", caveats)
+        self.assertIn("| A | 127,214,649, 43.272% | 117,145,568, 43.590% |", caveats)
+        self.assertIn("| B | 1, 0.000% | 0, 0.000% |", caveats)
+        self.assertIn("- " + LOOPS[0], caveats)
+        text = rendered()
+        self.assertIn("compared under Caveats", text)
 
     def test_the_header_says_what_was_counted(self):
         fields = check_results.parse_header(rendered())
@@ -163,6 +183,111 @@ class Check(unittest.TestCase):
         text = rendered().replace("missed: 400.10 M msg/s", "missed: 400.00 M msg/s")
         self.assertIn("parse-figure-differs", self.codes(text))
 
+    def test_rates_over_fewer_messages_than_every_frame(self):
+        # The framing passes over no message at all, and the decode over the messages it
+        # decoded: the file's own figures agree with its table, but not with the frame count.
+        records = [record(index) for index in (1, 2, 3)]
+        for each in records:
+            for p in each["passes"]:
+                p["totals"] = dict(p["totals"], messages=p["totals"]["decoded"])
+        text = rendered(records)
+        self.assertIn("parse-messages-not-frames", self.codes(text))
+        self.assertIn("parse-messages-not-frames", {c for c, _ in check_results.check_text(text)})
+
+    def test_a_frame_count_or_size_that_is_not_the_manifests(self):
+        records = [record(index) for index in (1, 2, 3)]
+        for each in records:
+            each["bytes"] += 1
+            each["reference"]["frames"] += 1
+            for p in each["passes"]:
+                p["totals"] = dict(p["totals"], messages=MESSAGES + 1)
+        found = parse_driver.check_text(rendered(records))
+        self.assertEqual({code for code, _ in found}, {"parse-not-the-manifest"})
+        self.assertEqual(len(found), 2)
+
+    def test_a_day_the_manifest_does_not_pin(self):
+        text = rendered().replace("- dataset: 12302019.NASDAQ_ITCH50", "- dataset: other.itch")
+        self.assertIn("parse-day-unpinned", self.codes(text))
+
+    def test_a_caveat_figure_changed(self):
+        text = rendered().replace("| Bytes a message | 30.732 |", "| Bytes a message | 30.704 |")
+        self.assertIn("parse-figure-differs", self.codes(text))
+
+    def test_a_driver_bar_that_is_not_benchmarks_md(self):
+        text = (REPO_ROOT / "BENCHMARKS.md").read_text(encoding="utf-8")
+        passes = tuple((name, target, what, 70.9 if target == "T-PARSE-1" else msgs, gbs)
+                       for name, target, what, msgs, gbs in parse_driver.PASSES)
+        with mock.patch.object(parse_driver, "PASSES", passes):
+            found = [target for target, _ in check_results.bar_disagreements(text)]
+        self.assertEqual(found, ["T-PARSE-1"])
+
+
+# objdump -d --no-show-raw-insn, cut down: GNU objdump on x86-64, llvm-objdump on arm64.
+X86 = """
+0000000000401200 <_ZN4itch5bench5parse10frame_walkESt4spanIKSt4byteLm18446744073709551615EE>:
+  401200:\tendbr64
+  401204:\tmov    %rsi,%rax
+  401207:\tjmp    401220 <_ZN4itch5bench5parse10frame_walkESt4spanIKSt4byteLm18446744073709551615EE+0x20>
+  401209:\tnotrack jmp *%rax
+  40120c:\tlea    0xe2d(%rip),%rdx        # 402040 <_ZN4itch12kLengthByTypeE>
+  401213:\tret
+
+0000000000401300 <_ZN4itch5bench5parse11book_decodeESt4spanIKSt4byteLm18446744073709551615EE>:
+  401300:\tpush   %rbx
+  401301:\tcall   401500 <_ZZN4itch5bench5parse11book_decodeEvENKUlcPKSt4byteE_clEcS4_>
+  401306:\tret
+
+0000000000401400 <_ZN4itch5bench5parse13strict_decodeESt4spanIKSt4byteLm18446744073709551615EE>:
+  401400:\tje     401600 <_ZN4itch6decodeESt4spanIKSt4byteLm18446744073709551615EE>
+  401406:\tret
+"""
+ARM64 = """
+0000000100003000 <__ZN4itch5bench5parse10frame_walkENSt3__14spanIKSt4byteLm18446744073709551615EEE>:
+100003000: \tldrh\tw8, [x0]
+100003004: \tb.ne\t0x100003000 <__ZN4itch5bench5parse10frame_walkENSt3__14spanIKSt4byteLm18446744073709551615EEE>
+100003008: \tbr\tx9
+10000300c: \tret
+0000000100003100 <__ZN4itch5bench5parse11book_decodeENSt3__14spanIKSt4byteLm18446744073709551615EEE>:
+100003100: \tadd\tx8, x8, #1
+100003104: \tret
+0000000100003200 <__ZN4itch5bench5parse13strict_decodeENSt3__14spanIKSt4byteLm18446744073709551615EEE>:
+100003200: \tblr\tx8
+100003204: \tret
+"""
+
+
+class Inline(unittest.TestCase):
+    def test_a_pass_with_no_call_passes(self):
+        lines, problems = parse_driver.inline_verdicts(X86)
+        self.assertEqual(lines, ["frame_walk: 6 instructions, no call and no jump to another "
+                                 "function"])
+        self.assertEqual(len(problems), 2)
+
+    def test_a_call_in_a_pass_is_refused(self):
+        _, problems = parse_driver.inline_verdicts(X86)
+        self.assertTrue(any(p.startswith("book_decode: 1 instructions leave the pass: 401301:")
+                            for p in problems), problems)
+
+    def test_a_jump_to_another_function_is_refused(self):
+        _, problems = parse_driver.inline_verdicts(X86)
+        self.assertTrue(any(p.startswith("strict_decode: 1 instructions leave the pass: 401400:")
+                            for p in problems), problems)
+
+    def test_arm64_calls_and_branches(self):
+        lines, problems = parse_driver.inline_verdicts(ARM64)
+        self.assertEqual([line.split(":")[0] for line in lines], ["frame_walk", "book_decode"])
+        self.assertEqual([p.split(":")[0] for p in problems], ["strict_decode"])
+
+    def test_a_pass_that_is_not_a_function_of_its_own_is_refused(self):
+        cut = X86[:X86.index("0000000000401300")]
+        _, problems = parse_driver.inline_verdicts(cut)
+        self.assertIn("book_decode: not in the binary as a function of its own", problems)
+
+    def test_the_kept_code_is_the_three_passes(self):
+        code = parse_driver.pass_code(X86)
+        self.assertIn("401301:", code)
+        self.assertNotIn("<_ZN4itch12kLengthByTypeE>:", code)
+
 
 class Run(unittest.TestCase):
     def setUp(self):
@@ -170,9 +295,10 @@ class Run(unittest.TestCase):
         self.log = SCRATCH / "run_log.md"
         self.log.unlink(missing_ok=True)
         self.day = {"unpacked_bytes": BYTES, "messages": MESSAGES,
-                    "per_type_counts": {"A": 117_145_568, "F": 1_485_888, "E": 5_722_824,
-                                        "C": 99_917, "D": 114_360_997, "U": 21_639_067,
-                                        "P": 1_218_602, "Q": 17_836}}
+                    "per_type_counts": {"S": 6, "R": 8_906, "A": 117_145_568, "F": 1_485_888,
+                                        "E": 5_722_824, "C": 99_917, "X": 2_787_676,
+                                        "D": 114_360_997, "U": 21_639_067, "P": 1_218_602,
+                                        "Q": 17_836}}
 
     def test_a_good_record_is_accepted(self):
         parse_driver.validate_run(record(1), args_for(), self.day)
@@ -198,6 +324,27 @@ class Run(unittest.TestCase):
         other["warmup"]["strict"] = dict(other["warmup"]["strict"], fold=7)
         with self.assertRaises(parse_driver.Refused):
             parse_driver.validate_together([record(1), other])
+
+    def test_the_ten_types_are_itch_books(self):
+        self.assertEqual(sorted(parse_driver.TEN_TYPES), sorted("SRAFECXDUP"))
+
+    def test_a_day_the_manifest_does_not_pin_is_refused_before_anything_runs(self):
+        with mock.patch.object(parse_driver.platform, "system", return_value="Linux"), \
+                mock.patch.object(parse_driver, "inline_check") as inline:
+            with self.assertRaises(parse_driver.Refused) as caught:
+                parse_driver.run(args_for(input=Path("other.itch")), "P-0029-x", "now", "abc")
+        self.assertEqual(caught.exception.stage, "manifest")
+        inline.assert_not_called()
+
+    def test_a_call_in_a_timed_loop_is_refused_before_anything_runs(self):
+        with mock.patch.object(parse_driver.platform, "system", return_value="Linux"), \
+                mock.patch.object(parse_driver, "disassemble", return_value=X86), \
+                mock.patch.object(parse_driver.bench_driver, "hash_and_fault_in") as hashed:
+            with self.assertRaises(parse_driver.Refused) as caught:
+                parse_driver.run(args_for(input=Path("12302019.NASDAQ_ITCH50"), bench="b"),
+                                 "P-0029-x", "now", "abc")
+        self.assertEqual(caught.exception.stage, "inline")
+        hashed.assert_not_called()
 
     def test_another_host_is_refused_before_anything_runs(self):
         with mock.patch.object(parse_driver.platform, "system", return_value="Darwin"):

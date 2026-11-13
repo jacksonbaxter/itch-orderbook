@@ -6,6 +6,7 @@ T-PARSE-3).
         --raw-dir DIR --out results/parse_rate_debian_DAY.md [--repetitions N] [--rounds N] \\
         [--core N] [--sibling N] [--sampler-cpu N] [--wrapped-by TEXT] [--allow-dirty]
     parse_driver.py --check FILE...
+    parse_driver.py --inline-check BENCH_PARSE [--asm-out FILE]
 
 On a reported run this is measure.sh's direct child, as scripts/backtest_driver.py is, with the
 same order, signal handling and Linux sampler rule:
@@ -13,8 +14,9 @@ same order, signal handling and Linux sampler rule:
     measure.sh taskset -c 4 python3 -B scripts/parse_driver.py ... --core 4 --sibling 5 2> STDERR
     python3 -B scripts/stamp_load.py --results FILE --stderr STDERR --raw-dir RAW/RUN_ID
 
-Hash the input, which also faults it in; confirm the prediction is on record; run
-machine_check.sh, refusing on a failure; start scripts/linux_sampler.py; run the repetitions,
+Refuse an input scripts/data_manifest.json does not pin, and a bench_parse whose timed loops
+make a call (--inline-check, below); hash the input, which also faults it in; confirm the
+prediction is on record; run machine_check.sh, refusing on a failure; start scripts/linux_sampler.py; run the repetitions,
 one bench_parse process each, the file read back into the page cache before each, outside every
 process's span, since bench_parse drops the cache as it copies the day into memory. A process is
 published only if the Linux sampler rule passes every second of its span (docs/NOTES.md, "The
@@ -33,7 +35,14 @@ labelled, since both of itch-book's figures are the best of 3. Only debian is me
 anywhere else is refused before anything is timed.
 
 --check FILE... recomputes every figure of a results file from its table of timed passes, the
-summary, the best passes and each verdict, and exits 1 on any that differ.
+summary, the best passes and each verdict, holds every pass's messages and the file's bytes to
+the frame count and to the manifest's day, works the caveats' table again from the manifest,
+and exits 1 on any that differ.
+
+--inline-check BENCH_PARSE disassembles the binary with objdump and refuses a call, or a jump
+to another function, in any of the three pass functions (bench/parse_passes.hpp), each of which
+is the whole of a timed span's work: a timed loop holds no call. A jump through a table, as a
+switch makes, is not a call. --asm-out keeps the three functions' code.
 
 Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
 --raw-dir/<run id> with run.json (scripts/run_record.py). None of it is committed.
@@ -51,6 +60,7 @@ import os
 import platform
 import re
 import shlex
+import shutil
 import signal
 import statistics
 import subprocess
@@ -124,15 +134,140 @@ def verdict(target, msgs_median, gbs_median, bar_msgs, bar_gbs, day):
     """met only if both medians reach their bars; a bar set on another day says so."""
     short = []
     if msgs_median / MEGA < bar_msgs:
-        short.append(f"{bar_msgs - msgs_median / MEGA:,.2f} M msg/s")
+        short.append(f"{shortfall(bar_msgs, msgs_median / MEGA)} M msg/s")
     if gbs_median < bar_gbs:
-        short.append(f"{bar_gbs - gbs_median:,.2f} GB/s")
+        short.append(f"{shortfall(bar_gbs, gbs_median)} GB/s")
     text = "met" if not short else f"missed: {' and '.join(short)} under the bar"
     other = BAR_DAY.get(target)
     if other and other != day:
         text += (f"; measured on {day}, not the bar's {other}, which is not on this host: the "
-                 "two days' bytes a message are compared under the file's caveats")
+                 "two days are compared under Caveats")
     return text
+
+
+def shortfall(bar, value):
+    """How far under its bar a median is, never printed as 0.00: a miss is a miss."""
+    text = f"{bar - value:,.2f}"
+    return text if text != "0.00" else f"{bar - value:.2g}"
+
+
+# the timed loops' code
+
+PASS_SYMBOLS = {"frame_walk": "5parse10frame_walkE", "book_decode": "5parse11book_decodeE",
+                "strict_decode": "5parse13strict_decodeE"}
+FUNCTION_LINE = re.compile(r"^([0-9a-f]+) <(\S+)>:$")
+INSTRUCTION = re.compile(r"^\s*[0-9a-f]+:\s+(.*)$")
+PREFIXES = {"notrack", "bnd", "lock", "rep", "repz", "repnz", "repe", "repne", "data16", "cs",
+            "ds"}
+CALLS = re.compile(r"^(call[lqw]?|bl|blr|blraaz?|blrabz?)$")
+BRANCHES = re.compile(r"^(j[a-z]+|b|b\.[a-z]+|cbn?z|tbn?z)$")
+TARGET = re.compile(r"<([^>+]+)(\+0x[0-9a-f]+)?>")
+
+
+def pass_functions(disassembly):
+    """Each pass's own code in objdump -d's text: {pass: (symbol, [instruction lines])}."""
+    found, name, symbol = {}, None, None
+    for line in disassembly.splitlines():
+        header = FUNCTION_LINE.match(line)
+        if header:
+            symbol = header.group(2)
+            name = next((n for n, mangled in PASS_SYMBOLS.items() if mangled in symbol
+                         and not re.search(r"\.(cold|part)", symbol)), None)
+            if name is not None:
+                found.setdefault(name, (symbol, []))
+            continue
+        if name is not None and INSTRUCTION.match(line):
+            found[name][1].append(line)
+    return found
+
+
+def loop_calls(symbol, lines):
+    """The instructions of one pass's code that leave it: every call, and any branch to
+    another function."""
+    out = []
+    for line in lines:
+        words = INSTRUCTION.match(line).group(1).replace("\t", " ").split()
+        while words and words[0] in PREFIXES:
+            words = words[1:]
+        if not words:
+            continue
+        mnemonic = words[0]
+        target = TARGET.search(line)
+        if CALLS.match(mnemonic):
+            out.append(line.strip())
+        elif BRANCHES.match(mnemonic) and target and target.group(1) != symbol:
+            out.append(line.strip())
+    return out
+
+
+def inline_verdicts(disassembly):
+    """(lines to print, problems) for the three passes' code."""
+    found = pass_functions(disassembly)
+    lines, problems = [], []
+    for name in PASS_SYMBOLS:
+        if name not in found:
+            problems.append(f"{name}: not in the binary as a function of its own")
+            continue
+        symbol, code = found[name]
+        calls = loop_calls(symbol, code)
+        if calls:
+            problems.append(f"{name}: {len(calls)} instructions leave the pass: "
+                            + "; ".join(calls[:5]))
+        else:
+            lines.append(f"{name}: {len(code)} instructions, no call and no jump to another "
+                         "function")
+    return lines, problems
+
+
+def disassemble(bench):
+    tool = shutil.which("objdump")
+    if tool is None:
+        raise Refused("inline", "no objdump on this host, so the timed loops' code is not read")
+    done = subprocess.run([tool, "-d", "--no-show-raw-insn", str(bench)], capture_output=True,
+                          text=True, check=False)
+    if done.returncode != 0:
+        raise Refused("inline", f"objdump exited {done.returncode}: {done.stderr.strip()}")
+    return done.stdout
+
+
+def pass_code(disassembly):
+    """The three passes' code, as objdump gave it."""
+    found = pass_functions(disassembly)
+    out = []
+    for name in PASS_SYMBOLS:
+        if name in found:
+            symbol, code = found[name]
+            out += [f"<{symbol}>:", *code, ""]
+    return "\n".join(out)
+
+
+def inline_check(bench):
+    """The timed loops' code: lines for the results file, or Refused."""
+    disassembly = disassemble(bench)
+    lines, problems = inline_verdicts(disassembly)
+    if problems:
+        raise Refused("inline", "; ".join(problems))
+    return lines, disassembly
+
+
+def inline_main(argv):
+    if not argv or len(argv) not in (1, 3) or (len(argv) == 3 and argv[1] != "--asm-out"):
+        print("usage: parse_driver.py --inline-check BENCH_PARSE [--asm-out FILE]",
+              file=sys.stderr)
+        return 2
+    try:
+        disassembly = disassemble(argv[0])
+    except Refused as refusal:
+        print(f"parse_driver: FAIL inline {refusal}")
+        return 1
+    if len(argv) == 3:
+        Path(argv[2]).write_text(pass_code(disassembly), encoding="utf-8")
+    lines, problems = inline_verdicts(disassembly)
+    for line in lines:
+        print(f"parse_driver: ok inline {line}")
+    for problem in problems:
+        print(f"parse_driver: FAIL inline {problem}")
+    return 1 if problems else 0
 
 
 # the run
@@ -189,15 +324,13 @@ def validate_run(record, args, manifest_day):
             raise Refused("record", f"a {p['pass']} pass is not its warm-up's")
         if p["seconds"] <= 0:
             raise Refused("record", f"a {p['pass']} pass took no time")
-    if manifest_day is not None:
-        pinned = {"bytes": manifest_day["unpacked_bytes"], "frames": manifest_day["messages"],
-                  "decode_types": sum(manifest_day["per_type_counts"].get(t, 0)
-                                      for t in TEN_TYPES)}
-        found = {"bytes": record["bytes"], "frames": ref["frames"],
-                 "decode_types": ref["decode_types"]}
-        for name, value in pinned.items():
-            if found[name] != value:
-                raise Refused("record", f"{name} {found[name]:,}, not the manifest's {value:,}")
+    pinned = {"bytes": manifest_day["unpacked_bytes"], "frames": manifest_day["messages"],
+              "decode_types": sum(manifest_day["per_type_counts"].get(t, 0) for t in TEN_TYPES)}
+    found = {"bytes": record["bytes"], "frames": ref["frames"],
+             "decode_types": ref["decode_types"]}
+    for name, value in pinned.items():
+        if found[name] != value:
+            raise Refused("record", f"{name} {found[name]:,}, not the manifest's {value:,}")
 
 
 def validate_together(records):
@@ -266,9 +399,12 @@ def judged_process(args, index, commit, digest, watch, sampled, manifest_day):
                           "so the host is given back and the run is tried again later")
 
 
+def manifest_days():
+    return json.loads(run_record.MANIFEST.read_text(encoding="utf-8")).get("days", {})
+
+
 def manifest_entry(name):
-    days = json.loads(run_record.MANIFEST.read_text(encoding="utf-8")).get("days", {})
-    return next((entry for entry in days.values() if entry.get("name") == name), None)
+    return next((entry for entry in manifest_days().values() if entry.get("name") == name), None)
 
 
 def run(args, run_id, started, commit):
@@ -277,11 +413,17 @@ def run(args, run_id, started, commit):
                               "measured")
     if args.core is None or args.sibling is None:
         raise Refused("sampler", "the Linux sampler rule needs --core and --sibling")
+    manifest_day = manifest_entry(args.input.name)
+    if manifest_day is None:
+        raise Refused("manifest", f"{args.input.name} is not a day scripts/data_manifest.json "
+                                  "pins, so its counts could not be held to anything")
+    bench_driver.set_stage("reading the timed loops' code")
+    loops, disassembly = inline_check(args.bench)
+    args.record.output("passes.asm", pass_code(disassembly))
     bench_driver.swap_watch = bench_driver.SwapWatch(args.vmstat)
     bench_driver.set_stage("hashing the input")
     digest = bench_driver.hash_and_fault_in(args.input)
     args.record.dataset(args.input, digest)
-    manifest_day = manifest_entry(args.input.name)
     bench_driver.set_stage("checking the prediction")
     code = subprocess.run([sys.executable, "-B", str(REPO_ROOT / "scripts" / "check_predictions.py"),
                            "--root", str(args.predictions_root), "--require", args.prediction],
@@ -304,7 +446,7 @@ def run(args, run_id, started, commit):
     validate_together(records)
     bench_driver.set_stage("rendering the results file")
     text = render(records, args, run_id, started, utc_now(), machine_output,
-                  relative_command(args), sampled)
+                  relative_command(args), sampled, loops)
     violations = [found for found in check_results.check_text(text)
                   if found[0] not in check_results.LEFT_TO_STAMP]
     if violations:
@@ -337,6 +479,11 @@ def summary_rows(passes, file_bytes):
     return rows
 
 
+def best_heading(passes):
+    each = len(passes) // len(PASSES)
+    return f"| Target | Best of {each} passes, messages/s | Best of {each} passes, GB/s |"
+
+
 def best_rows(passes, file_bytes):
     found = figures(passes, file_bytes)
     return [f"| {target} | {max(found[name]['msgs']):,.0f} | {max(found[name]['gbs']):.3f} |"
@@ -362,6 +509,65 @@ def pass_rows(passes, file_bytes):
             f"{p['messages']:,} | {rate(p['messages'], p['seconds']):,.0f} | "
             f"{gb_rate(file_bytes, p['seconds']):.3f} | {p['fold']:,} |"
             for p in passes]
+
+
+def caveat_rows(day):
+    """The measured day beside each other day a bar was set on, from the manifest's raw
+    counts: bytes, messages, bytes a message, and each type's share of the messages."""
+    days = manifest_days()
+    others = sorted({other for other in BAR_DAY.values() if other != day})
+    if not others or day not in days or any(other not in days for other in others):
+        return None
+    shown = [days[other] for other in others] + [days[day]]
+    heading = ("| | " + " | ".join(f"{other}, the bar's day" for other in others)
+               + f" | {day}, measured |")
+    rows = [heading, "|---|" + "---|" * len(shown),
+            "| Bytes | " + " | ".join(f"{d['unpacked_bytes']:,}" for d in shown) + " |",
+            "| Messages | " + " | ".join(f"{d['messages']:,}" for d in shown) + " |",
+            "| Bytes a message | " + " | ".join(f"{d['unpacked_bytes'] / d['messages']:.3f}"
+                                               for d in shown) + " |"]
+    types = sorted({t for d in shown for t in d["per_type_counts"]},
+                   key=lambda t: (-max(d["per_type_counts"].get(t, 0) / d["messages"]
+                                       for d in shown), t))
+    for t in types:
+        cells = []
+        for d in shown:
+            count = d["per_type_counts"].get(t, 0)
+            cells.append(f"{count:,}, {count / d['messages'] * 100:.3f}%")
+        rows.append(f"| {t} | " + " | ".join(cells) + " |")
+    return rows
+
+
+def caveat_lines(day, loops):
+    lines = ["## Caveats", "",
+             "- T-PARSE-1 is a transcription of the work of itch-book's `scan()`, its `parse()` "
+             "loop with a handler that takes nothing: per frame the length prefix, a stop at a "
+             "zero-length frame, the type byte, the type's length looked up and compared, and "
+             "one of three counters. The work is the same; what differs is the compiler and the "
+             "host, the clock (rdtsc, one span a pass) and the figure the verdict is on (the "
+             "median, not the best of 3).",
+             "- T-PARSE-2 is the same loop with the ten types itch-book's Checksum handler takes "
+             "decoded and the fields it adds folded, and one add a message more than the source "
+             "makes: the count of messages decoded, which bench_parse holds to the frame "
+             "reader's count.",
+             "- T-PARSE-3: the strict decode reads the variant `itch::decode()` returns by a "
+             "switch on its index, not `std::visit`, whose table of functions would put an "
+             "indirect call in the loop. Lunary decoded the day memory-mapped; bench_parse, as "
+             "itch-book does, reads a copy into anonymous memory before the warm-up, so no "
+             "timed pass takes a page fault or reads the page cache. Lunary's bar is on "
+             f"{BAR_DAY['T-PARSE-3']}, which is not on this host"]
+    table = caveat_rows(day)
+    if table:
+        lines[-1] += ("; the days' sizes and each type's share of their messages, from "
+                      "scripts/data_manifest.json:")
+        lines += [""] + table
+    else:
+        lines[-1] += "."
+    lines += ["", "The timed loops, as objdump read them from the bench_parse that ran "
+              "(`parse_driver.py --inline-check`): each pass is one function, and none makes a "
+              "call or jumps to another function.", ""]
+    lines += [f"- {line}" for line in loops]
+    return lines
 
 
 def count_rows(record):
@@ -426,7 +632,7 @@ def header_lines(records, args, run_id, started, finished, sampled):
     return lines
 
 
-def render(records, args, run_id, started, finished, machine_output, command, sampled):
+def render(records, args, run_id, started, finished, machine_output, command, sampled, loops):
     first = records[0]
     host = first["header"]["host"]
     day = first["header"]["dataset"].split(".")[0]
@@ -438,10 +644,10 @@ def render(records, args, run_id, started, finished, machine_output, command, sa
              f"Host: **{host}**. Numbers from the two hosts are never mixed. The Mac is not "
              "measured.", "",
              "Three passes over the whole day, held in memory, on one pinned thread, each as its "
-             "target's source defines it (`bench/parse_passes.hpp`): the framing walk counts "
-             "every frame by its length prefix and reads no payload byte; the decode checks each "
-             "frame's type against its length and decodes itch-book's ten types (S, R, A, F, E, "
-             "C, X, D, U, P), adding the fields its Checksum handler adds; the strict decode runs "
+             "target's source defines it (`bench/parse_passes.hpp`): the framing walk is "
+             "itch-book's `scan()`, which reads each frame's length and type byte and counts it; "
+             "the decode is the same loop with itch-book's ten types (S, R, A, F, E, C, X, D, U, "
+             "P) decoded, adding the fields its Checksum handler adds; the strict decode runs "
              "`itch::decode()` on every frame and adds every field of every one of the 23 types. "
              "Each pass's rate is every framed message over its seconds; its GB/s is the whole "
              "file's bytes, length prefixes included, over the same seconds, in 10^9 bytes, as "
@@ -458,12 +664,13 @@ def render(records, args, run_id, started, finished, machine_output, command, sa
     lines += summary_rows(passes, file_bytes)
     lines += ["", "## Best pass", "",
               "Both itch-book figures are the best of 3 passes (its `parse_throughput.cpp`); "
-              "Lunary's is a median of 10. The best timed pass of each, for comparison only; "
-              "every verdict is on the median.", "",
-              "| Target | Best messages/s | Best GB/s |", "|---|---|---|"]
+              "Lunary's is a median of 10. The best timed pass of each, of all this run's, for "
+              "comparison only; every verdict is on the median.", "",
+              best_heading(passes), "|---|---|---|"]
     lines += best_rows(passes, file_bytes)
     lines += ["", "## Targets", "", "| Target | Bar | Measured | Verdict |", "|---|---|---|---|"]
     lines += target_rows(passes, file_bytes, day)
+    lines += [""] + caveat_lines(day, loops)
     lines += ["", "## Counts", "",
               "From the warm-up. Every timed pass gave the same, and every repetition, or the run "
               "is refused.", "", "| Count | Value |", "|---|---|"]
@@ -535,10 +742,34 @@ def check_text(text):
         if len({(p["messages"], p["fold"]) for p in of}) > 1:
             problems.append(("parse-passes-disagree", f"the {name} passes disagree"))
     day = fields.get("dataset", "").split(".")[0]
+    pinned = manifest_entry(fields.get("dataset", ""))
+    frames = re.match(r"[\d,]+", fields.get("timed_messages", ""))
+    if pinned is None:
+        problems.append(("parse-day-unpinned", f"{fields.get('dataset')!r} is not a day "
+                                               "scripts/data_manifest.json pins"))
+    if frames is None:
+        problems.append(("parse-messages-missing", "no timed_messages field"))
+    else:
+        frames = int(frames.group(0).replace(",", ""))
+        wrong = sorted({p["messages"] for p in passes} - {frames})
+        if wrong:
+            problems.append(("parse-messages-not-frames",
+                             f"passes over {', '.join(f'{w:,}' for w in wrong)} messages, not "
+                             f"every framed message, {frames:,}"))
+        counted = f"| Frames, every one a message | {frames:,} |"
+        if counted not in (check_results.section(text, "Counts") or "").splitlines():
+            problems.append(("parse-messages-not-frames", f"Counts: no row {counted}"))
+        if pinned is not None and frames != pinned["messages"]:
+            problems.append(("parse-not-the-manifest", f"{frames:,} frames, not the manifest's "
+                                                       f"{pinned['messages']:,}"))
+    if pinned is not None and file_bytes != pinned["unpacked_bytes"]:
+        problems.append(("parse-not-the-manifest", f"{file_bytes:,} bytes, not the manifest's "
+                                                   f"{pinned['unpacked_bytes']:,}"))
     for title, rows in (("Every timed pass", pass_rows(passes, file_bytes)),
                         ("Summary", summary_rows(passes, file_bytes)),
-                        ("Best pass", best_rows(passes, file_bytes)),
-                        ("Targets", target_rows(passes, file_bytes, day))):
+                        ("Best pass", [best_heading(passes), *best_rows(passes, file_bytes)]),
+                        ("Targets", target_rows(passes, file_bytes, day)),
+                        ("Caveats", caveat_rows(day) or [])):
         printed = check_results.section(text, title) or ""
         for row in rows:
             if row not in printed.splitlines():
@@ -592,6 +823,8 @@ def parse_args(argv):
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["--inline-check"]:
+        return inline_main(argv[1:])
     if argv[:1] == ["--check"]:
         if len(argv) < 2:
             print("usage: parse_driver.py --check FILE...", file=sys.stderr)
