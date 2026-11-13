@@ -50,6 +50,10 @@ CLEAN_FILES = {
     "RESULTS.md": DUE_TIME,
     "WRITEUP.md": DUE_TIME,
     "results/run.md": "Host: debian.\n",
+    "results/run_log.md": ("# Run log\n\n| Run | Prediction | Commit | OS | Outcome |\n"
+                           "|---|---|---|---|---|\n"
+                           "| P-0001-x | P-0001 | abc | Darwin | withdrawn: the sampler saw a "
+                           "macOS system daemon at 41.2% CPU at 2026-11-05T15:15:58Z |\n"),
     ".github/workflows/ci.yml": f"jobs:\n  a:\n    steps:\n      - uses: {PINNED} # v1.2.3\n",
     "docs/index.html": ("<!doctype html><html><body><h1>Replay <code>09:30</code></h1>\n"
                         "<p>At 09:30:00, 0.01 of a share, 10 of 12 levels.</p>\n"
@@ -429,6 +433,64 @@ class Gates(unittest.TestCase):
                                             header.replace("20261113T040000Z", "x"))
                 self.assert_passes(name, header.replace("host: debian",
                                                         f"host: {check_results.MAC_HOST}"))
+
+    def run_log(self, *outcomes):
+        return ("# Run log\n\n| Run | Prediction | Commit | OS | Outcome |\n|---|---|---|---|---|\n"
+                + "".join(f"| P-0001-{index} | P-0001 | abc | Darwin | {outcome} |\n"
+                          for index, outcome in enumerate(outcomes)))
+
+    # Each form a row has given a process in, with an invented program's name where a kind
+    # belongs; then the same forms with kinds, and the shares that are not a process's.
+    NAMED_FORMS = (
+        "withdrawn: the CPU sampler saw frobd at 41.2% CPU at 2026-11-05T15:15:58Z",
+        "withdrawn: the sampler saw 3 other processes above 20% CPU inside its span, the "
+        "first `frobd` at 21.7% at 2026-11-10T10:34:28Z",
+        "withdrawn: the sampler saw 3 other processes above 20% CPU inside its span, the "
+        "first, frobd, at 21.7% at 2026-11-10T10:34:28Z",
+        "withdrawn: which saw 2 other processes above 20% CPU inside the run: a macOS system "
+        "daemon at 32.4% (19:26:58 UTC); frobd at 22.1% (19:28:01 UTC)",
+        "withdrawn: frobd's unit tests were seen at 92% to 100% CPU from 14:34:49 UTC",
+        "withdrawn: the host's backup timer ran frobd at up to 193.1% CPU inside its span",
+        "withdrawn: 8 other processes, a browser at 66.1% from 19:21:41 UTC and frobd up to 199.2%",
+        "withdrawn: the sampler saw this piece's own read (frobd, 28.4%) at its first second",
+        "withdrawn: the sampler saw the other cores: 25.00% of a CPU busy at "
+        "2026-11-10T10:34:28.000000Z, the most of it frobd",
+    )
+    KIND_FORMS = (
+        "withdrawn: the CPU sampler saw a macOS system daemon at 41.2% CPU at 2026-11-05T15:15:58Z",
+        "withdrawn: the sampler saw 3 other processes above 20% CPU inside its span, the "
+        "first, the system indexer, at 21.7% at 2026-11-10T10:34:28Z",
+        "withdrawn: the sampler saw 2 other busy processes in the run, the first another "
+        "process at 50.0% CPU at 2026-11-10T10:34:28Z",
+        "withdrawn: which saw 2 other processes above 20% CPU inside the run: a macOS system "
+        "daemon at 32.4% (19:26:58 UTC); another assistant session at 22.1% (19:28:01 UTC)",
+        "withdrawn: another project's tests were seen at 92% to 100% CPU from 14:34:49 UTC",
+        "withdrawn: the host's backup timer ran a backup tool at up to 193.1% CPU inside its span",
+        "withdrawn: a backup tool and its file-sync tool at 22% to 165%",
+        "withdrawn: 8 other processes, a browser at 66.1% from 19:21:41 UTC and the system "
+        "indexer up to 199.2%",
+        "withdrawn: the sampler saw this piece's own read (a system tool, 28.4%) at its first second",
+        "withdrawn: the sampler saw the other cores: 25.00% of a CPU busy at "
+        "2026-11-10T10:34:28.000000Z, the most of it a kernel thread",
+        "published: paged-flat lookup 8.95 ns, 19.6% of the pass; best look-ahead D=4 at "
+        "-18.01% over D=0, hash policy +3.12%, adds outside a window 8.337%",
+        "withdrawn: no other process above 20% CPU; cpu5 and cpu7 each 100% busy over 1 s",
+    )
+
+    def test_run_log_kinds(self):
+        for outcome in self.NAMED_FORMS:
+            with self.subTest(outcome=outcome):
+                self.reset()
+                self.assert_only_gate_fails("run-log-kinds", "results/run_log.md",
+                                            self.run_log(*self.KIND_FORMS, outcome))
+        self.reset()
+        self.assert_passes("results/run_log.md", self.run_log(*self.KIND_FORMS))
+
+    def test_the_run_log_is_required(self):
+        (self.root / "results" / "run_log.md").unlink()
+        code, output = self.run_gates("--only", "run-log-kinds")
+        self.assertEqual(code, 1, output)
+        self.assertIn("FAIL run-log-kinds: scanned no files", output)
 
     def test_spsc_due_time_unmeasured(self):
         for name in gates.DUE_TIME_PAGES:

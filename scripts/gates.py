@@ -529,6 +529,28 @@ def linux_sampler_rule(root, files):
     return violations
 
 
+RUN_LOG = "results/run_log.md"
+
+
+def run_log_file(root):
+    path = root / RUN_LOG
+    return [path] if path.is_file() else []
+
+
+def run_log_kinds(root, files):
+    """Every process a run-log row gives with its CPU share, or as the busiest other work, is
+    one of process_kinds.KINDS: never a program's name. The grammar knows only the kinds."""
+    import process_kinds  # noqa: PLC0415  Here, so that the other gates need nothing beside them.
+
+    violations = []
+    for path in files:
+        for number, cause in process_kinds.run_log_rows(read_text(path) or ""):
+            for subject in process_kinds.cause_breaks(cause):
+                violations.append((path, number, f"a process given as {subject!r}, which is "
+                                                 "not one of process_kinds.KINDS"))
+    return violations
+
+
 # r4-2: the SPSC paced and burst latencies are measured from the push, and none from the time
 # each message was due. Each public page that gives or discusses them says so in a paragraph
 # that also gives the reason: the due time is not carried in the item, so measuring from it
@@ -602,6 +624,9 @@ def gates():
         Gate("linux-sampler-rule", "every debian results file of any kind from the Linux "
              "sampler rule's moment on carries the rule's line, passing",
              linux_sampler_rule, results_pages),
+        Gate("run-log-kinds", "every process a run-log row gives with its CPU share is given "
+             "by one of process_kinds.KINDS, never by its program's name",
+             run_log_kinds, run_log_file),
         Gate("spsc-due-time-unmeasured", "BENCHMARKS.md, RESULTS.md and WRITEUP.md each say "
              "that no SPSC latency from the due time is measured, and why",
              spsc_due_time_unmeasured, due_time_pages),
