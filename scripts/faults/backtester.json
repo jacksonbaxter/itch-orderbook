@@ -998,6 +998,150 @@
       "expect": {
         "signature": "\\[  FAILED  \\] Fees\\.S38AMakerAtExactlyOneDollarEarnsTheCredit"
       }
+    },
+    {
+      "id": "backtester-qoff-c-reaches-shown-price",
+      "breaks": "Under Q-off a printable C at a better price fills a simulated order at the real order's own price (r9-2)",
+      "check": "test_backtest QueueOff.APrintableCAtABetterPriceDoesNotReachTheRestingPrice",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "budget -= fill_from_front(slot, shares, budget, fills && reached, time);",
+          "new": "budget -= fill_from_front(slot, shares, budget, fills, time);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] QueueOff\\.APrintableCAtABetterPriceDoesNotReachTheRestingPrice"
+      }
+    },
+    {
+      "id": "backtester-cross-while-halted",
+      "breaks": "A real add that crosses a resting simulated order fills it while the symbol is halted (r9-3)",
+      "check": "test_backtest ItchEdges.S33HaltedCrossingAddDoesNotFill",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    if (real == kNoIndex || resting_[locate] == 0 || !can_fill(locate)) {",
+          "new": "    if (real == kNoIndex || resting_[locate] == 0) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.S33HaltedCrossingAddDoesNotFill"
+      }
+    },
+    {
+      "id": "backtester-replace-skips-admit",
+      "breaks": "A replace that arrives while the symbol is halted is accepted (r9-3)",
+      "check": "test_backtest ItchEdges.S33ReplaceWhileHaltedIsRefused",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "        const Reject reason = admit(sim.locate, arrival.shares);",
+          "new": "        const Reject reason = Reject::none;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.S33ReplaceWhileHaltedIsRefused"
+      }
+    },
+    {
+      "id": "backtester-tie-order-reversed",
+      "breaks": "Events of one nanosecond run wake, report, delivery, arrival: the documented order reversed (r9-4)",
+      "check": "test_backtest LatencyOff.EventsOfOneNanosecondReachTheStrategyInTheTieOrder",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "enum class Kind : std::uint8_t { arrival, delivery, report, wake, none };",
+          "new": "enum class Kind : std::uint8_t { wake, report, delivery, arrival, none };"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] LatencyOff\\.EventsOfOneNanosecondReachTheStrategyInTheTieOrder"
+      }
+    },
+    {
+      "id": "backtester-tie-order-delivery-before-arrival",
+      "breaks": "A delivery runs before an arrival of the same nanosecond",
+      "check": "test_backtest LatencyOff.EventsOfOneNanosecondReachTheStrategyInTheTieOrder",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "enum class Kind : std::uint8_t { arrival, delivery, report, wake, none };",
+          "new": "enum class Kind : std::uint8_t { delivery, arrival, report, wake, none };"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] LatencyOff\\.EventsOfOneNanosecondReachTheStrategyInTheTieOrder"
+      }
+    },
+    {
+      "id": "backtester-tie-order-wake-before-report",
+      "breaks": "A wake runs before a report of the same nanosecond",
+      "check": "test_backtest LatencyOff.EventsOfOneNanosecondReachTheStrategyInTheTieOrder",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "enum class Kind : std::uint8_t { arrival, delivery, report, wake, none };",
+          "new": "enum class Kind : std::uint8_t { arrival, delivery, wake, report, none };"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] LatencyOff\\.EventsOfOneNanosecondReachTheStrategyInTheTieOrder"
+      }
     }
   ]
 }

@@ -385,6 +385,39 @@ TEST(QueueOff, ProportionalRoundsEachRemovalDownInMillionths) {
   EXPECT_EQ(run.queue(kS).ahead_fraction, 0U);
 }
 
+// S50 under each Q-off rule. R1 100 at 10.00, then S 100 at 10.00: ahead 100. R2 100 joins
+// behind S, and E R2 30 takes 30 from the front: ahead 70, nothing reaches S. S2 then bids 40
+// at 10.01. A printable C executes all 100 of R1. At 10.01, a price better for the seller than
+// R1's own, it takes the 70 ahead, and the 30 left over do not reach S: the seller went no
+// lower than 10.01, so S at R1's price fills nothing. S2, at the trade's price, fills 40. The
+// same C at 10.00 reaches both: S2 fills 40, and S the 30 of the 60 left.
+TEST(QueueOff, APrintableCAtABetterPriceDoesNotReachTheRestingPrice) {
+  for (const QueueModel model : {QueueModel::conservative, QueueModel::proportional}) {
+    for (const Price4 traded : {k1001, k1000}) {
+      Replay run{Switches{.queue = model}};
+      run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+      run.strategy.send(kS2, 4500, Side::bid, k1001, 40);
+      run.feed(wire::add(kLocate, 1, 'B', 100, k1000, 1000));
+      run.feed(wire::add(kLocate, 2, 'B', 100, k1000, 3000));
+      run.feed(wire::execute(kLocate, 2, 30, 4000));
+      EXPECT_EQ(run.ahead(kS), 70U) << to_string(model);
+      run.feed(printable_execution(1, 100, traded, 'Y', 5000));
+      run.advance(10'000);
+      EXPECT_EQ(fills_of(run.fills(kS2)), (std::vector<Fill>{{k1001, 40, kMaker}}))
+          << to_string(model) << " at " << traded;
+      if (traded == k1001) {
+        EXPECT_TRUE(run.fills(kS).empty()) << to_string(model);
+        EXPECT_EQ(run.queue(kS).remaining, 100U) << to_string(model);
+      } else {
+        EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1000, 30, kMaker}}))
+            << to_string(model);
+        EXPECT_EQ(run.queue(kS).remaining, 70U) << to_string(model);
+      }
+      EXPECT_EQ(run.ahead(kS), 0U) << to_string(model) << " at " << traded;
+    }
+  }
+}
+
 // L-off. The config's latencies are this file's base ones, and the switch zeroes all four:
 // S decided at 2000 arrives at 2000, behind R1 and R2. Its accept and its fill reach the
 // strategy at their exchange times, and every message reaches it at its own timestamp. The run
@@ -422,6 +455,72 @@ TEST(LatencyOff, EveryLatencyIsZero) {
   Replay base;
   play(base);
   EXPECT_NE(off.engine.event_hash(), base.engine.event_hash());
+}
+
+// Records each event as the strategy is given it, with the arrivals the engine had run by then:
+// an arrival reaches no strategy, so the count is how the order shows where it went.
+struct TieOrder {
+  struct Seen {
+    char what;  // 'M' market, 'R' report, 'W' wake.
+    Nanos time;
+    char detail;  // The message type, or 'f' fill, 'a' accepted.
+    std::uint64_t arrivals;
+    friend bool operator==(const Seen&, const Seen&) = default;
+  };
+
+  template <class Context>
+  void on_market(Context& context, const itch::backtest::MarketEvent& event) {
+    const char type = static_cast<char>(event.payload[0]);
+    seen.push_back({'M', event.time, type, engine->stats().arrivals});
+    if (event.exchange_time == 1) {
+      context.send({.locate = kLocate, .side = Side::bid, .price = k1000, .shares = 100});
+      context.wake_at(5000);
+    }
+    if (type == 'E') {
+      context.send({.locate = kLocate, .side = Side::bid, .price = k999, .shares = 10});
+    }
+  }
+  template <class Context>
+  void on_report(Context& /*context*/, const Report& report) {
+    seen.push_back(
+        {'R', report.time, report.kind == ReportKind::fill ? 'f' : 'a', engine->stats().arrivals});
+  }
+  template <class Context>
+  void on_wake(Context& context) {
+    seen.push_back({'W', context.now(), ' ', engine->stats().arrivals});
+  }
+
+  const Engine<>* engine = nullptr;
+  std::vector<Seen> seen;
+};
+
+// The tie order under L-off, where every latency is zero and so everything a message causes
+// falls in its own nanosecond. The directory's delivery at 1 sends S, a bid of 100 at 10.00,
+// which arrives at 1 and rests with nothing ahead, and sets a wake at 5000. R1 joins behind S
+// at 2000. At 5000 two messages apply first: E R1 40, which fills S 40 and reports it at 5000,
+// and an add at 9.99. Pending at 5000 then are two deliveries, the fill report and the wake.
+// The first delivery sends S2, which arrives at 5000. In the documented order, arrival,
+// delivery, report, wake, S2 arrives before the second delivery reaches the strategy, and its
+// accept queues behind the fill report; the wake comes last.
+TEST(LatencyOff, EventsOfOneNanosecondReachTheStrategyInTheTieOrder) {
+  Engine<> engine{config(kLatency, 20191230, {.latency_off = true})};
+  TieOrder strategy;
+  strategy.engine = &engine;
+  engine.feed(wire::directory(kLocate, 'Q', 'P', 100, 1), strategy);
+  engine.feed(wire::add(kLocate, 1, 'B', 100, k1000, 2000), strategy);
+  engine.feed(wire::execute(kLocate, 1, 40, 5000), strategy);
+  engine.feed(wire::add(kLocate, 2, 'B', 100, k999, 5000), strategy);
+  engine.advance(5001, strategy);
+  using Seen = TieOrder::Seen;
+  EXPECT_EQ(strategy.seen, (std::vector<Seen>{{'M', 1, 'R', 0},
+                                              {'R', 1, 'a', 1},
+                                              {'M', 2000, 'A', 1},
+                                              {'M', 5000, 'E', 1},
+                                              {'M', 5000, 'A', 2},
+                                              {'R', 5000, 'f', 2},
+                                              {'R', 5000, 'a', 2},
+                                              {'W', 5000, ' ', 2}}));
+  EXPECT_EQ(engine.stats().fills, 1U);
 }
 
 // ---- Join time and latency ------------------------------------------------------------
@@ -948,6 +1047,55 @@ TEST(ItchEdges, S33Halt) {
   run.feed(wire::execute(kLocate, 2, 50, 6000));
   run.advance(10'000);
   EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1000, 50, kMaker}}));
+}
+
+// 33, a crossing add. S bids 10.01 inside 10.00 by 10.03, as in S25. While halted, a real sell
+// of 40 at 10.01 is added: it would cross S, but nothing fills. Trading resumes and a new sell
+// of 20 at 10.01 crosses S, which fills 20 as maker.
+TEST(ItchEdges, S33HaltedCrossingAddDoesNotFill) {
+  Replay run;
+  run.strategy.send(kS, 2000, Side::bid, k1001, 100);
+  run.feed(wire::add(kLocate, 1, 'B', 100, k1000, 1000));
+  run.feed(wire::add(kLocate, 2, 'S', 100, k1003, 1001));
+  run.feed(wire::trading_action(kLocate, 'H', 2500));
+  run.feed(wire::add(kLocate, 3, 'S', 40, k1001, 3000));
+  run.advance(4000);
+  EXPECT_TRUE(run.fills(kS).empty());
+  EXPECT_EQ(run.engine.stats().crossing_fills, 0U);
+  EXPECT_EQ(run.queue(kS).remaining, 100U);
+  run.feed(wire::trading_action(kLocate, 'T', 5000));
+  run.feed(wire::add(kLocate, 4, 'S', 20, k1001, 6000));
+  run.advance(10'000);
+  EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1001, 20, kMaker}}));
+  EXPECT_EQ(run.engine.stats().crossing_fills, 1U);
+}
+
+// 33, a replace. S rests at 10.00 behind R1's 100. Halted at 2500, the strategy replaces S to
+// 50 at 9.99 at 3000; it arrives at 3060 and is refused as halted. S keeps its price, size and
+// place, and an execution behind it after the resumption fills it at 10.00.
+TEST(ItchEdges, S33ReplaceWhileHaltedIsRefused) {
+  Replay run;
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.strategy.replace(kS, 3000, k999, 50);
+  run.feed(wire::add(kLocate, 1, 'B', 100, k1000, 1000));
+  run.feed(wire::trading_action(kLocate, 'H', 2500));
+  run.advance(4000);
+  const auto refused = run.strategy.reports(kS, ReportKind::replace_rejected);
+  ASSERT_EQ(refused.size(), 1U);
+  EXPECT_EQ(refused[0].reason, Reject::halted);
+  EXPECT_EQ(refused[0].exchange_time, 3060U);
+  EXPECT_EQ(refused[0].price, k1000);
+  EXPECT_EQ(refused[0].remaining, 100U);
+  EXPECT_TRUE(run.strategy.reports(kS, ReportKind::replaced).empty());
+  EXPECT_EQ(run.queue(kS).price, k1000);
+  EXPECT_EQ(run.queue(kS).remaining, 100U);
+  EXPECT_EQ(run.ahead(kS), 100U);
+  run.feed(wire::trading_action(kLocate, 'T', 5000));
+  run.feed(wire::add(kLocate, 2, 'B', 100, k1000, 5100));
+  run.feed(wire::execute(kLocate, 1, 100, 6000));
+  run.feed(wire::execute(kLocate, 2, 60, 6100));
+  run.advance(10'000);
+  EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1000, 60, kMaker}}));
 }
 
 // 34. A Broken Trade does not undo a fill. It is counted.
