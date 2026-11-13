@@ -111,22 +111,22 @@ class WriteRecorder {
     ++move_count_;
   }
 
-  // The level slot a write reported for `id` stored into, read after the write: no write
+  // The level slot `slot` a write reported for `id` stored into, read after the write: no write
   // but open changes a level's identity, and open sets it from `id`.
   template <class Levels>
-  void on_level_slot(const itch::LevelId& id, std::uint32_t level, const Levels& levels) noexcept {
+  void on_level_slot(const itch::LevelId& id, std::uint32_t slot, const Levels& levels) noexcept {
     ++level_slot_checks_;
-    if (level >= level_live_.size()) {
-      fault(SlotFault::level_outside_pool, level, kNoIndex);
+    if (slot >= level_live_.size()) {
+      fault(SlotFault::level_outside_pool, slot, kNoIndex);
       return;
     }
-    if (level_live_[level] == 0) {
-      fault(SlotFault::level_not_live, level, kNoIndex);
+    if (level_live_[slot] == 0) {
+      fault(SlotFault::level_not_live, slot, kNoIndex);
       return;
     }
-    const auto& held = levels[level];
+    const auto& held = levels[slot];
     if (held.locate != id.locate || held.side != id.side || held.price != id.price) {
-      fault(SlotFault::level_of_other_price, level, kNoIndex);
+      fault(SlotFault::level_of_other_price, slot, kNoIndex);
     }
   }
   // An order slot a write for level slot `level` reads links from or stores into, before
@@ -658,44 +658,55 @@ class BasicOracleRun {
   void compare_arena(std::uint16_t locate) {
     if constexpr (kFlat) {
       for (const Side side : {Side::bid, Side::ask}) {
-        const std::size_t key = side_key(locate, side);
-        const auto& top = fast_.sides()[key];
-        ArenaBlock& seen = arena_seen_[key];
-        if (top.count > top.capacity) {
-          diverge(DivergenceKind::arena,
-                  std::format("locate={} side={:c} holds {} entries in a "
-                              "block of {}",
-                              locate, side == Side::bid ? 'B' : 'S', top.count, top.capacity));
-          continue;
-        }
-        if (top.base == seen.base && top.capacity == seen.capacity) {
-          continue;
-        }
-        ++counters_.arena_checks;
-        claim_block(seen, 0);
-        const auto owner = static_cast<std::uint32_t>(key + 1);
-        const ArenaBlock now{.base = top.base, .capacity = top.capacity};
-        if (now.capacity > arena_owner_.size() || now.base > arena_owner_.size() - now.capacity) {
-          diverge(DivergenceKind::arena,
-                  std::format("locate={} side={:c} block {} of {} is past the arena of {}", locate,
-                              side == Side::bid ? 'B' : 'S', now.base, now.capacity,
-                              arena_owner_.size()));
-          continue;
-        }
-        for (std::uint32_t at = now.base; at < now.base + now.capacity; ++at) {
-          if (arena_owner_[at] != 0) {
-            diverge(DivergenceKind::arena,
-                    std::format("locate={} side={:c} block {} of {} holds entry {} of side "
-                                "record {}",
-                                locate, side == Side::bid ? 'B' : 'S', now.base, now.capacity, at,
-                                arena_owner_[at] - 1));
-            break;
-          }
-        }
-        seen = now;
-        claim_block(seen, owner);
+        compare_arena_side(locate, side);
       }
     }
+  }
+
+  void compare_arena_side(std::uint16_t locate, Side side) {
+    const std::size_t key = side_key(locate, side);
+    const auto& top = fast_.sides()[key];
+    ArenaBlock& seen = arena_seen_[key];
+    if (top.count > top.capacity) {
+      diverge(DivergenceKind::arena,
+              std::format("locate={} side={:c} holds {} entries in a "
+                          "block of {}",
+                          locate, side == Side::bid ? 'B' : 'S', top.count, top.capacity));
+      return;
+    }
+    if (top.base == seen.base && top.capacity == seen.capacity) {
+      return;
+    }
+    ++counters_.arena_checks;
+    claim_block(seen, 0);
+    const auto owner = static_cast<std::uint32_t>(key + 1);
+    const ArenaBlock now{.base = top.base, .capacity = top.capacity};
+    if (now.capacity > arena_owner_.size() || now.base > arena_owner_.size() - now.capacity) {
+      diverge(
+          DivergenceKind::arena,
+          std::format("locate={} side={:c} block {} of {} is past the arena of {}", locate,
+                      side == Side::bid ? 'B' : 'S', now.base, now.capacity, arena_owner_.size()));
+      return;
+    }
+    if (const auto at = owned_entry(now)) {
+      diverge(DivergenceKind::arena,
+              std::format("locate={} side={:c} block {} of {} holds entry {} of side "
+                          "record {}",
+                          locate, side == Side::bid ? 'B' : 'S', now.base, now.capacity, *at,
+                          arena_owner_[*at] - 1));
+    }
+    seen = now;
+    claim_block(seen, owner);
+  }
+
+  // The first entry of a block, inside the arena, that a side's block already holds.
+  [[nodiscard]] std::optional<std::uint32_t> owned_entry(const ArenaBlock& block) const {
+    for (std::uint32_t at = block.base; at < block.base + block.capacity; ++at) {
+      if (arena_owner_[at] != 0) {
+        return at;
+      }
+    }
+    return std::nullopt;
   }
 
   void claim_block(const ArenaBlock& block, std::uint32_t owner) {
@@ -718,44 +729,60 @@ class BasicOracleRun {
                                                         std::span<const std::uint16_t> locates,
                                                         std::string_view name) const {
     std::optional<std::string> found;
-    const auto side_of = [&](std::uint16_t locate, Side side) {
-      std::uint64_t levels = 0;
-      book.walk_side(locate, side, [&](const typename Book::Level& level) {
-        if (++levels > config_.capacity.levels) {
-          found = std::format("{} book: locate={} side={:c} has more levels than its pool of {}",
-                              name, locate, side == Side::bid ? 'B' : 'S', config_.capacity.levels);
-          return false;
-        }
-        std::uint64_t orders = 0;
-        for (std::uint32_t order = level.front; order != kNoIndex;
-             order = book.order_at(order).newer) {
-          if (order >= book.order_capacity() || ++orders > config_.capacity.orders) {
-            found = std::format(
-                "{} book: locate={} side={:c} price={} has a FIFO that does not "
-                "end within its pool of {}",
-                name, locate, side == Side::bid ? 'B' : 'S', level.price, book.order_capacity());
-            return false;
-          }
-        }
-        return true;
-      });
-    };
     if (locates.empty()) {
       const auto sides = book.sides();
       for (std::size_t key = 0; key < sides.size() && !found; ++key) {
         if (!sides[key].empty()) {
-          side_of(static_cast<std::uint16_t>(key >> 1U), (key & 1U) == 0 ? Side::bid : Side::ask);
+          found = endless_side(book, static_cast<std::uint16_t>(key >> 1U),
+                               (key & 1U) == 0 ? Side::bid : Side::ask, name);
         }
       }
     } else {
       for (std::size_t at = 0; at < locates.size() && !found; ++at) {
-        side_of(locates[at], Side::bid);
+        found = endless_side(book, locates[at], Side::bid, name);
         if (!found) {
-          side_of(locates[at], Side::ask);
+          found = endless_side(book, locates[at], Side::ask, name);
         }
       }
     }
     return found;
+  }
+
+  // One side's walk for endless_list: its levels within the level pool, and each level's
+  // FIFO within the order pool.
+  template <class Book>
+  [[nodiscard]] std::optional<std::string> endless_side(const Book& book, std::uint16_t locate,
+                                                        Side side, std::string_view name) const {
+    std::optional<std::string> found;
+    std::uint64_t levels = 0;
+    book.walk_side(locate, side, [&](const auto& level) {
+      if (++levels > config_.capacity.levels) {
+        found = std::format("{} book: locate={} side={:c} has more levels than its pool of {}",
+                            name, locate, side == Side::bid ? 'B' : 'S', config_.capacity.levels);
+        return false;
+      }
+      if (!fifo_ends(book, level.front)) {
+        found = std::format(
+            "{} book: locate={} side={:c} price={} has a FIFO that does not "
+            "end within its pool of {}",
+            name, locate, side == Side::bid ? 'B' : 'S', level.price, book.order_capacity());
+        return false;
+      }
+      return true;
+    });
+    return found;
+  }
+
+  // Whether the FIFO from `front` ends within the order pool, each link naming a slot of it.
+  template <class Book>
+  [[nodiscard]] bool fifo_ends(const Book& book, std::uint32_t front) const {
+    std::uint64_t orders = 0;
+    for (std::uint32_t order = front; order != kNoIndex; order = book.order_at(order).newer) {
+      if (order >= book.order_capacity() || ++orders > config_.capacity.orders) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void compare_hash(DivergenceKind kind, std::uint64_t& counter) {

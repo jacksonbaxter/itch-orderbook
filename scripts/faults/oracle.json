@@ -3487,7 +3487,7 @@
       "mutations": [
         {
           "file": "tests/oracle/diff.hpp",
-          "old": "      fault(SlotFault::level_of_other_price, level, kNoIndex);\n",
+          "old": "      fault(SlotFault::level_of_other_price, slot, kNoIndex);\n",
           "new": ""
         }
       ],
@@ -3512,7 +3512,7 @@
       "mutations": [
         {
           "file": "tests/oracle/diff.hpp",
-          "old": "      fault(SlotFault::level_not_live, level, kNoIndex);\n      return;\n",
+          "old": "      fault(SlotFault::level_not_live, slot, kNoIndex);\n      return;\n",
           "new": ""
         }
       ],
@@ -3537,7 +3537,7 @@
       "mutations": [
         {
           "file": "tests/oracle/diff.hpp",
-          "old": "      fault(SlotFault::level_outside_pool, level, kNoIndex);\n      return;\n",
+          "old": "      fault(SlotFault::level_outside_pool, slot, kNoIndex);\n      return;\n",
           "new": "      return;\n"
         }
       ],
@@ -3803,7 +3803,7 @@
       "mutations": [
         {
           "file": "tools/itch_oracle.cpp",
-          "old": "      if (*number == 0 || *number > std::numeric_limits<std::uint32_t>::max()) {\n        return std::nullopt;\n      }\n",
+          "old": "  if (number == 0 || number > std::numeric_limits<std::uint32_t>::max()) {\n    return false;\n  }\n",
           "new": ""
         }
       ],

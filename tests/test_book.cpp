@@ -1201,7 +1201,7 @@ std::uint64_t first_divergence(Run& run, const std::vector<wire::Bytes>& message
 template <class Run>
 bool diverged_as(const Run& run, itch::oracle::DivergenceKind kind, std::string_view detail) {
   return std::ranges::any_of(run.divergences(), [&](const itch::oracle::Divergence& d) {
-    return d.kind == kind && d.detail.find(detail) != std::string::npos;
+    return d.kind == kind && d.detail.contains(detail);
   });
 }
 
@@ -1332,6 +1332,7 @@ TEST(SlotChecks, TheRecorderRefusesEachWrongSlot) {
   const std::uint32_t level2 = book.order_at(order2).level;
   const itch::LevelId at_1000{.locate = 1, .side = itch::Side::bid, .price = 1000};
   std::vector<itch::BookOrder> orders;
+  orders.reserve(book.order_capacity());
   for (std::uint32_t at = 0; at < book.order_capacity(); ++at) {
     orders.push_back(book.order_at(at));
   }

@@ -66,6 +66,30 @@ struct Options {
   return value;
 }
 
+// Sets the option `arg` to `number`. False for an option that takes no number, or a number
+// the option cannot take.
+[[nodiscard]] bool set_number(std::string_view arg, std::uint64_t number, Options& options) {
+  if (arg == "--hash-every") {
+    options.config.hash_every = number;
+    return true;
+  }
+  if (arg == "--prefetch") {
+    options.prefetch = number;
+    return true;
+  }
+  if (arg != "--max-orders" && arg != "--max-levels") {
+    return false;
+  }
+  // A pool of no slots, or more than a slot index can name, is bad usage: the hash indexes
+  // cannot be sized for 0 orders.
+  if (number == 0 || number > std::numeric_limits<std::uint32_t>::max()) {
+    return false;
+  }
+  (arg == "--max-orders" ? options.config.capacity.orders : options.config.capacity.levels) =
+      static_cast<std::uint32_t>(number);
+  return true;
+}
+
 [[nodiscard]] std::optional<Options> parse_options(std::span<const char* const> args) {
   Options options;
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -95,22 +119,7 @@ struct Options {
       case itch::tools::ArmOption::not_an_arm_option: break;
     }
     const auto number = parse_number(args[i]);
-    if (!number) {
-      return std::nullopt;
-    }
-    if (arg == "--hash-every") {
-      options.config.hash_every = *number;
-    } else if (arg == "--prefetch") {
-      options.prefetch = *number;
-    } else if (arg == "--max-orders" || arg == "--max-levels") {
-      // A pool of no slots, or more than a slot index can name, is bad usage: the hash
-      // indexes cannot be sized for 0 orders.
-      if (*number == 0 || *number > std::numeric_limits<std::uint32_t>::max()) {
-        return std::nullopt;
-      }
-      (arg == "--max-orders" ? options.config.capacity.orders : options.config.capacity.levels) =
-          static_cast<std::uint32_t>(*number);
-    } else {
+    if (!number || !set_number(arg, *number, options)) {
       return std::nullopt;
     }
   }
