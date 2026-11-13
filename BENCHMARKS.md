@@ -50,7 +50,7 @@ All on one thread, with the whole file resident before the clock starts, unless 
 - **Target:** ≥ 709 M msg/s, ~21.8 GB/s.
 - **Source:** [itch-book README](https://github.com/groovg/itch-book/blob/b502b002abf650760b79c010b3ae3a8f82896ae8/README.md), OSS-15.
 - **Measured:** Ryzen 7 9700X (Zen 5, 32 MB L3), 96 GB DDR5, Ubuntu 24.04, core isolated, SMT off, gcc 13.3 `-O3`. Full day 12302019 in RAM. One pinned thread. Counts every framed message, with no fields read. Best of 3.
-- **Comparability:** this measures memory bandwidth, as the README says. `debian` has far less of it. We report the median.
+- **Comparability:** itch-book's README says this walk measures memory bandwidth; that is its claim for its host, not something measured here. On `debian` the walk was not shown to be bound by bandwidth, and how much of the gap is the host's is not established (WRITEUP.md, "The parse rate"). We report the median.
 - **Status:** `VERIFIED`
 
 ### T-PARSE-2: decode of the book-affecting types
@@ -64,7 +64,7 @@ All on one thread, with the whole file resident before the clock starts, unless 
 - **Target:** ≥ 93.9 M msg/s and ≥ 2.89 GB/s on 10302019.
 - **Source:** [Lunary benchmarks](https://lunyn.com/benchmarks), OSS-34.
 - **Measured:** Google Cloud c3-standard-8, Xeon Platinum 8481C 2.70 GHz, 32 GB DDR5, Ubuntu 24.04, Rust `-C target-cpu=native`. Full day 10302019, memory-mapped. Single thread. Every field of every supported type decoded and checksummed, median of 10.
-- **Comparability:** a harder job than T-PARSE-2, under a VM, by a vendor on its own site. Ours is measured on 12302019 only: on `debian` the run on 10302019 was refused by the machine check before anything was timed, so the comparison is across days (docs/NOTES.md, "The parse rate on `debian`").
+- **Comparability:** a harder job than T-PARSE-2, under a VM, by a vendor on its own site. Ours is measured on 12302019 only: on `debian`, on 10302019, the standalone machine check failed input-resident each time it ran, so P-0030's run was never started, so the comparison is across days (docs/NOTES.md, "The parse rate on `debian`").
 - **Status:** `VERIFIED`
 
 ### T-BOOK-1: true L3 rebuild, all symbols

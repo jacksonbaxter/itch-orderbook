@@ -7,6 +7,8 @@ T-PARSE-3).
         [--core N] [--sibling N] [--sampler-cpu N] [--wrapped-by TEXT] [--allow-dirty]
     parse_driver.py --check FILE...
     parse_driver.py --inline-check BENCH_PARSE [--asm-out FILE]
+    parse_driver.py render --raw-dir RAW/RUN_ID --published FILE (--out FILE [--rendered-again
+        REASON] | --check) [--stderr FILE]
 
 On a reported run this is measure.sh's direct child, as scripts/backtest_driver.py is, with the
 same order, signal handling and Linux sampler rule:
@@ -37,7 +39,14 @@ anywhere else is refused before anything is timed.
 --check FILE... recomputes every figure of a results file from its table of timed passes, the
 summary, the best passes and each verdict, holds every pass's messages and the file's bytes to
 the frame count and to the manifest's day, works the caveats' table again from the manifest,
-and exits 1 on any that differ.
+holds the Counts table to the manifest's ten-type count, the frames and the passes' folds (each
+decode decoding all it should, rejecting none), and exits 1 on any that differ.
+
+render renders a published file again from its run's raw folder (the repetitions' records,
+the machine check's output, the timed loops' code and the sampler's log, judged again), stamps
+its load lines from measure.sh's stderr as stamp_load.py does, and puts a reason given with
+--rendered-again under the generated-by line, after any the file had. With --check it writes
+nothing and refuses a file that is not exactly what its raw records render.
 
 --inline-check BENCH_PARSE disassembles the binary with objdump and refuses a call, or a jump
 to another function, in any of the three pass functions (bench/parse_passes.hpp), each of which
@@ -96,10 +105,10 @@ PASSES = (
 TEN_TYPES = "SRAFECXDUP"
 # The day each bar was set on (BENCHMARKS.md): itch-book's two on 12302019, Lunary's on 10302019.
 BAR_DAY = {"T-PARSE-1": "12302019", "T-PARSE-2": "12302019", "T-PARSE-3": "10302019"}
-# What a file measured on another day says of a bar's own day: 10302019's words are the ones
-# results/parse_rate_debian_12302019.md was written with, when 10302019 was not on debian.
-OFF_DAY = {"10302019": "which is not on this host",
-           "12302019": "on which it is judged, in results/parse_rate_debian_12302019.md"}
+# Where a bar's own day is judged, when a file of another day gives its pass beside it. A day
+# not named here is one this run did not measure, and the file says only that: what is or is not
+# on the host is no fact of the run's record.
+JUDGED_ELSEWHERE = {"12302019": "judged on 12302019, in results/parse_rate_debian_12302019.md"}
 PARSE_FIELD = "parse_passes"
 PASS_ROW = re.compile(r"^\| (\d+) \| (\d+) \| (framing|decode|strict) \| ([\d.]+) \| ([\d,]+) \| "
                       r"[\d,]+ \| [\d.]+ \| ([\d,]+) \|$")
@@ -137,18 +146,21 @@ def figures(passes, file_bytes):
 
 
 def verdict(target, msgs_median, gbs_median, bar_msgs, bar_gbs, day):
-    """met only if both medians reach their bars; a bar set on another day says so."""
+    """met only if both medians reach their bars, else missed with the gap. A bar set on another
+    day than the day measured gets neither word, since a verdict on the bar is a verdict on its
+    day: it gets what was seen, above or under the bar on the day measured, and what was not."""
     short = []
     if msgs_median / MEGA < bar_msgs:
         short.append(f"{shortfall(bar_msgs, msgs_median / MEGA)} M msg/s")
     if gbs_median < bar_gbs:
         short.append(f"{shortfall(bar_gbs, gbs_median)} GB/s")
-    text = "met" if not short else f"missed: {' and '.join(short)} under the bar"
     other = BAR_DAY.get(target)
     if other and other != day:
-        text += (f"; measured on {day}, not the bar's {other}, {OFF_DAY[other]}: the two days "
-                 "are compared under Caveats")
-    return text
+        seen = f"under the bar on {day} by {' and '.join(short)}" if short else \
+            f"above the bar on {day}"
+        return (f"{seen}, a day other than the bar's; "
+                f"{JUDGED_ELSEWHERE.get(other, f'not measured on {other}')}")
+    return "met" if not short else f"missed: {' and '.join(short)} under the bar"
 
 
 def shortfall(bar, value):
@@ -632,14 +644,14 @@ def caveat_lines(day, loops):
              "itch-book does, reads a copy into anonymous memory before the warm-up, and every "
              "page of it was found resident before and after each timed pass; bench_parse "
              "counts no page faults. Lunary's bar is on "
-             f"{BAR_DAY['T-PARSE-3']}, {OFF_DAY[BAR_DAY['T-PARSE-3']]}"]
+             f"{BAR_DAY['T-PARSE-3']}, a day this run did not measure"]
     if BAR_DAY["T-PARSE-3"] == day:
         itch_book = BAR_DAY["T-PARSE-1"]
         lines[-1] = (f"{lines[-1].rsplit(' Lunary', 1)[0]} Lunary's bar is on {day}, the day "
                      "measured here.")
         lines.append(f"- T-PARSE-1 and T-PARSE-2's bars were set on {itch_book}, itch-book's "
-                     f"day, {OFF_DAY[itch_book]}; this file gives their passes on {day} beside "
-                     "it")
+                     f"day, a day this run did not measure; this file gives their passes on "
+                     f"{day} beside it")
     table = caveat_rows(day)
     if table:
         lines[-1] += ("; the days' sizes and each type's share of their messages, from "
@@ -798,6 +810,154 @@ def relative_command(args):
     return f"{args.wrapped_by} {text}" if args.wrapped_by else text
 
 
+# render: a published file again from its run's raw records
+
+class PrintedSwap:
+    """The swap line as the published file printed it."""
+
+    def __init__(self, line):
+        self.text = line
+
+    def line(self):
+        return self.text
+
+
+DRIVER_WORDS = "python3 -B scripts/parse_driver.py "
+
+
+def published_parts(text):
+    """What the run printed only into its file: its arguments, its run id and times, its
+    command as the file gives it and the swap line."""
+    fields = check_results.parse_header(text)
+    command = (check_results.section(text, "Commands") or "").strip().strip("`").strip()
+    wrapped, found, words = command.partition(DRIVER_WORDS)
+    if not found:
+        raise Refused("published", "no parse_driver.py command in its Commands section")
+    args = parse_args(shlex.split(words))
+    args.wrapped_by = wrapped.strip() or None
+    swap = next((line for line in text.splitlines()
+                 if line.startswith(("The kernel's pswpout", "Swap-outs are not read"))), None)
+    return args, fields, command, swap
+
+
+def sampled_again(published, raw_dir, args):
+    """The Sampler section judged again from the sampler's log in the raw folder: each published
+    process's span must still pass the rule and give the summary the file printed. Withdrawn
+    rows are carried over as the run wrote them, each with its run-log row."""
+    path = raw_dir / "sampler.txt"
+    if not path.is_file():
+        raise Refused("published", "the raw folder has no sampler.txt")
+    lines = path.read_text(encoding="utf-8").splitlines()
+    first = next((line for line in lines if line.split()[1:2] == ["start"]), None)
+    if first is None:
+        raise Refused("published", "the sampler's log has no start line")
+    settings = dict(word.split("=", 1) for word in first.split()[2:])
+    sampled = {"every": float(settings["every"]), "cpu": int(settings["cpu"]), "published": [],
+               "withdrawn": []}
+    for cells in check_results.table_rows(published, "Sampler"):
+        if cells[0].startswith("withdrawn "):
+            sampled["withdrawn"].append((cells[0].split(", ", 1)[1], cells[1], cells[3]))
+            continue
+        if not cells[0].isdigit():
+            continue  # The table's head.
+        index, begin, end, printed = int(cells[0]), cells[1], cells[2], cells[3]
+        why = linux_sampler.judge(lines, begin, end)
+        again = linux_sampler.summary(lines, begin, end, args.core, args.sibling)
+        if why is not None or again != printed:
+            raise Refused("published", f"process {index}'s span is not what the sampler's log "
+                                       f"gives: {why or again}")
+        sampled["published"].append((index, begin, end, printed))
+    if len(sampled["published"]) != args.repetitions:
+        raise Refused("published", f"{len(sampled['published'])} processes in its Sampler "
+                                   f"section, not {args.repetitions}")
+    return sampled
+
+
+def kept_loops(raw_dir):
+    """The inline check's lines, worked again from the timed loops' code the run kept."""
+    code = run_record.kept_output(raw_dir, "passes.asm")
+    disassembly = re.sub(r"^<(\S+)>:$", r"0 <\1>:", code, flags=re.MULTILINE)
+    lines, problems = inline_verdicts(disassembly)
+    if problems:
+        raise Refused("inline", "; ".join(problems))
+    return lines
+
+
+def render_again(raw_dir, published, stderr, again=None):
+    """The published file's run rendered again from its raw records: the repetitions' records,
+    the machine check's output, the timed loops' code and the sampler's log the run kept, and
+    from the file only what the run printed nowhere else (its arguments, run id, times and swap
+    line). A reason given is stamped under the generated-by line, after any earlier one."""
+    import stamp_load  # noqa: PLC0415  # Imported here: it reads check_results, which reads this.
+
+    args, fields, command, swap = published_parts(published)
+    run_record.refuse_incomplete(raw_dir, (bench_driver.MACHINE_CHECK, "passes.asm"),
+                                 fields.get("run_id"))
+    if not run_record.is_new_kind(raw_dir):
+        raise Refused("raw", f"{raw_dir.name} holds no run.json")
+    machine = run_record.kept_output(raw_dir, bench_driver.MACHINE_CHECK)
+    manifest_day = manifest_entry(fields.get("dataset", ""))
+    if manifest_day is None:
+        raise Refused("manifest", f"{fields.get('dataset')!r} is not a day the manifest pins")
+    records = []
+    for index in range(1, args.repetitions + 1):
+        record = json.loads((raw_dir / f"parse-repetition-{index}.json").read_text(
+            encoding="utf-8"))
+        if record["refusals"]:
+            raise Refused("raw", f"repetition {index} refused: {'; '.join(record['refusals'])}")
+        validate_run(record, args, manifest_day)
+        records.append(record)
+    validate_together(records)
+    sampled = sampled_again(published, raw_dir, args)
+    bench_driver.swap_watch = PrintedSwap(swap) if swap else None
+    try:
+        text = bench_driver.with_earlier_renders(
+            render(records, args, fields["run_id"], fields["run_started"],
+                   fields["run_finished"], machine, command, sampled, kept_loops(raw_dir)),
+            published, again)
+    finally:
+        bench_driver.swap_watch = None
+    stamped = stamp_load.stamp(text, stderr)
+    violations = check_results.check_text(stamped)
+    if violations:
+        raise Refused("results", "; ".join(f"{code}: {detail}" for code, detail in violations))
+    return stamped
+
+
+def render_main(argv):
+    parser = argparse.ArgumentParser(prog="parse_driver.py render",
+                                     description="render a published file again from raw")
+    parser.add_argument("--raw-dir", type=Path, required=True, help="the run's own folder")
+    parser.add_argument("--published", type=Path, required=True)
+    parser.add_argument("--out", type=Path, help="where to write it; with --check, nothing")
+    parser.add_argument("--stderr", type=Path,
+                        help="measure.sh's stderr, the run's outputs/measure.stderr unless given")
+    parser.add_argument("--rendered-again", metavar="REASON")
+    parser.add_argument("--check", action="store_true",
+                        help="refuse unless the published file is its raw records' render")
+    args = parser.parse_args(argv)
+    if args.check == (args.out is not None) or (args.check and args.rendered_again):
+        parser.error("give --out, or --check without --out and --rendered-again")
+    try:
+        stderr = (args.stderr or args.raw_dir / "outputs" / run_record.MEASURE_STDERR).read_text(
+            encoding="utf-8")
+        published = args.published.read_text(encoding="utf-8")
+        text = render_again(args.raw_dir, published, stderr, args.rendered_again)
+    except (Refused, run_record.Incomplete, OSError, ValueError, KeyError) as error:
+        print(f"parse_driver: render refused: {scrub(str(error))}", file=sys.stderr)
+        return 1
+    if args.check:
+        if text != published:
+            print(f"parse_driver: FAIL {args.published.name} is not what its raw records "
+                  f"render", file=sys.stderr)
+            return 1
+        print(f"parse_driver: ok {args.published.name} is what its raw records render")
+        return 0
+    args.out.write_text(text, encoding="utf-8")
+    print(f"parse_driver: wrote {args.out}", file=sys.stderr)
+    return 0
+
+
 # --check
 
 LOOP_LINE = re.compile(r"^- (frame_walk|book_decode|strict_decode): \d+ instructions"
@@ -878,7 +1038,27 @@ def check_text(text):
             if row not in printed.splitlines():
                 problems.append(("parse-figure-differs", f"{title}: {row}"))
     problems.extend(caveat_problems(text, day))
+    if pinned is not None and frames is not None:
+        problems.extend(count_problems(text, passes, file_bytes, frames, pinned))
     return problems
+
+
+def count_problems(text, passes, file_bytes, frames, pinned):
+    """The Counts table held to what it must be: the file's bytes; the ten types' messages the
+    manifest's per-type counts sum to; the decode decoding exactly those and the strict decode
+    every frame, each rejecting none; and each fold the one every timed pass of it gave."""
+    printed = {cells[0]: cells[1] for cells in check_results.table_rows(text, "Counts")
+               if len(cells) == 2}
+    ten = sum(pinned["per_type_counts"].get(t, 0) for t in TEN_TYPES)
+    folds = {name: {p["fold"] for p in passes if p["pass"] == name} for name in ("decode", "strict")}
+    want = {"Bytes, the whole file": f"{file_bytes:,}",
+            f"Messages of the decode's ten types ({', '.join(TEN_TYPES)})": f"{ten:,}"}
+    for name, label, decoded in (("decode", "Decode: decoded, rejected, fold", ten),
+                                 ("strict", "Strict decode: decoded, rejected, fold", frames)):
+        if len(folds[name]) == 1:
+            want[label] = f"{decoded:,}, 0, {next(iter(folds[name])):,}"
+    return [("parse-counts-differ", f"Counts: {label} is {printed.get(label)!r}, not {value!r}")
+            for label, value in want.items() if printed.get(label) != value]
 
 
 def check_main(paths):
@@ -932,6 +1112,8 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["--inline-check"]:
         return inline_main(argv[1:])
+    if argv[:1] == ["render"]:
+        return render_main(argv[1:])
     if argv[:1] == ["--check"]:
         if len(argv) < 2:
             print("usage: parse_driver.py --check FILE...", file=sys.stderr)

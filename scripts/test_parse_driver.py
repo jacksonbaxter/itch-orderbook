@@ -13,6 +13,7 @@ import io
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -23,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_results  # noqa: E402
 import parse_driver  # noqa: E402
 import process_kinds  # noqa: E402
+import run_record  # noqa: E402
 import stamp_load  # noqa: E402
 import test_linux_sampler  # noqa: E402
 
@@ -131,8 +133,19 @@ class Figures(unittest.TestCase):
                       "the median | missed: 400.10 M msg/s and 12.32 GB/s under the bar |",
                       targets)
         strict = next(row for row in targets if row.startswith("| T-PARSE-3 |"))
-        self.assertIn("on 10302019 |", strict)
-        self.assertIn("measured on 12302019, not the bar's 10302019", strict)
+        # A bar set on another day gets no verdict word: what was seen on the day measured,
+        # and that the bar's own day was not measured.
+        self.assertTrue(strict.endswith("| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | 66.03 M "
+                                        "msg/s, 2.027 GB/s, the median | under the bar on "
+                                        "12302019 by 27.87 M msg/s and 0.86 GB/s, a day other "
+                                        "than the bar's; not measured on 10302019 |"), strict)
+        self.assertEqual(parse_driver.verdict("T-PARSE-3", 117.7e6, 3.615, 93.9, 2.89,
+                                              "12302019"),
+                         "above the bar on 12302019, a day other than the bar's; not measured on "
+                         "10302019")
+        for median in (117.7e6, 90e6):
+            words = parse_driver.verdict("T-PARSE-3", median, 3.615, 93.9, 2.89, "12302019")
+            self.assertFalse(words.startswith(("met", "missed")), words)
         self.assertEqual(parse_driver.verdict("T-PARSE-2", 200e6, 6.2, 199.0, 6.1, "12302019"),
                          "met")
         self.assertEqual(parse_driver.verdict("T-PARSE-2", 200e6, 6.0, 199.0, 6.1, "12302019"),
@@ -152,7 +165,10 @@ class Figures(unittest.TestCase):
         self.assertIn("| B | 1, 0.000% | 0, 0.000% |", caveats)
         self.assertIn("- " + LOOPS[0], caveats)
         text = rendered()
-        self.assertIn("compared under Caveats", text)
+        self.assertIn("Lunary's bar is on 10302019, a day this run did not measure; the days' "
+                      "sizes", text)
+        # What is or is not on the host is no fact of the run's record.
+        self.assertNotIn("not on this host", text)
 
     def test_t_parse_3_is_judged_on_its_own_day(self):
         # 10302019, Lunary's day: its manifest counts, the same made-up seconds.
@@ -179,22 +195,23 @@ class Figures(unittest.TestCase):
         self.assertIn("| T-PARSE-3 | ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | 72.23 M msg/s, "
                       "2.220 GB/s, the median | missed: 21.67 M msg/s and 0.67 GB/s under the "
                       "bar |", targets)
-        off = ("; measured on 10302019, not the bar's 12302019, on which it is judged, in "
-               "results/parse_rate_debian_12302019.md: the two days are compared under Caveats |")
+        off = (", a day other than the bar's; judged on 12302019, in "
+               "results/parse_rate_debian_12302019.md |")
         for target, bar in (("T-PARSE-1", "≥ 709 M msg/s and 21.8 GB/s, on 12302019"),
                             ("T-PARSE-2", "≥ 199 M msg/s and 6.1 GB/s, on 12302019")):
             line = next(line for line in targets if line.startswith(f"| {target} |"))
             self.assertTrue(line.startswith(f"| {target} | {bar} |"), line)
             self.assertTrue(line.endswith(off), line)
+            self.assertIn(" | under the bar on 10302019 by ", line)
         caveats = rows(text, "Caveats")
         self.assertIn("| | 12302019, the bar's day | 10302019, measured |", caveats)
         self.assertIn("| Bytes a message | 30.704 | 30.732 |", caveats)
         self.assertTrue(any(line.endswith("Lunary's bar is on 10302019, the day measured here.")
                             for line in caveats))
-        self.assertIn("- T-PARSE-1 and T-PARSE-2's bars were set on 12302019, itch-book's day, on "
-                      "which it is judged, in results/parse_rate_debian_12302019.md; this file "
-                      "gives their passes on 10302019 beside it; the days' sizes and each type's "
-                      "share of their messages, from scripts/data_manifest.json:", caveats)
+        self.assertIn("- T-PARSE-1 and T-PARSE-2's bars were set on 12302019, itch-book's day, a "
+                      "day this run did not measure; this file gives their passes on 10302019 "
+                      "beside it; the days' sizes and each type's share of their messages, from "
+                      "scripts/data_manifest.json:", caveats)
         self.assertNotIn("not on this host", text)
 
     def test_the_header_says_what_was_counted(self):
@@ -232,6 +249,43 @@ class Check(unittest.TestCase):
         text = rendered().replace("missed: 400.10 M msg/s", "missed: 400.00 M msg/s")
         self.assertIn("parse-figure-differs", self.codes(text))
 
+    def test_a_verdict_word_for_another_days_bar_is_refused(self):
+        text = rendered()
+        under = ("under the bar on 12302019 by 27.87 M msg/s and 0.86 GB/s, a day other than the "
+                 "bar's; not measured on 10302019")
+        self.assertIn(f"| {under} |", text)
+        self.assertNotIn("parse-verdict-other-day", {c for c, _ in check_results.check_text(text)})
+        for words in ("missed: 27.87 M msg/s and 0.86 GB/s under the bar",
+                      "missed: 27.87 M msg/s and 0.86 GB/s under the bar; measured on 12302019, "
+                      "not the bar's 10302019: the two days are compared under Caveats",
+                      "met; measured on 12302019, not the bar's 10302019, which is not on this "
+                      "host: the two days are compared under Caveats",
+                      "met", "above the bar"):
+            found = check_results.check_text(text.replace(f"| {under} |", f"| {words} |"))
+            self.assertIn("parse-verdict-other-day", {code for code, _ in found}, words)
+        # A bar of the file's own day is held to met or missed as before, not to these words.
+        self.assertEqual(check_results.parse_other_day_verdicts(text.replace(
+            ", on 10302019 | 66.03 M", " | 66.03 M")), [])
+
+    def test_a_swap_line_whose_counts_differ_is_refused(self):
+        # Held for every results file; shown on the published parse file, whose line has both.
+        text = (REPO_ROOT / "results" / "parse_rate_debian_12302019.md").read_text(encoding="utf-8")
+        self.assertEqual(check_results.check_text(text), [])
+        line = ("The kernel's pswpout was 2,303,951 at the start of the run and 2,303,951 after "
+                "its last process: no page of any process was swapped out")
+        self.assertIn(line, text)
+        found = check_results.check_text(text.replace(line, line.replace(
+            "and 2,303,951 after", "and 2,303,999 after")))
+        self.assertEqual({code for code, _ in found}, {"swap-line-inconsistent"})
+
+    def test_a_passing_input_resident_with_pages_missing_is_refused(self):
+        text = (REPO_ROOT / "results" / "parse_rate_debian_12302019.md").read_text(encoding="utf-8")
+        line = "machine_check: pass input-resident: 2014504 of 2014504 pages resident"
+        self.assertEqual(text.count(line), 1)
+        found = check_results.check_text(text.replace(line, line.replace(
+            "2014504 of", "2014057 of")))
+        self.assertEqual({code for code, _ in found}, {"machine-check-inconsistent"})
+
     def test_rates_over_fewer_messages_than_every_frame(self):
         # The framing passes over no message at all, and the decode over the messages it
         # decoded: the file's own figures agree with its table, but not with the frame count.
@@ -251,8 +305,32 @@ class Check(unittest.TestCase):
             for p in each["passes"]:
                 p["totals"] = dict(p["totals"], messages=MESSAGES + 1)
         found = parse_driver.check_text(rendered(records))
-        self.assertEqual({code for code, _ in found}, {"parse-not-the-manifest"})
-        self.assertEqual(len(found), 2)
+        # The strict decode decoded the manifest's frames, now one fewer than the file's.
+        self.assertEqual({code for code, _ in found}, {"parse-not-the-manifest",
+                                                       "parse-counts-differ"})
+        self.assertEqual([code for code, _ in found].count("parse-not-the-manifest"), 2)
+
+    def test_the_counts_table_is_held(self):
+        text = rendered()
+        self.assertEqual(parse_driver.check_text(text), [])
+        for old, new in (
+                (f"({', '.join(parse_driver.TEN_TYPES)}) | {TEN:,} |",
+                 f"({', '.join(parse_driver.TEN_TYPES)}) | {TEN + 1:,} |"),
+                (f"| Decode: decoded, rejected, fold | {TEN:,}, 0, 123 |",
+                 f"| Decode: decoded, rejected, fold | {TEN:,}, 7, 123 |"),
+                (f"| Decode: decoded, rejected, fold | {TEN:,}, 0, 123 |",
+                 f"| Decode: decoded, rejected, fold | {TEN - 1:,}, 0, 123 |"),
+                (f"| Strict decode: decoded, rejected, fold | {MESSAGES:,}, 0, 456 |",
+                 f"| Strict decode: decoded, rejected, fold | {MESSAGES:,}, 0, 457 |"),
+                (f"| Strict decode: decoded, rejected, fold | {MESSAGES:,}, 0, 456 |",
+                 f"| Strict decode: decoded, rejected, fold | {MESSAGES - 1:,}, 1, 456 |"),
+                (f"| Bytes, the whole file | {BYTES:,} |", f"| Bytes, the whole file | {BYTES - 1:,} |")):
+            with self.subTest(new=new):
+                self.assertEqual(text.count(old), 1, old)
+                found = parse_driver.check_text(text.replace(old, new))
+                self.assertEqual({code for code, _ in found}, {"parse-counts-differ"}, found)
+                found = check_results.check_text(text.replace(old, new))
+                self.assertIn("parse-counts-differ", {code for code, _ in found})
 
     def test_a_day_the_manifest_does_not_pin(self):
         text = rendered().replace("- dataset: 12302019.NASDAQ_ITCH50", "- dataset: other.itch")
@@ -367,6 +445,91 @@ class Inline(unittest.TestCase):
         code = parse_driver.pass_code(X86)
         self.assertIn("401301:", code)
         self.assertNotIn("<_ZN4itch12kLengthByTypeE>:", code)
+
+
+class RenderAgain(unittest.TestCase):
+    """parse_driver.py render: a published file rendered again from its run's raw folder."""
+
+    COMMAND = ("measure.sh taskset -c 4 python3 -B scripts/parse_driver.py --bench <raw>/bench_parse "
+               "--probe <raw>/bench_probe --input <raw>/12302019.NASDAQ_ITCH50 --prediction "
+               "P-0029 --repetitions 3 --rounds 5 --raw-dir <raw> --out "
+               "results/parse_rate_debian_12302019.md --core 4 --sibling 5")
+
+    def setUp(self):
+        SCRATCH.mkdir(parents=True, exist_ok=True)
+        self.scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.addCleanup(self.scratch.cleanup)
+        self.raw = Path(self.scratch.name) / "P-0029-x"
+        self.raw.mkdir()
+        binary = Path(self.scratch.name) / "bench_parse"
+        binary.write_bytes(b"stand-in")
+        kept = run_record.Record(self.raw, "parse_driver", "P-0029-x", "abc (clean)")
+        kept.binary(binary)
+        kept.dataset(Path("12302019.NASDAQ_ITCH50"), "0" * 64, manifest=self.raw / "none.json")
+        kept.output("machine_check.txt", MACHINE)
+        code = []
+        for (name, mangled), size in zip(parse_driver.PASS_SYMBOLS.items(), (20, 90, 400)):
+            code += [f"<_ZN4itch5bench{mangled}x>:",
+                     *[f"   {1000 + i:x}:\tmov    %rdi,%rax" for i in range(size)], ""]
+        kept.output("passes.asm", "\n".join(code))
+        self.stderr = test_linux_sampler.stderr_for(*test_linux_sampler.RULE_DAY)
+        kept.output(run_record.MEASURE_STDERR, self.stderr)
+        (self.raw / "sampler.txt").write_text(
+            "\n".join(test_linux_sampler.log(*test_linux_sampler.steady(0, 60))) + "\n",
+            encoding="utf-8")
+        kept.kept_file("sampler.txt")
+        for index in (1, 2, 3):
+            (self.raw / f"parse-repetition-{index}.json").write_text(json.dumps(record(index)),
+                                                                    encoding="utf-8")
+        text = parse_driver.render([record(index) for index in (1, 2, 3)], args_for(),
+                                   "P-0029-x", *test_linux_sampler.RULE_DAY, MACHINE,
+                                   self.COMMAND, sampled(), LOOPS)
+        self.published = stamp_load.stamp(text, self.stderr)
+
+    def test_the_same_records_give_the_same_file(self):
+        self.assertEqual(check_results.check_text(self.published), [])
+        self.assertEqual(parse_driver.render_again(self.raw, self.published, self.stderr),
+                         self.published)
+
+    def test_a_reason_is_stamped_and_kept_by_the_next_render(self):
+        again = parse_driver.render_again(self.raw, self.published, self.stderr, "the reason")
+        self.assertIn("Do not edit by hand.\n\nRendered again from the run's own raw records, "
+                      "unchanged: the reason\n\nHost: ", again)
+        self.assertEqual(parse_driver.render_again(self.raw, again, self.stderr), again)
+
+    def test_the_figures_and_the_verdicts_come_from_the_records(self):
+        changed = record(2)
+        for one in changed["passes"]:
+            one["seconds"] = round(one["seconds"] / 2, 9)
+        (self.raw / "parse-repetition-2.json").write_text(json.dumps(changed), encoding="utf-8")
+        again = parse_driver.render_again(self.raw, self.published, self.stderr)
+        self.assertNotEqual(again, self.published)
+        self.assertIn("| 2 | 1 | framing | 0.425000000 |", again)
+
+    def test_a_record_whose_kept_output_changed_is_refused(self):
+        (self.raw / "outputs" / "machine_check.txt").write_text("machine_check: passed",
+                                                                 encoding="utf-8")
+        with self.assertRaisesRegex(run_record.Incomplete, "machine_check.txt as it was kept"):
+            parse_driver.render_again(self.raw, self.published, self.stderr)
+
+    def test_a_span_the_sampler_log_does_not_give_is_refused(self):
+        with self.assertRaisesRegex(parse_driver.Refused, "process 1's span"):
+            parse_driver.render_again(self.raw, self.published.replace(
+                "| 1 | 2026-11-13T04:00:10.000000Z |", "| 1 | 2026-11-13T04:00:11.000000Z |"),
+                self.stderr)
+
+    def test_check_refuses_a_file_that_is_not_its_render(self):
+        path = Path(self.scratch.name) / "published.md"
+        path.write_text(self.published, encoding="utf-8")
+        argv = ["render", "--raw-dir", str(self.raw), "--published", str(path), "--check"]
+        with mock.patch("sys.stdout", io.StringIO()) as out:
+            self.assertEqual(parse_driver.main(argv), 0)
+        self.assertIn("is what its raw records render", out.getvalue())
+        path.write_text(self.published.replace("a day other than the bar's", "met"),
+                        encoding="utf-8")
+        with mock.patch("sys.stderr", io.StringIO()) as err:
+            self.assertEqual(parse_driver.main(argv), 1)
+        self.assertIn("is not what its raw records render", err.getvalue())
 
 
 class Run(unittest.TestCase):

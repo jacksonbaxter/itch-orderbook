@@ -788,9 +788,9 @@ class ResultsTable(unittest.TestCase):
                          "core 4 | 298,983,253 | 295,511,473 | 305,215,684 | 0.95% | 9.180 | ≥ 709 "
                          "M msg/s and 21.8 GB/s | **missed**: 410.02 M msg/s and 12.62 GB/s under "
                          f"the bar | `6d53ed4cf1e2` | [{PARSE}]({PARSE}) |")
-        # T-PARSE-3's bar is another day's: its verdict names both days, never a bare met.
-        self.assertIn("| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | met; measured on 12302019, "
-                      "not the bar's 10302019,", rows[2])
+        # T-PARSE-3's bar is another day's: no verdict word, what was seen and what was not.
+        self.assertIn("| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | above the bar on 12302019, "
+                      "a day other than the bar's; not measured on 10302019 |", rows[2])
         self.edit(PARSE, "| T-PARSE-2, itch-book's decode of its ten types, GB/s |", "| x |")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
@@ -889,12 +889,28 @@ class MissedTargets(unittest.TestCase):
                 self.assertIn(f"]({PARSE}) |", line)
 
     def test_a_parse_target_on_another_day_with_a_bare_met_is_refused(self):
-        self.edit(PARSE, "| met; measured on 12302019, not the bar's 10302019, which is not on this "
-                  "host: the two days are compared under Caveats |", "| met |")
+        self.edit(PARSE, "| above the bar on 12302019, a day other than the bar's; not measured on "
+                  "10302019 |", "| met |")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
-        self.assertIn(f"{PARSE}: T-PARSE-3 is 'met', not a verdict on 12302019 that names the "
-                      "bar's day, 10302019", output)
+        self.assertIn(f"{PARSE}: T-PARSE-3's bar is set on 10302019, and the file, of 12302019, "
+                      "gives it 'met': another day's bar is not met or missed", output)
+
+    def test_a_verdict_word_for_another_days_bar_is_refused(self):
+        words = ("above the bar on 12302019, a day other than the bar's; not measured on "
+                 "10302019")
+        for given in ("met", "met; measured on 12302019, not the bar's 10302019, which is not on "
+                      "this host: the two days are compared under Caveats",
+                      "missed: 21.67 M msg/s and 0.67 GB/s under the bar; measured on 12302019, "
+                      "not the bar's 10302019", "above the bar"):
+            with self.subTest(given=given):
+                self.setUp()
+                self.edit(PARSE, f"| {words} |", f"| {given} |")
+                code, output = self.run_table("--check")
+                self.assertEqual(code, 1, output)
+                self.assertIn(f"{PARSE}: T-PARSE-3's bar is set on 10302019, and the file, of "
+                              f"12302019, gives it {given!r}: another day's bar is not met or "
+                              "missed", output)
 
     def test_a_parse_target_whose_bar_names_no_other_day_is_refused(self):
         self.edit(PARSE, "| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 |",
