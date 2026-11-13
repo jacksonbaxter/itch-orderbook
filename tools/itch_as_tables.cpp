@@ -61,7 +61,11 @@ template <class T>
 // γ: above 0, so that ln(1 + γ/k) and 2/γ are finite, and finite itself.
 [[nodiscard]] bool parse_gamma(std::string_view text, std::vector<double>& gammas) {
   double gamma = 0;
-  if (!parse_number(text, gamma) || !(gamma > 0.0 && gamma < 1e12)) {
+  if (!parse_number(text, gamma)) {
+    return false;
+  }
+  const bool in_range = gamma > 0.0 && gamma < 1e12;  // False for NaN too.
+  if (!in_range) {
     return false;
   }
   gammas.push_back(gamma);

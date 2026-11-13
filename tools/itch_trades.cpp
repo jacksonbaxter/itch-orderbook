@@ -110,6 +110,23 @@ struct Options {
   return true;
 }
 
+enum class BookOption : std::uint8_t { not_a_book_option, taken, bad_value };
+
+// An option that picks the book's arm or its capacity.
+[[nodiscard]] BookOption take_book_option(Options& options, std::string_view arg,
+                                          std::string_view value) {
+  const auto arm = itch::tools::parse_arm_option(arg, value, options.arm, options.config.capacity);
+  if (arm != itch::tools::ArmOption::not_an_arm_option) {
+    return arm == itch::tools::ArmOption::bad_value ? BookOption::bad_value : BookOption::taken;
+  }
+  const auto capacity = itch::tools::parse_capacity_option(arg, value, options.config.capacity);
+  if (capacity != itch::tools::CapacityOption::not_a_capacity) {
+    return capacity == itch::tools::CapacityOption::bad_value ? BookOption::bad_value
+                                                              : BookOption::taken;
+  }
+  return BookOption::not_a_book_option;
+}
+
 [[nodiscard]] std::optional<Options> parse_options(std::span<const char* const> args) {
   Options options;
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -128,23 +145,16 @@ struct Options {
     if (take_text(options, arg, args[i])) {
       continue;
     }
-    if (const auto taken =
-            itch::tools::parse_arm_option(arg, args[i], options.arm, options.config.capacity);
-        taken != itch::tools::ArmOption::not_an_arm_option) {
-      if (taken == itch::tools::ArmOption::bad_value) {
-        return std::nullopt;
-      }
-    } else if (const auto capacity =
-                   itch::tools::parse_capacity_option(arg, args[i], options.config.capacity);
-               capacity != itch::tools::CapacityOption::not_a_capacity) {
-      if (capacity == itch::tools::CapacityOption::bad_value) {
-        return std::nullopt;
-      }
-    } else {
-      const auto number = parse_number(args[i]);
-      if (!number || !take_number(options, arg, *number)) {
-        return std::nullopt;
-      }
+    const BookOption book = take_book_option(options, arg, args[i]);
+    if (book == BookOption::bad_value) {
+      return std::nullopt;
+    }
+    if (book == BookOption::taken) {
+      continue;
+    }
+    const auto number = parse_number(args[i]);
+    if (!number || !take_number(options, arg, *number)) {
+      return std::nullopt;
     }
   }
   const bool has_reference = options.crossstats != nullptr || options.midas != nullptr;

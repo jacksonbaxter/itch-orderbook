@@ -1866,8 +1866,8 @@
       "mutations": [
         {
           "file": "tools/itch_as_tables.cpp",
-          "old": "  if (!parse_number(text, gamma) || !(gamma > 0.0 && gamma < 1e12)) {\n",
-          "new": "  if (!parse_number(text, gamma)) {\n"
+          "old": "  const bool in_range = gamma > 0.0 && gamma < 1e12;  // False for NaN too.\n",
+          "new": "  const bool in_range = true;\n"
         }
       ],
       "build": {
