@@ -851,6 +851,18 @@ std::vector<std::string_view> built_modes() {
   return ids;
 }
 
+// True when no built mode passes `wanted`. A test that loops over those modes would check
+// nothing, so it skips and says which modes it needs (r1-2).
+template <class Wanted>
+bool none_built(Wanted wanted) {
+  return std::ranges::none_of(built_modes(), wanted);
+}
+
+// The io_uring modes that take provided buffers by multishot receive.
+constexpr bool multishot_ring(std::string_view id) noexcept {
+  return id.starts_with('U') && id != "U1";
+}
+
 // Each built mode on the pair, through with_mode()'s factory, every fixture arriving whole
 // and leaving the book as the file does; paced too.
 TEST(Modes, EveryBuiltModeDeliversEveryFixtureWhole) {
@@ -983,6 +995,9 @@ TEST(Modes, QueuedDatagramsArriveInOrderAndTheBatchingModesTakeManyAtOnce) {
 TEST(Modes, ADatagramPastTheSlotIsCountedTruncated) {
   constexpr std::chrono::milliseconds kTimeout{100};
   constexpr std::size_t kSlot = 512;
+  if (none_built(udp::uses_slots)) {
+    GTEST_SKIP() << "no mode with slots (S3, S4, U2 to U5) is built here";
+  }
   for (const std::string_view id : built_modes()) {
     if (!udp::uses_slots(id)) {
       continue;
@@ -1045,6 +1060,9 @@ TEST(Modes, TheModesThatReadControlMessagesSeeTheSocketsDrops) {
 // arms it again, and still takes every datagram the socket held (IU-30).
 TEST(Modes, AMultishotModeOutOfBuffersRearmsAndLosesNothing) {
   constexpr std::chrono::milliseconds kTimeout{200};
+  if (none_built(multishot_ring)) {
+    GTEST_SKIP() << "no multishot io_uring mode (U2 to U5) is built here";
+  }
   for (const std::string_view id : built_modes()) {
     if (!id.starts_with('U') || id == "U1") {
       continue;
@@ -1073,6 +1091,9 @@ TEST(Modes, AMultishotModeOutOfBuffersRearmsAndLosesNothing) {
 // A ring mode with a buffer count the kernel would refuse fails its setup, and the loopback
 // refuses the run.
 TEST(Modes, ARingModeWithABadBufferCountFailsItsSetup) {
+  if (none_built(multishot_ring)) {
+    GTEST_SKIP() << "no multishot io_uring mode (U2 to U5) is built here";
+  }
   for (const std::string_view id : built_modes()) {
     if (!id.starts_with('U') || id == "U1") {
       continue;
