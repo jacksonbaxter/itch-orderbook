@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <print>
 #include <span>
 #include <string>
@@ -250,6 +251,56 @@ TEST(NodeBook, APoolBookWithNoPagesRefusesEveryAdd) {
   itch::NodeBook<itch::PoolIndexArm> book{
       {.orders = 64, .levels = 64, .pages = itch::PageRequest::transparent}};
   EXPECT_FALSE(book.heap().ready());
+  EXPECT_EQ(book.capacity().orders, 0U);
+  EXPECT_EQ(book.apply(wire::add(1, 1, 'B', 100, 10)), itch::ApplyStatus::capacity_exhausted);
+  EXPECT_EQ(book.live_orders(), 0U);
+  EXPECT_EQ(book.nodes_made(), 0U);
+}
+#endif
+
+#ifdef __linux__
+// The same two on Linux (r2-6). Explicit pages come only from the kernel's 2 MiB pool, and a
+// private MAP_HUGETLB mapping reserves its pages when it is made, so a request for more pages
+// than the pool has free, plus all it may still overcommit, is refused on any host, whatever it
+// reserved. The bound is read from sysfs, never set. Other processes can meanwhile only take
+// pages from the pool, and 64 pages more cover one that gives a few back. A kernel without the
+// 2 MiB pool refuses every such request, and reads as 0 + 0 + 64.
+std::uint64_t huge_pages_past_the_pool() {
+  const std::filesystem::path pool{"/sys/kernel/mm/hugepages/hugepages-2048kB"};
+  const auto read = [&pool](const char* name) {
+    std::ifstream file{pool / name};
+    std::uint64_t value = 0;
+    return file >> value ? value : 0;
+  };
+  return read("free_hugepages") + read("nr_overcommit_hugepages") + 64;
+}
+
+TEST(NodePool, OnLinuxAPoolPastTheFreeHugePagesHasNoRoom) {
+  const std::uint64_t pages = huge_pages_past_the_pool();
+  const std::uint64_t nodes = (pages * itch::kHugePage / sizeof(Probe)) + 1;
+  if (nodes > std::numeric_limits<std::uint32_t>::max()) {
+    GTEST_SKIP() << "the 2 MiB pool may give " << pages - 64
+                 << " pages, more than a pool of 2^32 - 1 nodes asks for";
+  }
+  const itch::NodePool<Probe, itch::HandleKind::index, itch::FreeOrder::lifo> pool{
+      static_cast<std::uint32_t>(nodes), itch::PageRequest::explicit_huge};
+  EXPECT_FALSE(pool.pages().mapped) << pool.pages().describe();
+  EXPECT_FALSE(pool.has_room());
+  EXPECT_EQ(pool.capacity(), 0U);
+}
+
+// The levels' pool asks past the free pages; a level is at least 32 bytes.
+TEST(NodeBook, OnLinuxAPoolBookPastTheFreeHugePagesRefusesEveryAdd) {
+  const std::uint64_t pages = huge_pages_past_the_pool();
+  const std::uint64_t levels = (pages * itch::kHugePage / 32) + 1;
+  if (levels > std::numeric_limits<std::uint32_t>::max()) {
+    GTEST_SKIP() << "the 2 MiB pool may give " << pages - 64
+                 << " pages, more than a pool of 2^32 - 1 levels asks for";
+  }
+  itch::NodeBook<itch::PoolIndexArm> book{{.orders = 64,
+                                           .levels = static_cast<std::uint32_t>(levels),
+                                           .pages = itch::PageRequest::explicit_huge}};
+  EXPECT_FALSE(book.heap().ready()) << book.heap().level_pages().describe();
   EXPECT_EQ(book.capacity().orders, 0U);
   EXPECT_EQ(book.apply(wire::add(1, 1, 'B', 100, 10)), itch::ApplyStatus::capacity_exhausted);
   EXPECT_EQ(book.live_orders(), 0U);
