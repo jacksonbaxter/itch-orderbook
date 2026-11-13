@@ -94,13 +94,15 @@ class Engine {
   }
 
   prints() { return this.m._demo_prints(); }
+  // A P's side is the message's field, which Nasdaq has sent as "B" on every P since
+  // 2014-07-14 whatever side the hidden order rested on, so a P shows no side, as a cross.
   print(n) {
     const at = this.m._demo_print(n);
     if (at === 0) return null;
     const w = at >>> 2;
-    return { ns: this.u64(w), shares: this.u64(w + 2), price: this.u32[w + 4],
-             kind: String.fromCharCode(this.u8[at + 20]),
-             side: String.fromCharCode(this.u8[at + 21]) };
+    const kind = String.fromCharCode(this.u8[at + 20]);
+    return { ns: this.u64(w), shares: this.u64(w + 2), price: this.u32[w + 4], kind,
+             side: kind === "P" ? " " : String.fromCharCode(this.u8[at + 21]) };
   }
 }
 

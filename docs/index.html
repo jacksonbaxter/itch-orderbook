@@ -75,7 +75,9 @@ python3 scripts/demo.py serve</code></pre>
     </table>
     <p class="note">E executes a displayed order at its price, C at another price, P is a
     trade against a hidden order, and Q is an opening or closing cross. A non-printable C is
-    left out, as the tape leaves it out.</p>
+    left out, as the tape leaves it out. An E or a C takes the colour of the order it
+    executed, bid or ask. A P and a Q have none: since 2014-07-14 Nasdaq sends "B" as every
+    P's side, whatever side the hidden order rested on, and a cross has no side.</p>
   </section>
 
   <section class="panel" id="measure-panel">
