@@ -1166,6 +1166,27 @@
       "expect": {
         "signature": "FAIL: test_the_mac_figure_follows_its_file"
       }
+    },
+    {
+      "id": "readme-mac-row-sampler-note-dropped",
+      "breaks": "RESULTS.md's and the README's rows quoting a macOS run from before the sampler rule leave out its note that no sampler ran beside it (r5-2)",
+      "check": "test_results_table.py test_a_book_file_gets_a_row_of_its_own",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if sampler and sampler[1] == check_results.SAMPLER_BEFORE_RULE:\n        return f\"; sampler: {sampler[1]}\"\n",
+          "new": "    if False:\n        return f\"; sampler: {sampler[1]}\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_book_file_gets_a_row_of_its_own",
+        "exit": 1
+      }
     }
   ]
 }

@@ -6,7 +6,8 @@
         [--design NAME]... [--throughput-only NAME... --throughput-only-why TEXT] \\
         [--input-mode ram|mapped] [--track-top] [--repetitions N] [--core N] \\
         [--sibling N] [--title TEXT] [--note TEXT] \\
-        [--orders N] [--levels N] [--wrapped-by TEXT] [--allow-dirty] [--bench-arg ARG]...
+        [--orders N] [--levels N] [--wrapped-by TEXT] [--allow-dirty] [--bench-arg ARG]... \\
+        [--quiet-before S] [--quiet-wait S] [--most-in-a-row N] [--most-withdrawn N]
 
 On a reported run this is measure.sh's direct child, and it runs one process at a time,
 so that signalling it stops everything:
@@ -28,6 +29,14 @@ which builds no other book first, so that the memory it reports is that book's o
 more than one design, --out must hold `{design}`, which becomes each design's name. A
 fast design's file compares its throughput with every map design in the same run,
 repetition by repetition (T-DESIGN-1), and every file holds each target beside the bar.
+
+On macOS the Mac's sampler rule applies to every process, timed and untimed
+(scripts/mac_rule.py): the CPU sampler runs beside the whole run, and a process is published
+only if it covered the process's whole span and saw no other process above 20% CPU in it;
+otherwise it is withdrawn, its raw files set aside, with its own row in the run log, and run
+again, never for its numbers. --quiet-before, --quiet-wait, --most-in-a-row and
+--most-withdrawn are the rule's waits and limits. Each file says so in its interference
+field and its Sampler section, so a Mac run needs no outside sampler's log.
 
 A design named with --throughput-only runs the warm-up and the throughput pass alone in
 its timed process, with no latency pass and so no buffer for the latency samples. Its file
@@ -80,6 +89,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+if __name__ == "__main__":
+    # One module, run or imported: the modules this one imports import it back by name.
+    sys.modules.setdefault("bench_driver", sys.modules["__main__"])
 
 import check_results  # noqa: E402
 
@@ -278,12 +290,30 @@ def run_process(args, index, commit, digest, design, passes):
     return record
 
 
-def run_repetition(args, index, commit, digest, design=None):
-    """The timed record, with the counters and memory of its own untimed process."""
+def run_repetition(args, index, commit, digest, design=None, sampler=None, sampled=None):
+    """The timed record, with the counters and memory of its own untimed process. With a
+    sampler, on the Mac, each process is judged by the sampler rule (scripts/mac_rule.py)."""
     passes = "throughput" if design in args.throughput_only else "timed"
-    timed = run_process(args, index, commit, digest, design, passes)
-    untimed = run_process(args, index, commit, digest, design, "untimed")
-    return merged(timed, untimed, index)
+    if sampler is None:
+        timed = run_process(args, index, commit, digest, design, passes)
+        untimed = run_process(args, index, commit, digest, design, "untimed")
+        return merged(timed, untimed, index)
+    import mac_rule  # noqa: PLC0415
+
+    stem = f"{design}-repetition-{index}" if design else f"repetition-{index}"
+    records = []
+    for kind in (passes, "untimed"):
+        def set_aside(count, kind=kind):
+            for suffix in (".json", ".log"):
+                path = args.raw_dir / f"{stem}-{kind}{suffix}"
+                if path.is_file():
+                    path.rename(args.raw_dir / f"{stem}-{kind}-withdrawn-{count}{suffix}")
+        what = f"{design + ', ' if design else ''}repetition {index}, {kind} process"
+        records.append(mac_rule.judged(
+            args, sampler, sampled, what,
+            lambda kind=kind: run_process(args, index, commit, digest, design, kind),
+            set_aside, commit))
+    return merged(*records, index)
 
 
 def merged(timed, untimed, index):
@@ -536,10 +566,20 @@ def repetition_rows(records):
     return rows
 
 
-def header_lines(records, args, run_id, started, finished):
+def of_design(design):
+    """Which of a run's sampled processes are this design's, for its file."""
+    return lambda what: not design or what.startswith(f"{design}, ")
+
+
+def header_lines(records, args, run_id, started, finished, sampled=None):
     header = dict(records[0]["header"])
     lines = [f"- {name}: {header[name]}" for name in HEADER_ORDER if name in header]
     warmup = records[0]["warmup"]["messages"]
+    if sampled is not None:
+        import mac_rule  # noqa: PLC0415
+
+        lines.append(mac_rule.interference_line(sampled, of_design(header.get("design", "")
+                                                                   .split(":")[0])))
     lines += [f"- measure_load_start: {check_results.PENDING}",
               f"- measure_load_end: {check_results.PENDING}",
               *peak_lines(records),
@@ -898,7 +938,8 @@ def host_note(records):
             "figure, and a bar set on x86 Linux is not passed or failed by one.", ""]
 
 
-def render(records, args, run_id, started, finished, machine_output, command, runs=None):
+def render(records, args, run_id, started, finished, machine_output, command, runs=None,
+           sampled=None):
     design = design_of(records[0]) if "design" in records[0]["header"] else ""
     title = (args.title or f"bench_replay on {args.input.name}").replace("{design}", design)
     host = records[0]["header"]["host"]
@@ -912,7 +953,7 @@ def render(records, args, run_id, started, finished, machine_output, command, ru
     if args.note:
         lines += [f"**{args.note}**", ""]
     lines += ["## Header", ""]
-    lines += header_lines(records, args, run_id, started, finished)
+    lines += header_lines(records, args, run_id, started, finished, sampled)
     passes = ("one warm-up pass, excluded from every figure here, then a throughput pass and a "
               "separate latency pass, each on a fresh book")
     if not has_latency(records[0]):
@@ -978,6 +1019,10 @@ def render(records, args, run_id, started, finished, machine_output, command, ru
     lines += repetition_rows(records)
     if swap_watch is not None:
         lines += ["", swap_watch.line()]
+    if sampled is not None:
+        import mac_rule  # noqa: PLC0415
+
+        lines += [""] + mac_rule.sampler_section(sampled, of_design(design))
     lines += ["", "## machine_check output", "", "```", machine_output, "```", "",
               "## Commands", "", "```", command, "```", ""]
     return "\n".join(lines)
@@ -1014,6 +1059,15 @@ def relative_command(args, given=None):
             words += [flag, str(value)]
     for argument in args.bench_arg:
         words += [f"--bench-arg={argument}"]
+    import mac_rule  # noqa: PLC0415
+
+    for flag, value, default in (("--quiet-before", args.quiet_before, 0.0),
+                                 ("--quiet-wait", args.quiet_wait, mac_rule.QUIET_WAIT_S),
+                                 ("--most-in-a-row", args.most_in_a_row, mac_rule.MOST_IN_A_ROW),
+                                 ("--most-withdrawn", args.most_withdrawn,
+                                  mac_rule.MOST_WITHDRAWN)):
+        if value != default:
+            words += [flag, f"{value:g}"]
     for flag, value in (("--title", args.title), ("--note", args.note)):
         if value is not None:
             words += [flag, value]
@@ -1050,7 +1104,7 @@ def append_written(path, run_id, prediction, commit, written):
                "published or withdrawn with the reason")
 
 
-def run(args, run_id, started, commit):
+def run(args, run_id, started, commit, sampler=None):
     global swap_watch
     swap_watch = SwapWatch(args.vmstat)
     set_stage("hashing the input")
@@ -1064,10 +1118,12 @@ def run(args, run_id, started, commit):
     set_stage("machine_check")
     machine_output = machine_check(args)
     designs = args.design or [None]
+    sampled = None if sampler is None else {"every": sampler.every, "published": [],
+                                            "withdrawn": []}
     runs = {}
     for index in range(1, args.repetitions + 1):
         for design in designs:
-            record = run_repetition(args, index, commit, digest, design)
+            record = run_repetition(args, index, commit, digest, design, sampler, sampled)
             validate_run(record, latency=design not in args.throughput_only)
             runs.setdefault(design_of(record), []).append(record)
     validate_together(runs)
@@ -1077,7 +1133,7 @@ def run(args, run_id, started, commit):
     for design, records in runs.items():
         out = Path(str(args.out).replace("{design}", design))
         texts[out] = render(records, args, run_id, started, finished, machine_output,
-                            relative_command(args), runs)
+                            relative_command(args), runs, sampled)
         violations = [found for found in check_results.check_text(texts[out])
                       if found[0] != "load-not-stamped"]
         if violations:
@@ -1119,6 +1175,10 @@ def parse_args(argv):
     parser.add_argument("--wrapped-by", help="what the run was started under, for the record")
     parser.add_argument("--allow-dirty", action="store_true", help="for tests, not for a report")
     parser.add_argument("--bench-arg", action="append", default=[], metavar="ARG")
+    import mac_rule  # noqa: PLC0415
+
+    mac_rule.add_arguments(parser)
+    mac_rule.add_sampler_arguments(parser)
     parser.add_argument("--predictions-root", type=Path, default=REPO_ROOT, help=argparse.SUPPRESS)
     parser.add_argument("--run-log", type=Path, default=REPO_ROOT / "results" / "run_log.md",
                         help=argparse.SUPPRESS)
@@ -1175,7 +1235,9 @@ def published_parts(text):
     """What the run printed only into its files: its arguments, run id and times, the machine
     check's output and the swap line."""
     fields = check_results.parse_header(text)
-    command = (check_results.section(text, "Commands") or "").strip().strip("`").strip()
+    # The code block alone: a sentence may follow it (AS_PUBLISHED).
+    command = (check_results.section(text, "Commands") or "").strip().split("\n```\n")[0]
+    command = command.strip().strip("`").strip()
     wrapped, found, words = command.partition("python3 -B scripts/bench_driver.py ")
     if not found:
         raise Refused("published", "no bench_driver.py command in its Commands section")
@@ -1188,6 +1250,23 @@ def published_parts(text):
     swap = next((line for line in text.splitlines()
                  if line.startswith(("The kernel's pswpout", "Swap-outs are not read"))), None)
     return args, fields, machine, swap
+
+
+AGAIN = "Rendered again from the run's own raw records, unchanged: "
+GENERATED_END = "Do not edit by hand.\n\n"
+
+
+def with_earlier_renders(text, published, again=None):
+    """text with a line saying why it was rendered again, if again is given, and before it
+    every such line the published file already had, so that each render stays on record."""
+    lines = [line for line in published.splitlines() if line.startswith(AGAIN)]
+    if again:
+        lines.append(f"{AGAIN}{again}")
+    if not lines:
+        return text
+    if GENERATED_END not in text:
+        raise Refused("render", "no generated-by line to put the render's reasons under")
+    return text.replace(GENERATED_END, GENERATED_END + "\n\n".join(lines) + "\n\n", 1)
 
 
 def raw_record(raw_dir, stem):
@@ -1238,6 +1317,8 @@ def render_again(raw_dir, published, stderr, title=None, note=None, again=None,
     that the line leaves them out."""
     import stamp_load  # Here, since stamp_load imports this module.
 
+    if check_results.section(published, "Sampler") is not None:
+        raise Refused("published", "its Sampler section's verdicts are not in the raw records")
     args, fields, machine, swap = published_parts(published)
     args.title = args.title if title is None else title
     args.note = args.note if note is None else note
@@ -1269,11 +1350,7 @@ def render_again(raw_dir, published, stderr, title=None, note=None, again=None,
             if printed is not None:
                 args.title, args.note = None, None
                 text += f"\n{AS_PUBLISHED}\n"
-            if again:
-                generated = ("Generated by `scripts/bench_driver.py` from raw records that are "
-                             "not committed. Do not edit by hand.\n\n")
-                text = text.replace(generated, generated + "Rendered again from the run's own "
-                                    f"raw records, unchanged: {again}\n\n", 1)
+            text = with_earlier_renders(text, published, again)
             texts[name] = stamp_load.stamp(text, stderr)
     finally:
         swap_watch = None
@@ -1335,9 +1412,12 @@ def main(argv=None):
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
     commit = "unknown"
     written = []
+    import mac_rule  # noqa: PLC0415
+
+    sampler = mac_rule.start(args)
     try:
         commit = git_commit(REPO_ROOT, args.allow_dirty)
-        written = run(args, run_id, started, commit)
+        written = run(args, run_id, started, commit, sampler)
     except Stopped as stop:
         stop_child()
         name = signal.Signals(stop.signum).name
@@ -1354,6 +1434,9 @@ def main(argv=None):
         return 1
     except Exception as error:  # Last, so that no run ends without its row.
         return log_failure("bench_driver", args.run_log, run_id, args.prediction, commit, error)
+    finally:
+        if sampler is not None:
+            sampler.done.set()
     hold_signals()
     append_written(args.run_log, run_id, args.prediction, commit, written)
     for out in written:

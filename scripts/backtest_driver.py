@@ -38,6 +38,12 @@ later. Each process first waits until the sampler has seen --quiet-before second
 pass the rule, for at most --quiet-wait seconds (600), and the run is refused if it never
 does. The file's load_rule field and Sampler section say what the rule saw.
 
+On macOS the Mac's sampler rule applies to each process instead (scripts/mac_rule.py): the
+CPU sampler of spsc_driver.py runs beside the run, and a process is published only if it
+covered the process's whole span with no gap over 5 s and saw no other process above 20%
+CPU in it, with the same withdrawals, waits and limits; the file's interference field and
+Sampler section say what it saw.
+
 Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
 --raw-dir, which is not committed.
 
@@ -75,6 +81,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import linux_sampler  # noqa: E402
+import mac_rule  # noqa: E402
 import stamp_load  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -242,9 +249,24 @@ def withdraw(args, index, host, begin, why, sampled, commit):
                                              f"sampler rule, over the {args.most_withdrawn} allowed")
 
 
-def judged_process(args, index, commit, digest, watch, sampled):
-    """One repetition, run again until the Linux sampler rule publishes it. With no sampler,
-    on macOS, the process is the repetition."""
+def judged_process(args, index, commit, digest, watch, sampled, mac=None):
+    """One repetition, run again until the Linux sampler rule publishes it, or on macOS the
+    Mac's (scripts/mac_rule.py, with mac its sampler)."""
+    if mac is not None:
+        def set_aside(count):
+            for suffix in (".json", ".log"):
+                path = args.raw_dir / f"{args.workload}-repetition-{index}{suffix}"
+                if path.is_file():
+                    path.rename(args.raw_dir / f"{args.workload}-repetition-{index}-withdrawn-"
+                                               f"{count}{suffix}")
+
+        def one():
+            record = run_process(args, index, commit, digest)
+            validate_run(record, args.workload)
+            return record
+        return mac_rule.judged(args, mac, sampled,
+                               f"{WORKLOADS[args.workload]['target']}, repetition {index}", one,
+                               set_aside, commit)
     in_a_row = 0
     while True:
         if watch is not None:
@@ -429,9 +451,10 @@ def header_lines(records, args, run_id, started, finished, sampled=None):
               f"- input: {first['input']}",
               f"- latency: L_md {latency['market_data']:,} ns, L_oe {latency['order_entry']:,} "
               f"ns, L_resp {latency['response']:,} ns, L_compute {latency['compute']:,} ns",
+              *([mac_rule.interference_line(sampled)] if sampled and "mac" in sampled else []),
               f"- measure_load_start: {check_results.PENDING}",
               f"- measure_load_end: {check_results.PENDING}",
-              *([load_rule_line(sampled)] if sampled else []),
+              *([load_rule_line(sampled)] if sampled and "mac" not in sampled else []),
               *bench_driver.peak_lines(records),
               f"- prediction: {args.prediction}",
               f"- run_id: {run_id}",
@@ -485,7 +508,9 @@ def render(records, args, run_id, started, finished, machine_output, command, sa
     lines += repetition_rows(records)
     if bench_driver.swap_watch is not None:
         lines += ["", bench_driver.swap_watch.line()]
-    if sampled:
+    if sampled and "mac" in sampled:
+        lines += [""] + mac_rule.sampler_section(sampled)
+    elif sampled:
         lines += [""] + sampler_section(sampled)
     lines += ["", "## machine_check output", "", "```", machine_output, "```", "",
               "## Commands", "", "```", command, "```", ""]
@@ -535,8 +560,12 @@ def run(args, run_id, started, commit):
         raise Refused("prediction", code.stdout.strip())
     bench_driver.set_stage("machine_check")
     machine_output = bench_driver.machine_check(args)
-    watch, sampled = None, None
-    if platform.system() == "Linux":
+    watch, sampled, mac = None, None, None
+    if platform.system() == "Darwin":
+        bench_driver.set_stage("starting the sampler")
+        mac = mac_rule.start(args)
+        sampled = {"every": mac.every, "mac": True, "published": [], "withdrawn": []}
+    elif platform.system() == "Linux":
         if args.core is None or args.sibling is None:
             raise Refused("sampler", "the Linux sampler rule needs --core and --sibling")
         bench_driver.set_stage("starting the sampler")
@@ -544,11 +573,13 @@ def run(args, run_id, started, commit):
                                                args.sibling, args.sampler_cpu)
         sampled = {"every": watch.every, "cpu": cpu, "published": [], "withdrawn": []}
     try:
-        records = [judged_process(args, index, commit, digest, watch, sampled)
+        records = [judged_process(args, index, commit, digest, watch, sampled, mac)
                    for index in range(1, args.repetitions + 1)]
     finally:
         if watch is not None:
             watch.stop()
+        if mac is not None:
+            mac.done.set()
     validate_together(records)
     bench_driver.set_stage("rendering the results file")
     text = render(records, args, run_id, started, bench_driver.utc_now(), machine_output,
@@ -585,6 +616,7 @@ def parse_args(argv):
     parser.add_argument("--quiet-wait", type=float, default=QUIET_WAIT_S, metavar="S")
     parser.add_argument("--most-in-a-row", type=int, default=MOST_IN_A_ROW)
     parser.add_argument("--most-withdrawn", type=int, default=MOST_WITHDRAWN)
+    mac_rule.add_sampler_arguments(parser)
     parser.add_argument("--predictions-root", type=Path, default=REPO_ROOT, help=argparse.SUPPRESS)
     parser.add_argument("--run-log", type=Path, default=REPO_ROOT / "results" / "run_log.md",
                         help=argparse.SUPPRESS)
@@ -641,8 +673,9 @@ def render_again(raw_dir, published, stderr, again=None):
     validate_together(records)
     bench_driver.swap_watch = PrintedSwap(swap) if swap else None
     try:
-        text = render(records, args, fields["run_id"], fields["run_started"],
-                      fields["run_finished"], machine, relative_command(args), again=again)
+        text = bench_driver.with_earlier_renders(
+            render(records, args, fields["run_id"], fields["run_started"],
+                   fields["run_finished"], machine, relative_command(args)), published, again)
     finally:
         bench_driver.swap_watch = None
     stamped = stamp_load.stamp(text, stderr)

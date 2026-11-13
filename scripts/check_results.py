@@ -7,7 +7,8 @@ Reads the file as published, so it holds whatever wrote it to the same rules: ev
 header field present, an unreadable one written as `unavailable: <reason>`, no pin that
 was not read back, no percentile below the timer's floor, no multiplexed counter called
 measured, the warm-up out of the timed counts, the input resident, load lines stamped
-from a real measure.sh run, a quiet CPU sampler beside any macOS run from 2026-11-05 on,
+from a real measure.sh run, a quiet CPU sampler beside any macOS run from 2026-11-05 on and,
+on one started before that day, a sampler line saying that none ran beside it,
 the Linux sampler rule applied to any debian run from 2026-11-13T03:00Z on (a load_rule field
 whose figures, or whose Sampler section's figures for every repetition, are under the rule's
 bars, scripts/linux_sampler.py), machine_check's output present and passing, and nothing private. scripts/bench_driver.py and scripts/stamp_load.py run the same checks, so that
@@ -154,6 +155,17 @@ ALLOC_SAMPLER_RULE = (
     "and run again; none was withdrawn for its numbers. The untimed processes, of memory alone, "
     "are not judged.")
 ALLOC_INTERFERENCE = SPSC_INTERFERENCE
+# bench_driver.py and backtest_driver.py on the Mac: the sampler rule applied by the driver to
+# every process it runs (scripts/mac_rule.py), so that no outside sampler's log is needed.
+DRIVER_SAMPLER_RULE = (
+    "The Mac's sampler rule was applied by the driver: a CPU sampler ran beside every process "
+    "from before it started to after it ended, and a process is published only if the sampler "
+    "covered its whole span with no gap over 5 s and saw no other process above 20% CPU in it. "
+    "A process that failed the rule was withdrawn, with its own row in results/run_log.md, and "
+    "run again; none was withdrawn for its numbers.")
+DRIVER_INTERFERENCE = re.compile(r"sampled every [\d.]+ s by the driver over each process's "
+                                 r"whole span; no other process above 20% CPU in any published "
+                                 r"process; \d+ withdrawn under the rule")
 _T1_HOST = "Ryzen 7 5825U, Linux, pinned"
 _T2_HOST = "i7-9700 under WSL2"
 _T3_HOST = "Ryzen 9 5950X, Linux, pinned"
@@ -207,6 +219,13 @@ def spsc_interference(every):
             "other process above 20% CPU in any published repetition")
 
 
+def driver_interference(every):
+    """The start of the interference field bench_driver.py and backtest_driver.py write when
+    they apply the Mac's sampler rule themselves."""
+    return (f"sampled every {every:g} s by the driver over each process's whole span; no other "
+            "process above 20% CPU in any published process")
+
+
 def comparison_value(spec, medians):
     """The comparison's ratio from the summary's medians by label, or None if one is absent."""
     if "value" in spec:
@@ -217,6 +236,10 @@ def comparison_value(spec, medians):
     return num / den
 # From this day every macOS run needs a quiet CPU sampler beside it (stamp_load.py).
 SAMPLER_RULE_FROM = "2026-11-05T00:00:00Z"
+# The sampler line of a macOS run started before that day, where a later one gives its verdict.
+SAMPLER_BEFORE_RULE = ("none: the run was made before the sampler rule of 2026-11-05, and no "
+                       "sampler ran beside it, so nothing is known about other processes' load "
+                       "during it")
 # From this moment every debian run is held to the Linux sampler rule: its driver judged each
 # process (backtest_driver.py), or stamp_load.py judged the whole run from the sampler's log.
 LINUX_RULE_FROM = "2026-11-13T03:00:00Z"
@@ -461,15 +484,51 @@ def check_load(fields):
 
 
 def needs_sampler(fields):
-    """A macOS run from the rule's day on, but for an SPSC file: spsc_driver.py samples each
-    repetition itself, and check_spsc_sampler holds the file to its own Sampler section."""
+    """A macOS run from the rule's day on whose driver did not apply the rule itself: an SPSC,
+    allocator, bench or backtest file with an interference field was sampled by its driver,
+    and is held to its own Sampler section instead (check_spsc_sampler, check_alloc_sampler,
+    check_driver_sampler)."""
     return fields.get("host") == MAC_HOST and fields.get("run_started", "") >= SAMPLER_RULE_FROM \
-        and not is_spsc_file(fields)
+        and not is_spsc_file(fields) and "interference" not in fields
+
+
+def check_driver_sampler(text, fields):
+    """A bench or backtest file whose driver applied the Mac's sampler rule: said, and a quiet
+    span for every process the file publishes, two a repetition for a bench design (timed and
+    untimed) and one for a backtest."""
+    if fields.get("host") != MAC_HOST or fields.get("run_started", "") < SAMPLER_RULE_FROM \
+            or "interference" not in fields or is_spsc_file(fields) or is_alloc_file(fields):
+        return
+    if not DRIVER_INTERFERENCE.fullmatch(fields["interference"]) or \
+            DRIVER_SAMPLER_RULE not in text:
+        yield "sampler-rule-unsaid", repr(fields["interference"])
+        return
+    published = [cells for cells in table_rows(text, "Sampler")
+                 if len(cells) == 4 and not cells[0].startswith(("Process", "withdrawn"))]
+    quiet = [cells for cells in published if cells[3].startswith("published: ")]
+    wanted = (number(fields.get("repetitions", "")) or 0) * (1 if is_backtest_file(fields) else 2)
+    if len(quiet) != len(published) or len(quiet) != wanted:
+        yield "sampler-not-quiet", (f"{len(quiet)} quiet spans of {len(published)} for "
+                                    f"{wanted:g} processes")
+
+
+def before_sampler_rule(fields):
+    """A macOS run started before the sampler rule's day."""
+    return fields.get("host") == MAC_HOST and fields.get("run_started", "") < SAMPLER_RULE_FROM
 
 
 def check_sampler(fields):
-    """A macOS run from the rule's day on was stamped with a sampler that saw it quiet."""
-    if not needs_sampler(fields) or fields.get("measure_load_start") == PENDING:
+    """A macOS run from the rule's day on was stamped with a sampler that saw it quiet; one
+    from before it says that no sampler ran beside it."""
+    if fields.get("measure_load_start") == PENDING:
+        return
+    if before_sampler_rule(fields):
+        if fields.get("sampler") != SAMPLER_BEFORE_RULE:
+            yield "sampler-before-rule-unsaid", (f"a macOS run started before 2026-11-05 has "
+                                                 f"sampler {fields.get('sampler')!r}, not "
+                                                 f"{SAMPLER_BEFORE_RULE!r}")
+        return
+    if not needs_sampler(fields):
         return
     value = fields.get("sampler")
     if value is None:
@@ -515,6 +574,49 @@ def check_linux_rule(text, fields):
     if len(withdrawn) != int(match.group(1)):
         yield "load-rule-not-quiet", (f"{len(withdrawn)} withdrawn rows in the Sampler, the "
                                       f"load_rule says {match.group(1)}")
+
+
+# The kinds of results file whose drivers can write the Linux sampler rule's line:
+# backtest_driver.py applies it to each process, and the bench, SPSC, allocator and ladder
+# drivers' runs are stamped through stamp_load.py --sampler.
+LINUX_RULE_WIRED = ("bench_", "backtest_", "spsc_", "alloc_", "walks_ladder_")
+RUN_ID_TIME = re.compile(r"P-\d+-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z")
+
+
+def run_start(fields):
+    """When the run began: its run_started field, or else the time its run id gives."""
+    if fields.get("run_started"):
+        return fields["run_started"]
+    match = RUN_ID_TIME.match(fields.get("run_id", ""))
+    if match is None:
+        return None
+    year, month, day, hour, minute, second = match.groups()
+    return f"{year}-{month}-{day}T{hour}:{minute}:{second}Z"
+
+
+def check_linux_rule_any(name, text):
+    """The Linux sampler rule over a results file of any kind, failing closed: a file whose
+    header gives the debian host and a run start from the rule's moment on carries the rule's
+    load_rule line with a passing verdict, held by check_linux_rule, pending or not. A debian
+    file that gives no run start is refused, since the rule cannot be told not to apply."""
+    fields = parse_header(text)
+    if fields.get("host") != "debian":
+        return []
+    start = run_start(fields)
+    if start is None:
+        return [("run-start-unknown", "a debian file with no run_started and no run id that "
+                                      "gives the time, so the Linux sampler rule cannot be "
+                                      "told not to apply")]
+    dated = dict(fields, run_started=start)
+    if not needs_linux_rule(dated):
+        return []
+    if "load_rule" not in fields:
+        why = f"a debian run from {LINUX_RULE_FROM} on has no load_rule line"
+        if not name.startswith(LINUX_RULE_WIRED):
+            why += (f"; no driver of the {name.split('_')[0]} kind writes it yet, so no "
+                    "debian file of that kind can be published until one does")
+        return [("load-rule-missing", why)]
+    return list(check_linux_rule(text, dated))
 
 
 def check_machine(text):
@@ -1069,7 +1171,8 @@ def check_text(text):
     skipped = SPSC_PER_PASS if is_spsc_file(fields) and fields["suite"] != "pipeline" else ()
     for found in (check_fields(fields, skipped), check_host(fields), check_pin(fields),
                   check_residency(fields), check_warmup(fields), check_statistics(text),
-                  check_load(fields), check_sampler(fields), check_linux_rule(text, fields),
+                  check_load(fields), check_sampler(fields), check_driver_sampler(text, fields),
+                  check_linux_rule(text, fields),
                   check_machine(text),
                   check_private(text, fields)):
         violations.extend(found)

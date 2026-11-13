@@ -11,9 +11,11 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import subprocess
 import sys
 import types
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -394,6 +396,198 @@ class RenderAgain(unittest.TestCase):
                                       as_published=True)
         again = bench_driver.render_again(self.raw, old, STDERR, as_published=True)
         self.assertEqual(again["bench_stub.md"], f"{old}\n{bench_driver.AS_PUBLISHED}\n")
+        # Rendered again once more, it is the same file, with the sentence once.
+        self.assertEqual(bench_driver.render_again(self.raw, again["bench_stub.md"], STDERR,
+                                                   as_published=True), again)
+
+    def test_each_render_stays_on_record(self):
+        published = self.publish([*BENCH_BASE, "--design", "hash-flat"], ["hash-flat"])
+        first = bench_driver.render_again(self.raw, published["bench_hash-flat.md"], STDERR,
+                                          again="the first reason")["bench_hash-flat.md"]
+        second = bench_driver.render_again(self.raw, first, STDERR,
+                                           again="the second reason")["bench_hash-flat.md"]
+        self.assertIn(f"\n\n{bench_driver.AGAIN}the first reason\n\n"
+                      f"{bench_driver.AGAIN}the second reason\n\nHost: ", second)
+
+
+class DriverSamplerCheck(unittest.TestCase):
+    """r5-2: check_results holds a Mac bench or backtest file whose driver applied the
+    sampler rule to its own Sampler section, and still wants one or the sampler line."""
+
+    def text(self, sampled):
+        args = bench_driver.parse_args([*BENCH_BASE, "--design", "hash-flat", *STUB_NOTE])
+        records = [bench_driver.merged(raw_record("hash-flat", 100.0 + index),
+                                       raw_record("hash-flat", untimed=True), index)
+                   for index in (1, 2, 3)]
+        text = bench_driver.render(records, args, RUN_ID, "2026-11-13T04:00:01Z",
+                                   "2026-11-13T04:00:09Z", MACHINE, "command",
+                                   {"hash-flat": records}, sampled)
+        return text.replace("at=2026-10-31T10:00:00Z", "at=2026-11-13T04:00:00Z")
+
+    def sampled(self):
+        quiet = "published: 3 samples, the longest gap 2 s, no other process above 20% CPU"
+        return {"every": 2.0, "withdrawn": [], "published": [
+            (f"hash-flat, repetition {index}, {kind} process", "2026-11-13T04:00:02Z",
+             "2026-11-13T04:00:03Z", quiet) for index in (1, 2, 3) for kind in ("timed", "untimed")]}
+
+    def codes(self, text):
+        return {code for code, _ in check_results.check_text(text)} - {"load-not-stamped"}
+
+    def test_a_driver_sampled_file_is_held_to_its_sampler_section(self):
+        sampled = self.sampled()
+        self.assertEqual(self.codes(self.text(sampled)), set())
+        sampled["published"].pop()
+        self.assertEqual(self.codes(self.text(sampled)), {"sampler-not-quiet"})
+        text = self.text(self.sampled())
+        self.assertEqual(self.codes(text.replace(check_results.DRIVER_SAMPLER_RULE, "Sampled.")),
+                         {"sampler-rule-unsaid"})
+        noisy = text.replace("| published: 3 samples", "| withdrawn: 3 samples", 1)
+        self.assertEqual(self.codes(noisy), {"sampler-not-quiet"})
+
+    def test_a_later_mac_file_with_neither_needs_the_sampler(self):
+        text = self.text(None)
+        with self.assertRaisesRegex(ValueError, "needs the CPU sampler's log"):
+            stamp_load.stamp(text, STDERR)
+        for name, line in (("start", "measure.sh: start load1=1.20 host=macOS (M4 Max) "
+                                     "at=2026-11-13T04:00:00Z"),
+                           ("end", "measure.sh: end load1=1.30 exit=0 at=2026-11-13T04:00:10Z")):
+            text = text.replace(f"- measure_load_{name}: {check_results.PENDING}",
+                                f"- measure_load_{name}: {line}")
+        self.assertIn("sampler-missing", self.codes(text))
+
+
+class MacSamplerScript(unittest.TestCase):
+    """r5-2: scripts/mac_sampler.sh, the sampler the published variants runs on the Mac used,
+    now in the repository: its log as variants_report.py reads it."""
+
+    def test_it_names_every_other_busy_process_and_no_measured_one(self):
+        import variants_report  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            root = Path(directory)
+            (root / "bin").mkdir()
+            ps = root / "bin" / "ps"
+            ps.write_text("#!/bin/sh\necho ' %CPU ARGS'\necho ' 55.0 /usr/bin/other_job --x'\n"
+                          "echo ' 90.0 /some/bin/bench_variants --experiment lookup'\n"
+                          "echo '  5.0 /usr/bin/idle_job'\n", encoding="utf-8")
+            ps.chmod(0o755)
+            log = root / "sampler.txt"
+            process = subprocess.Popen(
+                ["bash", str(REPO_ROOT / "scripts" / "mac_sampler.sh"), str(log), "0.2"],
+                env={"PATH": f"{root / 'bin'}:/usr/bin:/bin"})
+            try:
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline and (not log.is_file() or log.read_text(
+                        encoding="utf-8").count(" sample\n") < 3):
+                    time.sleep(0.1)
+            finally:
+                process.kill()
+                process.wait()
+            lines = log.read_text(encoding="utf-8").splitlines()
+        samples = [line for line in lines if line.endswith(" sample")]
+        foreign = [line for line in lines if " FOREIGN " in line]
+        self.assertGreaterEqual(len(samples), 3, lines)
+        self.assertTrue(foreign, lines)
+        for line in foreign:
+            self.assertRegex(line, r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ FOREIGN 55\.0 "
+                                   r"/usr/bin/other_job --x$")
+        start = samples[0].split()[0]
+        with self.assertRaisesRegex(variants_report.ReportError, "another process was busy"):
+            variants_report.quiet_spans("\n".join(lines), [(f"x at={start}", f"y at={start}")])
+
+
+FAKE_REPLAY = """#!{python}
+import json, os, sys, time
+argv = sys.argv[1:]
+options = dict(zip(argv[::2], argv[1::2]))
+record = json.loads(open({template!r}).read())
+record["header"]["design"] = options["--design"] + ": a fixture"
+if options["--passes"] == "timed" and {busy!r} != "none" and (
+        {busy!r} == "always" or not os.path.exists({once!r})):
+    open({once!r}, "w").close()
+    open({busy_file!r}, "w").close()
+    time.sleep(1)
+    os.remove({busy_file!r})
+open(options["--out"], "w").write(json.dumps(record))
+"""
+
+
+@unittest.skipUnless(sys.platform == "darwin", "the Mac's sampler rule runs on macOS only")
+class MacSampler(unittest.TestCase):
+    """r5-2: bench_driver applies the Mac's sampler rule to each process itself, so a later
+    Mac run needs no outside sampler's log."""
+
+    def run_driver(self, root, busy="none"):
+        import test_alloc_results  # noqa: PLC0415
+
+        (root / "results").mkdir()
+        (root / "results" / "predictions.md").write_text("## P-0999: x\n\nIt runs.\n",
+                                                         encoding="utf-8")
+        template = root / "record.json"
+        fake = test_alloc_results.record("malloc-fresh")
+        fake["header"]["residency"] = "1 of 1 pages resident"
+        template.write_text(json.dumps(fake), encoding="utf-8")
+        bench = root / "bench.py"
+        bench.write_text(FAKE_REPLAY.format(python=sys.executable, template=str(template),
+                                            busy=busy, once=str(root / "once"),
+                                            busy_file=str(root / "busy")), encoding="utf-8")
+        bench.chmod(0o755)
+        ps = root / "ps.sh"
+        ps.write_text(f"#!/bin/sh\n[ -f '{root}/busy' ] && echo '99999 1 50.0 /usr/bin/other_job'"
+                      "\nexit 0\n", encoding="utf-8")
+        ps.chmod(0o755)
+        machine = FIXTURES.parent / "machine_check"
+        out = root / "results" / "bench_{design}.md"
+        result = subprocess.run(
+            [sys.executable, "-B", str(REPO_ROOT / "scripts" / "bench_driver.py"),
+             "--bench", str(bench), "--probe", str(machine / "fake_probe.sh"),
+             "--input", str(machine / "input.bin"), "--prediction", "P-0999",
+             "--raw-dir", str(root / "raw"), "--out", str(out), "--design", "paged-flat",
+             "--design", "map-fresh", "--input-mode", "ram", "--allow-dirty",
+             "--predictions-root", str(root), "--run-log", str(root / "results" / "run_log.md"),
+             "--ps", str(ps), "--sample-every", "0.2"],
+            capture_output=True, text=True, timeout=300, check=False)
+        log = root / "results" / "run_log.md"
+        return result, root / "results", log.read_text(encoding="utf-8") if log.is_file() else ""
+
+    def test_a_run_is_sampled_by_the_driver_and_passes_once_stamped(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            result, results, log = self.run_driver(Path(directory))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for design in ("paged-flat", "map-fresh"):
+                text = (results / f"bench_{design}.md").read_text(encoding="utf-8")
+                self.assertEqual({code for code, _ in check_results.check_text(text)},
+                                 {"load-not-stamped"}, design)
+                self.assertIn(f"- interference: {check_results.driver_interference(0.2)}; 0 "
+                              "withdrawn under the rule\n", text)
+                self.assertEqual(text.count(f"| {design}, repetition "), 6)
+                stamped = stamp_load.stamp(text.replace(
+                    "- run_started: ", "- run_started: 2026-11-13T04:00:00Z\n- was: "), STDERR)
+                self.assertNotIn("- sampler:", stamped)
+
+    def test_a_process_beside_another_busy_process_is_withdrawn_and_rerun(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            result, results, log = self.run_driver(Path(directory), busy="first")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("withdrawn: paged-flat, repetition 1, timed process on the Mac, exit 0; "
+                          "the CPU sampler saw other_job at 50.0% CPU", log)
+            text = (results / "bench_paged-flat.md").read_text(encoding="utf-8")
+            self.assertEqual({code for code, _ in check_results.check_text(text)},
+                             {"load-not-stamped"})
+            self.assertIn("; 1 withdrawn under the rule", text)
+            other = (results / "bench_map-fresh.md").read_text(encoding="utf-8")
+            self.assertIn("; 0 withdrawn under the rule", other)
+            self.assertTrue((Path(directory) / "raw" /
+                             "paged-flat-repetition-1-timed-withdrawn-1.json").is_file())
+
+    def test_a_process_withdrawn_three_times_running_ends_the_run(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            result, results, log = self.run_driver(Path(directory), busy="always")
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertFalse((results / "bench_paged-flat.md").exists())
+            self.assertEqual(log.count("withdrawn: paged-flat, repetition 1, timed process"), 3)
+            self.assertIn("refused at paged-flat, repetition 1, timed process: withdrawn 3 times "
+                          "in a row under the sampler rule", log)
 
 
 if __name__ == "__main__":

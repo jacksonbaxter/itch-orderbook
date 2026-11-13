@@ -629,7 +629,7 @@
       "mutations": [
         {
           "file": "scripts/check_results.py",
-          "old": "        and not is_spsc_file(fields)\n",
+          "old": "        and not is_spsc_file(fields) and \"interference\" not in fields\n",
           "new": "        and True\n"
         }
       ],

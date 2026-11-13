@@ -37,6 +37,7 @@ Host: **macOS (M4 Max)**. Numbers from the two hosts are never mixed.
 - top_of_book: not tracked
 - measure_load_start: measure.sh: start load1=1.20 host=macOS (M4 Max) at=2026-11-04T10:51:08Z
 - measure_load_end: measure.sh: end load1=1.30 exit=0 at=2026-11-04T10:51:19Z
+- sampler: none: the run was made before the sampler rule of 2026-11-05, and no sampler ran beside it, so nothing is known about other processes' load during it
 - peak_rss: unavailable: /usr/bin/time did not wrap the run
 - peak_footprint: unavailable: /usr/bin/time did not wrap the run
 - prediction: P-0999

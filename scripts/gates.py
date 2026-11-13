@@ -493,6 +493,24 @@ def unpinned_action(root, files):
     return violations
 
 
+def results_pages(root):
+    return [path for path in walk(root, "results") if path.suffix in PROSE]
+
+
+def linux_sampler_rule(root, files):
+    """Every results file of every kind held to the Linux sampler rule, by check_results.py's
+    own line and parser (check_linux_rule_any)."""
+    # Here, so that the other gates need nothing beside them.
+    import check_results  # noqa: PLC0415
+
+    violations = []
+    for path in files:
+        text = read_text(path) or ""
+        for code, detail in check_results.check_linux_rule_any(path.name, text):
+            violations.append((path, 1, f"{code}: {detail}"))
+    return violations
+
+
 @dataclass(frozen=True)
 class Gate:
     name: str
@@ -536,6 +554,9 @@ def gates():
              "button is a pill", demo_pill_button, demo_files),
         Gate("demo-gradient", "the demo page has no gradient, so no gradient hero",
              demo_gradient, demo_files),
+        Gate("linux-sampler-rule", "every debian results file of any kind from the Linux "
+             "sampler rule's moment on carries the rule's line, passing",
+             linux_sampler_rule, results_pages),
     )
 
 

@@ -150,6 +150,8 @@ def stamp(results_text, stderr_text, sampler_text=None):
         if old not in results_text:
             raise ValueError(f"{name} is not pending in the results file")
         results_text = results_text.replace(old, f"- {name}: {line}")
+    if sampler is None and check_results.before_sampler_rule(fields):
+        sampler = check_results.SAMPLER_BEFORE_RULE
     if sampler is not None:
         results_text = results_text.replace(f"- measure_load_end: {end}",
                                             f"- measure_load_end: {end}\n- sampler: {sampler}")

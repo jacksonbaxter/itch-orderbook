@@ -247,6 +247,6 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [ ] Full-repo review. For each problem: file and line, why it's wrong, how to show it fails, then fix it.
 - [ ] Every Linux number cites its commit. Sync through `debian_sync.sh` from committed `HEAD`.
 - [ ] Final report
-- [x] The Linux sampler rule, fixed before any new number: `scripts/linux_sampler.py`, held by `backtest_driver.py`, `stamp_load.py` and `check_results.py` for every `debian` run from 2026-11-13T03:00Z; docs/NOTES.md, "The Linux sampler rule", and BENCHMARKS.md's method section. The other report checkers do not read it yet.
+- [x] The Linux sampler rule, fixed before any new number: `scripts/linux_sampler.py`, held by `backtest_driver.py`, `stamp_load.py` and `check_results.py` for every `debian` run from 2026-11-13T03:00Z; docs/NOTES.md, "The Linux sampler rule", and BENCHMARKS.md's method section. Every other kind is held to it by the `linux-sampler-rule` gate, over every file in `results/`: their drivers do not write the rule's line yet, so no new `debian` file of theirs can be published until one does.
 - [ ] P-0106: T-BT-3 on `debian` again under that rule, P-0104's schedule, to decide between 298.14 and 323.88 ns a message; then `results/backtest_shadow_debian_12302019.md` rendered from its records with the miss's host reason.
 - [x] T-BT-1 held in its bar's unit, engine events/s, with messages/s beside it; both T-BT-1 files rendered again from their raw records (docs/NOTES.md, "T-BT-1 in its bar's unit").

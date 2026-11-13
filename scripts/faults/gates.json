@@ -225,6 +225,72 @@
         "signature": "gates: FAIL attribution-without-ledger include/itch/mm/attribution\\.hpp:\\d+: includes itch/mm/ledger\\.hpp",
         "exit": 1
       }
+    },
+    {
+      "id": "gates-linux-sampler-rule-drops-udp",
+      "breaks": "The Linux sampler rule's every-kind check skips one kind, the UDP files, so a later debian UDP run with no load_rule line would pass the gates",
+      "check": "test_gates.py test_the_linux_sampler_rule_holds_every_kind_of_file",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    fields = parse_header(text)\n    if fields.get(\"host\") != \"debian\":\n        return []\n    start = run_start(fields)\n",
+          "new": "    fields = parse_header(text)\n    if fields.get(\"host\") != \"debian\" or name.startswith(\"udp_\"):\n        return []\n    start = run_start(fields)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_linux_sampler_rule_holds_every_kind_of_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-linux-sampler-rule-no-run-start-passes",
+      "breaks": "A debian results file that gives no run start is taken as from before the Linux sampler rule, so the check fails open",
+      "check": "test_gates.py test_the_linux_sampler_rule_holds_every_kind_of_file",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if start is None:\n        return [(\"run-start-unknown\",",
+          "new": "    if start is None:\n        return []\n        return [(\"run-start-unknown\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_linux_sampler_rule_holds_every_kind_of_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-linux-sampler-rule-later-udp-file",
+      "breaks": "A debian UDP results file from after the Linux sampler rule's moment, with no load_rule line: the gate refuses it, and says no UDP driver writes the line yet",
+      "check": "gates.py linux-sampler-rule",
+      "mutations": [
+        {
+          "file": "results/udp_feed_debian_12302019.md",
+          "old": "- run_started: 2026-11-12T02:03:12Z\n",
+          "new": "- run_started: 2026-11-13T04:03:12Z\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}",
+        "--only",
+        "linux-sampler-rule"
+      ],
+      "expect": {
+        "signature": "gates: FAIL linux-sampler-rule results/udp_feed_debian_12302019\\.md:1: load-rule-missing: .*no driver of the udp kind writes it yet",
+        "exit": 1
+      }
     }
   ]
 }

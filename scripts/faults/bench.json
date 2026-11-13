@@ -4541,8 +4541,8 @@
       "mutations": [
         {
           "file": "scripts/bench_driver.py",
-          "old": "    for argument in args.bench_arg:\n        words += [f\"--bench-arg={argument}\"]\n    for flag, value in ((\"--title\"",
-          "new": "    for argument in ():\n        words += [f\"--bench-arg={argument}\"]\n    for flag, value in ((\"--title\""
+          "old": "    for argument in args.bench_arg:\n        words += [f\"--bench-arg={argument}\"]\n    import mac_rule",
+          "new": "    for argument in ():\n        words += [f\"--bench-arg={argument}\"]\n    import mac_rule"
         }
       ],
       "command": [
@@ -4657,6 +4657,140 @@
       ],
       "expect": {
         "signature": "^FAIL: test_a_run_of_no_design_keeps_its_title_and_note_as_printed_and_says_so",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-check-before-rule-mac-unsaid",
+      "breaks": "check_results.py accepts a macOS run from before the sampler rule of 2026-11-05 that does not say no sampler ran beside it (r5-2)",
+      "check": "test_bench_results.py test_a_mac_run_before_the_rule_says_that_no_sampler_ran",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if fields.get(\"sampler\") != SAMPLER_BEFORE_RULE:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py",
+        "Sampler"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_mac_run_before_the_rule_says_that_no_sampler_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stamp-before-rule-mac-unsaid",
+      "breaks": "stamp_load.py stamps a macOS run from before the sampler rule with no sampler line, so its file says nothing about other processes' load (r5-2)",
+      "check": "test_bench_results.py test_a_mac_run_before_the_rule_says_that_no_sampler_ran",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    if sampler is None and check_results.before_sampler_rule(fields):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py",
+        "Sampler"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_mac_run_before_the_rule_says_that_no_sampler_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-check-driver-sampler-uncounted",
+      "breaks": "check_results.py accepts a driver-sampled Mac file whose Sampler section lacks a published process (r5-2)",
+      "check": "test_driver_records.py test_a_driver_sampled_file_is_held_to_its_sampler_section",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    wanted = (number(fields.get(\"repetitions\", \"\")) or 0) * (1 if is_backtest_file(fields) else 2)\n    if len(quiet) != len(published) or len(quiet) != wanted:\n",
+          "new": "    wanted = (number(fields.get(\"repetitions\", \"\")) or 0) * (1 if is_backtest_file(fields) else 2)\n    if len(quiet) != len(published):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "DriverSamplerCheck"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_driver_sampled_file_is_held_to_its_sampler_section",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-mac-processes-unjudged",
+      "breaks": "bench_driver.py on the Mac runs its processes beside the sampler without judging them, so a later Mac run publishes with no sampler verdict (r5-2)",
+      "check": "test_driver_records.py test_a_run_is_sampled_by_the_driver_and_passes_once_stamped",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if sampler is None:\n        timed = run_process(args, index, commit, digest, design, passes)\n",
+          "new": "    if True:\n        timed = run_process(args, index, commit, digest, design, passes)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "MacSampler"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_run_is_sampled_by_the_driver_and_passes_once_stamped",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "bench-backtest-mac-processes-unjudged",
+      "breaks": "backtest_driver.py on the Mac runs its repetitions without the sampler rule (r5-2)",
+      "check": "test_backtest_results.py test_a_run_writes_a_file_that_passes_once_stamped",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    if mac is not None:\n        def set_aside(count):\n",
+          "new": "    if False:\n        def set_aside(count):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py",
+        "EndToEnd"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_run_writes_a_file_that_passes_once_stamped",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "bench-mac-sampler-script-names-idle-processes",
+      "breaks": "scripts/mac_sampler.sh names every process, not only those above 20% CPU, so an idle one voids a span (r5-2)",
+      "check": "test_driver_records.py test_it_names_every_other_busy_process_and_no_measured_one",
+      "mutations": [
+        {
+          "file": "scripts/mac_sampler.sh",
+          "old": "'NR > 1 && $1 > 20 && $0 !~",
+          "new": "'NR > 1 && $0 !~"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "MacSamplerScript"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_it_names_every_other_busy_process_and_no_measured_one",
         "exit": 1
       }
     }

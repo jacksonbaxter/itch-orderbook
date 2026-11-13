@@ -410,8 +410,18 @@ class Sampler(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "needs the CPU sampler's log"):
             stamp_load.stamp(self.pending, self.stderr)
 
-    def test_a_mac_run_before_the_rule_does_not(self):
-        self.assertNotIn("- sampler:", stamp_load.stamp(PENDING, STDERR))
+    def test_a_mac_run_before_the_rule_says_that_no_sampler_ran(self):
+        """r5-2: a Mac run from before 2026-11-05 needs no sampler's log, and its file says, in
+        the line where a later one gives the sampler's verdict, that none ran beside it."""
+        stamped = stamp_load.stamp(PENDING, STDERR)
+        self.assertIn(f"\n- sampler: {check_results.SAMPLER_BEFORE_RULE}\n", stamped)
+        self.assertEqual(check_results.check_text(stamped), [])
+        dropped = "\n".join(line for line in stamped.splitlines()
+                            if not line.startswith("- sampler:"))
+        self.assertEqual(codes(dropped), {"sampler-before-rule-unsaid"})
+        quiet = stamped.replace(f"- sampler: {check_results.SAMPLER_BEFORE_RULE}",
+                                "- sampler: quiet: the sampler rule was applied: 3 lines")
+        self.assertEqual(codes(quiet), {"sampler-before-rule-unsaid"})
 
     def test_a_gap_in_the_run_is_refused(self):
         with self.assertRaisesRegex(ValueError, "the sampler stopped for 8 s"):

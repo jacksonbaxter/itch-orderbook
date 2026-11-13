@@ -34,6 +34,7 @@ Host: **macOS (M4 Max)**. Numbers from the two hosts are never mixed.
 - residency: 7 of 7 pages resident
 - measure_load_start: measure.sh: start load1=1.20 host=macOS (M4 Max) at=2026-10-31T10:00:00Z
 - measure_load_end: measure.sh: end load1=1.30 exit=0 at=2026-10-31T10:00:10Z
+- sampler: none: the run was made before the sampler rule of 2026-11-05, and no sampler ran beside it, so nothing is known about other processes' load during it
 - peak_rss: 114.98 GiB
 - peak_footprint: 2.18 GiB
 - prediction: P-0999
