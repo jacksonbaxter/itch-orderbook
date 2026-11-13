@@ -16,7 +16,8 @@
     "results",
     "docs",
     "README.md",
-    "RESULTS.md"
+    "RESULTS.md",
+    "BENCHMARKS.md"
   ],
   "faults": [
     {
@@ -117,6 +118,86 @@
       ],
       "expect": {
         "signature": "^FAIL: test_a_fault_for_another_system_is_still_checked_for_staleness"
+      }
+    },
+    {
+      "id": "matrix-tool-fault-signature-loose",
+      "breaks": "An mm-select fault's signature is loosened back to any failure of the script, so a tool that only exits 1 counts as detecting it",
+      "check": "test_fault_matrix.py test_a_tool_that_only_fails_detects_no_tool_fault",
+      "mutations": [
+        {
+          "file": "scripts/faults/marketmaker.json",
+          "old": "\"signature\": \"^select cli: FAIL day: line 3: have 'excluded category 1 issue 1 etp 0 test 1 halted 2 \"",
+          "new": "\"signature\": \"select cli: FAIL\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_tool_that_only_fails_detects_no_tool_fault \\("
+      }
+    },
+    {
+      "id": "matrix-stale-edits-tried-alone",
+      "breaks": "find_stale tries each mutation on the file as committed, not as the edits before it left it",
+      "check": "test_fault_matrix.py, sequential staleness",
+      "mutations": [
+        {
+          "file": "scripts/fault_matrix.py",
+          "old": "        texts[mutation[\"file\"]] = text.replace(mutation[\"old\"], mutation[\"new\"]).encode(\"utf-8\")\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_later_edit_an_earlier_one_disturbed_is_stale \\("
+      }
+    },
+    {
+      "id": "matrix-input-read-before-mutation",
+      "breaks": "find_stale tries an input on its file as committed, after a mutation of the same file",
+      "check": "test_fault_matrix.py, an input after a mutation",
+      "mutations": [
+        {
+          "file": "scripts/fault_matrix.py",
+          "old": "        data = current(spec[\"file\"])\n",
+          "new": "        data = path.read_bytes()\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_input_after_a_mutation_of_its_file_is_tried_on_the_mutated_text \\("
+      }
+    },
+    {
+      "id": "matrix-no-fault-ran-passes",
+      "breaks": "A run in which every selected fault was stale exits 0",
+      "check": "test_fault_matrix.py, a run in which no fault ran",
+      "mutations": [
+        {
+          "file": "scripts/fault_matrix.py",
+          "old": "              \"system\", flush=True)\n        return 1\n",
+          "new": "              \"system\", flush=True)\n        return 0\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_run_in_which_no_fault_ran_fails \\("
       }
     }
   ]

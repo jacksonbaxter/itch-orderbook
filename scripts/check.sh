@@ -8,23 +8,31 @@
 #
 # Needs CC and CXX, or a compiler on PATH, plus cmake, ninja, python3, clang-format and
 # clang-tidy. The wasm and demo stages need EMSDK, and the demo stage opens the page in the
-# headless browser ITCH_BROWSER names, if it names one. It never reads data/: real-day checks
-# live in scripts/check_real_day.sh.
+# headless browser ITCH_BROWSER names: a Chrome or Chromium binary, such as the Chrome for
+# Testing that `python3 -m playwright install chromium` fetches. Without one the demo stage
+# fails, unless --without-browser is given, when it runs the rest and the summary says
+# "partial: the page was not opened". It never reads data/: real-day checks live in
+# scripts/check_real_day.sh.
+#
+#     scripts/check.sh --without-browser   the demo stage without the page, said so
 #
 # Stages run one at a time and a build uses at most ITCH_CHECK_JOBS jobs, so that no two
 # sanitizer or clang-tidy builds ever overlap. A failed stage does not stop the rest.
 # The exit status is non-zero if any stage failed. Each stage's output is kept in
-# build/check-logs/<stage>.log.
+# build/check-logs/<stage>.log. A stage that did only part of its work prints a line
+# `partial: <what it left out>`, and the summary carries that line in place of a bare ok.
 #
 # To add a stage: write a function named stage_<name>, then add one `register` line.
 
-set -u
+set -u -o pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 cd "$repo_root" || exit 2
 
 jobs=${ITCH_CHECK_JOBS:-6}
 log_dir=build/check-logs
+ctest_preset=release
+without_browser=0
 
 python_test() { python3 -B "$@"; }
 
@@ -37,12 +45,53 @@ preset_with_tests() {
   build_preset "$1" && ctest --preset "$1"
 }
 
+# The tests ctest knows, one a line: ctest_preset's, or the build directory's it runs in when
+# ctest_preset is empty.
+ctest_names() {
+  ctest ${ctest_preset:+--preset "$ctest_preset"} -N | sed -n 's/^ *Test *#[0-9]*: //p'
+}
+
+# Fails, naming each, when a test a stage names is not one ctest knows: a regex that names
+# several still matches when one is renamed or removed, so long as another is left.
+ctest_listed() { # name...
+  local known name missing=0
+  known=$(ctest_names) || return 1
+  for name in "$@"; do
+    case $'\n'"$known"$'\n' in
+      *$'\n'"$name"$'\n'*) ;;
+      *) echo "ctest knows no test named $name"; missing=1 ;;
+    esac
+  done
+  [ "$missing" -eq 0 ]
+}
+
+# The tests named and no others, once each is known to exist.
+ctest_only() { # name...
+  ctest_listed "$@" || return 1
+  local IFS='|'
+  ctest --preset "$ctest_preset" -R "^($*)\$"
+}
+
+# The results files each pattern matches, one a line. Fails, naming the pattern, when one
+# matches none, so that a check over them cannot pass by reading nothing.
+results_files() { # pattern...
+  local pattern
+  for pattern in "$@"; do
+    compgen -G "results/$pattern" || { echo "no results file matches results/$pattern" >&2; return 1; }
+  done
+}
+
 stage_toolchain() {
   for tool in cmake ninja python3 clang-format clang-tidy; do
     command -v "$tool" || { echo "missing tool: $tool"; return 1; }
   done
-  "${CXX:-c++}" --version | head -n 1
-  cmake --version | head -n 1
+  local version
+  # Each version is read whole and its first line printed: a pipe into head would hide a
+  # compiler that is not there.
+  version=$("${CXX:-c++}" --version) || { echo "the compiler ${CXX:-c++} does not run"; return 1; }
+  echo "${version%%$'\n'*}"
+  version=$(cmake --version) || return 1
+  echo "${version%%$'\n'*}"
 }
 
 stage_format() {
@@ -63,7 +112,9 @@ stage_script_tests() {
     python_test scripts/test_oracle_sessions.py &&
     python_test scripts/test_trades_report.py &&
     python_test scripts/test_fault_matrix.py &&
-    python_test scripts/test_fetch_tool.py
+    python_test scripts/test_fetch_tool.py &&
+    python_test scripts/test_check_sh.py &&
+    python_test scripts/test_check_benchmark_sources.py
 }
 
 # RESULTS.md's tables and the README's headline against a fresh run over results/, and the
@@ -92,14 +143,14 @@ stage_asan_ubsan() { preset_with_tests asan-ubsan; }
 # on every allocator arm, and the book corpus.
 stage_oracle() {
   build_preset release &&
-    ctest --preset release -R '^(test_book|test_alloc|test_node_book|test_oracle_cli|corpus_fuzz_book)$'
+    ctest_only test_book test_alloc test_node_book test_oracle_cli corpus_fuzz_book
 }
 # The trade-print checks on their fixtures: both reference parsers and their corpora, the
 # faulty-book tests, and every check through the tool. Needs nothing from data/.
 stage_trades() {
   build_preset release &&
-    ctest --preset release \
-      -R '^(test_reference_files|test_trade_checks|test_trades_cli|corpus_fuzz_crossstats|corpus_fuzz_midas)$'
+    ctest_only test_reference_files test_trade_checks test_trades_cli corpus_fuzz_crossstats \
+      corpus_fuzz_midas
 }
 # The benchmark harness: each check on its fixtures, the gates on the committed results,
 # and the tests of the harness itself. Needs nothing from data/.
@@ -127,56 +178,61 @@ stage_bench() {
     python_test scripts/test_simd_asm_audit.py &&
     python_test scripts/test_zen1_events.py &&
     python_test scripts/gate_numbers.py &&
-    python_test scripts/check_predictions.py || return 1
-  results=$(find results -name 'bench_*.md' -o -name 'backtest_*.md' -o -name 'spsc_*.md' \
-    -o -name 'alloc_*.md' -o -name 'walks_ladder_*.md')
-  if [ -n "$results" ]; then
-    # shellcheck disable=SC2086
-    python_test scripts/check_results.py $results || return 1
-  fi
-  if [ -f results/chase_debian.md ]; then
-    python_test scripts/chase_report.py --check results/chase_debian.md || return 1
-  fi
-  for counts in results/counters_by_type_*.md results/counters_by_age_*.md; do
-    [ -f "$counts" ] || continue
-    python_test scripts/counts_report.py --check "$counts" || return 1
+    python_test scripts/check_predictions.py &&
+    python_test scripts/check_results.py --bars BENCHMARKS.md || return 1
+  # Each pattern must match a file, or the check it feeds has read nothing.
+  local file
+  results=$(results_files 'bench_*.md' 'backtest_*.md' 'spsc_*.md' 'alloc_*.md' \
+    'walks_ladder_*.md') || return 1
+  # shellcheck disable=SC2086
+  python_test scripts/check_results.py $results || return 1
+  results=$(results_files chase_debian.md) || return 1
+  python_test scripts/chase_report.py --check $results || return 1
+  results=$(results_files 'counters_by_type_*.md' 'counters_by_age_*.md') || return 1
+  for file in $results; do
+    python_test scripts/counts_report.py --check "$file" || return 1
   done
-  if [ -f results/counters_zen1_events_debian.md ]; then
-    python_test scripts/zen1_events.py --check results/counters_zen1_events_debian.md || return 1
-  fi
-  for graph in results/flamegraph_*.md results/profile_*.md; do
-    [ -f "$graph" ] || continue
-    python_test scripts/flame_report.py --check "$graph" || return 1
+  results=$(results_files counters_zen1_events_debian.md) || return 1
+  python_test scripts/zen1_events.py --check $results || return 1
+  results=$(results_files 'flamegraph_*.md' 'profile_*.md') || return 1
+  for file in $results; do
+    python_test scripts/flame_report.py --check "$file" || return 1
   done
-  for variants in results/lookup_*.md results/prefetch_*.md results/dispatch_*.md \
-    results/layout_*.md results/structure_*.md; do
-    [ -f "$variants" ] || continue
-    python_test scripts/variants_report.py --check "$variants" || return 1
+  results=$(results_files 'lookup_*.md' 'prefetch_*.md' 'dispatch_*.md' 'layout_*.md' \
+    'structure_*.md') || return 1
+  for file in $results; do
+    python_test scripts/variants_report.py --check "$file" || return 1
   done
-  for types in results/types_*.md; do
-    [ -f "$types" ] || continue
-    python_test scripts/types_report.py --check "$types" || return 1
+  # No types_ file is published yet, so this pattern alone may match none; one that is
+  # published is checked.
+  for file in results/types_*.md; do
+    [ -f "$file" ] || continue
+    python_test scripts/types_report.py --check "$file" || return 1
   done
-  for window in results/window_*.md; do
-    [ -f "$window" ] || continue
-    python_test scripts/window_report.py --check "$window" || return 1
+  results=$(results_files 'window_*.md') || return 1
+  for file in $results; do
+    python_test scripts/window_report.py --check "$file" || return 1
   done
-  for simd in results/simd_*.md; do
-    [ -f "$simd" ] || continue
-    case $simd in
-      results/simd_asm_*) python_test scripts/simd_asm_audit.py --check "$simd" || return 1 ;;
-      *) python_test scripts/simd_report.py --check "$simd" || return 1 ;;
+  results_files 'simd_asm_*.md' >/dev/null || return 1
+  results=$(results_files 'simd_*.md') || return 1
+  for file in $results; do
+    case $file in
+      results/simd_asm_*) python_test scripts/simd_asm_audit.py --check "$file" || return 1 ;;
+      *) python_test scripts/simd_report.py --check "$file" || return 1 ;;
     esac
   done
-  for udp in results/udp_*.md; do
-    [ -f "$udp" ] || continue
-    python_test scripts/udp_report.py --check "$udp" || return 1
+  results=$(results_files 'udp_*.md') || return 1
+  for file in $results; do
+    python_test scripts/udp_report.py --check "$file" || return 1
   done
-  for walks in results/walks_*.md; do
-    [ -f "$walks" ] || continue
-    python_test scripts/walk_report.py check "$walks" || return 1
+  results=$(results_files 'walks_*.md') || return 1
+  for file in $results; do
+    python_test scripts/walk_report.py check "$file" || return 1
   done
-  build_preset release && ctest --preset release -R '^(test_bench|test_walk_counts$)'
+  build_preset release &&
+    ctest_only test_bench_platform test_bench_replay test_bench_cli test_bench_backtest_cli \
+      test_bench_counts_cli test_bench_variants_cli test_bench_spsc_cli test_bench_kernels_cli \
+      test_bench_udp_cli test_bench_walks_cli test_walk_counts
 }
 # The market maker: T-MM-2's report on its fixtures and its results file against a rerun; the
 # report day's report on its fixtures and its results file against the tool output it carries;
@@ -188,7 +244,8 @@ stage_market_maker() {
     python_test scripts/mm_report.py check &&
     build_preset release &&
     python_test scripts/as_tables_report.py check --tool build/release/tools/itch_as_tables &&
-    ctest --preset release -R '^(test_attribution|test_market_maker|test_alloc|test_calibrate_cli|test_select_cli|test_mm_cli)$'
+    ctest_only test_attribution test_market_maker test_alloc test_calibrate_cli test_select_cli \
+      test_mm_cli
 }
 stage_tsan() { preset_with_tests tsan; }
 # From clean: ninja does not track .clang-tidy, so an incremental run could be a stale pass.
@@ -199,21 +256,32 @@ stage_fuzz_smoke() { build_preset fuzz && ctest --preset fuzz-smoke; }
 stage_wasm() { preset_with_tests wasm; }
 # The browser demo: its scripts' tests, docs/numbers.json against results/, T-WASM-1's results
 # file against itself, the replay natively, then the engine in node against the native build on
-# an extract cut at test time, and the page in a headless browser when ITCH_BROWSER names one.
-# Needs EMSDK, and nothing from data/.
+# an extract cut at test time, and the page in the headless browser ITCH_BROWSER names. With no
+# browser it fails before it builds, unless --without-browser was given: then it does the rest
+# and says it did not open the page. Needs EMSDK, and nothing from data/.
 stage_demo() {
   local browser=()
+  if [ -n "${ITCH_BROWSER:-}" ]; then
+    [ -x "$ITCH_BROWSER" ] || { echo "demo: ITCH_BROWSER names no program that runs: $ITCH_BROWSER"; return 1; }
+    browser=(--browser "$ITCH_BROWSER")
+  elif [ "$without_browser" -eq 0 ]; then
+    echo "demo: no browser to open the page in. Set ITCH_BROWSER to a Chrome or Chromium binary,"
+    echo "such as the Chrome for Testing that \`python3 -m playwright install chromium\` fetches"
+    echo "(on macOS, .../Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing),"
+    echo "or pass --without-browser to run the rest of the stage and have the summary say so."
+    return 1
+  fi
   python_test scripts/test_demo.py &&
     python_test scripts/demo.py numbers --check &&
     python_test scripts/wasm_report.py check &&
     build_preset release &&
-    ctest --preset release -R '^(test_demo_replay|test_demo_cli|test_alloc)$' &&
-    build_preset wasm || return 1
-  if [ -n "${ITCH_BROWSER:-}" ]; then
-    browser=(--browser "$ITCH_BROWSER")
+    ctest_only test_demo_replay test_demo_cli test_alloc &&
+    build_preset wasm &&
+    python_test scripts/test_demo_engine.py --release build/release --wasm build/wasm \
+      ${browser[@]+"${browser[@]}"} || return 1
+  if [ ${#browser[@]} -eq 0 ]; then
+    echo "partial: the page was not opened"
   fi
-  python_test scripts/test_demo_engine.py --release build/release --wasm build/wasm \
-    ${browser[@]+"${browser[@]}"}
 }
 stage_fault_matrix() {
   python_test scripts/fault_matrix.py --log-dir "$log_dir/faults"
@@ -261,6 +329,7 @@ while [ $# -gt 0 ]; do
       esac
       shift
       ;;
+    --without-browser) without_browser=1 ;;
     --list)
       for name in $stage_names; do
         case " $quick_names " in
@@ -270,7 +339,7 @@ while [ $# -gt 0 ]; do
       done
       exit 0
       ;;
-    *) echo "usage: scripts/check.sh [--quick] [--list] [--only NAME]..." >&2; exit 2 ;;
+    *) echo "usage: scripts/check.sh [--quick] [--list] [--only NAME]... [--without-browser]" >&2; exit 2 ;;
   esac
   shift
 done
@@ -281,6 +350,7 @@ fi
 mkdir -p "$log_dir"
 summary=""
 failed=0
+partial=""
 for name in $selected; do
   log=$log_dir/$name.log
   printf '%-14s ... ' "$name"
@@ -293,18 +363,32 @@ for name in $selected; do
     failed=$((failed + 1))
   fi
   elapsed=$((SECONDS - started))
-  printf '%s (%d s)\n' "$verdict" "$elapsed"
+  # A stage that passed but left part of its work undone says what, and is not a bare ok.
+  note=""
+  if [ "$verdict" = ok ]; then
+    note=$(grep -m 1 '^partial: ' "$log") || note=""
+  fi
+  if [ -n "$note" ]; then
+    verdict=partial
+    partial="$partial $name"
+  fi
+  printf '%s (%d s)%s\n' "$verdict" "$elapsed" "${note:+, $note}"
   if [ "$verdict" = FAIL ]; then
     tail -n 20 "$log"
   fi
-  summary="$summary$(printf '%-14s %-5s %5d s  %s' "$name" "$verdict" "$elapsed" "$log")"$'\n'
+  summary="$summary$(printf '%-14s %-7s %5d s  %s%s' "$name" "$verdict" "$elapsed" "$log" \
+    "${note:+  $note}")"$'\n'
 done
 
 echo
-echo "stage          verdict  time  log"
+echo "stage          verdict    time  log"
 printf '%s' "$summary"
 if [ "$failed" -ne 0 ]; then
   echo "check: FAILED, $failed of $(echo $selected | wc -w | tr -d ' ') stages"
   exit 1
+fi
+if [ -n "$partial" ]; then
+  echo "check: all stages passed, in part only:$partial"
+  exit 0
 fi
 echo "check: all stages passed"

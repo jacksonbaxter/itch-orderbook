@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""gate_numbers.py, breaking every figure of a fixture in turn (criterion 30)."""
+"""gate_numbers.py, breaking every figure of a fixture in turn, and each rule that holds a figure
+to its place (criterion 30)."""
 
 import contextlib
 import io
@@ -53,10 +54,13 @@ class Gate(unittest.TestCase):
             figures = list(gate_numbers.figures_in(original))
             self.assertTrue(figures)
             lines = original.splitlines()
-            for number, figure, _ in figures:
+            for found in figures:
+                number, figure, _ = found
                 line = lines[number - 1]
                 broken = list(lines)
-                broken[number - 1] = line.replace(figure, changed(figure), 1)
+                digits = figure.lstrip("-−+")
+                broken[number - 1] = (line[:found.position]
+                                      + line[found.position:].replace(digits, changed(digits), 1))
                 (self.root / page).write_text("\n".join(broken) + "\n", encoding="utf-8")
                 code, output = run(self.root)
                 self.assertEqual(code, 1, f"{figure} changed and the gate passed")
@@ -67,7 +71,8 @@ class Gate(unittest.TestCase):
     def test_the_figures_found_are_the_right_ones(self):
         text = (self.root / "README.md").read_text(encoding="utf-8")
         figures = [figure for _, figure, _ in gate_numbers.figures_in(text)]
-        self.assertEqual(figures, ["20,677,835", "291.7", "12.5", "3.06", "268,744,780"])
+        self.assertEqual(figures, ["20,677,835", "291.7", "12.5", "3.06", "268,744,780", "10",
+                                   "2,830,848", "2,735,896", "9", "136", "200", "146", "-27.50"])
 
     def test_a_cited_file_is_the_only_source(self):
         (self.root / "results" / "bench_two.md").write_text("Rate 3.06.\n", encoding="utf-8")
@@ -83,7 +88,7 @@ class Gate(unittest.TestCase):
 
     def test_a_figure_only_in_the_predictions_fails(self):
         with open(self.root / "README.md", "a", encoding="utf-8") as readme:
-            readme.write("It reached 99,999.5 messages.\n")
+            readme.write("\n| Reached | 99,999.5 messages |\n")
         code, output = run(self.root)
         self.assertEqual(code, 1)
         self.assertIn("99,999.5 is in no results file", output)
@@ -99,8 +104,9 @@ class Gate(unittest.TestCase):
 
     def test_a_figure_only_in_a_fault_matrix_row_fails(self):
         self.write_fault_matrix()
+        # The row shares the matrix row's words, so only the file's kind keeps it out.
         with open(self.root / "README.md", "a", encoding="utf-8") as readme:
-            readme.write("It reached 88,888.5 messages.\n")
+            readme.write("\n| Results file | 88,888.5 messages |\n")
         code, output = run(self.root)
         self.assertEqual(code, 1, output)
         self.assertIn("88,888.5 is in no results file", output)
@@ -123,9 +129,109 @@ class Gate(unittest.TestCase):
 
     def test_a_figure_inside_a_longer_number_is_not_found(self):
         with open(self.root / "README.md", "a", encoding="utf-8") as readme:
-            readme.write("It reached 77,835 messages.\n")
+            readme.write("It reached 77,835 messages ([results/bench_one.md](x)).\n")
         code, output = run(self.root)
         self.assertEqual(code, 1, output)
+        self.assertIn("77,835 is not in results/bench_one.md", output)
+
+    def edit(self, page, old, new):
+        path = self.root / page
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, old)
+        path.write_text(text.replace(old, new), encoding="utf-8")
+
+    def test_a_figure_moved_to_another_row_fails(self):
+        self.edit("README.md", "S4 carries 2,830,848 messages/s; S1 and S3 tie at 2,735,896",
+                  "S4 carries 2,735,896 messages/s; S1 and S3 tie at 2,830,848")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("README.md:12: 2,735,896 is not in results/modes.md", output)
+        self.assertIn("README.md:12: 2,830,848 is not in results/modes.md", output)
+
+    def test_a_figure_from_another_column_of_its_row_fails(self):
+        self.edit("README.md", "in 9 trials", "in 5 trials")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("README.md:12: 5 is not in results/modes.md", output)
+
+    def test_a_small_count_on_a_cited_line_is_read(self):
+        self.edit("README.md", "Over 10 sessions", "Over 12 sessions")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("README.md:12: 12 is not in results/modes.md", output)
+
+    def test_names_days_and_titles_are_not_figures(self):
+        text = (self.root / "README.md").read_text(encoding="utf-8")
+        lines = {number: line for number, line in enumerate(text.splitlines(), start=1)}
+        for found in gate_numbers.figures_in(text):
+            line = lines[found.line]
+            for name in ("Zen 1", "4 cores", "12302019", "4 GB", "3 hosts"):
+                start = line.find(name)
+                if start >= 0:
+                    self.assertFalse(start <= found.position < start + len(name),
+                                     f"{name} read as the figure {found.figure}")
+
+    def test_listed_figures_out_of_order_fail(self):
+        self.edit("README.md", "take 136, 200 and 146", "take 146, 200 and 136")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("146 is not in results/modes.md as pool-index's", output)
+        self.assertIn("136 is not in results/modes.md as pool-fifo's", output)
+
+    def test_a_listed_figure_its_key_line_gives_otherwise_fails(self):
+        # pool-index's row holds a 0 under Page faults; the fault_check line gives it 136.
+        self.edit("README.md", "take 136, 200 and 146", "take 0, 200 and 146")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("README.md:14: 0 is not in results/modes.md as pool-index's", output)
+
+    def test_a_dropped_minus_sign_fails(self):
+        self.edit("README.md", "-$27.50", "$27.50")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("README.md:14: 27.50 is not in results/modes.md", output)
+
+    def test_a_minus_sign_is_read_however_it_is_written(self):
+        self.edit("README.md", "-$27.50", "−27.50")
+        code, output = run(self.root)
+        self.assertEqual(code, 0, output)
+        self.edit("results/modes.md", "-$27.50", "-27.50")
+        code, output = run(self.root)
+        self.assertEqual(code, 0, output)
+        self.edit("results/modes.md", "-27.50", "27.50")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("−27.50 is not in results/modes.md", output)
+
+    def test_a_line_of_prose_with_a_figure_must_cite(self):
+        self.edit("README.md", " ([results/bench_one.md](results/bench_one.md))", "")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("README.md:10: 268,744,780 is in no results file: its line of prose cites "
+                      "none", output)
+
+    def test_a_figure_is_held_to_the_file_its_clause_cites(self):
+        self.edit("README.md", "dated 2019-12-30 ([results/bench_one.md](results/bench_one.md))",
+                  "dated 2019-12-30 ([results/bench_one.md](x)); the rate is 12.5 "
+                  "([results/bench_two.md](x))")
+        code, output = run(self.root)
+        self.assertEqual(code, 0, output)
+        self.edit("README.md", "the rate is 12.5 ([results/bench_two.md](x))",
+                  "the rate is 12.5 ([results/modes.md](x))")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("README.md:10: 12.5 is not in results/modes.md", output)
+
+    def test_a_label_in_brackets_after_a_figure_is_its_label(self):
+        self.edit("README.md", "S1 and S3 tie at 2,735,896 messages/s in 9 trials",
+                  "the modes run at 2,735,896 (S3) to 2,830,848 (S4) messages/s")
+        code, output = run(self.root)
+        self.assertEqual(code, 0, output)
+        self.edit("README.md", "2,735,896 (S3) to 2,830,848 (S4)",
+                  "2,735,896 (S4) to 2,830,848 (S3)")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("2,735,896 is not in results/modes.md", output)
 
     def test_the_results_page_is_gated_without_being_named(self):
         page = self.root / "RESULTS.md"

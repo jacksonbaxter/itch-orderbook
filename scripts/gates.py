@@ -47,10 +47,17 @@ COMMENT_OR_LITERAL = re.compile(
 NAMED_POINTER_CAST = re.compile(
     r"\b(reinterpret_cast|static_cast|const_cast)\s*<\s*((?:const\s+|volatile\s+)*)"
     r"([\w:]+(?:\s+[\w:]+)*)\s*(?:const\s*)?[*&]")
+# A C-style cast to a pointer to any type, followed by what it casts: `(const Header*)src`.
+# A declaration's unnamed parameter, `f(Header*) const`, is not followed by an operand.
 C_STYLE_POINTER_CAST = re.compile(
-    r"\(\s*(?:const\s+|volatile\s+)*"
-    r"((?:std::)?u?int(?:16|32|64)_t|(?:unsigned\s+)?(?:short|int|long)(?:\s+long)?|float|double|T)"
-    r"\s*(?:const\s*)?\*\s*\)")
+    r"\(\s*((?:[A-Za-z_][\w:]*(?:\s*<[^<>()]*>)?\s+)*[A-Za-z_][\w:]*(?:\s*<[^<>()]*>)?)"
+    r"\s*(?:const\s*)?\*+\s*(?:const\s*)?\)"
+    r"(?=\s*[\w(&*])(?!\s*(?:const|volatile|override|final|noexcept|throw)\b)")
+# A reinterpret_cast whose target names no * or &: a pointer through an alias, `WordPtr`,
+# unless it is the integer a pointer is cast to.
+ALIAS_CAST = re.compile(r"\breinterpret_cast\s*<\s*((?:const\s+|volatile\s+)*[\w:]+"
+                        r"(?:\s*<[^<>]*>)?)\s*>")
+POINTER_INTEGERS = {"std::uintptr_t", "uintptr_t", "std::intptr_t", "intptr_t"}
 LIFETIME_START = re.compile(r"\bstart_lifetime_as(?:_array)?\b")
 BRANCH_HINT = re.compile(
     r"\[\[\s*(?:likely|unlikely)\s*\]\]|__builtin_expect\w*|__builtin_prefetch|_mm_prefetch"
@@ -172,10 +179,20 @@ def wire_pointer_cast(root, files):
             if pointee not in BYTE_TYPES:
                 violations.append((path, line_of(code, match.start()),
                                    f"{match[1]} to {pointee}"))
-        for pattern, what in ((C_STYLE_POINTER_CAST, "C-style cast to a multi-byte pointer"),
-                              (LIFETIME_START, "start_lifetime_as")):
-            for match in pattern.finditer(code):
-                violations.append((path, line_of(code, match.start()), what))
+        for match in C_STYLE_POINTER_CAST.finditer(code):
+            pointee = " ".join(word for word in match[1].split()
+                               if word not in ("const", "volatile"))
+            if pointee not in BYTE_TYPES:
+                violations.append((path, line_of(code, match.start()),
+                                   f"C-style cast to a pointer to {pointee}"))
+        for match in ALIAS_CAST.finditer(code):
+            target = " ".join(word for word in match[1].split()
+                              if word not in ("const", "volatile"))
+            if target not in POINTER_INTEGERS:
+                violations.append((path, line_of(code, match.start()),
+                                   f"reinterpret_cast to {target}, a pointer through an alias"))
+        for match in LIFETIME_START.finditer(code):
+            violations.append((path, line_of(code, match.start()), "start_lifetime_as"))
     return violations
 
 
@@ -258,7 +275,7 @@ def aborting_call(root, files):
 
 
 def toolchain_path(root, files):
-    build_files = [path for path in files if path.suffix in {".cmake", ".sh", ".py", ".yml"}
+    build_files = [path for path in files if path.suffix in {".cmake", ".sh", ".py", ".yml", ".yaml"}
                    or path.name in {"CMakeLists.txt", "CMakePresets.json"}]
     return scan_lines(re.compile(r"\.tool" r"chain/"), "hardcoded toolchain path: {}")(
         root, build_files)
@@ -480,7 +497,8 @@ def demo_gradient(root, files):
 
 
 def workflow_files(root):
-    return sorted((root / ".github" / "workflows").glob("*.yml"))
+    workflows = root / ".github" / "workflows"
+    return sorted([*workflows.glob("*.yml"), *workflows.glob("*.yaml")])
 
 
 def unpinned_action(root, files):
@@ -503,7 +521,9 @@ class Gate:
 
 def gates():
     return (
-        Gate("wire-pointer-cast", "no pointer cast to a multi-byte type over wire bytes",
+        Gate("wire-pointer-cast", "no pointer cast to a multi-byte type over wire bytes, named, "
+             "C-style or through an alias; it reads casts as written in include/, src/ and "
+             "tools/, so one a called function makes elsewhere is not seen",
              wire_pointer_cast, lambda root: cxx_files(root, WIRE_CODE)),
         Gate("bare-branch-hint", "every branch hint or prefetch states a // measured: reason",
              bare_branch_hint, lambda root: cxx_files(root, ALL_CODE)),
@@ -517,7 +537,8 @@ def gates():
              held_vendor, lambda root: list(walk(root))),
         Gate("no-conditional-compilation", "no hooks or test-only #if in parser code",
              preprocessor_condition, lambda root: cxx_files(root, PRODUCTION_CODE)),
-        Gate("no-abort-on-wire", "no assert, throw or abort in parser code",
+        Gate("no-abort-on-wire", "no assert, throw or abort in parser code; it reads the calls "
+             "it names, not types, so a standard container's .at(), which throws, is not seen",
              aborting_call, lambda root: cxx_files(root, PRODUCTION_CODE + REFERENCE_PARSERS)),
         Gate("toolchain-path", "no hardcoded toolchain path in build files or scripts",
              toolchain_path, lambda root: list(walk(root))),

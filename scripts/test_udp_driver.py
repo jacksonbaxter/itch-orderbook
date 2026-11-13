@@ -351,6 +351,7 @@ class ProcessTest(unittest.TestCase):
         words = udp_driver.smoke_words(args, "U5")
         self.assertEqual(words[:5], ["/q/bin/heavy.sh", "/q/itch_loopback", "/q/day", "--mode",
                                      "U5"])
+        self.assertIn("--rate", words)
         self.assertEqual(words[words.index("--rate") + 1], "1000000")
         self.assertEqual(words[-2:], ["--sq-core", "2"])
         self.assertNotIn("--sq-core", udp_driver.smoke_words(args, "S3"))
