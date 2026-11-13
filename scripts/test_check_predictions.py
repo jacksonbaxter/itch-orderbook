@@ -570,8 +570,8 @@ class Rewordings(unittest.TestCase):
     # (the commit before, the rewording commit): the kinds (2026-11-13), then the grammar's
     # order (r14-2, the same day).
     STEPS = (("95772ae", "940484d"), ("731ae85", "4fa29bb"))
-    SHA256 = "31674e48bbec7f4f563675ee8973f2f645d4926352555deab46d0d3ce18e88d7"
-    ENTRIES = 166
+    SHA256 = "efd5e3d9b7634e192bdb8dfbadfe0eeee4cc972e71940eb5056198694a7104a4"
+    ENTRIES = 172
 
     def test_the_file_is_pinned(self):
         path = REPO_ROOT / check_predictions.REWORDINGS
