@@ -33,7 +33,7 @@ Zen 1 limits what `debian` can show:
 - Other work beside a timed process withdraws it. On the Mac a sampler reads every other process every 2 s, and a process during which another passed 20% CPU is withdrawn ([results/layout_mac_12302019.md](results/layout_mac_12302019.md)). That rule is why two Mac targets have no result. Mac runs made before it, the book designs' and the backtester's among them, had no sampler beside them.
   On `debian` the same kind of rule started late in the project: a sampler reads /proc every 1 s and withdraws a process whose core, SMT sibling or other cores were busy; T-BT-3's rerun is the one published figure under it so far ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
 - Each driver now writes a record of its run beside the raw output: the commit and tree state, each binary's hash, the dataset's hash and an untouched copy of every tool output the file quotes. Files published before that have no such record, and docs/NOTES.md lists what each lacks.
-- Every run, failed and withdrawn ones included, gets a row in [results/run_log.md](results/run_log.md), which is never edited.
+- Every run, failed and withdrawn ones included, gets a row in [results/run_log.md](results/run_log.md). No row is removed or rewritten; the one change, on 2026-11-13, gave other programs by their kinds.
 - The fault matrix plants bugs in a scratch copy and requires the named check to catch each. Its last full run caught 1063 of 1063, after 196 control commands passed on the clean tree ([results/fault_matrix.md](results/fault_matrix.md)).
 
 ## Data layout

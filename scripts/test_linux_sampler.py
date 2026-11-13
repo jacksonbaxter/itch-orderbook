@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import backtest_driver  # noqa: E402
 import check_results  # noqa: E402
 import linux_sampler  # noqa: E402
+import process_kinds  # noqa: E402
 import stamp_load  # noqa: E402
 import test_backtest_results  # noqa: E402
 
@@ -167,7 +168,7 @@ class SamplerOnAMadeUpProc(unittest.TestCase):
                                     others=[(500, "other job", other)])
         _, values = linux_sampler.parse_sample(lines[0])
         self.assertEqual(values["sibling"], "40.000")
-        self.assertIn("FOREIGN sibling 40.00% another process of this user", "\n".join(lines))
+        self.assertIn("FOREIGN sibling 40.00% another process\n", "\n".join(lines) + "\n")
 
     def test_the_other_cores_add_up(self):
         # Three CPUs at 8% each: each under the bar alone, 24% together.
@@ -179,7 +180,7 @@ class SamplerOnAMadeUpProc(unittest.TestCase):
     def test_the_kinds(self):
         projects = Path(self.scratch.name) / "projects"
         others = [
-            (600, "kworker/2:1", {"ticks": 30, "cpu_after": 2, "flags": linux_sampler.PF_KTHREAD}),
+            (600, "kfrob/2:1", {"ticks": 30, "cpu_after": 2, "flags": linux_sampler.PF_KTHREAD}),
             (601, "daemon", {"ticks": 20, "cpu_after": 3, "uid": 0}),
             (602, "unit tests", {"ticks": 50, "cpu_after": 6, "cwd": projects / "other" / "b"}),
             (603, "a (strange) name", {"ticks": 10, "cpu_after": 7}),
@@ -191,9 +192,9 @@ class SamplerOnAMadeUpProc(unittest.TestCase):
         busy = [line for line in lines if " busy " in line]
         self.assertEqual([line.split(" ", 3)[3] for line in busy], [
             "cpu6 another project's process: unit tests [602]",
-            "cpu2 a kernel thread: kworker/2:1 [600]",
-            "cpu3 a system service: daemon [601]",
-            "cpu7 another process of this user: a (strange) name [603]",
+            "cpu2 a kernel thread: kfrob/2:1 [600]",
+            "cpu3 a Linux system daemon: daemon [601]",
+            "cpu7 another process: a (strange) name [603]",
             "cpu1 another process of this project: build [604]"])
         self.assertIn("FOREIGN others 115.00% another project's process", "\n".join(lines))
 
@@ -271,6 +272,17 @@ class Judge(unittest.TestCase):
             self.assertIn(words, why)
             self.assertIn(f"at {stamp(6)}, the most of it another project's process", why)
             self.assertNotIn("unit tests", why)
+
+    def test_a_log_from_before_the_kinds_gives_them(self):
+        """A log written before 2026-11-13 used other words for two kinds; a reason read from
+        it gives the kinds as process_kinds has them."""
+        for earlier, kind in (("a system service", "a Linux system daemon"),
+                              ("another process of this user", "another process")):
+            lines = log(*steady(0, 5), (6, (0.0, 0.0, 30.0)), *steady(7, 12),
+                        busy=[(6, f"busy 20.1% cpu2 {earlier}: job [7]")])
+            why = reason(lines, stamp(0.5), stamp(10.5), 101)
+            self.assertTrue(why.endswith(f"the most of it {kind}"), why)
+            self.assertEqual(process_kinds.cause_breaks(why), [])
 
     def test_the_bars_are_not_crossed_at_the_bar(self):
         lines = log(*steady(0, 12, (1.0, 5.0, 20.0)))

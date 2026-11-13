@@ -529,7 +529,7 @@
       "mutations": [
         {
           "file": "scripts/spsc_driver.py",
-          "old": "    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end, by_kind)",
+          "old": "    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end)",
           "new": "    return None"
         }
       ],
@@ -895,7 +895,7 @@
       "mutations": [
         {
           "file": "scripts/spsc_driver.py",
-          "old": "        if again != said:\n",
+          "old": "        if again != process_kinds.reworded(said):\n",
           "new": "        if False:\n"
         }
       ],
@@ -907,6 +907,29 @@
       ],
       "expect": {
         "signature": "^FAIL: test_a_published_file_renders_again_from_its_raw_records",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-render-sampler-verdicts-by-name",
+      "system": "Darwin",
+      "breaks": "spsc_driver render holds a published file's Sampler verdicts to the raw sampler.txt word for word, so a file written before the kinds, which names the process, is refused though its kind, share and time agree",
+      "check": "test_spsc_results ForeignByKind",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "        if again != process_kinds.reworded(said):\n",
+          "new": "        if again != said:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "ForeignByKind"
+      ],
+      "expect": {
+        "signature": "^ERROR: test_every_record_gives_a_foreign_process_by_kind",
         "exit": 1
       }
     },
@@ -980,13 +1003,13 @@
     },
     {
       "id": "spsc-foreign-process-named-by-program",
-      "breaks": "The sampler rule names a foreign process by its program, not its kind, in a run and in a render of a record of the new kind",
+      "breaks": "The sampler rule names a foreign process by its program, not its kind, in a run and in a render of any record",
       "check": "test_spsc_results.py ForeignByKind",
       "mutations": [
         {
           "file": "scripts/wasm_bench.py",
-          "old": "            if by_kind:\n                name = foreign_kind(words[3])\n",
-          "new": "            if False:\n                name = foreign_kind(words[3])\n"
+          "old": "            return f\"the CPU sampler saw {foreign_kind(words[3])} at {words[2]}% CPU at {words[0]}\"",
+          "new": "            return f\"the CPU sampler saw {words[3].split()[0].rsplit('/', 1)[-1]} at {words[2]}% CPU at {words[0]}\""
         }
       ],
       "command": [
@@ -995,7 +1018,7 @@
         "{tree}/scripts/test_spsc_results.py"
       ],
       "expect": {
-        "signature": "^FAIL: test_a_new_kind_record_names_a_foreign_process_by_kind_and_an_old_one_as_published",
+        "signature": "^FAIL: test_every_record_gives_a_foreign_process_by_kind",
         "exit": 1
       }
     },

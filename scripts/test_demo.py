@@ -598,7 +598,7 @@ class Report(unittest.TestCase):
         self.assertIn("sampler-rule-missing", {c for c, _ in self.violations(dropped)})
 
     def test_own_processes_and_their_wrappers_are_not_foreign(self):
-        rows = [(1, 0, 0.0, "launchd"),
+        rows = [(1, 0, 0.0, "/sbin/frob-init"),
                 (10, 1, 0.1, "bash measure.sh /usr/bin/time -l python3 wasm_bench.py"),
                 (11, 10, 0.0, "/usr/bin/time -l python3 wasm_bench.py"),
                 (12, 11, 30.0, "python3 wasm_bench.py browser"),

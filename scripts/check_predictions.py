@@ -17,7 +17,11 @@ start time its `run_id` carries, and before it, to the second, when the file nam
 commit, since then the times alone give the order. A result that gives neither is refused, and so is a measured commit
 the history does not hold. Each result's `run_id` is a Run cell of results/run_log.md's table,
 exactly. results/run_log.md gets a row for every run, failed ones included, and only ever
-grows.
+grows. The one change to its earlier lines it allows is one listed in
+scripts/run_log_rewordings.json, by the sha256 of the line as it was and as it became: on
+2026-11-13 each program a row named that is not this project's was given by its kind
+(scripts/process_kinds.py), and the file lists each line that changed, so that no other line
+may change and none may change back.
 
 --require ID checks only that one prediction is on record, before a run starts. --no-git
 leaves out what needs history, for a tree that has none, such as a sync to debian; so does a
@@ -32,6 +36,8 @@ Exit codes: 0 passed, 1 a violation, 2 bad usage.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -42,6 +48,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PREDICTIONS = "results/predictions.md"
 RUN_LOG = "results/run_log.md"
+REWORDINGS = "scripts/run_log_rewordings.json"
 RESULT_PATTERNS = ("alloc_*.md", "bench_*.md", "chase_*.md", "backtest_*.md", "counters_*.md",
                    "flamegraph_*.md", "mm_*.md", "lookup_*.md", "prefetch_*.md", "dispatch_*.md",
                    "spsc_*.md", "wasm_*.md", "simd_*.md", "layout_*.md", "structure_*.md",
@@ -141,26 +148,62 @@ def log_at(root, commit):
     return git(root, "show", f"{commit}:{RUN_LOG}") or ""
 
 
-def dropped_rows(earlier, text):
-    """The rows of an earlier log that this one no longer holds, each counted as often."""
-    return Counter(earlier.splitlines()) - Counter(text.splitlines())
+def digest(line):
+    return hashlib.sha256(line.encode("utf-8")).hexdigest()
+
+
+def rewordings(root):
+    """{sha256 of a log line as it was: sha256 of the line it became}, from REWORDINGS."""
+    path = root / REWORDINGS
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))["lines"]
+
+
+def settled(line, reworded):
+    """A line by its digest, a reworded line by the digest of the line it became."""
+    found = digest(line)
+    return reworded.get(found, found)
+
+
+def dropped_rows(earlier, text, reworded=None):
+    """The rows of an earlier log that this one no longer holds, each counted as often, a
+    listed rewording counted as the row it rewords."""
+    reworded = reworded or {}
+    return (Counter(settled(line, reworded) for line in earlier.splitlines())
+            - Counter(settled(line, reworded) for line in text.splitlines()))
+
+
+def extends(earlier, text, reworded):
+    """Whether text starts with earlier, a line listed in reworded read as the line it
+    became, and only that line."""
+    if text.startswith(earlier):
+        return True
+    before, after = earlier.split("\n"), text.split("\n")
+    if len(after) < len(before):
+        return False
+    return (all(old == new or reworded.get(digest(old)) == digest(new)
+                for old, new in zip(before[:-1], after))
+            and after[len(before) - 1].startswith(before[-1]))
 
 
 def check_log_history(root):
     """Every committed version of the log extends its parents': a commit appends to its first
-    parent's log, and a merge also keeps every row of each branch it merges."""
+    parent's log, and a merge also keeps every row of each branch it merges. A line listed in
+    REWORDINGS may have become the line listed beside it, and nothing else."""
+    reworded = rewordings(root)
     history = git(root, "log", "--full-history", "--reverse", "--format=%H %P", "--", RUN_LOG)
     for line in (history or "").splitlines():
         commit, *parents = line.split()
         text = log_at(root, commit)
-        if parents and not text.startswith(log_at(root, parents[0])):
+        if parents and not extends(log_at(root, parents[0]), text, reworded):
             yield "run-log-rewritten", commit[:10], "an earlier row changed or went"
         for parent in parents[1:]:
-            if dropped_rows(log_at(root, parent), text):
+            if dropped_rows(log_at(root, parent), text, reworded):
                 yield "run-log-rewritten", commit[:10], f"a row of merged {parent[:10]} went"
     committed = git(root, "show", f"HEAD:{RUN_LOG}")
     current = (root / RUN_LOG).read_text(encoding="utf-8") if (root / RUN_LOG).is_file() else ""
-    if committed is not None and not current.startswith(committed):
+    if committed is not None and not extends(committed, current, reworded):
         yield "run-log-rewritten", "working tree", "an earlier row changed or went"
 
 

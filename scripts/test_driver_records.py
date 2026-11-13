@@ -697,7 +697,7 @@ class MacSampler(unittest.TestCase):
             result, results, log = self.run_driver(Path(directory), busy="first")
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("withdrawn: paged-flat, repetition 1, timed process on the Mac, exit 0; "
-                          "the CPU sampler saw a system process at 50.0% CPU", log)
+                          "the CPU sampler saw another process at 50.0% CPU", log)
             text = (results / "bench_paged-flat.md").read_text(encoding="utf-8")
             self.assertEqual({code for code, _ in check_results.check_text(text)},
                              {"load-not-stamped", "sampler-stand-in"})

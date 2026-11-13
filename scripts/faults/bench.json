@@ -931,7 +931,7 @@
       "mutations": [
         {
           "file": "scripts/check_predictions.py",
-          "old": "        if parents and not text.startswith(log_at(root, parents[0])):\n",
+          "old": "        if parents and not extends(log_at(root, parents[0]), text, reworded):\n",
           "new": "        if False:\n"
         }
       ],
@@ -942,6 +942,48 @@
       ],
       "expect": {
         "signature": "FAIL: test_a_failed_run_removed_from_the_log",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-log-rewording-unlisted",
+      "breaks": "An earlier run-log line is changed to anything at all and let through, not only as scripts/run_log_rewordings.json lists",
+      "check": "test_check_predictions.py test_an_unlisted_rewording_of_a_row",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "    return (all(old == new or reworded.get(digest(old)) == digest(new)\n",
+          "new": "    return (all(True or reworded.get(digest(old)) == digest(new)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_unlisted_rewording_of_a_row",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-log-rewording-merge-unsettled",
+      "breaks": "A merge of a branch whose log still holds a row as it was before the listed rewording counts that row as dropped",
+      "check": "test_check_predictions.py test_a_merge_of_a_branch_from_before_a_rewording",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "    found = digest(line)\n    return reworded.get(found, found)\n",
+          "new": "    found = digest(line)\n    return found\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_merge_of_a_branch_from_before_a_rewording",
         "exit": 1
       }
     },

@@ -365,7 +365,7 @@ class Cli(unittest.TestCase):
         result, out, log = self.sampled_run(busy_first_bench(), "while busy")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(log.count("| withdrawn: "), 1, log)
-        self.assertIn("the CPU sampler saw a system process at 50.0% CPU", log)
+        self.assertIn("the CPU sampler saw another process at 50.0% CPU", log)
         text = out.read_text(encoding="utf-8")
         self.assertIn("; 1 withdrawn under the rule", text)
         self.assertEqual({code for code, _ in check_results.check_text(text)},

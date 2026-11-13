@@ -168,8 +168,8 @@
       "mutations": [
         {
           "file": "scripts/linux_sampler.py",
-          "old": "            return words[4].split(\":\", 1)[0]\n",
-          "new": "            return words[4]\n"
+          "old": "            kind = words[4].split(\":\", 1)[0]\n",
+          "new": "            kind = words[4]\n"
         }
       ],
       "command": [
@@ -559,6 +559,26 @@
       ],
       "expect": {
         "signature": "FAIL: test_a_span_the_log_does_not_give"
+      }
+    },
+    {
+      "id": "load-linux-sampler-earlier-words",
+      "breaks": "A Linux sampler log from before 2026-11-13 gives its busiest process in words that are not one of the fixed kinds",
+      "check": "test_linux_sampler.py test_a_log_from_before_the_kinds_gives_them",
+      "mutations": [
+        {
+          "file": "scripts/linux_sampler.py",
+          "old": "            return EARLIER_WORDS.get(kind, kind)\n",
+          "new": "            return kind\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_linux_sampler.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_log_from_before_the_kinds_gives_them"
       }
     }
   ]
