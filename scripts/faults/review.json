@@ -232,6 +232,28 @@
         "signature": "review_report: FAIL stale results/final_review\\.md: not what write makes",
         "exit": 1
       }
+    },
+    {
+      "id": "review-every-reviewer-looked-again",
+      "breaks": "review_report.py counts every reviewer as having looked again at the fixes",
+      "check": "test_review_report.py ReviewReport.test_only_a_reviewer_with_more_than_one_look_is_said_to_have_looked_again",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    again = [r[\"id\"] for r in reviewers if len(r[\"looks\"]) > 1]\n",
+          "new": "    again = [r[\"id\"] for r in reviewers if r[\"looks\"]]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_only_a_reviewer_with_more_than_one_look_is_said_to_have_looked_again"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_only_a_reviewer_with_more_than_one_look_is_said_to_have_looked_again",
+        "exit": 1
+      }
     }
   ]
 }

@@ -2477,6 +2477,30 @@
         "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 138 is not in results/final_review\\.md",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-writeup-review-looked-again-overstated",
+      "breaks": "WRITEUP.md's final review paragraph says more reviewers looked again at the fixes than results/final_review.md gives (r15-4)",
+      "check": "gate_numbers.py on WRITEUP.md",
+      "mutations": [
+        {
+          "file": "WRITEUP.md",
+          "old": "looked again at the fixes were 2 of 14,",
+          "new": "looked again at the fixes were 12 of 14,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "WRITEUP.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 12 is not in results/final_review\\.md",
+        "exit": 1
+      }
     }
   ]
 }

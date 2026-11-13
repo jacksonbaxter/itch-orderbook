@@ -239,6 +239,7 @@ def render(data):
     validate(data)
     reviewers, findings = data["reviewers"], data["findings"]
     total = tally(findings)
+    again = [r["id"] for r in reviewers if len(r["looks"]) > 1]
     lines = [
         "# The final review: every finding and what became of it",
         "",
@@ -252,6 +253,9 @@ def render(data):
         "- Host: none",
         f"- Reviewers: {len(reviewers)}",
         f"- Findings: {len(findings)}",
+        f"- Looked again: {len(again)} of {len(reviewers)} reviewers"
+        + (f" ({', '.join(again)})" if again else "")
+        + "; every other outcome was checked against the tree by the record's author",
         "- Severities: " + ", ".join(f"{sum(1 for f in findings if f['severity'] == s)} {s}"
                                      for s in SEVERITIES),
         "- Outcomes: " + ", ".join(f"{count} {outcome}" for outcome, count
@@ -280,6 +284,11 @@ def render(data):
                      sum(stated.values()), words))
     lines += table(("Reviewer", "What it read", "Commits read", *SEVERITIES, "Findings",
                     "Last words"), rows)
+    lines += ["", "How many reviewers looked again at the fixes. The outcomes of the others' findings "
+              "were checked against the tree by the record's author.", ""]
+    lines += table(("Reviewers", "Reviewers counted", "Reviewers in all"),
+                   [("Looked again at the fixes", len(again), len(reviewers)),
+                    ("Read once", len(reviewers) - len(again), len(reviewers))])
     lines += ["", "## Counts", "", "By reviewer and outcome.", ""]
     rows = [(r["id"], *tally([f for f in findings if reviewer_of(f) == r["id"]]))
             for r in reviewers]

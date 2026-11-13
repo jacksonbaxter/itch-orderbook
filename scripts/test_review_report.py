@@ -114,6 +114,14 @@ class ReviewReport(unittest.TestCase):
         self.assertEqual(sum(by_reviewer["All"][:-1]), rows)
         self.assertEqual([by_severity[s][-1] for s in review_report.SEVERITIES], [1, 2, 2])
 
+    def test_only_a_reviewer_with_more_than_one_look_is_said_to_have_looked_again(self):
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        text = self.out.read_text(encoding="utf-8")
+        self.assertIn("- Looked again: 1 of 2 reviewers (r1); every other outcome was checked "
+                      "against the tree by the record's author\n", text)
+        self.assertIn("| Looked again at the fixes | 1 | 2 |\n| Read once | 1 | 2 |\n", text)
+
     def test_counts_that_are_not_the_rows_are_refused(self):
         self.data["reviewers"][0]["looks"][1]["NOTE"] = 2
         self.assertIn("r1: its looks state", self.refused("count"))
