@@ -18,7 +18,8 @@
 // --symbols     writes one line per symbol, for the raw log.
 // --details     how many violations of each check are printed in full. All are counted.
 // --index, --levels  the arm of the fast book, the book's default arm if left out, and the
-//               capacities are as itch_oracle's.
+//               capacities are as itch_oracle's, but for --max-orders and --max-levels,
+//               which take 1 to 2^32 - 1 (capacity.hpp).
 //
 // Exit codes: 0 every check that ran passed. 2 bad usage or an unreadable file. 3 a
 // reference file failed to parse, with its typed error printed. Otherwise 64 plus one
@@ -38,6 +39,7 @@
 #include <system_error>
 
 #include "book_arms.hpp"
+#include "capacity.hpp"
 #include "itch/book.hpp"
 #include "itch/reader.hpp"
 #include "mapped_file.hpp"
@@ -86,10 +88,6 @@ struct Options {
     options.midas_rows = value;
   } else if (flag == "--details") {
     options.config.detail_limit = static_cast<std::size_t>(value);
-  } else if (flag == "--max-orders") {
-    options.config.capacity.orders = static_cast<std::uint32_t>(value);
-  } else if (flag == "--max-levels") {
-    options.config.capacity.levels = static_cast<std::uint32_t>(value);
   } else {
     return false;
   }
@@ -134,6 +132,12 @@ struct Options {
             itch::tools::parse_arm_option(arg, args[i], options.arm, options.config.capacity);
         taken != itch::tools::ArmOption::not_an_arm_option) {
       if (taken == itch::tools::ArmOption::bad_value) {
+        return std::nullopt;
+      }
+    } else if (const auto capacity =
+                   itch::tools::parse_capacity_option(arg, args[i], options.config.capacity);
+               capacity != itch::tools::CapacityOption::not_a_capacity) {
+      if (capacity == itch::tools::CapacityOption::bad_value) {
         return std::nullopt;
       }
     } else {

@@ -277,6 +277,16 @@ def main():
                               capture_output=True, check=False).returncode
         if code != 2:
             failures.append(f"bad arm {name} {value}: exit {code}, wanted 2")
+    # A capacity of 0 or past 32 bits is bad usage, on every index: 0 orders gave the hash
+    # indexes one slot and a shift of 64, and 2^32 wrapped to 0.
+    for flag, value in (("--max-orders", "0"), ("--max-orders", "4294967296"),
+                        ("--max-levels", "0"), ("--max-levels", "4294967297")):
+        for index in ("hash", "paged"):
+            code = subprocess.run([tool, str(fixtures / "day.itch"), "--index", index, flag,
+                                   value], capture_output=True, check=False).returncode
+            if code != 2:
+                failures.append(f"capacity {flag} {value} --index {index}: exit {code}, "
+                                "wanted 2")
 
     # The report reads what the tool really prints, so the two cannot drift apart.
     (scratch / "report.log").write_text(done.stdout, encoding="ascii")
