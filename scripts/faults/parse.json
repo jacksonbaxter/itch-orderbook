@@ -788,6 +788,72 @@
         "signature": "FAIL: test_check_refuses_a_file_that_is_not_its_render",
         "exit": 1
       }
+    },
+    {
+      "id": "parse-counts-ten-types-unheld",
+      "breaks": "parse_driver.py --check leaves the Counts table's ten-type message count unheld, so a count off the manifest's passes",
+      "check": "test_parse_driver.py Check.test_the_counts_table_is_held",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    want = {\"Bytes, the whole file\": f\"{file_bytes:,}\",\n            f\"Messages of the decode's ten types ({', '.join(TEN_TYPES)})\": f\"{ten:,}\"}\n",
+          "new": "    want = {\"Bytes, the whole file\": f\"{file_bytes:,}\"}\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_the_counts_table_is_held"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_counts_table_is_held",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-counts-decoded-and-rejected-unheld",
+      "breaks": "parse_driver.py --check takes the Counts table's decoded and rejected as printed, so a decode that rejected some, or decoded fewer than it should, passes",
+      "check": "test_parse_driver.py Check.test_the_counts_table_is_held",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "            want[label] = f\"{decoded:,}, 0, {next(iter(folds[name])):,}\"\n",
+          "new": "            want[label] = \", \".join(printed.get(label, \"\").split(\", \")[:-1] + [f\"{next(iter(folds[name])):,}\"])\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_the_counts_table_is_held"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_counts_table_is_held",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-counts-fold-unheld",
+      "breaks": "parse_driver.py --check takes the Counts table's folds as printed, so a fold that is not the passes' passes",
+      "check": "test_parse_driver.py Check.test_the_counts_table_is_held",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "            want[label] = f\"{decoded:,}, 0, {next(iter(folds[name])):,}\"\n",
+          "new": "            want[label] = f\"{decoded:,}, 0, \" + printed.get(label, \"\").split(\", \")[-1]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_the_counts_table_is_held"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_counts_table_is_held",
+        "exit": 1
+      }
     }
   ]
 }

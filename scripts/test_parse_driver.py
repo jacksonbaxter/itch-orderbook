@@ -286,8 +286,32 @@ class Check(unittest.TestCase):
             for p in each["passes"]:
                 p["totals"] = dict(p["totals"], messages=MESSAGES + 1)
         found = parse_driver.check_text(rendered(records))
-        self.assertEqual({code for code, _ in found}, {"parse-not-the-manifest"})
-        self.assertEqual(len(found), 2)
+        # The strict decode decoded the manifest's frames, now one fewer than the file's.
+        self.assertEqual({code for code, _ in found}, {"parse-not-the-manifest",
+                                                       "parse-counts-differ"})
+        self.assertEqual([code for code, _ in found].count("parse-not-the-manifest"), 2)
+
+    def test_the_counts_table_is_held(self):
+        text = rendered()
+        self.assertEqual(parse_driver.check_text(text), [])
+        for old, new in (
+                (f"({', '.join(parse_driver.TEN_TYPES)}) | {TEN:,} |",
+                 f"({', '.join(parse_driver.TEN_TYPES)}) | {TEN + 1:,} |"),
+                (f"| Decode: decoded, rejected, fold | {TEN:,}, 0, 123 |",
+                 f"| Decode: decoded, rejected, fold | {TEN:,}, 7, 123 |"),
+                (f"| Decode: decoded, rejected, fold | {TEN:,}, 0, 123 |",
+                 f"| Decode: decoded, rejected, fold | {TEN - 1:,}, 0, 123 |"),
+                (f"| Strict decode: decoded, rejected, fold | {MESSAGES:,}, 0, 456 |",
+                 f"| Strict decode: decoded, rejected, fold | {MESSAGES:,}, 0, 457 |"),
+                (f"| Strict decode: decoded, rejected, fold | {MESSAGES:,}, 0, 456 |",
+                 f"| Strict decode: decoded, rejected, fold | {MESSAGES - 1:,}, 1, 456 |"),
+                (f"| Bytes, the whole file | {BYTES:,} |", f"| Bytes, the whole file | {BYTES - 1:,} |")):
+            with self.subTest(new=new):
+                self.assertEqual(text.count(old), 1, old)
+                found = parse_driver.check_text(text.replace(old, new))
+                self.assertEqual({code for code, _ in found}, {"parse-counts-differ"}, found)
+                found = check_results.check_text(text.replace(old, new))
+                self.assertIn("parse-counts-differ", {code for code, _ in found})
 
     def test_a_day_the_manifest_does_not_pin(self):
         text = rendered().replace("- dataset: 12302019.NASDAQ_ITCH50", "- dataset: other.itch")

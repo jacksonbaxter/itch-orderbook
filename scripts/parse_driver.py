@@ -39,7 +39,8 @@ anywhere else is refused before anything is timed.
 --check FILE... recomputes every figure of a results file from its table of timed passes, the
 summary, the best passes and each verdict, holds every pass's messages and the file's bytes to
 the frame count and to the manifest's day, works the caveats' table again from the manifest,
-and exits 1 on any that differ.
+holds the Counts table to the manifest's ten-type count, the frames and the passes' folds (each
+decode decoding all it should, rejecting none), and exits 1 on any that differ.
 
 render renders a published file again from its run's raw folder (the repetitions' records,
 the machine check's output, the timed loops' code and the sampler's log, judged again), stamps
@@ -1037,7 +1038,27 @@ def check_text(text):
             if row not in printed.splitlines():
                 problems.append(("parse-figure-differs", f"{title}: {row}"))
     problems.extend(caveat_problems(text, day))
+    if pinned is not None and frames is not None:
+        problems.extend(count_problems(text, passes, file_bytes, frames, pinned))
     return problems
+
+
+def count_problems(text, passes, file_bytes, frames, pinned):
+    """The Counts table held to what it must be: the file's bytes; the ten types' messages the
+    manifest's per-type counts sum to; the decode decoding exactly those and the strict decode
+    every frame, each rejecting none; and each fold the one every timed pass of it gave."""
+    printed = {cells[0]: cells[1] for cells in check_results.table_rows(text, "Counts")
+               if len(cells) == 2}
+    ten = sum(pinned["per_type_counts"].get(t, 0) for t in TEN_TYPES)
+    folds = {name: {p["fold"] for p in passes if p["pass"] == name} for name in ("decode", "strict")}
+    want = {"Bytes, the whole file": f"{file_bytes:,}",
+            f"Messages of the decode's ten types ({', '.join(TEN_TYPES)})": f"{ten:,}"}
+    for name, label, decoded in (("decode", "Decode: decoded, rejected, fold", ten),
+                                 ("strict", "Strict decode: decoded, rejected, fold", frames)):
+        if len(folds[name]) == 1:
+            want[label] = f"{decoded:,}, 0, {next(iter(folds[name])):,}"
+    return [("parse-counts-differ", f"Counts: {label} is {printed.get(label)!r}, not {value!r}")
+            for label, value in want.items() if printed.get(label) != value]
 
 
 def check_main(paths):
