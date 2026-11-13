@@ -950,6 +950,54 @@
       "expect": {
         "signature": "\\[  FAILED  \\] LatencyOff\\.EveryLatencyIsZero"
       }
+    },
+    {
+      "id": "backtester-fees-dollar-boundary-strict",
+      "breaks": "A fill at exactly $1.0000 is priced as under $1, so a maker there loses its per-share credit (r9-1)",
+      "check": "test_fees S38AMakerAtExactlyOneDollarEarnsTheCredit",
+      "mutations": [
+        {
+          "file": "include/itch/fees.hpp",
+          "old": "  if (fill.price >= kOneDollar) {",
+          "new": "  if (fill.price > kOneDollar) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_fees"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_fees"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Fees\\.S38AMakerAtExactlyOneDollarEarnsTheCredit"
+      }
+    },
+    {
+      "id": "backtester-fees-dollar-boundary-a-tick-low",
+      "breaks": "A fill at $0.9999 is priced per share, as if it were $1 or more",
+      "check": "test_fees S38AMakerAtExactlyOneDollarEarnsTheCredit",
+      "mutations": [
+        {
+          "file": "include/itch/fees.hpp",
+          "old": "  if (fill.price >= kOneDollar) {",
+          "new": "  if (fill.price >= kOneDollar - 1) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_fees"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_fees"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Fees\\.S38AMakerAtExactlyOneDollarEarnsTheCredit"
+      }
     }
   ]
 }
