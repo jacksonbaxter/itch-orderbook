@@ -538,10 +538,13 @@ def run_log_file(root):
 
 
 def run_log_kinds(root, files):
-    """Every CPU share in a run-log row's outcome sits in a known form: a process form, whose
-    subject is one of process_kinds.KINDS, with its share and, where a tool wrote it, its time;
-    or a figure form, about no process. Anything else fails, and so does a kind the sampler saw
-    with no share (process_kinds.cause_breaks). The grammar knows only the kinds and forms."""
+    """The run log's grammar (process_kinds.cause_breaks): each share a row's outcome gives, as
+    N% or N percent, sits in a form the tools write, a process form whose subject is one of
+    process_kinds.KINDS (with its time where a tool wrote it) or a fixed figure form; a share in
+    no form fails, and so does a kind the sampler saw with no share. It holds the forms the tools
+    write. It does not see a name with no share beside it, a share written another way, a name
+    joined to a kind that has the share, or words before a figure form: process_kinds' docstring
+    gives these limits."""
     import process_kinds  # noqa: PLC0415  Here, so that the other gates need nothing beside them.
 
     violations = []

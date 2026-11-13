@@ -22,13 +22,23 @@ tried in that order. A map whose kinds are not all in KINDS is refused. A map th
 cannot be used stops the tool that reads it (check_map, default_map), before it writes a row, and
 no message gives the map's path.
 
-cause_breaks() is the run log's grammar, and it is closed. Every CPU share in a row's outcome
-must sit in a known form: a process form, whose subject is one of KINDS, with its share and,
-where a tool wrote it ("saw X at 41.2% CPU at <time>", "the first, X, at 100.0% at <time>", the
-Linux sampler's "the most of it X, at 38.5% of a CPU"), its time; or a figure form, a share that
-is about no process (the rule's bar, a share of a pass). Anything else is refused, and so is a
-kind the sampler saw with no share. It holds no name of any program: it knows only the kinds
-and the forms. A name in prose with no share is beyond it.
+cause_breaks() is the run log's grammar. It is there to hold the forms the tools write: each
+share a row gives must sit in one of the forms it knows, and a share in no form fails. A process
+form has one of KINDS as its subject, right before the share, and where a tool wrote it ("saw X
+at 41.2% CPU at <time>", "the first, X, at 100.0% at <time>", the Linux sampler's "the most of it
+X, at 38.5% of a CPU") the time after it. A figure form is one of the fixed phrasings of a share
+that a row gives of something other than a process (the rule's bar, a share of a pass). A kind
+after "saw", "the first" or "the most of it" with no share fails too. It holds no name of any
+program: it knows only the kinds and the forms. What it does not check, in one place:
+- a figure form is not checked to be about no process: any words may stand before one ("X ran
+  at 19.6% of the pass" passes, whatever X is);
+- a share is seen only when written as a number and "%" ("41.2%", "41.2 %") or "percent"; "41.2
+  per cent", "41.2 pct", a full-width percent sign or "0.41 of a CPU" is not seen as a share;
+- a name joined to a kind that has the share is not seen ("saw X and a browser at 41.2% CPU at
+  <time>" passes, whatever X is);
+- a name with no share beside it is not seen at all.
+No tool writes any of these; the grammar cannot tell them from honest prose without a list of
+names, which it does not keep.
 
 A library, not a command.
 """
@@ -166,10 +176,11 @@ def reworded(reason, kinds=None):
     return NAMED_REASON.sub(lambda match: f"saw {kind_of(match.group(1), kinds)} at ", reason)
 
 
-# The run log's grammar. It is closed: every CPU share in an outcome must sit in one of the
-# forms below, and anything else is refused. A process form gives a process by one of KINDS,
-# with its share, and where a tool wrote it (the sampler's "saw", "the first"), with its time;
-# a figure form is a share that is about no process. Nothing here names a program.
+# The run log's grammar: every share written as N% (or N percent) in an outcome must sit in
+# one of the forms below. A process form gives a process by one of KINDS, with its share, and
+# where a tool wrote it (the sampler's "saw", "the first"), with its time; a figure form is a
+# fixed phrasing of a share of something else. What it does not check is in the module's
+# docstring. Nothing here names a program.
 
 def _kinds(kinds):
     return "|".join(re.escape(kind) for kind in sorted(kinds, key=len, reverse=True))
@@ -224,7 +235,7 @@ FIGURE_FORMS = (
 )
 _PROCESS = [re.compile(form) for form in PROCESS_FORMS]
 _FIGURE = [re.compile(form) for form in FIGURE_FORMS]
-# Any share at all, as written: "41.2%", "41.2 %", "41.2 percent".
+# A share as the grammar sees one: "41.2%", "41.2 %", "41.2 percent", and no other way.
 ANY_SHARE = re.compile(r"(?<![\w.])\d+(?:\.\d+)?\s*(?:%|percent\b)")
 # A kind the sampler saw, or the first or the most of it, must come with its share: a kind
 # here outside a process form is refused.
