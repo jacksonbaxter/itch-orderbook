@@ -570,6 +570,38 @@
         "signature": "loopback cli: FAIL .*slot"
       },
       "system": "Linux"
+    },
+    {
+      "id": "udp-bench-small-slot-silent",
+      "breaks": "bench_udp refuses a packing too large for a batching mode's slot with exit 2 but does not say why (r9-12)",
+      "check": "test_bench_udp_cli.py, the S3 small slot case",
+      "mutations": [
+        {
+          "file": "bench/bench_udp.cpp",
+          "old": "    std::println(stderr, \"bench_udp: a {}-byte datagram does not fit a {}-byte slot\",\n                 options.plan.max_datagram, options.mode_options.slot_bytes);\n    return false;",
+          "new": "    return false;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_udp"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_udp_cli.py",
+        "{build}/bench/bench_udp",
+        "{build}/bench_udp_fault",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "S1,S2,S3,S4,U1,U2,U3,U4,U5"
+      ],
+      "expect": {
+        "signature": "bench_udp cli: FAIL S3 small slot: said "
+      },
+      "system": "Linux"
     }
   ]
 }

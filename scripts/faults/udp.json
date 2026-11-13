@@ -851,6 +851,69 @@
       "expect": {
         "signature": "never reached its checkpoint"
       }
+    },
+    {
+      "id": "udp-bench-missing-file-silent",
+      "breaks": "bench_udp refuses a file it cannot open with exit 2 but says nothing (r9-12)",
+      "check": "test_bench_udp_cli.py, the missing file case",
+      "mutations": [
+        {
+          "file": "bench/bench_udp.cpp",
+          "old": "  if (!file) {\n    std::println(stderr, \"bench_udp: cannot open {}\", options.path);\n    return std::nullopt;\n  }",
+          "new": "  if (!file) {\n    return std::nullopt;\n  }"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_udp"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_udp_cli.py",
+        "{build}/bench/bench_udp",
+        "{build}/bench_udp_fault",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "S1"
+      ],
+      "expect": {
+        "signature": "bench_udp cli: FAIL missing file: said "
+      }
+    },
+    {
+      "id": "udp-bench-not-built-silent",
+      "breaks": "bench_udp refuses a mode the build lacks with exit 2 but does not say it is not built (r9-12). Darwin: a Mac build never has S2 to U5, while a Linux build with liburing has every mode",
+      "check": "test_bench_udp_cli.py, the S2 not built case",
+      "mutations": [
+        {
+          "file": "bench/bench_udp.cpp",
+          "old": "    std::println(stderr, \"bench_udp: mode {} is not built here: {}\", options.mode,\n                 udp::why_not_built(options.mode));\n    return false;",
+          "new": "    return false;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "bench_udp"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_bench_udp_cli.py",
+        "{build}/bench/bench_udp",
+        "{build}/bench_udp_fault",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "S1"
+      ],
+      "expect": {
+        "signature": "bench_udp cli: FAIL S2 not built: said "
+      },
+      "system": "Darwin"
     }
   ]
 }

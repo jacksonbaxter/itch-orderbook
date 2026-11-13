@@ -1738,6 +1738,64 @@
         "signature": "mm_report: FAIL total-not-ledger AMD, AS Base",
         "exit": 1
       }
+    },
+    {
+      "id": "mm-cli-ledger-total-unprinted",
+      "breaks": "itch_mm prints the ledger's total under another name, which the CLI test once read as 0 (r9-15)",
+      "check": "test_mm_cli.py, every figure printed as an integer",
+      "mutations": [
+        {
+          "file": "include/itch/mm/session.hpp",
+          "old": "ledger ? std::format(\"ledger_total {}\\n\", *ledger)",
+          "new": "ledger ? std::format(\"ledger {}\\n\", *ledger)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_mm"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_mm_cli.py",
+        "{build}/tools/itch_mm",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "mm cli: FAIL S1 as exact: missing or not an integer: ledger_total None"
+      }
+    },
+    {
+      "id": "mm-cli-ledger-total-not-a-number",
+      "breaks": "itch_mm prints the ledger's total as overflow, which crashed the CLI test before it could say so",
+      "check": "test_mm_cli.py, every figure printed as an integer",
+      "mutations": [
+        {
+          "file": "include/itch/mm/session.hpp",
+          "old": "ledger ? std::format(\"ledger_total {}\\n\", *ledger)",
+          "new": "!ledger ? std::format(\"ledger_total {}\\n\", *ledger)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_mm"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_mm_cli.py",
+        "{build}/tools/itch_mm",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "mm cli: FAIL S1 as exact: missing or not an integer: ledger_total 'overflow'"
+      }
     }
   ]
 }
