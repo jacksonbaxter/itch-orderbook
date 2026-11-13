@@ -2842,7 +2842,7 @@ The cause, as far as it was measured. The host has 16,463,536,128 bytes of memor
 
 The prediction took the Mac's trial times scaled by E4's and E6's ratios between the hosts; every pass on `debian` was faster than that scaling gave.
 
-**P-0030 as it stands.** Committed at 3c18a2f, after P-0029's result was seen, before any check on 10302019. Its run was refused before anything was timed, so it is neither held nor missed: no part of it has a figure to be judged by. It stays in `results/predictions.md` as written. Its "T-PARSE-3 missed; it met", in what was seen before it, means that P-0029's median was above the bar on 12302019, not the bar's day, 10302019, and is not a pass.
+**P-0030 as it stands.** Committed at 3c18a2f, after P-0029's result was seen, before any check on 10302019. The standalone machine check failed input-resident each time it ran on 10302019, so P-0030's run was never started and has no run-log row; it is neither held nor missed: no part of it has a figure to be judged by. It stays in `results/predictions.md` as written. Its "T-PARSE-3 missed; it met", in what was seen before it, means that P-0029's median was above the bar on 12302019, not the bar's day, 10302019, and is not a pass.
 
 ## The final review's record, 2026-11-13
 

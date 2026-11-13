@@ -844,9 +844,9 @@ def generate(root):
                       "sources count; the verdict is on the median. A bar set on a day other than "
                       "the file's gets no verdict, met or missed: the row says whether the median "
                       "is above or under the bar on the day measured, and that the bar's own day "
-                      "was not measured. T-PARSE-3's bar is set on 10302019; the run on that day "
-                      "on `debian` was refused by the machine check, at its input-resident "
-                      "condition, before anything was timed (docs/NOTES.md, \"The parse rate on "
+                      "was not measured. T-PARSE-3's bar is set on 10302019; on `debian` "
+                      "the standalone machine check failed input-resident each time it ran on that "
+                      "day, so P-0030's run was never started (docs/NOTES.md, \"The parse rate on "
                       "`debian`\").", ""]
         lines += markdown_table(("Target", "Pass", "Day", "Host", "Pinning", "Median messages/s",
                                  "Min", "Max", "CV", "Median GB/s", "Bar", "Verdict", "Commit",
@@ -1380,9 +1380,10 @@ MISSED = (
      "[The parse rate](#the-parse-rate)"),
     ("T-PARSE-2", PARSE_DEBIAN, missed_row, "as T-PARSE-1: [The parse rate](#the-parse-rate)"),
     ("T-PARSE-3", PARSE_DEBIAN, other_day_row,
-     "the bar is set on 10302019; on this host the machine check refused that day at its "
-     "input-resident condition, the kernel keeping other cached files over the day just read, so "
-     "P-0030's run was refused before anything was timed: [The parse rate](#the-parse-rate)"),
+     "the bar is set on 10302019; on this host the standalone machine check failed "
+     "input-resident each time it ran on that day, so P-0030's run was never started; why the "
+     "day would not stay wholly in the page cache is not established: "
+     "[The parse rate](#the-parse-rate)"),
     ("T-BT-3", "backtest_shadow_debian_12302019.md", missed_row,
      "the bar was set on a Mac; the queue walk is a small share of a message's time, so it is "
      "not the cause; the rest is not established: [Beyond the book](#beyond-the-book)"),

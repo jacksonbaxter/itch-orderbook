@@ -64,7 +64,7 @@ All on one thread, with the whole file resident before the clock starts, unless 
 - **Target:** ≥ 93.9 M msg/s and ≥ 2.89 GB/s on 10302019.
 - **Source:** [Lunary benchmarks](https://lunyn.com/benchmarks), OSS-34.
 - **Measured:** Google Cloud c3-standard-8, Xeon Platinum 8481C 2.70 GHz, 32 GB DDR5, Ubuntu 24.04, Rust `-C target-cpu=native`. Full day 10302019, memory-mapped. Single thread. Every field of every supported type decoded and checksummed, median of 10.
-- **Comparability:** a harder job than T-PARSE-2, under a VM, by a vendor on its own site. Ours is measured on 12302019 only: on `debian` the run on 10302019 was refused by the machine check before anything was timed, so the comparison is across days (docs/NOTES.md, "The parse rate on `debian`").
+- **Comparability:** a harder job than T-PARSE-2, under a VM, by a vendor on its own site. Ours is measured on 12302019 only: on `debian`, on 10302019, the standalone machine check failed input-resident each time it ran, so P-0030's run was never started, so the comparison is across days (docs/NOTES.md, "The parse rate on `debian`").
 - **Status:** `VERIFIED`
 
 ### T-BOOK-1: true L3 rebuild, all symbols
