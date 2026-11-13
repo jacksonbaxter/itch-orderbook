@@ -353,6 +353,26 @@ def wait_for_quiet(watch, args):
         time.sleep(watch.every)
 
 
+ANOTHER = "another process"  # What a committed row calls a process not this run's (no map).
+MOST_OF_IT = re.compile(r" at (\S+Z), the most of it (.+)$")
+
+
+def public_why(why, lines):
+    """A withdrawal's reason as the run log and the results file carry it: what the sampler saw,
+    with its share and time, and the busiest other process as "another process" at its own
+    share of a CPU, never by its name or the sampler's guess at its kind. sampler.txt, in the
+    raw folder, keeps the name."""
+    match = MOST_OF_IT.search(why)
+    if match is None:
+        return why
+    stamp = match.group(1)
+    share = next((words[2] for words in (line.split(None, 3) for line in lines)
+                  if len(words) > 2 and words[0] == stamp and words[1] == "busy"), None)
+    if share is None:  # No process above the sampler's floor: kernel or interrupt work.
+        return why
+    return f"{why[:match.start(2)]}{ANOTHER}, at {share} of a CPU"
+
+
 def withdraw(args, index, begin, why, sampled, commit):
     """A process the rule does not publish: its files set aside and its own row."""
     sampled["withdrawn"].append((f"repetition {index}", begin, why))
@@ -387,6 +407,8 @@ def judged_process(args, index, commit, digest, watch, sampled, manifest_day):
         watch.wait_past(end)
         lines = watch.lines()
         why = linux_sampler.judge(lines, begin, end, last_pid)
+        if why is not None:
+            why = public_why(why, lines)
         if why is None:
             sampled["published"].append((index, begin, end, linux_sampler.summary(
                 lines, begin, end, args.core, args.sibling)))

@@ -546,6 +546,28 @@
         "signature": "FAIL: test_the_caveats_prose_changed",
         "exit": 1
       }
+    },
+    {
+      "id": "parse-withdrawal-gives-the-samplers-kind",
+      "breaks": "A withdrawal's row and the Sampler section carry the sampler's word for the busiest other process, not another process at its share of a CPU",
+      "check": "test_parse_driver.py Run.test_a_withdrawal_names_no_process",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    return f\"{why[:match.start(2)]}{ANOTHER}, at {share} of a CPU\"\n",
+          "new": "    return why\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Run.test_a_withdrawal_names_no_process"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_withdrawal_names_no_process",
+        "exit": 1
+      }
     }
   ]
 }
