@@ -37,6 +37,7 @@ def finding(fid, severity, outcome, **evidence):
 
 DATA = {
     "checked_at": "abcdef1",
+    "rechecked": [],
     "complete": False,
     "reviewers": [
         {"id": "r1", "read": "the parser", "commits": ["1234567"],
@@ -161,6 +162,16 @@ class ReviewReport(unittest.TestCase):
         self.assertIn("- Result: not complete: 1 open, 1 reviewer to come\n", text)
         self.assertIn("- r12-1 (FIX, open): what r12-1 found.", text)
         self.assertIn("- STILL TO COME: the last reviewer reads the pages", text)
+
+    def test_an_outcome_checked_again_is_named_with_its_commit(self):
+        self.data["rechecked"] = [{"what": "r1-2", "at": "fedcba9"}]
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        self.assertIn("- Commit: abcdef1, where every outcome was checked, but these, checked again "
+                      "later: r1-2 at fedcba9\n", self.out.read_text(encoding="utf-8"))
+        self.out.unlink()
+        self.data["rechecked"] = [{"what": "r1-2", "at": "the merge"}]
+        self.assertIn("'the merge' is not a commit", self.refused("data"))
 
     def test_check_passes_a_fresh_render(self):
         self.assertEqual(self.run_step("write")[0], 0)

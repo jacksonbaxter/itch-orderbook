@@ -1,5 +1,15 @@
 {
  "checked_at": "de0e39a",
+ "rechecked": [
+  {
+   "what": "r12-3",
+   "at": "2987ecf"
+  },
+  {
+   "what": "r11-3 and r13's outcomes",
+   "at": "e87755d"
+  }
+ ],
  "complete": false,
  "reviewers": [
   {
@@ -220,7 +230,7 @@
     }
    ],
    "last_words": "Nothing is left that I would block the measurement for, provided the kinds-map fix lands first or `ITCH_PROCESS_KINDS` on debian is confirmed unset or readable before \"go\".",
-   "branch": "the parse-rate branch at fee1a6b"
+   "branch": ""
   },
   {
    "id": "r14",
@@ -2424,12 +2434,23 @@
    "id": "r11-3",
    "severity": "FIX",
    "finding": "The parse-rate targets T-PARSE-1 to T-PARSE-3 have no measured number and no reason given",
-   "outcome": "open",
-   "detail": "Being measured on `debian`; open until the parse-rate results and pages are published.",
-   "commits": [],
-   "tests": [],
-   "faults": [],
-   "notes": []
+   "outcome": "partly",
+   "detail": "T-PARSE-1 and T-PARSE-2 now have their measured number, gap and reason (cause not established) in `results/parse_rate_debian_12302019.md` and the pages. T-PARSE-3 has a number on 12302019 only, above a bar that is set on 10302019; the pages say so. Still to do, and left with the owner: T-PARSE-3 on its own day, which could not be measured on `debian`, since the machine check's input-resident condition failed and the run under P-0030 was refused before anything was timed.",
+   "commits": [
+    "4890abb",
+    "c3ecf81"
+   ],
+   "tests": [
+    "test_t_parse_3_is_judged_on_its_own_day",
+    "test_a_parse_target_on_another_day_with_a_bare_met_is_refused"
+   ],
+   "faults": [
+    "parse-bar-day-not-named",
+    "parse-own-day-said-absent"
+   ],
+   "notes": [
+    "The parse rate on `debian`"
+   ]
   },
   {
    "id": "r11-4",
