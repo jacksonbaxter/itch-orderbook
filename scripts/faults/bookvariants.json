@@ -754,6 +754,72 @@
       "expect": {
         "signature": "FUZZ_CHECK failed: ahead\\.distance\\(\\) == distance"
       }
+    },
+    {
+      "id": "bookvariants-window-u-search-counts-closed-level",
+      "breaks": "itch_window never sees a U's old order alone on its level, so it counts the U's add search with that level still in the book, one too many when it was better than the new price (review finding r2-3)",
+      "check": "test_tools_cli, itch_window's U search",
+      "mutations": [
+        {
+          "file": "tools/itch_window.cpp",
+          "old": "  return level != nullptr && level->order_count == 1 && better ? 1U : 0U;\n",
+          "new": "  return level != nullptr && level->order_count == 0 && better ? 1U : 0U;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_alloc",
+          "itch_as_tables",
+          "itch_window"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_tools_cli.py",
+        "{build}/tools/itch_alloc",
+        "{build}/tools/itch_as_tables",
+        "{build}/tools/itch_window",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "tools cli: FAIL window: no line 'better add 1 6'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bookvariants-window-u-search-closed-whichever-way",
+      "breaks": "itch_window takes a level off a U's add search when the old order's lone level closes, whether or not that level was better than the new price",
+      "check": "test_tools_cli, itch_window's U search",
+      "mutations": [
+        {
+          "file": "tools/itch_window.cpp",
+          "old": "  const bool better = old.side == itch::Side::bid ? old.price > price : old.price < price;\n",
+          "new": "  const bool better = old.price != price;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_alloc",
+          "itch_as_tables",
+          "itch_window"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_tools_cli.py",
+        "{build}/tools/itch_alloc",
+        "{build}/tools/itch_as_tables",
+        "{build}/tools/itch_window",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "tools cli: FAIL window: no line 'better add 0 6'",
+        "exit": 1
+      }
     }
   ]
 }

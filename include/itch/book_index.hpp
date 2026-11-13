@@ -51,7 +51,9 @@ struct Identity {
 };
 
 // Open addressing with linear probing, at most half full, keyed by Hash of the reference.
-// Any 64-bit reference is a key.
+// Any 64-bit reference is a key. orders must be at least 1: for 0 the table has one slot, the
+// shift is 64, which is undefined, and find() can read past the table. itch_alloc,
+// itch_trades and itch_map_compare refuse 0 (tools/capacity.hpp).
 template <class Hash>
 class OpenHashIndex {
  public:
@@ -131,7 +133,8 @@ using IdentityHashIndex = OpenHashIndex<Identity>;
 // the slot of the first order on its chain, and each order's link to the next sits in an
 // array beside the pool, indexed by the order's slot, so that BookOrder stays 24 bytes. A
 // lookup reads its bucket, then each order on the chain to compare its reference, and that
-// order's link to go on. A new order goes at the front of its chain.
+// order's link to go on. A new order goes at the front of its chain. orders must be at least
+// 1, as for OpenHashIndex.
 class ChainedIndex {
  public:
   explicit ChainedIndex(const BookCapacity& capacity) : ChainedIndex(capacity.orders) {}

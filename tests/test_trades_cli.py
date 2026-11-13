@@ -277,6 +277,16 @@ def main():
                               capture_output=True, check=False).returncode
         if code != 2:
             failures.append(f"bad arm {name} {value}: exit {code}, wanted 2")
+    # A capacity of 0 or past 32 bits is bad usage, on every index: 0 orders gave the hash
+    # indexes one slot and a shift of 64, and 2^32 wrapped to 0.
+    for flag, value in (("--max-orders", "0"), ("--max-orders", "4294967296"),
+                        ("--max-levels", "0"), ("--max-levels", "4294967297")):
+        for index in ("hash", "paged"):
+            code = subprocess.run([tool, str(fixtures / "day.itch"), "--index", index, flag,
+                                   value], capture_output=True, check=False).returncode
+            if code != 2:
+                failures.append(f"capacity {flag} {value} --index {index}: exit {code}, "
+                                "wanted 2")
 
     # The report reads what the tool really prints, so the two cannot drift apart.
     (scratch / "report.log").write_text(done.stdout, encoding="ascii")
@@ -319,6 +329,12 @@ def main():
     text = symbols.read_text(encoding="ascii")
     if "symbol ZTST locate=5 test=1" not in text or "broken=100" not in text:
         failures.append("symbols: ZTST's line is wrong")
+    # A symbol file that cannot be written fails the run, before the day is replayed.
+    unwritable = run(extra=DATE + PINNED_ROWS + ("--symbols", str(scratch / "no-such-dir/s.txt")))
+    if unwritable.returncode != 2 or "cannot write" not in unwritable.stderr \
+            or "messages_checked" in unwritable.stdout:
+        failures.append(f"symbols unwritable: exit {unwritable.returncode}, wanted 2 before the "
+                        "replay")
 
     # Bad usage and unreadable files.
     for name, args, wanted in (

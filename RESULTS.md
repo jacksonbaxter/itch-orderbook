@@ -484,7 +484,7 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 | Where the DRAM demand fills fall, by structure, debian, 12302019 | debian | largest single structure level record at 22.7% of the floor on DRAM demand fills; no structure reaches the 40% rule, no bottleneck claimed | `31508858939c` | [results/structure_debian_12302019.md](results/structure_debian_12302019.md) |
 | The walks of the backtester's simulated levels, counted, on macOS (M4 Max), 12302019 | macOS (M4 Max); the counts are the same on any host, since nothing is timed | T-BT-3: 1.081 walks, 1.769 level steps and 0.518 order steps a message, 4.37 levels on the side at a walk on average; 100,000 orders, 23,400 s life: 1.084, 6.781 and 1.035, 81.67 levels | `3077b849234b` | [results/walks_counts_12302019.md](results/walks_counts_12302019.md) |
 | The walks of the backtester's simulated levels, timed on a ladder of schedules, on debian, 12302019 | debian | 4.969 ns a walk step over 4 schedules; the walk 3.51% of T-BT-3's 323.88 ns a message and 10.45% of 100,000 orders, 14,400 s life's 348.76 ns | `df1676ed0e18` | [results/walks_ladder_debian_12302019.md](results/walks_ladder_debian_12302019.md) |
-| carteret's window width against overflow, on this book, 12302019 | macOS (M4 Max); the counts are the same on any host, since nothing is timed | adds outside a window of 256 ticks 8.337%, of 2,048 1.493% (carteret 4.90% and 1.03%); sub-cent 0.468%; add searches past 1 or fewer better levels 57.10%, past 16 or more 10.79% | `3188ffdea6a6` | [results/window_12302019.md](results/window_12302019.md) |
+| carteret's window width against overflow, on this book, 12302019 | macOS (M4 Max); the counts are the same on any host, since nothing is timed | adds outside a window of 256 ticks 8.337%, of 2,048 1.493% (carteret 4.90% and 1.03%); sub-cent 0.468%; add searches past 1 or fewer better levels 57.27%, past 16 or more 10.75% | `fc35ccf0136b` | [results/window_12302019.md](results/window_12302019.md) |
 
 The SPSC ring. Each row is one comparison from a results file's targets table: a ratio of two of its medians, or for T-SPSC-3 the median of paired ratios, against BENCHMARKS.md's bar. Every bar was set on x86, so a macOS row says the host differs, and an unpinned Mac's cross-core figures are weak evidence.
 
@@ -913,4 +913,6 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0903-20261112T172808Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` | yes |
 | `P-0106-20261113T040315Z` | `P-0106` | `22fe2d6542a1` | Linux | `published` | yes |
 | `P-0201-20261105T053845Z` | `P-0201` | `abfb37c88eb0` | Darwin | `withdrawn` | yes |
+| `P-0027-window-12302019` | `P-0027` | `fc35ccf0136b` | Darwin | `published` | yes |
+| `P-0028-rerun-20261113T030553Z` | `P-0028` | `a3388a03ed5d` | Darwin | `recorded` | yes |
 <!-- results table: end -->

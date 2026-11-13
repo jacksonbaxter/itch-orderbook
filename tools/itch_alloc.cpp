@@ -10,7 +10,8 @@
 //
 // Warm-up is the first N messages, 0 by default, so the count starts at the first
 // message after construction. --index and --levels pick the arm of the fast book, the
-// book's default arm if left out, and the capacities are as itch_oracle's. --prefetch
+// book's default arm if left out, and the capacities are as itch_oracle's, but for
+// --max-orders and --max-levels, which take 1 to 2^32 - 1 (capacity.hpp). --prefetch
 // walks the fast book's pass with itch/lookahead.hpp's reader, D messages ahead, so that
 // the reader's ring and the book's look-ahead are inside the count. Exit codes: 0 pass,
 // 1 fail, 2 bad usage.
@@ -36,6 +37,7 @@
 
 #include "alloc_arms.hpp"
 #include "book_arms.hpp"
+#include "capacity.hpp"
 #include "itch/book.hpp"
 #include "itch/lookahead.hpp"
 #include "itch/page_map.hpp"
@@ -86,19 +88,29 @@ enum class Taken : std::uint8_t { yes, bad_value, not_this };
   return Taken::not_this;
 }
 
-// The options that take a number. --max-orders and --max-levels size both books.
+// --max-orders and --max-levels, which size both books.
+[[nodiscard]] Taken take_capacity_option(std::string_view arg, std::string_view value,
+                                         Options& options) {
+  switch (itch::tools::parse_capacity_option(arg, value, options.capacity)) {
+    case itch::tools::CapacityOption::taken: break;
+    case itch::tools::CapacityOption::bad_value: return Taken::bad_value;
+    case itch::tools::CapacityOption::not_a_capacity: return Taken::not_this;
+  }
+  if (arg == "--max-orders") {
+    options.node_capacity.orders = options.capacity.orders;
+  } else {
+    options.node_capacity.levels = options.capacity.levels;
+  }
+  return Taken::yes;
+}
+
+// The options that take a number.
 [[nodiscard]] bool take_number_option(std::string_view arg, std::uint64_t number,
                                       Options& options) {
   if (arg == "--warmup") {
     options.warmup = number;
   } else if (arg == "--prefetch") {
     options.prefetch = number;
-  } else if (arg == "--max-orders") {
-    options.capacity.orders = static_cast<std::uint32_t>(number);
-    options.node_capacity.orders = options.capacity.orders;
-  } else if (arg == "--max-levels") {
-    options.capacity.levels = static_cast<std::uint32_t>(number);
-    options.node_capacity.levels = options.capacity.levels;
   } else {
     return false;
   }
@@ -129,6 +141,11 @@ enum class Taken : std::uint8_t { yes, bad_value, not_this };
       case itch::tools::ArmOption::taken: continue;
       case itch::tools::ArmOption::bad_value: return std::nullopt;
       case itch::tools::ArmOption::not_an_arm_option: break;
+    }
+    switch (take_capacity_option(arg, args[i], options)) {
+      case Taken::yes: continue;
+      case Taken::bad_value: return std::nullopt;
+      case Taken::not_this: break;
     }
     const auto number = parse_number(args[i]);
     if (!number || !take_number_option(arg, *number, options)) {

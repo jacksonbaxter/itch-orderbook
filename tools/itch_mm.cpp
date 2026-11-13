@@ -24,7 +24,11 @@
 //     log overflowed, and no fee failed;
 //   - every fill lies in the PnL window, and S + A + I equals the ledger's total, with ==.
 //
-// Exit codes: 0 every check passed, 1 a check failed, 2 bad usage or an unreadable file.
+// The file's framing must end on a frame boundary (tools/framing.hpp), or the session does not
+// run, since mm::replay ends a file cut mid-frame as it ends a whole one.
+//
+// Exit codes: 0 every check passed, 1 a check failed or the framing did not end cleanly, 2 bad
+// usage or an unreadable file.
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -40,6 +44,7 @@
 #include <string_view>
 #include <system_error>
 
+#include "framing.hpp"
 #include "itch/backtest.hpp"
 #include "itch/book.hpp"
 #include "itch/mm/attribution.hpp"
@@ -332,6 +337,9 @@ int run(const std::optional<Options>& options) {
   if (!file) {
     std::println(stderr, "itch_mm: cannot read {}", options->path);
     return 2;
+  }
+  if (!itch::tools::framing_ends_cleanly("itch_mm", file->bytes())) {
+    return 1;
   }
   if (options->glft) {
     return session(*options, file->bytes(),

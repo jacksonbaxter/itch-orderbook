@@ -16,6 +16,7 @@ Bad usage, an unreadable file and a day with no fee schedule exit 2. A failure p
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 CHECKS = ("allocations", "no refused message", "no refused delivery", "no overflow",
@@ -111,6 +112,17 @@ def main():
         done = run(*args)
         if done.returncode != 2:
             failures.append((name, f"exit {done.returncode}, not 2"))
+
+    # The day after a frame of a type the spec does not define, cut inside its last frame: the
+    # replay would end it like a whole day, so the framing check refuses it before the run.
+    with tempfile.TemporaryDirectory() as scratch:
+        cut = Path(scratch) / "cut.itch"
+        cut.write_bytes(b"\x00\x03z\x00\x00" + Path(session).read_bytes()[:-1])
+        done = run(str(cut), *base[1:], *SESSION)
+        if done.returncode != 1 or done.stdout or \
+                "FAIL framing: truncated_payload at offset" not in done.stderr or \
+                "skipped frames 1 (unknown_type 1, bad_length 0)" not in done.stderr:
+            failures.append(("cut", f"exit {done.returncode}: {done.stdout}{done.stderr}"))
 
     for case, reason in failures:
         print(f"mm cli: FAIL {case}: {reason}")
