@@ -9,6 +9,7 @@ a stand-in for the sampler and for bench_parse, so it needs no Linux host.
 """
 
 import argparse
+import io
 import json
 import os
 import sys
@@ -451,19 +452,33 @@ class Run(unittest.TestCase):
         self.assertNotIn("zzfakebusy", row)
         self.assertEqual(process_kinds.cause_breaks(row), [])
 
-    def test_a_bad_map_is_refused_before_anything_runs(self):
-        bad = SCRATCH / "zzinvented_private" / "bad_kinds.json"
-        bad.parent.mkdir(parents=True, exist_ok=True)
-        bad.write_text("{not json", encoding="utf-8")
-        with mock.patch.dict(os.environ, {process_kinds.MAP_ENV: str(bad)}), \
-                mock.patch.object(parse_driver.platform, "system", return_value="Linux"), \
-                mock.patch.object(parse_driver, "inline_check",
-                                  side_effect=parse_driver.Refused("inline", "not reached")):
-            with self.assertRaises(parse_driver.Refused) as caught:
-                parse_driver.run(args_for(input=Path("12302019.NASDAQ_ITCH50"), bench="b"),
-                                 "P-0029-x", "now", "abc")
-        self.assertEqual(caught.exception.stage, "kinds")
-        self.assertNotIn("zzinvented_private", str(caught.exception))
+    def test_a_bad_map_stops_the_driver_before_any_row(self):
+        # As every tool that gives a kind (process_kinds.check_map): exit 2 before the run
+        # starts or a row is written, and the message gives no path.
+        folder = SCRATCH / "zzinvented_private"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "not_json.json").write_text("{not json", encoding="utf-8")
+        (folder / "wrong_kind.json").write_text(
+            json.dumps({"programs": {"zzfakebusy": "zzinvented kind"}}), encoding="utf-8")
+        argv = ["--bench", "b", "--probe", "p", "--input", "12302019.NASDAQ_ITCH50",
+                "--prediction", "P-0029", "--raw-dir", str(SCRATCH), "--out", "o.md",
+                "--run-log", str(self.log)]
+        for name in ("missing.json", "not_json.json", "wrong_kind.json"):
+            with self.subTest(map=name):
+                said = io.StringIO()
+                with mock.patch.dict(os.environ, {process_kinds.MAP_ENV: str(folder / name)}), \
+                        mock.patch.object(parse_driver.run_record, "open_run") as opened, \
+                        mock.patch.object(parse_driver, "run",
+                                          side_effect=RuntimeError("not reached")), \
+                        mock.patch("sys.stderr", said):
+                    with self.assertRaises(SystemExit) as caught:
+                        parse_driver.main(argv)
+                self.assertEqual(caught.exception.code, 2)
+                opened.assert_not_called()
+                self.assertFalse(self.log.exists() and self.log.read_text(encoding="utf-8"))
+                self.assertIn("parse_driver: ", said.getvalue())
+                self.assertNotIn("zzinvented", said.getvalue())
+                self.assertNotIn("zzfakebusy", said.getvalue())
 
     def test_no_row_carries_the_maps_path_or_a_name(self):
         kinds = SCRATCH / "zzinvented_private" / "kinds.json"

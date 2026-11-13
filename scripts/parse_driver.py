@@ -362,19 +362,8 @@ def wait_for_quiet(watch, args):
 
 
 MOST_OF_IT = re.compile(r" at (\S+Z), the most of it (.+)$")
-KINDS_UNREADABLE = (f"${process_kinds.MAP_ENV} names a map of process kinds that cannot be read, "
-                    "or that gives a kind not in process_kinds.KINDS")
 # The program names the sampler has logged in this run: never in a row (scrub()).
 seen_names = set()
-
-
-def check_kinds_map():
-    """The map of process kinds loaded and held to process_kinds.KINDS before anything is
-    timed, so that a bad map is refused at the start and never met at a withdrawal."""
-    try:
-        process_kinds.default_map()
-    except process_kinds.MapError:
-        raise Refused("kinds", KINDS_UNREADABLE) from None
 
 
 def note_names(lines):
@@ -395,10 +384,7 @@ def scrub(text):
         for form in {path, os.path.abspath(path), os.path.realpath(path)}:
             text = text.replace(form, f"${process_kinds.MAP_ENV}")
     names = set(seen_names)
-    try:
-        kinds = process_kinds.default_map()
-    except process_kinds.MapError:
-        kinds = None
+    kinds = process_kinds.default_map()  # main() has checked it (check_map).
     if kinds:
         names |= {name for name in kinds["programs"] if len(name) > 1}
     for name in sorted(names, key=len, reverse=True):
@@ -426,10 +412,7 @@ def public_why(why, lines):
         return why
     told, _, rest = busy[4].partition(": ")
     command = rest.rsplit(" [", 1)[0]
-    try:
-        kind = process_kinds.kind_of(command)
-    except process_kinds.MapError:  # check_kinds_map() refused a bad map before this.
-        kind = process_kinds.OTHER
+    kind = process_kinds.kind_of(command)  # main() has checked the map (check_map).
     if kind == process_kinds.OTHER:
         kind = linux_sampler.EARLIER_WORDS.get(told, told)
     if kind not in process_kinds.KINDS:
@@ -500,8 +483,6 @@ def run(args, run_id, started, commit):
                               "measured")
     if args.core is None or args.sibling is None:
         raise Refused("sampler", "the Linux sampler rule needs --core and --sibling")
-    bench_driver.set_stage("reading the map of process kinds")
-    check_kinds_map()
     manifest_day = manifest_entry(args.input.name)
     if manifest_day is None:
         raise Refused("manifest", f"{args.input.name} is not a day scripts/data_manifest.json "
@@ -932,6 +913,9 @@ def parse_args(argv):
 
 
 def main(argv=None):
+    # As every tool that gives a kind: a map set and unusable stops the driver here, exit 2,
+    # before it runs or writes a row, with a message that gives no path.
+    process_kinds.check_map("parse_driver")
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["--inline-check"]:
         return inline_main(argv[1:])

@@ -576,7 +576,7 @@
       "mutations": [
         {
           "file": "scripts/parse_driver.py",
-          "old": "    kind = process_kinds.kind_of(command)\n",
+          "old": "    kind = process_kinds.kind_of(command)  # main() has checked the map (check_map).\n",
           "new": "    kind = process_kinds.OTHER\n"
         }
       ],
@@ -636,24 +636,24 @@
       }
     },
     {
-      "id": "parse-bad-map-found-mid-run",
-      "breaks": "parse_driver.py meets an unreadable map of process kinds only at a withdrawal, mid-run, not before anything is timed",
-      "check": "test_parse_driver.py Run.test_a_bad_map_is_refused_before_anything_runs",
+      "id": "parse-bad-map-not-checked-first",
+      "breaks": "parse_driver.py does not check the map of process kinds first (process_kinds.check_map), so a map set and unusable is met only mid-run, after the run has started and a row can be written",
+      "check": "test_parse_driver.py Run.test_a_bad_map_stops_the_driver_before_any_row",
       "mutations": [
         {
           "file": "scripts/parse_driver.py",
-          "old": "    check_kinds_map()\n    manifest_day",
-          "new": "    manifest_day"
+          "old": "    process_kinds.check_map(\"parse_driver\")\n",
+          "new": ""
         }
       ],
       "command": [
         "{python}",
         "-B",
         "{tree}/scripts/test_parse_driver.py",
-        "Run.test_a_bad_map_is_refused_before_anything_runs"
+        "Run.test_a_bad_map_stops_the_driver_before_any_row"
       ],
       "expect": {
-        "signature": "FAIL: test_a_bad_map_is_refused_before_anything_runs",
+        "signature": "FAIL: test_a_bad_map_stops_the_driver_before_any_row",
         "exit": 1
       }
     },
