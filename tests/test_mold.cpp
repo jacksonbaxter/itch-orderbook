@@ -321,6 +321,24 @@ TEST(MoldSequence, ASequencePastTheTopIsOutOfRange) {
   EXPECT_EQ(tracker.counts().lost, 0U);
 }
 
+// One message at the top: a packet whose sequence and count reach 2^64 - 1 is admitted, and
+// one whose last message would be 2^64 - 1 itself is refused, since the next expected
+// sequence after it would not fit.
+TEST(MoldSequence, OneMessageAtTheTopIsAdmittedOnlyBelowTheLastSequence) {
+  constexpr std::uint64_t kTop = 0xFFFFFFFFFFFFFFFFULL;
+  mold::SequenceTracker tracker{kSession, kTop - 1};
+  const mold::Admit below = tracker.admit(header_of(kTop - 1, 1));
+  EXPECT_EQ(below.skip, 0U);
+  EXPECT_EQ(below.take, 1U);
+  EXPECT_EQ(tracker.counts().out_of_range, 0U);
+  EXPECT_EQ(tracker.next_expected(), kTop);
+  const mold::Admit top = tracker.admit(header_of(kTop, 1));
+  EXPECT_EQ(top.take, 0U);
+  EXPECT_EQ(tracker.counts().out_of_range, 1U);
+  EXPECT_EQ(tracker.counts().admitted, 1U);
+  EXPECT_EQ(tracker.next_expected(), kTop);
+}
+
 // --- The packet array -----------------------------------------------------------------
 
 // The blocks of every data packet laid end to end, and the packets checked on the way.

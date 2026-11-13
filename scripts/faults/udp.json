@@ -970,6 +970,56 @@
       "expect": {
         "signature": "loopback cli: FAIL \\S+ default: no line loopback_file_end_hash or loopback_udp_end_hash"
       }
+    },
+    {
+      "id": "udp-mold-top-refuses-one-below",
+      "breaks": "the top check refuses a packet whose last message is at 2^64 - 2, one below where it must start refusing (r8-6)",
+      "check": "test_mold MoldSequence.OneMessageAtTheTopIsAdmittedOnlyBelowTheLastSequence",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "    if (count > std::numeric_limits<std::uint64_t>::max() - header.sequence) {\n",
+          "new": "    if (count >= std::numeric_limits<std::uint64_t>::max() - header.sequence) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldSequence.*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldSequence\\.OneMessageAtTheTopIsAdmittedOnlyBelowTheLastSequence"
+      }
+    },
+    {
+      "id": "udp-mold-top-admits-the-last-sequence",
+      "breaks": "the top check admits a message at 2^64 - 1, so the next expected sequence wraps to 0 (r8-6)",
+      "check": "test_mold MoldSequence.OneMessageAtTheTopIsAdmittedOnlyBelowTheLastSequence",
+      "mutations": [
+        {
+          "file": "include/itch/mold.hpp",
+          "old": "    if (count > std::numeric_limits<std::uint64_t>::max() - header.sequence) {\n",
+          "new": "    if (count > std::numeric_limits<std::uint64_t>::max() - header.sequence + 1) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_mold"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_mold",
+        "--gtest_filter=MoldSequence.*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] MoldSequence\\.OneMessageAtTheTopIsAdmittedOnlyBelowTheLastSequence"
+      }
     }
   ]
 }
