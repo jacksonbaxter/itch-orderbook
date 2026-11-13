@@ -4200,6 +4200,66 @@
       "expect": {
         "signature": "FAIL: test_the_command_shown_carries_the_core_and_its_sibling"
       }
+    },
+    {
+      "id": "bench-backtest-t-bt-1-in-messages",
+      "breaks": "The driver holds T-BT-1 to its bar in messages/s, not the engine events/s BENCHMARKS.md sets it in",
+      "check": "test_backtest_results.py test_t_bt_1_is_held_in_engine_events",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    if spec[\"unit\"] == \"messages/s\":\n        median, measured = messages,",
+          "new": "    if True:\n        median, measured = messages,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_bt_1_is_held_in_engine_events"
+      }
+    },
+    {
+      "id": "bench-backtest-file-unit-unchecked",
+      "breaks": "check_results passes a T-BT-1 row in messages/s against a bar in engine events/s",
+      "check": "test_backtest_results.py test_a_target_in_another_unit",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if cells[1] != f\"≥ {bar:.2f} M {unit}\" or \\\n",
+          "new": "    if False and cells[1] != f\"≥ {bar:.2f} M {unit}\" or False and \\\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_target_in_another_unit"
+      }
+    },
+    {
+      "id": "bench-backtest-render-again-sampled",
+      "breaks": "backtest_driver.py render renders a file with a Sampler section again, whose verdicts are not in the records",
+      "check": "test_backtest_results.py test_a_file_with_a_sampler_section",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    if check_results.section(published, \"Sampler\") is not None:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_with_a_sampler_section"
+      }
     }
   ]
 }

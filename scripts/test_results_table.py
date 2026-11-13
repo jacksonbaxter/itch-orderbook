@@ -460,8 +460,8 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| p50 140.14 ns; p99 840.86 ns; p99.9 1,472.00 ns; `paged-flat`, file in "
                       "memory, top of book not tracked | debian,", latency)
         self.assertIn("| **missed**: p50 by 19.14 ns,", latency)
-        self.assertIn("| ≥ 2.00 M messages/s | 4.57 M messages/s | debian, AMD Ryzen Embedded "
-                      "V1605B, pinned to core 4 | met |", backtest)
+        self.assertIn("| ≥ 2.00 M engine events/s | 4.68 M engine events/s (4.57 M messages/s) | "
+                      "debian, AMD Ryzen Embedded V1605B, pinned to core 4 | met |", backtest)
         self.assertIn("| ≤ 1.31×, set on Ryzen 9 5950X, Linux, pinned | 0.95×, pipelined time / "
                       "single-threaded time | debian, AMD Ryzen Embedded V1605B, pinned to cores 4 "
                       "and 6 | met |", spsc)
@@ -519,8 +519,8 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("results_table: FAIL the headline shows no missed target", output)
 
     def test_a_headline_row_with_no_verdict_is_refused(self):
-        self.edit(HEADLINE_BACKTEST, "| 4.57 M messages/s | met |",
-                  "| 4.57 M messages/s | host differs: a macOS figure |")
+        self.edit(HEADLINE_BACKTEST, "(4.57 M messages/s) | met |",
+                  "(4.57 M messages/s) | host differs: a macOS figure |")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
         self.assertIn(f"results_table: FAIL {HEADLINE_BACKTEST}: T-BT-1's verdict is 'host "
