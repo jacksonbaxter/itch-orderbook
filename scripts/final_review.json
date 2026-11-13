@@ -2577,7 +2577,7 @@
    "severity": "FIX",
    "finding": "BENCHMARKS names note files that are not in the repository, and a private path",
    "outcome": "fixed",
-   "detail": "Each note file is marked as a private research note, not in the repository; the private path is gone; the measured counter table is linked.",
+   "detail": "Each note file is marked as a private research note, not in the repository; the private path is gone from BENCHMARKS; the measured counter table is linked. docs/NOTES.md held the same path; it was not part of this finding, and r15-7 removed it.",
    "commits": [
     "38c7553"
    ],

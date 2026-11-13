@@ -197,7 +197,7 @@ By severity and outcome.
 | r11-9 | FIX | README says a test counts every heap allocation; it counts `operator new` | fixed | README says the test counts every call to `operator new`. Commit 113df28. |
 | r11-10 | FIX | BENCHMARKS says the attribution's C++ test is still to be written | fixed | BENCHMARKS names `tests/test_attribution.cpp`. Commit 38c7553. |
 | r11-11 | FIX | BENCHMARKS suggests the oracle's raw output is committed | fixed | BENCHMARKS says it is kept outside the repository. Commit 38c7553. |
-| r11-12 | FIX | BENCHMARKS names note files that are not in the repository, and a private path | fixed | Each note file is marked as a private research note, not in the repository; the private path is gone; the measured counter table is linked. Commit 38c7553. |
+| r11-12 | FIX | BENCHMARKS names note files that are not in the repository, and a private path | fixed | Each note file is marked as a private research note, not in the repository; the private path is gone from BENCHMARKS; the measured counter table is linked. docs/NOTES.md held the same path; it was not part of this finding, and r15-7 removed it. Commit 38c7553. |
 | r11-13 | NOTE | The "lost or did not help" section holds two wins | fixed | WRITEUP says none became the default and why the two winners stay off. Commit 16aba6a. |
 | r11-14 | NOTE | WRITEUP overstates the timer-floor rule | fixed | WRITEUP says no percentile under the floor is published, and a mean over many messages can be lower. Commit 16aba6a. |
 | r11-15 | NOTE | Two WRITEUP lines disagree on whether the AVX-512 VBMI kernel ran | fixed | WRITEUP says it has run on neither host and its test skips on `debian`. Commit 16aba6a. |
