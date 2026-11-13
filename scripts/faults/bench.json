@@ -3576,8 +3576,8 @@
       "mutations": [
         {
           "file": "scripts/counts_report.py",
-          "old": "            if not total == listed == whole:",
-          "new": "            if False:"
+          "old": "            if not total == said == pass_:\n",
+          "new": "            if False:\n"
         }
       ],
       "command": [
@@ -3979,8 +3979,8 @@
       "mutations": [
         {
           "file": "scripts/counts_report.py",
-          "old": "        if not total == listed == whole:\n            found.append((\"not-tiled\", f\"{name}: slots add up",
-          "new": "        if False:\n            found.append((\"not-tiled\", f\"{name}: slots add up"
+          "old": "            if not total == said == pass_:\n",
+          "new": "            if False:\n"
         }
       ],
       "command": [
@@ -4704,6 +4704,135 @@
       ],
       "expect": {
         "signature": "FAIL: test_records_that_differ_in_their_header_are_refused \\(__main__\\.CountsByAge",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-figures-unrecomputed",
+      "breaks": "--check takes the figures as printed and never works them out again from the totals",
+      "check": "test_counts_report.py",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if want != got:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_median_and_verdict_typed_in_together_are_caught ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-one-repetition-published",
+      "breaks": "Only repetition 1's totals are published again",
+      "check": "test_counts_report.py",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    return out + totals_sections(summaries, \"Totals by type\", \"type\")",
+          "new": "    return out + totals_sections(summaries[:1], \"Totals by type\", \"type\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_clean_report_passes_its_own_check \\(__main__\\.CountsReport",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-plain-totals-unpublished",
+      "breaks": "A type-age file leaves out the totals of the records by type alone beside it",
+      "check": "test_counts_report.py",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "            + totals_sections(plain_summaries, \"Totals by type alone\", \"type\"))",
+          "new": "            + [])"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_clean_report_passes_its_own_check \\(__main__\\.CountsByAge",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-repetition-count-unchecked",
+      "breaks": "--check accepts a file missing a repetition's totals",
+      "check": "test_counts_report.py",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if (name == \"repetitions\" and not count) or fields.get(name) != str(count):",
+          "new": "        if name == \"repetitions\" and not count:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_works_every_figure_out_again_from_each_repetition ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-header-figures-unchecked",
+      "breaks": "--check leaves the header's counts and the age summary unchecked against the totals",
+      "check": "test_counts_report.py",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if fields.get(name) != value:\n            found.append((\"figures-differ\", f\"header",
+          "new": "        if False:\n            found.append((\"figures-differ\", f\"header"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_works_every_figure_out_again_from_each_repetition ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-file-median-typed-in",
+      "breaks": "A published counters file's T-PERF-1 median and verdict typed in together",
+      "check": "counts_report.py --check figures-differ",
+      "inputs": [
+        {
+          "file": "results/counters_by_type_paged-flat_debian_12302019.md",
+          "op": "replace_text",
+          "old": "against ≤ 0.623: **FAIL**. Measured 2.002 raw (min 2.001, max 2.013), missing it by 1.379;",
+          "new": "against ≤ 0.623: **PASS**. Measured 0.600 raw (min 2.001, max 2.013);"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/counts_report.py",
+        "--check",
+        "{tree}/results/counters_by_type_paged-flat_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "counts_report: FAIL figures-differ: line 3 of the figures",
         "exit": 1
       }
     }

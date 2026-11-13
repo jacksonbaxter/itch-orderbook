@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -73,6 +74,22 @@ def record(scale=1):
 AGE_SPLIT = {"E": {"under 1 ms": (20, 1), "1 s and over": (10, 4)},
              "D": {"under 1 ms": (180, 2), "1 to 10 ms": (100, 2), "1 s and over": (100, 3)},
              "U": {"under 1 ms": (30, 2), "100 ms to 1 s": (25, 3), "1 s and over": (15, 6)}}
+
+
+def bump_row(text, section, label, by=1000):
+    """The text with the first count of the row `label` in `section` raised by `by`."""
+    head, body = text.split(f"## {section}\n", 1)
+    body, tail = body.split("\n## ", 1)
+    row = next(line for line in body.splitlines() if line.startswith(f"| {label} |"))
+    cells = row.split(" | ")
+    cells[2] = f"{int(cells[2].replace(',', '')) + by:,}"
+    return head + f"## {section}\n" + body.replace(row, " | ".join(cells)) + "\n## " + tail
+
+
+def drop_section(text, section):
+    """The text without the section `section`."""
+    head, body = text.split(f"## {section}\n", 1)
+    return head + "## " + body.split("\n## ", 1)[1]
 
 
 def age_record(scale=1):
@@ -143,6 +160,25 @@ class CountsByAge(unittest.TestCase):
             with self.assertRaisesRegex(counts_report.ReportError,
                                         f"the records differ in {field}:"):
                 self.render([age_record(), age_record()], [plain])
+
+    def test_check_works_every_figure_out_again_from_each_repetition(self):
+        text = self.render([age_record(), age_record(2)], [record(), record(3)])
+        self.assertEqual(counts_report.check_ages(text), [])
+        codes = [code for code, _ in counts_report.check_ages(
+            bump_row(text, "Totals by type and age, repetition 2", "empty spans before the pass"))]
+        self.assertEqual(codes, ["figures-differ"])
+        edited = text
+        for label in ("`A`", "all types", "whole pass, rdpmc"):
+            edited = bump_row(edited, "Totals by type alone, repetition 2", label)
+        self.assertEqual([code for code, _ in counts_report.check_ages(edited)],
+                         ["figures-differ"])
+        codes = [code for code, _ in counts_report.check_ages(
+            drop_section(text, "Totals by type alone, repetition 2"))]
+        self.assertIn("totals-missing", codes)
+        edited = re.sub(r"^- summary: floor on DRAM demand fills a message naming an order: [0-9.]+",
+                        "- summary: floor on DRAM demand fills a message naming an order: 0.100",
+                        text, flags=re.MULTILINE)
+        self.assertIn("figures-differ", [code for code, _ in counts_report.check_ages(edited)])
 
     def test_a_plain_record_among_the_aged_is_refused(self):
         with self.assertRaises(counts_report.ReportError):
@@ -293,10 +329,41 @@ class CountsReport(unittest.TestCase):
 
     def test_check_catches_a_total_edited_after_the_fact(self):
         text = self.render([record()])
-        edited = text.replace("| `A` | 800 | 400 |", "| `A` | 801 | 400 |", 1)
+        edited = text.replace("| `A` | 400 | 800 | 400 |", "| `A` | 400 | 801 | 400 |", 1)
         self.assertTrue(edited != text)
         codes = [code for code, _ in counts_report.check_published(edited)]
         self.assertIn("not-tiled", codes)
+
+    def test_a_median_and_verdict_typed_in_together_are_caught(self):
+        text = self.render([record(), record(2), record(3)])
+        row = next(line for line in text.splitlines()
+                   if line.startswith("| `r0843:u` per book message"))
+        edited = text.replace(row, row.replace(f"| {row.split(' | ')[1]} |", "| 0.6000 |", 1))
+        edited = re.sub(r"against ≤ 0\.623: \*\*FAIL\*\*\. Measured [0-9.]+ raw",
+                        "against ≤ 0.623: **PASS**. Measured 0.600 raw", edited)
+        codes = [code for code, _ in counts_report.check_published(edited)]
+        self.assertIn("figures-differ", codes)
+        self.assertNotIn("verdict-faked", codes)
+
+    def test_check_works_every_figure_out_again_from_each_repetition(self):
+        text = self.render([record(), record(2), record(3)])
+        self.assertEqual(text.count("## Totals by type, repetition "), 3)
+        for label in ("empty spans before the pass", "empty spans after the pass"):
+            edited = bump_row(bump_row(text, "Totals by type, repetition 2", label),
+                              "Totals by type, repetition 3", label)
+            codes = [code for code, _ in counts_report.check_published(edited)]
+            self.assertEqual(codes, ["figures-differ"], label)
+        edited = text
+        for label in ("`A`", "all types", "whole pass, rdpmc"):
+            edited = bump_row(edited, "Totals by type, repetition 2", label)
+        self.assertEqual([code for code, _ in counts_report.check_published(edited)],
+                         ["figures-differ"])
+        self.assertIn("not-tiled", [code for code, _ in counts_report.check_published(
+            bump_row(text, "Totals by type, repetition 2", "`A`"))])
+        self.assertIn("totals-missing", [code for code, _ in counts_report.check_published(
+            drop_section(text, "Totals by type, repetition 3"))])
+        self.assertIn("figures-differ", [code for code, _ in counts_report.check_published(
+            re.sub(r"^- book_messages: [0-9,]+", "- book_messages: 1", text, flags=re.MULTILINE))])
 
     def test_check_catches_a_faked_verdict(self):
         text = self.render([record()]).replace(

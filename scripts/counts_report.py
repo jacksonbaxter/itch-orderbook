@@ -32,9 +32,13 @@ off only in a column that says so.
 On Zen 1, `cache-misses` counts L2 misses and `r0843:u` is a floor on DRAM demand fills
 (results/chase_debian.md), and every line of the file that names either says so.
 
---check reads a published file and judges it again: the totals tile, the verdicts follow
-from the figures and the targets, the names are said, nothing private is in it. Given the
-raw records too, it rebuilds the file and compares.
+The file publishes every repetition's integers: each type's (or slot's) spans and counts,
+the whole pass, and the empty spans before and after it, and those of the records by type
+alone beside a type-age file. --check reads them back and works every figure out again from
+them, the verdicts, medians, minima, maxima, empty-span costs, shares and the summary, and
+compares the file line for line, so that no figure can say more than the counts; and it
+judges the rest: the totals tile, the verdicts follow from the targets, the names are said,
+nothing private is in it. Given the raw records too, it rebuilds the file and compares.
 
 Each violation prints as `counts_report: FAIL <code>: <detail>`.
 
@@ -65,6 +69,13 @@ CYCLES = "cycles"
 EVENTS = (FILLS, BRANCH, INSTRUCTIONS, L2, CYCLES)
 BOOK_TYPES = ("A", "F", "E", "C", "X", "D", "U", "P", "Q")
 NAMING_TYPES = ("E", "C", "X", "D", "U")
+WHOLE = "whole pass, rdpmc"
+EMPTY_ROW = "empty spans {when} the pass"
+TOTALS_TEXT = """\
+Repetition {number}'s integers, which every figure in the tables above comes from: each
+{each}'s spans and counts, the whole pass by `rdpmc`, and the empty spans before and after the
+pass. Each column's {each}s add up to its whole pass, and `--check` works every figure above
+out again from these tables."""
 AGES = ("under 1 ms", "1 to 10 ms", "10 to 100 ms", "100 ms to 1 s", "1 s and over", "not live")
 TYPE_NAMES = {
     "A": "Add Order", "F": "Add Order with MPID", "E": "Order Executed",
@@ -90,7 +101,6 @@ SAME_FIELDS = ("host", "cpu", "kernel", "compiler", "flags", "commit", "dataset"
 SOURCE = {"A": 1.16, "D": 0.58, "E": 0.79, "U": 2.30, "book": 0.983}
 VERDICT = re.compile(r"^- (T-PERF-[12]), .*?: \*\*(PASS|FAIL)\*\*\. Measured ([0-9.]+) raw",
                      re.MULTILINE)
-TOTAL_ROW = re.compile(r"^\| (`[^`]+`|all types|whole pass, rdpmc) \| (.*) \|$")
 COMMIT_FIELD = re.compile(r"^[0-9a-f]{12} ")
 NAME_RULES = ((re.compile(r"cache-misses"), "L2 miss"),
               (re.compile(r"r0843"), "floor on DRAM demand fills"))
@@ -173,24 +183,35 @@ def summarise_one(record):
         raise ReportError("the spans by type do not add up to the whole pass")
     if sum(entry["spans"] for entry in types.values()) != pass_["frames"]:
         raise ReportError("the spans by type are not one a frame")
-    empty = {}
-    for name in record["events"]:
-        before = by_name(record, record["empty_before"]["sums"])[name]
-        after = by_name(record, record["empty_after"]["sums"])[name]
-        empty[name] = {"before": before / record["empty_before"]["spans"],
-                       "after": after / record["empty_after"]["spans"]}
-        empty[name]["cost"] = (empty[name]["before"] + empty[name]["after"]) / 2
+    if pass_["frames"] != record["mix"]["messages"]:
+        raise ReportError(f"{pass_['frames']} frames in the pass, {record['mix']['messages']} "
+                          "messages counted by the warm-up walk")
     book_spans = sum(types[code]["spans"] for code in BOOK_TYPES if code in types)
     if book_spans != record["mix"]["book_messages"]:
         raise ReportError(f"{book_spans} book-message spans, {record['mix']['book_messages']} "
                           "book messages counted by the warm-up walk")
+    empties = {when: (record[f"empty_{when}"]["spans"],
+                      by_name(record, record[f"empty_{when}"]["sums"]))
+               for when in ("before", "after")}
+    return derive(types, ages, by_age, whole, empties,
+                  by_name(record, record["around_pass"]["read"]),
+                  by_name(record, record["around_pass"]["rdpmc"]))
+
+
+def derive(types, ages, by_age, whole, empties, around_read, around_rdpmc):
+    """One process's figures from its integers, a record's or the ones a file publishes: the
+    spans and counts of each type (and slot), the whole pass, and the empty spans' counts."""
+    empty = {}
+    for name in whole:
+        before, after = (empties[when][1][name] / empties[when][0] for when in ("before", "after"))
+        empty[name] = {"before": before, "after": after, "cost": (before + after) / 2}
     book = {name: sum(types[code]["sums"][name] for code in BOOK_TYPES if code in types)
-            for name in record["events"]}
+            for name in whole}
     return {"whole": whole, "types": types, "ages": ages, "by_age": by_age,
-            "empty": empty, "book": book,
-            "book_messages": book_spans, "messages": record["mix"]["messages"],
-            "around_read": by_name(record, record["around_pass"]["read"]),
-            "around_rdpmc": by_name(record, record["around_pass"]["rdpmc"])}
+            "empty": empty, "empties": empties, "book": book,
+            "book_messages": sum(types[code]["spans"] for code in BOOK_TYPES if code in types),
+            "messages": sum(entry["spans"] for entry in types.values()),
+            "around_read": around_read, "around_rdpmc": around_rdpmc}
 
 
 def per(value, count):
@@ -269,16 +290,35 @@ def type_table(summaries, name):
     return rows
 
 
-def totals_table(summary, names):
-    rows = ["| Type | " + " | ".join(names) + " |", "|---" * (len(names) + 1) + "|"]
-    for code, entry in summary["types"].items():
-        rows.append(f"| {type_label(code)} | "
-                    + " | ".join(f"{entry['sums'][name]:,}" for name in names) + " |")
-    rows.append("| all types | " + " | ".join(
-        f"{sum(e['sums'][name] for e in summary['types'].values()):,}" for name in names) + " |")
-    rows.append("| whole pass, rdpmc | "
-                + " | ".join(f"{summary['whole'][name]:,}" for name in names) + " |")
+def totals_table(summary, names, head="Type", every="all types", slots=None):
+    """One repetition's integers: each type's (or slot's) spans and counts, their sum, the whole
+    pass by rdpmc, and the empty spans before and after it."""
+    if slots is None:
+        slots = [(type_label(code), entry) for code, entry in summary["types"].items()]
+
+    def row(label, spans, sums):
+        return f"| {label} | {spans:,} | " + " | ".join(f"{sums[name]:,}" for name in names) + " |"
+    rows = [f"| {head} | Spans | " + " | ".join(names) + " |", "|---" * (len(names) + 2) + "|"]
+    rows += [row(label, entry["spans"], entry["sums"]) for label, entry in slots]
+    rows.append(row(every, sum(e["spans"] for e in summary["types"].values()),
+                    {name: sum(e["sums"][name] for e in summary["types"].values())
+                     for name in names}))
+    rows.append(row(WHOLE, summary["messages"], summary["whole"]))
+    for when in ("before", "after"):
+        spans, sums = summary["empties"][when]
+        rows.append(row(EMPTY_ROW.format(when=when), spans, sums))
     return rows
+
+
+def totals_sections(summaries, title, every_label):
+    """A totals section for each repetition, from which --check works every figure out again."""
+    out = []
+    for number, summary in enumerate(summaries, start=1):
+        out += ["", f"## {title}, repetition {number}", "", TOTALS_TEXT.format(
+            number=number, each=every_label), ""]
+        out += (age_totals_table(summary, list(EVENTS)) if summary["by_age"] else
+                totals_table(summary, list(EVENTS)))
+    return out
 
 
 def load_lines(stderr_text):
@@ -320,10 +360,6 @@ def render(records, stderrs, machine_checks, prediction):
     day = header.get("dataset", "").split(".", 1)[0]
     peak = max(record["peak_rss_bytes"] for record in records) / 1024 ** 3
     migrations = sum(record["migrations"] for record in records)
-    fills_book, fills_all = headline(summaries, FILLS)
-    branch_book, branch_all = headline(summaries, BRANCH)
-    fills_cost = median_of([s["empty"][FILLS]["cost"] for s in summaries])
-    branch_cost = median_of([s["empty"][BRANCH]["cost"] for s in summaries])
     out = [f"# Hardware counts by message type, {design} on {header['host']}, {day}", "",
            "Generated by `scripts/counts_report.py` from raw records that are not committed. "
            "Do not edit by hand.", "", f"Host: **{header['host']}**. Numbers from the two hosts "
@@ -340,23 +376,43 @@ def render(records, stderrs, machine_checks, prediction):
             f"- run_started: {timestamp(lines[0][0])}",
             f"- run_finished: {timestamp(lines[-1][1])}", "",
             "## How the counts are taken", "",
-            METHOD.format(empty=records[0]["empty_before"]["spans"]), "",
-            "## Verdicts", "",
-            verdict_line("T-PERF-1", T_PERF_1, median_of(fills_book), fills_cost,
-                         "`r0843:u` per book message, a floor on DRAM demand fills",
-                         spread_text(fills_book)),
-            verdict_line("T-PERF-2", T_PERF_2, median_of(branch_all), branch_cost,
-                         "branch misses per message, against the floor BENCHMARKS.md states, "
-                         "with no top-tier bar claimed",
-                         spread_text(branch_all)), "",
-            "T-PERF-1's bar is carteret's, on a Ryzen 9 5950X (Zen 3) with 32 MB of L3 to one "
-            "core and its identity hash. This host is a Ryzen Embedded V1605B (Zen 1) with 4 MB "
-            "of L3 shared by four cores, so far less of the book's working set stays on chip "
-            "and more of its lines come from DRAM. The bar is kept, and the gap is the host's "
-            "and the design's together: the source's own book, as shipped, gave "
-            f"{SOURCE['book']} on its host.", "",
-            "| Figure | Median | Min | Max | Empty span | Median, empty span taken off |",
-            "|---|---|---|---|---|---|"]
+            METHOD.format(empty=records[0]["empty_before"]["spans"]), ""]
+    out += type_figures(summaries)
+    out += ["", "## What this does not show", "", CAVEATS, "",
+            "## machine_check output", "", "Before the first repetition and after the last, "
+            "each under `measure.sh taskset -c 4`.", "", "```"]
+    out += [text.strip() for text in machine_checks]
+    out += ["```", "", "## measure.sh load lines", "", "```"]
+    out += [line for pair in lines for line in pair]
+    out += ["```", "", "## Command", "", "```",
+            f"measure.sh taskset -c 4 build/bench/bench_counts --input <raw>/{day}.NASDAQ_ITCH50 "
+            f"--design {design} --core 4 --commit <commit> --out <raw>/run-N.json", "```", ""]
+    return "\n".join(out), run_id
+
+
+def type_figures(summaries):
+    """Every figure of a file by type, from the verdicts to the totals, from the processes'
+    integers alone: render writes it from the records, and --check again from the totals."""
+    fills_book, fills_all = headline(summaries, FILLS)
+    branch_book, branch_all = headline(summaries, BRANCH)
+    fills_cost = median_of([s["empty"][FILLS]["cost"] for s in summaries])
+    branch_cost = median_of([s["empty"][BRANCH]["cost"] for s in summaries])
+    out = ["## Verdicts", "",
+           verdict_line("T-PERF-1", T_PERF_1, median_of(fills_book), fills_cost,
+                        "`r0843:u` per book message, a floor on DRAM demand fills",
+                        spread_text(fills_book)),
+           verdict_line("T-PERF-2", T_PERF_2, median_of(branch_all), branch_cost,
+                        "branch misses per message, against the floor BENCHMARKS.md states, "
+                        "with no top-tier bar claimed",
+                        spread_text(branch_all)), "",
+           "T-PERF-1's bar is carteret's, on a Ryzen 9 5950X (Zen 3) with 32 MB of L3 to one "
+           "core and its identity hash. This host is a Ryzen Embedded V1605B (Zen 1) with 4 MB "
+           "of L3 shared by four cores, so far less of the book's working set stays on chip "
+           "and more of its lines come from DRAM. The bar is kept, and the gap is the host's "
+           "and the design's together: the source's own book, as shipped, gave "
+           f"{SOURCE['book']} on its host.", "",
+           "| Figure | Median | Min | Max | Empty span | Median, empty span taken off |",
+           "|---|---|---|---|---|---|"]
     for label, values, cost in (
             ("`r0843:u` per book message, a floor on DRAM demand fills", fills_book, fills_cost),
             ("`r0843:u` per message, a floor on DRAM demand fills", fills_all, fills_cost),
@@ -411,20 +467,7 @@ def render(records, stderrs, machine_checks, prediction):
                 f"Each type's spans over its messages, {over(len(summaries))}, with the "
                 "empty span's cost beside it and taken off in the column that says so.", ""]
         out += type_table(summaries, name)
-    out += ["", "## Totals by type, repetition 1", "",
-            "The integers the figures come from, so that the tiling can be checked from this "
-            "file: each column's types add up to its whole pass.", ""]
-    out += totals_table(summaries[0], list(EVENTS))
-    out += ["", "## What this does not show", "", CAVEATS, "",
-            "## machine_check output", "", "Before the first repetition and after the last, "
-            "each under `measure.sh taskset -c 4`.", "", "```"]
-    out += [text.strip() for text in machine_checks]
-    out += ["```", "", "## measure.sh load lines", "", "```"]
-    out += [line for pair in lines for line in pair]
-    out += ["```", "", "## Command", "", "```",
-            f"measure.sh taskset -c 4 build/bench/bench_counts --input <raw>/{day}.NASDAQ_ITCH50 "
-            f"--design {design} --core 4 --commit <commit> --out <raw>/run-N.json", "```", ""]
-    return "\n".join(out), run_id
+    return out + totals_sections(summaries, "Totals by type", "type")
 
 
 AGE_METHOD = """\
@@ -514,22 +557,15 @@ def type_age_table(summaries, name):
 
 
 def age_totals_table(summary, names):
-    rows = ["| Slot | " + " | ".join(names) + " |", "|---" * (len(names) + 1) + "|"]
+    """totals_table with each naming type's slots by age in place of its one row."""
+    slots = []
     for code, entry in summary["types"].items():
         if code in NAMING_TYPES:
-            for age in AGES:
-                one = summary["ages"].get((code, age))
-                if one is not None:
-                    rows.append(f"| `{code}` {age} | "
-                                + " | ".join(f"{one['sums'][name]:,}" for name in names) + " |")
+            slots += [(f"`{code}` {age}", summary["ages"][(code, age)]) for age in AGES
+                      if (code, age) in summary["ages"]]
         else:
-            rows.append(f"| {type_label(code)} | "
-                        + " | ".join(f"{entry['sums'][name]:,}" for name in names) + " |")
-    rows.append("| all slots | " + " | ".join(
-        f"{sum(e['sums'][name] for e in summary['types'].values()):,}" for name in names) + " |")
-    rows.append("| whole pass, rdpmc | "
-                + " | ".join(f"{summary['whole'][name]:,}" for name in names) + " |")
-    return rows
+            slots.append((type_label(code), entry))
+    return totals_table(summary, names, "Slot", "all slots", slots)
 
 
 def age_summary(summaries):
@@ -626,6 +662,32 @@ def render_ages(records, stderrs, machine_checks, prediction, plain=None, plain_
             "## How the counts are taken", "",
             METHOD.format(empty=records[0]["empty_before"]["spans"]), "", AGE_METHOD, "",
             "## What each counter can attribute", "", ATTRIBUTES, ""]
+    out += age_figures(summaries, plain_summaries)
+    out += ["", "## What this does not show", "", CAVEATS, AGE_CAVEATS, ""]
+    if not_published:
+        out += ["## Processes of this arm not published", "",
+                "Each has its own run-log row. What keeps it out is the rule each row gives; a "
+                "process is never kept out for its figures.", ""]
+        out += [f"- {line}" for line in not_published]
+        out.append("")
+    out += ["## machine_check output", "", check_placement(before, lead, after, gap), "", "```"]
+    out += [text.strip() for text in machine_checks]
+    out += ["```", "", "## measure.sh load lines", "", "```"]
+    out += [line for pair in lines + plain_lines for line in pair]
+    out += ["```", "", "## Command", "", "```",
+            f"measure.sh taskset -c 4 build/bench/bench_counts --input <raw>/{day}.NASDAQ_ITCH50 "
+            f"--design {design} --by type-age --core 4 --commit <commit> --out <raw>/run-N.json",
+            f"measure.sh taskset -c 4 build/bench/bench_counts --input <raw>/{day}.NASDAQ_ITCH50 "
+            f"--design {design} --by type --core 4 --commit <commit> --out <raw>/plain-N.json",
+            "```", ""]
+    return "\n".join(out), run_id
+
+
+def age_figures(summaries, plain_summaries):
+    """Every figure of a file by type and age, from the tables by age to the totals, from the
+    processes' integers alone: render writes it from the records, and --check again from the
+    totals."""
+    out = []
     for name in (FILLS, L2):
         out += [f"## By the age of the order named: {name}", "",
                 f"E, C, X, D and U pooled, each age's spans over its messages, "
@@ -663,31 +725,8 @@ def render_ages(records, stderrs, machine_checks, prediction, plain=None, plain_
         out.append(f"| {name} | {fmt(median_of([s['empty'][name]['before'] for s in summaries]))}"
                    f" | {fmt(median_of([s['empty'][name]['after'] for s in summaries]))} "
                    f"| {fmt(median_of([s['empty'][name]['cost'] for s in summaries]))} |")
-    out += ["", "## Totals by type and age, repetition 1", "",
-            "The integers the figures come from, so that the tiling can be checked from this "
-            "file: each column's slots add up to its whole pass.", ""]
-    out += age_totals_table(summaries[0], list(EVENTS))
-    out += ["", "## What this does not show", "", CAVEATS, AGE_CAVEATS, ""]
-    if not_published:
-        out += ["## Processes of this arm not published", "",
-                "Each has its own run-log row. What keeps it out is the rule each row gives; a "
-                "process is never kept out for its figures.", ""]
-        out += [f"- {line}" for line in not_published]
-        out.append("")
-    out += ["## machine_check output", "", check_placement(before, lead, after, gap), "", "```"]
-    out += [text.strip() for text in machine_checks]
-    out += ["```", "", "## measure.sh load lines", "", "```"]
-    out += [line for pair in lines + plain_lines for line in pair]
-    out += ["```", "", "## Command", "", "```",
-            f"measure.sh taskset -c 4 build/bench/bench_counts --input <raw>/{day}.NASDAQ_ITCH50 "
-            f"--design {design} --by type-age --core 4 --commit <commit> --out <raw>/run-N.json",
-            f"measure.sh taskset -c 4 build/bench/bench_counts --input <raw>/{day}.NASDAQ_ITCH50 "
-            f"--design {design} --by type --core 4 --commit <commit> --out <raw>/plain-N.json",
-            "```", ""]
-    return "\n".join(out), run_id
-
-
-AGE_ROW = re.compile(r"^\| (`[^`]+` [^|]+?|`[^`]+`|none|all slots|whole pass, rdpmc) \| (.*) \|$")
+    return (out + totals_sections(summaries, "Totals by type and age", "slot")
+            + totals_sections(plain_summaries, "Totals by type alone", "type"))
 
 
 def check_ages(text):
@@ -696,25 +735,11 @@ def check_ages(text):
     if not fields:
         return [("header-missing", "no Header section")]
     found = header_violations(text, fields)
-    body = check_results.section(text, "Totals by type and age, repetition 1") or ""
-    rows, names = {}, []
-    for line in body.splitlines():
-        if line.startswith("| Slot |"):
-            names = [cell.strip() for cell in line.strip("|").split("|")][1:]
-        match = AGE_ROW.match(line)
-        if match:
-            rows[match.group(1)] = [int(cell.strip().replace(",", ""))
-                                    for cell in match.group(2).split("|")]
-    if "all slots" not in rows or "whole pass, rdpmc" not in rows or len(rows) < 3:
-        return found + [("totals-missing", "the totals table is not whole")]
-    slots = [values for label, values in rows.items()
-             if label not in ("all slots", "whole pass, rdpmc")]
-    for name, total, listed, whole in zip(names, [sum(c) for c in zip(*slots)],
-                                          rows["all slots"], rows["whole pass, rdpmc"]):
-        if not total == listed == whole:
-            found.append(("not-tiled", f"{name}: slots add up to {total:,}, the file says "
-                                       f"{listed:,} and the whole pass {whole:,}"))
-    if not any(label.startswith("`E` ") for label in rows):
+    figures, summaries = figure_violations(text, fields, by_age=True)
+    if not summaries:
+        return found + figures
+    found += figures
+    if not any(code == "E" for code, _ in summaries[0]["ages"]):
         found.append(("ages-missing", "no slot of an E by age in the totals"))
     table = check_results.section(text, f"By the age of the order named: {FILLS}") or ""
     figures = {}
@@ -808,18 +833,130 @@ def said_near(summary, said, figure):
     return match is not None and abs(float(match.group(1)) - figure) <= 0.00055
 
 
-def published_totals(text):
-    """The totals table, as {row label: [integers]}, and its column names."""
-    body = check_results.section(text, "Totals by type, repetition 1") or ""
-    rows, names = {}, []
-    for line in body.splitlines():
-        if line.startswith("| Type |"):
-            names = [cell.strip() for cell in line.strip("|").split("|")][1:]
-        match = TOTAL_ROW.match(line)
-        if match:
-            rows[match.group(1)] = [int(cell.strip().replace(",", ""))
-                                    for cell in match.group(2).split("|")]
-    return rows, names
+def around_counts(text):
+    """The rdpmc and read() around each repetition's pass, from the whole-pass table, as
+    {repetition: (read, rdpmc)}; a file by type and age has no such table."""
+    around = {}
+    for line in (check_results.section(text, "The whole pass") or "").splitlines():
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) == 8 and cells[0].isdigit():
+            read, rdpmc = around.setdefault(int(cells[0]), ({}, {}))
+            rdpmc[cells[1]], read[cells[1]] = integer(cells[5]), integer(cells[6])
+    return around
+
+
+def integer(cell):
+    return int(cell.replace(",", ""))
+
+
+def published_summaries(text, title, every):
+    """Each repetition's totals section read back into what summarise_one gives the records,
+    with the counts around each pass from the whole-pass table. ReportError if a section is not
+    whole."""
+    summaries, around, number = [], around_counts(text), 1
+    totals = (every, WHOLE, EMPTY_ROW.format(when="before"), EMPTY_ROW.format(when="after"))
+    while (body := check_results.section(text, f"{title}, repetition {number}")) is not None:
+        names, rows = None, {}
+        for line in body.splitlines():
+            if not line.startswith("| "):
+                continue
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if cells[1] == "Spans":
+                names = cells[2:]
+            else:
+                rows[cells[0]] = (integer(cells[1]), [integer(cell) for cell in cells[2:]])
+        missing = [label for label in totals if label not in rows]
+        if names != list(EVENTS) or missing:
+            raise ReportError(f"{title}, repetition {number}: columns {names}, rows {missing} "
+                              "missing")
+        types, ages = {}, {}
+        for label, (spans, values) in rows.items():
+            sums = dict(zip(names, values))
+            slot = re.fullmatch(r"`([^`]+)` (.+)", label)
+            if label in totals:
+                continue
+            if slot is None:
+                types["none" if label == "none" else label.strip("`")] = {"spans": spans,
+                                                                          "sums": sums}
+                continue
+            ages[slot.groups()] = {"spans": spans, "sums": sums}
+            one = types.setdefault(slot.group(1), {"spans": 0, "sums": dict.fromkeys(names, 0)})
+            one["spans"] += spans
+            for name in names:
+                one["sums"][name] += sums[name]
+        empties = {when: (rows[EMPTY_ROW.format(when=when)][0],
+                          dict(zip(names, rows[EMPTY_ROW.format(when=when)][1])))
+                   for when in ("before", "after")}
+        summary = derive(types, ages, every == "all slots", dict(zip(names, rows[WHOLE][1])),
+                         empties, *around.get(number, ({}, {})))
+        summary["printed"] = {"every": rows[every], "whole": rows[WHOLE]}
+        summaries.append(summary)
+        number += 1
+    return summaries
+
+
+def figure_violations(text, fields, by_age):
+    """Every figure the file prints from its processes, worked out again from the integers it
+    publishes for each repetition, and compared line for line; and those integers tile. Returns
+    the violations and the summaries read back."""
+    title, every = (("Totals by type and age", "all slots") if by_age else
+                    ("Totals by type", "all types"))
+    try:
+        summaries = published_summaries(text, title, every)
+        plain = published_summaries(text, "Totals by type alone", "all types") if by_age else []
+    except (ReportError, ValueError, IndexError) as error:
+        return [("totals-missing", str(error))], []
+    found = []
+    wanted = {"repetitions": len(summaries)}
+    if by_age:
+        wanted["repetitions_by_type_alone"] = len(plain)
+    for name, count in wanted.items():
+        if (name == "repetitions" and not count) or fields.get(name) != str(count):
+            found.append(("totals-missing", f"{count} repetitions' totals, and the header's "
+                                            f"{name} is {fields.get(name)!r}"))
+    if not summaries:
+        return found, []
+    for number, summary in enumerate(summaries + plain, start=1):
+        listed, whole = summary["printed"]["every"], summary["printed"]["whole"]
+        by_type = [sum(e["spans"] for e in summary["types"].values())] + [
+            sum(e["sums"][name] for e in summary["types"].values()) for name in EVENTS]
+        for name, total, said, pass_ in zip(("spans", *EVENTS), by_type,
+                                            [listed[0], *listed[1]], [whole[0], *whole[1]]):
+            if not total == said == pass_:
+                found.append(("not-tiled", f"totals {number}, {name}: the rows add up to "
+                                           f"{total:,}, the file says {said:,} and the whole "
+                                           f"pass {pass_:,}"))
+    if found:
+        return found, summaries
+    first = summaries[0]
+    said = {"messages": f"{first['messages']:,}", "book_messages": f"{first['book_messages']:,}",
+            "empty_spans": f"{first['empties']['before'][0]:,} before and after the pass, each "
+                           "process"}
+    if by_age:
+        said["summary"] = age_summary(summaries)
+    for name, value in said.items():
+        if fields.get(name) != value:
+            found.append(("figures-differ", f"header {name}: the totals give {value!r}, the file "
+                                            f"says {fields.get(name)!r}"))
+    try:
+        lines = age_figures(summaries, plain) if by_age else type_figures(summaries)
+    except (KeyError, ZeroDivisionError, ValueError) as error:
+        return found + [("totals-missing", f"the totals cannot give the figures: {error!r}")], \
+            summaries
+    lines = "\n".join(lines).split("\n")
+    start = text.find("\n" + lines[0] + "\n") + 1
+    end = text.find("\n\n## What this does not show")
+    printed = text[start:end].split("\n") if start and end > start else []
+    for number, (want, got) in enumerate(zip(lines, printed), start=1):
+        if want != got:
+            found.append(("figures-differ", f"line {number} of the figures: the totals give "
+                                            f"{want!r}, the file says {got!r}"))
+            break
+    else:
+        if len(lines) != len(printed):
+            found.append(("figures-differ", f"the totals give {len(lines)} lines of figures, the "
+                                            f"file has {len(printed)}"))
+    return found, summaries
 
 
 def figure_of(text, label):
@@ -865,18 +1002,7 @@ def check_published(text):
     if not fields:
         return [("header-missing", "no Header section")]
     found = header_violations(text, fields)
-    rows, names = published_totals(text)
-    if "all types" not in rows or "whole pass, rdpmc" not in rows or len(rows) < 3:
-        found.append(("totals-missing", "the totals table is not whole"))
-    else:
-        types = [values for label, values in rows.items()
-                 if label not in ("all types", "whole pass, rdpmc")]
-        summed = [sum(column) for column in zip(*types)]
-        for name, total, listed, whole in zip(names, summed, rows["all types"],
-                                              rows["whole pass, rdpmc"]):
-            if not total == listed == whole:
-                found.append(("not-tiled", f"{name}: types add up to {total:,}, the file says "
-                                           f"{listed:,} and the whole pass {whole:,}"))
+    found += figure_violations(text, fields, by_age=False)[0]
     found += count_violations(text, fields, by_age=False)
     if "| NO |" in (check_results.section(text, "The whole pass") or ""):
         found.append(("not-tiled", "a repetition's spans do not add up to its whole pass"))
