@@ -28,6 +28,7 @@ DEMO_TESTS = ["test_demo_replay", "test_demo_cli", "test_alloc"]
 
 # One file for each pattern the bench stage reads.
 BENCH_RESULTS = ["bench_a.md", "backtest_a.md", "spsc_a.md", "alloc_a.md", "walks_ladder_a.md",
+                 "parse_rate_a.md",
                  "chase_debian.md", "counters_by_type_a.md", "counters_by_age_a.md",
                  "counters_zen1_events_debian.md", "flamegraph_a.md", "profile_a.md",
                  "lookup_a.md", "prefetch_a.md", "dispatch_a.md", "layout_a.md",
@@ -134,7 +135,7 @@ class CheckSh(unittest.TestCase):
 
     def test_a_results_pattern_that_matches_nothing_fails_the_bench_stage(self):
         for missing in ("udp_a.md", "chase_debian.md", "simd_asm_a.md", "profile_a.md",
-                        "fuzz_30min_a.md"):
+                        "fuzz_30min_a.md", "parse_rate_a.md"):
             with self.subTest(missing=missing):
                 for path in (self.repo / "results").glob("*.md"):
                     path.unlink()
@@ -143,7 +144,7 @@ class CheckSh(unittest.TestCase):
                 self.assertEqual(run.returncode, 1, run.stdout)
                 pattern = {"udp_a.md": "udp_*.md", "chase_debian.md": "chase_debian.md",
                            "simd_asm_a.md": "simd_asm_*.md", "profile_a.md": "profile_*.md",
-                           "fuzz_30min_a.md": "fuzz_*.md"}
+                           "fuzz_30min_a.md": "fuzz_*.md", "parse_rate_a.md": "parse_rate_*.md"}
                 self.assertIn(f"no results file matches results/{pattern[missing]}",
                               self.log("bench"))
 
@@ -158,6 +159,7 @@ class CheckSh(unittest.TestCase):
         self.assertIn("python3 -B scripts/simd_report.py --check results/simd_a.md\n", calls)
         self.assertIn("python3 -B scripts/udp_report.py --check results/udp_a.md\n", calls)
         self.assertIn("python3 -B scripts/fuzz_report.py check results/fuzz_30min_a.md\n", calls)
+        self.assertEqual(calls.count("results/parse_rate_a.md"), 1, calls)
         self.assertIn("ctest --preset release -R ^(" + "|".join(BENCH_TESTS) + ")$\n", calls)
 
     def test_the_demo_stage_fails_without_a_browser_and_says_how_to_name_one(self):

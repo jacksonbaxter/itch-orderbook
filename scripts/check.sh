@@ -171,6 +171,7 @@ stage_bench() {
     python_test scripts/test_driver_records.py &&
     python_test scripts/test_backtest_results.py &&
     python_test scripts/test_linux_sampler.py &&
+    python_test scripts/test_parse_driver.py &&
     python_test scripts/test_spsc_results.py &&
     python_test scripts/test_alloc_results.py &&
     python_test scripts/test_chase_report.py &&
@@ -192,7 +193,7 @@ stage_bench() {
   # Each pattern must match a file, or the check it feeds has read nothing.
   local file
   results=$(results_files 'bench_*.md' 'backtest_*.md' 'spsc_*.md' 'alloc_*.md' \
-    'walks_ladder_*.md') || return 1
+    'walks_ladder_*.md' 'parse_rate_*.md') || return 1
   # shellcheck disable=SC2086
   python_test scripts/check_results.py $results || return 1
   results=$(results_files chase_debian.md) || return 1

@@ -106,6 +106,11 @@ if(TARGET itch::mimalloc)
 endif()
 itch_add_test(test_book_variants test_book_variants.cpp)
 target_include_directories(test_book_variants PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+# bench_parse's three passes (T-PARSE-1 to T-PARSE-3) against plain references.
+itch_add_test(test_parse_passes test_parse_passes.cpp)
+target_include_directories(test_parse_passes PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+target_compile_definitions(test_parse_passes PRIVATE
+  "ITCH_ORACLE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle\"")
 
 # MoldUDP64 framing, the sequence check, the prebuilt packets and the feed (T-URING-1).
 itch_add_test(test_mold test_mold.cpp)
@@ -204,9 +209,13 @@ if(ITCH_BUILD_BENCH)
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_walks_cli.py"
             "$<TARGET_FILE:bench_walks>" "${CMAKE_CURRENT_BINARY_DIR}/bench_walks_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
+  add_test(NAME test_bench_parse_cli
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_bench_parse_cli.py"
+            "$<TARGET_FILE:bench_parse>" "${CMAKE_CURRENT_BINARY_DIR}/bench_parse_cli"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle/session.itch")
   set_tests_properties(test_bench_cli test_bench_backtest_cli test_bench_counts_cli
     test_bench_variants_cli test_bench_spsc_cli test_bench_kernels_cli test_bench_udp_cli
-    test_bench_walks_cli PROPERTIES LABELS unit)
+    test_bench_walks_cli test_bench_parse_cli PROPERTIES LABELS unit)
 endif()
 
 if(ITCH_BUILD_TOOLS)

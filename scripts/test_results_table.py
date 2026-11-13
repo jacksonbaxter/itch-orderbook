@@ -27,6 +27,7 @@ BOOK = "bench_book_hash-linked_ram_fixture_12302019.md"  # Beside the real files
 HEADLINE_BOOK = "results/bench_book_paged-flat_ram_debian_12302019.md"
 UNJUDGED_BOOK = "results/bench_book_paged-flat_ram_mac_12302019.md"
 HEADLINE_BACKTEST = "results/backtest_quoting_debian_12302019.md"
+PARSE = "results/parse_rate_debian_12302019.md"
 
 
 class ResultsTable(unittest.TestCase):
@@ -776,6 +777,32 @@ class ResultsTable(unittest.TestCase):
         self.assertIn(f"results_table: FAIL {UNJUDGED_BOOK}: its host is debian", output)
 
 
+    def test_a_parse_file_gets_a_row_for_each_pass(self):
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        results_page = output.split("README.md:\n", 1)[0]
+        rows = [line for line in results_page.splitlines() if f"]({PARSE})" in line]
+        self.assertEqual([row.split(" | ")[0] for row in rows],
+                         ["| T-PARSE-1", "| T-PARSE-2", "| T-PARSE-3"], output)
+        self.assertEqual(rows[0], "| T-PARSE-1 | the framing walk | 12302019 | debian | pinned to "
+                         "core 4 | 298,983,253 | 295,511,473 | 305,215,684 | 0.95% | 9.180 | ≥ 709 "
+                         "M msg/s and 21.8 GB/s | **missed**: 410.02 M msg/s and 12.62 GB/s under "
+                         f"the bar | `6d53ed4cf1e2` | [{PARSE}]({PARSE}) |")
+        # T-PARSE-3's bar is another day's: its verdict names both days, never a bare met.
+        self.assertIn("| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | met; measured on 12302019, "
+                      "not the bar's 10302019,", rows[2])
+        self.edit(PARSE, "| T-PARSE-2, itch-book's decode of its ten types, GB/s |", "| x |")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL {PARSE}", output)
+
+    def test_a_parse_verdict_no_row_took_up_is_refused(self):
+        self.edit(PARSE, "| T-PARSE-3 | ≥ 93.9 M", "| T-PARSE-9 | ≥ 93.9 M")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL {PARSE}", output)
+
+
 class MissedTargets(unittest.TestCase):
     """WRITEUP.md's table of every target missed or not measured."""
 
@@ -847,13 +874,41 @@ class MissedTargets(unittest.TestCase):
         self.assertIn("P-0502 has a published run or none, and WRITEUP.md's table says T-BOOK-4 "
                       "was never measured", output)
 
-    def test_a_parse_target_a_prediction_names_is_refused(self):
-        with open(self.root / "results" / "predictions.md", "a", encoding="utf-8") as predictions:
-            predictions.write("\n## P-9999: T-PARSE-1 planted by the test\n")
+    def test_the_parse_targets_are_measured_rows_from_their_file(self):
+        table = self.missed()
+        self.assertIn("| T-PARSE-1 | ≥ 709 M msg/s and 21.8 GB/s | 298.98 M msg/s, 9.180 GB/s, the "
+                      "median | 410.02 M msg/s and 12.62 GB/s under the bar | debian |", table)
+        self.assertIn("| T-PARSE-2 | ≥ 199 M msg/s and 6.1 GB/s | 140.97 M msg/s, 4.328 GB/s, the "
+                      "median | 58.03 M msg/s and 1.77 GB/s under the bar | debian |", table)
+        self.assertIn("| T-PARSE-3 | ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | 117.74 M msg/s, "
+                      "3.615 GB/s, the median, on 12302019 | above the bar on 12302019, a day other "
+                      "than the bar's; not measured on 10302019 | debian |", table)
+        for line in table.splitlines():
+            if line.startswith("| T-PARSE-"):
+                self.assertFalse(line.endswith(results_table.NOT_MEASURED_MARK), line)
+                self.assertIn(f"]({PARSE}) |", line)
+
+    def test_a_parse_target_on_another_day_with_a_bare_met_is_refused(self):
+        self.edit(PARSE, "| met; measured on 12302019, not the bar's 10302019, which is not on this "
+                  "host: the two days are compared under Caveats |", "| met |")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
-        self.assertIn("P-9999 names T-PARSE-1, which WRITEUP.md's table says no run measured",
-                      output)
+        self.assertIn(f"{PARSE}: T-PARSE-3 is 'met', not a verdict on 12302019 that names the "
+                      "bar's day, 10302019", output)
+
+    def test_a_parse_target_whose_bar_names_no_other_day_is_refused(self):
+        self.edit(PARSE, "| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 |",
+                  "| ≥ 93.9 M msg/s and 2.89 GB/s |")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"{PARSE}: T-PARSE-3's bar is '≥ 93.9 M msg/s and 2.89 GB/s', not one set "
+                      "on another day than 12302019", output)
+
+    def test_a_parse_miss_whose_file_calls_it_met_is_refused(self):
+        self.edit(PARSE, "| missed: 58.03 M msg/s and 1.77 GB/s under the bar |", "| met |")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("T-PARSE-2 is 'met', not missed", output)
 
     def test_a_missing_writeup_marker_fails(self):
         self.edit("WRITEUP.md", results_table.MISS_END + "\n", "")

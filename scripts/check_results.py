@@ -15,6 +15,10 @@ whose figures, or whose Sampler section's figures for every repetition, are unde
 bars, scripts/linux_sampler.py), machine_check's output present and passing, and nothing private. scripts/bench_driver.py and scripts/stamp_load.py run the same checks, so that
 a file failing them is never written as finished.
 
+A parse rate file, one with a `parse_passes` field (scripts/parse_driver.py), has no latency
+or counter tables: every figure in it is worked again from its table of timed passes by that
+driver's check_text().
+
 A backtest file, one with a `workload` field (scripts/backtest_driver.py), has no latency
 or counter tables. It is held instead to its workload's fields, the summary's three rates
 with each median inside its min and max and matching the median of the repetitions table,
@@ -335,6 +339,11 @@ SPSC_BENCHMARKS = {
     ("T-SPSC-3", "pipelined time / single-threaded time"):
         "takes {op} {0:g}× the single-threaded replay",
 }
+# The words of T-PARSE-1 to T-PARSE-3's Target lines, for the bars scripts/parse_driver.py
+# holds its medians to: {0} M msg/s, {1} GB/s, {day} the day a bar was set on.
+PARSE_BENCHMARKS = {"T-PARSE-1": "≥ {0:g} M msg/s, ~{1:g} GB/s",
+                    "T-PARSE-2": "≥ {0:g} M msg/s and ≥ ~{1:g} GB/s",
+                    "T-PARSE-3": "≥ {0:g} M msg/s and ≥ {1:g} GB/s on {day}"}
 SYMBOLS = {">=": "≥", "<=": "≤"}
 
 
@@ -366,6 +375,12 @@ def bar_copies():
             words = None
         yield key[0], f"SPSC_COMPARISONS {key[1]}", \
             words and words.format(spec["bar"], op=SYMBOLS[spec["op"]])
+    # Imported here: parse_driver imports this module.
+    import parse_driver  # noqa: PLC0415
+
+    for name, target, _, bar_msgs, bar_gbs in parse_driver.PASSES:
+        yield target, f"parse_driver.PASSES {name}", PARSE_BENCHMARKS[target].format(
+            bar_msgs, bar_gbs, day=parse_driver.BAR_DAY.get(target, ""))
 
 
 def bar_disagreements(benchmarks):
@@ -1235,6 +1250,18 @@ def check_walks(text):
     return walk_report.check_text(text)
 
 
+def is_parse_file(fields):
+    """scripts/parse_driver.py's parse rate, T-PARSE-1 to T-PARSE-3."""
+    return "parse_passes" in fields
+
+
+def check_parse(text):
+    # Imported here: parse_driver imports this module.
+    import parse_driver  # noqa: PLC0415
+
+    return parse_driver.check_text(text)
+
+
 def check_backtest_summary(text, fields):
     rows = {cells[0]: cells for cells in table_rows(text, "Summary")}
     for label in BACKTEST_SUMMARY:
@@ -1616,6 +1643,9 @@ def check_text(text, name=None):
     if is_walks_file(fields):
         violations.extend(check_walks(text))
         violations.extend(check_command_siblings(text))
+        return violations
+    if is_parse_file(fields):
+        violations.extend(check_parse(text))
         return violations
     if is_backtest_file(fields):
         violations.extend(check_backtest(text, fields))

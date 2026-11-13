@@ -396,7 +396,8 @@ class BookResults(unittest.TestCase):
         copies = list(check_results.bar_copies())
         self.assertEqual({target for target, _, _ in copies},
                          set(check_results.BOOK_BARS) | {"T-BT-1", "T-BT-3", "T-SPSC-1",
-                                                         "T-SPSC-2", "T-SPSC-3"})
+                                                         "T-SPSC-2", "T-SPSC-3", "T-PARSE-1",
+                                                         "T-PARSE-2", "T-PARSE-3"})
 
     def test_a_bar_changed_in_benchmarks_md_alone_is_refused(self):
         text = (REPO_ROOT / "BENCHMARKS.md").read_text(encoding="utf-8")
@@ -405,7 +406,10 @@ class BookResults(unittest.TestCase):
                                  ("| replace | 110 | 709 | 945 |", "| replace | 110 | 709 | 954 |",
                                   "T-LAT-1"),
                                  ("at least 1.16× better", "at least 1.20× better", "T-SPSC-1"),
-                                 ("≤ 1.31× the single", "≤ 1.13× the single", "T-SPSC-3")):
+                                 ("≤ 1.31× the single", "≤ 1.13× the single", "T-SPSC-3"),
+                                 ("≥ 709 M msg/s", "≥ 70.9 M msg/s", "T-PARSE-1"),
+                                 ("≥ ~6.1 GB/s", "≥ ~6.4 GB/s", "T-PARSE-2"),
+                                 ("2.89 GB/s on 10302019", "2.89 GB/s on 12302019", "T-PARSE-3")):
             changed = replace(text, old, new)
             self.assertEqual([found for found, _ in check_results.bar_disagreements(changed)],
                              [target], old)
