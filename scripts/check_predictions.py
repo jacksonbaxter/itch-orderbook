@@ -187,10 +187,19 @@ def extends(earlier, text, reworded):
             and after[len(before) - 1].startswith(before[-1]))
 
 
+def changed_back(earlier, text, reworded):
+    """The lines of text that are a listed line as it was while the earlier log holds the line
+    it became: a rewording undone, which dropped_rows(), reading both as the line it became,
+    does not see (r14-1)."""
+    became = {digest(line) for line in earlier.splitlines()} & set(reworded.values())
+    return [line for line in text.splitlines() if reworded.get(digest(line)) in became]
+
+
 def check_log_history(root):
     """Every committed version of the log extends its parents': a commit appends to its first
     parent's log, and a merge also keeps every row of each branch it merges. A line listed in
-    REWORDINGS may have become the line listed beside it, and nothing else."""
+    REWORDINGS may have become the line listed beside it, and nothing else; once a parent holds
+    the line it became, no commit may hold it as it was again, a merge included."""
     reworded = rewordings(root)
     history = git(root, "log", "--full-history", "--reverse", "--format=%H %P", "--", RUN_LOG)
     for line in (history or "").splitlines():
@@ -201,6 +210,10 @@ def check_log_history(root):
         for parent in parents[1:]:
             if dropped_rows(log_at(root, parent), text, reworded):
                 yield "run-log-rewritten", commit[:10], f"a row of merged {parent[:10]} went"
+        for parent in parents:
+            if changed_back(log_at(root, parent), text, reworded):
+                yield ("run-log-rewritten", commit[:10],
+                       f"a row {parent[:10]} holds reworded is back as it was")
     committed = git(root, "show", f"HEAD:{RUN_LOG}")
     current = (root / RUN_LOG).read_text(encoding="utf-8") if (root / RUN_LOG).is_file() else ""
     if committed is not None and not extends(committed, current, reworded):

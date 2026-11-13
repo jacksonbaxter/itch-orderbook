@@ -6761,6 +6761,27 @@
         "signature": "^FAIL: test_a_run_of_no_design_keeps_every_process_it_sampled \\(",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-run-log-rewording-undone-by-merge",
+      "breaks": "A merge that keeps a run-log line as it was, while a parent holds the line scripts/run_log_rewordings.json says it became, is let through, so a merge undoes a rewording unseen",
+      "check": "test_check_predictions.py test_a_merge_that_undoes_a_rewording",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "            if changed_back(log_at(root, parent), text, reworded):\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_merge_that_undoes_a_rewording",
+        "exit": 1
+      }
     }
   ]
 }

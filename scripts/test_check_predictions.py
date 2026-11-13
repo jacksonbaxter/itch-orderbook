@@ -372,6 +372,40 @@ class History(unittest.TestCase):
         code, output = check(self.root)
         self.assertEqual(code, 0, output)
 
+    def test_a_merge_that_undoes_a_rewording(self):
+        """r14-1: the branch from before the rewording merges the reworded trunk and keeps its
+        own log, the line as it was: the rewording is undone, and that is refused, whichever
+        parent is first."""
+        self.copy("predictions.md")
+        self.commit("predictions.md")
+        log = self.results / "run_log.md"
+        self.copy("run_log.md", "bench_fixture.md")
+        base = log.read_text(encoding="utf-8").replace(self.REFUSED, self.NAMED)
+        log.write_text(base, encoding="utf-8")
+        self.commit("run_log.md", "bench_fixture.md")
+        side = "| P-0001-side | P-0001 | abc | Darwin | published |\n"
+        old = self.git("rev-parse", "--abbrev-ref", "HEAD").strip()
+        self.git("checkout", "-q", "-b", "trunk")
+        log.write_text(base.replace(self.NAMED, self.KIND), encoding="utf-8")
+        self.commit("run_log.md")
+        self.git("checkout", "-q", old)
+        log.write_text(base + side, encoding="utf-8")
+        self.commit("run_log.md")
+        (self.root / "scripts").mkdir(exist_ok=True)
+        (self.root / check_predictions.REWORDINGS).write_text(json.dumps({"lines": {
+            check_predictions.digest(self.NAMED): check_predictions.digest(self.KIND)}}),
+            encoding="utf-8")
+        for first, second in ((old, "trunk"), ("trunk", old)):
+            with self.subTest(first=first):
+                self.git("checkout", "-q", "--detach", first)
+                self.git("merge", "-q", "--no-ff", "--no-commit", "-s", "ours", second)
+                log.write_text(base + side, encoding="utf-8")
+                self.commit("run_log.md")
+                code, output = check(self.root)
+                self.assertEqual(code, 1, output)
+                self.assertIn("is back as it was", output)
+                self.git("checkout", "-q", old)
+
     def test_require_before_a_run(self):
         code, output = check(self.root, "--require", "P-0001")
         self.assertEqual(code, 1, output)
