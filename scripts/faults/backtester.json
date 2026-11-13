@@ -1142,6 +1142,294 @@
       "expect": {
         "signature": "\\[  FAILED  \\] LatencyOff\\.EventsOfOneNanosecondReachTheStrategyInTheTieOrder"
       }
+    },
+    {
+      "id": "backtester-wake-limit-drops-compute",
+      "breaks": "finish()'s wake limit leaves L_compute out of the round trip (r9-6)",
+      "check": "test_backtest ItchEdges.FinishRunsAWakeThatLandsOnTheLimit",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "clock_ + latency_.market_data + latency_.compute + latency_.order_entry + latency_.response;",
+          "new": "clock_ + latency_.market_data + latency_.order_entry + latency_.response;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.FinishRunsAWakeThatLandsOnTheLimit"
+      }
+    },
+    {
+      "id": "backtester-wake-limit-strict",
+      "breaks": "A wake that lands exactly on finish()'s limit does not run (r9-6)",
+      "check": "test_backtest ItchEdges.FinishRunsAWakeThatLandsOnTheLimit",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "wake_pending_ && wake_time_ <= wake_limit_",
+          "new": "wake_pending_ && wake_time_ < wake_limit_"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.FinishRunsAWakeThatLandsOnTheLimit"
+      }
+    },
+    {
+      "id": "backtester-wake-at-now-not-later",
+      "breaks": "wake_at(now) runs at now, not 1 ns later (r9-6)",
+      "check": "test_backtest ItchEdges.AWakeNotAfterNowRunsOneNanosecondLater",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "wake_time_ = time > now ? time : now + 1;",
+          "new": "wake_time_ = time >= now ? time : now + 1;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.AWakeNotAfterNowRunsOneNanosecondLater"
+      }
+    },
+    {
+      "id": "backtester-crossing-ignores-later-levels",
+      "breaks": "A crossing real add fills only the best simulated level it reaches (r9-7)",
+      "check": "test_backtest Fills.S25CrossingAddFillsTwoLevelsBestFirst",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "        const std::uint32_t available = book_.order_at(real).shares - consumed_[real];\n        const std::uint32_t take = std::min(sim.remaining, available);\n        if (take == 0) {\n          return;\n        }\n        consumed_[real] += take;\n        ++stats_.crossing_fills;\n        fill(slot, take, sim.price, Liquidity::maker, time);\n      }\n    }",
+          "new": "        const std::uint32_t available = book_.order_at(real).shares - consumed_[real];\n        const std::uint32_t take = std::min(sim.remaining, available);\n        if (take == 0) {\n          return;\n        }\n        consumed_[real] += take;\n        ++stats_.crossing_fills;\n        fill(slot, take, sim.price, Liquidity::maker, time);\n      }\n      return;\n    }"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Fills\\.S25CrossingAddFillsTwoLevelsBestFirst"
+      }
+    },
+    {
+      "id": "backtester-cancel-report-zero-shares",
+      "breaks": "A strategy's cancel reports 0 shares cancelled (r9-8)",
+      "check": "test_backtest JoinAndLatency.ACancelTakesSOffTheBook",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "        report(ReportKind::cancelled, Reject::none, slot, time, sim.price, sim.remaining,\n               Liquidity::maker, {});\n        unrest(slot);\n        release(slot);\n        return;\n      }\n      case Action::replace",
+          "new": "        report(ReportKind::cancelled, Reject::none, slot, time, sim.price, 0,\n               Liquidity::maker, {});\n        unrest(slot);\n        release(slot);\n        return;\n      }\n      case Action::replace"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] JoinAndLatency\\.ACancelTakesSOffTheBook"
+      }
+    },
+    {
+      "id": "backtester-cancel-keeps-resting",
+      "breaks": "A strategy's cancel is reported but the order stays on the book (r9-8)",
+      "check": "test_backtest JoinAndLatency.ACancelTakesSOffTheBook",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "        report(ReportKind::cancelled, Reject::none, slot, time, sim.price, sim.remaining,\n               Liquidity::maker, {});\n        unrest(slot);\n        release(slot);\n        return;\n      }\n      case Action::replace",
+          "new": "        report(ReportKind::cancelled, Reject::none, slot, time, sim.price, sim.remaining,\n               Liquidity::maker, {});\n        return;\n      }\n      case Action::replace"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] JoinAndLatency\\.ACancelTakesSOffTheBook"
+      }
+    },
+    {
+      "id": "backtester-report-remaining-zero",
+      "breaks": "Every report gives the order's remaining shares as 0 (r9-8)",
+      "check": "test_backtest JoinAndLatency.ACancelTakesSOffTheBook",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "                 .remaining = sim.remaining,\n                 .fees = fees});",
+          "new": "                 .remaining = 0,\n                 .fees = fees});"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] JoinAndLatency\\.ACancelTakesSOffTheBook"
+      }
+    },
+    {
+      "id": "backtester-close-config-ignored",
+      "breaks": "End of Market Hours expires every order even with cancel_at_market_close off (r9-9)",
+      "check": "test_backtest ItchEdges.S35OrdersOutliveTheMarketCloseWhenTheConfigKeepsThem",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "        if (cancel_at_close_) {",
+          "new": "        if (true) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.S35OrdersOutliveTheMarketCloseWhenTheConfigKeepsThem"
+      }
+    },
+    {
+      "id": "backtester-end-of-system-hours-no-close",
+      "breaks": "End of System Hours and End of Messages close nothing (r9-9)",
+      "check": "test_backtest ItchEdges.S35OrdersOutliveTheMarketCloseWhenTheConfigKeepsThem",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "      case 'E':\n      case 'C': close_session(time); break;",
+          "new": "      case 'E':\n      case 'C': break;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.S35OrdersOutliveTheMarketCloseWhenTheConfigKeepsThem"
+      }
+    },
+    {
+      "id": "backtester-out-of-order-not-clamped",
+      "breaks": "A timestamp before the clock is counted but not held at the clock (r9-10)",
+      "check": "test_backtest ItchEdges.AnEarlierTimestampIsHeldAtTheClock",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "      ++stats_.out_of_order;\n      time = clock_;",
+          "new": "      ++stats_.out_of_order;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.AnEarlierTimestampIsHeldAtTheClock"
+      }
+    },
+    {
+      "id": "backtester-deliver-every-locate",
+      "breaks": "Every locate's messages reach the strategy, not only the traded symbols' (r9-11)",
+      "check": "test_backtest ItchEdges.OnlyTheTradedSymbolIsDelivered",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "    if (type == SystemEvent::kType || subscribed_[locate] != 0) {\n      deliver(payload, time);",
+          "new": "    if (true) {\n      deliver(payload, time);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.OnlyTheTradedSymbolIsDelivered"
+      }
+    },
+    {
+      "id": "backtester-hidden-print-bid-only",
+      "breaks": "A Trade at a simulated ask's price is not counted (r9-16)",
+      "check": "test_backtest ItchEdges.S30HiddenTradeAtAnAsksPrice",
+      "mutations": [
+        {
+          "file": "include/itch/backtest.hpp",
+          "old": "(has_sim_level(locate, Side::bid, price) || has_sim_level(locate, Side::ask, price))",
+          "new": "has_sim_level(locate, Side::bid, price)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_backtest"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_backtest"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] ItchEdges\\.S30HiddenTradeAtAnAsksPrice"
+      }
     }
   ]
 }

@@ -103,6 +103,10 @@ class Replay {
   explicit Replay(Switches switches) : engine{config(kLatency, 20191230, switches)} {
     feed(wire::directory(kLocate, 'Q', 'P', 100, 1));
   }
+  // Any other config, such as one that keeps orders past End of Market Hours.
+  explicit Replay(const Config& config) : engine{config} {
+    feed(wire::directory(kLocate, 'Q', 'P', 100, 1));
+  }
 
   void feed(const wire::Bytes& message) { engine.feed(message, strategy); }
   // Everything due before `time` runs.
@@ -674,6 +678,42 @@ TEST(JoinAndLatency, S16CancelRace) {
   EXPECT_TRUE(run.strategy.reports(kS, ReportKind::cancelled).empty());
 }
 
+// A cancel that finds S resting. S fills 30 of 100, then the cancel decided at 4000 arrives at
+// 4060: the report says cancelled, 70 shares at 10.00, and reaches the strategy at 4130. S no
+// longer rests, a later execution behind it fills nothing, and its slot is free: the next send
+// takes it, one generation on.
+TEST(JoinAndLatency, ACancelTakesSOffTheBook) {
+  Replay run;
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.strategy.cancel(kS, 4000);
+  run.strategy.send(kS2, 5000, Side::bid, k999, 10);
+  run.feed(wire::add(kLocate, 1, 'B', 100, k1000, 1000));
+  run.feed(wire::add(kLocate, 2, 'B', 100, k1000, 3000));
+  run.feed(wire::execute(kLocate, 1, 100, 3100));
+  run.feed(wire::execute(kLocate, 2, 30, 3200));
+  run.advance(4200);
+  const auto fills = run.fills(kS);
+  ASSERT_EQ(fills.size(), 1U);
+  EXPECT_EQ(fills[0].shares, 30U);
+  EXPECT_EQ(fills[0].remaining, 70U);
+  const auto cancelled = run.strategy.reports(kS, ReportKind::cancelled);
+  ASSERT_EQ(cancelled.size(), 1U);
+  EXPECT_EQ(cancelled[0].reason, Reject::none);
+  EXPECT_EQ(cancelled[0].shares, 70U);
+  EXPECT_EQ(cancelled[0].price, k1000);
+  EXPECT_EQ(cancelled[0].exchange_time, 4060U);
+  EXPECT_EQ(cancelled[0].time, 4130U);
+  EXPECT_FALSE(run.resting(kS));
+  EXPECT_EQ(run.engine.resting_orders(), 0U);
+  run.feed(wire::execute(kLocate, 2, 50, 4300));
+  run.advance(10'000);
+  EXPECT_EQ(run.fills(kS).size(), 1U);
+  EXPECT_EQ(run.strategy.id(kS2).slot, run.strategy.id(kS).slot);
+  EXPECT_EQ(run.strategy.id(kS2).generation, run.strategy.id(kS).generation + 1);
+  EXPECT_EQ(run.strategy.reports(kS2, ReportKind::accepted).size(), 1U);
+  EXPECT_EQ(run.engine.resting_orders(), 1U);
+}
+
 // 17. A replace of S re-joins at the replace's arrival, behind everything resting then.
 TEST(JoinAndLatency, S17ReplaceOnSLosesItsPlace) {
   Replay run;
@@ -804,6 +844,32 @@ TEST(Fills, S25CrossingAdd) {
   ASSERT_EQ(run.strategy.reports(kS2, ReportKind::cancelled).size(), 1U);
   EXPECT_EQ(run.strategy.reports(kS2, ReportKind::cancelled)[0].shares, 100U);
   EXPECT_EQ(run.queue(kS).remaining, 40U);
+}
+
+// 25 over two levels. S bids 50 at 10.02 and S2 50 at 10.01, inside 10.00 by 10.03. A real sell
+// of 80 at 10.01 reaches both. The best price goes first: S fills 50 at its 10.02, then S2 the
+// 30 left at 10.01, each as maker, and S2 rests with 20.
+TEST(Fills, S25CrossingAddFillsTwoLevelsBestFirst) {
+  Replay run;
+  run.strategy.send(kS, 2000, Side::bid, k1002, 50);
+  run.strategy.send(kS2, 2000, Side::bid, k1001, 50);
+  run.feed(wire::add(kLocate, 1, 'B', 100, k1000, 1000));
+  run.feed(wire::add(kLocate, 2, 'S', 100, k1003, 1001));
+  run.feed(wire::add(kLocate, 3, 'S', 80, k1001, 3000));
+  run.advance(10'000);
+  EXPECT_EQ(run.engine.stats().crossing_fills, 2U);
+  std::vector<Fill> fills;
+  for (const Report& report : run.strategy.reports()) {
+    if (report.kind == ReportKind::fill) {
+      EXPECT_EQ(report.exchange_time, 3000U);
+      fills.push_back(
+          {.price = report.price, .shares = report.shares, .liquidity = report.liquidity});
+    }
+  }
+  EXPECT_EQ(fills, (std::vector<Fill>{{k1002, 50, kMaker}, {k1001, 30, kMaker}}));
+  EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1002, 50, kMaker}}));
+  EXPECT_FALSE(run.resting(kS));
+  EXPECT_EQ(run.queue(kS2).remaining, 20U);
 }
 
 // 26. Real cancels clear everything ahead. S is unfilled: nothing fills it without an
@@ -976,6 +1042,20 @@ TEST(ItchEdges, S30HiddenTradeAtSsPrice) {
   EXPECT_EQ(run.engine.stats().hidden_prints_at_sim_price, 1U);
 }
 
+// 30 on the ask side. S offers at 10.01 behind R1. A Trade at 10.01 is counted; one at 10.02,
+// where no simulated order rests, is not.
+TEST(ItchEdges, S30HiddenTradeAtAnAsksPrice) {
+  Replay run;
+  run.strategy.send(kS, 2000, Side::ask, k1001, 100);
+  run.feed(wire::add(kLocate, 1, 'S', 100, k1001, 1000));
+  run.feed(wire::trade(kLocate, 100, k1001, 3000));
+  run.feed(wire::trade(kLocate, 100, k1002, 3100));
+  run.advance(10'000);
+  EXPECT_EQ(run.ahead(kS), 100U);
+  EXPECT_TRUE(run.fills(kS).empty());
+  EXPECT_EQ(run.engine.stats().hidden_prints_at_sim_price, 1U);
+}
+
 // 31. A non-printable execution, as a cross makes, takes shares from ahead but fills
 // nothing. The same execution printable does.
 TEST(ItchEdges, S31NonPrintableExecutionDoesNotFill) {
@@ -1130,6 +1210,37 @@ TEST(ItchEdges, S35EndOfDay) {
   EXPECT_EQ(run.engine.resting_orders(), 0U);
 }
 
+// 35 with Config::cancel_at_market_close off. S rests through End of Market Hours at 9000, and
+// S2, sent at 9100, is accepted after it. End of System Hours at 20000 expires both; S3, sent
+// at 20500, is refused as closed. A message after the close changes nothing.
+TEST(ItchEdges, S35OrdersOutliveTheMarketCloseWhenTheConfigKeepsThem) {
+  Config kept = config(kLatency);
+  kept.cancel_at_market_close = false;
+  Replay run{kept};
+  run.strategy.send(kS, 2000, Side::bid, k1000, 100);
+  run.strategy.send(kS2, 9100, Side::bid, k999, 50);
+  run.strategy.send(3, 20'500, Side::bid, k1000, 100);
+  run.feed(wire::system_event('Q', 1000));
+  run.feed(wire::system_event('M', 9000));
+  run.advance(10'000);
+  EXPECT_TRUE(run.resting(kS));
+  EXPECT_TRUE(run.resting(kS2));
+  EXPECT_TRUE(run.strategy.reports(kS, ReportKind::expired).empty());
+  run.feed(wire::system_event('E', 20'000));
+  run.feed(wire::add(kLocate, 1, 'B', 100, k1000, 21'000));
+  run.finish();
+  for (const int name : {kS, kS2}) {
+    const auto expired = run.strategy.reports(name, ReportKind::expired);
+    ASSERT_EQ(expired.size(), 1U) << name;
+    EXPECT_EQ(expired[0].exchange_time, 20'000U) << name;
+  }
+  EXPECT_EQ(run.strategy.reports(kS2, ReportKind::expired)[0].shares, 50U);
+  const auto rejected = run.strategy.reports(3, ReportKind::rejected);
+  ASSERT_EQ(rejected.size(), 1U);
+  EXPECT_EQ(rejected[0].reason, Reject::closed);
+  EXPECT_EQ(run.engine.resting_orders(), 0U);
+}
+
 // A strategy that always sets another wake, and sends on each, cannot keep the run alive
 // after its input: wakes run for one round trip past the last message, L_md + L_compute +
 // L_oe + L_resp = 230 ns, and a send after the close is refused.
@@ -1167,6 +1278,56 @@ TEST(ItchEdges, FinishEndsARunThatAlwaysWakes) {
   EXPECT_GT(engine.stats().expired, 0U);
 }
 
+// Asks for one wake when the message at 1000 reaches it, `delay` after that, and then each
+// time it is woken one at `again` past its time, which may be in its past.
+struct Waker {
+  template <class Context>
+  void on_market(Context& context, const itch::backtest::MarketEvent& event) {
+    if (event.exchange_time == 1000) {
+      context.wake_at(context.now() + delay);
+    }
+  }
+  template <class Context>
+  void on_report(Context& /*context*/, const Report& /*report*/) {}
+  template <class Context>
+  void on_wake(Context& context) {
+    wakes.push_back(context.now());
+    if (wakes.size() < 4) {
+      context.wake_at(static_cast<Nanos>(static_cast<std::int64_t>(context.now()) + again));
+    }
+  }
+  Nanos delay = 0;
+  std::int64_t again = 0;
+  std::vector<Nanos> wakes;
+};
+
+std::vector<Nanos> wakes_after_finish(Nanos delay, std::int64_t again) {
+  Engine<> engine{config(kLatency)};
+  Waker strategy{.delay = delay, .again = again, .wakes = {}};
+  engine.feed(wire::directory(kLocate, 'Q', 'P', 100, 1), strategy);
+  engine.feed(wire::add(kLocate, 1, 'B', 100, k999, 1000), strategy);
+  engine.finish(strategy);
+  return strategy.wakes;
+}
+
+// The limit itself is in the round trip. The last message, at 1000, reaches the strategy at
+// 1100, which asks for a wake 130 later: 1230 is exactly 1000 + L_md + L_compute + L_oe +
+// L_resp, so it runs, and the next, at 1231, does not. Asked for at 1229, a wake runs there
+// and at 1230.
+TEST(ItchEdges, FinishRunsAWakeThatLandsOnTheLimit) {
+  EXPECT_EQ(wakes_after_finish(130, 1), (std::vector<Nanos>{1230}));
+  EXPECT_EQ(wakes_after_finish(129, 1), (std::vector<Nanos>{1229, 1230}));
+  EXPECT_EQ(wakes_after_finish(131, 1), (std::vector<Nanos>{}));
+}
+
+// A wake asked for at now(), or before it, runs 1 ns later. Delivered at 1100, the strategy
+// asks for 1100: it wakes at 1101. From then on it asks, each time it wakes, for that same
+// nanosecond, or for the one before it: either way it wakes 1 ns later.
+TEST(ItchEdges, AWakeNotAfterNowRunsOneNanosecondLater) {
+  EXPECT_EQ(wakes_after_finish(0, -1), (std::vector<Nanos>{1101, 1102, 1103, 1104}));
+  EXPECT_EQ(wakes_after_finish(0, 0), (std::vector<Nanos>{1101, 1102, 1103, 1104}));
+}
+
 // 36. Three messages share S's arrival nanosecond: all apply first, in file order, so
 // only R2 is ahead. The strategy sees them in file order too.
 TEST(ItchEdges, S36SameTimestampBurst) {
@@ -1185,6 +1346,52 @@ TEST(ItchEdges, S36SameTimestampBurst) {
     }
   }
   EXPECT_EQ(burst, (std::vector<std::uint64_t>{1, 2, 3}));
+}
+
+// A message stamped before the one ahead of it is held at the clock: the add stamped 2500
+// after one at 3000 is counted out of order, applies at 3000, and reaches the strategy at
+// 3000 + L_md, stamped 3000.
+TEST(ItchEdges, AnEarlierTimestampIsHeldAtTheClock) {
+  Replay run;
+  run.feed(wire::add(kLocate, 1, 'B', 100, k1000, 3000));
+  run.feed(wire::add(kLocate, 2, 'B', 100, k999, 2500));
+  EXPECT_EQ(run.engine.stats().out_of_order, 1U);
+  EXPECT_EQ(run.engine.clock(), 3000U);
+  run.advance(10'000);
+  ASSERT_EQ(run.strategy.seen().size(), 3U);
+  const Scripted::Seen& late = run.strategy.seen()[2];
+  EXPECT_EQ(late.sequence, 2U);
+  EXPECT_EQ(late.exchange_time, 3000U);
+  EXPECT_EQ(late.time, 3100U);
+}
+
+// Two locates: the traded symbol on 1 and another on 2. Only locate 1's messages and the
+// System Events reach the strategy, so its view book holds nothing of locate 2, while the
+// exchange-side book does.
+TEST(ItchEdges, OnlyTheTradedSymbolIsDelivered) {
+  constexpr std::uint16_t kOther = 2;
+  wire::Bytes other = wire::directory(kOther, 'Q', 'P', 100, 2);
+  constexpr std::size_t kStockOffset = 11;
+  other[kStockOffset + 3] = std::byte{'Z'};  // SYMZ, which the config does not trade.
+  Replay run;
+  run.feed(other);
+  run.feed(wire::add(kOther, 7, 'B', 100, k1000, 1000));
+  run.feed(wire::add(kLocate, 1, 'B', 100, k1000, 1001));
+  run.feed(wire::system_event('Q', 1002));
+  run.feed(wire::execute(kOther, 7, 40, 1003));
+  run.advance(10'000);
+  std::vector<std::uint64_t> sequences;
+  std::vector<char> types;
+  for (const Scripted::Seen& seen : run.strategy.seen()) {
+    sequences.push_back(seen.sequence);
+    types.push_back(seen.type);
+  }
+  EXPECT_EQ(sequences, (std::vector<std::uint64_t>{0, 3, 4}));
+  EXPECT_EQ(types, (std::vector<char>{'R', 'A', 'S'}));
+  ASSERT_TRUE(run.engine.exchange_book().resting_order(7).has_value());
+  EXPECT_EQ(run.engine.exchange_book().resting_order(7)->shares, 60U);
+  EXPECT_FALSE(run.engine.view_book().resting_order(7).has_value());
+  EXPECT_TRUE(run.engine.view_book().resting_order(1).has_value());
 }
 
 // ---- What the strategy cannot reach ---------------------------------------------------
