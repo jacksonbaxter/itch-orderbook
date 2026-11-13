@@ -484,38 +484,35 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| p50 140.14 ns; p99 840.86 ns; p99.9 1,472.00 ns; `paged-flat`, file in "
                       "memory, top of book not tracked | debian,", latency)
         self.assertIn("| **missed**: p50 by 19.14 ns,", latency)
-        self.assertIn("| ≥ 2.00 M events/s | 4,677,511 engine events/s; 4,570,542 messages/s | "
+        self.assertIn("| ≥ 2.00 M engine events/s | 4.68 M engine events/s (4.57 M messages/s) | "
                       "debian, AMD Ryzen Embedded V1605B, pinned to core 4 | met |", backtest)
         self.assertIn("| ≤ 1.31×, set on Ryzen 9 5950X, Linux, pinned | 0.95×, pipelined time / "
                       "single-threaded time | debian, AMD Ryzen Embedded V1605B, pinned to cores 4 "
                       "and 6 | met |", spsc)
 
     def test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar(self):
-        # The headline and the backtest table read the Summary's Engine events/s median.
+        # The backtest table reads the Summary's Engine events/s median.
         self.edit(HEADLINE_BACKTEST, "| Engine events/s | 4,677,511 |",
                   "| Engine events/s | 4,677,512 |")
-        self.assertIn("| ≥ 2.00 M events/s | 4,677,512 engine events/s; 4,570,542 messages/s |",
-                      self.headline()[4])
         code, output = self.run_table()
-        self.assertIn("| ≥ 2.00 M events/s | 4,677,512 events/s | 0.98% | 4,570,542 messages/s "
-                      "| met |", output)
-        # A verdict the events/s median does not bear out is refused.
+        self.assertIn("| ≥ 2.00 M engine events/s | 4,677,512 engine events/s | 0.98% | "
+                      "4,570,542 messages/s | met |", output)
         self.edit(HEADLINE_BACKTEST, "| Engine events/s | 4,677,512 |",
-                  "| Engine events/s | 1,999,999 |")
+                  "| Engine events/s | 4,677,511 |")
+        # A file whose bar is not BENCHMARKS.md's is refused.
+        self.edit("BENCHMARKS.md", "- **Target:** ≥ 2.0 M events/s on one thread",
+                  "- **Target:** ≥ 2.5 M events/s on one thread")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
-        self.assertIn(f"results_table: FAIL {HEADLINE_BACKTEST}: T-BT-1 is met in the file, and "
-                      "its Engine events/s median, 1,999,999, has it missed against ≥ 2.00 M "
-                      "events/s", output)
+        self.assertIn(f"results_table: FAIL {HEADLINE_BACKTEST}: T-BT-1's bar is '≥ 2.00 M "
+                      "engine events/s', and BENCHMARKS.md's is ≥ 2.50 M engine events/s", output)
         # A bar whose unit in BENCHMARKS.md is not the one compared is refused.
-        self.edit(HEADLINE_BACKTEST, "| Engine events/s | 1,999,999 |",
-                  "| Engine events/s | 4,677,511 |")
-        self.edit("BENCHMARKS.md", "- **Target:** ≥ 2.0 M events/s on one thread",
+        self.edit("BENCHMARKS.md", "- **Target:** ≥ 2.5 M events/s on one thread",
                   "- **Target:** ≥ 2.0 M messages/s on one thread")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
         self.assertIn("results_table: FAIL BENCHMARKS.md: T-BT-1's bar is in messages/s, and this "
-                      "script compares it in events/s", output)
+                      "script compares it in engine events/s", output)
 
     def test_a_second_thread_pinned_elsewhere_is_named_as_such(self):
         self.edit("results/spsc_pipeline_debian_12302019.md",
@@ -570,8 +567,8 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("results_table: FAIL the headline shows no missed target", output)
 
     def test_a_headline_row_with_no_verdict_is_refused(self):
-        self.edit(HEADLINE_BACKTEST, "| 4.57 M messages/s | met |",
-                  "| 4.57 M messages/s | host differs: a macOS figure |")
+        self.edit(HEADLINE_BACKTEST, "(4.57 M messages/s) | met |",
+                  "(4.57 M messages/s) | host differs: a macOS figure |")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
         self.assertIn(f"results_table: FAIL {HEADLINE_BACKTEST}: T-BT-1's verdict is 'host "

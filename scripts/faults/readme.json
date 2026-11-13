@@ -938,8 +938,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "| 4,677,511 engine events/s;",
-          "new": "| 4,677,512 engine events/s;"
+          "old": "| 4.68 M engine events/s (4.57 M messages/s) |",
+          "new": "| 4.86 M engine events/s (4.57 M messages/s) |"
         }
       ],
       "command": [
@@ -1175,8 +1175,8 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "\"T-BT-1\": (\"Engine events/s\", \"events/s\"),",
-          "new": "\"T-BT-1\": (\"Replay rate, messages/s\", \"events/s\"),"
+          "old": "\"T-BT-1\": (\"Engine events/s\", \"engine events/s\"),",
+          "new": "\"T-BT-1\": (\"Replay rate, messages/s\", \"engine events/s\"),"
         }
       ],
       "command": [
@@ -1190,14 +1190,14 @@
       }
     },
     {
-      "id": "readme-backtest-verdict-unheld",
-      "breaks": "a backtest verdict that the median in the bar's unit does not bear out passes",
+      "id": "readme-backtest-bar-unheld",
+      "breaks": "a results file whose T-BT-1 bar is not BENCHMARKS.md's passes",
       "check": "test_results_table.py test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "        if judged != verdict:\n",
-          "new": "        if False:\n"
+          "old": "    if shown != f\"≥ {bar:.2f} M {unit}\":\n",
+          "new": "    if False:\n"
         }
       ],
       "command": [
@@ -1217,7 +1217,7 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "    if unit != compared:\n",
+          "old": "    if compared.split(\" \")[-1] != unit:\n",
           "new": "    if False:\n"
         }
       ],

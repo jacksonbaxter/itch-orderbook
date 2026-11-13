@@ -8,7 +8,9 @@ header field present, an unreadable one written as `unavailable: <reason>`, no p
 was not read back, no percentile below the timer's floor, no multiplexed counter called
 measured, the warm-up out of the timed counts, the input resident, load lines stamped
 from a real measure.sh run, a quiet CPU sampler beside any macOS run from 2026-11-05 on,
-machine_check's output present and passing, and nothing private. scripts/bench_driver.py and scripts/stamp_load.py run the same checks, so that
+the Linux sampler rule applied to any debian run from 2026-11-13T03:00Z on (a load_rule field
+whose figures, or whose Sampler section's figures for every repetition, are under the rule's
+bars, scripts/linux_sampler.py), machine_check's output present and passing, and nothing private. scripts/bench_driver.py and scripts/stamp_load.py run the same checks, so that
 a file failing them is never written as finished.
 
 A backtest file, one with a `workload` field (scripts/backtest_driver.py), has no latency
@@ -75,6 +77,10 @@ import re
 import statistics
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import linux_sampler  # noqa: E402
 
 REQUIRED_FIELDS = (
     "host", "cpu", "kernel", "compiler", "flags", "commit", "dataset", "dataset_sha256",
@@ -211,6 +217,13 @@ def comparison_value(spec, medians):
     return num / den
 # From this day every macOS run needs a quiet CPU sampler beside it (stamp_load.py).
 SAMPLER_RULE_FROM = "2026-11-05T00:00:00Z"
+# From this moment every debian run is held to the Linux sampler rule: its driver judged each
+# process (backtest_driver.py), or stamp_load.py judged the whole run from the sampler's log.
+LINUX_RULE_FROM = "2026-11-13T03:00:00Z"
+LINUX_RULE = re.compile(r"the Linux sampler rule was applied: sampled every [\d.]+ s from /proc "
+                        r"by scripts/linux_sampler\.py on cpu\d+, over each process's whole "
+                        r"span; every published process quiet; (\d+) withdrawn under the rule")
+LINUX_RULE_WHOLE = "quiet: the Linux sampler rule was applied over the whole run: "
 
 HOME_PATH = re.compile(r"/(?:Users|home)/[A-Za-z0-9._-]+/|[A-Za-z]:\\Users\\[A-Za-z0-9._-]+")
 ADDRESS = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
@@ -465,6 +478,45 @@ def check_sampler(fields):
         yield "sampler-not-quiet", value
 
 
+def needs_linux_rule(fields):
+    """A debian run from the moment the Linux sampler rule was fixed."""
+    return fields.get("host") == "debian" and fields.get("run_started", "") >= LINUX_RULE_FROM
+
+
+def check_linux_rule(text, fields):
+    """A debian run from the rule's moment on shows every process it publishes quiet."""
+    if not needs_linux_rule(fields):
+        return
+    value = fields.get("load_rule")
+    if value is None:
+        if fields.get("measure_load_start") != PENDING:
+            yield "load-rule-missing", "a debian run from 2026-11-13T03:00Z on has no load_rule"
+        return
+    if value.startswith(LINUX_RULE_WHOLE):
+        why = linux_sampler.summary_breaks(value[len(LINUX_RULE_WHOLE):])
+        if why:
+            yield "load-rule-not-quiet", why
+        return
+    match = LINUX_RULE.fullmatch(value)
+    if match is None:
+        yield "load-rule-invalid", value
+        return
+    rows = table_rows(text, "Sampler")
+    quiet = {cells[0]: cells for cells in rows if re.fullmatch(r"[0-9]+", cells[0])}
+    for index in range(1, int(number(fields.get("repetitions", "0") or "0") or 0) + 1):
+        cells = quiet.get(str(index))
+        if cells is None or len(cells) != 4:
+            yield "load-rule-not-quiet", f"repetition {index} has no quiet span in the Sampler"
+            continue
+        why = linux_sampler.summary_breaks(cells[3])
+        if why:
+            yield "load-rule-not-quiet", f"repetition {index}: {why}"
+    withdrawn = [cells for cells in rows if cells[0].startswith("withdrawn ")]
+    if len(withdrawn) != int(match.group(1)):
+        yield "load-rule-not-quiet", (f"{len(withdrawn)} withdrawn rows in the Sampler, the "
+                                      f"load_rule says {match.group(1)}")
+
+
 def check_machine(text):
     output = section(text, "machine_check output")
     if output is None:
@@ -706,8 +758,22 @@ def check_backtest_target(text, fields):
         yield "target-verdict-invalid", f"{target} has {len(cells)} cells, not 4"
         return
     verdict = cells[3]
+    # Each bar in its own unit (BENCHMARKS.md): T-BT-1's engine events/s, after which its row
+    # gives messages/s, labelled; T-BT-3's ITCH messages/s.
+    unit, row_name = (("engine events/s", "Engine events/s") if workload == "quoting" else
+                      ("messages/s", "Replay rate, messages/s"))
+    summary = {row[0]: row for row in table_rows(text, "Summary")}
+    if cells[1] != f"≥ {bar:.2f} M {unit}" or \
+            not re.fullmatch(rf"[0-9.]+ M {re.escape(unit)}( \([0-9.]+ M messages/s\))?", cells[2]):
+        yield "target-unit-wrong", f"{target} is not held in {unit}: {cells[1]!r}, {cells[2]!r}"
+        return
+    messages = summary.get("Replay rate, messages/s")
+    if unit != "messages/s" and (messages is None or number(messages[1]) is None or
+                                 f"({number(messages[1]) / 1e6:.2f} M messages/s)" not in cells[2]):
+        yield "target-verdict-wrong", f"{target}'s messages/s, {cells[2]!r}, is not the summary's"
+        return
     measured = number(cells[2])
-    rate = {row[0]: row for row in table_rows(text, "Summary")}.get("Replay rate, messages/s")
+    rate = summary.get(row_name)
     if not (verdict == "met" or verdict.startswith(VERDICTS[1:])):
         yield "target-verdict-invalid", f"{target}: {verdict!r}"
     elif fields.get("host") == MAC_HOST and x86 and verdict.startswith(("met", "missed: ")):
@@ -718,7 +784,7 @@ def check_backtest_target(text, fields):
     elif (verdict == "met") != (number(rate[1]) / 1e6 >= bar) and not verdict.startswith(
             VERDICTS[2:]):
         yield "target-verdict-wrong", (f"{target} is {verdict.split(':')[0]} at {rate[1]} "
-                                       f"messages/s against {bar} M")
+                                       f"{unit} against {bar} M")
 
 
 def check_backtest(text, fields):
@@ -1003,7 +1069,8 @@ def check_text(text):
     skipped = SPSC_PER_PASS if is_spsc_file(fields) and fields["suite"] != "pipeline" else ()
     for found in (check_fields(fields, skipped), check_host(fields), check_pin(fields),
                   check_residency(fields), check_warmup(fields), check_statistics(text),
-                  check_load(fields), check_sampler(fields), check_machine(text),
+                  check_load(fields), check_sampler(fields), check_linux_rule(text, fields),
+                  check_machine(text),
                   check_private(text, fields)):
         violations.extend(found)
     if is_walks_file(fields):
