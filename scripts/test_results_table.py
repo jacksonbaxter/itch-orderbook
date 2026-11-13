@@ -216,7 +216,7 @@ class ResultsTable(unittest.TestCase):
     def test_the_final_review_has_a_row_that_follows_its_file(self):
         row = self.row("Final review", "none")
         self.assertIn("| none | not complete: 1 open,", row)
-        self.assertIn("| 14 reviewers, 168 findings (2 BLOCK, 67 FIX, 99 NOTE); 138 fixed,", row)
+        self.assertIn("| 14 reviewers, 168 findings (2 BLOCK, 67 FIX, 99 NOTE); 139 fixed,", row)
         self.edit("results/final_review.md", "- Findings: 168\n", "- Findings: 167\n")
         self.assertIn("| 14 reviewers, 167 findings (", self.row("Final review", "none"))
         code, output = self.run_table("--check")

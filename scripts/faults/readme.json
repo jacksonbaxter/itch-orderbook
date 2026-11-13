@@ -2461,8 +2461,8 @@
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "Of the findings, 138 are fixed,",
-          "new": "Of the findings, 137 are fixed,"
+          "old": "Of the findings, 139 are fixed,",
+          "new": "Of the findings, 138 are fixed,"
         }
       ],
       "command": [
@@ -2474,7 +2474,7 @@
         "WRITEUP.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 137 is not in results/final_review\\.md",
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 138 is not in results/final_review\\.md",
         "exit": 1
       }
     }

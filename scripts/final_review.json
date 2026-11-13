@@ -2756,10 +2756,11 @@
    "id": "r12-3",
    "severity": "FIX",
    "finding": "Two code line numbers in docs/NOTES.md's \"left as it is\" section are out of date",
-   "outcome": "partly",
-   "detail": "Both were set right. Since then a later commit added a line to `scripts/wasm_report.py`, so the digest comparison docs/NOTES.md places at line 203 is at line 204; the other number holds.",
+   "outcome": "fixed",
+   "detail": "Both were set right. A later commit then added a line to `scripts/wasm_report.py`, moving the digest comparison down one, so docs/NOTES.md now names the function, `render`, instead of a line number; the other number holds.",
    "commits": [
-    "822c10a"
+    "822c10a",
+    "2987ecf"
    ],
    "tests": [],
    "faults": [],
