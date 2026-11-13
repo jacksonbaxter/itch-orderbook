@@ -2240,6 +2240,30 @@
       "expect": {
         "signature": "FAIL: test_a_not_measured_target_with_a_published_run_is_refused"
       }
+    },
+    {
+      "id": "readme-writeup-spsc-due-time-dropped",
+      "breaks": "WRITEUP.md no longer says that no SPSC latency from the due time was measured (r4-2)",
+      "check": "gates.py spsc-due-time-unmeasured",
+      "mutations": [
+        {
+          "file": "WRITEUP.md",
+          "old": "No latency from the due time was measured: it needs the due time carried in each item",
+          "new": "A latency from the due time would need the due time carried in each item"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}",
+        "--only",
+        "spsc-due-time-unmeasured"
+      ],
+      "expect": {
+        "signature": "gates: FAIL spsc-due-time-unmeasured WRITEUP\\.md:1:",
+        "exit": 1
+      }
     }
   ]
 }

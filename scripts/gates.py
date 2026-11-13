@@ -529,6 +529,30 @@ def linux_sampler_rule(root, files):
     return violations
 
 
+# r4-2: the SPSC paced and burst latencies are measured from the push, and none from the time
+# each message was due. Each public page that gives or discusses them says so in a paragraph
+# that also gives the reason: the due time is not carried in the item, so measuring from it
+# is a change to measured code.
+DUE_TIME_PAGES = ("BENCHMARKS.md", "RESULTS.md", "WRITEUP.md")
+DUE_TIME_UNMEASURED = re.compile(r"\bno (?:latency|figure) from the due time (?:is|was) measured\b",
+                                 re.IGNORECASE)
+
+
+def due_time_pages(root):
+    return [root / name for name in DUE_TIME_PAGES if (root / name).is_file()]
+
+
+def spsc_due_time_unmeasured(root, files):
+    violations = []
+    for path in files:
+        paragraphs = re.split(r"\n\s*\n", read_text(path) or "")
+        if not any(DUE_TIME_UNMEASURED.search(p) and "measured code" in p for p in paragraphs):
+            violations.append((path, 1, "no paragraph says that no SPSC latency from the due "
+                                        "time is measured and that it needs a change to "
+                                        "measured code (r4-2)"))
+    return violations
+
+
 @dataclass(frozen=True)
 class Gate:
     name: str
@@ -578,6 +602,9 @@ def gates():
         Gate("linux-sampler-rule", "every debian results file of any kind from the Linux "
              "sampler rule's moment on carries the rule's line, passing",
              linux_sampler_rule, results_pages),
+        Gate("spsc-due-time-unmeasured", "BENCHMARKS.md, RESULTS.md and WRITEUP.md each say "
+             "that no SPSC latency from the due time is measured, and why",
+             spsc_due_time_unmeasured, due_time_pages),
     )
 
 

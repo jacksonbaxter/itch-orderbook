@@ -1,7 +1,8 @@
 {
   "area": "gates",
   "tree": ["CMakeLists.txt", "CMakePresets.json", ".clang-tidy", ".github", "cmake", "include",
-           "src", "tests", "tools", "fuzz", "bench", "scripts", "results", "docs"],
+           "src", "tests", "tools", "fuzz", "bench", "scripts", "results", "docs", "BENCHMARKS.md",
+           "RESULTS.md", "WRITEUP.md"],
   "faults": [
     {
       "id": "gates-wire-pointer-cast",
@@ -434,6 +435,46 @@
       ],
       "expect": {
         "signature": "^FAIL: test_actionlint_reads_a_yaml_workflow_too \\("
+      }
+    },
+    {
+      "id": "gates-spsc-due-time-gate-blind",
+      "breaks": "The spsc-due-time-unmeasured gate passes a page that never says no SPSC latency from the due time is measured (r4-2)",
+      "check": "test_gates.py, the due-time gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "        if not any(DUE_TIME_UNMEASURED.search(p) and \"measured code\" in p for p in paragraphs):\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_spsc_due_time_unmeasured \\("
+      }
+    },
+    {
+      "id": "gates-spsc-due-time-reason-unread",
+      "breaks": "The spsc-due-time-unmeasured gate takes the sentence without the reason beside it (r4-2)",
+      "check": "test_gates.py, the due-time gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "        if not any(DUE_TIME_UNMEASURED.search(p) and \"measured code\" in p for p in paragraphs):\n",
+          "new": "        if not any(DUE_TIME_UNMEASURED.search(p) for p in paragraphs):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_spsc_due_time_unmeasured \\("
       }
     }
   ]

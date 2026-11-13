@@ -33,6 +33,8 @@ LAN_ADDRESS = "192." + "168.1.20"
 VENDOR = "CB" + "OE"
 TOOLCHAIN = ".tool" + "chain/"
 PINNED = "actions/checkout@" + "0123456789abcdef" * 2 + "01234567"
+DUE_TIME = ("The latencies are from the push. No latency from the due time is measured: it needs "
+            "the due time in each item, a change to measured code.\n")
 
 CLEAN_FILES = {
     "include/itch/wire.hpp": "#pragma once\nint clean_header();\n",
@@ -44,6 +46,9 @@ CLEAN_FILES = {
                                         "// Never reads the ledger.\nint attribute();\n"),
     "include/itch/mm/fills.hpp": "#pragma once\nint fill();\n",
     "docs/NOTES.md": "Notes.\n",
+    "BENCHMARKS.md": DUE_TIME,
+    "RESULTS.md": DUE_TIME,
+    "WRITEUP.md": DUE_TIME,
     "results/run.md": "Host: debian.\n",
     ".github/workflows/ci.yml": f"jobs:\n  a:\n    steps:\n      - uses: {PINNED} # v1.2.3\n",
     "docs/index.html": ("<!doctype html><html><body><h1>Replay <code>09:30</code></h1>\n"
@@ -424,6 +429,21 @@ class Gates(unittest.TestCase):
                                             header.replace("20261113T040000Z", "x"))
                 self.assert_passes(name, header.replace("host: debian",
                                                         f"host: {check_results.MAC_HOST}"))
+
+    def test_spsc_due_time_unmeasured(self):
+        for name in gates.DUE_TIME_PAGES:
+            with self.subTest(name=name):
+                self.reset()
+                self.assert_only_gate_fails("spsc-due-time-unmeasured", name,
+                                            "The latencies are from the push.\n")
+                # The sentence with its reason in another paragraph, or none, is not enough.
+                self.reset()
+                self.assert_only_gate_fails("spsc-due-time-unmeasured", name,
+                                            "No latency from the due time is measured.\n\n"
+                                            "That needs a change to measured code.\n")
+                self.reset()
+                self.assert_passes(name, "No figure from the due time was measured, since that "
+                                         "needs a change to measured code.\n")
 
     def test_a_gate_that_scans_nothing_fails(self):
         scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
