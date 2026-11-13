@@ -1,6 +1,6 @@
 # What an L3 book costs on a small x86 core, measured
 
-This is the long form of [README.md](README.md): which design choices were measured, what each cost, and which targets were missed and why. Every figure is quoted from a file in [results/](results/), and its line links that file; `scripts/gate_numbers.py` fails the check if a figure is not in the file its line cites. Where a cause was not measured, the page says "not established". [BENCHMARKS.md](BENCHMARKS.md) gives every target's source, and [docs/NOTES.md](docs/NOTES.md) the history.
+This is the long form of [README.md](README.md): which design choices were measured, what each cost, and which targets were missed and why. Every figure is quoted from a file in [results/](results/), and its line links that file; `scripts/gate_numbers.py` fails the check if a figure is not in the file its line cites. It holds that each figure is in that file beside a word its clause shares, and in its row or beside its partner where a label, a one-word row label or an "N of M" ties it; it does not hold that the figure is the one for that place when the file has the same figure elsewhere under a shared word. Where a cause was not measured, the page says "not established". [BENCHMARKS.md](BENCHMARKS.md) gives every target's source, and [docs/NOTES.md](docs/NOTES.md) the history.
 
 ## What was built, and on what
 
@@ -13,14 +13,14 @@ The data is Nasdaq's free sample files: ten full sessions for correctness, nine 
 
 There are two hosts, and their numbers are never mixed.
 
-- `debian` is an AMD Ryzen Embedded V1605B, a Zen 1 part with 4 cores and 8 threads. Timed threads are pinned, with turbo and SMT on and no isolation. The timer's quantum is 10.010 ns, and no figure under its floor of 40.041 ns is published ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+- `debian` is an AMD Ryzen Embedded V1605B, a Zen 1 part with 4 cores and 8 threads. Timed threads are pinned, with turbo and SMT on and no isolation. The timer's quantum is 10.010 ns, and no percentile under its floor of 40.041 ns is published; a mean over many messages can be lower ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 - The Mac is an Apple M4 Max, and macOS cannot pin a thread. The harness's proof run, a stub book with nothing in it, varied with a CV of 67.35% there ([results/bench_replay_stub_mac_12302019.md](results/bench_replay_stub_mac_12302019.md)).
 
 So the Mac carries the correctness runs, which are counts, and `debian` every headline timing. A Mac timing is labelled macOS.
 
 Zen 1 limits what `debian` can show:
 
-- It has no AVX-512, so the AVX-512 VBMI kernel is built and tested but runs on no host here.
+- It has no AVX-512, so the AVX-512 VBMI kernel is built there but has run on neither host: its test skips on `debian`, naming the missing features.
 - Its `cache-misses` event counts L2 misses. A pointer chase at 1 MB, between L2 and L3, reads 0.7628 `cache-misses` a load and 0.0000 on the DRAM fill event `r0843:u` ([results/chase_debian.md](results/chase_debian.md)). `r0843:u` stands in for last-level misses, as a floor, since lines the prefetcher fetched are not counted.
 - `perf_event_paranoid` is 2 there, so profiles are user space only.
 - No huge pages are reserved; that is a root step outside the project. Transparent huge pages are on.
@@ -29,7 +29,7 @@ Zen 1 limits what `debian` can show:
 ### How a number gets published
 
 - A prediction is committed first, in [results/predictions.md](results/predictions.md), with what would refute it.
-- `machine_check` refuses the run unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is resident in memory.
+- On `debian`, `machine_check` refuses the run unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is resident in memory. On the Mac it enforces only the input's residency and the timer's calibration, and records the rest as things it cannot enforce.
 - Other work beside a timed process withdraws it. On the Mac a sampler reads every other process every 2 s, and a process during which another passed 20% CPU is withdrawn ([results/layout_mac_12302019.md](results/layout_mac_12302019.md)). That rule is why two Mac targets have no result. Mac runs made before it, the book designs' and the backtester's among them, had no sampler beside them.
   On `debian` the same kind of rule started late in the project: a sampler reads /proc every 1 s and withdraws a process whose core, SMT sibling or other cores were busy; T-BT-3's rerun is the one published figure under it so far ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
 - Each driver now writes a record of its run beside the raw output: the commit and tree state, each binary's hash, the dataset's hash and an untouched copy of every tool output the file quotes. Files published before that have no such record, and docs/NOTES.md lists what each lacks.
@@ -57,9 +57,9 @@ The baseline is the book most people would start with: `std::map` levels and an 
 The two counter columns are per-message means through `rdpmc`: each span runs from one read to the next, so it holds the counter reads, and no empty span is taken off ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 For scale, that file quotes the empty span measured on this host and design, one read of every event and nothing else, at instructions 308.0001, and at 0.0000 on the floor on DRAM demand fills, so the instruction column is not `apply()`'s own count ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 
-This table is the main finding. The four fast arms run almost the same instructions a message, counter reads included, and their speed follows their DRAM fills: they differ in how long they wait, not in how much they do. On the Mac the six designs rank the same way ([results/bench_book_paged-flat_ram_mac_12302019.md](results/bench_book_paged-flat_ram_mac_12302019.md) and the files beside it), but the Mac read no cache counters, so why the hosts differ so much is not established. Those Mac runs were made before the sampler rule, and no sampler ran beside them, so nothing is known about other load during them.
+This table is the main finding. The four fast arms run almost the same instructions a message, counter reads included, and their speed follows their DRAM fills: they differ in how long they wait, not in how much they do. On the Mac the six designs rank the same way except the two linked arms, which swap: `paged-linked` is ahead of `hash-linked` there in every repetition, while on `debian` their ranges overlap ([results/bench_book_paged-flat_ram_mac_12302019.md](results/bench_book_paged-flat_ram_mac_12302019.md) and the files beside it). But the Mac read no cache counters, so why the hosts differ so much is not established. Those Mac runs were made before the sampler rule, and no sampler ran beside them, so nothing is known about other load during them.
 
-The profile shows where the waiting is. `FastBook::apply` is the widest frame at 42.14% self, and about four fifths of its samples sit on three instructions, each just after a load that depends on the one before ([results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md)). Nothing outside the book, no allocation or system call, shows above 0.1% ([results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md)).
+The profile shows where the waiting is. `FastBook::apply` is the widest frame at 42.14% self, and about four fifths of its samples sit on three instructions, each just after a load that depends on the one before ([results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md)). Nothing outside the pass, no allocation, system call or timer frame, shows above 0.1% ([results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md)).
 
 ### Flat levels against linked
 
@@ -76,7 +76,7 @@ The paged index is faster and pays in memory: in the layout run the hash index's
 
 The lookup alone does not explain the gap:
 
-- Timed alone on `debian`, a paged lookup costs 30.71 ns and a hash lookup 32.50 ns, with overlapping ranges, though the paged one makes 0.024 DRAM fills against the hash's 0.227 ([results/lookup_debian_12302019.md](results/lookup_debian_12302019.md)).
+- Timed alone on `debian`, a lookup on `paged-flat` costs 30.71 ns and on `hash-flat` 32.50 ns, with overlapping ranges, though `paged-flat` makes 0.024 DRAM fills a lookup and `hash-flat` 0.227 ([results/lookup_debian_12302019.md](results/lookup_debian_12302019.md)).
 - On the Mac the hash lookup is faster, 5.03 ns against 8.95 ns, yet `paged-flat` is still the faster book there ([results/lookup_mac_12302019.md](results/lookup_mac_12302019.md)).
 
 The hash was varied too:
@@ -116,7 +116,7 @@ With the pools on base pages, on `debian`:
 
 On transparent huge pages, pool-index's median ratio to malloc-fresh is 1.390; pool-index's median throughput is 2,834,723 messages/s ([results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md)). TLB reach is the obvious suspect, but no TLB counter was read, so the cause is not established.
 
-The index pool also narrows each link, so its lead over the pointer pool is not the allocator's alone. The fastest node book is still slower than both flat-level arms of `FastBook`: under a node design, arrays and indices matter more than any allocator.
+The index pool also narrows each link, so its lead over the pointer pool is not the allocator's alone. The fastest node book is still slower than both flat-level arms of `FastBook`. The two books were timed by different harnesses at different commits, so no finer ranking, of an allocator against a level layout, is drawn from them.
 
 ### The page-fault check fails as published
 
@@ -198,7 +198,7 @@ No counters were read on the queue runs, so why this ring is slower here, and wh
 
 The queue files also give one-way latencies of paced and burst sends, and this write-up quotes none of them. Each is measured from the push, not from the time the message was due, so a send held back behind a slow push has its wait in no latency figure, which favours a queue with slow pushes. No latency from the due time was measured: it needs the due time carried in each item, a change to the benchmark's measured code that no run has had (BENCHMARKS.md, "What the paced and burst latencies measure").
 
-Inside the replay the ring does its job. With the parser on one core and the book on another, the day takes 0.954 of the single-threaded time against a bar of at most 1.31, so T-SPSC-3 is met; the single-threaded runs varied with a CV of 6.25%, so the saving is small beside the noise ([results/spsc_pipeline_debian_12302019.md](results/spsc_pipeline_debian_12302019.md)).
+Inside the replay the ring does its job. With the parser on one core and the book on another, the median pipelined time over single-threaded time is 0.954 against a bar of at most 1.31, so T-SPSC-3 is met; the single-threaded runs varied with a CV of 6.25%, so the saving is small beside the noise ([results/spsc_pipeline_debian_12302019.md](results/spsc_pipeline_debian_12302019.md)).
 
 ### UDP receive: sockets against io_uring
 
@@ -230,16 +230,19 @@ Three runs of the same process took a median of 298.14 ns a message (P-0104), 32
 
 The market maker is Avellaneda-Stoikov, tuned on 10302019 and reported on 12302019, out of sample by day. Its PnL splits into spread capture, adverse selection and inventory, which sum exactly to the ledger's total, tested on integers ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
 
-- On AMD, macOS, the base run made +15.90 dollars of spread capture, -27.50 of adverse selection and -14.36 of inventory, a total of -25.96, over 11 fills ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
-- With the latency model off, the same symbol-day totals +1.23 ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
+It traded two symbols on 12302019, on macOS, each its own symbol-day. Q-off swaps the exact queue position for a conservative or a proportional rule, and L-off sets every latency to zero:
 
-One symbol-day shows the latency model can change the sign of the result, and nothing about an edge.
+- On AMD, the base run made +15.90 dollars of spread capture, -27.50 of adverse selection and -14.36 of inventory, a total of -25.96; that run, AS Base, made 11 fills ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
+- AMD's other totals, in dollars: AS Q-off conservative -23.64, AS Q-off proportional -28.57, AS L-off +1.23 ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
+- BYND's totals, in dollars: AS Base -414.51, AS Q-off conservative -412.51, AS Q-off proportional -409.46, AS L-off -327.53 ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
+
+On AMD the latency model changes the sign of the total; on BYND it does not. Two symbol-days show how the PnL splits, and nothing about an edge.
 
 T-MM-2, reproducing the paper's average spreads, fails on one of three: 3.0317 at γ = 1, 3.03 at two decimals against the paper's 3.02. Other time grids move it to 3.0217 and 3.0117, and the file keeps the failing grid as the measurement ([results/mm_as_tables.md](results/mm_as_tables.md)).
 
 ### The browser replay
 
-The same `FastBook`, compiled to WebAssembly, replays one symbol in the browser demo. On the Mac it ran 13,819,561 messages/s natively and 11,661,713 in the browser, 1.19× native ([results/wasm_replay_mac_12302019.md](results/wasm_replay_mac_12302019.md)). The bar names Google Chrome, which is not installed here; the run used Chrome for Testing, so there is no verdict.
+The same `FastBook`, compiled to WebAssembly, replays one symbol in the browser demo. On the Mac it ran 13,819,561 messages/s natively and 11,661,713 in the browser; a replay in the browser took 1.19× native's time ([results/wasm_replay_mac_12302019.md](results/wasm_replay_mac_12302019.md)). The bar names Google Chrome, which is not installed here; the run used Chrome for Testing, so there is no verdict.
 
 ## Correctness
 
@@ -293,7 +296,7 @@ Every check is tested like code: the fault matrix plants a bug and requires the 
 
 ### Fuzzing
 
-Each of the nine fuzz targets ran for 1,800 s on the Mac under ASan and UBSan, three at a time, from its committed seeds, on the code of commit aef684f, and every one was clean: exit 0, 0 crashes and no input saved ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)). The file says what clean means, and why the fuzzers used the toolchain's symbolizer.
+Each of the nine fuzz targets ran for 1,800 s on the Mac under ASan and UBSan, three at a time, from its committed seeds, on the code of commit aef684f, and every one was clean: exit 0, 0 crashes and no input saved ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)). The file says what clean means, and why the fuzzers used the toolchain's symbolizer. No later commit has changed the fuzz targets or any code they build from: `git diff aef684f -- fuzz src include cmake CMakeLists.txt CMakePresets.json` was empty at the commit this page was last checked at.
 
 - `fuzz_mold` ran 247,377,437 executions and `fuzz_midas` 212,887,115 ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)).
 - `fuzz_book` ran 67,300 executions, since each of its inputs is a stream of order messages replayed through every arm of the fast book and through the reference book, the two compared in full after every message ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)).
@@ -304,7 +307,7 @@ In the final review, reviewers who did not write the code went through it area b
 
 ## What was tried and did not work
 
-Each was measured and lost or did not help.
+Each was measured, and none became the default. Most lost or did not help; the two that won on one host, prefetching on `debian` and NEON on the Mac, stay off for the reasons given.
 
 - Prefetching gained 16.41% on `debian` ([results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md)).
 - On the Mac it lost at every distance, -18.01% at its best, so it is off by default ([results/prefetch_mac_12302019.md](results/prefetch_mac_12302019.md)).
@@ -345,13 +348,13 @@ Generated by `scripts/results_table.py` from the results files; `scripts/check.s
 | T-DESIGN-1 | ≥ 4.0× the map book's throughput, same run (a ratio on one host, comparable on any host) | over map-fresh 3.79×; over map-aged 4.08× | over map-fresh by 0.21× | macOS | not established; the Mac's counters give no misses: [Data layout](#data-layout) | [results/bench_book_paged-flat_ram_mac_12302019.md](results/bench_book_paged-flat_ram_mac_12302019.md) |
 | T-PERF-1 | `r0843:u` per book message ≤ 0.623 | 2.002 raw, `paged-flat` | by 1.379 | debian | the bar was set on a Zen 3 with far more L3; messages naming an order a second old or more take most of the fills: [Branches](#branches-and-the-instruction-stream) | [results/counters_by_type_paged-flat_debian_12302019.md](results/counters_by_type_paged-flat_debian_12302019.md) |
 | T-PERF-2 | branch misses per message ≤ 2.04 | 2.102 raw, `paged-flat` | by 0.062 | debian | not established; replaces miss most a message, and adds take the largest share of all misses: [Branches](#branches-and-the-instruction-stream) | [results/counters_by_type_paged-flat_debian_12302019.md](results/counters_by_type_paged-flat_debian_12302019.md) |
-| T-INV-2 | never crossed, checked strictly after every message | 12302019, strict: 18,958 crossed and 1,018 locked of 268,354,200 two-sided observations; 654 and 10 of 259,196,890 with the market open and the symbol trading; the same on 4 arms | fails strictly on 9 of 10 sessions | macOS | the feed's, not the book's: every cross is in a symbol not in normal trading or inside a reopening window, and T-INV-3, the rule the user chose, passes: [Correctness](#correctness) | [results/oracle_12302019.md](results/oracle_12302019.md) |
-| T-TRADE-3, 01302020 | exact, with no tolerance | 6 violations | any violation fails | macOS | TAP alone: MIDAS lists it twice that day and the tool sums both rows, as docs/NOTES.md records: [Correctness](#correctness) | [results/trades_01302020.md](results/trades_01302020.md) |
-| T-TRADE-3, 03272019 | exact, with no tolerance | 2 violations | any violation fails | macOS | PLAB alone, the feed above MIDAS; cause not established: [Correctness](#correctness) | [results/trades_03272019.md](results/trades_03272019.md) |
-| T-TRADE-3, 05302019 | exact, with no tolerance | 38 violations | any violation fails | macOS | ten symbols, the feed above MIDAS; cause not established: [Correctness](#correctness) | [results/trades_05302019.md](results/trades_05302019.md) |
-| T-TRADE-3, 08302019 | exact, with no tolerance | 6 violations | any violation fails | macOS | INTC alone, the feed above MIDAS in every column; cause not established: [Correctness](#correctness) | [results/trades_08302019.md](results/trades_08302019.md) |
-| T-TRADE-5, 03272019 | exact, with no tolerance | 2 violations | any violation fails | macOS | two `E` on RBZ away from the best, just after a resumption with its book crossed; the oracle agrees with the reference book that day: [Correctness](#correctness) | [results/trades_03272019.md](results/trades_03272019.md) |
-| T-TRADE-5, 05302019 | exact, with no tolerance | 1 violation | any violation fails | macOS | one `E` on ELTK, as with RBZ on the day above: [Correctness](#correctness) | [results/trades_05302019.md](results/trades_05302019.md) |
+| T-INV-2 | never crossed, checked strictly after every message | 12302019, strict: 18,958 crossed and 1,018 locked of 268,354,200 two-sided observations; 654 and 10 of 259,196,890 with the market open and the symbol trading; the same on 4 arms | fails strictly on nine of ten sessions | macOS | the feed's, not the book's: every cross is in a symbol not in normal trading or inside a reopening window, and T-INV-3, the rule the user chose, passes: [Correctness](#correctness) | [results/oracle_12302019.md](results/oracle_12302019.md) |
+| T-TRADE-3, 01302020 | exact, with no tolerance | 6 violations | shares, the feed's against MIDAS: TAP 219183 against 438366 | macOS | TAP alone: MIDAS lists it twice that day and the tool sums both rows, as docs/NOTES.md records: [Correctness](#correctness) | [results/trades_01302020.md](results/trades_01302020.md) |
+| T-TRADE-3, 03272019 | exact, with no tolerance | 2 violations | shares, the feed's against MIDAS: PLAB 72996 against 72896 | macOS | PLAB alone, the feed above MIDAS; cause not established: [Correctness](#correctness) | [results/trades_03272019.md](results/trades_03272019.md) |
+| T-TRADE-3, 05302019 | exact, with no tolerance | 38 violations | shares, the feed's against MIDAS: AGYS 17333 against 17332; CAR 325768 against 324966; CSFL 158347 against 157687; DWDP 1260875 against 1260775; RH 108363 against 108261; SO 403518 against 402808; TBT 839702 against 839102; TTC 83530 against 83429; UVV 22593 against 22592; ZS 850263 against 850163 | macOS | ten symbols, the feed above MIDAS; cause not established: [Correctness](#correctness) | [results/trades_05302019.md](results/trades_05302019.md) |
+| T-TRADE-3, 08302019 | exact, with no tolerance | 6 violations | shares, the feed's against MIDAS: INTC 3644012 against 3644011 | macOS | INTC alone, the feed above MIDAS in every column; cause not established: [Correctness](#correctness) | [results/trades_08302019.md](results/trades_08302019.md) |
+| T-TRADE-5, 03272019 | exact, with no tolerance | 2 violations | each `E`'s price against the best, as ITCH prints prices: RBZ at 216400 with the best at 180500; RBZ at 270000 with the best at 290500 | macOS | two `E` on RBZ away from the best, just after a resumption with its book crossed; the oracle agrees with the reference book that day: [Correctness](#correctness) | [results/trades_03272019.md](results/trades_03272019.md) |
+| T-TRADE-5, 05302019 | exact, with no tolerance | 1 violation | each `E`'s price against the best, as ITCH prints prices: ELTK at 98700 with the best at 104200 | macOS | one `E` on ELTK, as with RBZ on the day above: [Correctness](#correctness) | [results/trades_05302019.md](results/trades_05302019.md) |
 | T-BT-3 | ≥ 4.61 M messages/s | 3.51 M messages/s | 1.10 M messages/s under the bar | debian | the bar was set on a Mac; the queue walk is a small share of a message's time, so it is not the cause; the rest is not established: [Beyond the book](#beyond-the-book) | [results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md) |
 | T-MM-2 | 1.49 at γ = 0.1, 1.35 at γ = 0.01, 3.02 at γ = 1 | 1.4918, 1.3490, 3.0317 | γ = 1: 3.03 at two decimals against 3.02 | macOS | the file traces it to the simulation's time grid, and other grids move it: [Beyond the book](#beyond-the-book) | [results/mm_as_tables.md](results/mm_as_tables.md) |
 | T-SPSC-1, boost rtt / project rtt | ≥ 1.16× | 1.15× | 1.15× against ≥ 1.16× | debian | not established: no counters were read: [Beyond the book](#beyond-the-book) | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
@@ -379,7 +382,7 @@ T-SIMD-1, T-URING-1 and T-ARENA-1's timings have no numeric bar and are reported
 - **One host of each kind.** Most bars were set on desktop and server parts with more cache and newer cores, and no such host was available to split each gap into the host's share and the design's.
 - **One venue.** Nine Nasdaq days and one BX day, and all timing on one day. Other feeds and other days' message mixes may rank the designs differently.
 - **No network.** The UDP replay runs over loopback: system calls and copies, with no kernel-bypass card, no NIC timestamps and no real packet loss.
-- **No market impact.** The backtester's feed cannot react to the strategy, so its PnL shows the accounting on one symbol-day, not what a strategy would earn.
+- **No market impact.** The backtester's feed cannot react to the strategy, so its PnL shows the accounting on two symbol-days, not what a strategy would earn.
 - **No kernel view.** Profiles are user space only, so time in the kernel, the UDP receive path's included, is not shown.
 - **A noisy Mac.** The Mac cannot pin threads and shares its cores with other work, so its timings are context.
 - **No reserved huge pages.** The pools' explicit huge-page arm never ran, since reserving pages is a root step.

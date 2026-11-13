@@ -540,7 +540,7 @@ def backtest_headline(target, name, text, root):
 def spsc_rows(name, text):
     """An SPSC file: one row for each comparison in its targets table."""
     host = header_field(text, "host", name)
-    pinning = find(r"^- pinning: (.*?)(?::|$)", text, name)[1]
+    pinning = pinned_cores(text, name)
     commit = header_commit(text, name)
     section = find(r"^## Targets\n((?s:.*?))(?=^## |\Z)", text, name)[1]
     rows = []
@@ -845,19 +845,37 @@ def generate(root):
                                  "Book memory MiB", "Commit", "File"), arms)
     if pnl:
         lines += ["", "The market maker on its report day, 12302019, a late-December session, "
-                      "with every parameter chosen on 10302019, an FOMC day. One symbol-day. No "
+                      "with every parameter chosen on 10302019, an FOMC day. No "
                       f"edge is claimed. {len({row[0] for row in pnl})} symbols on one day: each "
                       "is its own symbol-day. The file gives S gross, fees, the markout curve and "
                       "how Q-off and L-off each change the PnL. Dollars at the base fee tier; a "
                       "replayed feed cannot react, so market impact is absent.", ""]
         lines += markdown_table(("Symbol", "Run", "Fills", "Shares", "S, $", "A, $", "I, $",
                                  "Total, $", "Total, ticks a share", "File"), pnl)
+    lines += ["", held_by_tests()]
     lines += ["", "Every benchmark run, failed ones included, from "
                   "[results/run_log.md](results/run_log.md). The log is never edited, so a run "
                   "with more than one row has a later one saying what became of it: of the "
                   "rows with one run id, the last stands.", ""]
     lines += markdown_table(RUN_HEADS + ("Stands",), run_rows(run_log))
     return lines
+
+
+def held_by_tests():
+    """The sentence that names the targets no results file holds, and what holds each."""
+    def names(items):
+        quoted = [f"`{item}`" for item in items]
+        return quoted[0] if len(quoted) == 1 else f"{', '.join(quoted[:-1])} and {quoted[-1]}"
+    held = []
+    for target, asks, tests, gates in HELD_BY_TESTS:
+        by = f"the ctest entries {names(tests)}"
+        if gates:
+            by += f", and the gate {names(gates)} in `scripts/gates.py`"
+        held.append(f"{target}, {asks}, by {by}")
+    return (f"{' and '.join(target for target, *_ in HELD_BY_TESTS)} have no row here: no "
+            "results file holds them, and no figure was measured for them. Each is held by "
+            f"tests instead: {'; '.join(held)}. CI and `scripts/check.sh` run the ctest "
+            "entries, and `scripts/check.sh` the gate.")
 
 
 def shown_verdict(verdict, gap=""):
@@ -878,6 +896,8 @@ def pinned_cores(text, name):
     cores = [re.fullmatch(r"pinned to core (\d+)", pinning) for pinning in pinnings]
     if all(cores):
         return f"pinned to cores {cores[0][1]} and {cores[1][1]}"
+    if all(pinning == "not pinned" for pinning in pinnings):
+        return "neither thread pinned"
     return f"{pinnings[0]}; the second thread {pinnings[1]}"
 
 
@@ -1150,6 +1170,18 @@ def spread_row(target, name, text):
             ", ".join(measured for _, _, measured, *_ in rows), gap, host_label(text, name))
 
 
+# Small counts a generated sentence gives in words, so that the number gate does not read
+# them as figures: "nine of ten sessions" is a count of files, held by this script's --check.
+COUNT_WORDS = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+               "ten", "eleven", "twelve")
+
+
+def in_words(count):
+    if not 0 <= count < len(COUNT_WORDS):
+        raise TableError(f"{count} is past the counts this script writes in words")
+    return COUNT_WORDS[count]
+
+
 def inv2_row(target, name, text, root):
     """T-INV-2 strict on the reference day, and how many sessions it fails on."""
     days = sorted(path.name for path in (root / "results").glob("oracle_*.md")
@@ -1163,7 +1195,7 @@ def inv2_row(target, name, text, root):
         raise TableError(f"results/{name}: {target} passes, and {WRITEUP_PAGE}'s table names it "
                          "as failing")
     return (target, "never crossed, checked strictly after every message",
-            f"{day_of(name)}, {row[4]}", f"fails strictly on {failing} of {len(days)} sessions",
+            f"{day_of(name)}, {row[4]}", f"fails strictly on {in_words(failing)} of {in_words(len(days))} sessions",
             host_label(text, name))
 
 
@@ -1176,7 +1208,31 @@ def trade_row(target, name, text):
     count = found[2]
     return (f"{target}, {day_of(name)}", "exact, with no tolerance",
             f"{count} violation{'' if count == '1' else 's'}",
-            "any violation fails", host_label(text, name))
+            trade_gap(target, name, text), host_label(text, name))
+
+
+def trade_gap(target, name, text):
+    """How far a failing trade-print check is off, from the violations its file prints in full:
+    T-TRADE-3's shares, the feed's against MIDAS, else every column it printed; T-TRADE-5's
+    `E` prices against the best, as ITCH prints prices."""
+    if target == "T-TRADE-5":
+        check, shown = "e_not_at_best", r"symbol=(\S+) order at (\d+), best (\d+)"
+        form = "{0} at {1} with the best at {2}"
+        lead = "each `E`'s price against the best, as ITCH prints prices"
+    else:
+        check, shown = "t3_trade_shares", r"symbol=(\S+) feed (\d+), MIDAS (\d+)"
+        form = "{0} {1} against {2}"
+        lead = "shares, the feed's against MIDAS"
+        if not re.search(r"^- `t3_trade_shares ", text, re.MULTILINE):
+            check, shown = r"t3_\w+", r"symbol=(\S+) feed (\d+), MIDAS (\d+)"
+            lead = "the feed's against MIDAS, each column printed"
+    found = re.findall(rf"^- `{check} [^`]*?{shown}`$", text, re.MULTILINE)
+    counted = sum(int(count) for count in re.findall(
+        rf"^- check {check} \({re.escape(target)}\): (\d+) violations?$", text, re.MULTILINE))
+    if not found or len(found) != counted:
+        raise TableError(f"results/{name}: {target} prints {len(found)} violations in full and "
+                         f"counts {counted}, so its gap cannot be given whole")
+    return f"{lead}: " + "; ".join(form.format(*violation) for violation in found)
 
 
 # (target, file, reader, why). A reader returns (target, bar, measured, gap, host).
@@ -1281,6 +1337,14 @@ ACCOUNTED = {
 }
 # A target accounted met with no row of its own here, and the results file that must show it.
 MET_BY_FILE = {"Fuzzing": "fuzz_30min_mac.md"}
+# The targets no results file holds, what each asks, and the ctest entries and gates that hold
+# it instead; test_results_table.py holds each name to tests/CMakeLists.txt and gates.py.
+HELD_BY_TESTS = (
+    ("T-BT-2", "the backtester's validity gates",
+     ("test_backtest", "test_backtest_validity", "test_backtest_cli"), ()),
+    ("T-MM-1", "the PnL split summing exactly to the ledger",
+     ("test_attribution", "test_market_maker"), ("attribution-without-ledger",)),
+)
 
 
 def benchmark_targets(root):

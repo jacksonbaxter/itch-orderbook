@@ -2739,3 +2739,31 @@ All nine fuzz targets ran for 1,800 s each on the Mac, at commit aef684f, in the
 **The symbolizer.** Each fuzzer ran with `ASAN_OPTIONS` and `UBSAN_OPTIONS` setting `external_symbolizer_path` to the toolchain's `llvm-symbolizer`, as the status file's "build done" line records. Without it every fuzzer hangs at its first NEW_FUNC line on this Mac, where the system symbolizer waits on an authorization ("No check waits on the system symbolizer", above). `fuzz_report.py` refuses a run whose options do not set it.
 
 **What the counts say.** `fuzz_book` ran 67,300 executions where the other targets ran from 1,354,541 (`fuzz_lookahead`) to 247,377,437 (`fuzz_mold`): each of its inputs is a stream of order messages replayed through every arm of the fast book in turn and the reference book, the two compared in full after every message. The x86-64 kernels are not built on the Mac, so `fuzz_kernels` fuzzed only scalar and NEON here.
+
+## The pages after the final review of the documents (r11), 2026-11-13
+
+The reviewer of README.md, WRITEUP.md, BENCHMARKS.md and RESULTS.md at 63e70f1 found 12 FIX and 12 NOTE. Each claim was checked against the file it cites before a page changed. r11-3 (the parse rate) and r11-24 (a comment in `scripts/check.sh`) are other pieces' and are not covered here.
+
+**What the number gate holds, and what it does not.** `gate_numbers.py` holds that each figure is in the results file its clause cites, beside a word its clause shares. Two rules now tie a figure to one place:
+
+- A figure beside a one-word row label (rigtorp, `switch`) that a table of the cited file holding the figure has as a row label must be in that row, or straight after that word in the file. On the page, beside means the word straight before the figure, or the row's first cell for the first figure of a page table row's second cell.
+- The two integers of an `N of M` must stand together in one table, or one line outside tables, of the cited file, and twice there if N is M.
+
+Each rule has a test in `test_gate_numbers.py` that fails without it, and a fault in `scripts/faults/readme.json`.
+
+The gate does not hold that a figure is the one for its place when the file has the same figure elsewhere under a shared word. These still pass, from the reviewer's mutation script run again:
+
+- two figures of one clause that share its words, with no label to tell them apart, swapped: 3.03 and 3.02 in the README's T-MM-2 line, or a feed figure and a MIDAS figure;
+- a figure moved to another run's place when a line of the file names that run before it: the tool output's "from -$25.96 to $1.23" lines;
+- "2 processes of the 3" changed to "3 of the 3", since that is not an `N of M` as written;
+- counts in words (nine, four), which it does not read. WRITEUP's T-INV-2 gap now gives its count of sessions in words, held by `results_table.py --check`.
+
+The reviewer's 78 changes: the gate before caught 71; after, 74, with 2 skipped because the reworded text no longer holds them. The two still missed are "Clang 23.1.4", a compiler named on purpose, and "1,800 s" changed to 1,801, which the fuzz file also holds as each target's seconds. A second batch of 20 changes on the text as it now stands: the gate before caught 10, after 15. The scripts and their output are in the research cache, not in this repository.
+
+Some true figures were held to their place by rewording rather than by a rule: the lookup costs name `paged-flat` and `hash-flat` before each figure; T-SPSC-3's 0.954 names its row, the median pipelined time over single-threaded time; AMD's 11 fills name the run, AS Base; the README's T-MM-2 line gives 3.03 against the paper's 3.02, which the file holds, in place of "off by 0.01", which it held only by chance.
+
+**The market maker's file.** `results/mm_pnl_12302019.md` said "One symbol-day." above "2 symbol-days". `mm_report.py render --raw-dir` from the run's raw records reproduced the committed file byte for byte; with the fixed sentence changed to "No edge is claimed." the only line that differed was that one. The committed file also has its "Rendered again" note rewritten to say it was rendered twice and why. WRITEUP gives both symbols' base, Q-off and L-off totals.
+
+**The fuzz file.** `results/fuzz_30min_mac.md` is generated and names the commit fuzzed. It cannot say that later commits leave the fuzzed code alone, so it was not edited. WRITEUP says so instead, at the commit the page was last checked at; the final gate should run `git diff --stat aef684f HEAD -- fuzz src include cmake CMakeLists.txt CMakePresets.json` again.
+
+**T-BT-2 and T-MM-1.** No results file holds either. RESULTS.md now says so and names the ctest entries and the gate that hold each; `test_results_table.py` holds each name to `tests/CMakeLists.txt` and `scripts/gates.py`. RESULTS.md's opening says that every verdict a results file gives is there.

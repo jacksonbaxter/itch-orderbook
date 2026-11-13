@@ -269,6 +269,50 @@ class Gate(unittest.TestCase):
         self.assertIn("4,570,543 is not in results/backtest_quoting_debian_12302019.md", output)
         self.assertIn(f"WRITEUP.md:{line}:", output)
 
+    def write(self, name, text):
+        (self.root / name).write_text(text, encoding="utf-8")
+
+    def test_a_figure_beside_a_one_word_row_label_is_held_to_its_row(self):
+        self.write("results/queues.md", "# Queues\n\n| Queue | Median round trip, ns |\n"
+                   "|---|---|\n| rigtorp, rtt | 198.5 |\n| moodycamel, rtt | 169.3 |\n\n"
+                   "| Form | Branch misses a message |\n|---|---|\n| `switch` | 2.0303 |\n"
+                   "| `table` | 2.1005 |\n")
+        self.write("WRITEUP.md", "| Queue | Median round trip, ns | File |\n|---|---|---|\n"
+                   "| rigtorp | 198.5 | results/queues.md |\n"
+                   "| moodycamel | 169.3 | results/queues.md |\n\n"
+                   "The forms missed `switch` 2.0303 a message and `table` 2.1005 "
+                   "([results/queues.md](results/queues.md)).\n")
+        code, output = run(self.root)
+        self.assertEqual(code, 0, output)
+        self.edit("WRITEUP.md", "| rigtorp | 198.5 |", "| rigtorp | 169.3 |")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("WRITEUP.md:3: 169.3 is not in results/queues.md", output)
+        self.edit("WRITEUP.md", "| rigtorp | 169.3 |", "| rigtorp | 198.5 |")
+        self.edit("WRITEUP.md", "`switch` 2.0303 a message and `table` 2.1005",
+                  "`switch` 2.1005 a message and `table` 2.0303")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("WRITEUP.md:6: 2.1005 is not in results/queues.md", output)
+        self.assertIn("WRITEUP.md:6: 2.0303 is not in results/queues.md", output)
+
+    def test_the_two_integers_of_n_of_m_stand_together(self):
+        self.write("results/resumptions.md", "# Resumptions\n\n- resumptions late: 23\n\n"
+                   "| Resumptions and leftovers | Count |\n|---|---|\n"
+                   "| Resumptions into trading | 33 |\n"
+                   "| Of which found the book crossed | 22 |\n")
+        self.write("WRITEUP.md", "On the day 22 of 33 resumptions found the book crossed "
+                   "([results/resumptions.md](results/resumptions.md)).\n")
+        code, output = run(self.root)
+        self.assertEqual(code, 0, output)
+        for wrong in ("23 of 33", "33 of 33"):
+            self.write("WRITEUP.md", f"On the day {wrong} resumptions found the book crossed "
+                       "([results/resumptions.md](results/resumptions.md)).\n")
+            code, output = run(self.root)
+            self.assertEqual(code, 1, output)
+            self.assertIn(f"WRITEUP.md:1: {wrong} is not in results/resumptions.md together",
+                          output)
+
     def test_no_pages_at_all_passes_and_says_so(self):
         (self.root / "README.md").unlink()
         (self.root / "RESULTS.md").unlink()

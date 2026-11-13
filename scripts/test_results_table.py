@@ -476,7 +476,10 @@ class ResultsTable(unittest.TestCase):
         rows = [line for line in output.splitlines() if f"(results/{name})" in line]
         self.assertEqual(len(rows), 3, output)
         self.assertIn("| T-SPSC-1 | boost rtt / project rtt | 12302019 | macOS (M4 Max) | "
-                      "not pinned | 1.78× | ≥ 1.16× | host differs | `abc` |", rows[0])
+                      "neither thread pinned | 1.78× | ≥ 1.16× | host differs | `abc` |", rows[0])
+        # A two-thread run on debian names both cores, the peer's from its own field.
+        self.assertIn("| T-SPSC-3 | pipelined time / single-threaded time | 12302019 | debian | "
+                      "pinned to cores 4 and 6 |", output)
         path = self.root / "results" / name
         path.write_text(re.sub(r"(?m)^\| T-SPSC-\d \|.*\n", "", test_spsc_results.QUEUES_FILE),
                         encoding="utf-8")
@@ -531,7 +534,28 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 0, output)
         rows = [line for line in output.splitlines() if line.startswith(("| AMD | ", "| BYND | "))]
         self.assertEqual(len(rows), 14, output)
-        self.assertIn("One symbol-day. No edge is claimed. 2 symbols on one day", output)
+        self.assertIn("an FOMC day. No edge is claimed. 2 symbols on one day", output)
+        self.assertNotIn("One symbol-day", output)
+
+    def test_the_targets_held_by_tests_name_real_tests_and_no_file(self):
+        cmake = (REPO_ROOT / "tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        registered = (set(re.findall(r"^\s*itch_add_test\((\w+)", cmake, re.MULTILINE))
+                      | set(re.findall(r"add_test\(NAME (\w+)", cmake)))
+        gates = (REPO_ROOT / "scripts" / "gates.py").read_text(encoding="utf-8")
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        for target, _, tests, gate_names in results_table.HELD_BY_TESTS:
+            for name in tests:
+                self.assertIn(name, registered, f"{target}: {name} is no ctest entry")
+                self.assertIn(f"`{name}`", output)
+            for name in gate_names:
+                self.assertIn(f'Gate("{name}"', gates, f"{target}: {name} is no gate")
+                self.assertIn(f"`{name}`", output)
+            self.assertIn(target, results_table.ACCOUNTED)
+            for path in (self.root / "results").glob("*.md"):
+                self.assertNotRegex(path.read_text(encoding="utf-8"),
+                                    rf"(?m)^\| {re.escape(target)} \|", path.name)
+        self.assertIn("T-BT-2 and T-MM-1 have no row here: no results file holds them", output)
 
     def test_a_market_maker_run_dropped_from_a_table_is_refused(self):
         name = "results/mm_pnl_12302019.md"
@@ -765,6 +789,22 @@ class MissedTargets(unittest.TestCase):
         self.assertIn("| T-BOOK-4 |", table)
         self.assertIn("3 runs logged under P-0502, none published: 2 withdrawn, 1 stopped or "
                       "refused", table)
+
+    def test_a_failing_trade_check_gives_its_size_from_its_file(self):
+        table = self.missed()
+        self.assertIn("| T-TRADE-3, 03272019 | exact, with no tolerance | 2 violations | shares, "
+                      "the feed's against MIDAS: PLAB 72996 against 72896 | macOS |", table)
+        self.assertIn("| T-TRADE-5, 03272019 | exact, with no tolerance | 2 violations | each "
+                      "`E`'s price against the best, as ITCH prints prices: RBZ at 216400 with "
+                      "the best at 180500; RBZ at 270000 with the best at 290500 | macOS |", table)
+        self.assertNotIn("any violation fails", table)
+        # A violation the file counts and does not print leaves the gap unknown: refused.
+        self.edit("results/trades_03272019.md", "- check t3_trade_shares (T-TRADE-3): 1 violations",
+                  "- check t3_trade_shares (T-TRADE-3): 2 violations")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("results/trades_03272019.md: T-TRADE-3 prints 1 violations in full and "
+                      "counts 2, so its gap cannot be given whole", output)
 
     def test_a_writeup_row_typed_over_fails(self):
         self.edit("WRITEUP.md", "| T-SPSC-1, project rtt / rigtorp rtt | ≤ 1.00× | 1.16× |",
