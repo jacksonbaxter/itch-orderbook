@@ -58,6 +58,62 @@
       }
     },
     {
+      "id": "spsc-observe-relaxed",
+      "breaks": "The consumer reads the producer's index with relaxed, so it may read a slot before the slot's write is seen (r3-5)",
+      "check": "ThreadSanitizer on test_spsc's two threads, no recovery",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "kObserve = std::memory_order_acquire;",
+          "new": "kObserve = std::memory_order_relaxed;"
+        }
+      ],
+      "build": {
+        "preset": "tsan",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "tsan",
+        "-R",
+        "^test_spsc$"
+      ],
+      "expect": {
+        "signature": "ThreadSanitizer: data race"
+      }
+    },
+    {
+      "id": "spsc-return-relaxed",
+      "breaks": "The consumer returns its index with relaxed, so the producer may write over a slot whose read has not finished (r3-5)",
+      "check": "ThreadSanitizer on test_spsc's two threads, no recovery",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "kReturn = std::memory_order_release;",
+          "new": "kReturn = std::memory_order_relaxed;"
+        }
+      ],
+      "build": {
+        "preset": "tsan",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "tsan",
+        "-R",
+        "^test_spsc$"
+      ],
+      "expect": {
+        "signature": "ThreadSanitizer: data race"
+      }
+    },
+    {
       "id": "spsc-mask-off-by-one",
       "breaks": "The mask is one short of capacity - 1, so two indices a slot apart share a slot",
       "check": "test_spsc KeepsOrderInEveryConfiguration",
