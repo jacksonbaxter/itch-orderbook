@@ -362,6 +362,52 @@ def wait_for_quiet(watch, args):
 
 
 MOST_OF_IT = re.compile(r" at (\S+Z), the most of it (.+)$")
+KINDS_UNREADABLE = (f"${process_kinds.MAP_ENV} names a map of process kinds that cannot be read, "
+                    "or that gives a kind not in process_kinds.KINDS")
+# The program names the sampler has logged in this run: never in a row (scrub()).
+seen_names = set()
+
+
+def check_kinds_map():
+    """The map of process kinds loaded and held to process_kinds.KINDS before anything is
+    timed, so that a bad map is refused at the start and never met at a withdrawal."""
+    try:
+        process_kinds.default_map()
+    except process_kinds.MapError:
+        raise Refused("kinds", KINDS_UNREADABLE) from None
+
+
+def note_names(lines):
+    """Keeps the program of every busy line, so that scrub() can keep it out of a row."""
+    for words in (line.split(None, 4) for line in lines):
+        if len(words) == 5 and words[1] == "busy":
+            command = words[4].partition(": ")[2].rsplit(" [", 1)[0]
+            for name in (command.split()[:1] + [process_kinds.program_of(command)]):
+                if len(name) > 1:
+                    seen_names.add(name)
+
+
+def scrub(text):
+    """A row's text with the map's path, and every program name the map or the sampler gave in
+    this run, taken out: whatever failed, a row says no more than a kind."""
+    path = os.environ.get(process_kinds.MAP_ENV)
+    if path:
+        for form in {path, os.path.abspath(path), os.path.realpath(path)}:
+            text = text.replace(form, f"${process_kinds.MAP_ENV}")
+    names = set(seen_names)
+    try:
+        kinds = process_kinds.default_map()
+    except process_kinds.MapError:
+        kinds = None
+    if kinds:
+        names |= {name for name in kinds["programs"] if len(name) > 1}
+    for name in sorted(names, key=len, reverse=True):
+        text = re.sub(rf"(?<![\w.-]){re.escape(name)}(?![\w-])", process_kinds.OTHER, text)
+    return text
+
+
+def log_row(args, run_id, commit, outcome):
+    bench_driver.append_log(args.run_log, run_id, args.prediction, commit, scrub(outcome))
 
 
 def public_why(why, lines):
@@ -380,7 +426,10 @@ def public_why(why, lines):
         return why
     told, _, rest = busy[4].partition(": ")
     command = rest.rsplit(" [", 1)[0]
-    kind = process_kinds.kind_of(command)
+    try:
+        kind = process_kinds.kind_of(command)
+    except process_kinds.MapError:  # check_kinds_map() refused a bad map before this.
+        kind = process_kinds.OTHER
     if kind == process_kinds.OTHER:
         kind = linux_sampler.EARLIER_WORDS.get(told, told)
     if kind not in process_kinds.KINDS:
@@ -397,8 +446,8 @@ def withdraw(args, index, begin, why, sampled, commit):
         if path.is_file():
             path.rename(args.raw_dir / f"parse-repetition-{index}-withdrawn-{count}{suffix}")
     run_id = f"{args.prediction}-{begin[:19].replace(':', '').replace('-', '')}Z"
-    bench_driver.append_log(
-        args.run_log, run_id, args.prediction, commit,
+    log_row(
+        args, run_id, commit,
         f"withdrawn: T-PARSE-1 to T-PARSE-3, repetition {index}, exit 0; {why}, inside its span, "
         f"so the Linux sampler rule does not publish it; nothing from it is published, and it "
         f"is rerun under {args.prediction}; the row was written by the driver")
@@ -421,6 +470,7 @@ def judged_process(args, index, commit, digest, watch, sampled, manifest_day):
         end = linux_sampler.utc_now()
         watch.wait_past(end)
         lines = watch.lines()
+        note_names(lines)
         why = linux_sampler.judge(lines, begin, end, last_pid)
         if why is not None:
             why = public_why(why, lines)
@@ -450,6 +500,8 @@ def run(args, run_id, started, commit):
                               "measured")
     if args.core is None or args.sibling is None:
         raise Refused("sampler", "the Linux sampler rule needs --core and --sibling")
+    bench_driver.set_stage("reading the map of process kinds")
+    check_kinds_map()
     manifest_day = manifest_entry(args.input.name)
     if manifest_day is None:
         raise Refused("manifest", f"{args.input.name} is not a day scripts/data_manifest.json "
@@ -903,19 +955,21 @@ def main(argv=None):
         bench_driver.stop_child()
         name = signal.Signals(stop.signum).name
         print(f"parse_driver: stopped by {name} at {bench_driver.stage}", file=sys.stderr)
-        bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
-                                f"stopped by {name} at {bench_driver.stage}; nothing from it is "
-                                "published; the row was written by the driver as it stopped")
+        log_row(args, run_id, commit,
+                f"stopped by {name} at {bench_driver.stage}; nothing from it is published; the row "
+                "was written by the driver as it stopped")
         return 128 + stop.signum
     except (Refused, run_record.Incomplete) as refusal:
         bench_driver.hold_signals()
-        print(f"parse_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
-        bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
-                                f"refused at {refusal.stage}: {refusal}")
+        print(f"parse_driver: refused at {refusal.stage}: {scrub(str(refusal))}", file=sys.stderr)
+        log_row(args, run_id, commit, f"refused at {refusal.stage}: {refusal}")
         return 1
     except Exception as error:  # Last, so that no run ends without its row.
-        return bench_driver.log_failure("parse_driver", args.run_log, run_id, args.prediction,
-                                        commit, error)
+        # As bench_driver.log_failure, with the text scrubbed of the map's path and any name.
+        bench_driver.hold_signals()
+        print(f"parse_driver: failed: {scrub(repr(error))}", file=sys.stderr)
+        log_row(args, run_id, commit, f"failed: {error!r}")
+        return 1
     bench_driver.hold_signals()
     bench_driver.append_written(args.run_log, run_id, args.prediction, commit, [written])
     print(f"parse_driver: wrote {written}, load lines pending. Now run scripts/stamp_load.py.",

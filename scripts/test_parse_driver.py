@@ -451,6 +451,44 @@ class Run(unittest.TestCase):
         self.assertNotIn("zzfakebusy", row)
         self.assertEqual(process_kinds.cause_breaks(row), [])
 
+    def test_a_bad_map_is_refused_before_anything_runs(self):
+        bad = SCRATCH / "zzinvented_private" / "bad_kinds.json"
+        bad.parent.mkdir(parents=True, exist_ok=True)
+        bad.write_text("{not json", encoding="utf-8")
+        with mock.patch.dict(os.environ, {process_kinds.MAP_ENV: str(bad)}), \
+                mock.patch.object(parse_driver.platform, "system", return_value="Linux"), \
+                mock.patch.object(parse_driver, "inline_check",
+                                  side_effect=parse_driver.Refused("inline", "not reached")):
+            with self.assertRaises(parse_driver.Refused) as caught:
+                parse_driver.run(args_for(input=Path("12302019.NASDAQ_ITCH50"), bench="b"),
+                                 "P-0029-x", "now", "abc")
+        self.assertEqual(caught.exception.stage, "kinds")
+        self.assertNotIn("zzinvented_private", str(caught.exception))
+
+    def test_no_row_carries_the_maps_path_or_a_name(self):
+        kinds = SCRATCH / "zzinvented_private" / "kinds.json"
+        kinds.parent.mkdir(parents=True, exist_ok=True)
+        kinds.write_text(json.dumps({"programs": {"zzfakebusy": process_kinds.BROWSER}}),
+                         encoding="utf-8")
+        self.addCleanup(parse_driver.seen_names.clear)
+        parse_driver.note_names(
+            [f"{self.STAMP} busy 12.0% cpu2 a kernel thread: zzfakemiddle/3 [12]"])
+        argv = ["--bench", "b", "--probe", "p", "--input", "12302019.NASDAQ_ITCH50",
+                "--prediction", "P-0029", "--raw-dir", str(SCRATCH), "--out", "o.md",
+                "--run-log", str(self.log)]
+        boom = RuntimeError(f"cannot read {kinds}: zzfakebusy and zzfakemiddle/3 were busy")
+        with mock.patch.dict(os.environ, {process_kinds.MAP_ENV: str(kinds)}), \
+                mock.patch.object(parse_driver.run_record, "open_run"), \
+                mock.patch.object(parse_driver.run_record, "start_record"), \
+                mock.patch.object(parse_driver.bench_driver, "git_commit", return_value="abc"), \
+                mock.patch.object(parse_driver, "run", side_effect=boom), \
+                mock.patch("sys.stderr"):
+            self.assertEqual(parse_driver.main(argv), 1)
+        row = self.log.read_text(encoding="utf-8").splitlines()[-1]
+        self.assertIn("failed: RuntimeError", row)
+        for private in ("zzinvented_private", "zzfakebusy", "zzfakemiddle"):
+            self.assertNotIn(private, row)
+
     def test_three_withdrawn_in_a_row_refuse_the_run(self):
         watch = mock.Mock(every=1.0)
         watch.lines.return_value = []

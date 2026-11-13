@@ -634,6 +634,50 @@
         "signature": "FAIL: test_a_branch_into_a_cold_part_is_refused",
         "exit": 1
       }
+    },
+    {
+      "id": "parse-bad-map-found-mid-run",
+      "breaks": "parse_driver.py meets an unreadable map of process kinds only at a withdrawal, mid-run, not before anything is timed",
+      "check": "test_parse_driver.py Run.test_a_bad_map_is_refused_before_anything_runs",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    check_kinds_map()\n    manifest_day",
+          "new": "    manifest_day"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Run.test_a_bad_map_is_refused_before_anything_runs"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_bad_map_is_refused_before_anything_runs",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-row-not-scrubbed",
+      "breaks": "A row parse_driver.py writes on a failure carries the map's path and the program names the sampler logged",
+      "check": "test_parse_driver.py Run.test_no_row_carries_the_maps_path_or_a_name",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    bench_driver.append_log(args.run_log, run_id, args.prediction, commit, scrub(outcome))\n",
+          "new": "    bench_driver.append_log(args.run_log, run_id, args.prediction, commit, outcome)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Run.test_no_row_carries_the_maps_path_or_a_name"
+      ],
+      "expect": {
+        "signature": "FAIL: test_no_row_carries_the_maps_path_or_a_name",
+        "exit": 1
+      }
     }
   ]
 }
