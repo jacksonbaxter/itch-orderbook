@@ -396,7 +396,8 @@ class CommittedFaults(unittest.TestCase):
         # breaks every case, and its output must match none of their signatures.
         faults = [fault for fault in fm.load_faults(fm.REPO_ROOT / "scripts" / "faults")
                   if fault.id.startswith(("mm-select-", "mm-cli-"))]
-        self.assertEqual(len(faults), 10)
+        # Ten when this test was written; every one added since is held to the same rule.
+        self.assertGreaterEqual(len(faults), 10)
         broken = "/usr/bin/false" if Path("/usr/bin/false").exists() else "/bin/false"
         with tempfile.TemporaryDirectory(dir=SCRATCH) as scratch:
             outputs = {}

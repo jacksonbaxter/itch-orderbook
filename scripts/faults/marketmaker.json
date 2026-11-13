@@ -1934,7 +1934,7 @@
         "{tree}/tests/fixtures/oracle"
       ],
       "expect": {
-        "signature": "mm cli: FAIL cut: exit",
+        "signature": "^mm cli: FAIL cut: exit 0: ",
         "exit": 1
       }
     },
@@ -1963,7 +1963,7 @@
         "{build}/select_fault"
       ],
       "expect": {
-        "signature": "select cli: FAIL cut: exit",
+        "signature": "^select cli: FAIL cut: exit 0: ",
         "exit": 1
       }
     },
