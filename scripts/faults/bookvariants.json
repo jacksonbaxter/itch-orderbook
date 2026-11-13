@@ -668,6 +668,131 @@
         "signature": "^FAIL: test_a_mac_process_is_published_only_if_sampled_quiet",
         "exit": 1
       }
+    },
+    {
+      "id": "bookvariants-arm-identity-builds-hash",
+      "breaks": "--index identity and identity-* build HashIndex (r8-1)",
+      "check": "test_bench_replay BenchReplay.EveryArmNameBuildsTheTypesItNames",
+      "mutations": [
+        {
+          "file": "tools/book_arms.hpp",
+          "old": "    case IndexArm::identity: return with_levels.template operator()<IdentityHashIndex>();",
+          "new": "    case IndexArm::identity: return with_levels.template operator()<HashIndex>();"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_bench_replay",
+        "--gtest_filter=BenchReplay.*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.EveryArmNameBuildsTheTypesItNames"
+      }
+    },
+    {
+      "id": "bookvariants-arm-chained-builds-hash",
+      "breaks": "--index chained and chained-* build HashIndex (r8-1)",
+      "check": "test_bench_replay BenchReplay.EveryArmNameBuildsTheTypesItNames",
+      "mutations": [
+        {
+          "file": "tools/book_arms.hpp",
+          "old": "    case IndexArm::chained: return with_levels.template operator()<ChainedIndex>();",
+          "new": "    case IndexArm::chained: return with_levels.template operator()<HashIndex>();"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_bench_replay",
+        "--gtest_filter=BenchReplay.*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.EveryArmNameBuildsTheTypesItNames"
+      }
+    },
+    {
+      "id": "bookvariants-arm-scan16-builds-flat",
+      "breaks": "--levels flat-scan16 and *-flat-scan16 build FlatLevels (r8-1)",
+      "check": "test_bench_replay BenchReplay.EveryArmNameBuildsTheTypesItNames",
+      "mutations": [
+        {
+          "file": "tools/book_arms.hpp",
+          "old": "      case LevelsArm::flat_scan16: return run.template operator()<Index, Scan16FlatLevels>();",
+          "new": "      case LevelsArm::flat_scan16: return run.template operator()<Index, FlatLevels>();"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_bench_replay",
+        "--gtest_filter=BenchReplay.*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.EveryArmNameBuildsTheTypesItNames"
+      }
+    },
+    {
+      "id": "bookvariants-arm-bisect-builds-flat",
+      "breaks": "--levels flat-bisect and *-flat-bisect build FlatLevels (r8-1)",
+      "check": "test_bench_replay BenchReplay.EveryArmNameBuildsTheTypesItNames",
+      "mutations": [
+        {
+          "file": "tools/book_arms.hpp",
+          "old": "      case LevelsArm::flat_bisect: return run.template operator()<Index, BisectFlatLevels>();",
+          "new": "      case LevelsArm::flat_bisect: return run.template operator()<Index, FlatLevels>();"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_bench_replay",
+        "--gtest_filter=BenchReplay.*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.EveryArmNameBuildsTheTypesItNames"
+      }
+    },
+    {
+      "id": "bookvariants-arm-names-scan16-bisect-swapped",
+      "breaks": "The names flat-scan16 and flat-bisect each pick the other's levels",
+      "check": "test_bench_replay BenchReplay.EveryArmNameBuildsTheTypesItNames",
+      "mutations": [
+        {
+          "file": "tools/book_arms.hpp",
+          "old": "\"flat-scan16\",\n                                                                 \"flat-bisect\"};",
+          "new": "\"flat-bisect\",\n                                                                 \"flat-scan16\"};"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_bench_replay"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_bench_replay",
+        "--gtest_filter=BenchReplay.*"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] BenchReplay\\.EveryArmNameBuildsTheTypesItNames"
+      }
     }
   ]
 }

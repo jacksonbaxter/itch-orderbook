@@ -94,6 +94,9 @@ def main():
                 (options[options.index("--stages") + 1] if "--stages" in options else "all",
                  options[options.index("--kinds") + 1]))):
             failures.append(f"{name}: variant {data['variant']}")
+        if data is not None and name.startswith("layout ") and \
+                data["variant"].get("design") != name.removeprefix("layout "):
+            failures.append(f"{name}: the record names design {data['variant'].get('design')}")
         if data is not None and want is not None and not name.startswith("hash"):
             got = (data["passes"][0]["live_orders"], data["passes"][0]["live_levels"])
             if got != want:

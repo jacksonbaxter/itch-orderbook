@@ -20,7 +20,9 @@ import sys
 from pathlib import Path
 
 SMALL = ("--max-orders", "4096", "--max-levels", "4096")
-ARMS = (("hash", "linked"), ("hash", "flat"), ("paged", "linked"), ("paged", "flat"))
+ARMS = (("hash", "linked"), ("hash", "flat"), ("paged", "linked"), ("paged", "flat"),
+        ("identity", "flat"), ("chained", "flat"), ("paged", "flat-scan16"),
+        ("paged", "flat-bisect"))
 ARM_SMALL = SMALL + ("--max-pages", "8", "--index-bits", "16", "--max-slots", "8192")
 AGED = ("--heap", "aged", "--seed", "7", "--warm-blocks", "4096", "--ring-blocks", "64")
 # Each message the fixture builder marks as refused: 5 unknown, 1 on another locate, 2 too
