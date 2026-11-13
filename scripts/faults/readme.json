@@ -2453,6 +2453,30 @@
         "signature": "^FAIL: test_the_final_review_has_a_row_that_follows_its_file",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-writeup-review-figure-not-in-results",
+      "breaks": "WRITEUP.md's final review paragraph gives a count of fixed findings that results/final_review.md does not",
+      "check": "gate_numbers.py on WRITEUP.md",
+      "mutations": [
+        {
+          "file": "WRITEUP.md",
+          "old": "Of the findings, 138 are fixed,",
+          "new": "Of the findings, 137 are fixed,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "WRITEUP.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 137 is not in results/final_review\\.md",
+        "exit": 1
+      }
     }
   ]
 }
