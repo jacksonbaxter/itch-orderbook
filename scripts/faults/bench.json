@@ -4813,26 +4813,149 @@
       }
     },
     {
-      "id": "bench-counts-file-median-typed-in",
-      "breaks": "A published counters file's T-PERF-1 median and verdict typed in together",
-      "check": "counts_report.py --check figures-differ",
-      "inputs": [
+      "id": "bench-flame-report-shares-unrecomputed",
+      "breaks": "--check takes the hottest frames' shares as printed",
+      "check": "test_flame_report.py",
+      "mutations": [
         {
-          "file": "results/counters_by_type_paged-flat_debian_12302019.md",
-          "op": "replace_text",
-          "old": "against ≤ 0.623: **FAIL**. Measured 2.002 raw (min 2.001, max 2.013), missing it by 1.379;",
-          "new": "against ≤ 0.623: **PASS**. Measured 0.600 raw (min 2.001, max 2.013);"
+          "file": "scripts/flame_report.py",
+          "old": "    if hottest_body != section_text(hottest_lines(stacks)):",
+          "new": "    if False:"
         }
       ],
       "command": [
         "{python}",
         "-B",
-        "{tree}/scripts/counts_report.py",
-        "--check",
-        "{tree}/results/counters_by_type_paged-flat_debian_12302019.md"
+        "{tree}/scripts/test_flame_report.py"
       ],
       "expect": {
-        "signature": "counts_report: FAIL figures-differ: line 3 of the figures",
+        "signature": "^FAIL: test_check_works_the_shares_out_again_from_the_folded_stacks ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-ratio-unrecomputed",
+      "breaks": "--check takes the frame-pointer ratio as printed",
+      "check": "test_flame_report.py",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "        if fields.get(\"frame_pointer_ratio\") != f\"{ratio:.4f}\":",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_works_the_ratio_out_again_from_the_two_builds ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-delta-section-unrecomputed",
+      "breaks": "--check takes the frame-pointer build's table and sentence as printed",
+      "check": "test_flame_report.py",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "        if (check_results.section(text, \"The frame-pointer build\") or \"\").strip() != \\\n                section_text(lines):",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_works_the_ratio_out_again_from_the_two_builds ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-summary-unrecomputed",
+      "breaks": "--check takes the summary as printed",
+      "check": "test_flame_report.py",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    if fields.get(\"summary\") != summary:",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_works_the_shares_out_again_from_the_folded_stacks ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-svg-unmatched",
+      "breaks": "Frames the SVG draws are never held to the folded stacks",
+      "check": "test_flame_report.py",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    return sorted(f\"{name} ({count:,} samples)\" for name, count in (drawn - held).elements())",
+          "new": "    return []"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_frame_the_svg_draws_is_a_node_of_the_folded_stacks ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-folded-unwritten",
+      "breaks": "render leaves the folded stacks out, so nothing can be worked out again",
+      "check": "test_flame_report.py",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    args.out.with_suffix(\".folded\").write_text(folded, encoding=\"utf-8\")\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_debian_graph_renders_and_passes_its_own_check ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-folded-private-unchecked",
+      "breaks": "--check never looks for private text in the folded stacks",
+      "check": "test_flame_report.py",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    leaked = private_found(raw)\n",
+          "new": "    leaked = None\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_catches_a_private_name_in_the_folded_stacks ",
         "exit": 1
       }
     }

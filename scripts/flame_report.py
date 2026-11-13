@@ -22,9 +22,16 @@ instantiations, which the table prints alike, are ranked apart, and where mergin
 change the list it says so), the perf annotate excerpt for the hottest function on Linux, what the graph cannot show, and on Linux the frame-pointer
 build's throughput against the normal build, read from the two bench_driver files.
 
---check reads each results file and the SVG beside it: nothing private in either, the
-sample count the same in both, the limits stated, and on Linux the build named as the
-frame-pointer build with its delta.
+render also writes the folded stacks the SVG is drawn from beside it (`.folded`, scrubbed
+as the SVG is), so that every figure can be worked out again from the file alone.
+
+--check reads each results file and the SVG and folded stacks beside it: nothing private in
+any, the limits stated, and on Linux the build named as the frame-pointer build with its
+delta. From the folded stacks it works out again the sample and stack counts, the hottest
+frames table with its self and total shares, the instantiations said alike, and the summary,
+and it requires every frame the SVG draws to be a node of those stacks with the same samples.
+On Linux it reads the two bench_driver files the delta table links, and works out again the
+frame-pointer ratio, the table and the sentence that gives it.
 
 Each violation prints as `flame_report: FAIL <code> <file>: <detail>`.
 
@@ -35,6 +42,7 @@ unusable input.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import shutil
@@ -50,6 +58,9 @@ import gates  # noqa: E402
 
 SAMPLE_LINE = re.compile(r"^(?P<lead>[ +!:|]*?)(?P<count>\d+) (?P<frame>.*)$")
 SAMPLE_FRAME = re.compile(r"^(?P<name>.*?)  \(in (?P<image>[^)]+)\)")
+SVG_FRAME = re.compile(r"<title>([^<]*) \(([0-9,]+) samples?, [0-9.]+%\)</title>")
+DELTA_LINK = re.compile(r"^\| (normal|frame pointers) \|.*\[results/[^]]+\]\(([^)]+)\) \|$",
+                        re.MULTILINE)
 SVG_TOTAL = re.compile(r"<title>all \(([0-9,]+) samples, 100%\)</title>")
 MD_SAMPLES = re.compile(r"^- samples: ([0-9,]+)$", re.MULTILINE)
 THROUGHPUT = re.compile(r"^\| Throughput, messages/s \| ([0-9,]+) \| ([0-9,]+) \| ([0-9,]+) "
@@ -260,6 +271,16 @@ def fold_lines(stacks):
     return [f"{stack} {count}" for stack, count in sorted(stacks.items())]
 
 
+def parse_folded(text):
+    """Folded stacks as written, {stack: samples}, with nothing scrubbed or shortened again."""
+    stacks = Counter()
+    for line in text.splitlines():
+        if line.strip():
+            stack, _, count = line.rpartition(" ")
+            stacks[stack] += int(count)
+    return stacks
+
+
 def read_folded(text):
     stacks = Counter()
     for line in text.splitlines():
@@ -281,6 +302,45 @@ def hottest(stacks):
             inclusive[frame] += count
     ranked = sorted(own, key=lambda frame: (-own[frame], frame))[:TOP_FRAMES]
     return [(frame, own[frame] / total, inclusive[frame] / total) for frame in ranked], total
+
+
+def hottest_lines(stacks):
+    """The Hottest frames section: the table, and what merging the instantiations it prints
+    alike would give."""
+    frames, _ = hottest(stacks)
+    out = ["## Hottest frames", "",
+           f"The {len(frames)} frames with the most samples at the top of the stack. Self is "
+           "the share of samples in the frame itself; total adds every frame it called.", "",
+           "| Frame | Self | Total |", "|---|---|---|"]
+    out += [f"| `{brief(frame)}` | {100 * own:.2f}% | {100 * inclusive:.2f}% |"
+            for frame, own, inclusive in frames]
+    alike = alike_lines(stacks)
+    if alike:
+        out += ["", alike[0], ""] + [f"- {line}" for line in alike[1:]]
+    return out
+
+
+def summary_line(stacks, event, ratio):
+    frames, total = hottest(stacks)
+    summary = (f"{total:,} samples, {event}, the hottest frame `{brief(frames[0][0])}` at "
+               f"{100 * frames[0][1]:.2f}% self")
+    if ratio is not None:
+        summary += f"; the frame-pointer build at {ratio:.4f} of the normal build's throughput"
+    return summary
+
+
+def svg_mismatches(image, stacks):
+    """Each frame the SVG draws that is not a node of the folded stacks with its samples: a
+    node is a stack's prefix, and its samples those of every stack under it."""
+    nodes = Counter()
+    for stack, count in stacks.items():
+        frames = stack.split(";")
+        for depth in range(len(frames)):
+            nodes[tuple(frames[: depth + 1])] += count
+    held = Counter((key[-1], count) for key, count in nodes.items())
+    drawn = Counter((html.unescape(name), int(count.replace(",", "")))
+                    for name, count in SVG_FRAME.findall(image) if name != "all")
+    return sorted(f"{name} ({count:,} samples)" for name, count in (drawn - held).elements())
 
 
 def ordinal(number):
@@ -367,6 +427,18 @@ def throughput(path):
             "repetitions": fields.get("repetitions", ""), "name": path.name}
 
 
+def frame_pointer_lines(normal, frame_pointer):
+    """The frame-pointer build's section, from the two bench_driver files' throughput rows."""
+    _, rows, ratio = delta_lines(normal, frame_pointer)
+    return ["## The frame-pointer build", "",
+            f"The graph is taken on a build with `{' '.join(FRAME_POINTER)}`, which keeps "
+            "a frame pointer in every function so that `perf` can walk the stack. Both "
+            "builds ran `paged-flat` mapped, top of book not tracked, throughput only, in "
+            "the same sitting through `scripts/bench_driver.py`. The frame-pointer build "
+            f"ran at {ratio:.4f} times the normal build's median throughput, "
+            f"{100 * (ratio - 1):+.2f}%.", ""] + rows
+
+
 def delta_lines(normal, frame_pointer):
     ratio = frame_pointer["median"] / normal["median"]
     rows = ["| Build | Flags | Median messages/s | Min | Max | CV | Commit | File |",
@@ -405,7 +477,7 @@ def render(args):
     if drawn.returncode != 0:
         raise ReportError(f"flamegraph.pl failed: {drawn.stderr.strip()}")
     image = scrub(drawn.stdout)
-    frames, total = hottest(stacks)
+    _, total = hottest(stacks)
     notes = scrub(args.notes.read_text(encoding="utf-8")).strip()
     out = [f"# Flamegraph: {args.workload} on {host}, {day}", "",
            "Generated by `scripts/flame_report.py` from sampled stacks that are not committed. "
@@ -429,21 +501,9 @@ def render(args):
         ratio_lines, delta_rows, ratio = delta_lines(throughput(args.normal),
                                                      throughput(args.frame_pointer))
         out += ratio_lines[:1]
-    top, top_own, _ = frames[0]
-    summary = (f"{total:,} samples, {args.event}, the hottest frame `{brief(top)}` at "
-               f"{100 * top_own:.2f}% self")
-    if ratio is not None:
-        summary += f"; the frame-pointer build at {ratio:.4f} of the normal build's throughput"
-    out.append(f"- summary: {summary}")
-    out += ["", "## What it shows", "", notes, "", "## Hottest frames", "",
-            f"The {len(frames)} frames with the most samples at the top of the stack. Self is "
-            "the share of samples in the frame itself; total adds every frame it called.", "",
-            "| Frame | Self | Total |", "|---|---|---|"]
-    out += [f"| `{brief(frame)}` | {100 * own:.2f}% | {100 * inclusive:.2f}% |"
-            for frame, own, inclusive in frames]
-    alike = alike_lines(stacks)
-    if alike:
-        out += ["", alike[0], ""] + [f"- {line}" for line in alike[1:]]
+    out.append(f"- summary: {summary_line(stacks, args.event, ratio)}")
+    out += ["", "## What it shows", "", notes, ""]
+    out += hottest_lines(stacks)
     if args.annotate:
         excerpt = annotate_excerpt(scrub(args.annotate.read_text(encoding="utf-8",
                                                                  errors="replace")))
@@ -452,14 +512,7 @@ def render(args):
                 "samples and the code around them. The percentages are of that symbol's samples.",
                 "", "```", excerpt, "```"]
     if delta_rows:
-        out += ["", "## The frame-pointer build", "",
-                f"The graph is taken on a build with `{' '.join(FRAME_POINTER)}`, which keeps "
-                "a frame pointer in every function so that `perf` can walk the stack. Both "
-                "builds ran `paged-flat` mapped, top of book not tracked, throughput only, in "
-                "the same sitting through `scripts/bench_driver.py`. The frame-pointer build "
-                f"ran at {ratio:.4f} times the normal build's median throughput, "
-                f"{100 * (ratio - 1):+.2f}%.", ""]
-        out += delta_rows
+        out += [""] + frame_pointer_lines(throughput(args.normal), throughput(args.frame_pointer))
     out += ["", "## What it cannot show", "", LIMITS[args.source], "", "## Command", "", "```",
             scrub(args.command), "```", ""]
     text = "\n".join(out)
@@ -468,6 +521,7 @@ def render(args):
         raise ReportError(f"private text survived the scrub: {found}")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     svg.write_text(image, encoding="utf-8")
+    args.out.with_suffix(".folded").write_text(folded, encoding="utf-8")
     args.out.write_text(text, encoding="utf-8")
     if args.run_log:
         if not args.run_id:
@@ -512,6 +566,65 @@ def check_file(path):
             found.append(("annotate-missing", "no perf annotate excerpt"))
     elif "does not replace the `perf` data" not in text:
         found.append(("host-unsaid", "a macOS graph that does not say it is no substitute"))
+    return found + figure_violations(path, text, image, fields)
+
+
+def section_text(lines):
+    return "\n".join(lines[1:]).strip()
+
+
+def figure_violations(path, text, image, fields):
+    """Every figure the file prints, worked out again from the folded stacks beside it and,
+    on Linux, from the two bench_driver files it links."""
+    folded = path.with_suffix(".folded")
+    if not folded.is_file():
+        return [("folded-missing", f"no {folded.name} beside it")]
+    raw = folded.read_text(encoding="utf-8")
+    leaked = private_found(raw)
+    if leaked:
+        return [("private-text", f"folded stacks: {leaked}")]
+    try:
+        stacks = parse_folded(raw)
+    except ValueError as error:
+        return [("folded-unreadable", repr(error))]
+    if not stacks:
+        return [("folded-unreadable", "no stacks")]
+    found = []
+    total = sum(stacks.values())
+    for name, value in (("samples", f"{total:,}"), ("stacks", f"{len(stacks):,}")):
+        if fields.get(name) != value:
+            found.append(("figures-differ", f"{name}: the folded stacks give {value}, the file "
+                                            f"says {fields.get(name)}"))
+    for frame in svg_mismatches(image, stacks):
+        found.append(("svg-differs", f"the SVG draws {frame}, which no node of the folded "
+                                     "stacks has"))
+    hottest_body = (check_results.section(text, "Hottest frames") or "").strip()
+    if hottest_body != section_text(hottest_lines(stacks)):
+        found.append(("figures-differ", "the Hottest frames section is not what the folded "
+                                        "stacks give"))
+    ratio = None
+    if fields.get("host") == "debian":
+        links = dict(DELTA_LINK.findall(check_results.section(text, "The frame-pointer build")
+                                        or ""))
+        try:
+            normal, frame_pointer = (throughput(path.parent / links[label])
+                                     for label in ("normal", "frame pointers"))
+        except (KeyError, OSError, ReportError) as error:
+            return found + [("delta-unreadable", f"the two builds' files: {error!r}")]
+        lines = frame_pointer_lines(normal, frame_pointer)
+        ratio = frame_pointer["median"] / normal["median"]
+        if fields.get("frame_pointer_ratio") != f"{ratio:.4f}":
+            found.append(("figures-differ", f"frame_pointer_ratio: the two builds' files give "
+                                            f"{ratio:.4f}, the file says "
+                                            f"{fields.get('frame_pointer_ratio')}"))
+        if (check_results.section(text, "The frame-pointer build") or "").strip() != \
+                section_text(lines):
+            found.append(("figures-differ", "the frame-pointer build's section is not what the "
+                                            "two builds' files give"))
+    summary = summary_line(stacks, fields.get("event", ""), ratio)
+    if fields.get("summary") != summary:
+        found.append(("figures-differ", f"summary: the figures give {summary!r}, the file says "
+                                        f"{fields.get('summary')!r}"))
     return found
 
 
