@@ -127,6 +127,41 @@ def rendered(runs=None, arm_checks=None, sampled=SAMPLED):
 GOOD = rendered()
 
 
+SWAP = ("The kernel's pswpout was 7 at the start of the run and 7 after its last process: no "
+        "page of any process was swapped out while it ran, and the driver refuses a run where "
+        "one is.")
+
+
+def linux_runs():
+    runs = {arm: [record(arm, s) for s in (1.0, 0.98, 1.03)] for arm in ARMS}
+    for records in runs.values():
+        for each in records:
+            each["header"].update(
+                host="debian", kernel="Linux 6.12.116+deb13-amd64", core="4",
+                pinning="pinned to core 4: pthread_setaffinity_np returned 0, read back [4]")
+            each["pinned"] = True
+    return runs
+
+
+def linux_published(runs):
+    """A Linux run's file as the driver publishes it, stamped, with a command it can parse."""
+    args = alloc_driver.parse_args([
+        "--bench", "<raw>/bench_replay", "--probe", "<raw>/bench_probe",
+        "--alloc-tool", "<raw>/itch_alloc", "--compare-tool", "<raw>/itch_map_compare",
+        "--input", "<raw>/12302019.NASDAQ_ITCH50", "--prediction", "P-0701",
+        "--pages", "base", "--raw-dir", "<raw>",
+        "--out", str(REPO_ROOT / "results" / "alloc_arms_base_debian_12302019.md"),
+        "--core", "4", "--sibling", "5", "--wrapped-by", "measure.sh taskset -c 4"])
+    alloc_driver.bench_driver.swap_watch = alloc_driver.PrintedSwap(SWAP)
+    try:
+        text = alloc_driver.render(runs, {arm: checks(arm) for arm in runs}, args, "P-0701-x",
+                                   "2026-10-31T10:00:01Z", "2026-10-31T10:00:09Z", MACHINE,
+                                   alloc_driver.relative_command(args))
+    finally:
+        alloc_driver.bench_driver.swap_watch = None
+    return stamp_load.stamp(text, STDERR)
+
+
 def codes(text):
     return {code for code, _ in check_results.check_text(text)}
 
@@ -323,6 +358,43 @@ class Driver(unittest.TestCase):
         command = alloc_driver.relative_command(alloc_driver.parse_args(
             [*base, "--core", "4", "--sibling", "5"]))
         self.assertIn(" --core 4 --sibling 5", command)
+
+    def test_the_peak_rss_is_the_largest_timed_process_over_every_arm(self):
+        runs = linux_runs()
+        runs["malloc-aged"][1]["peak_rss_bytes"] = (9 << 30) + (1 << 28)
+        self.assertEqual(alloc_driver.peak_lines(runs)[0],
+                         "- peak_rss: 9.25 GiB, getrusage of the benchmark, the largest timed "
+                         "process over every arm, malloc-aged's")
+        self.assertIn("\n- peak_rss: 9.25 GiB, getrusage of the benchmark, the largest timed "
+                      "process over every arm, malloc-aged's\n", linux_published(runs))
+
+    def test_a_published_file_renders_again_from_its_raw_records(self):
+        runs = linux_runs()
+        published = linux_published(runs)
+        self.assertEqual(codes(published), set())
+        self.assertIn(f"\n\n{SWAP}\n\n", published)
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            raw = Path(directory)
+            for arm, records in runs.items():
+                for index, timed in enumerate(records, start=1):
+                    stem = raw / f"alloc-{arm}-repetition-{index}"
+                    Path(f"{stem}-timed.json").write_text(json.dumps(timed), encoding="utf-8")
+                    Path(f"{stem}-untimed.json").write_text(json.dumps(timed), encoding="utf-8")
+                for tool, name in (("alloc", "itch_alloc"), ("compare", "itch_map_compare")):
+                    (raw / f"{name}-{arm}.log").write_text("".join(
+                        f"{key} {value}\n" for key, value in checks(arm)[tool].items()),
+                        encoding="utf-8")
+            (raw / "stderr.txt").write_text(STDERR, encoding="utf-8")
+            self.assertEqual(alloc_driver.render_again(raw, published), published)
+            again = alloc_driver.render_again(raw, published, "the peak_rss line was wrong")
+            self.assertEqual(again, published.replace(
+                "Do not edit by hand.\n\n", "Do not edit by hand.\n\nRendered again from the "
+                "run's own raw records, unchanged: the peak_rss line was wrong\n\n", 1))
+            (raw / "itch_map_compare-pool-fifo.log").write_text("verdict NODE-BOOK FAIL\n",
+                                                                encoding="utf-8")
+            with self.assertRaisesRegex(alloc_driver.Refused,
+                                        "pool-fifo: its itch_alloc or itch_map_compare log"):
+                alloc_driver.render_again(raw, published)
 
     def test_the_pages_reach_every_bench_process(self):
         args = alloc_driver.parse_args(["--bench", "b", "--probe", "p", "--alloc-tool", "a",
