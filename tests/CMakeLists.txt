@@ -207,7 +207,7 @@ if(ITCH_BUILD_TOOLS)
   add_test(NAME test_tools_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_tools_cli.py"
             "$<TARGET_FILE:itch_alloc>" "$<TARGET_FILE:itch_as_tables>"
-            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle")
+            "$<TARGET_FILE:itch_window>" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle")
   set_tests_properties(test_tools_cli PROPERTIES LABELS unit)
 endif()
 
