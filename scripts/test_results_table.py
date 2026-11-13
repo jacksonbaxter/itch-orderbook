@@ -888,6 +888,14 @@ class MissedTargets(unittest.TestCase):
                 self.assertFalse(line.endswith(results_table.NOT_MEASURED_MARK), line)
                 self.assertIn(f"]({PARSE}) |", line)
 
+    def test_a_parse_target_on_another_day_with_a_bare_met_is_refused(self):
+        self.edit(PARSE, "| above the bar on 12302019, a day other than the bar's; not measured on "
+                  "10302019 |", "| met |")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"{PARSE}: T-PARSE-3's bar is set on 10302019, and the file, of 12302019, "
+                      "gives it 'met': another day's bar is not met or missed", output)
+
     def test_a_verdict_word_for_another_days_bar_is_refused(self):
         words = ("above the bar on 12302019, a day other than the bar's; not measured on "
                  "10302019")
