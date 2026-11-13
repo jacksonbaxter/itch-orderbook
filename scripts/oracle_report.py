@@ -15,6 +15,12 @@ that arm's. Each --arm-log is another arm's pair of logs. Every arm is held to t
 checks, and has to agree with the first on every line its logs print, apart from the lines
 that only describe the arm, its moves and its run. A difference is a hard failure.
 
+A run with a hard failure still gets its file, so that a failing day is published as one:
+each verdict a failure belongs to reads FAIL, whatever the tool printed, and a "What failed"
+section lists every failure. Each verdict is held to its own counts as well: T-INV-2 is PASS
+exactly when nothing was crossed or locked, T-ALLOC-1 exactly when the fast book allocated
+nothing.
+
 Exit codes: 0 every hard check passed and T-INV-2 passed. 1 a hard check failed, and
 T-INV-3 is one. 2 the inputs could not be used. 3 only T-INV-2 failed: it is strict, so it
 is reported as failing, and the code keeps it apart from a broken book.
@@ -38,24 +44,49 @@ IRONBOOK_TYPES = "AFU"
 # observes a replace twice: once in add_retained() and again in on(OrderReplace). So a
 # crossed U counts twice in its totals, and those rows use that counting. They describe
 # that one session, so only its results file sets them beside ours.
+#
+# Each row names where it is published. Every carteret figure is in the Evidence table and
+# the line under it that close record 036 of its docs/design.md at that commit: Total,
+# Symbol not in state T, Inside a reopening window, In continuous trading (which it also
+# calls inside 09:30 to 16:00), Distinct symbols, the deepest crossing and the 33 reopening
+# windows. Ironbook's three are the continuous crossed-book line of its
+# bench/results/full_day_validation.txt. BENCHMARKS.md's T-INV-2 entry cites both.
 COMPARISON_DAY = "12302019"
+CARTERET_DESIGN = ("https://github.com/EkanshSingh401/carteret/blob/"
+                   "3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/design.md")
+IRONBOOK_VALIDATION = ("https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/"
+                       "e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/bench/results/"
+                       "full_day_validation.txt")
+BENCHMARKS_ENTRY = "../BENCHMARKS.md#t-inv-2-the-book-is-never-crossed"
+CARTERET = f"[carteret]({CARTERET_DESIGN}), design.md record 036, Evidence"
+CARTERET_TOTAL = f"{CARTERET}, row Total"
+IRONBOOK = (f"[Ironbook]({IRONBOOK_VALIDATION}), full_day_validation.txt, line "
+            "crossed-book checks (continuous)")
 COMPARISON = [
-    ("book messages, crossed", "carteret", 8580, "crossed"),
-    ("book messages, locked", "carteret", 70, "locked"),
-    ("not in state T, crossed", "carteret", 7945, "not_in_t_crossed"),
-    ("not in state T, locked", "carteret", 62, "not_in_t_locked"),
-    ("reopening window, crossed", "carteret", 635, "window_crossed"),
-    ("reopening window, locked", "carteret", 8, "window_locked"),
-    ("inside 09:30 to 16:00, crossed", "carteret", 8372, "clock_crossed"),
-    ("inside 09:30 to 16:00, locked", "carteret", 70, "clock_locked"),
-    ("crossed symbols", "carteret", 13, "crossed_symbols"),
-    ("locked symbols", "carteret", 6, "locked_symbols"),
-    ("deepest crossing, price units", "carteret", 140000, "deepest"),
-    ("reopening windows", "carteret", 33, "windows"),
-    ("market open and T, checks", "Ironbook", 136896897, "ironbook_checks"),
-    ("market open and T, crossed", "Ironbook", 10, "ironbook_crossed"),
-    ("market open and T, locked", "Ironbook", 0, "ironbook_locked"),
+    ("book messages, crossed", CARTERET_TOTAL, 8580, "crossed"),
+    ("book messages, locked", CARTERET_TOTAL, 70, "locked"),
+    ("not in state T, crossed", f"{CARTERET}, row Symbol not in state `T`", 7945,
+     "not_in_t_crossed"),
+    ("not in state T, locked", f"{CARTERET}, row Symbol not in state `T`", 62,
+     "not_in_t_locked"),
+    ("reopening window, crossed", f"{CARTERET}, row Inside a reopening window", 635,
+     "window_crossed"),
+    ("reopening window, locked", f"{CARTERET}, row Inside a reopening window", 8,
+     "window_locked"),
+    ("inside 09:30 to 16:00, crossed", f"{CARTERET}, row In continuous trading", 8372,
+     "clock_crossed"),
+    ("inside 09:30 to 16:00, locked", f"{CARTERET}, row In continuous trading", 70,
+     "clock_locked"),
+    ("crossed symbols", f"{CARTERET}, row Distinct symbols", 13, "crossed_symbols"),
+    ("locked symbols", f"{CARTERET}, row Distinct symbols", 6, "locked_symbols"),
+    ("deepest crossing, price units", f"{CARTERET}, the line under the table", 140000,
+     "deepest"),
+    ("reopening windows", f"{CARTERET}, the line under the table", 33, "windows"),
+    ("market open and T, checks", IRONBOOK, 136896897, "ironbook_checks"),
+    ("market open and T, crossed", IRONBOOK, 10, "ironbook_crossed"),
+    ("market open and T, locked", IRONBOOK, 0, "ironbook_locked"),
 ]
+TESTS = ("T-ORACLE-1", "T-INV-1", "T-INV-2", "T-INV-3", "T-ALLOC-1")
 
 PAIR = re.compile(r"crossed=(\d+) locked=(\d+)")
 TALLY = re.compile(
@@ -75,7 +106,7 @@ ARM_ONLY = {
     "oracle_index", "oracle_levels", "oracle_max_pages", "oracle_index_bits", "oracle_max_slots",
     "elapsed_seconds", "move_reports", "moved_checks", "empty_moved_checks",
     "index_fallback_inserts", "index_fallback_live_end", "index_peak_live_pages",
-    "level_slots_used", "level_relocations", "book_index", "book_levels",
+    "level_slots_used", "level_relocations", "book_index", "book_levels", "arena_checks",
 }
 
 
@@ -131,6 +162,8 @@ def parse_log(text):
         elif re.fullmatch(r"[\d.]+ real\s+[\d.]+ user\s+[\d.]+ sys", stripped):
             fields = stripped.split()
             log["time"].update(real=float(fields[0]), user=float(fields[2]), sys=float(fields[4]))
+        elif gnu_time(stripped, log["time"]):
+            pass
         else:
             match = PAIR.search(stripped)
             key, _, value = stripped.partition(" ")
@@ -141,22 +174,66 @@ def parse_log(text):
     return log
 
 
+# GNU time -v, which check_real_day.sh runs on Linux. It has no footprint.
+GNU_TIME = {
+    "Maximum resident set size (kbytes)": ("max_rss", lambda text: int(text) * 1024),
+    "User time (seconds)": ("user", float),
+    "System time (seconds)": ("sys", float),
+    "Elapsed (wall clock) time (h:mm:ss or m:ss)": ("real", lambda text: wall_clock(text)),
+}
+
+
+def wall_clock(text):
+    """GNU time's h:mm:ss or m:ss.ss, in seconds."""
+    seconds = 0.0
+    for part in text.split(":"):
+        seconds = seconds * 60 + float(part)
+    return seconds
+
+
+def gnu_time(line, time):
+    """Takes one GNU time -v line into time. False if it is not one."""
+    label, colon, value = line.rpartition(": ")
+    if not colon or label not in GNU_TIME:
+        return False
+    key, convert = GNU_TIME[label]
+    time[key] = convert(value.strip())
+    return True
+
+
 def number(log, key):
     if key not in log["values"]:
         raise ReportError(f"the log has no {key}")
     return int(log["values"][key])
 
 
+def named_references(counts):
+    """The references a day's order messages name: one each, and two for a U."""
+    return sum(counts.get(kind, 0) for kind in ONE_LEVEL_TYPES) + 2 * counts.get("U", 0)
+
+
+def fewest_order_slots(counts):
+    """The fewest order slots a day whose every message applies goes through. An add takes
+    one; an execute, cancel or partial cancel deducts from one or unlinks and frees it; a
+    delete unlinks and frees one; a replace unlinks and frees one and takes another."""
+    return (counts.get("A", 0) + counts.get("F", 0) + counts.get("E", 0) + counts.get("C", 0)
+            + counts.get("X", 0) + 2 * counts.get("D", 0) + 3 * counts.get("U", 0))
+
+
 def hard_failures(log, entry):
-    """Every reason the run does not meet T-ORACLE-1, T-INV-1 or T-INV-3 on this day."""
+    """Every reason the run does not meet T-ORACLE-1, T-INV-1, T-INV-2's own counts or
+    T-INV-3 on this day, each as (result, text)."""
     failures = []
     messages = entry["messages"]
     counts = entry["per_type_counts"]
 
-    def require(condition, text):
+    def require(condition, text, result="T-ORACLE-1"):
         if not condition:
-            failures.append(text)
+            failures.append((result, text))
 
+    require(number(log, "bytes") == entry["unpacked_bytes"],
+            f"bytes {number(log, 'bytes')}, manifest {entry['unpacked_bytes']}: not the "
+            "pinned file")
     for key in ("frames", "messages_diffed", "status_checks", "write_set_checks"):
         require(number(log, key) == messages, f"{key} {number(log, key)}, manifest {messages}")
     require(number(log, "bbo_checks") == 2 * messages, "bbo_checks is not two per message")
@@ -167,6 +244,21 @@ def hard_failures(log, entry):
     require(single + replaces <= touched <= single + 2 * replaces,
             f"{touched} touched levels, outside {single + replaces} to {single + 2 * replaces}")
     require(number(log, "write_set_violations") == 0, "write-set violations")
+    require(number(log, "slot_violations") == 0, "slot violations")
+    named = named_references(counts)
+    require(number(log, "index_checks") == named,
+            f"index_checks {number(log, 'index_checks')}, the manifest's messages name {named}")
+    # Each choke-point write reports the level slot it stored into.
+    require(number(log, "level_slot_checks") >= number(log, "write_set_writes"),
+            "fewer level slots checked than choke-point writes")
+    fewest = fewest_order_slots(counts)
+    require(number(log, "order_slot_checks") >= fewest,
+            f"order_slot_checks {number(log, 'order_slot_checks')}, fewer than the {fewest} "
+            "the manifest's messages go through")
+    if "level_relocations" in log["values"]:
+        # Each side's first block and each move to a bigger one is checked.
+        require(number(log, "arena_checks") > number(log, "level_relocations"),
+                "fewer arena checks than first blocks and relocations")
     every = number(log, "oracle_hash_every")
     if every:
         require(number(log, "periodic_hash_checks") == messages // every,
@@ -175,22 +267,34 @@ def hard_failures(log, entry):
     require(number(log, "malformed_frames") == 0, "malformed frames")
     require(log["values"].get("end") == "end_of_input", "the stream did not end cleanly")
     require(number(log, "divergences") == 0 and not log["divergences"], "divergences")
-    require(number(log, "t_inv1_violations") == 0, "T-INV-1 violations")
     require(log["verdicts"].get("T-ORACLE-1") == "PASS", "T-ORACLE-1 verdict is not PASS")
-    require(log["verdicts"].get("T-INV-1") == "PASS", "T-INV-1 verdict is not PASS")
-    require(log["verdicts"].get("T-INV-3") == "PASS", "T-INV-3 verdict is not PASS")
+    require(number(log, "t_inv1_violations") == 0, "T-INV-1 violations", "T-INV-1")
+    require(log["verdicts"].get("T-INV-1") == "PASS", "T-INV-1 verdict is not PASS", "T-INV-1")
+    inv2 = log["verdicts"].get("T-INV-2")
+    require(inv2 == inv2_verdict(log),
+            f"T-INV-2 verdict is {inv2}, and {number(log, 't_inv2_crossed')} crossed and "
+            f"{number(log, 't_inv2_locked')} locked make it {inv2_verdict(log)}", "T-INV-2")
+    require(log["verdicts"].get("T-INV-3") == "PASS", "T-INV-3 verdict is not PASS", "T-INV-3")
     new, leftover = pair_of(log, "t_inv3_new"), pair_of(log, "t_inv3_leftover")
-    require(new == (0, 0), f"T-INV-3 new crosses: {new[0]} crossed and {new[1]} locked")
+    require(new == (0, 0), f"T-INV-3 new crosses: {new[0]} crossed and {new[1]} locked",
+            "T-INV-3")
     require(len(log["new_crosses"]) == new[0] + new[1],
-            f"{len(log['new_crosses'])} T-INV-3 violations printed, {new[0] + new[1]} counted")
+            f"{len(log['new_crosses'])} T-INV-3 violations printed, {new[0] + new[1]} counted",
+            "T-INV-3")
     # The population is T-INV-2's own row, so a tally that lost an observation shows here.
     population = pair_of(log, "t_inv2_market_open_and_t")
     require((new[0] + leftover[0], new[1] + leftover[1]) == population,
             f"T-INV-3 accounts for {new[0] + leftover[0]} crossed and {new[1] + leftover[1]} "
-            f"locked, the population holds {population[0]} and {population[1]}")
+            f"locked, the population holds {population[0]} and {population[1]}", "T-INV-3")
     require(number(log, "t_inv3_leftovers_opened") <= number(log, "t_inv2_reopening_windows"),
-            "more leftovers than resumptions")
+            "more leftovers than resumptions", "T-INV-3")
     return failures
+
+
+def inv2_verdict(log):
+    """T-INV-2 from its counts: strict, so PASS only with nothing crossed and nothing locked."""
+    clean = number(log, "t_inv2_crossed") == 0 and number(log, "t_inv2_locked") == 0
+    return "PASS" if clean else "FAIL"
 
 
 def pair_of(log, key):
@@ -227,6 +331,8 @@ def disagreements(first, other):
     return keys
 
 
+# A failure is (arm, result, text). The arm is None for one about the arms as a set, and
+# the result None for one that belongs to no single result.
 def arm_failures(arms, entry):
     """Each arm is held to the hard checks, and every arm to the first one's answers."""
     failures = []
@@ -235,18 +341,20 @@ def arm_failures(arms, entry):
     for arm in arms:
         name = arm["name"]
         if name in seen:
-            failures.append(f"arm {name} is given twice")
+            failures.append((None, None, f"arm {name} is given twice"))
         seen.add(name)
         if arm is not first:
-            failures += [f"arm {name}: {text}" for text in hard_failures(arm["log"], entry)]
-            failures += [f"arm {name}: {text}" for text in alloc_failures(arm["alloc"], entry)]
+            failures += [(name, result, text) for result, text in hard_failures(arm["log"], entry)]
+            failures += [(name, result, text)
+                         for result, text in alloc_failures(arm["alloc"], entry)]
         if arm["alloc"] is not None and arm_of(arm["alloc"], "book_index", "book_levels") != name:
-            failures.append(f"arm {name}: its allocation log ran another arm")
+            failures.append((name, "T-ALLOC-1", "its allocation log ran another arm"))
         differ = disagreements(first["log"], arm["log"])
         if arm["alloc"] is not None and first["alloc"] is not None:
             differ += [f"allocation {key}" for key in disagreements(first["alloc"], arm["alloc"])]
         if differ:
-            failures.append(f"arm {name} disagrees with {first['name']} on {', '.join(differ)}")
+            failures.append((None, None,
+                             f"arm {name} disagrees with {first['name']} on {', '.join(differ)}"))
     return failures
 
 
@@ -254,11 +362,37 @@ def alloc_failures(alloc, entry):
     if alloc is None:
         return []
     failures = []
-    if alloc["verdicts"].get("T-ALLOC-1") != "PASS":
-        failures.append("T-ALLOC-1 verdict is not PASS")
+    verdict = alloc["verdicts"].get("T-ALLOC-1")
+    own = "PASS" if number(alloc, "fast_allocations") == 0 else "FAIL"
+    if verdict != "PASS":
+        failures.append(("T-ALLOC-1", "T-ALLOC-1 verdict is not PASS"))
+    if verdict != own:
+        failures.append(("T-ALLOC-1", f"T-ALLOC-1 verdict is {verdict}, and "
+                         f"{number(alloc, 'fast_allocations')} fast-book allocations make it "
+                         f"{own}"))
     if number(alloc, "fast_messages") != entry["messages"]:
-        failures.append("the allocation run did not cover the whole day")
+        failures.append(("T-ALLOC-1", "the allocation run did not cover the whole day"))
     return failures
+
+
+def failure_text(failure, first):
+    """A failure as the report prints it: the first arm's plainly, another's after its name."""
+    arm, _, text = failure
+    return text if arm is None or arm == first else f"arm {arm}: {text}"
+
+
+def verdict(arm, result, failures):
+    """A result's verdict for one arm: FAIL if any failure belongs to it, whatever the tool
+    printed. T-INV-2 is its own counts'."""
+    log, alloc = arm["log"], arm["alloc"]
+    if result == "T-ALLOC-1" and alloc is None:
+        return "not run"
+    if any(name == arm["name"] and owner == result for name, owner, _ in failures):
+        return "FAIL"
+    if result == "T-INV-2":
+        return inv2_verdict(log)
+    source = alloc if result == "T-ALLOC-1" else log
+    return source["verdicts"].get(result, "missing")
 
 
 def sum_tallies(log, types, scope):
@@ -319,14 +453,14 @@ def count(value):
     return f"{value:,}"
 
 
-def inv3_section(log):
+def inv3_section(log, result):
     """T-INV-3, apart from T-INV-2, whose strict result this does not touch."""
     new, leftover = pair_of(log, "t_inv3_new"), pair_of(log, "t_inv3_leftover")
     lines = [
         "",
         "## T-INV-3: no new cross in normal trading",
         "",
-        f"Verdict: **{log['verdicts'].get('T-INV-3', 'missing')}**, "
+        f"Verdict: **{result}**, "
         f"{count(new[0] + new[1])} violations. This check is separate from T-INV-2 and does "
         "not change it.",
         "",
@@ -375,44 +509,62 @@ def stopped_early(log):
     return real is not None and elapsed is not None and real < float(elapsed)
 
 
+GIB = 1024.0 ** 3
+
+
+def gib_cell(time, key, unit=""):
+    """A memory figure in GiB, or unavailable when the log has none: never a made-up 0."""
+    if key not in time:
+        return "unavailable"
+    return f"{time[key] / GIB:.2f}{unit}"
+
+
+def seconds_cell(time, key):
+    return f"{time[key]:.1f} s" if key in time else "unavailable"
+
+
 def footprint_cell(log, unit=""):
-    gib = 1024.0 ** 3
-    footprint = f"{log['time'].get('peak_footprint', 0) / gib:.2f}{unit}"
+    footprint = gib_cell(log["time"], "peak_footprint", unit)
     return f"{footprint} to the first stop" if stopped_early(log) else footprint
 
 
-def arms_section(arms):
+def arms_section(arms, failures):
     """One row per arm. The verdicts here are not marked up: the sections below hold them."""
-    gib = 1024.0 ** 3
     first = arms[0]["name"]
+    if any(arm is None and text.startswith("arm ") and " disagrees with " in text
+           for arm, _, text in failures):
+        agree = (f"The arms do not all agree with `{first}`: \"What failed\" below says on "
+                 "which lines.")
+    else:
+        agree = (f"Every line its logs print agrees with `{first}`'s, apart from the lines "
+                 "that describe the arm, what it moved and how long it ran, and the report "
+                 "fails on any other difference.")
     lines = [
         "",
         "## Every arm of the fast book",
         "",
-        f"Each arm replayed the whole day on its own. Every line its logs print agrees with "
-        f"`{first}`'s, apart from the lines that describe the arm, what it moved and how long "
-        "it ran, and the report fails on any other difference. The sections after this one "
+        f"Each arm replayed the whole day on its own. {agree} The sections after this one "
         f"are `{first}`'s. The raw logs are not committed.",
         "",
     ]
     rows = []
     for arm in arms:
-        log, alloc, time = arm["log"], arm["alloc"], arm["log"]["time"]
+        log, time = arm["log"], arm["log"]["time"]
         crossed, locked = number(log, "t_inv2_crossed"), number(log, "t_inv2_locked")
         rows.append((
             f"`{arm['name']}`",
-            log["verdicts"].get("T-ORACLE-1", "missing"),
-            log["verdicts"].get("T-INV-1", "missing"),
-            f"{log['verdicts'].get('T-INV-2', 'missing')}, {count(crossed)} crossed and "
+            verdict(arm, "T-ORACLE-1", failures),
+            verdict(arm, "T-INV-1", failures),
+            f"{verdict(arm, 'T-INV-2', failures)}, {count(crossed)} crossed and "
             f"{count(locked)} locked",
-            log["verdicts"].get("T-INV-3", "missing"),
-            alloc["verdicts"].get("T-ALLOC-1", "missing") if alloc else "not run",
+            verdict(arm, "T-INV-3", failures),
+            verdict(arm, "T-ALLOC-1", failures),
             count(number(log, "messages_diffed")),
             f"`{log['values'].get('last_hash', '?')}`",
             count(int(log["values"].get("move_reports", 0))),
             count(int(log["values"].get("moved_checks", 0))),
             log["values"].get("elapsed_seconds", "?"),
-            f"{time.get('max_rss', 0) / gib:.2f}",
+            gib_cell(time, "max_rss"),
             footprint_cell(log),
             f"`{arm['raw']}`",
         ))
@@ -427,19 +579,19 @@ def elapsed_line(values, time, early):
     replay = values.get("elapsed_seconds", "?")
     if early:
         return (f"- Elapsed: {replay} s in the replay, wall time with the pause included, "
-                f"{time.get('user', 0.0):.1f} s user. /usr/bin/time's real, "
-                f"{time.get('real', 0.0):.1f} s, is shorter than the replay: the run was paused "
+                f"{seconds_cell(time, 'user')} user. /usr/bin/time's real, "
+                f"{seconds_cell(time, 'real')}, is shorter than the replay: the run was paused "
                 "with SIGSTOP, and macOS's time stops its clock and reads the footprint at the "
                 "first stop, so neither is the whole run's")
-    return (f"- Elapsed: {replay} s in the replay, {time.get('real', 0.0):.1f} s real, "
-            f"{time.get('user', 0.0):.1f} s user")
+    return (f"- Elapsed: {replay} s in the replay, {seconds_cell(time, 'real')} real, "
+            f"{seconds_cell(time, 'user')} user")
 
 
-def render(log, entry, day, alloc, arms):
+def render(log, entry, day, alloc, arms, failures=()):
     run = log["run"]
     values = log["values"]
     time = log["time"]
-    gib = 1024.0 ** 3
+    first = arms[0]
     lines = [
         f"# Oracle replay of {day}",
         "",
@@ -454,21 +606,26 @@ def render(log, entry, day, alloc, arms):
         f"`{entry['unpacked_sha256']}`",
         f"- Command: `{run.get('run_command', 'unavailable')}`",
         elapsed_line(values, time, stopped_early(log)),
-        f"- Maximum RSS: {time.get('max_rss', 0) / gib:.2f} GiB, which includes the mapped file",
+        f"- Maximum RSS: {gib_cell(time, 'max_rss', ' GiB')}, which includes the mapped file",
         f"- Peak memory footprint: {footprint_cell(log, ' GiB')}",
         f"- Book: `FastBook`, {len(arms)} arm{'s' if len(arms) != 1 else ''} below. The run "
         f"above and the detail after the table are `{arms[0]['name']}`.",
     ]
-    lines += arms_section(arms)
+    if failures:
+        lines += ["", "## What failed", "",
+                  "Each of these is a hard failure of the report's own checks, and each result "
+                  "it belongs to reads FAIL below, whatever the tool printed.", ""]
+        lines += [f"- {failure_text(failure, first['name'])}" for failure in failures]
+    lines += arms_section(arms, failures)
     lines += [
         "",
         "## T-ORACLE-1: the reference book agrees after every message",
         "",
-        f"Verdict: **{log['verdicts'].get('T-ORACLE-1', 'missing')}**",
+        f"Verdict: **{verdict(first, 'T-ORACLE-1', failures)}**",
         "",
     ]
     touched = number(log, "touched_checks")
-    lines += format_table(("Check", "Count"), [
+    rows = [
         ("Messages in the file (manifest)", count(entry["messages"])),
         ("Messages diffed", count(number(log, "messages_diffed"))),
         ("Status comparisons", count(number(log, "status_checks"))),
@@ -478,6 +635,14 @@ def render(log, entry, day, alloc, arms):
         ("Messages with the write set checked", count(number(log, "write_set_checks"))),
         ("Choke-point writes, all inside the touched set", count(number(log, "write_set_writes"))),
         ("Write-set violations", count(number(log, "write_set_violations"))),
+        ("Order slots checked as a write went through them", count(number(log, "order_slot_checks"))),
+        ("Level slots checked as a write went through them", count(number(log, "level_slot_checks"))),
+        ("Slot violations", count(number(log, "slot_violations"))),
+        ("References named, each looked up in both books", count(number(log, "index_checks"))),
+    ]
+    if "arena_checks" in values:
+        rows.append(("Flat blocks checked against the arena", count(number(log, "arena_checks"))))
+    rows += [
         (f"Whole-book hashes, every {count(number(log, 'oracle_hash_every'))} messages",
          count(number(log, "periodic_hash_checks"))),
         ("End-of-day hashes", count(number(log, "final_hash_checks"))),
@@ -486,17 +651,18 @@ def render(log, entry, day, alloc, arms):
         ("Peak live orders", count(number(log, "peak_live_orders"))),
         ("Peak live levels", count(number(log, "peak_live_levels"))),
         ("Live orders at the end of the day", count(number(log, "live_orders_end"))),
-    ])
+    ]
+    lines += format_table(("Check", "Count"), rows)
     lines += [
         "",
         "## T-INV-1: every execute, cancel, delete and replace names a live order",
         "",
-        f"Verdict: **{log['verdicts'].get('T-INV-1', 'missing')}**, "
+        f"Verdict: **{verdict(first, 'T-INV-1', failures)}**, "
         f"{count(number(log, 't_inv1_violations'))} violations.",
         "",
         "## T-INV-2: the book is never crossed",
         "",
-        f"Verdict, strict: **{log['verdicts'].get('T-INV-2', 'missing')}**. The strict result "
+        f"Verdict, strict: **{verdict(first, 'T-INV-2', failures)}**. The strict result "
         "stands as reported. No scoped version is a pass condition.",
         "",
         "An observation is taken after every message, on that message's locate, and needs both "
@@ -552,7 +718,8 @@ def render(log, entry, day, alloc, arms):
             "checks after book messages only, and its source observes a replace twice, so its "
             f"rows here count a crossed `U` twice. We count {count(book[2])} crossed once per "
             "message, and the Ironbook rows use its own check: after `A`, `F` and `U`, with "
-            "the market open and the symbol in state `T`.",
+            "the market open and the symbol in state `T`. Each row names where its figure is "
+            f"published; [BENCHMARKS.md's T-INV-2 entry]({BENCHMARKS_ENTRY}) cites both.",
             "",
         ]
         lines += format_table(
@@ -562,13 +729,13 @@ def render(log, entry, day, alloc, arms):
     else:
         lines.append(f"None. The figures this file could set beside ours were published for "
                      f"{COMPARISON_DAY} only.")
-    lines += inv3_section(log)
+    lines += inv3_section(log, verdict(first, "T-INV-3", failures))
     if alloc:
         lines += [
             "",
             "## T-ALLOC-1: no allocation on the hot path",
             "",
-            f"Verdict: **{alloc['verdicts'].get('T-ALLOC-1', 'missing')}**",
+            f"Verdict: **{verdict(first, 'T-ALLOC-1', failures)}**",
             "",
         ]
         lines += format_table(("Book", "Messages", "Allocations after warm-up"), [
@@ -623,10 +790,12 @@ def main(argv=None):
             raise ReportError(f"no day {args.day} in the manifest")
         entry = days[args.day]
         log = read(args.log)
-        failures = hard_failures(log, entry)
+        arms = [{"name": arm_of(log), "log": log, "alloc": None, "raw": args.log.name}]
+        failures = [(arms[0]["name"], result, text) for result, text in hard_failures(log, entry)]
         alloc = read(args.alloc_log) if args.alloc_log else None
-        failures += alloc_failures(alloc, entry)
-        arms = [{"name": arm_of(log), "log": log, "alloc": alloc, "raw": args.log.name}]
+        arms[0]["alloc"] = alloc
+        failures += [(arms[0]["name"], result, text)
+                     for result, text in alloc_failures(alloc, entry)]
         for oracle_path, alloc_path in args.arm_log:
             other = read(oracle_path)
             arms.append({"name": arm_of(other), "log": other, "alloc": read(alloc_path),
@@ -637,13 +806,14 @@ def main(argv=None):
         return 2
 
     for failure in failures:
-        print(f"oracle report: FAIL {failure}")
+        print(f"oracle report: FAIL {failure_text(failure, arms[0]['name'])}")
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(render(log, entry, args.day, alloc, arms), encoding="utf-8")
+        args.out.write_text(render(log, entry, args.day, alloc, arms, failures),
+                            encoding="utf-8")
     if failures:
         return 1
-    inv2 = log["verdicts"].get("T-INV-2")
+    inv2 = inv2_verdict(log)
     print(f"oracle report: {args.day} T-ORACLE-1 PASS, T-INV-1 PASS, T-INV-3 PASS, "
           f"{number(log, 'messages_diffed')} messages diffed, T-INV-2 {inv2}, "
           f"the same on {len(arms)} arm{'s' if len(arms) != 1 else ''}")

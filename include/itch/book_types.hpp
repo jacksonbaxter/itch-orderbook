@@ -46,11 +46,27 @@ enum class Side : std::uint8_t { bid = 0, ask = 1 };
 // its count, or the level itself coming or going. on_level_move names a level whose
 // contents stay as they are while the structure that finds it by price is rewritten: a
 // neighbour's link, or its entry in a flat array that shifts or moves to a bigger block.
+//
+// The slot calls name the pool slots a write goes through, by the same index the book uses,
+// with the book's own storage to read: on_level_slot the level slot a write to `id` stored
+// into, on_order_slot an order slot a write for that level slot reads links from or stores
+// into, and the take and give-back calls each slot a pool hands out or takes back. They take
+// what the book already holds, so that the empty policy costs no load.
 struct NoWriteObserver {
   static constexpr void on_level_write(std::uint16_t /*locate*/, Side /*side*/,
                                        Price4 /*price*/) noexcept {}
   static constexpr void on_level_move(std::uint16_t /*locate*/, Side /*side*/,
                                       Price4 /*price*/) noexcept {}
+  template <class Id, class Levels>
+  static constexpr void on_level_slot(const Id& /*id*/, std::uint32_t /*level*/,
+                                      const Levels& /*levels*/) noexcept {}
+  template <class Orders>
+  static constexpr void on_order_slot(std::uint32_t /*level*/, std::uint32_t /*order*/,
+                                      const Orders& /*orders*/) noexcept {}
+  static constexpr void on_level_take(std::uint32_t /*level*/) noexcept {}
+  static constexpr void on_level_give_back(std::uint32_t /*level*/) noexcept {}
+  static constexpr void on_order_take(std::uint32_t /*order*/) noexcept {}
+  static constexpr void on_order_give_back(std::uint32_t /*order*/) noexcept {}
 
   friend bool operator==(const NoWriteObserver&, const NoWriteObserver&) = default;
 };
