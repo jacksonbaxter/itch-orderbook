@@ -164,6 +164,17 @@ class Verdict(unittest.TestCase):
     def test_the_machine_hostname_never_reaches_the_file(self):
         self.assertNotIn("some-machine", build()[0])
 
+    def test_a_failed_machine_check_refuses_the_run(self):
+        for broken in ("machine_check: record host: debian\n"
+                       "machine_check: FAIL governor: core 4 runs schedutil\n"
+                       "machine_check: refused, 1 failed\n",
+                       CHECKS[1].replace("machine_check: pass pin-readback",
+                                         "machine_check: FAIL pin-readback"),
+                       CHECKS[1].replace("machine_check: passed", "")):
+            checks = [CHECKS[0], broken, CHECKS[2]]
+            with self.assertRaisesRegex(ValueError, "run 2's machine check did not pass"):
+                chase_report.render(RECORDS, STDERRS, checks, SYSFS, PREDICTION)
+
 
 class Published(unittest.TestCase):
     def test_the_fixture_passes(self):
@@ -216,6 +227,17 @@ class Published(unittest.TestCase):
         self.assertIn("machine-check-failed",
                       codes(PUBLISHED.replace("machine_check: passed", "machine_check: refused")))
 
+    def test_one_run_without_a_passing_machine_check(self):
+        last = "machine_check: passed\n```\n\n## measure.sh load lines"
+        self.assertIn("machine-check-failed",
+                      codes(replace(PUBLISHED, last, last.replace("passed", "refused, 1 failed"))))
+
+    def test_a_failed_line_beside_every_pass(self):
+        end = "```\n\n## measure.sh load lines"
+        self.assertIn("machine-check-failed",
+                      codes(replace(PUBLISHED, end, "machine_check: FAIL governor: schedutil\n"
+                                    + end)))
+
     def test_private_text(self):
         address = ".".join(("100", "64", "0", "1"))
         self.assertIn("private-text", codes(PUBLISHED + address))
@@ -267,6 +289,34 @@ class Cli(unittest.TestCase):
         code, out = self.run_main(*arguments, "--out", str(SCRATCH / "chase_report_fail.md"))
         self.assertEqual(code, 1)
         self.assertIn("verdict FAIL", out)
+
+    def test_a_run_whose_machine_check_failed_is_unusable(self):
+        target = SCRATCH / "chase_report_test_check.out"
+        target.write_text(replace(CHECKS[1], "machine_check: pass pin-readback",
+                                  "machine_check: FAIL pin-readback"), encoding="utf-8")
+        arguments = self.arguments()
+        arguments[arguments.index("--machine-check") + 2] = str(target)
+        out_file = SCRATCH / "chase_report_failed_check.md"
+        out_file.unlink(missing_ok=True)
+        code, out = self.run_main(*arguments, "--out", str(out_file))
+        self.assertEqual(code, 2)
+        self.assertIn("run 2's machine check did not pass", out)
+        self.assertFalse(out_file.exists())
+
+    def test_a_file_that_fails_its_own_check_is_not_written(self):
+        arguments = self.arguments()
+        for run in RUNS:
+            record = copy.deepcopy(RECORDS[run - 1])
+            record["header"]["governor"] = "schedutil"
+            target = SCRATCH / f"chase_report_test_governor-{run}.json"
+            target.write_text(json.dumps(record), encoding="utf-8")
+            arguments[run] = str(target)
+        out_file = SCRATCH / "chase_report_governor.md"
+        out_file.unlink(missing_ok=True)
+        code, out = self.run_main(*arguments, "--out", str(out_file))
+        self.assertEqual(code, 2)
+        self.assertIn("chase_report: FAIL governor: schedutil", out)
+        self.assertFalse(out_file.exists())
 
     def test_a_refused_run_is_unusable(self):
         target = SCRATCH / "chase_report_test.json"

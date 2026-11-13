@@ -15,6 +15,9 @@ last-level number is published.
 say more than the table under it. Given the raw records as well, it rebuilds the file and
 compares the two, so that a table cannot say more than the run.
 
+Each run's machine check must end `machine_check: passed` and hold no `FAIL`, or the run is
+refused; --check asks the same of the file, one passing check for each run.
+
 Each violation prints as `chase_report: FAIL <code>: <detail>`.
 
 Exit codes: 0 the verdict is PASS, or --check found nothing wrong, 1 the verdict is FAIL or
@@ -207,6 +210,15 @@ def read_sysfs(text):
     return match.group(1) if match else "unavailable: no cache-misses line"
 
 
+def machine_check_failure(text):
+    """Why one run's machine_check output does not pass, or None if it does."""
+    lines = text.strip().splitlines()
+    if not lines or lines[-1] != "machine_check: passed":
+        return f"it ends {lines[-1] if lines else 'empty'!r}, not 'machine_check: passed'"
+    failed = [line for line in lines if "FAIL" in line]
+    return f"it holds {failed[0]!r}" if failed else None
+
+
 def load_lines(stderr_text):
     """The run's two measure.sh lines, with the machine's hostname replaced."""
     start = stamp_load.one_line(stamp_load.START, stderr_text, "start")
@@ -239,6 +251,10 @@ def caveats(summary):
 
 
 def render(records, stderrs, machine_checks, sysfs_text, prediction):
+    for run, text in enumerate(machine_checks, start=1):
+        failure = machine_check_failure(text)
+        if failure is not None:
+            raise ValueError(f"run {run}'s machine check did not pass: {failure}")
     summary = summarise(records)
     sysfs = read_sysfs(sysfs_text)
     raw_event = records[0]["raw_event"]
@@ -359,8 +375,13 @@ def check_published(text):
         host = check_results.HOST_WORD.search(line)
         if host is not None and host.group(1) != "debian":
             found.append(("load-line-hostname", f"host={host.group(1)}"))
-    if "machine_check: passed" not in (check_results.section(text, "machine_check output") or ""):
-        found.append(("machine-check-failed", "the embedded output does not pass"))
+    output = check_results.section(text, "machine_check output") or ""
+    passes, runs = output.count("machine_check: passed"), fields.get("runs", "")
+    if not runs.isdigit() or passes != int(runs):
+        found.append(("machine-check-failed", f"{passes} passing checks for {runs or 'no'} runs"))
+    for line in output.splitlines():
+        if "FAIL" in line:
+            found.append(("machine-check-failed", line))
     summary = published_summary(text)
     if not summary or any(len(entry) < 16 for entry in summary):
         return [*found, ("table-missing", "the per-size tables are not whole")]
@@ -418,6 +439,10 @@ def run_check(args):
 
 def run_report(args):
     text, passed, run_id = render(*read_inputs(args), args.prediction)
+    violations = check_published(text)
+    if violations:
+        report_violations(violations)
+        raise ValueError("the rendered file does not pass --check, so it was not written")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(text, encoding="utf-8")
     if args.run_log:

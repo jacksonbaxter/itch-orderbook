@@ -4473,6 +4473,133 @@
         "signature": "FAIL: test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-chase-machine-check-unread",
+      "breaks": "A run whose machine check failed is rendered like any other",
+      "check": "test_chase_report.py",
+      "mutations": [
+        {
+          "file": "scripts/chase_report.py",
+          "old": "        if failure is not None:\n            raise ValueError(f\"run {run}'s machine check",
+          "new": "        if False:\n            raise ValueError(f\"run {run}'s machine check"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_chase_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_failed_machine_check_refuses_the_run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-record-check-failed",
+      "breaks": "One run's machine check holds a FAIL line",
+      "check": "chase_report.py machine-check refusal",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/check-2.out",
+          "op": "replace_text",
+          "old": "machine_check: pass pin-readback",
+          "new": "machine_check: FAIL pin-readback"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--record",
+        "{tree}/tests/fixtures/chase/run-1.json",
+        "{tree}/tests/fixtures/chase/run-2.json",
+        "{tree}/tests/fixtures/chase/run-3.json",
+        "--load",
+        "{tree}/tests/fixtures/chase/run-1.err",
+        "{tree}/tests/fixtures/chase/run-2.err",
+        "{tree}/tests/fixtures/chase/run-3.err",
+        "--machine-check",
+        "{tree}/tests/fixtures/chase/check-1.out",
+        "{tree}/tests/fixtures/chase/check-2.out",
+        "{tree}/tests/fixtures/chase/check-3.out",
+        "--sysfs",
+        "{tree}/tests/fixtures/chase/sysfs_events.txt",
+        "--prediction",
+        "P-0002",
+        "--out",
+        "{tree}/tests/fixtures/chase/generated.md"
+      ],
+      "expect": {
+        "signature": "run 2's machine check did not pass",
+        "exit": 2
+      }
+    },
+    {
+      "id": "bench-chase-file-check-count",
+      "breaks": "--check takes one passing machine check for three runs",
+      "check": "test_chase_report.py",
+      "mutations": [
+        {
+          "file": "scripts/chase_report.py",
+          "old": "    if not runs.isdigit() or passes != int(runs):",
+          "new": "    if not runs.isdigit() or passes < 1:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_chase_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_one_run_without_a_passing_machine_check",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-file-check-failed",
+      "breaks": "A published file's machine check output holds a FAIL line beside three passes",
+      "check": "chase_report.py --check machine-check-failed",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/published.md",
+          "op": "replace_text",
+          "old": "```\n\n## measure.sh load lines",
+          "new": "machine_check: FAIL governor: core 4 runs schedutil\n```\n\n## measure.sh load lines"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--check",
+        "{tree}/tests/fixtures/chase/published.md"
+      ],
+      "expect": {
+        "signature": "chase_report: FAIL machine-check-failed: machine_check: FAIL governor",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-written-unchecked",
+      "breaks": "The report writes a file that its own --check would refuse",
+      "check": "test_chase_report.py",
+      "mutations": [
+        {
+          "file": "scripts/chase_report.py",
+          "old": "    violations = check_published(text)\n    if violations:\n        report_violations(violations)\n        raise",
+          "new": "    violations = []\n    if violations:\n        report_violations(violations)\n        raise"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_chase_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_that_fails_its_own_check_is_not_written",
+        "exit": 1
+      }
     }
   ]
 }
