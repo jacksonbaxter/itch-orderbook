@@ -229,6 +229,22 @@ struct GuardedWalk {
   }
 };
 
+// batch4 on four copies of one Add Order whose last byte is the last before a guard page. E5's
+// batch_pass hands Add Orders to batch4 with no kOverread guard, so batch4 must read inside
+// each Add Order on every kernel, avx512vbmi's included (r4-6). A read past one would fault.
+struct GuardedBatch {
+  const std::byte* add;
+  template <class K>
+  [[gnu::always_inline]] int operator()() const {
+    const std::array<const std::byte*, 4> m{add, add, add, add};
+    AddBatch got;
+    AddBatch want;
+    K::batch4(m.data(), got);
+    Scalar::batch4(m.data(), want);
+    return got == want ? 0 : 1;
+  }
+};
+
 class KernelTest : public ::testing::TestWithParam<KernelId> {};
 
 // The kernel under test, or a skip that says why it cannot run here.
@@ -309,6 +325,19 @@ TEST_P(KernelTest, FinalFrameOfEveryOpTypeStaysInsideTheMappedRange) {
     EXPECT_TRUE(result.clean()) << "type " << static_cast<char>(message[0]) << ": "
                                 << result.describe();
   }
+}
+
+TEST_P(KernelTest, BatchOfFourStaysInsideEachAddOrder) {
+  SELECT_OR_SKIP(kernel);
+  itch::testing::GuardedRegion region{std::size_t{1} << 16U};
+  const Bytes add = itch::fixtures::to_bytes(itch::fixtures::kAddOrder);
+  ASSERT_EQ(add.size(), itch::message_length(itch::AddOrder::kType));
+  const auto placed = region.flush_against_end(add);
+  const auto result = itch::testing::run_in_child([&kernel, placed] {
+    GuardedBatch work{.add = placed.data()};
+    return itch::kernels::run(*kernel, work);
+  });
+  EXPECT_TRUE(result.clean()) << result.describe();
 }
 
 INSTANTIATE_TEST_SUITE_P(Built, KernelTest, ::testing::ValuesIn(itch::kernels::kBuilt),

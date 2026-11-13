@@ -24,6 +24,7 @@ scalar, or the --kernels given: on this Mac neon, on debian ssse3 and avx2. Each
 variant is named after it, so the results file says which instruction set every figure used.
 avx512vbmi is refused for decode, consume and parse (E2, E3 and E4 by type), whose passes have
 no guard for the 45 bytes it reads past a message (r1-1, r4-6): the run log's row says so.
+batch (E5) is not refused: its pass reads Add Orders only through batch4, inside each.
 
 On macOS, where nothing pins a process and other projects share the machine, a CPU sampler
 runs beside the whole run (scripts/wasm_bench.py's): every 2 s a `sample` line, and a `FOREIGN`
@@ -87,6 +88,9 @@ WATCHLISTS = (8, 64)
 # r1-1, r4-6: the passes of these experiments hand every message to the kernel, with no guard
 # for kOverread, and avx512vbmi loads 64 bytes from each message's first byte: up to 45 bytes
 # past the end of the input after an Order Delete. Refused until the passes are guarded.
+# E5's batch_pass has no guard either but is not here: it hands the kernel only whole Add
+# Orders, and only to batch4, which reads inside each on every kernel (test_kernels'
+# BatchOfFourStaysInsideEachAddOrder).
 UNGUARDED = {"decode": "E2's decode_pass", "consume": "E3's consume_pass",
              "parse": "E4's parse_one_type"}
 OVERREADING_KERNELS = ("avx512vbmi",)

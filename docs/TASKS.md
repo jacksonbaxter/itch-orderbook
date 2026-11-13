@@ -296,3 +296,6 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [x] No sanitizer or fuzz test waits on the system symbolizer on macOS, and a test that hangs fails after 1800 s; `scripts/test_sanitizer_tests.py`, eight faults in `tooling.json` (docs/NOTES.md, "No check waits on the system symbolizer").
 - [x] The no-build faults ran lock-free on this branch. The stages and the faults that build ran in the merge check of the drivers piece's merge, which follows this branch.
 - [ ] `test_oracle_cli.py` (the oracle piece's file) should run the four arms identity-flat, chained-flat, paged-flat-scan16 and paged-flat-bisect, its fast-book allocation check on lifecycle.itch, and say when it skips the mimalloc arm.
+
+### The review's part-done findings, closed (piece K)
+- [x] r1-1, r4-6: E5 (`batch`) needs no avx512vbmi refusal: its pass reads Add Orders only through `batch4`, inside each; docs/NOTES.md, "The review's part-done findings, closed", and the r1-1 paragraph corrected. Test `Built/KernelTest.BatchOfFourStaysInsideEachAddOrder`; fault `simd-neon-batch-reads-past-the-add-order`.

@@ -122,6 +122,33 @@
       }
     },
     {
+      "id": "simd-neon-batch-reads-past-the-add-order",
+      "breaks": "The NEON batch reads each price one byte late, one byte past the Add Order, as E5's unguarded batch_pass would let it (r4-6)",
+      "check": "test_kernels Built/KernelTest.BatchOfFourStaysInsideEachAddOrder/neon",
+      "mutations": [
+        {
+          "file": "include/itch/kernels/neon.hpp",
+          "old": "      std::memcpy(&price[i], m[i] + 32, sizeof(std::uint32_t));\n",
+          "new": "      std::memcpy(&price[i], m[i] + 33, sizeof(std::uint32_t));\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_kernels"
+        ],
+        "gtest": true
+      },
+      "command": [
+        "{build}/tests/test_kernels"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Built\\/KernelTest\\.BatchOfFourStaysInsideEachAddOrder\\/neon",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
       "id": "simd-cli-vector-kernel-for-a-kernel-free-experiment",
       "breaks": "bench_kernels runs a kernel-free experiment under a vector kernel's name",
       "check": "test_bench_kernels_cli.py",
