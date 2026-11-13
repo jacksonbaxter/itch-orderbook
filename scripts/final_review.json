@@ -6,8 +6,12 @@
    "at": "2987ecf"
   },
   {
-   "what": "r11-3 and r13's outcomes",
+   "what": "r13's outcomes",
    "at": "e87755d"
+  },
+  {
+   "what": "r11-3 and every r15 outcome",
+   "at": "e40bc4c"
   }
  ],
  "complete": false,
@@ -253,11 +257,25 @@
    ],
    "last_words": "Nothing is left that I would block the merge for.",
    "branch": ""
+  },
+  {
+   "id": "r15",
+   "read": "the parse-rate results, predictions and pages, their checks, and this record, at c1584a0, as the last reviewer; it sampled the record's findings and found none recorded as fixed that was not. Its summary says it sampled 31 findings from 14 reviewers; its list names 34 findings from 13, none of them r8's",
+   "commits": [
+    "c1584a0"
+   ],
+   "looks": [
+    {
+     "BLOCK": 0,
+     "FIX": 7,
+     "NOTE": 9
+    }
+   ],
+   "last_words": "Nothing is left that I would block a merge for.",
+   "branch": ""
   }
  ],
- "to_come": [
-  "The last reviewer, who did not write any of it, reads the parse-rate pages and this record. Its findings and their outcomes go in this file when it has reported."
- ],
+ "to_come": [],
  "findings": [
   {
    "id": "r1-1",
@@ -2435,22 +2453,29 @@
    "severity": "FIX",
    "finding": "The parse-rate targets T-PARSE-1 to T-PARSE-3 have no measured number and no reason given",
    "outcome": "partly",
-   "detail": "T-PARSE-1 and T-PARSE-2 now have their measured number, gap and reason (cause not established) in `results/parse_rate_debian_12302019.md` and the pages. T-PARSE-3 has a number on 12302019 only, above a bar that is set on 10302019; the pages say so. Still to do, and left with the owner: T-PARSE-3 on its own day, which could not be measured on `debian`, since the standalone machine check failed input-resident each time, so P-0030's run was never started.",
+   "detail": "T-PARSE-1 and T-PARSE-2 now have their measured number, gap and reason (cause not established) in `results/parse_rate_debian_12302019.md` and the pages. T-PARSE-3 has a number on 12302019 only: its median is above a bar that is set on 10302019, which is not a pass, and the pages say so. Still to do, and left with the owner: T-PARSE-3 on its own day, which could not be measured on `debian`, since the standalone machine check failed input-resident each time, so P-0030's run was never started.",
    "commits": [
     "4890abb",
-    "c3ecf81"
+    "c3ecf81",
+    "df0aaa6",
+    "1fe5bb7",
+    "30bb188"
    ],
    "tests": [
     "test_t_parse_3_is_judged_on_its_own_day",
-    "test_a_parse_target_on_another_day_with_a_bare_met_is_refused"
+    "test_a_parse_target_on_another_day_with_a_bare_met_is_refused",
+    "test_a_verdict_word_for_another_days_bar_is_refused"
    ],
    "faults": [
     "parse-bar-day-not-named",
-    "parse-own-day-said-absent"
+    "parse-own-day-said-absent",
+    "parse-other-day-given-a-verdict-word"
    ],
    "notes": [
     "The parse rate on `debian`"
-   ]
+   ],
+   "waits_on": "the owner",
+   "waits_for": "T-PARSE-3 on its bar's own day"
   },
   {
    "id": "r11-4",
@@ -3343,6 +3368,260 @@
    ],
    "tests": [],
    "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r15-1",
+   "severity": "FIX",
+   "finding": "T-PARSE-3's verdict cell said \"met\" in the results file and RESULTS.md, while WRITEUP and NOTES call it not a pass",
+   "outcome": "fixed",
+   "detail": "The driver gives a bar set on another day no verdict word, only that the median was above the bar on 12302019 and that the bar's day was not measured; the file was rendered again from its raw records with no figure changed, and RESULTS.md and WRITEUP follow it.",
+   "commits": [
+    "df0aaa6",
+    "1fe5bb7",
+    "cf2df95"
+   ],
+   "tests": [
+    "test_a_verdict_word_for_another_days_bar_is_refused",
+    "test_check_refuses_a_file_that_is_not_its_render"
+   ],
+   "faults": [
+    "parse-other-day-given-a-verdict-word",
+    "parse-other-day-verdict-word-let-through",
+    "readme-parse-other-day-verdict-word-let-through"
+   ],
+   "notes": [
+    "The parse rate on `debian`"
+   ]
+  },
+  {
+   "id": "r15-2",
+   "severity": "FIX",
+   "finding": "P-0030's \"What was seen\" in results/predictions.md calls T-PARSE-3 a plain \"met\", and docs/NOTES.md did not correct it",
+   "outcome": "fixed",
+   "detail": "The prediction is not edited. docs/NOTES.md, under P-0030 as it stands, says its \"it met\" means above the bar on 12302019, not the bar's day, and is not a pass.",
+   "commits": [
+    "6c5bdf7"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The parse rate on `debian`"
+   ]
+  },
+  {
+   "id": "r15-3",
+   "severity": "FIX",
+   "finding": "Two memory figures in docs/NOTES.md on the 10302019 cause, and the inference drawn from them, have no raw record",
+   "outcome": "fixed",
+   "detail": "The two figures and the inference are dropped; what the records hold stays, and the cause is given as not established.",
+   "commits": [
+    "99f5c9f"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The parse rate on `debian`"
+   ]
+  },
+  {
+   "id": "r15-4",
+   "severity": "FIX",
+   "finding": "WRITEUP said most reviewers looked again at the fixes; only r13 and r14 did",
+   "outcome": "fixed",
+   "detail": "The record gives how many looked again in a header line and a table, and WRITEUP gives 2 of 14 from it, held by the number gate.",
+   "commits": [
+    "fb5f8a7"
+   ],
+   "tests": [
+    "test_only_a_reviewer_with_more_than_one_look_is_said_to_have_looked_again"
+   ],
+   "faults": [
+    "review-every-reviewer-looked-again",
+    "readme-writeup-review-looked-again-overstated"
+   ],
+   "notes": []
+  },
+  {
+   "id": "r15-5",
+   "severity": "FIX",
+   "finding": "Three new parse-rate checks had no fault, and one had no test either",
+   "outcome": "fixed",
+   "detail": "check_predictions' pattern for parse-rate files has a test and a fault; check.sh's pattern and results_table.py's parse reader have faults.",
+   "commits": [
+    "310b507"
+   ],
+   "tests": [
+    "test_a_parse_rate_file_naming_no_prediction"
+   ],
+   "faults": [
+    "parse-predictions-skip-parse-results",
+    "parse-bench-stage-skips-parse-results",
+    "readme-parse-rows-dropped",
+    "readme-parse-other-day-row-drops-its-day",
+    "readme-parse-target-row-dropped"
+   ],
+   "notes": []
+  },
+  {
+   "id": "r15-6",
+   "severity": "FIX",
+   "finding": "parse_driver --check said it recomputes every figure but left the Counts table unchecked",
+   "outcome": "fixed",
+   "detail": "--check now holds the file's bytes, the ten types' count summed from the manifest, the decodes decoding exactly what they should and rejecting none, and each fold to the passes'.",
+   "commits": [
+    "4e64e95"
+   ],
+   "tests": [
+    "test_the_counts_table_is_held"
+   ],
+   "faults": [
+    "parse-counts-ten-types-unheld",
+    "parse-counts-decoded-and-rejected-unheld",
+    "parse-counts-fold-unheld"
+   ],
+   "notes": []
+  },
+  {
+   "id": "r15-7",
+   "severity": "FIX",
+   "finding": "docs/NOTES.md held a path into the working cache, the kind of private path r11-12 removed from BENCHMARKS",
+   "outcome": "fixed",
+   "detail": "NOTES now says the clones and snapshots are kept outside the repository. A second such path, in the paragraph on run-log row 318, found while fixing this, was removed with it.",
+   "commits": [
+    "ebceec7",
+    "e40bc4c"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r15-8",
+   "severity": "NOTE",
+   "finding": "Several places said P-0030's run was refused; the driver was never started",
+   "outcome": "fixed",
+   "detail": "Each place now says the standalone machine check failed input-resident each time, so P-0030's run was never started: BENCHMARKS, WRITEUP, RESULTS.md, docs/TASKS.md and this record.",
+   "commits": [
+    "30bb188",
+    "602776b"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r15-9",
+   "severity": "NOTE",
+   "finding": "The number gate held each parse figure but not which was which: three swaps between real figures passed",
+   "outcome": "fixed",
+   "detail": "README and WRITEUP give each figure after its target id, so each is held to its own row; the reviewer's three swaps now fail the gate, checked by hand.",
+   "commits": [
+    "11fe796"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r15-10",
+   "severity": "NOTE",
+   "finding": "review_report checked that evidence exists, not what an outcome needs: a fixed finding with no commit and a known limit with no NOTES section passed",
+   "outcome": "fixed",
+   "detail": "Both are refused now, a fixed finding with no commit only unless it says why. The record says what the script cannot check: whether the evidence named is the right evidence.",
+   "commits": [
+    "34d5df2"
+   ],
+   "tests": [
+    "test_a_fixed_finding_with_no_commit_is_refused_unless_it_says_why",
+    "test_a_known_limit_with_no_notes_section_is_refused"
+   ],
+   "faults": [
+    "review-fixed-without-commit-taken",
+    "review-limit-without-notes-taken"
+   ],
+   "notes": []
+  },
+  {
+   "id": "r15-11",
+   "severity": "NOTE",
+   "finding": "docs/NOTES.md spoke of the run log's closed word list (r14-11); there is none",
+   "outcome": "fixed",
+   "detail": "NOTES gives r14-11 in the reviewer's own words.",
+   "commits": [
+    "776c335"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r15-12",
+   "severity": "NOTE",
+   "finding": "BENCHMARKS gave memory bandwidth as the cause of T-PARSE-1's gap, which is not established",
+   "outcome": "fixed",
+   "detail": "The bandwidth claim is given as the other project's README's, for its host; BENCHMARKS points to WRITEUP's cause not established.",
+   "commits": [
+    "468257c"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r15-13",
+   "severity": "NOTE",
+   "finding": "WRITEUP's T-PARSE-3 paragraph and row gave only the day difference, not where its bar was set",
+   "outcome": "fixed",
+   "detail": "Both now say the bar was set on a cloud VM with a Xeon Platinum 8481C, in Rust, over the day memory-mapped, as a median of ten runs.",
+   "commits": [
+    "539c5db"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r15-14",
+   "severity": "NOTE",
+   "finding": "The record gave r13's third look as 1628ee1 without saying why it differs from the commit the reviewer read",
+   "outcome": "fixed",
+   "detail": "The record says r13's third look read edfc9b4, 1628ee1 with P-0029's first draft, since rewritten as e9d85a9, so it names 1628ee1, which is in the history.",
+   "commits": [
+    "602776b"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r15-15",
+   "severity": "NOTE",
+   "finding": "Home-relative paths of the Linux host, and two paths of scripts kept outside the repository, remain in docs/TASKS.md, docs/NOTES.md and results/predictions.md",
+   "outcome": "left for the owner",
+   "detail": "None names a user or a host address, predictions cannot be edited, and the owner's scan passes them. The owner decides.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r15-16",
+   "severity": "NOTE",
+   "finding": "check_results accepted a swap line and an input-resident pass whose own figures contradicted them",
+   "outcome": "fixed",
+   "detail": "check_results holds the swap line's two counts equal where it says nothing was swapped out, and a passing input-resident to every page resident; every committed results file passes as before.",
+   "commits": [
+    "52c130f"
+   ],
+   "tests": [
+    "test_a_swap_line_whose_counts_differ_is_refused",
+    "test_a_passing_input_resident_with_pages_missing_is_refused"
+   ],
+   "faults": [
+    "readme-swap-line-counts-unheld",
+    "readme-input-resident-pass-unheld"
+   ],
    "notes": []
   }
  ]

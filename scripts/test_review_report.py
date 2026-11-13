@@ -186,7 +186,7 @@ class ReviewReport(unittest.TestCase):
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
         text = self.out.read_text(encoding="utf-8")
-        self.assertIn("- Result: not complete: 1 open, 1 reviewer to come\n", text)
+        self.assertIn("- Result: not complete: r12-1, open; 1 reviewer to come\n", text)
         self.assertIn("- r12-1 (FIX, open): what r12-1 found.", text)
         self.assertIn("- STILL TO COME: the last reviewer reads the pages", text)
 
@@ -199,6 +199,21 @@ class ReviewReport(unittest.TestCase):
         self.out.unlink()
         self.data["rechecked"] = [{"what": "r1-2", "at": "the merge"}]
         self.assertIn("'the merge' is not a commit", self.refused("data"))
+
+    def test_the_result_says_what_waits_and_on_whom(self):
+        self.data["findings"][3].update(outcome="partly", waits_on="the owner",
+                                        waits_for="a run on its own day")
+        self.data["findings"][2]["outcome"] = "left for the owner"
+        self.data["findings"][4]["outcome"] = "open"
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        self.assertIn("- Result: not complete: waiting on the owner: r12-1 (a run on its own day), "
+                      "partly; r1-3, left for the owner; r12-2, open\n",
+                      self.out.read_text(encoding="utf-8"))
+        self.out.unlink()
+        self.data["findings"][4]["outcome"] = "fixed"
+        self.data["findings"][4]["waits_on"] = "the owner"
+        self.assertIn("r12-2: its waits_on is given, yet it is fixed", self.refused("data"))
 
     def test_check_passes_a_fresh_render(self):
         self.assertEqual(self.run_step("write")[0], 0)

@@ -24,7 +24,11 @@ be fixed) or NOTE. Its outcome is one of OUTCOMES. `write` refuses, and writes n
 - complete: a record said to be complete while a finding is open, partly done or left for the
   owner, while a reviewer is still to come, or while a reviewer's fixes are on a branch not
   merged yet;
-- data: anything else the file should have and does not.
+- data: anything else the file should have and does not, or a `waits_on` or `waits_for` on a
+  finding that is settled.
+
+The Result line names every finding not settled, grouped by whom it waits on (its `waits_on`,
+or the owner for one left for the owner) and with what waits (its `waits_for`) where given.
 
 The file gives the commit the outcomes were checked at, and any checked again later with the
 commit they were checked at, the reviewers, the counts by reviewer, by
@@ -179,6 +183,12 @@ def validate(data):
             raise Refused("severity", fid, f"{finding['severity']!r} is not one of {SEVERITIES}")
         if finding["outcome"] not in OUTCOMES:
             raise Refused("outcome", fid, f"{finding['outcome']!r} is not one of {OUTCOMES}")
+        for key in ("waits_on", "waits_for"):
+            words = finding.get(key, "")
+            if not isinstance(words, str) or "|" in words or "\n" in words or ";" in words:
+                raise Refused("data", fid, f"its {key} is not one line of words")
+            if words and finding["outcome"] not in UNSETTLED:
+                raise Refused("data", fid, f"its {key} is given, yet it is {finding['outcome']}")
         no_commit = finding.get("no_commit", "")
         if not isinstance(no_commit, str) or "|" in no_commit or "\n" in no_commit:
             raise Refused("data", fid, "its no_commit is not one line of words")
@@ -246,19 +256,41 @@ def evidence(finding):
     return " ".join(parts) if parts else "None needed."
 
 
+def waiter(finding):
+    """Whom an unsettled finding waits on: its waits_on, or the owner where it is left for the
+    owner; "" where the data names no one."""
+    return finding.get("waits_on", "") or ("the owner" if finding["outcome"] == "left for the owner"
+                                             else "")
+
+
+def and_list(items):
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
 def status(data):
-    findings = data["findings"]
-    unsettled = {outcome: sum(1 for f in findings if f["outcome"] == outcome)
-                 for outcome in UNSETTLED}
+    """The Result line: complete, or what is not settled, grouped by whom it waits on, with what
+    waits where the data says it, then any reviewer to come and any branch not merged."""
     if data["complete"]:
         return "complete: every finding settled, every reviewer reported"
-    said = [f"{count} {outcome}" for outcome, count in unsettled.items() if count]
+    groups = {}
+    for finding in data["findings"]:
+        if finding["outcome"] in UNSETTLED:
+            groups.setdefault(waiter(finding), {}).setdefault(finding["outcome"], []).append(finding)
+    said = []
+    for who, by_outcome in groups.items():
+        parts = []
+        for outcome in UNSETTLED:
+            items = [f["id"] + (f" ({f['waits_for']})" if f.get("waits_for") else "")
+                     for f in by_outcome.get(outcome, [])]
+            if items:
+                parts.append(f"{and_list(items)}, {outcome}")
+        said.append((f"waiting on {who}: " if who else "") + "; ".join(parts))
     if data["to_come"]:
         said.append(f"{len(data['to_come'])} reviewer to come")
     branches = [r["id"] for r in data["reviewers"] if r["branch"]]
     if branches:
         said.append(f"{', '.join(branches)}'s fixes not merged yet")
-    return "not complete: " + ", ".join(said) if said else "not complete"
+    return "not complete: " + "; ".join(said) if said else "not complete"
 
 
 def render(data):

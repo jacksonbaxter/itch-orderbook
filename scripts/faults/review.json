@@ -298,6 +298,28 @@
         "signature": "^FAIL: test_a_known_limit_with_no_notes_section_is_refused",
         "exit": 1
       }
+    },
+    {
+      "id": "review-result-hides-who-waits",
+      "breaks": "review_report.py's Result line no longer says that a finding left for the owner waits on the owner (r15)",
+      "check": "test_review_report.py ReviewReport.test_the_result_says_what_waits_and_on_whom",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    return finding.get(\"waits_on\", \"\") or (\"the owner\" if finding[\"outcome\"] == \"left for the owner\"\n                                             else \"\")\n",
+          "new": "    return finding.get(\"waits_on\", \"\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_the_result_says_what_waits_and_on_whom"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_result_says_what_waits_and_on_whom",
+        "exit": 1
+      }
     }
   ]
 }
