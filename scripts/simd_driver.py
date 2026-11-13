@@ -29,7 +29,12 @@ line for any process above 20% CPU outside this driver and what it runs. A proce
 only if the sampler covered its whole span, from measure.sh's start line to its end line, with
 no gap over 5 s and no foreign process inside it. Otherwise it is withdrawn, with its own row in
 results/run_log.md giving the reason, and run again as a further repetition, at most
-MOST_WITHDRAWN times in a run. On Linux the machine check runs before and after, itself as
+MOST_WITHDRAWN times in a run. The sampler rule is the only reason a process is withdrawn and
+run again, and measure.sh's exit 75, busy, the only one it is retried for: a process that exits
+anything else, bench_kernels' 3 when it refuses its own record among them, or leaves no record or
+no measure.sh lines, refuses the whole run, with the run log's row saying which and why, since a
+rerun that happens to pass would hide what the first one found. On Linux the machine check runs
+before and after, itself as
 `MEASURE_SH taskset -c 4 bash scripts/machine_check.sh ...`, so that it reads the pin and the
 governor the processes run under: outside measure.sh the governor is the host's own, and
 machine_check.sh refuses any other than performance.
@@ -77,7 +82,10 @@ WATCHLISTS = (8, 64)
 
 
 class Refused(Exception):
-    """The run cannot go on."""
+    """The run cannot go on: Refused(where, why)."""
+
+    def __str__(self):
+        return ": ".join(str(part) for part in self.args)
 
 
 def vector_kernels(bench, given):
@@ -186,16 +194,19 @@ def run_one(args, run_dir, name, extra, repetition, commit):
 
 
 def judge(args, stem, code, sampler):
-    """None if the process is published, else why not."""
+    """None if the process is published, else why the sampler rule withdraws it. Raises Refused
+    for anything else: a process that exited other than 0 (run_one has retried measure.sh's
+    75 already), left no record, or has no measure.sh lines refuses the run, never a rerun."""
     err = Path(f"{stem}.err").read_text(encoding="utf-8", errors="replace")
     if code != 0:
         refusals = [line for line in err.splitlines() if "refused:" in line]
-        return f"exited {code}" + (f": {'; '.join(refusals)}" if refusals else "")
+        raise Refused(stem.name, f"exited {code}" + (f": {'; '.join(refusals)}" if refusals
+                                                      else ""))
     if not Path(f"{stem}.json").is_file():
-        return "exited 0 with no record"
+        raise Refused(stem.name, "exited 0 with no record")
     span = span_of(err)
     if span is None:
-        return "measure.sh's start or end line is missing"
+        raise Refused(stem.name, "measure.sh's start or end line is missing")
     if sampler is not None:
         wait_for_sample(sampler, span[1])
         return wasm_bench.unquiet(sampler.lines, *span)
@@ -251,10 +262,17 @@ def run(args, run_id, commit):
                 if code == 2:
                     raise Refused(name, f"bench exited 2: "
                                         f"{Path(f'{stem}.err').read_text(encoding='utf-8')[-400:]}")
-                why = judge(args, stem, code, sampler)
                 entry = {"variant": name, "repetition": repetition, "stem": stem.name,
-                         "exit": code, "published": why is None, "why": why}
+                         "exit": code}
                 manifest["processes"].append(entry)
+                try:
+                    why = judge(args, stem, code, sampler)
+                except Refused as refusal:
+                    entry.update(published=False, why=refusal.args[1], refused=True)
+                    raise Refused(name, f"{args.experiment}, {name}, repetition {repetition}: "
+                                        f"{refusal.args[1]}; the run is refused, not rerun, "
+                                        "and nothing from it is published") from None
+                entry.update(published=why is None, why=why)
                 (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n",
                                                         encoding="utf-8")
                 if why is None:

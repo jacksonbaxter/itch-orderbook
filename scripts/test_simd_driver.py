@@ -87,8 +87,6 @@ class SimdDriverTest(unittest.TestCase):
                       self.reason(sampler=Sampler(samples(foreign_at=4))))
         self.assertIn("without a sample", self.reason(sampler=Sampler(samples(gap=True))))
         self.assertIn("did not cover", self.reason(sampler=Sampler(samples()[3:])))
-        self.assertIn("start or end line", self.reason(err=f"{START}\n",
-                                                       sampler=Sampler(samples())))
 
     def test_on_linux_every_process_and_check_runs_pinned_under_measure_sh(self):
         args = argparse.Namespace(measure=Path("/q/bin/measure.sh"), input=Path("/q/day"),
@@ -105,11 +103,64 @@ class SimdDriverTest(unittest.TestCase):
         self.assertEqual(words[6:], ["--input", "/q/day", "--probe", "/q/bench_probe", "--core",
                                      "4"])
 
-    def test_a_failed_or_recordless_process_is_withdrawn(self):
-        self.assertEqual(self.judged(code=3, err=f"{START}\nbench_kernels: refused: two work "
-                                                 f"passes disagree\n{END}\n"),
-                         "exited 3: bench_kernels: refused: two work passes disagree")
-        self.assertEqual(self.judged(record=False), "exited 0 with no record")
+    def test_a_failed_or_recordless_process_refuses_the_run(self):
+        """Only the sampler rule withdraws and reruns a process (r5-1): bench_kernels' exit 3,
+        its refusal of its own record, a missing record or missing measure.sh lines refuse the
+        run, sampler or not, so that no rerun can hide what the first process found."""
+        for sampler in (None, Sampler(samples())):
+            with self.assertRaisesRegex(simd_driver.Refused, "exited 3: bench_kernels: refused: "
+                                                             "two work passes disagree"):
+                self.judged(code=3, err=f"{START}\nbench_kernels: refused: two work passes "
+                                        f"disagree\n{END}\n", sampler=sampler)
+            with self.assertRaisesRegex(simd_driver.Refused, "exited 1$"):
+                self.judged(code=1, sampler=sampler)
+            with self.assertRaisesRegex(simd_driver.Refused, "exited 0 with no record"):
+                self.judged(record=False, sampler=sampler)
+            with self.assertRaisesRegex(simd_driver.Refused, "start or end line"):
+                self.judged(err=f"{START}\n", sampler=sampler)
+
+    def test_a_refused_process_ends_the_run_with_its_row(self):
+        """The whole driver on a fake bench_kernels whose first process exits 3: the run stops
+        there, exit 1, one run-log row that names the process and why, and no rerun."""
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            fake = root / "bench_kernels"
+            fake.write_text('#!/bin/sh\nout=""; prev=""; for a in "$@"; do [ "$prev" = "--out" ] '
+                            '&& out=$a; prev=$a; done\necho \'{}\' > "$out"\n'
+                            'case "$out" in *-1.json) echo "bench_kernels: refused: the kernel '
+                            'differed from the scalar kernel 12 times" >&2; exit 3 ;; esac\n',
+                            encoding="utf-8")
+            measure = root / "measure.sh"
+            measure.write_text('#!/bin/sh\necho "measure.sh: start load1=0.10 host=box '
+                               'at=$(date -u +%Y-%m-%dT%H:%M:%SZ) cpus=16" >&2\nshift 3\n"$@"; '
+                               'code=$?\necho "measure.sh: end load1=0.10 exit=$code '
+                               'at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2\nexit $code\n',
+                               encoding="utf-8")
+            fake.chmod(0o755)
+            measure.chmod(0o755)
+            log = root / "run_log.md"
+            system, check = simd_driver.platform.system, simd_driver.machine_check
+            simd_driver.platform.system = lambda: "Linux"
+            simd_driver.machine_check = lambda args: "machine_check: passed"
+            try:
+                code = simd_driver.main(
+                    ["--experiment", "framing", "--prediction", "P-0601", "--raw-dir",
+                     str(root / "raw"), "--input", str(fake), "--dataset", "d",
+                     "--dataset-sha256", "0" * 64, "--bench", str(fake), "--probe", str(fake),
+                     "--measure", str(measure), "--repetitions", "3", "--run-log", str(log),
+                     "--allow-dirty"])
+            finally:
+                simd_driver.platform.system, simd_driver.machine_check = system, check
+            rows = [line for line in log.read_text(encoding="utf-8").splitlines()
+                    if line.startswith("| P-0601-")]
+            processes = [path.name for path in (root / "raw").glob("*/*.json")
+                         if path.name != "manifest.json"]
+        self.assertEqual(code, 1)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("refused: length: framing, length, repetition 1: exited 3: bench_kernels: "
+                      "refused: the kernel differed from the scalar kernel 12 times; the run is "
+                      "refused, not rerun", rows[0])
+        self.assertEqual(processes, ["length-1.json"])
 
 
 if __name__ == "__main__":
