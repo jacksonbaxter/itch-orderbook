@@ -144,6 +144,12 @@ class History(unittest.TestCase):
                                                                       encoding="utf-8")
         self.assert_fails("prediction-missing")
 
+    def test_a_parse_rate_file_naming_no_prediction(self):
+        self.in_order()
+        (self.results / "parse_rate_debian_12302019.md").write_text("# nothing\n",
+                                                                    encoding="utf-8")
+        self.assert_fails("prediction-missing")
+
     def test_a_walks_counts_file_needs_no_prediction(self):
         # walk_report.py's counts are untimed, so they are no experiment.
         self.in_order()

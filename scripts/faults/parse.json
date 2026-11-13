@@ -854,6 +854,49 @@
         "signature": "FAIL: test_the_counts_table_is_held",
         "exit": 1
       }
+    },
+    {
+      "id": "parse-predictions-skip-parse-results",
+      "breaks": "check_predictions leaves parse_rate_*.md results unread, so a parse-rate file could name no prediction",
+      "check": "test_check_predictions.py test_a_parse_rate_file_naming_no_prediction",
+      "mutations": [
+        {
+          "file": "scripts/check_predictions.py",
+          "old": "RESULT_PATTERNS += (\"parse_rate_*.md\",)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_parse_rate_file_naming_no_prediction",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-bench-stage-skips-parse-results",
+      "breaks": "check.sh's bench stage leaves parse_rate_*.md out of check_results, so a parse-rate file is never checked there",
+      "check": "test_check_sh.py CheckSh.test_a_results_pattern_that_matches_nothing_fails_the_bench_stage",
+      "mutations": [
+        {
+          "file": "scripts/check.sh",
+          "old": "    'walks_ladder_*.md' 'parse_rate_*.md') || return 1\n",
+          "new": "    'walks_ladder_*.md') || return 1\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_sh.py",
+        "CheckSh.test_a_results_pattern_that_matches_nothing_fails_the_bench_stage"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_results_pattern_that_matches_nothing_fails_the_bench_stage",
+        "exit": 1
+      }
     }
   ]
 }

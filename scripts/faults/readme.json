@@ -2499,6 +2499,72 @@
         "signature": "FAIL: test_a_verdict_word_for_another_days_bar_is_refused",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-parse-rows-dropped",
+      "breaks": "results_table.py reads a parse-rate file and puts none of its passes in RESULTS.md",
+      "check": "test_results_table.py ResultsTable.test_a_parse_file_gets_a_row_for_each_pass",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            parses += found\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "ResultsTable.test_a_parse_file_gets_a_row_for_each_pass"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_parse_file_gets_a_row_for_each_pass",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-parse-other-day-row-drops-its-day",
+      "breaks": "WRITEUP's table gives T-PARSE-3's figure without the day it was measured on, beside a bar of another day",
+      "check": "test_results_table.py MissedTargets.test_the_parse_targets_are_measured_rows_from_their_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "return (target, cells[\"Bar\"], f\"{cells['Measured']}, on {day}\", cells[\"Verdict\"],",
+          "new": "return (target, cells[\"Bar\"], cells[\"Measured\"], cells[\"Verdict\"],"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_the_parse_targets_are_measured_rows_from_their_file"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_parse_targets_are_measured_rows_from_their_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-parse-target-row-dropped",
+      "breaks": "WRITEUP's table has no row for T-PARSE-2, measured and missed",
+      "check": "test_results_table.py MissedTargets.test_the_parse_targets_are_measured_rows_from_their_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    (\"T-PARSE-2\", PARSE_DEBIAN, missed_row, \"as T-PARSE-1: [The parse rate](#the-parse-rate)\"),\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_the_parse_targets_are_measured_rows_from_their_file"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_parse_targets_are_measured_rows_from_their_file",
+        "exit": 1
+      }
     }
   ]
 }
