@@ -1380,8 +1380,10 @@ MISSED = (
      "[The parse rate](#the-parse-rate)"),
     ("T-PARSE-2", PARSE_DEBIAN, missed_row, "as T-PARSE-1: [The parse rate](#the-parse-rate)"),
     ("T-PARSE-3", PARSE_DEBIAN, other_day_row,
-     "the bar is set on 10302019; on this host the standalone machine check failed "
-     "input-resident each time it ran on that day, so P-0030's run was never started; why the "
+     "the bar is set on 10302019, by Lunary on a cloud VM with a Xeon Platinum 8481C, in Rust, "
+     "over the day memory-mapped, as a median of ten runs; on this host the standalone machine "
+     "check failed input-resident each time it ran on that day, so P-0030's run was never "
+     "started; why the "
      "day would not stay wholly in the page cache is not established: "
      "[The parse rate](#the-parse-rate)"),
     ("T-BT-3", "backtest_shadow_debian_12302019.md", missed_row,
