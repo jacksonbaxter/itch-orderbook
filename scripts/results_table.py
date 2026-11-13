@@ -638,10 +638,11 @@ def run_rows(text):
     """A row for every line of the log's table. A line of it that is not the head, the rule
     or a run with its five cells is refused, never skipped, so no run drops out unseen.
 
-    The log is never edited, so a run's later row says what became of it: withdrawn after
-    it was published, or published again from the same records. Of the rows with one run
-    id, the last stands, and each earlier one names the line of the log that does, in a code
-    span, since a line number is not a measured figure."""
+    A row is never removed, and a run's outcome never rewritten (the one change to the log,
+    on 2026-11-13, gave other programs by their kinds), so a run's later row says what became
+    of it: withdrawn after it was published, or published again from the same records. Of the
+    rows with one run id, the last stands, and each earlier one names the line of the log that
+    does, in a code span, since a line number is not a measured figure."""
     found = []
     for number, line in enumerate(text.splitlines(), 1):
         if not line.strip().startswith("|"):
@@ -854,9 +855,11 @@ def generate(root):
                                  "Total, $", "Total, ticks a share", "File"), pnl)
     lines += ["", held_by_tests()]
     lines += ["", "Every benchmark run, failed ones included, from "
-                  "[results/run_log.md](results/run_log.md). The log is never edited, so a run "
-                  "with more than one row has a later one saying what became of it: of the "
-                  "rows with one run id, the last stands.", ""]
+                  "[results/run_log.md](results/run_log.md). A row is never removed, and a "
+                  "run's outcome never rewritten (the one change to the log, on 2026-11-13, "
+                  "gave other programs by their kinds), so a run with more than one row has a "
+                  "later one saying what became of it: of the rows with one run id, the last "
+                  "stands.", ""]
     lines += markdown_table(RUN_HEADS + ("Stands",), run_rows(run_log))
     return lines
 

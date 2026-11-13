@@ -895,7 +895,7 @@
       "mutations": [
         {
           "file": "scripts/spsc_driver.py",
-          "old": "        if again != said:\n",
+          "old": "        if again != process_kinds.reworded(said):\n",
           "new": "        if False:\n"
         }
       ],
@@ -907,6 +907,29 @@
       ],
       "expect": {
         "signature": "^FAIL: test_a_published_file_renders_again_from_its_raw_records",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-render-sampler-verdicts-by-name",
+      "system": "Darwin",
+      "breaks": "spsc_driver render holds a published file's Sampler verdicts to the raw sampler.txt word for word, so a file written before the kinds, which names the process, is refused though its kind, share and time agree",
+      "check": "test_spsc_results ForeignByKind",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "        if again != process_kinds.reworded(said):\n",
+          "new": "        if again != said:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "ForeignByKind"
+      ],
+      "expect": {
+        "signature": "^ERROR: test_every_record_gives_a_foreign_process_by_kind",
         "exit": 1
       }
     },

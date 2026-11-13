@@ -576,7 +576,7 @@ The market maker on its report day, 12302019, a late-December session, with ever
 
 T-BT-2 and T-MM-1 have no row here: no results file holds them, and no figure was measured for them. Each is held by tests instead: T-BT-2, the backtester's validity gates, by the ctest entries `test_backtest`, `test_backtest_validity` and `test_backtest_cli`; T-MM-1, the PnL split summing exactly to the ledger, by the ctest entries `test_attribution` and `test_market_maker`, and the gate `attribution-without-ledger` in `scripts/gates.py`. CI and `scripts/check.sh` run the ctest entries, and `scripts/check.sh` the gate.
 
-Every benchmark run, failed ones included, from [results/run_log.md](results/run_log.md). The log is never edited, so a run with more than one row has a later one saying what became of it: of the rows with one run id, the last stands.
+Every benchmark run, failed ones included, from [results/run_log.md](results/run_log.md). A row is never removed, and a run's outcome never rewritten (the one change to the log, on 2026-11-13, gave other programs by their kinds), so a run with more than one row has a later one saying what became of it: of the rows with one run id, the last stands.
 
 | Run | Prediction | Commit | OS | Outcome | Stands |
 |---|---|---|---|---|---|

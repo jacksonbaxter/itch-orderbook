@@ -89,6 +89,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
+import process_kinds  # noqa: E402
 import run_record  # noqa: E402
 import wasm_bench  # noqa: E402
 
@@ -935,7 +936,9 @@ def published_sampled(published, raw_dir, every):
         raise Refused("raw", "the file has a Sampler section and the raw folder no sampler.txt")
     lines = path.read_text(encoding="utf-8").splitlines()
     # Every record, old or new, gives a foreign process by its kind, through the name-to-kind
-    # map ($ITCH_PROCESS_KINDS): a file rendered with the map is checked with it.
+    # map ($ITCH_PROCESS_KINDS): a file rendered with the map is checked with it. A file
+    # written before 2026-11-13 names the process; it is held to the raw log by the kind of
+    # the process it names, with the share and the time.
     sampled = {"every": every, "stand_in": check_results.STAND_IN_SAMPLER in published,
                "published": [], "withdrawn": []}
     for cells in check_results.table_rows(published, "Sampler"):
@@ -951,7 +954,7 @@ def published_sampled(published, raw_dir, every):
             sampled["withdrawn"].append((begin, end, why))
         else:
             raise Refused("published", f"a Sampler row of no repetition: {what!r}")
-        if again != said:
+        if again != process_kinds.reworded(said):
             raise Refused("raw", f"{what}: sampler.txt gives {again!r}, the file {said!r}")
     return sampled
 

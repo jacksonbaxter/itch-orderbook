@@ -142,7 +142,7 @@ SAMPLED = {"every": 2.0,
                           "published: 2 samples, the longest gap 2 s, no other process above "
                           "20% CPU")] * 3,
            "withdrawn": [("2026-10-31T10:00:05Z", "2026-10-31T10:00:06Z",
-                          "the CPU sampler saw launchd at 25.0% CPU at 2026-10-31T10:00:05Z")]}
+                          "the CPU sampler saw frobd at 25.0% CPU at 2026-10-31T10:00:05Z")]}
 CROSS_CORE = ("agree: core 6's clock minus core 4's within [-120, 140] ticks, [-60.1, 70.1] ns, "
               "over 1000000 started on each core; the fastest round trip 260 ticks, 130.2 ns; "
               "0 of 2000000 trips read a later stamp below an earlier one")
@@ -418,10 +418,19 @@ class ForeignByKind(unittest.TestCase):
                                      f"{said.format(kind)} |\n")
                         sampled = spsc_driver.published_sampled(published, raw, 2.0)
                         self.assertEqual(sampled["withdrawn"], [(begin, end, said.format(kind))])
-                        for other in ("frobd", "a macOS system daemon"):
+                        # A file from before the kinds names the process: held by its kind.
+                        named = published.replace(said.format(kind), said.format("frobd"))
+                        self.assertEqual(spsc_driver.published_sampled(named, raw, 2.0),
+                                         sampled)
+                        others = [said.format("a macOS system daemon"),
+                                  said.replace("31.0%", "31.5%").format(kind),
+                                  said.replace("09:00:02Z", "09:00:04Z").format(kind)]
+                        if found:
+                            others.append(said.format("quuxd"))  # Another process by the map.
+                        for other in others:
                             with self.assertRaisesRegex(spsc_driver.Refused, "sampler.txt gives"):
                                 spsc_driver.published_sampled(published.replace(
-                                    said.format(kind), said.format(other)), raw, 2.0)
+                                    said.format(kind), other), raw, 2.0)
                     with self.assertRaisesRegex(ValueError, f"the first {kind} at 31.0% CPU at "
                                                             "2026-11-05T09:00:02Z$"):
                         stamp_load.sampler_line("\n".join(lines), begin, end)

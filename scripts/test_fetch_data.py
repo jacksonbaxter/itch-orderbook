@@ -482,8 +482,8 @@ class ManifestNames(unittest.TestCase):
                 continue
             with self.subTest(day=key):
                 self.assertFalse(fd.unpacked_name(day).lower().endswith(".txt"),
-                                 f"{key} unpacks to {fd.unpacked_name(day)}, which Spotlight "
-                                 "imports as plain text; give it an unpacked_name")
+                                 f"{key} unpacks to {fd.unpacked_name(day)}, which the system "
+                                 "indexer imports as plain text; give it an unpacked_name")
         self.assertEqual(fd.unpacked_name(manifest["days"]["06122026"]),
                          "06122026.NASDAQ_ITCH50")
 
