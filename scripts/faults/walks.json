@@ -530,7 +530,7 @@
       "mutations": [
         {
           "file": "scripts/walk_report.py",
-          "old": "    if [tuple(cells) for cells in table(text, \"Each round's line\")] != round_rows(known, steps):\n",
+          "old": "    if printed != rounds:\n",
           "new": "    if False:\n"
         }
       ],
@@ -572,7 +572,7 @@
       "mutations": [
         {
           "file": "scripts/walk_report.py",
-          "old": "    if slope_range(round_rows(known, steps)) != fields.get(\"round_slopes\"):\n",
+          "old": "    if slope_range(rounds) != fields.get(\"round_slopes\"):\n",
           "new": "    if False:\n"
         }
       ],
@@ -614,8 +614,8 @@
       "mutations": [
         {
           "file": "scripts/walk_report.py",
-          "old": "    slope = sum((x - mean_x) * (y - mean_y) for x, y in points) / spread\n",
-          "new": "    slope = (ys[-1] - ys[0]) / (xs[-1] - xs[0]) / 2\n"
+          "old": "    slope = [(x - mean_x) / spread for x in xs]\n",
+          "new": "    slope = [(x - mean_x) / spread / 2 for x in xs]\n"
         }
       ],
       "command": [
@@ -753,6 +753,48 @@
       ],
       "expect": {
         "signature": "^FAIL: test_a_sibling_read_but_not_asked_for ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-driver-line-on-printed-steps",
+      "breaks": "The ladder's lines are fitted on each schedule's walk steps a message as the table prints them, to a thousandth, not on the unrounded figure",
+      "check": "test_walk_report.py test_the_lines_are_fitted_on_the_unrounded_figures",
+      "mutations": [
+        {
+          "file": "scripts/walk_report.py",
+          "old": "    return (levels + orders) / record[\"engine\"][\"messages\"]\n",
+          "new": "    return round((levels + orders) / record[\"engine\"][\"messages\"], 3)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_lines_are_fitted_on_the_unrounded_figures ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "walks-driver-round-lines-on-printed-times",
+      "breaks": "Each round's line is fitted on the times a message as the repetitions table prints them, to a hundredth of a ns, not on the unrounded times",
+      "check": "test_walk_report.py test_the_lines_are_fitted_on_the_unrounded_figures",
+      "mutations": [
+        {
+          "file": "scripts/walk_driver.py",
+          "old": "          check_results.exact(ns_per_message(record))) for round_index, life, record in timed],\n",
+          "new": "          check_results.exact(round(ns_per_message(record), 2))) for round_index, life, record in timed],\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_lines_are_fitted_on_the_unrounded_figures ",
         "exit": 1
       }
     }

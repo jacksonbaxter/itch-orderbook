@@ -279,6 +279,34 @@ class Ladder(unittest.TestCase):
     def test_a_stale_round_range(self):
         self.assertIn("line-stale", codes(replace(LADDER, "- round_slopes: ", "- round_slopes: 9")))
 
+    def test_the_lines_are_fitted_on_the_unrounded_figures(self):
+        # The walk steps a message, 0.011 to 0.077 as printed, and the times, to a hundredth
+        # of a ns, are rounded far enough that a line through the printed figures differs.
+        steps = {life: sum(site["level_steps"] + site["order_steps"]
+                           for site in count_record(life)["sites"].values()) / MESSAGES
+                 for life in LIVES}
+        seconds = {60: (1.60, 1.61, 1.62), 600: (1.65, 1.66, 1.64), 3600: (1.70, 1.69, 1.72)}
+
+        def fitted(points):
+            mean_x = sum(x for x, _ in points) / len(points)
+            mean_y = sum(y for _, y in points) / len(points)
+            slope = sum((x - mean_x) * (y - mean_y) for x, y in points) / \
+                sum((x - mean_x) ** 2 for x, _ in points)
+            return slope, mean_y - slope * mean_x
+
+        def ns(value):
+            return value * 1e9 / MESSAGES
+
+        first = fitted([(steps[life], ns(seconds[life][0])) for life in LIVES])
+        self.assertIn(f"\n| 1 | {first[0]:.3f} | {first[1]:.2f} |\n", LADDER)
+        printed = fitted([(float(f"{steps[life]:.3f}"), float(f"{ns(seconds[life][0]):.2f}"))
+                          for life in LIVES])
+        self.assertNotEqual(f"{printed[0]:.3f}", f"{first[0]:.3f}")
+        line = fitted([(steps[life], ns(sorted(seconds[life])[1])) for life in LIVES])
+        self.assertIn(f"- slope: {line[0]:.3f} ns a walk step\n", LADDER)
+        self.assertIn(f"- intercept: {line[1]:.2f} ns a message\n", LADDER)
+        self.assertEqual(codes(LADDER), set())
+
     def test_the_slope_follows_the_times(self):
         flat = ladder({60: (1.6, 1.6, 1.6), 600: (1.6, 1.6, 1.6), 3600: (1.6, 1.6, 1.6)})
         self.assertIn("- slope: 0.000 ns a walk step", flat)

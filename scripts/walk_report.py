@@ -23,6 +23,13 @@ each repetition gave its schedule's event hash, and the line, the walk's time an
 are recomputed from the figures printed. Anything else a results file needs is
 check_results.py's, which calls this for a ladder file.
 
+walk_driver.py works the ladder's figures out from the raw records, each time a message and
+each schedule's walk steps a message unrounded, and rounds them only to print them. The
+walk steps a message follow exactly from the totals and the messages the file prints, but the
+times are printed to a hundredth of a ns, so check holds each figure worked out from them to
+the range those printed times leave (check_results.py, "Figures computed from unrounded
+values"). The line is linear in the times, so its range is exact.
+
 Each violation prints as `walk_report: FAIL <code> <file>: <detail>`.
 
 Exit codes: 0 written, or check found nothing; 1 check found something; 2 bad usage, or a
@@ -153,6 +160,12 @@ def message_cells(messages, walks, levels, orders, depths):
     return (f"{walks / messages:.3f}", f"{levels / messages:.3f}", f"{orders / messages:.3f}",
             f"{(levels + orders) / messages:.3f}", f"{levels / walks:.2f}" if walks else "0.00",
             f"{depths / walks:.2f}" if walks else "0.00")
+
+
+def steps_per_message(record):
+    """A schedule's walk steps a message, level steps and order steps, unrounded."""
+    _, _, levels, orders, _ = site_totals(record)[ALL]
+    return (levels + orders) / record["engine"]["messages"]
 
 
 def message_rows(records):
@@ -371,37 +384,80 @@ def check_text(text):
 # ---- The ladder ----------------------------------------------------------------------------
 
 
+# The line's figures over ranges of y, x exact: each is a sum of weights times the ys, so its
+# least and greatest come from taking each y at the end its weight's sign picks.
+
 def least_squares(points):
     """Slope and intercept of y on x."""
-    xs = [x for x, _ in points]
-    ys = [y for _, y in points]
-    mean_x, mean_y = statistics.fmean(xs), statistics.fmean(ys)
+    slope, intercept = line_weights([x for x, _ in points])
+    return (sum(w * y for w, (_, y) in zip(slope, points)),
+            sum(w * y for w, (_, y) in zip(intercept, points)))
+
+
+def line_weights(xs):
+    """The weights that give the least-squares slope and intercept from the ys."""
+    mean_x = statistics.fmean(xs)
     spread = sum((x - mean_x) ** 2 for x in xs)
-    slope = sum((x - mean_x) * (y - mean_y) for x, y in points) / spread
-    return slope, mean_y - slope * mean_x
+    slope = [(x - mean_x) / spread for x in xs]
+    return slope, [1 / len(xs) - mean_x * weight for weight in slope]
 
 
-def share_rows(points, names):
-    """The walk's share at each schedule, from the printed steps and medians."""
-    parsed = [(float(steps), float(median)) for steps, median in points]
-    slope, intercept = least_squares(parsed)
+def weighted_range(weights, ranges):
+    low = sum(w * (lo if w >= 0 else hi) for w, (lo, hi) in zip(weights, ranges))
+    high = sum(w * (hi if w >= 0 else lo) for w, (lo, hi) in zip(weights, ranges))
+    return low, high
+
+
+def fixed(places, suffix=""):
+    return lambda value: f"{value:.{places}f}{suffix}"
+
+
+def share_rows(names, steps, xs, medians, ranges, shown=None):
+    """The line through every schedule's median, and the walk's share at each: the slope and
+    intercept cells, and a row a schedule. `steps` and `medians` are the cells the file
+    prints; `xs` the walk steps a message, exact; `ranges` each median as a range. `shown` is
+    the file's own cells, {"slope", "intercept", "rows": {name: row}}, which check gives."""
+    shown = shown or {}
+    slope_w, intercept_w = line_weights(xs)
+    slope = check_results.shown_within(shown.get("slope"), weighted_range(slope_w, ranges),
+                                       fixed(3))
+    intercept = check_results.shown_within(shown.get("intercept"),
+                                           weighted_range(intercept_w, ranges), fixed(2))
     rows = []
-    for name, (steps, median), (x, y) in zip(names, points, parsed):
-        walk = slope * x
-        rows.append((name, steps, median, f"{intercept + walk:.2f}", f"{walk:.2f}",
-                     f"{100 * walk / y:.2f}%"))
-    return f"{slope:.3f}", f"{intercept:.2f}", rows
+    for index, name in enumerate(names):
+        x = xs[index]
+        mine = (shown.get("rows") or {}).get(name) or [None] * 6
+        line = weighted_range([v + x * w for v, w in zip(intercept_w, slope_w)], ranges)
+        walk = weighted_range([x * w for w in slope_w], ranges)
+        low, high = ranges[index]
+        shares = [100 * a / b for a in walk for b in (low, high)]
+        rows.append((name, steps[index], medians[index],
+                     check_results.shown_within(mine[3], line, fixed(2)),
+                     check_results.shown_within(mine[4], walk, fixed(2)),
+                     check_results.shown_within(mine[5], (min(shares), max(shares)),
+                                                fixed(2, "%"))))
+    return slope, intercept, rows
 
 
-def round_rows(repetitions, steps):
-    """Each round's own line, from its printed times: (round, slope, intercept)."""
+def round_rows(repetitions, xs, shown=None):
+    """Each round's own line: (round, slope, intercept). `repetitions` is (round, schedule,
+    time a message as a range) in the order run, `xs` each schedule's walk steps a message,
+    exact, and `shown` the file's own rows by round, which check gives."""
     rounds = {}
-    for cells in repetitions:
-        rounds.setdefault(cells[0], []).append((float(steps[cells[1]]), float(cells[2])))
+    for name, schedule, times in repetitions:
+        rounds.setdefault(name, []).append((xs[schedule], times))
     rows = []
     for name, points in rounds.items():
-        slope, intercept = least_squares(points) if len({x for x, _ in points}) > 1 else (0.0, 0.0)
-        rows.append((name, f"{slope:.3f}", f"{intercept:.2f}"))
+        mine = (shown or {}).get(name) or (name, None, None)
+        if len({x for x, _ in points}) > 1:
+            slope_w, intercept_w = line_weights([x for x, _ in points])
+            ranges = [times for _, times in points]
+            slope = weighted_range(slope_w, ranges)
+            intercept = weighted_range(intercept_w, ranges)
+        else:
+            slope = intercept = (0.0, 0.0)
+        rows.append((name, check_results.shown_within(mine[1], slope, fixed(3)),
+                     check_results.shown_within(mine[2], intercept, fixed(2))))
     return rows
 
 
@@ -409,6 +465,10 @@ def check_ladder(text):
     """The ladder's timed tables against its repetitions, its counts and its line."""
     hashes = {cells[0]: cells[5] for cells in table(text, "Schedules")}
     steps = {cells[0]: cells[4] for cells in table(text, "A message's walks")}
+    # Each schedule's walk steps a message, exact, from its totals and its messages.
+    messages = {cells[0]: number(cells[4]) for cells in table(text, "Schedules")}
+    xs = {cells[0]: (number(cells[4]) + number(cells[5])) / messages[cells[0]]
+          for cells in table(text, "Totals by site") if cells[1] == ALL and cells[0] in messages}
     repetitions = {}
     for cells in table(text, "Repetitions"):
         if len(cells) != 6:
@@ -420,12 +480,14 @@ def check_ladder(text):
     summary = {cells[0]: cells[1:] for cells in table(text, "Summary")}
     if list(summary) != list(hashes):
         yield "schedules-differ", "the Summary's schedules are not the Schedules table's"
+    times = {}
     for name, cells in summary.items():
-        values = [float(row[2]) for row in repetitions.get(name, [])]
+        values = [check_results.printed_range(row[2], 2) for row in repetitions.get(name, [])]
         if len(values) < 3:
             yield "repetitions-few", f"{name}: {len(values)} repetitions"
             continue
-        want = summary_cells(values)
+        times[name] = values
+        want = summary_cells(values, cells)
         if cells != want:
             yield "summary-figure", f"{name}: {cells} against {want} from the repetitions"
     share = table(text, "The walk's share")
@@ -436,14 +498,26 @@ def check_ladder(text):
     for cells in share:
         if cells[1] != steps.get(cells[0]) or cells[2] != summary.get(cells[0], [None])[0]:
             yield "share-input", f"{cells[0]}: steps {cells[1]} or median {cells[2]} not as printed"
-    slope, intercept, rows = share_rows([(cells[1], cells[2]) for cells in share], names)
+    if any(name not in xs or name not in times for name in names):
+        yield "share-input", "a schedule with no totals or too few repetitions"
+        return
+    fields = check_results.parse_header(text)
+    shown = {"slope": fields.get("slope", "").split(" ")[0],
+             "intercept": fields.get("intercept", "").split(" ")[0],
+             "rows": {cells[0]: cells for cells in share}}
+    slope, intercept, rows = share_rows(
+        names, [cells[1] for cells in share], [xs[name] for name in names],
+        [cells[2] for cells in share],
+        [check_results.median_range(times[name]) for name in names], shown)
     if [tuple(cells) for cells in share] != rows:
         yield "share-figure", "the fit, the walk's time or the share is not what the figures give"
-    known = [cells for cells in table(text, "Repetitions") if cells[1] in steps]
-    if [tuple(cells) for cells in table(text, "Each round's line")] != round_rows(known, steps):
+    known = [(cells[0], cells[1], check_results.printed_range(cells[2], 2))
+             for cells in table(text, "Repetitions") if cells[1] in xs]
+    printed = [tuple(cells) for cells in table(text, "Each round's line")]
+    rounds = round_rows(known, xs, {cells[0]: cells for cells in printed})
+    if printed != rounds:
         yield "round-line", "a round's line is not what its repetitions give"
-    fields = check_results.parse_header(text)
-    if slope_range(round_rows(known, steps)) != fields.get("round_slopes"):
+    if slope_range(rounds) != fields.get("round_slopes"):
         yield "line-stale", f"round_slopes is {fields.get('round_slopes')!r}"
     if fields.get("slope") != f"{slope} ns a walk step" or \
             fields.get("intercept") != f"{intercept} ns a message":
@@ -464,12 +538,16 @@ def ladder_summary(slope, rows):
             f"{first[0]}'s {first[2]} ns a message and {last[5]} of {last[0]}'s {last[2]} ns")
 
 
-def summary_cells(values):
-    """Median, min, max and CV of the printed times a message, as the Summary prints them."""
-    mean = statistics.fmean(values)
-    cv = statistics.stdev(values) / mean if len(values) > 1 and mean else 0.0
-    return [f"{statistics.median(values):.2f}", f"{min(values):.2f}", f"{max(values):.2f}",
-            f"{cv * 100:.2f}%"]
+def summary_cells(ranges, cells=None):
+    """Median, min, max and CV of the times a message, each a range, as the Summary prints
+    them: each the file's own cell in `cells` if the ranges allow it."""
+    cells = cells or [None] * 4
+    out = [check_results.shown_within(cell, bounds, fixed(2)) for cell, bounds in zip(
+        cells, (check_results.median_range(ranges), check_results.min_range(ranges),
+                check_results.max_range(ranges)))]
+    low, high = check_results.cv_range(ranges)
+    out.append(check_results.shown_within(cells[3], (low * 100, high * 100), fixed(2, "%")))
+    return out
 
 
 # ---- Command line --------------------------------------------------------------------------
