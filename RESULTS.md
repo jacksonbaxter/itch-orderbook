@@ -647,4 +647,5 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0903-20261112T165458Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
 | `P-0903-20261112T172808Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
 | `P-0027-window-12302019` | `P-0027` | `fc35ccf0136b` | Darwin | `published` |
+| `P-0028-rerun-20261113T030553Z` | `P-0028` | `a3388a03ed5d` | Darwin | `recorded` |
 <!-- results table: end -->
