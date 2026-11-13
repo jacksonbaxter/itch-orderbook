@@ -45,6 +45,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_results  # noqa: E402
+import run_record  # noqa: E402
 import wasm_bench  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -399,6 +400,9 @@ def check(paths):
     return 1 if failed else 0
 
 
+MACHINE_CHECK = "machine_check.txt"
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="step", required=True)
@@ -412,11 +416,14 @@ def main(argv=None):
     if args.step == "check":
         return check(args.files or sorted((REPO_ROOT / "results").glob("wasm_*.md")))
     try:
+        # Each side's raw folder of the new kind must hold the whole record (gate item 8).
+        for side, path in (("native", args.native), ("browser", args.browser)):
+            run_record.refuse_incomplete(path.parent, (MACHINE_CHECK, f"{side}.sampler.txt"))
         text = render(json.loads(args.native.read_text(encoding="utf-8")),
                       json.loads(args.browser.read_text(encoding="utf-8")),
                       args.native_stderr.read_text(encoding="utf-8"),
                       args.browser_stderr.read_text(encoding="utf-8"), args.rendered_again)
-    except (ReportError, KeyError, ValueError) as error:
+    except (ReportError, run_record.Incomplete, KeyError, ValueError) as error:
         print(f"wasm_report: FAIL refused: {error!r}")
         return 1
     log_path = REPO_ROOT / "results" / "run_log.md"

@@ -932,6 +932,51 @@
         "signature": "^FAIL: test_a_published_file_renders_again_from_its_raw_records",
         "exit": 1
       }
+    },
+    {
+      "id": "spsc-driver-cross-core-unkept",
+      "breaks": "spsc_driver prints the cross-core check's verdict and keeps no copy of bench_probe's output (B4)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    args.record.output(CROSS_CORE, result.stdout)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_spsc_keeps_the_cross_core_check_untouched",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-render-accepts-incomplete-record",
+      "breaks": "spsc_driver render takes a record of the new kind whose sampler log is gone (gate item 8)",
+      "check": "test_spsc_results.py EndToEnd.test_a_published_file_renders_again_from_its_raw_records",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    run_record.refuse_incomplete(raw_dir, needs, fields.get(\"run_id\"))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_spsc_results.py",
+        "EndToEnd.test_a_published_file_renders_again_from_its_raw_records"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_a_published_file_renders_again_from_its_raw_records",
+        "exit": 1
+      },
+      "system": "Darwin"
     }
   ]
 }

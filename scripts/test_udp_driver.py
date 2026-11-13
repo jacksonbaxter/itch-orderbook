@@ -17,6 +17,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import test_udp_report as records  # noqa: E402
+import run_record  # noqa: E402
+import simd_driver  # noqa: E402
 import udp_driver  # noqa: E402
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -322,6 +324,8 @@ class ProcessTest(unittest.TestCase):
     def stand_ins(self, folder):
         write_script(folder / "measure.sh", FAKE_MEASURE)
         write_script(folder / "bench_udp", FAKE_BENCH.format(scripts=str(SCRIPTS)))
+        # A file the run hashes for its record (gate item 8); the stand-ins never run it.
+        (folder / "bench_probe").write_text("a probe\n", encoding="utf-8")
         (folder / "run_log.md").write_text("", encoding="utf-8")
 
     def test_each_process_is_pinned_under_measure_sh(self):
@@ -363,6 +367,34 @@ class ProcessTest(unittest.TestCase):
         call = call[:call.index("run = run_step(")]
         self.assertIn("capture_output=True", call)
         self.assertIn("file=sys.stderr", call)
+
+    def test_a_step_keeps_its_record_and_will_not_write_over_another(self):
+        """Gate item 8: the run's folder is named by its run id and holds run.json."""
+        with records.scratch() as folder:
+            folder = Path(folder)
+            self.stand_ins(folder)
+            (folder / "day.itch").write_bytes(b"a day")
+            digest = run_record.sha256_of(folder / "day.itch")
+            args = arguments(folder, dataset_sha256=digest)
+            run = udp_driver.Run(args, "P-0700-20261111T100000Z", "0123456789ab (clean)")
+            saved = simd_driver.machine_check
+            simd_driver.machine_check = lambda args: "machine_check: passed"
+            try:
+                run.check_machine("before")
+            finally:
+                simd_driver.machine_check = saved
+            self.assertEqual(run.dir.name, "P-0700-20261111T100000Z")
+            kept = json.loads((run.dir / "run.json").read_text(encoding="utf-8"))
+            self.assertEqual(kept["binaries"], {
+                str(folder / name): run_record.sha256_of(folder / name)
+                for name in ("bench_udp", "bench_probe", "measure.sh")})
+            self.assertEqual(kept["dataset"], {"name": "day.itch", "sha256": digest,
+                                               "manifest": "not pinned in "
+                                                           "scripts/data_manifest.json"})
+            self.assertEqual(run_record.kept_output(run.dir, "machine_check_before.txt"),
+                             "machine_check: passed")
+            with self.assertRaisesRegex(run_record.Incomplete, "exists and is not empty"):
+                udp_driver.Run(args, "P-0700-20261111T100000Z", "0123456789ab (clean)")
 
     def test_a_bisect_step_leaves_its_manifest_and_confirms_t_uring_2(self):
         with records.scratch() as folder:

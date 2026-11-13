@@ -10,7 +10,7 @@ On a reported run this is measure.sh's direct child, as scripts/bench_driver.py 
 shares that driver's order and its signal handling:
 
     measure.sh /usr/bin/time -l python3 -B scripts/backtest_driver.py ... 2> STDERR
-    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR
+    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR --raw-dir RAW/RUN_ID
 
 Hash the input, which also faults it in; confirm the prediction is on record; run
 machine_check.sh, refusing on a failure; run the repetitions, one bench_backtest process
@@ -44,8 +44,11 @@ covered the process's whole span with no gap over 5 s and saw no other process a
 CPU in it, with the same withdrawals, waits and limits; the file's interference field and
 Sampler section say what it saw.
 
-Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
---raw-dir, which is not committed.
+Every run gets a row in results/run_log.md, whatever became of it.
+Raw output stays in --raw-dir/<run id>, a folder of the run's own that the driver
+refuses to write into if another run has, with run.json beside it: the commit and tree
+state, each binary's sha256, the dataset hashed, and every tool output the file quotes
+(scripts/run_record.py). None of it is committed.
 
     backtest_driver.py render --raw-dir DIR --published FILE --out FILE [--stderr FILE] \
         [--rendered-again REASON]
@@ -82,6 +85,7 @@ import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import linux_sampler  # noqa: E402
 import mac_rule  # noqa: E402
+import run_record  # noqa: E402
 import stamp_load  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -552,6 +556,7 @@ def run(args, run_id, started, commit):
     bench_driver.swap_watch = bench_driver.SwapWatch(args.vmstat)
     bench_driver.set_stage("hashing the input")
     digest = bench_driver.hash_and_fault_in(args.input)
+    args.record.dataset(args.input, digest)
     bench_driver.set_stage("checking the prediction")
     code = subprocess.run([sys.executable, "-B", str(REPO_ROOT / "scripts" / "check_predictions.py"),
                            "--root", str(args.predictions_root), "--require", args.prediction],
@@ -560,6 +565,7 @@ def run(args, run_id, started, commit):
         raise Refused("prediction", code.stdout.strip())
     bench_driver.set_stage("machine_check")
     machine_output = bench_driver.machine_check(args)
+    args.record.output(bench_driver.MACHINE_CHECK, machine_output)
     watch, sampled, mac = None, None, None
     if platform.system() == "Darwin":
         bench_driver.set_stage("starting the sampler")
@@ -578,8 +584,8 @@ def run(args, run_id, started, commit):
     finally:
         if watch is not None:
             watch.stop()
-        if mac is not None:
-            mac.done.set()
+            args.record.kept_file("sampler.txt")
+        run_record.close_sampler(args, mac)
     validate_together(records)
     bench_driver.set_stage("rendering the results file")
     text = render(records, args, run_id, started, bench_driver.utc_now(), machine_output,
@@ -664,6 +670,9 @@ def render_again(raw_dir, published, stderr, again=None):
     if check_results.section(published, "Sampler") is not None:
         raise Refused("published", "its Sampler section's verdicts are not in the raw records")
     args, fields, machine, swap = published_parts(published)
+    run_record.refuse_incomplete(raw_dir, (bench_driver.MACHINE_CHECK,), fields.get("run_id"))
+    if run_record.is_new_kind(raw_dir):
+        machine = run_record.kept_output(raw_dir, bench_driver.MACHINE_CHECK)
     records = []
     for index in range(1, args.repetitions + 1):
         record = json.loads((raw_dir / f"{args.workload}-repetition-{index}.json").read_text(
@@ -698,7 +707,7 @@ def render_main(argv):
         stderr = (args.stderr or args.raw_dir / "stderr.txt").read_text(encoding="utf-8")
         text = render_again(args.raw_dir, args.published.read_text(encoding="utf-8"), stderr,
                             args.rendered_again)
-    except (Refused, OSError, ValueError, KeyError) as error:
+    except (Refused, run_record.Incomplete, OSError, ValueError, KeyError) as error:
         print(f"backtest_driver: render refused: {error}", file=sys.stderr)
         return 1
     args.out.write_text(text, encoding="utf-8")
@@ -713,12 +722,13 @@ def main(argv=None):
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)
-    args.raw_dir.mkdir(parents=True, exist_ok=True)
     started = bench_driver.utc_now()
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
     commit = "unknown"
     try:
+        run_record.open_run(args, run_id)
         commit = bench_driver.git_commit(REPO_ROOT, args.allow_dirty)
+        run_record.start_record(args, "backtest_driver", run_id, commit, (args.bench, args.probe))
         written = run(args, run_id, started, commit)
     except Stopped as stop:
         bench_driver.stop_child()
@@ -728,7 +738,7 @@ def main(argv=None):
                                 f"stopped by {name} at {bench_driver.stage}; nothing from it is "
                                 "published; the row was written by the driver as it stopped")
         return 128 + stop.signum
-    except Refused as refusal:
+    except (Refused, run_record.Incomplete) as refusal:
         bench_driver.hold_signals()
         print(f"backtest_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,

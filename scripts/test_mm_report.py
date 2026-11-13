@@ -3,7 +3,9 @@
 and what it must refuse. The committed evaluation is the matrix throughout."""
 
 import contextlib
+import hashlib
 import io
+import json
 import os
 import shutil
 import stat
@@ -16,6 +18,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import mm_report as report  # noqa: E402
+import run_record  # noqa: E402
 
 REPO_ROOT = report.REPO_ROOT
 SCRATCH = REPO_ROOT / "build"
@@ -314,6 +317,8 @@ class Run(unittest.TestCase):
         self.raw.mkdir()
         self.tool = self.write("itch_mm", FAKE_TOOL.format(scripts=str(Path(__file__).parent)))
         self.time = self.write("time", FAKE_TIME)
+        # The day the run hashes for its record (gate item 8); the fake tool never reads it.
+        self.data = self.write("day.itch", "a day\n")
 
     def write(self, name, text):
         path = self.root / name
@@ -329,11 +334,19 @@ class Run(unittest.TestCase):
 
     def test_the_matrix_runs_and_its_file_holds(self):
         code, said = self.run_report(
-            "run", "--tool", str(self.tool), "--data", "day.itch", "--raw-dir", str(self.raw),
+            "run", "--tool", str(self.tool), "--data", str(self.data), "--raw-dir", str(self.raw),
             "--prediction", "P-0202", "--time", str(self.time), "--root", str(self.root))
         self.assertEqual(code, 0, said)
-        self.assertEqual(len(list(self.raw.glob("*.out"))), 14)
-        self.assertTrue((self.raw / "mm_12302019_BYND_as_both_off_proportional.err").is_file())
+        (folder,) = self.raw.iterdir()
+        self.assertEqual(len(list(folder.glob("*.out"))), 14)
+        self.assertTrue((folder / "mm_12302019_BYND_as_both_off_proportional.err").is_file())
+        kept = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(kept["run_id"], folder.name)
+        self.assertEqual(kept["binaries"][str(self.tool)],
+                         hashlib.sha256(self.tool.read_bytes()).hexdigest())
+        self.assertEqual(kept["dataset"]["sha256"],
+                         hashlib.sha256(self.data.read_bytes()).hexdigest())
+        self.assertEqual(run_record.missing(folder, measure=False), [])
         code, said = self.run_report("check", str(self.root / OUT), "--root", str(self.root))
         self.assertEqual(code, 0, said)
         log = (self.root / "results" / "run_log.md").read_text(encoding="utf-8")
@@ -341,7 +354,7 @@ class Run(unittest.TestCase):
 
     def test_an_unknown_prediction_runs_nothing(self):
         code, said = self.run_report(
-            "run", "--tool", str(self.tool), "--data", "day.itch", "--raw-dir", str(self.raw),
+            "run", "--tool", str(self.tool), "--data", str(self.data), "--raw-dir", str(self.raw),
             "--prediction", "P-9999", "--time", str(self.time), "--root", str(self.root))
         self.assertEqual(code, 1, said)
         self.assertEqual(list(self.raw.iterdir()), [])
@@ -349,7 +362,7 @@ class Run(unittest.TestCase):
     def test_a_tool_that_fails_is_logged_and_refused(self):
         self.write("itch_mm", "#!/bin/sh\necho 'itch_mm: cannot read day.itch' >&2\nexit 2\n")
         code, said = self.run_report(
-            "run", "--tool", str(self.tool), "--data", "day.itch", "--raw-dir", str(self.raw),
+            "run", "--tool", str(self.tool), "--data", str(self.data), "--raw-dir", str(self.raw),
             "--prediction", "P-0202", "--time", str(self.time), "--root", str(self.root))
         self.assertEqual(code, 2, said)
         log = (self.root / "results" / "run_log.md").read_text(encoding="utf-8")

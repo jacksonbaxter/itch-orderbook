@@ -22,6 +22,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import demo  # noqa: E402
+import run_record  # noqa: E402
 import wasm_bench  # noqa: E402
 import wasm_report  # noqa: E402
 
@@ -209,11 +210,19 @@ class Bench(Scratch):
         wasm_bench.processes = lambda: [(os.getpid(), 1, 0.0, "python3 wasm_bench.py"),
                                         *self.foreign]
         self.addCleanup(setattr, wasm_bench, "processes", real)
-        self.common = ["--probe", "probe", "--prediction", "P-0401", "--raw-dir",
+        # A file the driver hashes for its record (gate item 8); the fake check never runs it.
+        probe = self.write("probe", "a probe\n")
+        self.common = ["--probe", str(probe), "--prediction", "P-0401", "--raw-dir",
                        str(self.root / "raw"), "--repetitions", "3", "--allow-dirty",
                        "--run-log", str(self.log), "--docs", str(self.root / "docs"),
                        "--predictions-root", str(self.root),
                        "--machine-check", str(self.check_script)]
+
+    def run_folder(self):
+        """The one folder, named by the run id, that the run wrote under --raw-dir."""
+        folders = list((self.root / "raw").iterdir())
+        self.assertEqual(len(folders), 1, folders)
+        return folders[0]
 
     def executable(self, name, text):
         path = self.write(name, text)
@@ -225,12 +234,31 @@ class Bench(Scratch):
                                                               digest=self.manifest["digest"]))
         code, output = quietly(wasm_bench.main, ["native", "--bench", str(bench), *self.common])
         self.assertEqual(code, 0, output)
-        record = json.loads((self.root / "raw" / "native.json").read_text())
+        record = json.loads((self.run_folder() / "native.json").read_text())
         self.assertEqual(record["side"], "native")
         self.assertEqual(record["extract_manifest"]["digest"], self.manifest["digest"])
         self.assertIn("recorded: T-WASM-1's native side", self.log.read_text())
         self.assertIn(record["run_id"], self.log.read_text())
         self.assertRegex(record["run_id"], r"^P-0401-\w+$")
+        # What the run keeps of itself, and wasm_report's refusal until it is whole (item 8).
+        folder = self.run_folder()
+        self.assertEqual(folder.name, record["run_id"])
+        needs = ("machine_check.txt", "native.sampler.txt")
+        self.assertEqual(run_record.missing(folder, needs, record["run_id"]),
+                         ["measure.stderr, untouched"])
+        kept = json.loads((folder / "run.json").read_text())
+        probe = self.root / "probe"
+        self.assertEqual(kept["binaries"], {str(bench): demo.sha256_of(bench),
+                                            str(probe): demo.sha256_of(probe)})
+        self.assertEqual(kept["dataset"]["name"], "extract.itch")
+        self.assertEqual(kept["dataset"]["sha256"], self.manifest["extract_sha256"])
+        stderr = self.write("native.stderr", "measure.sh: start\n")
+        code, output = quietly(wasm_report.main, [
+            "render", "--native", str(folder / "native.json"), "--native-stderr", str(stderr),
+            "--browser", str(folder / "native.json"), "--browser-stderr", str(stderr),
+            "--out", str(self.root / "out.md")])
+        self.assertEqual(code, 1, output)
+        self.assertIn("lacks measure.stderr, untouched", output)
 
     def test_a_foreign_process_withdraws_the_run(self):
         self.foreign = [(999_999, 1, 97.5, "build/fuzz/bin/some_fuzzer -max_total_time=300")]
@@ -240,9 +268,9 @@ class Bench(Scratch):
         self.assertEqual(code, wasm_bench.WITHDRAWN, output)
         self.assertIn("withdrawn: T-WASM-1's native side; the CPU sampler saw some_fuzzer at "
                       "97.5% CPU", self.log.read_text())
-        record = json.loads((self.root / "raw" / "native.json").read_text())
+        record = json.loads((self.run_folder() / "native.json").read_text())
         self.assertTrue(any("FOREIGN 97.5" in line for line in record["sampler"]["lines"]))
-        self.assertIn("FOREIGN 97.5", (self.root / "raw" / "native.sampler.txt").read_text())
+        self.assertIn("FOREIGN 97.5", (self.run_folder() / "native.sampler.txt").read_text())
         with self.assertRaisesRegex(wasm_report.ReportError, "native: not published under the "
                                                              "sampler rule: the CPU sampler saw"):
             wasm_report.sampler_line(record, "native")
@@ -279,7 +307,7 @@ class Bench(Scratch):
     def test_browser_takes_the_page_record_and_stops_the_browser(self):
         code, output = self.browser()
         self.assertEqual(code, 0, output)
-        record = json.loads((self.root / "raw" / "browser.json").read_text())
+        record = json.loads((self.run_folder() / "browser.json").read_text())
         self.assertEqual(record["browser"], "Fake Browser 1.0")
         self.assertEqual(len(record["repetitions"]), 3)
         self.assertIn("recorded: T-WASM-1's browser side", self.log.read_text())

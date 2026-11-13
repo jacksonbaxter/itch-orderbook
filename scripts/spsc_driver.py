@@ -11,7 +11,7 @@ bench_pipeline (T-SPSC-3). On a reported run this is measure.sh's direct child, 
 scripts/bench_driver.py is, and it shares that driver's order and its signal handling:
 
     measure.sh /usr/bin/time -l python3 -B scripts/spsc_driver.py ... 2> STDERR
-    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR
+    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR --raw-dir RAW/RUN_ID
 
 Hash the input, which also faults it in; confirm the prediction is on record; run
 machine_check.sh, refusing on a failure; run the repetitions, one process each, the
@@ -56,10 +56,14 @@ its columns so and says what that leaves out, with each row's late share (r4-2).
 renders a published file again from its run's raw records: every figure from the records,
 every Sampler verdict worked out again from DIR/sampler.txt, and only what the run printed
 into the file alone (its command, run id and times, the machine check, the cross-core and
-swap lines) taken from it.
+swap lines) taken from it; from a record of the new kind, which kept the machine check and
+the cross-core output, those two from the record, and a record that lacks any part refused.
 
-Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
---raw-dir, which is not committed.
+Every run gets a row in results/run_log.md, whatever became of it.
+Raw output stays in --raw-dir/<run id>, a folder of the run's own that the driver
+refuses to write into if another run has, with run.json beside it: the commit and tree
+state, each binary's sha256, the dataset hashed, and every tool output the file quotes
+(scripts/run_record.py). None of it is committed.
 
 Exit codes: 0 results written, 1 refused or failed, 2 bad usage, 128 + N stopped by
 signal N.
@@ -85,6 +89,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
+import run_record  # noqa: E402
 import wasm_bench  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -293,6 +298,17 @@ def cross_core_check(args):
     verdict = lines.get("cross_core_verdict", f"no verdict, exit {result.returncode}")
     if result.returncode != 0 or not verdict.startswith("agree"):
         raise Refused("cross-core timer", verdict)
+    args.record.output(CROSS_CORE, result.stdout)
+    return cross_core_line(result.stdout)
+
+
+CROSS_CORE = "cross_core.txt"
+
+
+def cross_core_line(stdout):
+    """The header's cross_core_timer line, from bench_probe --cross-core's output."""
+    lines = dict(line.split(": ", 1) for line in stdout.splitlines() if ": " in line)
+    verdict = lines["cross_core_verdict"]
     return (f"{verdict.split(':')[0]}: {lines['cross_core_offset']}, over "
             f"{lines['cross_core_trips']}; the fastest round trip "
             f"{lines['cross_core_fastest_round_trip']}; {lines['cross_core_backwards']}")
@@ -801,6 +817,7 @@ def run(args, run_id, started, commit, sampler):
     bench_driver.swap_watch = bench_driver.SwapWatch(args.vmstat)
     bench_driver.set_stage("hashing the input")
     digest = bench_driver.hash_and_fault_in(args.input)
+    args.record.dataset(args.input, digest)
     bench_driver.set_stage("checking the prediction")
     code = subprocess.run([sys.executable, "-B", str(REPO_ROOT / "scripts" / "check_predictions.py"),
                            "--root", str(args.predictions_root), "--require", args.prediction],
@@ -809,6 +826,7 @@ def run(args, run_id, started, commit, sampler):
         raise Refused("prediction", code.stdout.strip())
     bench_driver.set_stage("machine_check")
     machine_output = machine_checks(args)
+    args.record.output(bench_driver.MACHINE_CHECK, machine_output)
     cross_core = cross_core_check(args)
     records = []
     sampled = None if sampler is None else {
@@ -953,6 +971,16 @@ def render_again(raw_dir, published, stderr, again=None):
     validate_together(records)
     machine = (check_results.section(published, "machine_check output") or "").strip()
     machine = machine.removeprefix("```").removesuffix("```").strip("\n")
+    cross_core = fields.get("cross_core_timer")
+    needs = (bench_driver.MACHINE_CHECK,
+             *((CROSS_CORE,) if cross_core else ()),
+             *(("sampler.txt",) if check_results.section(published, "Sampler") else ()))
+    run_record.refuse_incomplete(raw_dir, needs, fields.get("run_id"))
+    if run_record.is_new_kind(raw_dir):
+        # The run kept each tool's output: the render quotes those, not the file.
+        machine = run_record.kept_output(raw_dir, bench_driver.MACHINE_CHECK)
+        if cross_core:
+            cross_core = cross_core_line(run_record.kept_output(raw_dir, CROSS_CORE))
     swap = next((line for line in published.splitlines()
                  if line.startswith(("The kernel's pswpout", "Swap-outs are not read"))), None)
     # How often the sampler ran is not on the command line (--sample-every is for tests).
@@ -962,7 +990,7 @@ def render_again(raw_dir, published, stderr, again=None):
     try:
         text = render(records, args, fields["run_id"], fields["run_started"],
                       fields["run_finished"], machine, command, sampled=sampled,
-                      cross_core=fields.get("cross_core_timer"))
+                      cross_core=cross_core)
     finally:
         bench_driver.swap_watch = None
     text = bench_driver.with_earlier_renders(text, published, again)
@@ -990,7 +1018,7 @@ def render_main(argv):
         if violations:
             raise Refused("results", f"{name}: " + "; ".join(
                 f"{code}: {detail}" for code, detail in violations))
-    except (Refused, OSError, ValueError, KeyError) as error:
+    except (Refused, run_record.Incomplete, OSError, ValueError, KeyError) as error:
         print(f"spsc_driver: render refused: {error}", file=sys.stderr)
         return 1
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -1006,16 +1034,17 @@ def main(argv=None):
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)
-    args.raw_dir.mkdir(parents=True, exist_ok=True)
     sampler = None
-    if platform.system() == "Darwin":
-        sampler = Sampler(args.raw_dir / "sampler.txt", args.ps, args.sample_every)
-        sampler.start()
     started = bench_driver.utc_now()
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
     commit = "unknown"
     try:
+        run_record.open_run(args, run_id)
+        if platform.system() == "Darwin":
+            sampler = Sampler(args.raw_dir / "sampler.txt", args.ps, args.sample_every)
+            sampler.start()
         commit = bench_driver.git_commit(REPO_ROOT, args.allow_dirty)
+        run_record.start_record(args, "spsc_driver", run_id, commit, (args.bench, args.probe))
         written = run(args, run_id, started, commit, sampler)
     except Stopped as stop:
         bench_driver.stop_child()
@@ -1025,7 +1054,7 @@ def main(argv=None):
                                 f"stopped by {name} at {bench_driver.stage}; nothing from it is "
                                 "published; the row was written by the driver as it stopped")
         return 128 + stop.signum
-    except Refused as refusal:
+    except (Refused, run_record.Incomplete) as refusal:
         bench_driver.hold_signals()
         print(f"spsc_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
@@ -1035,8 +1064,7 @@ def main(argv=None):
         return bench_driver.log_failure("spsc_driver", args.run_log, run_id, args.prediction, commit,
                                         error)
     finally:
-        if sampler is not None:
-            sampler.done.set()
+        run_record.close_sampler(args, sampler)
     bench_driver.hold_signals()
     bench_driver.append_written(args.run_log, run_id, args.prediction, commit, [written])
     print(f"spsc_driver: wrote {written}, load lines pending. Now run scripts/stamp_load.py.",

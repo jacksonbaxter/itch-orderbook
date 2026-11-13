@@ -575,6 +575,29 @@
    "expect": {
     "signature": "FAIL: test_the_command_shown_carries_the_core_and_its_sibling"
    }
+  },
+  {
+   "id": "alloc-driver-compare-tool-unhashed",
+   "breaks": "alloc_driver hashes the bench but not itch_map_compare, which it also runs (r5-9)",
+   "check": "test_alloc_results.py EndToEnd.test_a_run_writes_a_file_that_passes_once_stamped",
+   "mutations": [
+    {
+     "file": "scripts/alloc_driver.py",
+     "old": "                                                               args.compare_tool))",
+     "new": "                                                               ))"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "{tree}/scripts/test_alloc_results.py",
+    "EndToEnd.test_a_run_writes_a_file_that_passes_once_stamped"
+   ],
+   "expect": {
+    "signature": "^FAIL: test_a_run_writes_a_file_that_passes_once_stamped",
+    "exit": 1
+   },
+   "system": "Darwin"
   }
  ]
 }

@@ -72,8 +72,10 @@ an input not resident), and the machine check runs as scripts/simd_driver.py run
 the run. Before and after every step the manifest also gets perf_event_paranoid, the uptime
 and pswpout from /proc/vmstat, and a warning at its top if perf_event_paranoid reads 3.
 
-The run directory, DIR/<run id>/, holds every process's files and manifest.json, which lists
-every process and what became of it. scripts/udp_report.py turns run directories into a
+The run directory, DIR/<run id>/, refused if another run wrote in it, holds every process's
+files, manifest.json, which lists every process and what became of it, and run.json
+(scripts/run_record.py): the commit and tree state, each binary's sha256, the day hashed, and
+each machine check untouched. scripts/udp_report.py turns run directories into a
 results file. results/run_log.md gets a row for the run and one for every process that
 failed, and the prediction must be on record before anything runs (check_predictions.py
 --require). No Mac loopback figure is a result, so the driver runs on Linux only.
@@ -101,6 +103,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
+import run_record  # noqa: E402
 import simd_driver  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -483,8 +486,12 @@ class Run:
         self.args = args
         self.run_id = run_id
         self.commit = commit
-        self.dir = args.raw_dir / run_id
-        self.dir.mkdir(parents=True, exist_ok=False)
+        self.dir = run_record.run_folder(args.raw_dir, run_id)
+        # The run's own record (gate item 8), beside the manifest.
+        self.record = run_record.Record(self.dir, "udp_driver", run_id, commit)
+        for path in (args.bench, args.probe, args.measure, args.heavy, args.loopback):
+            if path is not None:
+                self.record.binary(path)
         self.count = 0
         self.failed = 0
         self.rng = random.Random(args.seed)
@@ -543,8 +550,10 @@ class Run:
         digest = bench_driver.hash_and_fault_in(self.args.input)
         if digest != self.args.dataset_sha256:
             raise Refused("input", f"the day's sha256 is {digest}, not {self.args.dataset_sha256}")
+        self.record.dataset(self.args.input, digest)
         try:
             self.manifest[f"machine_check_{when}"] = simd_driver.machine_check(self.args)
+            self.record.output(f"machine_check_{when}.txt", self.manifest[f"machine_check_{when}"])
         except simd_driver.Refused as error:
             if when == "before":
                 raise Refused("machine_check", f"the check before failed: {error}") from error
@@ -889,7 +898,7 @@ def main(argv=None):
         if checked.returncode != 0:
             raise Refused("prediction", f"{args.prediction} is not on record")
         run = run_step(args, run_id, commit)
-    except (Refused, OSError, ValueError, KeyError) as error:
+    except (Refused, run_record.Incomplete, OSError, ValueError, KeyError) as error:
         bench_driver.append_log(args.run_log, run_id, args.prediction,
                                 locals().get("commit", "unknown"),
                                 f"refused: udp {args.step}: {error}")

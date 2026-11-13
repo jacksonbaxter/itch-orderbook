@@ -18,7 +18,7 @@ of each schedule's time follows.
 On a reported run this is measure.sh's direct child, as scripts/backtest_driver.py is:
 
     measure.sh taskset -c 4 python3 -B scripts/walk_driver.py ... --core 4 2> STDERR
-    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR
+    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR --raw-dir RAW/RUN_ID
 
 Hash the input, which also faults it in; confirm the prediction is on record; run
 machine_check.sh, refusing on a failure; count each schedule's walks once with bench_walks,
@@ -26,8 +26,10 @@ untimed; then run the repetitions, each a round of one bench_backtest process a 
 the order of the schedules turned by one each round so that no schedule always runs first;
 refuse if any process refused, if a schedule's processes disagree on any count, if one does
 not give its count's event hash, or if the kernel swapped a page out; write the results file
-with its load lines pending. Every run gets a row in results/run_log.md. Raw output stays in
---raw-dir, which is not committed.
+with its load lines pending. Every run gets a row in results/run_log.md. Raw output stays in --raw-dir/<run id>, a folder of the run's own that the driver
+refuses to write into if another run has, with run.json beside it: the commit and tree
+state, each binary's sha256, the dataset hashed, and every tool output the file quotes
+(scripts/run_record.py). None of it is committed.
 
 Exit codes: 0 results written, 1 refused or failed, 2 bad usage, 128 + N stopped by
 signal N.
@@ -50,6 +52,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import backtest_driver  # noqa: E402
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
+import run_record  # noqa: E402
 import walk_report  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -253,6 +256,7 @@ def run(args, run_id, started, commit):
     bench_driver.swap_watch = bench_driver.SwapWatch(args.vmstat)
     bench_driver.set_stage("hashing the input")
     digest = bench_driver.hash_and_fault_in(args.input)
+    args.record.dataset(args.input, digest)
     bench_driver.set_stage("checking the prediction")
     code = subprocess.run([sys.executable, "-B", str(REPO_ROOT / "scripts" / "check_predictions.py"),
                            "--root", str(args.predictions_root), "--require", args.prediction],
@@ -261,6 +265,7 @@ def run(args, run_id, started, commit):
         raise Refused("prediction", code.stdout.strip())
     bench_driver.set_stage("machine_check")
     machine_output = bench_driver.machine_check(args)
+    args.record.output(bench_driver.MACHINE_CHECK, machine_output)
     counts = {life: count_walks(args, life, commit, digest) for life in lives}
     timed = []
     for round_index in range(1, args.repetitions + 1):
@@ -334,12 +339,14 @@ def main(argv=None):
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)
-    args.raw_dir.mkdir(parents=True, exist_ok=True)
     started = bench_driver.utc_now()
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
     commit = "unknown"
     try:
+        run_record.open_run(args, run_id)
         commit = bench_driver.git_commit(REPO_ROOT, args.allow_dirty)
+        run_record.start_record(args, "walk_driver", run_id, commit,
+                                (args.bench, args.walks, args.probe))
         written = run(args, run_id, started, commit)
     except Stopped as stop:
         bench_driver.stop_child()
@@ -349,7 +356,7 @@ def main(argv=None):
                                 f"stopped by {name} at {bench_driver.stage}; nothing from it is "
                                 "published; the row was written by the driver as it stopped")
         return 128 + stop.signum
-    except Refused as refusal:
+    except (Refused, run_record.Incomplete) as refusal:
         bench_driver.hold_signals()
         print(f"walk_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,

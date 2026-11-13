@@ -9,6 +9,7 @@ writes for what run() did, not the run itself.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import subprocess
@@ -27,6 +28,7 @@ import alloc_driver  # noqa: E402
 import backtest_driver  # noqa: E402
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
+import run_record  # noqa: E402
 import spsc_driver  # noqa: E402
 import simd_driver  # noqa: E402
 import stamp_load  # noqa: E402
@@ -129,12 +131,19 @@ PENDING_DRIVERS = {"bench_driver": bench_driver, "backtest_driver": backtest_dri
                    "alloc_driver": alloc_driver}
 
 
+def no_record(args, *rest):
+    """start_record for a run() that is replaced: its binaries are not there to hash, and
+    the record is RunRecord's to test."""
+    args.record = None
+
+
 def run_main(name, root, run):
     """The driver's main() with run() replaced by `run`, on Linux so that no Mac sampler
     starts, and the commit fixed. Its exit code."""
     module = PENDING_DRIVERS[name]
     with mock.patch.object(module, "run", run), \
             mock.patch.object(bench_driver, "git_commit", lambda root, dirty: "abc123 (clean)"), \
+            mock.patch.object(run_record, "start_record", no_record), \
             mock.patch("platform.system", lambda: "Linux"):
         return quiet(module.main, driver_argv(name, root))
 
@@ -198,6 +207,7 @@ def dies_unexpectedly(name):
                             mock.patch.object(bench_driver, "git_commit",
                                               lambda root, dirty: "abc123 (clean)"), \
                             mock.patch("subprocess.run", lambda *a, **k: checked), \
+                            mock.patch.object(run_record, "start_record", no_record), \
                             mock.patch("platform.system", lambda: "Linux"):
                         code = quiet(module.main, argv(root))
             except TypeError as error:
@@ -645,7 +655,7 @@ class MacSampler(unittest.TestCase):
             self.assertIn("; 1 withdrawn under the rule", text)
             other = (results / "bench_map-fresh.md").read_text(encoding="utf-8")
             self.assertIn("; 0 withdrawn under the rule", other)
-            self.assertTrue((Path(directory) / "raw" /
+            self.assertTrue((run_folder_of(Path(directory) / "raw") /
                              "paged-flat-repetition-1-timed-withdrawn-1.json").is_file())
 
     def test_a_process_withdrawn_three_times_running_ends_the_run(self):
@@ -656,6 +666,211 @@ class MacSampler(unittest.TestCase):
             self.assertEqual(log.count("withdrawn: paged-flat, repetition 1, timed process"), 3)
             self.assertIn("refused at paged-flat, repetition 1, timed process: withdrawn 3 times "
                           "in a row under the sampler rule", log)
+
+
+def run_folder_of(parent):
+    """The one run folder a driver made under --raw-dir."""
+    folders = [path for path in Path(parent).iterdir() if path.is_dir()]
+    assert len(folders) == 1, folders
+    return folders[0]
+
+
+def sha256(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def assert_run_record(test, parent, results_text, binaries, needs, dataset=None):
+    """The run's raw folder holds the record of the new kind (gate item 8): named by the run
+    id, with its commit and tree state, each binary's hash, the dataset hashed, and each tool
+    output untouched; complete once measure.sh's stderr is added."""
+    run_id = check_results.parse_header(results_text)["run_id"]
+    folder = run_folder_of(parent)
+    test.assertEqual(folder.name, run_id)
+    record = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+    test.assertEqual(record["version"], run_record.RECORD_VERSION)
+    test.assertEqual(record["run_id"], run_id)
+    test.assertRegex(record["commit"], r"^[0-9a-f]{12} \((clean|with uncommitted changes)\)$")
+    test.assertEqual(record["binaries"], {str(path): sha256(path) for path in binaries})
+    if dataset is not None:
+        test.assertEqual(record["dataset"]["name"], Path(dataset).name)
+        test.assertEqual(record["dataset"]["sha256"], sha256(dataset))
+    for name in needs:
+        test.assertIn(name, record["outputs"])
+    test.assertEqual(run_record.missing(folder, needs, run_id), ["measure.stderr, untouched"])
+    stderr = Path(parent).parent / "measure.stderr"
+    stderr.write_text(STDERR, encoding="utf-8")
+    run_record.add_measure_stderr(folder, run_id, stderr)
+    test.assertEqual(run_record.missing(folder, needs, run_id), [])
+    return folder, record
+
+
+@unittest.skipUnless(sys.platform == "darwin", "the drivers' end-to-end runs are on macOS")
+class RunRecord(unittest.TestCase):
+    """Gate item 8: what every run keeps from now on, and the render's refusal."""
+
+    def test_a_bench_run_keeps_its_record(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            root = Path(directory)
+            result, results, _ = MacSampler.run_driver(None, root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            text = (results / "bench_paged-flat.md").read_text(encoding="utf-8")
+            machine = FIXTURES.parent / "machine_check"
+            folder, _ = assert_run_record(
+                self, root / "raw", text, (root / "bench.py", machine / "fake_probe.sh"),
+                (bench_driver.MACHINE_CHECK, "sampler.txt"), machine / "input.bin")
+            block = check_results.section(text, "machine_check output").strip().strip("`").strip()
+            self.assertEqual(run_record.kept_output(folder, bench_driver.MACHINE_CHECK), block)
+
+
+class RunRecordParts(unittest.TestCase):
+    """Gate item 8, piece by piece: the folder, each field, the tree state, the reports'
+    refusals."""
+
+    def test_a_raw_folder_another_run_wrote_in_is_refused(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            parent = Path(directory)
+            self.assertEqual(run_record.run_folder(parent, "P-1-x"), parent / "P-1-x")
+            (parent / "P-1-x" / "a.json").write_text("{}", encoding="utf-8")
+            with self.assertRaisesRegex(run_record.Incomplete, "exists and is not empty"):
+                run_record.run_folder(parent, "P-1-x")
+
+    def test_stamp_load_keeps_measure_stderr_and_refuses_another_runs_folder(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            folder = run_record.run_folder(Path(directory), RUN_ID)
+            run_record.Record(folder, "x", RUN_ID, "0123456789ab (clean)").write()
+            stderr = Path(directory) / "measure.stderr"
+            stderr.write_bytes(STDERR.encode() + b"\xff\n")
+            run_record.add_measure_stderr(folder, RUN_ID, stderr)
+            self.assertEqual((folder / "outputs" / "measure.stderr").read_bytes(),
+                             stderr.read_bytes())
+            with self.assertRaisesRegex(run_record.Incomplete, "not P-0998"):
+                run_record.add_measure_stderr(folder, "P-0998-x", stderr)
+
+    def complete(self, parent):
+        """A complete record of the new kind, built as a driver builds it."""
+        folder = run_record.run_folder(parent, RUN_ID)
+        binary = parent / "bench"
+        binary.write_bytes(b"a binary")
+        data = parent / "day.itch"
+        data.write_bytes(b"a day")
+        record = run_record.Record(folder, "bench_driver", RUN_ID, "0123456789ab (clean)")
+        record.binary(binary)
+        record.dataset(data, sha256(data), manifest=parent / "no-manifest.json")
+        record.output("machine_check.txt", "machine_check: passed\n")
+        stderr = parent / "measure.stderr"
+        stderr.write_text(STDERR, encoding="utf-8")
+        run_record.add_measure_stderr(folder, RUN_ID, stderr)
+        return folder
+
+    def test_a_record_lacking_any_field_is_refused(self):
+        needs = ("machine_check.txt",)
+        for field in run_record.FIELDS:
+            with self.subTest(field=field), tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+                folder = self.complete(Path(directory))
+                self.assertEqual(run_record.missing(folder, needs, RUN_ID), [])
+                record = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+                del record[field]
+                (folder / "run.json").write_text(json.dumps(record), encoding="utf-8")
+                with self.assertRaisesRegex(run_record.Incomplete, "lacks"):
+                    run_record.refuse_incomplete(folder, needs, RUN_ID)
+
+    def test_a_record_lacking_a_part_of_a_field_is_refused(self):
+        needs = ("machine_check.txt",)
+        changes = {
+            "the tree state": lambda r: r.update(commit="0123456789ab"),
+            "a binary's hash": lambda r: r["binaries"].update({"bench": "unavailable"}),
+            "the dataset hash": lambda r: r["dataset"].update(sha256=None),
+            "an output": lambda r: r["outputs"].pop("machine_check.txt"),
+            "measure.sh's stderr": lambda r: r["outputs"].pop("measure.stderr"),
+            "another run id": lambda r: r.update(run_id="P-0999-20261031T100006Z"),
+            "another version": lambda r: r.update(version=0),
+        }
+        for what, change in changes.items():
+            with self.subTest(what=what), tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+                folder = self.complete(Path(directory))
+                record = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+                change(record)
+                (folder / "run.json").write_text(json.dumps(record), encoding="utf-8")
+                self.assertNotEqual(run_record.missing(folder, needs, RUN_ID), [], what)
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            folder = self.complete(Path(directory))
+            (folder / "outputs" / "machine_check.txt").write_text("edited\n", encoding="utf-8")
+            self.assertIn("machine_check.txt as it was kept",
+                          "; ".join(run_record.missing(folder, needs, RUN_ID)))
+
+    def test_a_dataset_that_is_not_its_pin_is_refused(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            parent = Path(directory)
+            manifest = parent / "manifest.json"
+            manifest.write_text(json.dumps({"days": {"d": {"name": "day.itch",
+                                                           "unpacked_sha256": "0" * 64}}}),
+                                encoding="utf-8")
+            folder = run_record.run_folder(parent, RUN_ID)
+            record = run_record.Record(folder, "x", RUN_ID, "0123456789ab (clean)")
+            with self.assertRaisesRegex(run_record.Incomplete, "not the 0000"):
+                record.dataset(parent / "day.itch", "1" * 64, manifest=manifest)
+            record.dataset(parent / "day.itch", "0" * 64, manifest=manifest)
+            self.assertEqual(record.data["dataset"]["manifest"], "matches its pin")
+
+    def test_an_old_record_renders_as_before_and_a_new_one_must_be_complete(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            self.assertEqual(run_record.missing(Path(directory)), [])
+            folder = self.complete(Path(directory))
+            (folder / "outputs" / "measure.stderr").unlink()
+            with self.assertRaisesRegex(run_record.Incomplete, "measure.stderr"):
+                bench_driver.render_again(folder, PENDING, STDERR)
+
+    def test_the_tree_state_counts_cmake_presets(self):
+        """r5-9: CMakePresets.json sets every build's flags, so a change to it is a dirty tree."""
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            root = Path(directory)
+            git = ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t"]
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            (root / "CMakePresets.json").write_text("{}\n", encoding="utf-8")
+            subprocess.run([*git, "add", "CMakePresets.json"], check=True)
+            subprocess.run([*git, "commit", "-q", "-m", "x"], check=True)
+            self.assertTrue(bench_driver.git_commit(root, False).endswith("(clean)"))
+            (root / "CMakePresets.json").write_text('{"x": 1}\n', encoding="utf-8")
+            with self.assertRaisesRegex(bench_driver.Refused, "uncommitted changes"):
+                bench_driver.git_commit(root, False)
+            self.assertTrue(bench_driver.git_commit(root, True).endswith(
+                "(with uncommitted changes)"))
+
+    def incomplete_run_dir(self, parent, manifest):
+        folder = run_record.run_folder(parent, RUN_ID)
+        (folder / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        run_record.Record(folder, "x", RUN_ID, "0123456789ab (clean)").write()
+        return folder
+
+    def test_the_simd_and_udp_reports_refuse_an_incomplete_record(self):
+        import simd_report  # noqa: PLC0415
+        import udp_report  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            folder = self.incomplete_run_dir(Path(directory), {
+                "run_id": RUN_ID, "sampler": None, "processes": [], "step": "bisect"})
+            with self.assertRaisesRegex(simd_report.ReportError, "machine_check_before.txt"):
+                simd_report.read_run(folder)
+            with self.assertRaisesRegex(udp_report.ReportError, "machine_check_after.txt"):
+                udp_report.read_runs([folder])
+
+    def test_spsc_keeps_the_cross_core_check_untouched(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            parent = Path(directory)
+            output = ("cross_core_offset: [-80, 80] ticks, [-40.0, 40.0] ns\n"
+                      "cross_core_trips: 10 started on each core\n"
+                      "cross_core_fastest_round_trip: 40 ticks, 20.0 ns\n"
+                      "cross_core_backwards: 0 of 20 trips read a later stamp below an earlier "
+                      "one\ncross_core_verdict: agree: the bound holds 0\n")
+            probe = parent / "probe.sh"
+            probe.write_text(f"#!/bin/sh\ncat <<'END'\n{output}END\n", encoding="utf-8")
+            probe.chmod(0o755)
+            folder = run_record.run_folder(parent, RUN_ID)
+            args = types.SimpleNamespace(peer_core=6, core=4, probe=probe, record=run_record.Record(
+                folder, "spsc_driver", RUN_ID, "0123456789ab (clean)"))
+            line = spsc_driver.cross_core_check(args)
+            self.assertEqual(run_record.kept_output(folder, spsc_driver.CROSS_CORE), output)
+            self.assertEqual(line, spsc_driver.cross_core_line(output))
 
 
 if __name__ == "__main__":

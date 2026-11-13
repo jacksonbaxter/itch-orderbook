@@ -903,6 +903,49 @@
         "signature": "^FAIL: test_the_ceiling_and_its_cap ",
         "exit": 1
       }
+    },
+    {
+      "id": "udp-runs-machine-check-unkept",
+      "breaks": "udp_driver writes the machine check into the manifest and keeps no untouched copy (A4)",
+      "check": "test_udp_driver.py",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "            self.record.output(f\"machine_check_{when}.txt\", self.manifest[f\"machine_check_{when}\"])\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_a_step_keeps_its_record_and_will_not_write_over_another",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-runs-report-accepts-incomplete-record",
+      "breaks": "udp_report renders a run directory of the new kind that lacks its machine checks (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "        run_record.refuse_incomplete(run_dir, needs, manifest.get(\"run_id\"), measure=False)\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_the_simd_and_udp_reports_refuse_an_incomplete_record",
+        "exit": 1
+      }
     }
   ]
 }

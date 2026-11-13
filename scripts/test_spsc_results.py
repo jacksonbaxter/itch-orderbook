@@ -25,7 +25,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import spsc_driver  # noqa: E402
+import run_record  # noqa: E402
 import stamp_load  # noqa: E402
+import test_driver_records  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
@@ -583,7 +585,7 @@ class EndToEnd(unittest.TestCase):
             self.assertIn("; 1 withdrawn under the rule", text)
             self.assertRegex(text, r"\| withdrawn 1 \| .* \| withdrawn: the CPU sampler saw "
                                    r"other_job at 50.0% CPU")
-            raw = Path(directory) / "raw"
+            raw = test_driver_records.run_folder_of(Path(directory) / "raw")
             self.assertTrue((raw / "queues-repetition-1-withdrawn-1.json").is_file())
             self.assertIn("FOREIGN 50.0 /usr/bin/other_job",
                           (raw / "sampler.txt").read_text(encoding="utf-8"))
@@ -597,7 +599,10 @@ class EndToEnd(unittest.TestCase):
             result, out, _ = self.run_driver(Path(directory), fake, busy_first=True, every=1.0)
             self.assertEqual(result.returncode, 0, result.stderr)
             published = stamp_load.stamp(out.read_text(encoding="utf-8"), STDERR)
-            raw = Path(directory) / "raw"
+            root, machine = Path(directory), FIXTURES / "machine_check"
+            raw, _ = test_driver_records.assert_run_record(
+                self, root / "raw", published, (root / "bench.sh", machine / "fake_probe.sh"),
+                (bench_driver.MACHINE_CHECK, "sampler.txt"), machine / "input.bin")
             name, again = spsc_driver.render_again(raw, published, STDERR)
             self.assertEqual((name, again), (out.name, published))
             name, again = spsc_driver.render_again(raw, published, STDERR, "a reason")
@@ -617,7 +622,12 @@ class EndToEnd(unittest.TestCase):
             with self.assertRaisesRegex(spsc_driver.Refused, "command"):
                 spsc_driver.render_again(raw, replace(
                     published, "--repetitions 3", "--repetitions 3 --core 4"), STDERR)
+            # A record of the new kind is refused with any of its parts gone (gate item 8).
             (raw / "sampler.txt").unlink()
+            with self.assertRaisesRegex(run_record.Incomplete, "sampler.txt as it was kept"):
+                spsc_driver.render_again(raw, published, STDERR)
+            # One of the kind before, with no run.json, renders as before, from what it holds.
+            (raw / "run.json").unlink()
             with self.assertRaisesRegex(spsc_driver.Refused, "no sampler.txt"):
                 spsc_driver.render_again(raw, published, STDERR)
 

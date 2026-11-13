@@ -21,6 +21,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import alloc_driver  # noqa: E402
+import test_driver_records  # noqa: E402
 import check_results  # noqa: E402
 import stamp_load  # noqa: E402
 
@@ -427,7 +428,12 @@ class EndToEnd(unittest.TestCase):
             # The driver leaves the outcome to stamp_load.py (r5-3).
             self.assertIn("| written, pending the load stamp: ", log)
             self.assertNotIn("| published", log)
-            raw = Path(directory) / "raw"
+            root, machine = Path(directory), FIXTURES / "machine_check"
+            raw, _ = test_driver_records.assert_run_record(
+                self, root / "raw", text, [root / f"{name}.py" for name in
+                                           ("bench", "alloc", "compare")] +
+                [machine / "fake_probe.sh"], ("machine_check.txt", "sampler.txt"),
+                machine / "input.bin")
             self.assertTrue((raw / "alloc-pool-fifo-repetition-3-untimed.json").is_file())
             self.assertTrue((raw / "itch_map_compare-mimalloc.log").is_file())
 
@@ -442,7 +448,7 @@ class EndToEnd(unittest.TestCase):
             self.assertIn("; 1 withdrawn under the rule", text)
             self.assertRegex(text, r"\| withdrawn 1: malloc-fresh, repetition 1 \| .* \| "
                                    r"withdrawn: the CPU sampler saw other_job at 50.0% CPU")
-            raw = Path(directory) / "raw"
+            raw = test_driver_records.run_folder_of(Path(directory) / "raw")
             self.assertTrue(
                 (raw / "alloc-malloc-fresh-repetition-1-timed-withdrawn-1.json").is_file())
 

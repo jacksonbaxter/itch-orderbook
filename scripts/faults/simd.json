@@ -713,6 +713,49 @@
         "signature": "^FAIL: test_a_refused_process_ends_the_run_with_its_row",
         "exit": 1
       }
+    },
+    {
+      "id": "simd-driver-dataset-hash-taken-on-trust",
+      "breaks": "simd_driver records --dataset-sha256 without hashing the input (r5-6)",
+      "check": "test_simd_driver.py",
+      "mutations": [
+        {
+          "file": "scripts/simd_driver.py",
+          "old": "    if digest != args.dataset_sha256:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_dataset_that_is_not_the_hash_given_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "simd-report-accepts-incomplete-record",
+      "breaks": "simd_report renders a run directory of the new kind that lacks its machine checks (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "        run_record.refuse_incomplete(run_dir, needs, manifest.get(\"run_id\"), measure=False)\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_the_simd_and_udp_reports_refuse_an_incomplete_record",
+        "exit": 1
+      }
     }
   ]
 }

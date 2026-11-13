@@ -22,6 +22,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import backtest_driver  # noqa: E402
+import test_driver_records  # noqa: E402
 import check_results  # noqa: E402
 import stamp_load  # noqa: E402
 
@@ -360,6 +361,11 @@ class EndToEnd(unittest.TestCase):
                           "withdrawn under the rule\n", text)
             self.assertIn(check_results.DRIVER_SAMPLER_RULE, text)
             self.assertEqual(text.count("| T-BT-3, repetition "), 3)
+            # What the run keeps of itself (gate item 8).
+            root, machine = Path(directory), FIXTURES / "machine_check"
+            test_driver_records.assert_run_record(
+                self, root / "raw", text, (root / "bench.sh", machine / "fake_probe.sh"),
+                ("machine_check.txt", "sampler.txt"), machine / "input.bin")
 
     def test_a_process_beside_another_busy_process_is_withdrawn_and_rerun(self):
         with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
@@ -372,7 +378,7 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual({code for code, _ in check_results.check_text(text)},
                              {"load-not-stamped"})
             self.assertIn("; 1 withdrawn under the rule", text)
-            self.assertTrue((Path(directory) / "raw" /
+            self.assertTrue((test_driver_records.run_folder_of(Path(directory) / "raw") /
                              "shadow-repetition-1-withdrawn-1.json").is_file())
 
     def test_a_process_withdrawn_three_times_running_ends_the_run(self):

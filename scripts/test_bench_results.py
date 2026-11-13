@@ -581,6 +581,9 @@ class Driver(unittest.TestCase):
             data.write_bytes(b"x" * 100)
             log = root / "results" / "run_log.md"
             out = root / "out.md"
+            # Files the driver can hash for its record, but not run.
+            for name in ("no-bench", "no-probe"):
+                (root / name).write_text("not a program\n", encoding="utf-8")
             result = subprocess.run(
                 [sys.executable, "-B", str(REPO_ROOT / "scripts" / "bench_driver.py"),
                  "--bench", str(root / "no-bench"), "--probe", str(root / "no-probe"),
@@ -893,6 +896,7 @@ class Signals(unittest.TestCase):
             root = Path(directory)
             marker = root / "probe-started"
             probe = self.script(root / "probe.sh", f"touch '{marker}'\nsleep 2\n")
+            (root / "no-bench").write_text("not a program\n", encoding="utf-8")
             driver = self.start(root, probe, root / "no-bench")
             code, stderr = self.stop_when(driver, marker)
             self.assertEqual(code, 128 + signal.SIGTERM, stderr)

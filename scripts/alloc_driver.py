@@ -14,7 +14,7 @@ run this is measure.sh's direct child, as scripts/bench_driver.py is, and it sha
 driver's order and its signal handling:
 
     measure.sh /usr/bin/time -l python3 -B scripts/alloc_driver.py ... 2> STDERR
-    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR
+    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR --raw-dir RAW/RUN_ID
 
 Hash the input, which also faults it in; confirm the prediction is on record; run
 machine_check.sh, refusing on a failure; run the repetitions, each running every arm in
@@ -43,8 +43,11 @@ rather than held while it stays busy; the run is tried again later. With --quiet
 first waits until the sampler has seen S seconds with no foreign process. The untimed
 processes publish counts and memory, which no other process can move, and are not judged.
 
-Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
---raw-dir, which is not committed.
+Every run gets a row in results/run_log.md, whatever became of it.
+Raw output stays in --raw-dir/<run id>, a folder of the run's own that the driver
+refuses to write into if another run has, with run.json beside it: the commit and tree
+state, each binary's sha256, the dataset hashed, and every tool output the file quotes
+(scripts/run_record.py). None of it is committed.
 
 Exit codes: 0 results written, 1 refused or failed, 2 bad usage, 128 + N stopped by
 signal N.
@@ -67,6 +70,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
+import run_record  # noqa: E402
 import spsc_driver  # noqa: E402
 import wasm_bench  # noqa: E402
 
@@ -564,6 +568,7 @@ def run(args, run_id, started, commit, sampler):
     bench_driver.swap_watch = bench_driver.SwapWatch(args.vmstat)
     bench_driver.set_stage("hashing the input")
     digest = bench_driver.hash_and_fault_in(args.input)
+    args.record.dataset(args.input, digest)
     bench_driver.set_stage("checking the prediction")
     code = subprocess.run([sys.executable, "-B", str(REPO_ROOT / "scripts" / "check_predictions.py"),
                            "--root", str(args.predictions_root), "--require", args.prediction],
@@ -572,6 +577,7 @@ def run(args, run_id, started, commit, sampler):
         raise Refused("prediction", code.stdout.strip())
     bench_driver.set_stage("machine_check")
     machine_output = bench_driver.machine_check(args)
+    args.record.output(bench_driver.MACHINE_CHECK, machine_output)
     sampled = None if sampler is None else {"every": sampler.every, "published": [],
                                             "withdrawn": []}
     runs = {arm: [] for arm in args.arm}
@@ -660,16 +666,19 @@ def main(argv=None):
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)
-    args.raw_dir.mkdir(parents=True, exist_ok=True)
     sampler = None
-    if platform.system() == "Darwin":
-        sampler = spsc_driver.Sampler(args.raw_dir / "sampler.txt", args.ps, args.sample_every)
-        sampler.start()
     started = bench_driver.utc_now()
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
     commit = "unknown"
     try:
+        run_record.open_run(args, run_id)
+        if platform.system() == "Darwin":
+            sampler = spsc_driver.Sampler(args.raw_dir / "sampler.txt", args.ps,
+                                          args.sample_every)
+            sampler.start()
         commit = bench_driver.git_commit(REPO_ROOT, args.allow_dirty)
+        run_record.start_record(args, "alloc_driver", run_id, commit, (args.bench, args.probe, args.alloc_tool,
+                                                               args.compare_tool))
         written = run(args, run_id, started, commit, sampler)
     except Stopped as stop:
         bench_driver.stop_child()
@@ -679,7 +688,7 @@ def main(argv=None):
                                 f"stopped by {name} at {bench_driver.stage}; nothing from it is "
                                 "published; the row was written by the driver as it stopped")
         return 128 + stop.signum
-    except Refused as refusal:
+    except (Refused, run_record.Incomplete) as refusal:
         bench_driver.hold_signals()
         print(f"alloc_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
@@ -689,8 +698,7 @@ def main(argv=None):
         return bench_driver.log_failure("alloc_driver", args.run_log, run_id, args.prediction, commit,
                                         error)
     finally:
-        if sampler is not None:
-            sampler.done.set()
+        run_record.close_sampler(args, sampler)
     bench_driver.hold_signals()
     bench_driver.append_written(args.run_log, run_id, args.prediction, commit, [written])
     print(f"alloc_driver: wrote {written}, load lines pending. Now run scripts/stamp_load.py.",

@@ -32,8 +32,10 @@ record and into <side>.sampler.txt. A side whose span the sampler did not cover 
 5 s, or in which it saw a foreign process, is withdrawn: its record is kept but its row says
 why, and scripts/wasm_report.py refuses to publish it.
 
-Each writes <side>.json to the raw directory, and every run gets a row in results/run_log.md,
-whatever became of it. scripts/wasm_report.py turns the two records into the results file.
+Each writes <side>.json to its own folder under the raw directory, named by its run id and
+refused if another run wrote in it, with run.json beside it: the commit and tree state, each
+binary's sha256, the extract hashed, the machine check and the sampler log
+(scripts/run_record.py). Every run gets a row in results/run_log.md, whatever became of it. scripts/wasm_report.py turns the two records into the results file.
 
 Exit codes: 0 record written, 1 refused or failed, 2 bad usage, 4 withdrawn under the sampler
 rule, 128 + N stopped by signal N.
@@ -59,6 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
 import demo  # noqa: E402
+import run_record  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
 Refused = bench_driver.Refused
@@ -389,10 +392,13 @@ def command_line(args):
 def run(args, run_id, started, commit, sampler):
     bench_driver.set_stage("checking the extract")
     manifest, extract_path = the_extract(args.docs / "local")
+    # Hashed from the file the run reads, never copied from a manifest (r5-6).
+    args.record.dataset(extract_path, run_record.sha256_of(extract_path))
     bench_driver.set_stage("checking the prediction")
     check_prediction(args.prediction, args.predictions_root)
     bench_driver.set_stage("machine_check")
     machine_output = machine_check(args.machine_check, args.probe, extract_path)
+    args.record.output(bench_driver.MACHINE_CHECK, machine_output)
     if args.side == "native":
         record = native(args, manifest, extract_path, commit)
     else:
@@ -400,6 +406,7 @@ def run(args, run_id, started, commit, sampler):
     bench_driver.hold_signals()
     finished = bench_driver.utc_now()
     sampler.stop()
+    args.record.kept_file(sampler.path.name)
     record.update({"side": args.side, "prediction": args.prediction, "run_id": run_id,
                    "commit": commit, "run_started": started, "run_finished": finished,
                    "machine_check": machine_output, "command": command_line(args),
@@ -442,15 +449,19 @@ def main(argv=None):
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)
-    args.raw_dir.mkdir(parents=True, exist_ok=True)
-    sampler = Sampler(args.raw_dir / f"{args.side}.sampler.txt")
-    sampler.start()
     started = bench_driver.utc_now()
     # One word after the prediction, as results_table.py reads the log's rows.
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}_{args.side}"
     commit = "unknown"
+    sampler = None
     try:
+        run_record.open_run(args, run_id)
+        sampler = Sampler(args.raw_dir / f"{args.side}.sampler.txt")
+        sampler.start()
         commit = bench_driver.git_commit(REPO_ROOT, args.allow_dirty)
+        run_record.start_record(args, "wasm_bench", run_id, commit,
+                                (args.bench if args.side == "native" else args.browser,
+                                 args.probe))
         written, withdrawn = run(args, run_id, started, commit, sampler)
     except Stopped as stop:
         bench_driver.stop_child()
@@ -460,7 +471,7 @@ def main(argv=None):
                                 f"T-WASM-1 {args.side}: stopped by {name} at "
                                 f"{bench_driver.stage}; nothing from it is published")
         return 128 + stop.signum
-    except Refused as refusal:
+    except (Refused, run_record.Incomplete) as refusal:
         bench_driver.hold_signals()
         print(f"wasm_bench: refused at {refusal.stage}: {refusal}", file=sys.stderr)
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
@@ -470,7 +481,8 @@ def main(argv=None):
         return bench_driver.log_failure("wasm_bench", args.run_log, run_id, args.prediction,
                                         commit, error, f"T-WASM-1 {args.side}: ")
     finally:
-        sampler.done.set()
+        if sampler is not None:
+            sampler.done.set()
     bench_driver.hold_signals()
     if withdrawn:
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,

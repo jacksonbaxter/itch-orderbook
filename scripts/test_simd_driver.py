@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import json
 import tempfile
 import threading
 import unittest
@@ -14,6 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import run_record  # noqa: E402
 import simd_driver  # noqa: E402
 
 START = "measure.sh: start load1=1.10 host=box at=2026-11-05T09:00:00Z cpus=16"
@@ -146,7 +148,8 @@ class SimdDriverTest(unittest.TestCase):
                 code = simd_driver.main(
                     ["--experiment", "framing", "--prediction", "P-0601", "--raw-dir",
                      str(root / "raw"), "--input", str(fake), "--dataset", "d",
-                     "--dataset-sha256", "0" * 64, "--bench", str(fake), "--probe", str(fake),
+                     "--dataset-sha256", run_record.sha256_of(fake), "--bench", str(fake),
+                     "--probe", str(fake),
                      "--measure", str(measure), "--repetitions", "3", "--run-log", str(log),
                      "--allow-dirty"])
             finally:
@@ -154,13 +157,37 @@ class SimdDriverTest(unittest.TestCase):
             rows = [line for line in log.read_text(encoding="utf-8").splitlines()
                     if line.startswith("| P-0601-")]
             processes = [path.name for path in (root / "raw").glob("*/*.json")
-                         if path.name != "manifest.json"]
+                         if path.name not in ("manifest.json", "run.json")]
+            # The run's own record (gate item 8), though the run was refused.
+            folder = next((root / "raw").iterdir())
+            kept = json.loads((folder / "run.json").read_text(encoding="utf-8"))
         self.assertEqual(code, 1)
         self.assertEqual(len(rows), 1, rows)
         self.assertIn("refused: length: framing, length, repetition 1: exited 3: bench_kernels: "
                       "refused: the kernel differed from the scalar kernel 12 times; the run is "
                       "refused, not rerun", rows[0])
         self.assertEqual(processes, ["length-1.json"])
+        self.assertEqual(folder.name, rows[0].split(" | ")[0].lstrip("| "))
+        self.assertEqual(kept["binaries"], {str(fake): kept["dataset"]["sha256"],
+                                            str(measure): kept["binaries"][str(measure)]})
+        self.assertEqual(kept["outputs"], {"machine_check_before.txt": kept["outputs"][
+            "machine_check_before.txt"], "machine_check_after.txt": kept["outputs"][
+            "machine_check_after.txt"]})
+
+    def test_a_dataset_that_is_not_the_hash_given_is_refused(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            fake = root / "bench_kernels"
+            fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            log = root / "run_log.md"
+            code = simd_driver.main(
+                ["--experiment", "framing", "--prediction", "P-0601", "--raw-dir",
+                 str(root / "raw"), "--input", str(fake), "--dataset", "d",
+                 "--dataset-sha256", "0" * 64, "--bench", str(fake), "--probe", str(fake),
+                 "--measure", str(fake), "--run-log", str(log), "--allow-dirty"])
+            self.assertEqual(code, 1)
+            self.assertIn(f"hashes to {run_record.sha256_of(fake)}, not the --dataset-sha256 "
+                          + "0" * 64, log.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

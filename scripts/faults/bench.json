@@ -4859,6 +4859,296 @@
         "signature": "^FAIL: test_the_table_says_what_it_holds_and_quotes_the_empty_span",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-run-record-version-unwritten",
+      "breaks": "run.json carries no version, so a render cannot tell a record of the new kind from an old one (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "        self.data = {\"version\": RECORD_VERSION, \"driver\": driver, \"run_id\": run_id,\n",
+          "new": "        self.data = {\"driver\": driver, \"run_id\": run_id,\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_record_lacking_any_field_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-record-folder-reused",
+      "breaks": "a driver writes into a raw folder another run has written in, over its evidence (r5-13)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "    if folder.exists() and (not folder.is_dir() or any(folder.iterdir())):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_raw_folder_another_run_wrote_in_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-record-binary-unhashed",
+      "breaks": "run.json records no sha256 of the binaries the run ran (r5-9)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "        self.data[\"binaries\"][str(path)] = sha256_of(path)\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_record_lacking_any_field_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-record-dataset-pin-unchecked",
+      "breaks": "the dataset's hash is recorded without being checked against data_manifest.json's pin (r5-6)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "        if pin is not None and pin != digest:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_dataset_that_is_not_its_pin_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-record-tree-state-unchecked",
+      "breaks": "a render accepts a record whose commit does not say whether the tree was clean (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "    if commit and not commit.endswith((\"(clean)\", \"(with uncommitted changes)\",\n",
+          "new": "    if False and not commit.endswith((\"(clean)\", \"(with uncommitted changes)\",\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_record_lacking_a_part_of_a_field_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-record-edited-output-accepted",
+      "breaks": "a render accepts a kept tool output that no longer has the hash it was kept with (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "        if not kept.is_file() or sha256_of(kept) != digest:\n",
+          "new": "        if not kept.is_file():\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_record_lacking_a_part_of_a_field_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stamp-measure-stderr-not-untouched",
+      "breaks": "stamp_load --raw-dir keeps measure.sh's stderr decoded and written again, not byte for byte (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "    path.write_bytes(body)\n",
+          "new": "    path.write_text(body.decode(\"utf-8\", errors=\"replace\"), encoding=\"utf-8\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_stamp_load_keeps_measure_stderr_and_refuses_another_runs_folder",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-git-commit-ignores-presets",
+      "breaks": "the dirty check leaves out CMakePresets.json, which sets every build's flags (r5-9)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "                                 \"include\", \"src\", \"tools\", \"scripts\", \"cmake\", \"CMakeLists.txt\",\n                                 \"CMakePresets.json\"],",
+          "new": "                                 \"include\", \"src\", \"tools\", \"scripts\", \"cmake\", \"CMakeLists.txt\"],"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_tree_state_counts_cmake_presets",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-render-accepts-incomplete-record",
+      "breaks": "bench_driver render takes a record of the new kind that lacks measure.sh's stderr (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    run_record.refuse_incomplete(raw_dir, (MACHINE_CHECK,), fields.get(\"run_id\"))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_an_old_record_renders_as_before_and_a_new_one_must_be_complete",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-machine-check-unkept",
+      "breaks": "bench_driver prints the machine check into the file and keeps no copy of it (A4)",
+      "check": "test_driver_records.py RunRecord",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    args.record.output(MACHINE_CHECK, machine_output)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecord"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_bench_run_keeps_its_record",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "bench-driver-dataset-unrecorded",
+      "breaks": "bench_driver keeps no dataset name and hash in its record (A2)",
+      "check": "test_driver_records.py RunRecord",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    args.record.dataset(args.input, digest)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecord"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_a_bench_run_keeps_its_record",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "bench-driver-probe-unhashed",
+      "breaks": "bench_driver hashes the replay binary but not bench_probe, which the machine check runs (r5-9)",
+      "check": "test_driver_records.py RunRecord",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "run_record.start_record(args, \"bench_driver\", run_id, commit, (args.bench, args.probe))",
+          "new": "run_record.start_record(args, \"bench_driver\", run_id, commit, (args.bench,))"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecord"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_bench_run_keeps_its_record",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "bench-backtest-dataset-unrecorded",
+      "breaks": "backtest_driver keeps no dataset name and hash in its record (A2)",
+      "check": "test_backtest_results.py EndToEnd.test_a_run_writes_a_file_that_passes_once_stamped",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    args.record.dataset(args.input, digest)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py",
+        "EndToEnd.test_a_run_writes_a_file_that_passes_once_stamped"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_a_run_writes_a_file_that_passes_once_stamped",
+        "exit": 1
+      },
+      "system": "Darwin"
     }
   ]
 }

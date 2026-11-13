@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Stamps a run's measure.sh load lines into its results file.
 
-    stamp_load.py --results FILE --stderr FILE [--sampler LOG] [--out FILE]
+    stamp_load.py --results FILE --stderr FILE [--sampler LOG] [--raw-dir DIR] [--out FILE]
 
 measure.sh prints its end line after the benchmark exits, so the file is finished from
 outside the lock, from the stderr that measure.sh wrote:
 
     measure.sh bench_driver.py ... 2> STDERR
-    stamp_load.py --results RESULTS --stderr STDERR
+    stamp_load.py --results RESULTS --stderr STDERR --raw-dir RAW/RUN_ID
 
 The lines are copied, never written from nothing, and refused if they are missing, doubled,
 or do not bracket the run. measure.sh's start line names the machine's hostname, which
@@ -34,6 +34,10 @@ withdrawn with the reason, when the stamp or check_results.py refuses it. No row
 edited. A file that is not pending, or whose run already has an outcome row for it, is refused
 with no row, so that a run once withdrawn is never stamped published after it.
 
+With --raw-dir, the run's own raw folder (scripts/run_record.py), measure.sh's stderr goes into
+its record untouched, as outputs/measure.stderr, refused if the folder is another run's: a
+render refuses a record of that kind without it.
+
 Exit codes: 0 stamped and the file passes check_results.py, 1 refused, 2 bad usage.
 """
 
@@ -50,6 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import linux_sampler  # noqa: E402
+import run_record  # noqa: E402
 
 START = re.compile(r"^measure\.sh: start .*$", re.MULTILINE)
 END = re.compile(r"^measure\.sh: end .*$", re.MULTILINE)
@@ -201,6 +206,8 @@ def main(argv=None):
     parser.add_argument("--stderr", type=Path, required=True)
     parser.add_argument("--sampler", type=Path,
                         help="the CPU sampler's log: a macOS run's, or linux_sampler.py's")
+    parser.add_argument("--raw-dir", type=Path,
+                        help="the run's own raw folder, to keep measure.sh's stderr in")
     parser.add_argument("--out", type=Path, help="default: stamp --results in place")
     parser.add_argument("--run-log", type=Path,
                         default=bench_driver.REPO_ROOT / "results" / "run_log.md",
@@ -217,6 +224,12 @@ def main(argv=None):
         print(f"stamp_load: refused: {fields['run_id']} already has an outcome row for {name} "
               "in the run log", file=sys.stderr)
         return 1
+    if args.raw_dir is not None:
+        try:
+            run_record.add_measure_stderr(args.raw_dir, fields.get("run_id"), args.stderr)
+        except (run_record.Incomplete, OSError, ValueError) as error:
+            print(f"stamp_load: refused: {error}", file=sys.stderr)
+            return 1
     why = None
     try:
         sampler = args.sampler.read_text(encoding="utf-8") if args.sampler else None

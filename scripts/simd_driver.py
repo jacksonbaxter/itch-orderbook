@@ -39,8 +39,10 @@ before and after, itself as
 governor the processes run under: outside measure.sh the governor is the host's own, and
 machine_check.sh refuses any other than performance.
 
-The run directory, DIR/<run id>/, holds every process's files, the sampler's log and
-manifest.json, which lists every process and what became of it. scripts/simd_report.py
+The run directory, DIR/<run id>/, refused if another run wrote in it, holds every process's
+files, the sampler's log, manifest.json, which lists every process and what became of it, and
+run.json (scripts/run_record.py): the commit and tree state, the sha256 of each binary, the
+input hashed and refused unless it is --dataset-sha256, and each machine check untouched. scripts/simd_report.py
 turns it into the results file. results/run_log.md gets a row for the run and for each
 process that was not published.
 
@@ -64,6 +66,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
+import run_record  # noqa: E402
 import wasm_bench  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -227,14 +230,23 @@ def wait_for_sample(sampler, finished):
 
 
 def run(args, run_id, commit):
-    run_dir = args.raw_dir / run_id
-    run_dir.mkdir(parents=True, exist_ok=False)
+    run_dir = run_record.run_folder(args.raw_dir, run_id)
     kernels = [] if args.experiment in (*FORMS, "asm", "e11") else \
         vector_kernels(args.bench, args.kernels)
     plan = variants(args.experiment, kernels)
     if args.experiment == "e11" and args.node_module is None:
         raise Refused("usage", "--experiment e11 needs --node-module")
     binary = {"e11": args.node_module, "asm": AUDIT}.get(args.experiment, args.bench)
+    # The run's own record (gate item 8): the input hashed here, never taken on trust from
+    # --dataset-sha256, which it must match (r5-6).
+    record = run_record.Record(run_dir, "simd_driver", run_id, commit)
+    for path in (binary, args.probe, args.measure):
+        record.binary(path)
+    digest = run_record.sha256_of(args.input)
+    if digest != args.dataset_sha256:
+        raise Refused("dataset", f"{args.input.name} hashes to {digest}, not the "
+                                 f"--dataset-sha256 {args.dataset_sha256}")
+    record.dataset(args.input, digest)
     manifest = {"run_id": run_id, "prediction": args.prediction, "experiment": args.experiment,
                 "commit": commit, "host_os": platform.system(), "binary": str(binary.name),
                 "binary_sha256": sha256_of(binary), "dataset": args.dataset,
@@ -244,6 +256,7 @@ def run(args, run_id, commit):
                 "started": bench_driver.utc_now()}
     if platform.system() == "Linux":
         manifest["machine_check_before"] = machine_check(args)
+        record.output("machine_check_before.txt", manifest["machine_check_before"])
     sampler = None
     if platform.system() == "Darwin":
         sampler = wasm_bench.Sampler(run_dir / "sampler.txt")
@@ -289,10 +302,12 @@ def run(args, run_id, commit):
     finally:
         if sampler is not None:
             sampler.stop()
+            record.kept_file("sampler.txt")
         manifest["finished"] = bench_driver.utc_now()
         if platform.system() == "Linux":
             try:
                 manifest["machine_check_after"] = machine_check(args)
+                record.output("machine_check_after.txt", manifest["machine_check_after"])
             except Refused as error:
                 manifest["machine_check_after"] = f"failed: {error}"
         (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n",
@@ -330,7 +345,7 @@ def main(argv=None):
                           check=False).returncode != 0:
             raise Refused("prediction", f"{args.prediction} is not on record")
         withdrawn = run(args, run_id, commit)
-    except (Refused, bench_driver.Refused) as error:
+    except (Refused, bench_driver.Refused, run_record.Incomplete) as error:
         bench_driver.append_log(args.run_log, run_id, args.prediction,
                                 locals().get("commit", "unknown"), f"refused: {error}")
         print(f"simd_driver: refused: {error}", file=sys.stderr)

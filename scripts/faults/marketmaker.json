@@ -1738,6 +1738,28 @@
         "signature": "mm_report: FAIL total-not-ledger AMD, AS Base",
         "exit": 1
       }
+    },
+    {
+      "id": "marketmaker-mm-run-dataset-unrecorded",
+      "breaks": "mm_report run keeps no hash of the day it ran on (A2, C8)",
+      "check": "test_mm_report.py Run.test_the_matrix_runs_and_its_file_holds",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "    record.dataset(args.data, run_record.sha256_of(args.data))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py",
+        "Run.test_the_matrix_runs_and_its_file_holds"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_the_matrix_runs_and_its_file_holds",
+        "exit": 1
+      }
     }
   ]
 }

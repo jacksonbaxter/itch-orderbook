@@ -13,7 +13,7 @@ On a reported run this is measure.sh's direct child, and it runs one process at 
 so that signalling it stops everything:
 
     measure.sh [taskset -c 4] python3 -B scripts/bench_driver.py ... 2> STDERR
-    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR
+    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR --raw-dir RAW/RUN_ID
 
 The order is: hash the input, which also faults it in; confirm the prediction is on
 record; run machine_check.sh, refusing on a failure; run the repetitions; refuse if any
@@ -50,8 +50,10 @@ SIGTERM, SIGINT or SIGHUP included: the driver passes the signal to the process 
 waits for it, writes the row with where the run was, and exits 128 plus the signal. A run
 that writes its files says "written, pending the load stamp", never "published": the load
 rule is applied after it, by scripts/stamp_load.py, which appends each file's outcome row,
-published or withdrawn with the reason. Raw output stays in --raw-dir, which is not
-committed. The Commands line in each file holds every argument that reached a child process
+published or withdrawn with the reason. Raw output stays in --raw-dir/<run id>, a folder of
+the run's own that the driver refuses to write into if another run has, with run.json
+beside it: the commit and tree state, each binary's sha256, the dataset hashed, and every
+tool output the file quotes (scripts/run_record.py). None of it is committed. The Commands line in each file holds every argument that reached a child process
 or changed the file.
 
     bench_driver.py render --raw-dir DIR --published FILE --out-dir DIR [--stderr FILE] \\
@@ -94,6 +96,7 @@ if __name__ == "__main__":
     sys.modules.setdefault("bench_driver", sys.modules["__main__"])
 
 import check_results  # noqa: E402
+import run_record  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HEADER_ORDER = ("host", "cpu", "kernel", "compiler", "flags", "commit", "dataset",
@@ -212,8 +215,10 @@ def git_commit(root, allow_dirty):
     if (root / ".git").exists():
         head = subprocess.run(["git", "-C", str(root), "rev-parse", "--short=12", "HEAD"],
                               capture_output=True, text=True, check=True).stdout.strip()
+        # CMakePresets.json sets the flags every build is made with (r5-9).
         status = subprocess.run(["git", "-C", str(root), "status", "--porcelain", "--", "bench",
-                                 "include", "src", "tools", "scripts", "cmake", "CMakeLists.txt"],
+                                 "include", "src", "tools", "scripts", "cmake", "CMakeLists.txt",
+                                 "CMakePresets.json"],
                                 capture_output=True, text=True, check=True).stdout
         if status and not allow_dirty:
             raise Refused("commit", "the tree has uncommitted changes")
@@ -1141,6 +1146,7 @@ def run(args, run_id, started, commit, sampler=None):
     swap_watch = SwapWatch(args.vmstat)
     set_stage("hashing the input")
     digest = hash_and_fault_in(args.input)
+    args.record.dataset(args.input, digest)
     set_stage("checking the prediction")
     code = subprocess.run([sys.executable, "-B", str(REPO_ROOT / "scripts" / "check_predictions.py"),
                            "--root", str(args.predictions_root), "--require", args.prediction],
@@ -1149,6 +1155,7 @@ def run(args, run_id, started, commit, sampler=None):
         raise Refused("prediction", code.stdout.strip())
     set_stage("machine_check")
     machine_output = machine_check(args)
+    args.record.output(MACHINE_CHECK, machine_output)
     designs = args.design or [None]
     sampled = None if sampler is None else {"every": sampler.every, "published": [],
                                             "withdrawn": []}
@@ -1285,6 +1292,8 @@ def published_parts(text):
 
 
 AGAIN = "Rendered again from the run's own raw records, unchanged: "
+# The machine check's output as the results file quotes it, kept in the run's record.
+MACHINE_CHECK = "machine_check.txt"
 GENERATED_END = "Do not edit by hand.\n\n"
 
 
@@ -1352,6 +1361,10 @@ def render_again(raw_dir, published, stderr, title=None, note=None, again=None,
     if check_results.section(published, "Sampler") is not None:
         raise Refused("published", "its Sampler section's verdicts are not in the raw records")
     args, fields, machine, swap = published_parts(published)
+    run_record.refuse_incomplete(raw_dir, (MACHINE_CHECK,), fields.get("run_id"))
+    if run_record.is_new_kind(raw_dir):
+        # The run kept what its machine check printed: the render quotes that.
+        machine = run_record.kept_output(raw_dir, MACHINE_CHECK)
     args.title = args.title if title is None else title
     args.note = args.note if note is None else note
     printed = None
@@ -1422,7 +1435,7 @@ def render_main(argv):
             if violations:
                 raise Refused("results", f"{name}: " + "; ".join(
                     f"{code}: {detail}" for code, detail in violations))
-    except (Refused, OSError, ValueError, KeyError) as error:
+    except (Refused, run_record.Incomplete, OSError, ValueError, KeyError) as error:
         print(f"bench_driver: render refused: {error}", file=sys.stderr)
         return 1
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -1439,16 +1452,18 @@ def main(argv=None):
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, forward_signal)
-    args.raw_dir.mkdir(parents=True, exist_ok=True)
     started = utc_now()
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
     commit = "unknown"
     written = []
     import mac_rule  # noqa: PLC0415
 
-    sampler = mac_rule.start(args)
+    sampler = None
     try:
+        run_record.open_run(args, run_id)
+        sampler = mac_rule.start(args)
         commit = git_commit(REPO_ROOT, args.allow_dirty)
+        run_record.start_record(args, "bench_driver", run_id, commit, (args.bench, args.probe))
         written = run(args, run_id, started, commit, sampler)
     except Stopped as stop:
         stop_child()
@@ -1458,7 +1473,7 @@ def main(argv=None):
                    f"stopped by {name} at {stage}; nothing from it is published; the row was "
                    "written by the driver as it stopped")
         return 128 + stop.signum
-    except Refused as refusal:
+    except (Refused, run_record.Incomplete) as refusal:
         hold_signals()
         print(f"bench_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
         append_log(args.run_log, run_id, args.prediction, commit,
@@ -1467,8 +1482,7 @@ def main(argv=None):
     except Exception as error:  # Last, so that no run ends without its row.
         return log_failure("bench_driver", args.run_log, run_id, args.prediction, commit, error)
     finally:
-        if sampler is not None:
-            sampler.done.set()
+        run_record.close_sampler(args, sampler)
     hold_signals()
     append_written(args.run_log, run_id, args.prediction, commit, written)
     for out in written:

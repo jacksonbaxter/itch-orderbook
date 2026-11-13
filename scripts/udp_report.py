@@ -73,6 +73,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_results  # noqa: E402
 import results_table  # noqa: E402
+import run_record  # noqa: E402
 import stamp_load  # noqa: E402
 import udp_driver  # noqa: E402
 
@@ -747,11 +748,23 @@ def derived(fields, rows, failed, printed=None):
 
 # --- Reading runs ---------------------------------------------------------------------------
 
+def refuse_incomplete_record(run_dir, manifest):
+    """A run directory of the new kind (scripts/run_record.py, gate item 8) must hold the
+    whole record, with both machine checks of a timed step."""
+    needs = () if manifest["step"] == "smoke" else ("machine_check_before.txt",
+                                                    "machine_check_after.txt")
+    try:
+        run_record.refuse_incomplete(run_dir, needs, manifest.get("run_id"), measure=False)
+    except run_record.Incomplete as error:
+        raise ReportError(str(error)) from error
+
+
 def read_runs(run_dirs):
     """(timed runs, smoke): each timed run (manifest, [(entry, record, stderr)], [failed])."""
     timed, smoke = [], None
     for run_dir in run_dirs:
         manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+        refuse_incomplete_record(run_dir, manifest)
         if manifest["step"] == "smoke":
             smoke = (manifest, json.loads((run_dir / "smoke.json").read_text(encoding="utf-8")))
             continue

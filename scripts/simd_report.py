@@ -42,6 +42,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_results  # noqa: E402
+import run_record  # noqa: E402
 import simd_driver  # noqa: E402
 import stamp_load  # noqa: E402
 import wasm_bench  # noqa: E402
@@ -734,6 +735,7 @@ def peak_rss(records, stderrs):
 
 def read_run(run_dir):
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    refuse_incomplete_record(run_dir, manifest)
     records, stderrs = [], []
     for entry in manifest["processes"]:
         if not entry["published"]:
@@ -755,6 +757,17 @@ def read_run(run_dir):
     if manifest.get("sampler"):
         sampler = (run_dir / manifest["sampler"]).read_text(encoding="utf-8")
     return manifest, records, stderrs, sampler
+
+
+def refuse_incomplete_record(run_dir, manifest):
+    """A run directory of the new kind (scripts/run_record.py, gate item 8) must hold the
+    whole record: on macOS the sampler log, on Linux both machine checks."""
+    needs = (("sampler.txt",) if manifest.get("sampler") else
+             ("machine_check_before.txt", "machine_check_after.txt"))
+    try:
+        run_record.refuse_incomplete(run_dir, needs, manifest.get("run_id"), measure=False)
+    except run_record.Incomplete as error:
+        raise ReportError(str(error)) from error
 
 
 def render(manifest, records, stderrs, sampler):
