@@ -3882,6 +3882,151 @@
       }
     },
     {
+      "id": "oracle-cli-chained-arm-wrong-bucket",
+      "breaks": "ChainedIndex looks an order up in the next reference's bucket, so the chained arm loses its orders (r8-1)",
+      "check": "test_oracle_cli, the chained arm on every fixture",
+      "mutations": [
+        {
+          "file": "include/itch/book_index.hpp",
+          "old": "    std::uint32_t order = heads_[bucket(reference)];\n    while (order != kNoIndex",
+          "new": "    std::uint32_t order = heads_[bucket(reference + 1)];\n    while (order != kNoIndex"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL lifecycle chained flat: "
+      }
+    },
+    {
+      "id": "oracle-cli-chained-arm-allocates",
+      "breaks": "ChainedIndex allocates on every insert, which only the chained arm's allocation check sees (r8-1)",
+      "check": "test_oracle_cli, itch_alloc on the chained arm",
+      "mutations": [
+        {
+          "file": "include/itch/book_index.hpp",
+          "old": "    std::uint32_t& head = heads_[bucket(reference)];\n    next_[order] = head;\n",
+          "new": "    ::operator delete(::operator new(8));\n    std::uint32_t& head = heads_[bucket(reference)];\n    next_[order] = head;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL alloc session chained flat: no line 'fast_allocations 0'"
+      }
+    },
+    {
+      "id": "oracle-cli-scan-arms-search-one-below",
+      "breaks": "The flat-scan16 and flat-bisect levels search for the key one below, so a second order at a price opens a second level (r8-1)",
+      "check": "test_oracle_cli, the flat-scan16 and flat-bisect arms on every fixture",
+      "mutations": [
+        {
+          "file": "include/itch/book_levels.hpp",
+          "old": "      at = scan_then_bisect(side, key);\n",
+          "new": "      at = scan_then_bisect(side, key - 1);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL lifecycle paged flat-scan16: "
+      }
+    },
+    {
+      "id": "oracle-cli-alloc-remove-on-empty",
+      "breaks": "The fast book allocates when an E, C or X takes an order's whole remainder, which session.itch never does (r8-2)",
+      "check": "test_oracle_cli, itch_alloc on lifecycle.itch",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    if (shares == orders_[order].shares) {\n      remove_order(order);\n    } else {",
+          "new": "    if (shares == orders_[order].shares) {\n      ::operator delete(::operator new(8));\n      remove_order(order);\n    } else {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL alloc lifecycle: exit 1: "
+      }
+    },
+    {
+      "id": "oracle-cli-mimalloc-arm-lost",
+      "breaks": "itch_alloc says it has no mimalloc in a build that links it, and test_oracle_cli skipped the arm in silence (r8-11)",
+      "check": "test_oracle_cli, itch_alloc's mimalloc arm",
+      "mutations": [
+        {
+          "file": "tools/alloc_arms.hpp",
+          "old": "#ifdef ITCH_HAVE_MIMALLOC\n      return run.template operator()<NodeBook<MimallocArm>>();",
+          "new": "#ifdef ITCH_HAVE_MIMALLOC_LOST\n      return run.template operator()<NodeBook<MimallocArm>>();"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL alloc mimalloc: the build has mimalloc, and the tool says not"
+      }
+    },
+    {
       "id": "oracle-cli-pool-range-unchecked",
       "breaks": "--max-orders and --max-levels take 0 and wrap past 2^32 - 1 (review r2-1)",
       "check": "test_oracle_cli, on bad usage",

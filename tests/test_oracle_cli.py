@@ -2,9 +2,15 @@
 """Black-box test of itch_oracle on the committed fixtures.
 
 Usage: test_oracle_cli.py <itch_oracle> <scratch dir> <fixtures dir> <itch_alloc>
+                          [with-mimalloc|without-mimalloc]
 
 Each expected line was worked out by hand from scripts/gen_oracle_fixtures.py, not
-copied from the tool's output. A failure prints `oracle cli: FAIL <case>: <reason>`.
+copied from the tool's output. Every arm the layout results publish runs through the
+oracle, the look-ahead and itch_alloc (r8-1), and the fast book's allocation check runs on
+lifecycle.itch, whose executions and cancels empty orders, as well as session.itch (r8-2).
+itch_alloc's mimalloc arm may say the build has no mimalloc only in a build CMake says has
+none, and then the test prints that it skipped it; with no fifth argument it says so
+whenever it skips (r8-11). A failure prints `oracle cli: FAIL <case>: <reason>`.
 """
 
 import resource
@@ -14,20 +20,25 @@ import sys
 from pathlib import Path
 
 SMALL = ("--max-orders", "4096", "--max-levels", "4096")
-# Every arm of the fast book, with the paged index's pool and reach small enough to fall
-# back on the fixtures, and the flat arena small enough to move blocks.
-ARMS = (("hash", "linked"), ("hash", "flat"), ("paged", "linked"), ("paged", "flat"))
+# Every arm of the fast book the layout results publish, with the paged index's pool and
+# reach small enough to fall back on the fixtures, and the flat arena small enough to move
+# blocks.
+ARMS = (("hash", "linked"), ("hash", "flat"), ("paged", "linked"), ("paged", "flat"),
+        ("identity", "flat"), ("chained", "flat"), ("paged", "flat-scan16"),
+        ("paged", "flat-bisect"))
+NO_MIMALLOC = "this build has no mimalloc"
 ARM_SMALL = SMALL + ("--max-pages", "8", "--index-bits", "16", "--max-slots", "8192")
 TYPES = "SRHYLVWKJhAFECXDUPQBINO"
 
 
-def alloc_arm_failures(alloc_tool, session, fixtures):
+def alloc_arm_failures(alloc_tool, session, fixtures, mimalloc_built=None, skipped=None):
     """T-ARENA-1's node book on each allocator arm through itch_alloc --allocator.
 
     A pool arm passes on no allocation at all. A heap arm's verdict is REPORT, with its
     calls: malloc one for each node made, std::pmr's resources fewer, a chunk at a time, and
     mimalloc none the counter sees, counted by the book instead. The aged heap's ballast is
-    taken off, so that malloc-aged counts what malloc-fresh does.
+    taken off, so that malloc-aged counts what malloc-fresh does. mimalloc_built is what
+    CMake says of the build, or None if it was not told; an arm skipped goes into skipped.
     """
     failures = []
     made = set()
@@ -35,7 +46,11 @@ def alloc_arm_failures(alloc_tool, session, fixtures):
                 "pool-index", "pool-pointer", "pool-fifo"):
         done = subprocess.run([alloc_tool, str(session), *SMALL, "--allocator", arm],
                               capture_output=True, text=True, check=False)
-        if done.returncode == 2 and arm == "mimalloc" and "no mimalloc" in done.stderr:
+        if done.returncode == 2 and arm == "mimalloc" and NO_MIMALLOC in done.stderr:
+            if mimalloc_built:
+                failures.append(f"alloc {arm}: the build has mimalloc, and the tool says not")
+            if skipped is not None:
+                skipped.add(arm)
             continue
         values = dict(line.split(" ", 1) for line in done.stdout.splitlines() if " " in line)
         counted = int(values.get("node_allocations", "-1"))
@@ -81,6 +96,9 @@ def alloc_arm_failures(alloc_tool, session, fixtures):
 
 def main():
     tool, scratch, fixtures, alloc_tool = sys.argv[1:5]
+    mimalloc_built = {"with-mimalloc": True, "without-mimalloc": False}.get(
+        sys.argv[5] if len(sys.argv) > 5 else "", None)
+    skipped = set()
     scratch = Path(scratch)
     scratch.mkdir(parents=True, exist_ok=True)
     fixtures = Path(fixtures)
@@ -317,7 +335,7 @@ def main():
             seen[(index, levels)] = tuple(values.get(key) for key in shared)
             if index == "paged" and "oracle_max_pages 8" not in lines:
                 failures.append(f"{name} {index} {levels}: the page pool is not reported")
-            if levels == "flat" and "oracle_max_slots 8192" not in lines:
+            if levels != "linked" and "oracle_max_slots 8192" not in lines:
                 failures.append(f"{name} {index} {levels}: the arena is not reported")
         if len(set(seen.values())) != 1:
             failures.append(f"{name}: the arms disagree on {shared}: {seen}")
@@ -384,39 +402,43 @@ def main():
         if run(lifecycle, *options).returncode != 2:
             failures.append(f"usage {name}: not exit 2")
 
-    # T-ALLOC-1 on a fixture: the fast pass is clean and the control pass is seen.
-    done = subprocess.run([alloc_tool, str(session), *SMALL], capture_output=True, text=True,
-                          check=False)
-    if done.returncode != 0 or "fast_allocations 0" not in done.stdout.splitlines():
-        failures.append(f"alloc: exit {done.returncode}: {done.stdout}")
-    if "control_allocations 0" in done.stdout.splitlines():
-        failures.append("alloc: the control book made no allocation")
-    if "verdict T-ALLOC-1 PASS" not in done.stdout:
-        failures.append("alloc: no pass verdict")
+    # T-ALLOC-1 on two fixtures: the fast pass is clean and the control pass is seen. session
+    # leaves deep orders resting; lifecycle empties orders by E, C and X, the path where an
+    # execution or cancel removes the order (r8-2).
+    alloc_files = (("session", session), ("lifecycle", lifecycle))
+    for name, path in alloc_files:
+        done = subprocess.run([alloc_tool, str(path), *SMALL], capture_output=True, text=True,
+                              check=False)
+        if done.returncode != 0 or "fast_allocations 0" not in done.stdout.splitlines():
+            failures.append(f"alloc {name}: exit {done.returncode}: {done.stdout}")
+        if "control_allocations 0" in done.stdout.splitlines():
+            failures.append(f"alloc {name}: the control book made no allocation")
+        if "verdict T-ALLOC-1 PASS" not in done.stdout:
+            failures.append(f"alloc {name}: no pass verdict")
     done = subprocess.run([alloc_tool, str(fixtures / "dead_reference.itch"), *SMALL],
                           capture_output=True, text=True, check=False)
     if done.returncode != 1:
         failures.append(f"alloc: a refused message exited {done.returncode}, wanted 1")
-    for index, levels in ARMS:
-        done = subprocess.run([alloc_tool, str(session), *ARM_SMALL, "--index", index, "--levels",
+    for (name, path), (index, levels) in ((f, a) for f in alloc_files for a in ARMS):
+        done = subprocess.run([alloc_tool, str(path), *ARM_SMALL, "--index", index, "--levels",
                                levels], capture_output=True, text=True, check=False)
         lines = done.stdout.splitlines()
         for line in (f"book_index {index}", f"book_levels {levels}", "fast_allocations 0",
                      "fast_refused 0"):
             if line not in lines:
-                failures.append(f"alloc {index} {levels}: no line {line!r}")
+                failures.append(f"alloc {name} {index} {levels}: no line {line!r}")
         if done.returncode != 0 or "control_allocations 0" in lines:
-            failures.append(f"alloc {index} {levels}: exit {done.returncode}")
-    for index, levels in ARMS:
-        done = subprocess.run([alloc_tool, str(session), *ARM_SMALL, "--index", index, "--levels",
+            failures.append(f"alloc {name} {index} {levels}: exit {done.returncode}")
+    for (name, path), (index, levels) in ((f, a) for f in alloc_files for a in ARMS):
+        done = subprocess.run([alloc_tool, str(path), *ARM_SMALL, "--index", index, "--levels",
                                levels, "--prefetch", "16"], capture_output=True, text=True,
                               check=False)
         lines = done.stdout.splitlines()
         for line in ("book_prefetch 16", "fast_allocations 0", "fast_refused 0"):
             if line not in lines:
-                failures.append(f"alloc {index} {levels} look-ahead 16: no line {line!r}")
+                failures.append(f"alloc {name} {index} {levels} look-ahead 16: no line {line!r}")
         if done.returncode != 0 or not any(x.startswith("verdict T-ALLOC-1 PASS") for x in lines):
-            failures.append(f"alloc {index} {levels} look-ahead 16: exit {done.returncode}")
+            failures.append(f"alloc {name} {index} {levels} look-ahead 16: exit {done.returncode}")
     done = subprocess.run([alloc_tool, str(session), "--prefetch", "3"], capture_output=True,
                           text=True, check=False)
     if done.returncode != 2:
@@ -425,8 +447,10 @@ def main():
                           text=True, check=False)
     if done.returncode != 2:
         failures.append(f"alloc: a bad arm exited {done.returncode}, wanted 2")
-    failures += alloc_arm_failures(alloc_tool, session, fixtures)
+    failures += alloc_arm_failures(alloc_tool, session, fixtures, mimalloc_built, skipped)
 
+    for arm in sorted(skipped):
+        print(f"oracle cli: skipped the alloc {arm} arm: {NO_MIMALLOC}")
     for failure in failures:
         print(f"oracle cli: FAIL {failure}")
     if failures:
