@@ -30,7 +30,8 @@ Zen 1 limits what `debian` can show:
 
 1. A prediction is committed first, in [results/predictions.md](results/predictions.md), with what would refute it.
 2. `machine_check` refuses the run unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is resident in memory.
-3. On `debian` a run that swapped is refused. On the Mac a sampler reads every other process every 2 s, and a timed process during which another passed 20% CPU is withdrawn ([results/layout_mac_12302019.md](results/layout_mac_12302019.md)). That rule is why two Mac targets have no result.
+3. Other work beside a timed process withdraws it. On the Mac a sampler reads every other process every 2 s, and a process during which another passed 20% CPU is withdrawn ([results/layout_mac_12302019.md](results/layout_mac_12302019.md)). That rule is why two Mac targets have no result.
+   On `debian` the same kind of rule started late in the project: a sampler reads /proc every 1 s and withdraws a process whose core, SMT sibling or other cores were busy; T-BT-3's rerun is the one published figure under it so far ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
 4. Every run, failed and withdrawn ones included, gets a row in [results/run_log.md](results/run_log.md), which is never edited.
 5. The fault matrix plants bugs in a scratch copy and requires the named check to catch each. Its last full run caught 1063 of 1063, after 196 control commands passed on the clean tree ([results/fault_matrix.md](results/fault_matrix.md)).
 
@@ -60,7 +61,7 @@ The profile shows where the waiting is. `FastBook::apply` is the widest frame at
 
 Flat levels beat linked ones on either index by a wide margin, with fewer DRAM fills (the table above). A linked side is walked node by node, and each node may be anywhere in memory. A flat side is one array; an insert moves the entries behind it, a short move because most adds land near the best:
 
-- On 12302019, 57.10% of add searches pass one better level or none, and 10.79% pass 16 or more ([results/window_12302019.md](results/window_12302019.md)).
+- On 12302019, 57.27% of add searches pass one better level or none, and 10.75% pass 16 or more ([results/window_12302019.md](results/window_12302019.md)).
 - 8.337% of adds land 256 or more whole-cent ticks behind the best, so a fixed window of ticks, as some books use, would often overflow ([results/window_12302019.md](results/window_12302019.md)).
 
 Capping the linear search at 16 entries before a binary search made no difference, -0.18% with overlapping ranges. A pure binary search lost 4.09% and missed more branches, 2.808 a message against 2.027 ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)).
@@ -83,7 +84,7 @@ Deletion, where open addressing shifts entries back, is the suspect, but no coun
 
 ### What the age of an order costs
 
-Messages that name an order (executes, cancels, deletes, replaces) were counted by that order's age:
+Messages that name an order (executes, cancels, deletes, replaces) were counted by that order's age, each figure the median of 2 processes of the 3 planned ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)):
 
 - A message naming an order under 1 ms old makes 0.0490 DRAM fills; one naming an order 1 s old or more makes 4.3729 ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)).
 - 54.5% of those messages name an order 1 s old or more, and they take 90.66% of the named messages' fills ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)).
@@ -156,7 +157,7 @@ ITCH fields are big-endian at fixed offsets, so a scalar parser is loads and byt
 
 On `debian`, decoding an Add Order alone, SSSE3 wins: 0.80 cycles against scalar's 9.94, with AVX2 at 1.78 ([results/simd_decode_debian_12302019.md](results/simd_decode_debian_12302019.md)). Why AVX2 trails SSSE3 on the same shuffle plan is not established; Zen 1's split 256-bit operations, clock changes and line-split stores were not tested apart.
 
-Over the whole parse the order reverses: scalar 35.099 cycles a message, SSSE3 46.282, AVX2 48.105, so SSSE3 runs at 0.693 of scalar's speed and AVX2 at 0.688 ([results/simd_parse_debian_12302019.md](results/simd_parse_debian_12302019.md)). A diagnostic counter run, recorded in docs/NOTES.md and not quoted here, put the loss in the work around the decode: the type dispatch and moving vector results back to integer registers.
+Over the whole parse the order reverses: scalar 35.099 cycles a message, SSSE3 46.282, AVX2 48.105, a speed-up over scalar, in cycles, of 0.758 for SSSE3 and 0.730 for AVX2 ([results/simd_parse_debian_12302019.md](results/simd_parse_debian_12302019.md)). A diagnostic counter run, recorded in docs/NOTES.md and not quoted here, put the loss in the work around the decode: the type dispatch and moving vector results back to integer registers.
 
 With the book behind it, the kernel does not matter: scalar 187.966 ns a message, SSSE3 188.132, AVX2 190.228 ([results/simd_book_debian_12302019.md](results/simd_book_debian_12302019.md)).
 
@@ -201,11 +202,12 @@ At 72 bytes a datagram, the sender was the limit for every mode but U4, which st
 
 The backtester replays the real book and queues simulated orders among the real ones by order reference: only depletion ahead of an order advances it. It models latency on market data and order entry, fees from a dated Nasdaq schedule, and partial fills.
 
-- T-BT-1 is met on `debian`: the whole day with a quoting strategy and its queue model at 4,570,542 messages/s, against a bar of 2.00 M ([results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md)).
-- T-BT-3 is missed on `debian`: four symbols with 100,000 shadow orders in real FIFO queues at 3,354,119 messages/s, 1.26 M under the 4.61 M bar ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
+- T-BT-1 is met on `debian`: the whole day with a quoting strategy and its queue model at 4.68 M engine events/s, 4,570,542 messages/s, against a bar of 2.00 M engine events/s ([results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md)).
+- T-BT-3 is missed on `debian`: four symbols with 100,000 shadow orders in real FIFO queues at 3,509,307 messages/s, 284.96 ns a message, 1.10 M under the 4.61 M bar ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
 - That bar was set on a Mac, and the Mac meets it ([results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md)).
 
-The suspect was the walk over simulated levels and orders. A ladder of schedules timed it at 4.969 ns a step, and on T-BT-3's schedule the walk is 3.51% of a message's 323.88 ns ([results/walks_ladder_debian_12302019.md](results/walks_ladder_debian_12302019.md)). So the walk is not the cause, and the rest of the gap is not established. The ladder's own time for that schedule differs from the published file's, and why is not established; neither run read counters.
+The suspect was the walk over simulated levels and orders. A ladder of schedules timed it at 4.969 ns a step, and on T-BT-3's schedule the walk is 3.51% of a message's 323.88 ns ([results/walks_ladder_debian_12302019.md](results/walks_ladder_debian_12302019.md)). So the walk is not the cause, and the rest of the gap is not established.
+Three runs of the same process took 298.14 ns a message (P-0104), 323.88 (P-0105, the ladder) and 284.96 (P-0106, published, the only one under the Linux sampler rule); the last is outside both bands P-0106 named, so that prediction failed, and why the runs differ is not established, since none read counters ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
 
 The market maker is Avellaneda-Stoikov, tuned on 10302019 and reported on 12302019, out of sample by day. Its PnL splits into spread capture, adverse selection and inventory, which sum exactly to the ledger's total, tested on integers ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
 
@@ -268,7 +270,7 @@ Each was measured and lost or did not help.
 - Prefetching gained 16.41% on `debian` ([results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md)).
 - On the Mac it lost at every distance, -18.01% at its best, so it is off by default ([results/prefetch_mac_12302019.md](results/prefetch_mac_12302019.md)).
 - A function-pointer table, -0.91%, and computed-goto threading, +0.66%, did not beat the `switch`, and both missed more branches ([results/dispatch_debian_12302019.md](results/dispatch_debian_12302019.md)).
-- SSSE3 and AVX2 lost the whole parse on `debian`, at 0.693 and 0.688 of scalar's speed, though SSSE3 wins the decode alone ([results/simd_parse_debian_12302019.md](results/simd_parse_debian_12302019.md)).
+- SSSE3 and AVX2 lost the whole parse on `debian`, at speed-ups of 0.758 and 0.730 over scalar in cycles, though SSSE3 wins the decode alone ([results/simd_parse_debian_12302019.md](results/simd_parse_debian_12302019.md)).
 - AVX2 lost to SSSE3 on the decode, 1.78 cycles against 0.80 ([results/simd_decode_debian_12302019.md](results/simd_decode_debian_12302019.md)).
 - NEON won the Mac's parse, 17.574 cycles against 18.790, by less than the bar for changing the default ([results/simd_parse_mac_12302019.md](results/simd_parse_mac_12302019.md)).
 - Over flat levels a capped linear search tied at -0.18%, and a binary search lost 4.09% ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)).
@@ -285,7 +287,7 @@ Wrong predictions are kept beside their outcomes in [results/predictions.md](res
 - The replace, delete and add costs on an older and a recent day's message mix (P-0801, P-0802): every Mac attempt was withdrawn under the load rule, stopped, or left too few quiet processes to publish.
 - T-BOOK-4 and T-ARENA-1 on the Mac, for the same reason; the table below counts their runs.
 - T-PARSE-1 to T-PARSE-3, the parse rate in messages and GB a second: the parse is timed in ns a message, and no rate in those units was produced.
-- The fuzzers' 30-minute runs: so far only short smoke runs.
+- The 30-minute fuzz runs: the fuzzers have had only short smoke runs, and the table below holds the row.
 
 ## Every target missed or not measured
 
@@ -312,7 +314,7 @@ Generated by `scripts/results_table.py` from the results files; `scripts/check.s
 | T-TRADE-3, 08302019 | exact, with no tolerance | 6 violations | any violation fails | macOS | INTC alone, the feed above MIDAS in every column; cause not established: [Correctness](#correctness) | [results/trades_08302019.md](results/trades_08302019.md) |
 | T-TRADE-5, 03272019 | exact, with no tolerance | 2 violations | any violation fails | macOS | two `E` on RBZ away from the best, just after a resumption with its book crossed; the oracle agrees with the reference book that day: [Correctness](#correctness) | [results/trades_03272019.md](results/trades_03272019.md) |
 | T-TRADE-5, 05302019 | exact, with no tolerance | 1 violation | any violation fails | macOS | one `E` on ELTK, as with RBZ on the day above: [Correctness](#correctness) | [results/trades_05302019.md](results/trades_05302019.md) |
-| T-BT-3 | ≥ 4.61 M messages/s | 3.35 M messages/s | 1.26 M messages/s under the bar | debian | the bar was set on a Mac; the queue walk is a small share of a message's time, so it is not the cause; the rest is not established: [Beyond the book](#beyond-the-book) | [results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md) |
+| T-BT-3 | ≥ 4.61 M messages/s | 3.51 M messages/s | 1.10 M messages/s under the bar | debian | the bar was set on a Mac; the queue walk is a small share of a message's time, so it is not the cause; the rest is not established: [Beyond the book](#beyond-the-book) | [results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md) |
 | T-MM-2 | 1.49 at γ = 0.1, 1.35 at γ = 0.01, 3.02 at γ = 1 | 1.4918, 1.3490, 3.0317 | γ = 1: 3.03 at two decimals against 3.02 | macOS | the file traces it to the simulation's time grid, and other grids move it: [Beyond the book](#beyond-the-book) | [results/mm_as_tables.md](results/mm_as_tables.md) |
 | T-SPSC-1, boost rtt / project rtt | ≥ 1.16× | 1.15× | 1.15× against ≥ 1.16× | debian | not established: no counters were read: [Beyond the book](#beyond-the-book) | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
 | T-SPSC-1, project rtt / moodycamel rtt | ≤ 1.00× | 1.35× | 1.35× against ≤ 1.00× | debian | not established: no counters were read: [Beyond the book](#beyond-the-book) | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |

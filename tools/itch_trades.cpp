@@ -18,12 +18,13 @@
 // --symbols     writes one line per symbol, for the raw log.
 // --details     how many violations of each check are printed in full. All are counted.
 // --index, --levels  the arm of the fast book, the book's default arm if left out, and the
-//               capacities are as itch_oracle's.
+//               capacities are as itch_oracle's, but for --max-orders and --max-levels,
+//               which take 1 to 2^32 - 1 (capacity.hpp).
 //
-// Exit codes: 0 every check that ran passed. 2 bad usage or an unreadable file. 3 a
-// reference file failed to parse, with its typed error printed. Otherwise 64 plus one
-// bit for each failed result: 1 T-TRADE-1, 2 T-TRADE-2, 4 T-TRADE-3, 8 T-TRADE-5,
-// 16 the per-type checks on E, C, P, Q and B.
+// Exit codes: 0 every check that ran passed. 2 bad usage, an unreadable file, or a --symbols
+// file that could not be opened or written in full. 3 a reference file failed to parse, with
+// its typed error printed. Otherwise 64 plus one bit for each failed result: 1 T-TRADE-1,
+// 2 T-TRADE-2, 4 T-TRADE-3, 8 T-TRADE-5, 16 the per-type checks on E, C, P, Q and B.
 #include <array>
 #include <charconv>
 #include <chrono>
@@ -38,6 +39,7 @@
 #include <system_error>
 
 #include "book_arms.hpp"
+#include "capacity.hpp"
 #include "itch/book.hpp"
 #include "itch/reader.hpp"
 #include "mapped_file.hpp"
@@ -86,10 +88,6 @@ struct Options {
     options.midas_rows = value;
   } else if (flag == "--details") {
     options.config.detail_limit = static_cast<std::size_t>(value);
-  } else if (flag == "--max-orders") {
-    options.config.capacity.orders = static_cast<std::uint32_t>(value);
-  } else if (flag == "--max-levels") {
-    options.config.capacity.levels = static_cast<std::uint32_t>(value);
   } else {
     return false;
   }
@@ -112,6 +110,23 @@ struct Options {
   return true;
 }
 
+enum class BookOption : std::uint8_t { not_a_book_option, taken, bad_value };
+
+// An option that picks the book's arm or its capacity.
+[[nodiscard]] BookOption take_book_option(Options& options, std::string_view arg,
+                                          std::string_view value) {
+  const auto arm = itch::tools::parse_arm_option(arg, value, options.arm, options.config.capacity);
+  if (arm != itch::tools::ArmOption::not_an_arm_option) {
+    return arm == itch::tools::ArmOption::bad_value ? BookOption::bad_value : BookOption::taken;
+  }
+  const auto capacity = itch::tools::parse_capacity_option(arg, value, options.config.capacity);
+  if (capacity != itch::tools::CapacityOption::not_a_capacity) {
+    return capacity == itch::tools::CapacityOption::bad_value ? BookOption::bad_value
+                                                              : BookOption::taken;
+  }
+  return BookOption::not_a_book_option;
+}
+
 [[nodiscard]] std::optional<Options> parse_options(std::span<const char* const> args) {
   Options options;
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -130,17 +145,16 @@ struct Options {
     if (take_text(options, arg, args[i])) {
       continue;
     }
-    if (const auto taken =
-            itch::tools::parse_arm_option(arg, args[i], options.arm, options.config.capacity);
-        taken != itch::tools::ArmOption::not_an_arm_option) {
-      if (taken == itch::tools::ArmOption::bad_value) {
-        return std::nullopt;
-      }
-    } else {
-      const auto number = parse_number(args[i]);
-      if (!number || !take_number(options, arg, *number)) {
-        return std::nullopt;
-      }
+    const BookOption book = take_book_option(options, arg, args[i]);
+    if (book == BookOption::bad_value) {
+      return std::nullopt;
+    }
+    if (book == BookOption::taken) {
+      continue;
+    }
+    const auto number = parse_number(args[i]);
+    if (!number || !take_number(options, arg, *number)) {
+      return std::nullopt;
     }
   }
   const bool has_reference = options.crossstats != nullptr || options.midas != nullptr;
@@ -201,16 +215,18 @@ template <class Run>
   return 0;
 }
 
+// Writes the --symbols file, opened before the replay, and closes it. False, said on stderr,
+// if any of it could not be written.
 template <class Run>
-void write_symbols(const Run& run, const char* path) {
-  // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-  std::FILE* out = std::fopen(path, "w");
-  if (out == nullptr) {
-    std::println(stderr, "itch_trades: cannot write {}", path);
-    return;
-  }
+[[nodiscard]] bool write_symbols(const Run& run, std::FILE* out, const char* path) {
   run.write_symbols(out);
-  static_cast<void>(std::fclose(out));  // NOLINT(cppcoreguidelines-owning-memory)
+  const bool written = std::ferror(out) == 0;
+  const bool closed = std::fclose(out) == 0;  // NOLINT(cppcoreguidelines-owning-memory)
+  if (!written || !closed) {
+    std::println(stderr, "itch_trades: could not write {}", path);
+    return false;
+  }
+  return true;
 }
 
 template <class Run>
@@ -256,6 +272,15 @@ int run_tool(const Options& options) {
   std::println("trades_max_orders {}", options.config.capacity.orders);
   std::println("trades_max_levels {}", options.config.capacity.levels);
   std::println("bytes {}", file->bytes().size());
+  // Opened before the day is replayed, so that a path that cannot be written fails at once.
+  std::FILE* symbols = nullptr;
+  if (options.symbols != nullptr) {
+    symbols = std::fopen(options.symbols, "w");  // NOLINT(cppcoreguidelines-owning-memory)
+    if (symbols == nullptr) {
+      std::println(stderr, "itch_trades: cannot write {}", options.symbols);
+      return kExitUsage;
+    }
+  }
 
   Run<Index, Levels> run{options.config};
   itch::FrameReader reader{file->bytes()};
@@ -271,9 +296,7 @@ int run_tool(const Options& options) {
   if (reference_status == 0 && options.midas != nullptr) {
     reference_status = compare_midas(run, options);
   }
-  if (options.symbols != nullptr) {
-    write_symbols(run, options.symbols);
-  }
+  const bool symbols_written = symbols == nullptr || write_symbols(run, symbols, options.symbols);
 
   const auto& counters = reader.counters();
   std::println("elapsed_seconds {:.1f}", replayed.count());
@@ -286,7 +309,10 @@ int run_tool(const Options& options) {
   std::println("messages_checked {}", run.messages());
   run.print_report();
   const int verdict = verdicts(run);
-  return reference_status != 0 ? reference_status : verdict;
+  if (reference_status != 0) {
+    return reference_status;
+  }
+  return symbols_written ? verdict : kExitUsage;
 }
 
 }  // namespace

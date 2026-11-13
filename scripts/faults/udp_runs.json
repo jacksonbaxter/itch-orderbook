@@ -113,8 +113,8 @@
       "mutations": [
         {
           "file": "scripts/udp_report.py",
-          "old": "        if check_results.section(text, title) != \"\\n\" + \"\\n\".join(lines) + \"\\n\\n\":\n",
-          "new": "        if False:\n"
+          "old": "                     if check_results.section(text, title) != \"\\n\" + \"\\n\".join(lines) + \"\\n\\n\"]\n",
+          "new": "                     if False]\n"
         }
       ],
       "command": [
@@ -806,8 +806,8 @@
       "mutations": [
         {
           "file": "scripts/udp_report.py",
-          "old": "        row[\"target\"] is not None and row[\"achieved\"] < udp_driver.PACE * row[\"target\"]\n",
-          "new": "        row[\"target\"] is not None and row[\"achieved\"] < 0\n"
+          "old": "        row[\"target\"] is not None and not valid_lossless(row)\n",
+          "new": "        row[\"target\"] is not None and False\n"
         }
       ],
       "command": [
@@ -901,6 +901,132 @@
       ],
       "expect": {
         "signature": "^FAIL: test_the_ceiling_and_its_cap ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-latency-median-of-printed",
+      "breaks": "The latency medians are of the times as printed, to 0.01 µs, not of the records' own times",
+      "check": "test_udp_report.py test_the_latency_medians_are_of_the_unrounded_times",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "            times = [value_range(row, key) for row in runs",
+          "new": "            times = [value_range(row, key, printed=True) for row in runs"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_latency_medians_are_of_the_unrounded_times ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-latency-cells-unread",
+      "breaks": "--check gives each latency median the middle of the range its cells leave, not the file's own cell within it",
+      "check": "test_udp_report.py test_the_latency_medians_are_of_the_unrounded_times",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    return {\"ceiling\": ceiling, \"cpu\": cpu, \"latency\": latency}\n",
+          "new": "    return {\"ceiling\": ceiling, \"cpu\": cpu, \"latency\": {}}\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_latency_medians_are_of_the_unrounded_times ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-pace-of-printed",
+      "breaks": "Whether the sender kept pace is asked of the rate rounded to a whole message a second, not the record's own rate",
+      "check": "test_udp_report.py test_the_pace_is_the_unrounded_rate_s",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "        return row[\"raw\"][\"achieved\"] >= target\n",
+          "new": "        return round(row[\"raw\"][\"achieved\"]) >= target\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_pace_is_the_unrounded_rate_s ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-pace-open-one-reading",
+      "breaks": "--check reads a row whose printed rate leaves its pace either way one way only, as the cell reads",
+      "check": "test_udp_report.py test_the_pace_is_the_unrounded_rate_s",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    for reading in itertools.product((True, False), repeat=len(open_rows)):\n",
+          "new": "    for reading in [(True,) * len(open_rows)]:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_pace_is_the_unrounded_rate_s ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-pace-open-read-as-printed",
+      "breaks": "--check takes a printed rate's pace as settled where the cell leaves it either way",
+      "check": "test_udp_report.py test_the_pace_is_the_unrounded_rate_s",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    if low >= target or high < target:\n",
+          "new": "    if True:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_pace_is_the_unrounded_rate_s ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-pace-open-unbounded",
+      "breaks": "--check tries every reading of any number of rows whose pace is open, 2 to the power of their count",
+      "check": "test_udp_report.py test_check_tries_no_more_than_ten_rows_whose_pace_is_open",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    if len(open_rows) > MOST_OPEN:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_tries_no_more_than_ten_rows_whose_pace_is_open ",
         "exit": 1
       }
     }

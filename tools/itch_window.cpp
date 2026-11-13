@@ -22,7 +22,9 @@
 //     each search FlatLevels makes, which is at every add and at every message that removes a
 //     level's last order. A search reads one key for each such level and one more, so this is
 //     what a window of W entries, a search that walks W entries and no further, would leave
-//     to the rest of the side.
+//     to the rest of the side. A U's add search is counted as the book makes it, after the old
+//     order is gone: when that order was alone on a level better than the new price, its level
+//     has closed, and the search passes one level fewer than the book held before the U.
 //
 // Exit codes: 0 the day walked and applied cleanly, 1 the book refused a message, 2 the file
 // could not be read or the arguments are wrong.
@@ -95,12 +97,14 @@ void count_price(const Book& book, std::uint16_t locate, itch::Side side, itch::
   }
 }
 
+// `closed` is how many of the levels better than the price close before the book searches.
 void count_search(const Book& book, std::uint16_t locate, itch::Side side, itch::Price4 price,
-                  DepthCounts& counts) {
+                  std::uint32_t closed, DepthCounts& counts) {
   const itch::LevelId id{.locate = locate, .side = side, .price = price};
   const auto place = book.levels().search(id);
   const std::uint32_t count = book.sides()[itch::side_key(locate, side)].count;
-  const std::uint32_t better = count - place.position - (place.level == itch::kNoIndex ? 0U : 1U);
+  const std::uint32_t better =
+      count - place.position - (place.level == itch::kNoIndex ? 0U : 1U) - closed;
   ++counts.searches;
   std::size_t bucket = 0;
   while (bucket + 1 < kDepthFloors.size() && better >= kDepthFloors.at(bucket + 1)) {
@@ -128,14 +132,23 @@ void count_named(const Book& book, std::uint64_t reference, bool removes, Counts
   count_price(book, order->locate, order->side, order->price, counts.named);
   const auto* level = book.find_level(order->locate, order->side, order->price);
   if (removes && level != nullptr && level->order_count == 1) {
-    count_search(book, order->locate, order->side, order->price, counts.close_searches);
+    count_search(book, order->locate, order->side, order->price, 0, counts.close_searches);
   }
 }
 
 void count_add(const Book& book, std::uint16_t locate, itch::Side side, itch::Price4 price,
-               Counts& counts) {
+               std::uint32_t closed, Counts& counts) {
   count_price(book, locate, side, price, counts.adds);
-  count_search(book, locate, side, price, counts.add_searches);
+  count_search(book, locate, side, price, closed, counts.add_searches);
+}
+
+// 1 if a U's old order is alone on its level and that level is better than the new price: the
+// book closes it before it searches for the new one.
+[[nodiscard]] std::uint32_t closed_before_search(const Book& book, const itch::RestingOrder& old,
+                                                 itch::Price4 price) {
+  const auto* level = book.find_level(old.locate, old.side, old.price);
+  const bool better = old.side == itch::Side::bid ? old.price > price : old.price < price;
+  return level != nullptr && level->order_count == 1 && better ? 1U : 0U;
 }
 
 void observe(const Book& book, std::span<const std::byte> payload, Counts& counts) {
@@ -148,12 +161,12 @@ void observe(const Book& book, std::span<const std::byte> payload, Counts& count
   switch (type) {
     case itch::AddOrder::kType: {
       const itch::AddOrder add = itch::AddOrder::from_wire(m);
-      count_add(book, add.header.stock_locate, side_of(add.side), add.price, counts);
+      count_add(book, add.header.stock_locate, side_of(add.side), add.price, 0, counts);
       return;
     }
     case itch::AddOrderAttributed::kType: {
       const itch::AddOrderAttributed add = itch::AddOrderAttributed::from_wire(m);
-      count_add(book, add.header.stock_locate, side_of(add.side), add.price, counts);
+      count_add(book, add.header.stock_locate, side_of(add.side), add.price, 0, counts);
       return;
     }
     case itch::OrderExecuted::kType: {
@@ -182,7 +195,8 @@ void observe(const Book& book, std::span<const std::byte> payload, Counts& count
       const auto order = book.resting_order(u.original_order_reference);
       count_named(book, u.original_order_reference, true, counts);
       if (order) {
-        count_add(book, order->locate, order->side, u.price, counts);
+        count_add(book, order->locate, order->side, u.price,
+                  closed_before_search(book, *order, u.price), counts);
       }
       return;
     }

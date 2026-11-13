@@ -87,7 +87,7 @@ T-INV-2 is strict, and it fails on real data: books cross while a symbol is halt
 | PRINTS | 01302020 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 1 arm | `dd6a39a` | [results/trades_01302020.md](results/trades_01302020.md) |
 | T-TRADE-1 | 03272019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
 | T-TRADE-2 | 03272019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
-| T-TRADE-3 | 03272019 | Darwin arm64 Apple M4 Max | **FAIL** | trade_shares wrong on PLAB, trades wrong on PLAB; equal_shares 5664 of 5665, equal_prints 5664 of 5665; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
+| T-TRADE-3 | 03272019 | Darwin arm64 Apple M4 Max | **FAIL** | trade_shares wrong on PLAB, trades wrong on PLAB; equal_shares 5664 of 5665, equal_prints 5664 of 5665; shares equal on 5,664 of 5,665; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
 | T-TRADE-5 | 03272019 | Darwin arm64 Apple M4 Max | **FAIL** | 2 violations; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
 | PRINTS | 03272019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
 | T-TRADE-1 | 05302019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 1 arm | `5810aa3` | [results/trades_05302019.md](results/trades_05302019.md) |
@@ -161,14 +161,14 @@ Book designs. Each row is one design's results file, with its ratio over each ma
 | `paged-linked` | ram | not tracked | 12302019 | debian | pinned to core 4 | 2,542,188 | 1.85% | 399.71 | 648.3 | 1.25× | 1.39× | `e0f9bb8101a2` | [results/bench_book_paged-linked_ram_debian_12302019.md](results/bench_book_paged-linked_ram_debian_12302019.md) |
 | `paged-linked` | ram | not tracked | 12302019 | macOS (M4 Max) | not pinned | 11,934,176 | 5.28% | 85.14 | 648.7 | 2.07× | 2.23× | `9934df5c3b7a` | [results/bench_book_paged-linked_ram_mac_12302019.md](results/bench_book_paged-linked_ram_mac_12302019.md) |
 
-The backtester. Each row is one workload's results file: T-BT-1 replays the whole day with a quoting strategy, T-BT-3 queuetruth's four symbols with its shadow orders. Each file says what one event is and what its rate is over, beside its source's.
+The backtester. Each row is one workload's results file: T-BT-1 replays the whole day with a quoting strategy, T-BT-3 queuetruth's four symbols with its shadow orders. Each file says what one event is and what its rate is over, beside its source's. Each bar is in the unit BENCHMARKS.md gives it, T-BT-1's in events a second and T-BT-3's in ITCH messages a second, and the verdict compares the median in that unit, which the CV is of; the other rate is beside it, labelled.
 
-| Workload | Target | Day | Host | Pinning | Median messages/s | CV | Engine events/s | Verdict | Commit | File |
-|---|---|---|---|---|---|---|---|---|---|---|
-| quoting | T-BT-1 | 12302019 | debian | pinned to core 4 | 4,570,542 | 0.98% | 4,677,511 | met | `c8ca2e2dd09b` | [results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md) |
-| quoting | T-BT-1 | 12302019 | macOS (M4 Max) | not pinned | 16,792,852 | 2.06% | 17,185,873 | host differs | `4fa6701df1cf` | [results/backtest_quoting_mac_12302019.md](results/backtest_quoting_mac_12302019.md) |
-| shadow | T-BT-3 | 12302019 | debian | pinned to core 4 | 3,354,119 | 2.06% | 7,160,445 | missed | `c8ca2e2dd09b` | [results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md) |
-| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | 7,804,654 | 0.24% | 16,661,541 | met | `55978750888d` | [results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md) |
+| Workload | Target | Day | Host | Pinning | Bar | Median, in the bar's unit | CV | The other rate | Verdict | Commit | File |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| quoting | T-BT-1 | 12302019 | debian | pinned to core 4 | ≥ 2.00 M engine events/s | 4,677,511 engine events/s | 0.98% | 4,570,542 messages/s | met | `c8ca2e2dd09b` | [results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md) |
+| quoting | T-BT-1 | 12302019 | macOS (M4 Max) | not pinned | ≥ 2.00 M engine events/s | 17,185,873 engine events/s | 2.06% | 16,792,852 messages/s | host differs | `4fa6701df1cf` | [results/backtest_quoting_mac_12302019.md](results/backtest_quoting_mac_12302019.md) |
+| shadow | T-BT-3 | 12302019 | debian | pinned to core 4 | ≥ 4.61 M messages/s | 3,509,307 messages/s | 0.25% | 7,491,744 engine events/s | missed | `22fe2d6542a1` | [results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md) |
+| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | ≥ 4.61 M messages/s | 7,804,654 messages/s | 0.24% | 16,661,541 engine events/s | met | `55978750888d` | [results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md) |
 
 The browser demo's replay of one symbol's extract, in a browser and natively on the same Mac, the same C++ on each side. Rates come from whole replays only: the browser cannot time one message. The bar was set in Google Chrome, so another browser neither meets nor misses it.
 
@@ -180,17 +180,17 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 
 | What | Host | Summary | Commit | File |
 |---|---|---|---|---|
-| Misses by message type and by the age of the order named, hash-flat on debian, 12302019 | debian | floor on DRAM demand fills a message naming an order: 0.601 under 1 ms old, 4.954 at 1 s and over; 54.5% of those messages name an order 1 s old or more | `31508858939c` | [results/counters_by_age_hash-flat_debian_12302019.md](results/counters_by_age_hash-flat_debian_12302019.md) |
-| Misses by message type and by the age of the order named, identity-flat on debian, 12302019 | debian | floor on DRAM demand fills a message naming an order: 0.461 under 1 ms old, 5.086 at 1 s and over; 54.5% of those messages name an order 1 s old or more | `31508858939c` | [results/counters_by_age_identity-flat_debian_12302019.md](results/counters_by_age_identity-flat_debian_12302019.md) |
-| Misses by message type and by the age of the order named, paged-flat on debian, 12302019 | debian | floor on DRAM demand fills a message naming an order: 0.049 under 1 ms old, 4.373 at 1 s and over; 54.5% of those messages name an order 1 s old or more | `31508858939c` | [results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md) |
+| Misses by message type and by the age of the order named, hash-flat on debian, 12302019 | debian | floor on DRAM demand fills a message naming an order: 0.601 under 1 ms old, 4.954 at 1 s and over; 54.5% of those messages name an order 1 s old or more; 1 process of the 3 planned | `31508858939c` | [results/counters_by_age_hash-flat_debian_12302019.md](results/counters_by_age_hash-flat_debian_12302019.md) |
+| Misses by message type and by the age of the order named, identity-flat on debian, 12302019 | debian | floor on DRAM demand fills a message naming an order: 0.461 under 1 ms old, 5.086 at 1 s and over; 54.5% of those messages name an order 1 s old or more; 1 process of the 3 planned | `31508858939c` | [results/counters_by_age_identity-flat_debian_12302019.md](results/counters_by_age_identity-flat_debian_12302019.md) |
+| Misses by message type and by the age of the order named, paged-flat on debian, 12302019 | debian | floor on DRAM demand fills a message naming an order: 0.049 under 1 ms old, 4.373 at 1 s and over; 54.5% of those messages name an order 1 s old or more; 2 processes of the 3 planned | `31508858939c` | [results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md) |
 | The Zen 1 counter table on debian | debian | of 37 tried, 27 counts, 1 counts zero, 7 not supported, 2 refused | `5a16936a14e8` | [results/counters_zen1_events_debian.md](results/counters_zen1_events_debian.md) |
 | E7: dispatch form, debian, 12302019 | debian | fastest form threaded; branch misses a message spread 0.0702 across the book forms; E7 not refuted | `54e5dc3b4938` | [results/dispatch_debian_12302019.md](results/dispatch_debian_12302019.md) |
 | E7: dispatch form, mac, 12302019 | macOS (M4 Max) | fastest form threaded; E7 not judged on this host, no branch-miss counter | `fde07d41bf28` | [results/dispatch_mac_12302019.md](results/dispatch_mac_12302019.md) |
-| Flamegraph: the backtester, quoting on debian, 12302019 | debian | 119,933 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 38.53% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_backtest-quoting_debian_12302019.md](results/flamegraph_backtest-quoting_debian_12302019.md) |
-| Flamegraph: the map baseline, map-fresh on debian, 12302019 | debian | 243,786 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::rest_order` at 22.63% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_map-fresh_debian_12302019.md](results/flamegraph_map-fresh_debian_12302019.md) |
-| Flamegraph: the book replay, paged-flat on debian, 12302019 | debian | 105,077 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 42.14% self; the frame-pointer build at 0.9755 of the normal build's throughput | `5a16936a14e8` | [results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md) |
+| Flamegraph: the backtester, quoting on debian, 12302019 | debian | 119,933 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 38.53% self; the frame-pointer build at 0.9755 of the normal build's throughput, both measured on `paged-flat` | `5a16936a14e8` | [results/flamegraph_backtest-quoting_debian_12302019.md](results/flamegraph_backtest-quoting_debian_12302019.md) |
+| Flamegraph: the map baseline, map-fresh on debian, 12302019 | debian | 243,786 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::rest_order` at 22.63% self; the frame-pointer build at 0.9755 of the normal build's throughput, both measured on `paged-flat` | `5a16936a14e8` | [results/flamegraph_map-fresh_debian_12302019.md](results/flamegraph_map-fresh_debian_12302019.md) |
+| Flamegraph: the book replay, paged-flat on debian, 12302019 | debian | 105,077 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 42.14% self; the frame-pointer build at 0.9755 of the normal build's throughput, both measured on `paged-flat` | `5a16936a14e8` | [results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md) |
 | carteret's layout experiments on this book, debian, 12302019 | debian | hash policy +10.79% (identity-flat over hash-flat); open addressing against chaining +7.93% (chained-flat over hash-flat); search window of 16 -0.18% (paged-flat-scan16 over paged-flat, ranges overlap); search window of 0 -4.09% (paged-flat-bisect over paged-flat) | `31508858939c` | [results/layout_debian_12302019.md](results/layout_debian_12302019.md) |
-| carteret's layout experiments on this book, mac, 12302019 | macOS (M4 Max) | hash policy +3.81% (identity-flat over hash-flat); open addressing against chaining +8.08% (chained-flat over hash-flat); search window of 16 -1.13% (paged-flat-scan16 over paged-flat); search window of 0 -13.95% (paged-flat-bisect over paged-flat) | `efdfc96d2b6b` | [results/layout_mac_12302019.md](results/layout_mac_12302019.md) |
+| carteret's layout experiments on this book, mac, 12302019 | macOS (M4 Max) | hash policy +3.81% (identity-flat over hash-flat; hash-flat 2 of 3 processes); open addressing against chaining +8.08% (chained-flat over hash-flat; chained-flat 1 of 3 processes, hash-flat 2 of 3 processes, one process has no range); search window of 16 -1.13% (paged-flat-scan16 over paged-flat); search window of 0 -13.95% (paged-flat-bisect over paged-flat; paged-flat-bisect 2 of 3 processes) | `efdfc96d2b6b` | [results/layout_mac_12302019.md](results/layout_mac_12302019.md) |
 | The order lookup apart from the level work, debian, 12302019 | debian | paged-flat lookup 30.71 ns, 17.3% of the pass; hash-flat lookup 32.50 ns, 15.3% of the pass | `54e5dc3b4938` | [results/lookup_debian_12302019.md](results/lookup_debian_12302019.md) |
 | The order lookup apart from the level work, mac, 12302019 | macOS (M4 Max) | paged-flat lookup 8.95 ns, 19.6% of the pass; hash-flat lookup 5.03 ns, 9.1% of the pass | `fde07d41bf28` | [results/lookup_mac_12302019.md](results/lookup_mac_12302019.md) |
 | E8: prefetch look-ahead on the book build, debian, 12302019 | debian | best look-ahead D=16 at +16.41% over D=0; E8 not refuted | `54e5dc3b4938` | [results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md) |
@@ -219,7 +219,7 @@ Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows
 | Where the DRAM demand fills fall, by structure, debian, 12302019 | debian | largest single structure level record at 22.7% of the floor on DRAM demand fills; no structure reaches the 40% rule, no bottleneck claimed | `31508858939c` | [results/structure_debian_12302019.md](results/structure_debian_12302019.md) |
 | The walks of the backtester's simulated levels, counted, on macOS (M4 Max), 12302019 | macOS (M4 Max); the counts are the same on any host, since nothing is timed | T-BT-3: 1.081 walks, 1.769 level steps and 0.518 order steps a message, 4.37 levels on the side at a walk on average; 100,000 orders, 23,400 s life: 1.084, 6.781 and 1.035, 81.67 levels | `3077b849234b` | [results/walks_counts_12302019.md](results/walks_counts_12302019.md) |
 | The walks of the backtester's simulated levels, timed on a ladder of schedules, on debian, 12302019 | debian | 4.969 ns a walk step over 4 schedules; the walk 3.51% of T-BT-3's 323.88 ns a message and 10.45% of 100,000 orders, 14,400 s life's 348.76 ns | `df1676ed0e18` | [results/walks_ladder_debian_12302019.md](results/walks_ladder_debian_12302019.md) |
-| carteret's window width against overflow, on this book, 12302019 | macOS (M4 Max); the counts are the same on any host, since nothing is timed | adds outside a window of 256 ticks 8.337%, of 2,048 1.493% (carteret 4.90% and 1.03%); sub-cent 0.468%; add searches past 1 or fewer better levels 57.10%, past 16 or more 10.79% | `3188ffdea6a6` | [results/window_12302019.md](results/window_12302019.md) |
+| carteret's window width against overflow, on this book, 12302019 | macOS (M4 Max); the counts are the same on any host, since nothing is timed | adds outside a window of 256 ticks 8.337%, of 2,048 1.493% (carteret 4.90% and 1.03%); sub-cent 0.468%; add searches past 1 or fewer better levels 57.27%, past 16 or more 10.75% | `fc35ccf0136b` | [results/window_12302019.md](results/window_12302019.md) |
 
 The SPSC ring. Each row is one comparison from a results file's targets table: a ratio of two of its medians, or for T-SPSC-3 the median of paired ratios, against BENCHMARKS.md's bar. Every bar was set on x86, so a macOS row says the host differs, and an unpinned Mac's cross-core figures are weak evidence.
 
@@ -308,342 +308,346 @@ The market maker on its report day, 12302019, a late-December session, with ever
 | BYND | AS both off, proportional | 57 | 2,980 | +140.91 | -157.26 | -375.41 | -391.76 | -13.146 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
 | BYND | GLFT Base | 66 | 3,624 | +152.26 | -184.33 | -430.67 | -462.74 | -12.769 | [results/mm_pnl_12302019.md](results/mm_pnl_12302019.md) |
 
-Every benchmark run, failed ones included, from [results/run_log.md](results/run_log.md).
+Every benchmark run, failed ones included, from [results/run_log.md](results/run_log.md). The log is never edited, so a run with more than one row has a later one saying what became of it: of the rows with one run id, the last stands.
 
-| Run | Prediction | Commit | OS | Outcome |
-|---|---|---|---|---|
-| `P-0001-20261031T083536Z` | `P-0001` | `747d316af3f5` | Darwin | `published` |
-| `P-0002-20261031T090306Z` | `P-0002` | `9392a9ba8a5b` | Linux | `chase verdict PASS` |
-| `P-0003-20261031T091318Z` | `P-0003` | `20cdcde135b0` | Linux | `chase verdict FAIL` |
-| `P-0004-20261031T091341Z` | `P-0004` | `unknown` | Linux | `refused at repetition 1` |
-| `P-0006-20261031T091906Z` | `P-0006` | `92e3f74c5766` | Linux | `published` |
-| `P-0008-20261103T082340Z` | `P-0008` | `3e5b67a8cefe` | Darwin | `refused at repetition 1, hash-linked` |
-| `P-0008-20261103T082514Z` | `P-0008` | `9934df5c3b7a` | Darwin | `published` |
-| `P-0009-20261103T090210Z` | `P-0009` | `f3fe97a93cea` | Darwin | `published` |
-| `P-0010-20261103T105131Z` | `P-0010` | `bfdd4bb117a7` | Linux | `stopped by hand at repetition 1, hash-linked, before any record` |
-| `P-0010-20261103T105404Z` | `P-0010` | `bfdd4bb117a7` | Linux | `stopped at repetition 1, hash-linked, by the host` |
-| `P-0010-20261103T110708Z` | `P-0010` | `bfdd4bb117a7` | Linux | `refused by hand at repetition 1, hash-flat, untimed process` |
-| `P-0011-20261103T112023Z` | `P-0011` | `bfdd4bb117a7` | Linux | `published` |
-| `P-0012-20261104T044034Z` | `P-0012` | `2810183f1d95` | Linux | `refused at repetition 1, map-aged` |
-| `P-0013-20261104T054149Z` | `P-0013` | `2810183f1d95` | Linux | `published` |
-| `P-0014-20261104T071049Z` | `P-0014` | `0ffe738913e4` | Linux | `refused at machine_check` |
-| `P-0101-20261104T113327Z` | `P-0101` | `4fa6701df1cf` | Darwin | `published` |
-| `P-0102-20261104T113546Z` | `P-0102` | `55978750888d` | Darwin | `published` |
-| `P-0015-20261104T113711Z` | `P-0015` | `e0f9bb8101a2` | Linux | `refused at repetition 1, hash-linked` |
-| `P-0015-20261105T023133Z` | `P-0015` | `e0f9bb8101a2` | Linux | `stopped by SIGTERM at repetition 1, hash-linked, timed process; nothing from it is published; the row was written by the driver as it stopped; typed after the driver's words` |
-| `P-0015-20261105T023320Z` | `P-0015` | `e0f9bb8101a2` | Linux | `published` |
-| `P-0019-20261105T073137Z` | `P-0019` | `5a16936a14e8` | Linux | `published` |
-| `P-0019-20261105T073614Z` | `P-0019` | `5a16936a14e8` | Linux | `published` |
-| `P-0016-20261105T071857Z` | `P-0016` | `5a16936a14e8` | Linux | `published` |
-| `P-0018-20261105T080854Z` | `P-0018` | `5a16936a14e8` | Linux | `published` |
-| `P-0018-20261105T081041Z` | `P-0018` | `5a16936a14e8` | Linux | `published` |
-| `P-0018-20261105T081446Z` | `P-0018` | `5a16936a14e8` | Linux | `published` |
-| `P-0017-20261105T074512Z` | `P-0017` | `5a16936a14e8` | Linux | `published` |
-| `P-0017-20261105T075659Z` | `P-0017` | `5a16936a14e8` | Linux | `published` |
-| `P-0201-20261105T053845Z` | `P-0201` | `abfb37c88eb0` | Darwin | `published` |
-| `P-0201-20261105T053946Z` | `P-0201` | `9fee6ab0cb7b` | Darwin | `published` |
-| `P-0202-20261105T080745Z` | `P-0202` | `0999cb43a604` | Darwin | `published` |
-| `P-0020-20261105T142440Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
-| `P-0020-20261105T142543Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
-| `P-0020-20261105T142704Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
-| `P-0020-20261105T142807Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
-| `P-0020-20261105T142928Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
-| `P-0020-20261105T143302Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` |
-| `P-0021-20261105T143424Z` | `P-0021` | `54e5dc3b4938` | Darwin | `withdrawn` |
-| `P-0021-20261105T143454Z` | `P-0021` | `54e5dc3b4938` | Darwin | `stopped by hand` |
-| `P-0020-20261105T171158Z` | `P-0020` | `54e5dc3b4938` | Linux | `withdrawn` |
-| `P-0020-20261105T171616Z` | `P-0020` | `54e5dc3b4938` | Linux | `withdrawn` |
-| `P-0020-20261105T172111Z` | `P-0020` | `54e5dc3b4938` | Linux | `published` |
-| `P-0021-20261105T174823Z` | `P-0021` | `54e5dc3b4938` | Linux | `published` |
-| `P-0022-20261105T181819Z` | `P-0022` | `54e5dc3b4938` | Linux | `published` |
-| `P-0020-20261105T151435Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0020-20261105T151539Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0020-20261105T151805Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0020-20261105T152031Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T152222Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T152406Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T152442Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T152519Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T152843Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T153054Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0022-20261105T153236Z` | `P-0022` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0022-20261105T153304Z` | `P-0022` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0022-20261105T153606Z` | `P-0022` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0020-20261105T153653Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0020-20261105T153802Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0020-20261105T153930Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0020-20261105T154610Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0020-20261105T154736Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T154936Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T155015Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T155056Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T155138Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T155501Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T155541Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T155624Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T155708Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T155743Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T155823Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T155906Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T155951Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T160026Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T160106Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T160149Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T160229Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0020-20261105T202719Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T203253Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T203635Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T203829Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0021-20261105T204826Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` |
-| `P-0020-20261105T151701Z` | `P-0020` | `fde07d41bf28` | Darwin | `published` |
-| `P-0021-20261105T152154Z` | `P-0021` | `fde07d41bf28` | Darwin | `published` |
-| `P-0022-20261105T153208Z` | `P-0022` | `fde07d41bf28` | Darwin | `published` |
-| `P-0301-20261105T115340Z` | `P-0301` | `f870418ad388` | Darwin | `published` |
-| `P-0302-20261105T115802Z` | `P-0302` | `f870418ad388` | Darwin | `published` |
-| `P-0303-20261105T120127Z` | `P-0303` | `f870418ad388` | Darwin | `published by the driver, then withdrawn by hand before it was committed` |
-| `P-0304-20261105T131900Z` | `P-0304` | `660007edd63b` | Darwin | `published by the driver, then withdrawn by hand before it was committed` |
-| `P-0304-20261105T132346Z` | `P-0304` | `bb83ed30c6a6` | Darwin | `published` |
-| `P-0401-20261105T163315Z_native` | `P-0401` | `05215cc6b2b0` | Darwin | `recorded` |
-| `P-0401-20261105T163318Z_browser` | `P-0401` | `05215cc6b2b0` | Darwin | `recorded` |
-| `P-0401-20261105T163315Z_native` | `P-0401` | `05215cc6b2b0` | Darwin | `withdrawn` |
-| `P-0401-20261105T163318Z_browser` | `P-0401` | `05215cc6b2b0` | Darwin | `withdrawn` |
-| `P-0401-20261105T171728Z_native` | `P-0401` | `545918cf50d4` | Darwin | `recorded` |
-| `P-0401-20261105T171731Z_browser` | `P-0401` | `545918cf50d4` | Darwin | `recorded` |
-| `P-0301-20261105T115340Z` | `P-0301` | `f870418ad388` | Darwin | `withdrawn` |
-| `P-0302-20261105T115802Z` | `P-0302` | `f870418ad388` | Darwin | `withdrawn` |
-| `P-0304-20261105T132346Z` | `P-0304` | `bb83ed30c6a6` | Darwin | `withdrawn` |
-| `P-0301-20261106T004328Z` | `P-0301` | `675befb3ad78` | Darwin | `withdrawn` |
-| `P-0301-20261105T235714Z` | `P-0301` | `675befb3ad78` | Darwin | `refused at results` |
-| `P-0302-20261106T004853Z` | `P-0302` | `675befb3ad78` | Darwin | `stopped by SIGTERM at waiting for the Mac to be quiet; nothing from it is published; the row was written by the driver as it stopped` |
-| `P-0301-20261106T014054Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T014404Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T014822Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T015258Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T015541Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T015705Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T015905Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T020215Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T020835Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T021202Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T021413Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T021605Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T021735Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T021936Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T022105Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T022235Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T022720Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T022833Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T023314Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T023433Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T023734Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T024224Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0301-20261106T012423Z` | `P-0301` | `0550a6017ece` | Darwin | `published` |
-| `P-0302-20261106T024847Z` | `P-0302` | `0550a6017ece` | Darwin | `published` |
-| `P-0304-20261106T025925Z` | `P-0304` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0304-20261106T030257Z` | `P-0304` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0304-20261106T030541Z` | `P-0304` | `0550a6017ece` | Darwin | `withdrawn` |
-| `P-0304-20261106T025242Z` | `P-0304` | `0550a6017ece` | Darwin | `published` |
-| `P-0305-20261106T014006Z` | `P-0305` | `675befb3ad78` | Linux | `published` |
-| `P-0305-20261106T014007Z` | `P-0305` | `675befb3ad78` | Linux | `published` |
-| `P-0305-20261106T014008Z` | `P-0305` | `675befb3ad78` | Linux | `published` |
-| `P-0306-20261106T075203Z` | `P-0306` | `675befb3ad78` | Linux | `published` |
-| `P-0307-20261106T075615Z` | `P-0307` | `675befb3ad78` | Linux | `published` |
-| `P-0308-20261106T080410Z` | `P-0308` | `675befb3ad78` | Linux | `published` |
-| `P-0308-20261106T080410Z` | `P-0308` | `675befb3ad78` | Linux | `withdrawn` |
-| `P-0308-20261109T231118Z` | `P-0308` | `8b5f06b896b3` | Linux | `published` |
-| `P-0502-20261105T175851Z` | `P-0502` | `9d5d4db0d16d` | Darwin | `stopped by SIGTERM at repetition 1, paged-flat, timed process; nothing from it is published; the row was written by the driver as it stopped; typed after the driver's words` |
-| `P-0502-20261105T192119Z` | `P-0502` | `15291031b1c5` | Darwin | `withdrawn` |
-| `P-0502-20261105T192630Z` | `P-0502` | `28c31ea79704` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_scalar-w2-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_neon-w2-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_scalar-w4-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_scalar-w6-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_neon-w6-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_scalar-w8-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_scalar-w4-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_neon-w4-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_scalar-w6-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_scalar-w8-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_neon-w8-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_scalar-w2-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z_scalar-w4-3` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` |
-| `P-0601-20261106T031311Z` | `P-0601` | `6588fa1fc1e3` | Darwin | `refused` |
-| `P-0601-20261106T031646Z_scalar-w2-1` | `P-0601` | `07c1bb1bab05` | Darwin | `withdrawn` |
-| `P-0601-20261106T031646Z` | `P-0601` | `07c1bb1bab05` | Darwin | `recorded` |
-| `P-0601-20261106T031646Z_report` | `P-0601` | `07c1bb1bab05` | Darwin | `published` |
-| `P-0602-20261106T032041Z` | `P-0602` | `ecee4a126b42` | Darwin | `recorded` |
-| `P-0602-20261106T032041Z_report` | `P-0602` | `ecee4a126b42` | Darwin | `published` |
-| `P-0603-20261106T032148Z_scalar-3` | `P-0603` | `86df0a80e649` | Darwin | `withdrawn` |
-| `P-0603-20261106T032148Z` | `P-0603` | `86df0a80e649` | Darwin | `recorded` |
-| `P-0604-20261106T032300Z_neon-1` | `P-0604` | `e3346335bed9` | Darwin | `withdrawn` |
-| `P-0604-20261106T032300Z` | `P-0604` | `e3346335bed9` | Darwin | `recorded` |
-| `P-0603-20261106T032148Z_report` | `P-0603` | `86df0a80e649` | Darwin | `published` |
-| `P-0604-20261106T032300Z_report` | `P-0604` | `e3346335bed9` | Darwin | `published` |
-| `P-0605-20261106T032513Z_neon-3` | `P-0605` | `3139854b4611` | Darwin | `withdrawn` |
-| `P-0605-20261106T032513Z` | `P-0605` | `3139854b4611` | Darwin | `recorded` |
-| `P-0606-20261106T032625Z_constant-3` | `P-0606` | `8621cf047934` | Darwin | `withdrawn` |
-| `P-0606-20261106T032625Z_length-3` | `P-0606` | `8621cf047934` | Darwin | `withdrawn` |
-| `P-0606-20261106T032625Z` | `P-0606` | `8621cf047934` | Darwin | `recorded` |
-| `P-0605-20261106T032513Z_report` | `P-0605` | `3139854b4611` | Darwin | `published` |
-| `P-0606-20261106T032625Z_report` | `P-0606` | `8621cf047934` | Darwin | `published` |
-| `P-0607-20261106T032808Z_compare-neon-n8-1` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` |
-| `P-0607-20261106T032808Z_compare-scalar-n64-3` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` |
-| `P-0607-20261106T032808Z_bitset-n64-3` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` |
-| `P-0607-20261106T032808Z_compare-scalar-n8-3` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` |
-| `P-0607-20261106T032808Z_compare-neon-n8-3` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` |
-| `P-0607-20261106T032808Z_compare-scalar-n64-4` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` |
-| `P-0607-20261106T032808Z_bitset-n64-4` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` |
-| `P-0607-20261106T032808Z_compare-scalar-n64-5` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` |
-| `P-0607-20261106T032808Z` | `P-0607` | `6102fabfd16f` | Darwin | `recorded` |
-| `P-0608-20261106T033249Z_exact-1` | `P-0608` | `3903f15d62ec` | Darwin | `withdrawn` |
-| `P-0608-20261106T033249Z_overread-2` | `P-0608` | `3903f15d62ec` | Darwin | `withdrawn` |
-| `P-0608-20261106T033249Z` | `P-0608` | `3903f15d62ec` | Darwin | `recorded` |
-| `P-0607-20261106T032808Z_report` | `P-0607` | `6102fabfd16f` | Darwin | `published` |
-| `P-0608-20261106T033249Z_report` | `P-0608` | `3903f15d62ec` | Darwin | `published` |
-| `P-0609-20261106T033507Z` | `P-0609` | `f7bf6842c202` | Darwin | `recorded` |
-| `P-0609-20261106T033507Z_report` | `P-0609` | `f7bf684` | Darwin | `not published` |
-| `P-0609-20261106T033637Z_scalar-3` | `P-0609` | `2c4136ec2116` | Darwin | `withdrawn` |
-| `P-0609-20261106T033637Z` | `P-0609` | `2c4136ec2116` | Darwin | `recorded` |
-| `P-0609-20261106T033637Z_report` | `P-0609` | `2c4136ec2116` | Darwin | `published` |
-| `P-0610-20261106T033824Z` | `P-0610` | `28f5fd6d0014` | Darwin | `recorded` |
-| `P-0610-20261106T033824Z_report` | `P-0610` | `28f5fd6d0014` | Darwin | `published` |
-| `P-0612-20261110T064838Z` | `P-0612` | `bd81414b46e7` | Linux | `recorded` |
-| `P-0613-20261110T065110Z` | `P-0613` | `bd81414b46e7` | Linux | `recorded` |
-| `P-0614-20261110T065415Z` | `P-0614` | `bd81414b46e7` | Linux | `recorded` |
-| `P-0611-20261110T065836Z` | `P-0611` | `bd81414b46e7` | Linux | `recorded` |
-| `P-0616-20261110T070549Z` | `P-0616` | `bd81414b46e7` | Linux | `recorded` |
-| `P-0617-20261110T070839Z` | `P-0617` | `bd81414b46e7` | Linux | `recorded` |
-| `P-0619-20261110T071013Z` | `P-0619` | `bd81414b46e7` | Linux | `recorded` |
-| `P-0618-20261110T071236Z` | `P-0618` | `bd81414b46e7` | Linux | `recorded` |
-| `P-0615-20261110T072015Z` | `P-0615` | `bd81414b46e7` | Linux | `recorded` |
-| `P-0620-20261110T073631Z` | `P-0620` | `688cf8c229dc` | Linux | `recorded` |
-| `P-0611-20261110T065836Z_report` | `P-0611` | `bd81414b46e7` | Linux | `published` |
-| `P-0612-20261110T064838Z_report` | `P-0612` | `bd81414b46e7` | Linux | `published` |
-| `P-0613-20261110T065110Z_report` | `P-0613` | `bd81414b46e7` | Linux | `published` |
-| `P-0614-20261110T065415Z_report` | `P-0614` | `bd81414b46e7` | Linux | `published` |
-| `P-0615-20261110T072015Z_report` | `P-0615` | `bd81414b46e7` | Linux | `published` |
-| `P-0616-20261110T070549Z_report` | `P-0616` | `bd81414b46e7` | Linux | `published` |
-| `P-0617-20261110T070839Z_report` | `P-0617` | `bd81414b46e7` | Linux | `published` |
-| `P-0618-20261110T071236Z_report` | `P-0618` | `bd81414b46e7` | Linux | `published` |
-| `P-0619-20261110T071013Z_report` | `P-0619` | `bd81414b46e7` | Linux | `published` |
-| `P-0620-20261110T073631Z_report` | `P-0620` | `688cf8c229dc` | Linux | `published` |
-| `P-0024-window-12302019` | `P-0024` | `3188ffdea6a6` | Darwin | `published` |
-| `P-0023-20261110T103318Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `published` |
-| `P-0023-20261110T103426Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T103553Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T103626Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T103733Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T104040Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T104111Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T104208Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T104346Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T104504Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T104539Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T104615Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T105456Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T105535Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T105610Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T105649Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T105730Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T120044Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T120132Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T120435Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T120602Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T120701Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T120749Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T120908Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T121707Z` | `P-0023` | `31508858939c` | Linux | `published` |
-| `P-0026-20261110T125013Z` | `P-0026` | `31508858939c` | Linux | `published` |
-| `P-0023-20261110T120008Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T160609Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T160729Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` |
-| `P-0023-20261110T103318Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `published` |
-| `P-0025-20261110T134729Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
-| `P-0025-20261110T151027Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
-| `P-0025-20261110T151358Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
-| `P-0025-20261110T151539Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
-| `P-0025-20261110T151822Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
-| `P-0025-20261110T152213Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
-| `P-0025-20261110T152850Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
-| `P-0025-20261110T154831Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
-| `P-0025-20261110T155201Z` | `P-0025` | `31508858939c` | Linux | `stopped by hand before it ran` |
-| `P-0025-20261110T183655Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
-| `P-0025-20261110T202336Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` |
-| `P-0025-20261110T134502Z` | `P-0025` | `31508858939c` | Linux | `published` |
-| `P-0025-20261110T153144Z` | `P-0025` | `31508858939c` | Linux | `published` |
-| `P-0025-20261110T154538Z` | `P-0025` | `31508858939c` | Linux | `published` |
-| `P-0701-20261110T031534Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
-| `P-0701-20261110T032355Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
-| `P-0701-20261110T033215Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
-| `P-0701-20261110T033635Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
-| `P-0701-20261110T033853Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
-| `P-0701-20261110T034934Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
-| `P-0701-20261110T040413Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
-| `P-0701-20261110T041729Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
-| `P-0701-20261110T042103Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
-| `P-0701-20261110T042433Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` |
-| `P-0701-20261110T031311Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `stopped by SIGTERM at waiting for the Mac to be quiet; nothing from it is published; the row was written by the driver as it stopped` |
-| `P-0701-20261110T063624Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
-| `P-0701-20261110T064504Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
-| `P-0701-20261110T064734Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
-| `P-0701-20261110T063344Z` | `P-0701` | `105084de0645` | Darwin | `refused at malloc-fresh, repetition 1` |
-| `P-0701-20261110T072504Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
-| `P-0701-20261110T072734Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
-| `P-0701-20261110T072921Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
-| `P-0701-20261110T071917Z` | `P-0701` | `105084de0645` | Darwin | `refused at malloc-fresh, repetition 1` |
-| `P-0701-20261110T093003Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
-| `P-0701-20261110T093521Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
-| `P-0701-20261110T093735Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` |
-| `P-0701-20261110T092811Z` | `P-0701` | `105084de0645` | Darwin | `refused at malloc-fresh, repetition 1` |
-| `P-0701-20261110T101440Z` | `P-0701` | `827bcbf08cf9` | Darwin | `withdrawn` |
-| `P-0701-20261110T101720Z` | `P-0701` | `827bcbf08cf9` | Darwin | `withdrawn` |
-| `P-0701-20261110T102208Z` | `P-0701` | `827bcbf08cf9` | Darwin | `withdrawn` |
-| `P-0701-20261110T100918Z` | `P-0701` | `827bcbf08cf9` | Darwin | `refused at malloc-fresh, repetition 1` |
-| `P-0103-20261111T061100Z` | `P-0103` | `c8ca2e2dd09b` | Linux | `published` |
-| `P-0104-20261111T061705Z` | `P-0104` | `c8ca2e2dd09b` | Linux | `published` |
-| `P-0802-20261110T162713Z_oracle` | `P-0802` | `b0b0b1f` | Darwin | `stopped by hand` |
-| `P-0801-20261110T165443Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T170230Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T170541Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `not published` |
-| `P-0801-20261110T170649Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T170831Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T171943Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T180217Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T181339Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T182251Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `not published` |
-| `P-0801-20261110T183306Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T184413Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T194206Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T213940Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T215103Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T221012Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T221334Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0801-20261110T221456Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` |
-| `P-0621-20261110T073644Z` | `P-0621` | `bd81414b46e7` | Linux | `diagnostic` |
-| `P-0309-debian-tsan-stress` | `P-0309` | `675befb3ad78` | Linux | `diagnostic` |
-| `P-0702-20261111T115529Z` | `P-0702` | `c8ca2e2dd09b` | Linux | `published` |
-| `P-0702-20261111T165051Z` | `P-0702` | `c8ca2e2dd09b` | Linux | `published` |
-| `P-0703-20261111T230006Z` | `P-0703` | `c8ca2e2dd09b` | Linux | `diagnostic, from the build of c8ca2e2 that P-0702 ran, not rebuilt, `src/` then holding df1676ed0e18` |
-| `P-0703-20261111T230854Z` | `P-0703` | `c8ca2e2dd09b` | Linux | `diagnostic, from the build of c8ca2e2 that P-0702 ran, not rebuilt, `src/` then holding df1676ed0e18` |
-| `P-0105-20261111T233500Z` | `P-0105` | `df1676ed0e18` | Linux | `published` |
-| `P-0901-20261112T020300Z_smoke-loopback-S3` | `P-0901` | `d847e8750aac` | Linux | `failed` |
-| `P-0901-20261112T020300Z_smoke-loopback-U4` | `P-0901` | `d847e8750aac` | Linux | `failed` |
-| `P-0901-20261112T020300Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` |
-| `P-0901-20261112T020304Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` |
-| `P-0902-20261112T020551Z` | `P-0902` | `d847e8750aac` | Linux | `recorded` |
-| `P-0901-20261112T030148Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` |
-| `P-0901-20261112T044013Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` |
-| `P-0901-20261112T020541Z_smoke-paced` | `P-0901` | `d847e8750aac` | Linux | `diagnostic, outside the driver, after the smoke step's unpaced S3 and U4 runs failed` |
-| `P-0901-20261112T020304Z_report` | `P-0901` | `d847e8750aac` | Linux | `published` |
-| `P-0902-20261112T020551Z_report` | `P-0902` | `d847e8750aac` | Linux | `published` |
-| `P-0901-20261112T030148Z_report` | `P-0901` | `d847e8750aac` | Linux | `published` |
-| `P-0901-20261112T044013Z_report` | `P-0901` | `d847e8750aac` | Linux | `published` |
-| `P-0903-20261112T163205Z_readings` | `P-0903` | `d847e8750aac` | Linux | `reading, untimed, outside the driver and `measure.sh`, before P-0903 was written` |
-| `P-0903-20261112T165325Z` | `P-0903` | `1843ac9d69ec` | Linux | `recorded` |
-| `P-0903-20261112T165458Z` | `P-0903` | `1843ac9d69ec` | Linux | `recorded` |
-| `P-0903-20261112T172808Z` | `P-0903` | `1843ac9d69ec` | Linux | `recorded` |
-| `P-0903-20261112T165458Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
-| `P-0903-20261112T172808Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
-| `P-0903-20261112T165458Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
-| `P-0903-20261112T172808Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` |
+| Run | Prediction | Commit | OS | Outcome | Stands |
+|---|---|---|---|---|---|
+| `P-0001-20261031T083536Z` | `P-0001` | `747d316af3f5` | Darwin | `published` | yes |
+| `P-0002-20261031T090306Z` | `P-0002` | `9392a9ba8a5b` | Linux | `chase verdict PASS` | yes |
+| `P-0003-20261031T091318Z` | `P-0003` | `20cdcde135b0` | Linux | `chase verdict FAIL` | yes |
+| `P-0004-20261031T091341Z` | `P-0004` | `unknown` | Linux | `refused at repetition 1` | yes |
+| `P-0006-20261031T091906Z` | `P-0006` | `92e3f74c5766` | Linux | `published` | yes |
+| `P-0008-20261103T082340Z` | `P-0008` | `3e5b67a8cefe` | Darwin | `refused at repetition 1, hash-linked` | yes |
+| `P-0008-20261103T082514Z` | `P-0008` | `9934df5c3b7a` | Darwin | `published` | yes |
+| `P-0009-20261103T090210Z` | `P-0009` | `f3fe97a93cea` | Darwin | `published` | yes |
+| `P-0010-20261103T105131Z` | `P-0010` | `bfdd4bb117a7` | Linux | `stopped by hand at repetition 1, hash-linked, before any record` | yes |
+| `P-0010-20261103T105404Z` | `P-0010` | `bfdd4bb117a7` | Linux | `stopped at repetition 1, hash-linked, by the host` | yes |
+| `P-0010-20261103T110708Z` | `P-0010` | `bfdd4bb117a7` | Linux | `refused by hand at repetition 1, hash-flat, untimed process` | yes |
+| `P-0011-20261103T112023Z` | `P-0011` | `bfdd4bb117a7` | Linux | `published` | yes |
+| `P-0012-20261104T044034Z` | `P-0012` | `2810183f1d95` | Linux | `refused at repetition 1, map-aged` | yes |
+| `P-0013-20261104T054149Z` | `P-0013` | `2810183f1d95` | Linux | `published` | yes |
+| `P-0014-20261104T071049Z` | `P-0014` | `0ffe738913e4` | Linux | `refused at machine_check` | yes |
+| `P-0101-20261104T113327Z` | `P-0101` | `4fa6701df1cf` | Darwin | `published` | yes |
+| `P-0102-20261104T113546Z` | `P-0102` | `55978750888d` | Darwin | `published` | yes |
+| `P-0015-20261104T113711Z` | `P-0015` | `e0f9bb8101a2` | Linux | `refused at repetition 1, hash-linked` | yes |
+| `P-0015-20261105T023133Z` | `P-0015` | `e0f9bb8101a2` | Linux | `stopped by SIGTERM at repetition 1, hash-linked, timed process; nothing from it is published; the row was written by the driver as it stopped; typed after the driver's words` | yes |
+| `P-0015-20261105T023320Z` | `P-0015` | `e0f9bb8101a2` | Linux | `published` | yes |
+| `P-0019-20261105T073137Z` | `P-0019` | `5a16936a14e8` | Linux | `published` | yes |
+| `P-0019-20261105T073614Z` | `P-0019` | `5a16936a14e8` | Linux | `published` | yes |
+| `P-0016-20261105T071857Z` | `P-0016` | `5a16936a14e8` | Linux | `published` | yes |
+| `P-0018-20261105T080854Z` | `P-0018` | `5a16936a14e8` | Linux | `published` | yes |
+| `P-0018-20261105T081041Z` | `P-0018` | `5a16936a14e8` | Linux | `published` | yes |
+| `P-0018-20261105T081446Z` | `P-0018` | `5a16936a14e8` | Linux | `published` | yes |
+| `P-0017-20261105T074512Z` | `P-0017` | `5a16936a14e8` | Linux | `published` | yes |
+| `P-0017-20261105T075659Z` | `P-0017` | `5a16936a14e8` | Linux | `published` | yes |
+| `P-0201-20261105T053845Z` | `P-0201` | `abfb37c88eb0` | Darwin | `published` | no: `run_log.md:344` stands |
+| `P-0201-20261105T053946Z` | `P-0201` | `9fee6ab0cb7b` | Darwin | `published` | yes |
+| `P-0202-20261105T080745Z` | `P-0202` | `0999cb43a604` | Darwin | `published` | yes |
+| `P-0020-20261105T142440Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T142543Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T142704Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T142807Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T142928Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T143302Z` | `P-0020` | `54e5dc3b4938` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T143424Z` | `P-0021` | `54e5dc3b4938` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T143454Z` | `P-0021` | `54e5dc3b4938` | Darwin | `stopped by hand` | yes |
+| `P-0020-20261105T171158Z` | `P-0020` | `54e5dc3b4938` | Linux | `withdrawn` | yes |
+| `P-0020-20261105T171616Z` | `P-0020` | `54e5dc3b4938` | Linux | `withdrawn` | yes |
+| `P-0020-20261105T172111Z` | `P-0020` | `54e5dc3b4938` | Linux | `published` | yes |
+| `P-0021-20261105T174823Z` | `P-0021` | `54e5dc3b4938` | Linux | `published` | yes |
+| `P-0022-20261105T181819Z` | `P-0022` | `54e5dc3b4938` | Linux | `published` | yes |
+| `P-0020-20261105T151435Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T151539Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T151805Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T152031Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T152222Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T152406Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T152442Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T152519Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T152843Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T153054Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0022-20261105T153236Z` | `P-0022` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0022-20261105T153304Z` | `P-0022` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0022-20261105T153606Z` | `P-0022` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T153653Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T153802Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T153930Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T154610Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T154736Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T154936Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T155015Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T155056Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T155138Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T155501Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T155541Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T155624Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T155708Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T155743Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T155823Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T155906Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T155951Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T160026Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T160106Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T160149Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T160229Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T202719Z` | `P-0020` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T203253Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T203635Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T203829Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0021-20261105T204826Z` | `P-0021` | `fde07d41bf28` | Darwin | `withdrawn` | yes |
+| `P-0020-20261105T151701Z` | `P-0020` | `fde07d41bf28` | Darwin | `published` | yes |
+| `P-0021-20261105T152154Z` | `P-0021` | `fde07d41bf28` | Darwin | `published` | yes |
+| `P-0022-20261105T153208Z` | `P-0022` | `fde07d41bf28` | Darwin | `published` | yes |
+| `P-0301-20261105T115340Z` | `P-0301` | `f870418ad388` | Darwin | `published` | no: `run_log.md:104` stands |
+| `P-0302-20261105T115802Z` | `P-0302` | `f870418ad388` | Darwin | `published` | no: `run_log.md:105` stands |
+| `P-0303-20261105T120127Z` | `P-0303` | `f870418ad388` | Darwin | `published by the driver, then withdrawn by hand before it was committed` | yes |
+| `P-0304-20261105T131900Z` | `P-0304` | `660007edd63b` | Darwin | `published by the driver, then withdrawn by hand before it was committed` | yes |
+| `P-0304-20261105T132346Z` | `P-0304` | `bb83ed30c6a6` | Darwin | `published` | no: `run_log.md:106` stands |
+| `P-0401-20261105T163315Z_native` | `P-0401` | `05215cc6b2b0` | Darwin | `recorded` | no: `run_log.md:100` stands |
+| `P-0401-20261105T163318Z_browser` | `P-0401` | `05215cc6b2b0` | Darwin | `recorded` | no: `run_log.md:101` stands |
+| `P-0401-20261105T163315Z_native` | `P-0401` | `05215cc6b2b0` | Darwin | `withdrawn` | yes |
+| `P-0401-20261105T163318Z_browser` | `P-0401` | `05215cc6b2b0` | Darwin | `withdrawn` | yes |
+| `P-0401-20261105T171728Z_native` | `P-0401` | `545918cf50d4` | Darwin | `recorded` | yes |
+| `P-0401-20261105T171731Z_browser` | `P-0401` | `545918cf50d4` | Darwin | `recorded` | yes |
+| `P-0301-20261105T115340Z` | `P-0301` | `f870418ad388` | Darwin | `withdrawn` | yes |
+| `P-0302-20261105T115802Z` | `P-0302` | `f870418ad388` | Darwin | `withdrawn` | yes |
+| `P-0304-20261105T132346Z` | `P-0304` | `bb83ed30c6a6` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T004328Z` | `P-0301` | `675befb3ad78` | Darwin | `withdrawn` | yes |
+| `P-0301-20261105T235714Z` | `P-0301` | `675befb3ad78` | Darwin | `refused at results` | yes |
+| `P-0302-20261106T004853Z` | `P-0302` | `675befb3ad78` | Darwin | `stopped by SIGTERM at waiting for the Mac to be quiet; nothing from it is published; the row was written by the driver as it stopped` | yes |
+| `P-0301-20261106T014054Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T014404Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T014822Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T015258Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T015541Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T015705Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T015905Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T020215Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T020835Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T021202Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T021413Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T021605Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T021735Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T021936Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T022105Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T022235Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T022720Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T022833Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T023314Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T023433Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T023734Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T024224Z` | `P-0301` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0301-20261106T012423Z` | `P-0301` | `0550a6017ece` | Darwin | `published` | yes |
+| `P-0302-20261106T024847Z` | `P-0302` | `0550a6017ece` | Darwin | `published` | yes |
+| `P-0304-20261106T025925Z` | `P-0304` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0304-20261106T030257Z` | `P-0304` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0304-20261106T030541Z` | `P-0304` | `0550a6017ece` | Darwin | `withdrawn` | yes |
+| `P-0304-20261106T025242Z` | `P-0304` | `0550a6017ece` | Darwin | `published` | yes |
+| `P-0305-20261106T014006Z` | `P-0305` | `675befb3ad78` | Linux | `published` | yes |
+| `P-0305-20261106T014007Z` | `P-0305` | `675befb3ad78` | Linux | `published` | yes |
+| `P-0305-20261106T014008Z` | `P-0305` | `675befb3ad78` | Linux | `published` | yes |
+| `P-0306-20261106T075203Z` | `P-0306` | `675befb3ad78` | Linux | `published` | yes |
+| `P-0307-20261106T075615Z` | `P-0307` | `675befb3ad78` | Linux | `published` | yes |
+| `P-0308-20261106T080410Z` | `P-0308` | `675befb3ad78` | Linux | `published` | no: `run_log.md:144` stands |
+| `P-0308-20261106T080410Z` | `P-0308` | `675befb3ad78` | Linux | `withdrawn` | yes |
+| `P-0308-20261109T231118Z` | `P-0308` | `8b5f06b896b3` | Linux | `published` | yes |
+| `P-0502-20261105T175851Z` | `P-0502` | `9d5d4db0d16d` | Darwin | `stopped by SIGTERM at repetition 1, paged-flat, timed process; nothing from it is published; the row was written by the driver as it stopped; typed after the driver's words` | yes |
+| `P-0502-20261105T192119Z` | `P-0502` | `15291031b1c5` | Darwin | `withdrawn` | yes |
+| `P-0502-20261105T192630Z` | `P-0502` | `28c31ea79704` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_scalar-w2-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_neon-w2-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_scalar-w4-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_scalar-w6-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_neon-w6-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_scalar-w8-1` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_scalar-w4-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_neon-w4-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_scalar-w6-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_scalar-w8-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_neon-w8-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_scalar-w2-2` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z_scalar-w4-3` | `P-0601` | `6588fa1fc1e3` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031311Z` | `P-0601` | `6588fa1fc1e3` | Darwin | `refused` | yes |
+| `P-0601-20261106T031646Z_scalar-w2-1` | `P-0601` | `07c1bb1bab05` | Darwin | `withdrawn` | yes |
+| `P-0601-20261106T031646Z` | `P-0601` | `07c1bb1bab05` | Darwin | `recorded` | yes |
+| `P-0601-20261106T031646Z_report` | `P-0601` | `07c1bb1bab05` | Darwin | `published` | yes |
+| `P-0602-20261106T032041Z` | `P-0602` | `ecee4a126b42` | Darwin | `recorded` | yes |
+| `P-0602-20261106T032041Z_report` | `P-0602` | `ecee4a126b42` | Darwin | `published` | yes |
+| `P-0603-20261106T032148Z_scalar-3` | `P-0603` | `86df0a80e649` | Darwin | `withdrawn` | yes |
+| `P-0603-20261106T032148Z` | `P-0603` | `86df0a80e649` | Darwin | `recorded` | yes |
+| `P-0604-20261106T032300Z_neon-1` | `P-0604` | `e3346335bed9` | Darwin | `withdrawn` | yes |
+| `P-0604-20261106T032300Z` | `P-0604` | `e3346335bed9` | Darwin | `recorded` | yes |
+| `P-0603-20261106T032148Z_report` | `P-0603` | `86df0a80e649` | Darwin | `published` | yes |
+| `P-0604-20261106T032300Z_report` | `P-0604` | `e3346335bed9` | Darwin | `published` | yes |
+| `P-0605-20261106T032513Z_neon-3` | `P-0605` | `3139854b4611` | Darwin | `withdrawn` | yes |
+| `P-0605-20261106T032513Z` | `P-0605` | `3139854b4611` | Darwin | `recorded` | yes |
+| `P-0606-20261106T032625Z_constant-3` | `P-0606` | `8621cf047934` | Darwin | `withdrawn` | yes |
+| `P-0606-20261106T032625Z_length-3` | `P-0606` | `8621cf047934` | Darwin | `withdrawn` | yes |
+| `P-0606-20261106T032625Z` | `P-0606` | `8621cf047934` | Darwin | `recorded` | yes |
+| `P-0605-20261106T032513Z_report` | `P-0605` | `3139854b4611` | Darwin | `published` | yes |
+| `P-0606-20261106T032625Z_report` | `P-0606` | `8621cf047934` | Darwin | `published` | yes |
+| `P-0607-20261106T032808Z_compare-neon-n8-1` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` | yes |
+| `P-0607-20261106T032808Z_compare-scalar-n64-3` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` | yes |
+| `P-0607-20261106T032808Z_bitset-n64-3` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` | yes |
+| `P-0607-20261106T032808Z_compare-scalar-n8-3` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` | yes |
+| `P-0607-20261106T032808Z_compare-neon-n8-3` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` | yes |
+| `P-0607-20261106T032808Z_compare-scalar-n64-4` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` | yes |
+| `P-0607-20261106T032808Z_bitset-n64-4` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` | yes |
+| `P-0607-20261106T032808Z_compare-scalar-n64-5` | `P-0607` | `6102fabfd16f` | Darwin | `withdrawn` | yes |
+| `P-0607-20261106T032808Z` | `P-0607` | `6102fabfd16f` | Darwin | `recorded` | yes |
+| `P-0608-20261106T033249Z_exact-1` | `P-0608` | `3903f15d62ec` | Darwin | `withdrawn` | yes |
+| `P-0608-20261106T033249Z_overread-2` | `P-0608` | `3903f15d62ec` | Darwin | `withdrawn` | yes |
+| `P-0608-20261106T033249Z` | `P-0608` | `3903f15d62ec` | Darwin | `recorded` | yes |
+| `P-0607-20261106T032808Z_report` | `P-0607` | `6102fabfd16f` | Darwin | `published` | yes |
+| `P-0608-20261106T033249Z_report` | `P-0608` | `3903f15d62ec` | Darwin | `published` | yes |
+| `P-0609-20261106T033507Z` | `P-0609` | `f7bf6842c202` | Darwin | `recorded` | yes |
+| `P-0609-20261106T033507Z_report` | `P-0609` | `f7bf684` | Darwin | `not published` | yes |
+| `P-0609-20261106T033637Z_scalar-3` | `P-0609` | `2c4136ec2116` | Darwin | `withdrawn` | yes |
+| `P-0609-20261106T033637Z` | `P-0609` | `2c4136ec2116` | Darwin | `recorded` | yes |
+| `P-0609-20261106T033637Z_report` | `P-0609` | `2c4136ec2116` | Darwin | `published` | yes |
+| `P-0610-20261106T033824Z` | `P-0610` | `28f5fd6d0014` | Darwin | `recorded` | yes |
+| `P-0610-20261106T033824Z_report` | `P-0610` | `28f5fd6d0014` | Darwin | `published` | yes |
+| `P-0612-20261110T064838Z` | `P-0612` | `bd81414b46e7` | Linux | `recorded` | yes |
+| `P-0613-20261110T065110Z` | `P-0613` | `bd81414b46e7` | Linux | `recorded` | yes |
+| `P-0614-20261110T065415Z` | `P-0614` | `bd81414b46e7` | Linux | `recorded` | yes |
+| `P-0611-20261110T065836Z` | `P-0611` | `bd81414b46e7` | Linux | `recorded` | yes |
+| `P-0616-20261110T070549Z` | `P-0616` | `bd81414b46e7` | Linux | `recorded` | yes |
+| `P-0617-20261110T070839Z` | `P-0617` | `bd81414b46e7` | Linux | `recorded` | yes |
+| `P-0619-20261110T071013Z` | `P-0619` | `bd81414b46e7` | Linux | `recorded` | yes |
+| `P-0618-20261110T071236Z` | `P-0618` | `bd81414b46e7` | Linux | `recorded` | yes |
+| `P-0615-20261110T072015Z` | `P-0615` | `bd81414b46e7` | Linux | `recorded` | yes |
+| `P-0620-20261110T073631Z` | `P-0620` | `688cf8c229dc` | Linux | `recorded` | yes |
+| `P-0611-20261110T065836Z_report` | `P-0611` | `bd81414b46e7` | Linux | `published` | yes |
+| `P-0612-20261110T064838Z_report` | `P-0612` | `bd81414b46e7` | Linux | `published` | yes |
+| `P-0613-20261110T065110Z_report` | `P-0613` | `bd81414b46e7` | Linux | `published` | yes |
+| `P-0614-20261110T065415Z_report` | `P-0614` | `bd81414b46e7` | Linux | `published` | yes |
+| `P-0615-20261110T072015Z_report` | `P-0615` | `bd81414b46e7` | Linux | `published` | yes |
+| `P-0616-20261110T070549Z_report` | `P-0616` | `bd81414b46e7` | Linux | `published` | yes |
+| `P-0617-20261110T070839Z_report` | `P-0617` | `bd81414b46e7` | Linux | `published` | yes |
+| `P-0618-20261110T071236Z_report` | `P-0618` | `bd81414b46e7` | Linux | `published` | yes |
+| `P-0619-20261110T071013Z_report` | `P-0619` | `bd81414b46e7` | Linux | `published` | yes |
+| `P-0620-20261110T073631Z_report` | `P-0620` | `688cf8c229dc` | Linux | `published` | yes |
+| `P-0024-window-12302019` | `P-0024` | `3188ffdea6a6` | Darwin | `published` | yes |
+| `P-0023-20261110T103318Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `published` | no: `run_log.md:252` stands |
+| `P-0023-20261110T103426Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T103553Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T103626Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T103733Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T104040Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T104111Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T104208Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T104346Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T104504Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T104539Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T104615Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T105456Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T105535Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T105610Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T105649Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T105730Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T120044Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T120132Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T120435Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T120602Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T120701Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T120749Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T120908Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T121707Z` | `P-0023` | `31508858939c` | Linux | `published` | yes |
+| `P-0026-20261110T125013Z` | `P-0026` | `31508858939c` | Linux | `published` | yes |
+| `P-0023-20261110T120008Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T160609Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T160729Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `withdrawn` | yes |
+| `P-0023-20261110T103318Z` | `P-0023` | `efdfc96d2b6b` | Darwin | `published` | yes |
+| `P-0025-20261110T134729Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` | yes |
+| `P-0025-20261110T151027Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` | yes |
+| `P-0025-20261110T151358Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` | yes |
+| `P-0025-20261110T151539Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` | yes |
+| `P-0025-20261110T151822Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` | yes |
+| `P-0025-20261110T152213Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` | yes |
+| `P-0025-20261110T152850Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` | yes |
+| `P-0025-20261110T154831Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` | yes |
+| `P-0025-20261110T155201Z` | `P-0025` | `31508858939c` | Linux | `stopped by hand before it ran` | yes |
+| `P-0025-20261110T183655Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` | yes |
+| `P-0025-20261110T202336Z` | `P-0025` | `31508858939c` | Linux | `withdrawn` | yes |
+| `P-0025-20261110T134502Z` | `P-0025` | `31508858939c` | Linux | `published` | yes |
+| `P-0025-20261110T153144Z` | `P-0025` | `31508858939c` | Linux | `published` | yes |
+| `P-0025-20261110T154538Z` | `P-0025` | `31508858939c` | Linux | `published` | yes |
+| `P-0701-20261110T031534Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T032355Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T033215Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T033635Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T033853Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T034934Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T040413Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T041729Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T042103Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T042433Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T031311Z` | `P-0701` | `0ed35b29eb5a` | Darwin | `stopped by SIGTERM at waiting for the Mac to be quiet; nothing from it is published; the row was written by the driver as it stopped` | yes |
+| `P-0701-20261110T063624Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T064504Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T064734Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T063344Z` | `P-0701` | `105084de0645` | Darwin | `refused at malloc-fresh, repetition 1` | yes |
+| `P-0701-20261110T072504Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T072734Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T072921Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T071917Z` | `P-0701` | `105084de0645` | Darwin | `refused at malloc-fresh, repetition 1` | yes |
+| `P-0701-20261110T093003Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T093521Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T093735Z` | `P-0701` | `105084de0645` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T092811Z` | `P-0701` | `105084de0645` | Darwin | `refused at malloc-fresh, repetition 1` | yes |
+| `P-0701-20261110T101440Z` | `P-0701` | `827bcbf08cf9` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T101720Z` | `P-0701` | `827bcbf08cf9` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T102208Z` | `P-0701` | `827bcbf08cf9` | Darwin | `withdrawn` | yes |
+| `P-0701-20261110T100918Z` | `P-0701` | `827bcbf08cf9` | Darwin | `refused at malloc-fresh, repetition 1` | yes |
+| `P-0103-20261111T061100Z` | `P-0103` | `c8ca2e2dd09b` | Linux | `published` | yes |
+| `P-0104-20261111T061705Z` | `P-0104` | `c8ca2e2dd09b` | Linux | `published` | yes |
+| `P-0802-20261110T162713Z_oracle` | `P-0802` | `b0b0b1f` | Darwin | `stopped by hand` | yes |
+| `P-0801-20261110T165443Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T170230Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T170541Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `not published` | yes |
+| `P-0801-20261110T170649Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T170831Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T171943Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T180217Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T181339Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T182251Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `not published` | yes |
+| `P-0801-20261110T183306Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T184413Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T194206Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T213940Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T215103Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T221012Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T221334Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0801-20261110T221456Z` | `P-0801` | `b0b0b1f3421c` | Darwin | `withdrawn` | yes |
+| `P-0621-20261110T073644Z` | `P-0621` | `bd81414b46e7` | Linux | `diagnostic` | yes |
+| `P-0309-debian-tsan-stress` | `P-0309` | `675befb3ad78` | Linux | `diagnostic` | yes |
+| `P-0702-20261111T115529Z` | `P-0702` | `c8ca2e2dd09b` | Linux | `published` | yes |
+| `P-0702-20261111T165051Z` | `P-0702` | `c8ca2e2dd09b` | Linux | `published` | yes |
+| `P-0703-20261111T230006Z` | `P-0703` | `c8ca2e2dd09b` | Linux | `diagnostic, from the build of c8ca2e2 that P-0702 ran, not rebuilt, `src/` then holding df1676ed0e18` | yes |
+| `P-0703-20261111T230854Z` | `P-0703` | `c8ca2e2dd09b` | Linux | `diagnostic, from the build of c8ca2e2 that P-0702 ran, not rebuilt, `src/` then holding df1676ed0e18` | yes |
+| `P-0105-20261111T233500Z` | `P-0105` | `df1676ed0e18` | Linux | `published` | yes |
+| `P-0901-20261112T020300Z_smoke-loopback-S3` | `P-0901` | `d847e8750aac` | Linux | `failed` | yes |
+| `P-0901-20261112T020300Z_smoke-loopback-U4` | `P-0901` | `d847e8750aac` | Linux | `failed` | yes |
+| `P-0901-20261112T020300Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` | yes |
+| `P-0901-20261112T020304Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` | yes |
+| `P-0902-20261112T020551Z` | `P-0902` | `d847e8750aac` | Linux | `recorded` | yes |
+| `P-0901-20261112T030148Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` | yes |
+| `P-0901-20261112T044013Z` | `P-0901` | `d847e8750aac` | Linux | `recorded` | yes |
+| `P-0901-20261112T020541Z_smoke-paced` | `P-0901` | `d847e8750aac` | Linux | `diagnostic, outside the driver, after the smoke step's unpaced S3 and U4 runs failed` | yes |
+| `P-0901-20261112T020304Z_report` | `P-0901` | `d847e8750aac` | Linux | `published` | yes |
+| `P-0902-20261112T020551Z_report` | `P-0902` | `d847e8750aac` | Linux | `published` | yes |
+| `P-0901-20261112T030148Z_report` | `P-0901` | `d847e8750aac` | Linux | `published` | yes |
+| `P-0901-20261112T044013Z_report` | `P-0901` | `d847e8750aac` | Linux | `published` | yes |
+| `P-0903-20261112T163205Z_readings` | `P-0903` | `d847e8750aac` | Linux | `reading, untimed, outside the driver and `measure.sh`, before P-0903 was written` | yes |
+| `P-0903-20261112T165325Z` | `P-0903` | `1843ac9d69ec` | Linux | `recorded` | yes |
+| `P-0903-20261112T165458Z` | `P-0903` | `1843ac9d69ec` | Linux | `recorded` | yes |
+| `P-0903-20261112T172808Z` | `P-0903` | `1843ac9d69ec` | Linux | `recorded` | yes |
+| `P-0903-20261112T165458Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` | no: `run_log.md:339` stands |
+| `P-0903-20261112T172808Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` | no: `run_log.md:340` stands |
+| `P-0903-20261112T165458Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` | yes |
+| `P-0903-20261112T172808Z_report` | `P-0903` | `1843ac9d69ec` | Linux | `published` | yes |
+| `P-0027-window-12302019` | `P-0027` | `fc35ccf0136b` | Darwin | `published` | yes |
+| `P-0028-rerun-20261113T030553Z` | `P-0028` | `a3388a03ed5d` | Darwin | `recorded` | yes |
+| `P-0106-20261113T040315Z` | `P-0106` | `22fe2d6542a1` | Linux | `published` | yes |
+| `P-0201-20261105T053845Z` | `P-0201` | `abfb37c88eb0` | Darwin | `withdrawn` | yes |
 <!-- results table: end -->

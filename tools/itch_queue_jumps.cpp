@@ -22,8 +22,9 @@
 //            add came before the open, no replace came late, and every printable `C` in the
 //            population traded at a price better for the aggressor than its order showed.
 //
-// Exit codes: 0 the day replayed (and, with --strict, held), 1 the book refused a message or
-// --strict failed, 2 bad usage or an unreadable file.
+// Exit codes: 0 the day replayed (and, with --strict, held), 1 the book refused a message,
+// --strict failed or the file's framing did not end on a frame boundary (tools/framing.hpp),
+// 2 bad usage or an unreadable file.
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -41,6 +42,7 @@
 #include <utility>
 #include <vector>
 
+#include "framing.hpp"
 #include "itch/book.hpp"
 #include "itch/messages.hpp"
 #include "itch/reader.hpp"
@@ -446,6 +448,9 @@ int run(std::span<const char* const> args) {
   if (!file) {
     std::println(stderr, "itch_queue_jumps: cannot read {}", path);
     return 2;
+  }
+  if (!itch::tools::framing_ends_cleanly("itch_queue_jumps", file->bytes())) {
+    return 1;
   }
   std::FILE* details = nullptr;
   if (details_path != nullptr) {

@@ -370,6 +370,37 @@
       "expect": {
         "signature": "map compare cli: FAIL \\S+ hash linked aged: ager_allocations None"
       }
+    },
+    {
+      "id": "mapbook-capacity-zero-orders-taken",
+      "breaks": "itch_map_compare takes --max-orders 0, which gives the hash indexes one slot and a shift of 64",
+      "check": "test_map_compare_cli, the capacities",
+      "mutations": [
+        {
+          "file": "tools/capacity.hpp",
+          "old": "  if (error != std::errc{} || end != value.data() + value.size() || parsed == 0) {\n",
+          "new": "  if (error != std::errc{} || end != value.data() + value.size()) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_map_compare"
+        ]
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_map_compare_cli.py",
+        "{build}/tools/itch_map_compare",
+        "{build}/map_compare_cli_fault",
+        "{tree}/tests/fixtures/oracle",
+        "{tree}/tests/fixtures/trades"
+      ],
+      "expect": {
+        "signature": "map compare cli: FAIL capacity --max-orders 0 --index hash: exit",
+        "exit": 1
+      }
     }
   ]
 }
