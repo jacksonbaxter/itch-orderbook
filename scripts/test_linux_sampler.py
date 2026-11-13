@@ -180,7 +180,7 @@ class SamplerOnAMadeUpProc(unittest.TestCase):
     def test_the_kinds(self):
         projects = Path(self.scratch.name) / "projects"
         others = [
-            (600, "kworker/2:1", {"ticks": 30, "cpu_after": 2, "flags": linux_sampler.PF_KTHREAD}),
+            (600, "kfrob/2:1", {"ticks": 30, "cpu_after": 2, "flags": linux_sampler.PF_KTHREAD}),
             (601, "daemon", {"ticks": 20, "cpu_after": 3, "uid": 0}),
             (602, "unit tests", {"ticks": 50, "cpu_after": 6, "cwd": projects / "other" / "b"}),
             (603, "a (strange) name", {"ticks": 10, "cpu_after": 7}),
@@ -192,7 +192,7 @@ class SamplerOnAMadeUpProc(unittest.TestCase):
         busy = [line for line in lines if " busy " in line]
         self.assertEqual([line.split(" ", 3)[3] for line in busy], [
             "cpu6 another project's process: unit tests [602]",
-            "cpu2 a kernel thread: kworker/2:1 [600]",
+            "cpu2 a kernel thread: kfrob/2:1 [600]",
             "cpu3 a Linux system daemon: daemon [601]",
             "cpu7 another process: a (strange) name [603]",
             "cpu1 another process of this project: build [604]"])
