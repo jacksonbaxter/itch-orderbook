@@ -267,6 +267,25 @@ class Check(unittest.TestCase):
         self.assertEqual(check_results.parse_other_day_verdicts(text.replace(
             ", on 10302019 | 66.03 M", " | 66.03 M")), [])
 
+    def test_a_swap_line_whose_counts_differ_is_refused(self):
+        # Held for every results file; shown on the published parse file, whose line has both.
+        text = (REPO_ROOT / "results" / "parse_rate_debian_12302019.md").read_text(encoding="utf-8")
+        self.assertEqual(check_results.check_text(text), [])
+        line = ("The kernel's pswpout was 2,303,951 at the start of the run and 2,303,951 after "
+                "its last process: no page of any process was swapped out")
+        self.assertIn(line, text)
+        found = check_results.check_text(text.replace(line, line.replace(
+            "and 2,303,951 after", "and 2,303,999 after")))
+        self.assertEqual({code for code, _ in found}, {"swap-line-inconsistent"})
+
+    def test_a_passing_input_resident_with_pages_missing_is_refused(self):
+        text = (REPO_ROOT / "results" / "parse_rate_debian_12302019.md").read_text(encoding="utf-8")
+        line = "machine_check: pass input-resident: 2014504 of 2014504 pages resident"
+        self.assertEqual(text.count(line), 1)
+        found = check_results.check_text(text.replace(line, line.replace(
+            "2014504 of", "2014057 of")))
+        self.assertEqual({code for code, _ in found}, {"machine-check-inconsistent"})
+
     def test_rates_over_fewer_messages_than_every_frame(self):
         # The framing passes over no message at all, and the decode over the messages it
         # decoded: the file's own figures agree with its table, but not with the frame count.

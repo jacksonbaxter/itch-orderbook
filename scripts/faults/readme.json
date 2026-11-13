@@ -2565,6 +2565,50 @@
         "signature": "FAIL: test_the_parse_targets_are_measured_rows_from_their_file",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-swap-line-counts-unheld",
+      "breaks": "check_results passes a swap line whose end count differs from its start while it says no page was swapped out",
+      "check": "test_parse_driver.py Check.test_a_swap_line_whose_counts_differ_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "check_machine(text), check_swap_line(text), check_stand_in(text),",
+          "new": "check_machine(text), check_stand_in(text),"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_a_swap_line_whose_counts_differ_is_refused"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_swap_line_whose_counts_differ_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-input-resident-pass-unheld",
+      "breaks": "check_results passes a machine_check block whose input-resident pass has pages missing",
+      "check": "test_parse_driver.py Check.test_a_passing_input_resident_with_pages_missing_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if held != pages:\n            yield \"machine-check-inconsistent\"",
+          "new": "        if False:\n            yield \"machine-check-inconsistent\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_a_passing_input_resident_with_pages_missing_is_refused"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_passing_input_resident_with_pages_missing_is_refused",
+        "exit": 1
+      }
     }
   ]
 }

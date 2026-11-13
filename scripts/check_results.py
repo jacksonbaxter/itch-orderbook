@@ -827,6 +827,24 @@ def check_machine(text):
     failures = re.findall(r"^machine_check: FAIL .*$", output, re.MULTILINE)
     for line in failures:
         yield "machine-check-failed", line
+    # A pass of input-resident is every page of the input resident, never fewer.
+    for held, pages in re.findall(r"^machine_check: pass input-resident: (\d+) of (\d+) pages",
+                                  output, re.MULTILINE):
+        if held != pages:
+            yield "machine-check-inconsistent", (f"input-resident passes with {held} of {pages} "
+                                                 "pages resident, not every page")
+
+
+SWAP_LINE = re.compile(r"^The kernel's pswpout was ([\d,]+) at the start of the run and ([\d,]+) "
+                       r"after its last process: no page of any process was swapped out", re.MULTILINE)
+
+
+def check_swap_line(text):
+    """The swap line's two counts are equal where it says no page was swapped out."""
+    for start, end in SWAP_LINE.findall(text):
+        if start != end:
+            yield "swap-line-inconsistent", (f"pswpout {start} at the start and {end} at the end, "
+                                             "and the line says no page was swapped out")
 
 
 # What a driver's own check before writing leaves to stamp_load.py: the load stamp, and a
@@ -1657,7 +1675,7 @@ def check_text(text, name=None):
                   check_residency(fields), check_warmup(fields), check_statistics(text),
                   check_load(fields), check_sampler(fields), check_driver_sampler(text, fields),
                   check_linux_rule(text, fields),
-                  check_machine(text), check_stand_in(text),
+                  check_machine(text), check_swap_line(text), check_stand_in(text),
                   check_private(text, fields)):
         violations.extend(found)
     if is_walks_file(fields):
