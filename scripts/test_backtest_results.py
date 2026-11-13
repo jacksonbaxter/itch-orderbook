@@ -373,7 +373,7 @@ class EndToEnd(unittest.TestCase):
                                                busy="first")
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("withdrawn: T-BT-3, repetition 1 on the Mac, exit 0; the CPU sampler "
-                          "saw other_job at 50.0% CPU", log)
+                          "saw a system process at 50.0% CPU", log)
             text = out.read_text(encoding="utf-8")
             self.assertEqual({code for code, _ in check_results.check_text(text)},
                              {"load-not-stamped"})

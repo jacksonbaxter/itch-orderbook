@@ -529,7 +529,7 @@
       "mutations": [
         {
           "file": "scripts/spsc_driver.py",
-          "old": "    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end)",
+          "old": "    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end, by_kind)",
           "new": "    return None"
         }
       ],
@@ -977,6 +977,27 @@
         "exit": 1
       },
       "system": "Darwin"
+    },
+    {
+      "id": "spsc-foreign-process-named-by-program",
+      "breaks": "The sampler rule names a foreign process by its program, not its kind, in a run and in a render of a record of the new kind",
+      "check": "test_spsc_results.py ForeignByKind",
+      "mutations": [
+        {
+          "file": "scripts/wasm_bench.py",
+          "old": "            if by_kind:\n                name = foreign_kind(words[3])\n",
+          "new": "            if False:\n                name = foreign_kind(words[3])\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_new_kind_record_names_a_foreign_process_by_kind_and_an_old_one_as_published",
+        "exit": 1
+      }
     }
   ]
 }

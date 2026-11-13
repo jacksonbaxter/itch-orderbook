@@ -514,12 +514,12 @@ class EndToEnd(unittest.TestCase):
             result, out, log = self.run_driver(Path(directory), busy_first=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("withdrawn: alloc arms, malloc-fresh, repetition 1 on the Mac, exit 0; "
-                          "the CPU sampler saw other_job at 50.0% CPU", log)
+                          "the CPU sampler saw a system process at 50.0% CPU", log)
             text = out.read_text(encoding="utf-8")
             self.assertEqual(codes(text), {"load-not-stamped"})
             self.assertIn("; 1 withdrawn under the rule", text)
             self.assertRegex(text, r"\| withdrawn 1: malloc-fresh, repetition 1 \| .* \| "
-                                   r"withdrawn: the CPU sampler saw other_job at 50.0% CPU")
+                                   r"withdrawn: the CPU sampler saw a system process at 50.0% CPU")
             raw = test_driver_records.run_folder_of(Path(directory) / "raw")
             self.assertTrue(
                 (raw / "alloc-malloc-fresh-repetition-1-timed-withdrawn-1.json").is_file())

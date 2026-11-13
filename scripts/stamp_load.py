@@ -101,8 +101,12 @@ def sampler_line(sampler_text, start, end):
         raise ValueError(f"the sampler stopped for {max(gaps):.0f} s between {start} and {end}")
     inside = [line for time, line in foreign if start <= time <= end]
     if inside:
+        # The reason goes into the run log's row, so the first is named by its kind, with its
+        # share and time; the sampler's log keeps its command.
+        import wasm_bench  # noqa: PLC0415  Here, since wasm_bench imports bench_driver.
+        stamp, _, cpu, command = (inside[0].split(None, 3) + ["", ""])[:4]
         raise ValueError(f"the sampler saw {len(inside)} other busy processes in the run, the "
-                         f"first {inside[0]!r}")
+                         f"first {wasm_bench.foreign_kind(command)} at {cpu}% CPU at {stamp}")
     return (f"quiet: the sampler rule was applied: {len(span)} lines from {span[0]} to "
             f"{span[-1]}, no gap over {SAMPLE_GAP} s, bracket the run from {start} to {end}, "
             "and no other process went above 20% CPU in it")

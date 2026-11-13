@@ -366,7 +366,7 @@ class Bench(Scratch):
                                                               digest=self.manifest["digest"]))
         code, output = quietly(wasm_bench.main, ["native", "--bench", str(bench), *self.common])
         self.assertEqual(code, wasm_bench.WITHDRAWN, output)
-        self.assertIn("withdrawn: T-WASM-1's native side; the CPU sampler saw some_fuzzer at "
+        self.assertIn("withdrawn: T-WASM-1's native side; the CPU sampler saw another process at "
                       "97.5% CPU", self.log.read_text())
         record = json.loads((self.run_folder() / "native.json").read_text())
         self.assertTrue(any("FOREIGN 97.5" in line for line in record["sampler"]["lines"]))
@@ -525,7 +525,7 @@ class Report(unittest.TestCase):
             60, "2026-11-05T10:01:58Z FOREIGN 99.0 build/fuzz/bin/some_fuzzer -runs=0")
         with self.assertRaisesRegex(wasm_report.ReportError,
                                     "browser: not published under the sampler rule: the CPU "
-                                    "sampler saw some_fuzzer at 99.0% CPU"):
+                                    "sampler saw another process at 99.0% CPU"):
             wasm_report.render(native, browser, stderr, stderr)
 
     def test_a_foreign_process_outside_the_span_does_not_count(self):

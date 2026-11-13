@@ -85,7 +85,7 @@ class SimdDriverTest(unittest.TestCase):
 
     def test_a_process_is_withdrawn_unless_sampled_quiet(self):
         self.assertIsNone(self.judged(sampler=Sampler(samples())))
-        self.assertIn("mds_stores at 31.0% CPU",
+        self.assertIn("a system process at 31.0% CPU",
                       self.reason(sampler=Sampler(samples(foreign_at=4))))
         self.assertIn("without a sample", self.reason(sampler=Sampler(samples(gap=True))))
         self.assertIn("did not cover", self.reason(sampler=Sampler(samples()[3:])))

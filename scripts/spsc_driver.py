@@ -222,9 +222,10 @@ def span_lines(lines, begin, end):
     return [line for line in lines if low <= wasm_bench.at(line.split()[0]) <= high]
 
 
-def span_unquiet(lines, begin, end):
-    """Why the sampler does not show the span quiet, or None."""
-    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end)
+def span_unquiet(lines, begin, end, by_kind=True):
+    """Why the sampler does not show the span quiet, or None; a foreign process named by kind
+    unless by_kind is False (wasm_bench.unquiet)."""
+    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end, by_kind)
 
 
 def span_summary(lines, begin, end):
@@ -930,12 +931,14 @@ def published_sampled(published, raw_dir, every):
     if not path.is_file():
         raise Refused("raw", "the file has a Sampler section and the raw folder no sampler.txt")
     lines = path.read_text(encoding="utf-8").splitlines()
+    # A record of the new kind named a foreign process by kind; one made before, by name.
+    by_kind = run_record.is_new_kind(raw_dir)
     sampled = {"every": every, "published": [], "withdrawn": []}
     for cells in check_results.table_rows(published, "Sampler"):
         if len(cells) != 4 or cells[0] == "Process":
             continue
         what, begin, end, said = cells
-        why = span_unquiet(lines, begin, end)
+        why = span_unquiet(lines, begin, end, by_kind)
         if what.startswith("repetition "):
             again = span_summary(lines, begin, end) if why is None else f"unquiet: {why}"
             sampled["published"].append((begin, end, again))
