@@ -280,12 +280,13 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
 
   const Model m = model(stream, plan);
   const auto packets = mold::build_packets(stream, plan);
-  FUZZ_CHECK(packets.has_value() == !m.failure.has_value());
-  if (!packets) {
-    FUZZ_CHECK(packets.error().error == m.failure->error);
-    FUZZ_CHECK(packets.error().offset == m.failure->offset);
+  if (const std::optional<mold::BuildFailure>& failure = m.failure) {
+    FUZZ_CHECK(!packets.has_value());
+    FUZZ_CHECK(packets.error().error == failure->error);
+    FUZZ_CHECK(packets.error().offset == failure->offset);
     return 0;
   }
+  FUZZ_CHECK(packets.has_value());
   FUZZ_CHECK(packets->plan().max_datagram == plan.max_datagram);
   check_packets(m, plan, stream, *packets);
   check_round_trip(m, plan, *packets);
