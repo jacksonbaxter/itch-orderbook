@@ -242,7 +242,7 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [ ] README: what it is, how to build and run, generated results table.
 - [x] README's top: a short pitch and a generated headline of 5 to 6 targets, at least one missed; the full results and run tables in RESULTS.md, generated and checked the same way.
 - [x] Repo layout: CLAUDE.md untracked and ignored, the working files moved to docs/NOTES.md and docs/TASKS.md with every reference following, and an MIT LICENSE with the third-party terms named in the README.
-- [ ] WRITEUP.md: blog-post length, with numbers. Data layout, memory, branch prediction, what was tried, what didn't work.
+- [x] WRITEUP.md: blog-post length, with numbers. Data layout, memory, branch prediction, what was tried, what didn't work.
 - [ ] WASM demo page builds and runs locally from `docs/`.
 - [ ] Full-repo review. For each problem: file and line, why it's wrong, how to show it fails, then fix it.
 - [ ] Every Linux number cites its commit. Sync through `debian_sync.sh` from committed `HEAD`.
