@@ -13,7 +13,8 @@
     "fuzz",
     "bench",
     "scripts",
-    "results"
+    "results",
+    "BENCHMARKS.md"
   ],
   "faults": [
     {

@@ -243,7 +243,8 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [x] README's top: a short pitch and a generated headline of 5 to 6 targets, at least one missed; the full results and run tables in RESULTS.md, generated and checked the same way.
 - [x] Repo layout: CLAUDE.md untracked and ignored, the working files moved to docs/NOTES.md and docs/TASKS.md with every reference following, and an MIT LICENSE with the third-party terms named in the README.
 - [ ] WRITEUP.md: blog-post length, with numbers. Data layout, memory, branch prediction, what was tried, what didn't work.
-- [ ] WASM demo page builds and runs locally from `docs/`.
+- [x] WASM demo page builds and runs locally from `docs/`. check.sh's demo stage builds the engine and opens the page in a headless browser, and fails when none is named; it passed at a89651a (page bench: 3 replays to the native digest). CI never opens the page.
+- The demo stage needs `ITCH_BROWSER` set to a Chrome or Chromium binary (here Chrome for Testing 153.0.8010.12, from `python3 -m playwright install chromium`), or `--without-browser`, with which it reports itself partial.
 - [ ] Full-repo review. For each problem: file and line, why it's wrong, how to show it fails, then fix it.
 - [ ] Every Linux number cites its commit. Sync through `debian_sync.sh` from committed `HEAD`.
 - [ ] Final report

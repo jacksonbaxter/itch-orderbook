@@ -10,8 +10,14 @@ differs from a fresh run.
 
 Every verdict in every results file reaches RESULTS.md, failures included. A results file
 with no reader here is refused, and so is a file with a verdict no row took up, so that
-neither can drop out unseen. A book benchmark file missing a field its row needs is
-refused as well. An oracle or trades file runs each arm of the fast book, and a
+neither can drop out unseen. A verdict is a **PASS**, **FAIL** or **NOT_AVAILABLE** mark, or
+a row of the file's Targets table, counted by its target and its verdict's words: each book
+file's whole targets table becomes rows of the Book targets table, misses with their gaps,
+figures no bar on their host can judge and targets the run did not measure with the reason
+included. A book benchmark file missing a field its row needs is refused as well. A
+stub-book harness proof is known by its label on the line just above its Header, where
+bench_driver.py writes it, not by the words anywhere in the file, and a `bench_book_` file so
+labelled is refused. An oracle or trades file runs each arm of the fast book, and a
 row says whether every arm gave its verdict. An arm that gave another one makes the row a
 failure that names it. A UDP replay file gives a T-URING-2 row when it
 holds a bisection at 1,400 bytes a datagram, T-URING-2's packet size, and a verdict in a file
@@ -62,6 +68,8 @@ NOT_RESULTS = {"predictions.md", "run_log.md"}
 VERDICT_MARK = re.compile(r"\*\*(?:Verdict: )?(PASS|FAIL|NOT_AVAILABLE)\*\*")
 TRADE_CHECKS = {"T-TRADE-1", "T-TRADE-2", "T-TRADE-3", "T-TRADE-5", "PRINTS"}
 HARNESS_LABEL = "Stub-book harness proof, not a book result."
+# T-ARENA-1's verdict in an allocator file's targets table: these words, then its fault check.
+ARENA_VERDICT = "no bar to meet; fault check "
 SHOWN = {"PASS": "PASS", "FAIL": "**FAIL**", "NOT_AVAILABLE": "**NOT AVAILABLE**"}
 RUN_HEADS = ("Run", "Prediction", "Commit", "OS", "Outcome")
 # A run's id: its prediction, the time it began, and for a run of many processes or a
@@ -343,6 +351,14 @@ def throughput_row(name, text):
             f"`{commit}`", source(name))
 
 
+def harness_proof(text):
+    """A stub-book harness proof: its label is the line just above its Header, where
+    bench_driver.py writes it, not the words anywhere in the file."""
+    above = text.split("\n## Header\n", 1)[0] if "\n## Header\n" in text else ""
+    lines = [line for line in above.splitlines() if line.strip()]
+    return bool(lines) and lines[-1].startswith(f"**{HARNESS_LABEL} ")
+
+
 def header_field(text, field, name):
     return find(rf"^- {field}: (.*)$", text, name)[1]
 
@@ -379,6 +395,54 @@ def book_row(name, text):
             day_of(name), host, pinning, rate, spread, batch, memory,
             ratio_cell(text, "map-fresh", name), ratio_cell(text, "map-aged", name),
             f"`{commit}`", source(name))
+
+
+TARGET_ID = re.compile(r"T-[A-Z0-9]+-\d+")
+
+
+def targets_table(name, text):
+    """Each row of the file's Targets table, by the table's own heads, or [] for a file with no
+    such table. A row of a target with a cell missing or over is refused."""
+    section = re.search(r"^## Targets\n((?s:.*?))(?=^## |\Z)", text, re.MULTILINE)
+    lines = [line for line in (section[1] if section else "").splitlines()
+             if line.startswith("| ")]
+    if not lines:
+        return []
+    heads = [cell.strip() for cell in lines[0].strip().strip("|").split("|")]
+    rows = []
+    for line in lines[1:]:
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if not TARGET_ID.fullmatch(cells[0]):
+            continue
+        if len(cells) != len(heads):
+            raise TableError(f"results/{name}: {cells[0]}'s row has {len(cells)} cells, its "
+                             f"targets table {len(heads)}")
+        rows.append(dict(zip(heads, cells)))
+    return rows
+
+
+def verdict_word(verdict):
+    """A Targets-table verdict's words before its detail: met, missed, host differs ..."""
+    return verdict.split(":")[0].strip()
+
+
+def book_target_rows(name, text, book):
+    """Every target in a book file's Targets table, with its bar, what was measured and its
+    verdict as the file gives it: a miss with its gap, a figure no bar on this host can judge
+    with why, and a target the run did not measure with the reason. book is the file's row in
+    the table of designs, whose design, input, top of book, day, host and commit it shares."""
+    design, input_mode, top, day, host = book[:5]
+    rows = []
+    for cells in targets_table(name, text):
+        verdict = cells["Verdict"]
+        word, _, detail = verdict.partition(": ")
+        rows.append((cells["Target"], design, input_mode, top, day, host, cells["Bar"],
+                     cells["Bar set on"], cells["Measured here"] or "–",
+                     f"**missed**: {detail}" if word == "missed" else verdict, book[-2],
+                     source(name)))
+    if not rows:
+        raise TableError(f"results/{name}: a book file with no target in its targets table")
+    return rows
 
 
 # Each backtest target's bar is in the unit BENCHMARKS.md gives it: T-BT-1's in events a
@@ -436,7 +500,11 @@ def backtest_row(root, name, text):
     host = header_field(text, "host", name)
     pinning = pinning_cell(text, name)
     target, bar, label, median = backtest_judged(root, name, text)
-    verdict = find(r"^\| T-BT-\d \| [^|]+ \| [^|]+ \| ([^|:]+)", text, name)[1].strip()
+    verdict = find(r"^\| T-BT-\d \| [^|]+ \| [^|]+ \| ([^|]+) \|$", text, name)[1].strip()
+    word, _, detail = verdict.partition(": ")
+    # A miss with its gap, and a figure no bar can judge with why, as the file gives them.
+    if word == "missed":
+        verdict = f"**missed**: {detail}"
     spread = table_row(label, text, name)[3]
     other_label, other_unit = BACKTEST_SECOND[label]
     other = f"{summary_median(text, other_label, name)} {other_unit}"
@@ -592,6 +660,7 @@ def generate(root):
     faults = []
     throughput = []
     books = []
+    book_targets = []
     backtests = []
     browsers = []
     summaries = []
@@ -604,6 +673,8 @@ def generate(root):
         if name in NOT_RESULTS:
             continue
         text = path.read_text(encoding="utf-8")
+        # The Targets-table verdicts a row below takes up, as (target, verdict's words).
+        taken = []
         if name == "oracle_sessions.md":
             rows = [sessions_row(name, text)]
         elif name.startswith("oracle_"):
@@ -620,17 +691,27 @@ def generate(root):
         elif name == "fault_matrix.md":
             faults.append(fault_row(name, text))
             rows = []
-        elif name.startswith("bench_") and HARNESS_LABEL in text:
+        elif name.startswith("bench_") and harness_proof(text):
+            if name.startswith("bench_book_"):
+                raise TableError(f"results/{name}: a book file's name, labelled the stub's")
             throughput.append(throughput_row(name, text))
             rows = []
         elif name.startswith("bench_"):
-            books.append(book_row(name, text))
+            book = book_row(name, text)
+            books.append(book)
+            targets = book_target_rows(name, text, book)
+            book_targets += targets
+            taken = [(row[0], verdict_word(row[9].replace("**", ""))) for row in targets]
             rows = []
         elif name.startswith("backtest_"):
-            backtests.append(backtest_row(root, name, text))
+            backtest = backtest_row(root, name, text)
+            backtests.append(backtest)
+            taken = [(backtest[1], verdict_word(backtest[9].replace("**", "")))]
             rows = []
         elif name.startswith("spsc_"):
-            spsc += spsc_rows(name, text)
+            found = spsc_rows(name, text)
+            spsc += found
+            taken = [(row[0], row[7]) for row in found]
             rows = []
         elif name.startswith("wasm_"):
             browsers.append(wasm_row(name, text))
@@ -638,6 +719,7 @@ def generate(root):
         elif name.startswith("alloc_"):
             arms, fault_check, pages = alloc_rows(name, text)
             arenas.append((name, fault_check, pages, arms))
+            taken = [("T-ARENA-1", verdict_word(f"{ARENA_VERDICT}{fault_check}"))]
             rows = []
         elif name.startswith("mm_pnl_"):
             pnl += pnl_rows(name, text)
@@ -652,6 +734,12 @@ def generate(root):
         marked = len(VERDICT_MARK.findall(text))
         if marked != len(rows):
             raise TableError(f"results/{name}: {marked} verdicts in the file, {len(rows)} rows")
+        tabled = sorted((cells["Target"], verdict_word(cells.get("Verdict", "no verdict")))
+                        for cells in targets_table(name, text))
+        if tabled != sorted(taken):
+            raise TableError(f"results/{name}: its targets table gives {len(tabled)} verdicts, "
+                             f"and the rows here take up {len(taken)}: "
+                             f"{sorted(set(tabled) ^ set(taken))[:4]}")
         verdicts += rows
     run_log = (root / "results" / "run_log.md").read_text(encoding="utf-8")
 
@@ -670,6 +758,17 @@ def generate(root):
                                  "Median messages/s", "CV", "Batch mean ns a book message",
                                  "Book memory MiB", "Over map-fresh", "Over map-aged", "Commit",
                                  "File"), books)
+    if book_targets:
+        order = list(dict.fromkeys(row[0] for row in book_targets))
+        book_targets.sort(key=lambda row: (order.index(row[0]), row[-1]))
+        lines += ["", "Book targets. Every target of every book design's results file, from the "
+                      "file's own targets table: its bar, where the bar was set, what this run "
+                      "measured and the verdict, misses with their gaps. A bar set on x86 Linux "
+                      "neither passes nor fails a macOS figure, so such a row says the host "
+                      "differs, and a target the run was not set up to measure says why.", ""]
+        lines += markdown_table(("Target", "Design", "Input", "Top of book", "Day", "Host", "Bar",
+                                 "Bar set on", "Measured", "Verdict", "Commit", "File"),
+                                book_targets)
     if backtests:
         lines += ["", "The backtester. Each row is one workload's results file: T-BT-1 replays the "
                       "whole day with a quoting strategy, T-BT-3 queuetruth's four symbols with "

@@ -291,6 +291,150 @@
         "signature": "gates: FAIL linux-sampler-rule results/udp_feed_debian_12302019\\.md:1: load-rule-missing: .*no driver of the udp kind writes it yet",
         "exit": 1
       }
+    },
+    {
+      "id": "gates-wire-c-style-struct-cast",
+      "breaks": "read_be48 copies six wire bytes through a C-style cast to a pointer to a struct",
+      "check": "gates.py wire-pointer-cast, C-style",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "  std::memcpy(wide.data() + 2, src, 6);\n",
+          "new": "  struct Six {\n    std::byte b[6];\n  };\n  *(Six*)(wide.data() + 2) = *(const Six*)src;\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "^gates: FAIL wire-pointer-cast include/itch/wire\\.hpp:\\d+: C-style cast to a pointer to Six",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-wire-alias-cast",
+      "breaks": "read_be reads its word through a reinterpret_cast to a pointer alias",
+      "check": "gates.py wire-pointer-cast, through an alias",
+      "mutations": [
+        {
+          "file": "include/itch/wire.hpp",
+          "old": "  T raw{};\n  std::memcpy(&raw, src, sizeof(T));\n",
+          "new": "  using Word = const T*;\n  T raw = *reinterpret_cast<Word>(src);\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "^gates: FAIL wire-pointer-cast include/itch/wire\\.hpp:\\d+: reinterpret_cast to Word, a pointer through an alias",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-c-style-cast-only-to-integers",
+      "breaks": "The C-style cast pattern is back to integer and floating pointees only",
+      "check": "test_gates.py, a cast to a struct",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "    r\"\\(\\s*((?:[A-Za-z_][\\w:]*(?:\\s*<[^<>()]*>)?\\s+)*[A-Za-z_][\\w:]*(?:\\s*<[^<>()]*>)?)\"\n",
+          "new": "    r\"\\(\\s*(?:const\\s+|volatile\\s+)*((?:std::)?u?int(?:16|32|64)_t|float|double|T)\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_cast_to_a_struct_or_through_an_alias \\("
+      }
+    },
+    {
+      "id": "gates-alias-cast-unread",
+      "breaks": "No reinterpret_cast to an alias is read",
+      "check": "test_gates.py, a cast through an alias",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "            if target not in POINTER_INTEGERS:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_cast_to_a_struct_or_through_an_alias \\("
+      }
+    },
+    {
+      "id": "gates-pointer-integer-flagged",
+      "breaks": "A reinterpret_cast to uintptr_t, which casts no pointer over bytes, is flagged",
+      "check": "test_gates.py, pointer integers allowed",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "POINTER_INTEGERS = {\"std::uintptr_t\", \"uintptr_t\", \"std::intptr_t\", \"intptr_t\"}\n",
+          "new": "POINTER_INTEGERS = set()\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_byte_casts_declarations_and_pointer_integers_are_allowed \\("
+      }
+    },
+    {
+      "id": "gates-yaml-workflow-unread",
+      "breaks": "gates.py reads *.yml workflows only, so a *.yaml one goes unchecked",
+      "check": "test_gates.py, a yaml workflow",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "    return sorted([*workflows.glob(\"*.yml\"), *workflows.glob(\"*.yaml\")])\n",
+          "new": "    return sorted(workflows.glob(\"*.yml\"))\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_yaml_workflow_is_read \\("
+      }
+    },
+    {
+      "id": "gates-actionlint-yaml-unread",
+      "breaks": "lint_workflows.py hands actionlint the *.yml workflows only",
+      "check": "test_gates.py, actionlint's workflow list",
+      "mutations": [
+        {
+          "file": "scripts/lint_workflows.py",
+          "old": "                  for path in [*folder.glob(\"*.yml\"), *folder.glob(\"*.yaml\")])\n",
+          "new": "                  for path in folder.glob(\"*.yml\"))\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_actionlint_reads_a_yaml_workflow_too \\("
+      }
     }
   ]
 }

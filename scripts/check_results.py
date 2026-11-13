@@ -2,6 +2,7 @@
 """Refuses a benchmark results file that claims more than the run could show.
 
     check_results.py FILE...
+    check_results.py --bars BENCHMARKS.md
 
 Reads the file as published, so it holds whatever wrote it to the same rules: every
 header field present, an unreadable one written as `unavailable: <reason>`, no pin that
@@ -23,13 +24,22 @@ with the median and the bar: T-BT-1's bar was set on x86, so a macOS file may no
 met or missed, while T-BT-3's was set on a Mac. Its command passes each sibling the machine
 check read as idle.
 
-A book file, any other file not labelled as the Phase 2 stub-book harness proof, is held to more:
-the design, input and top-of-book fields, a statement of how the run read the day beside
-itch-book's two methods, the latency table with its pair-subtracted
-column, the per-operation table, the book's memory, the summary's service and batch
+A book file, any other file not labelled as the Phase 2 stub-book harness proof, is held to
+more. The label counts only as the line just above the Header section, where bench_driver.py
+writes it, and a file so labelled may carry no book field and no `bench_book_` name. A book
+file is held to the design, input and top-of-book fields, a statement of how the run read the
+day beside itch-book's two methods, the latency table with its pair-subtracted column, the
+per-operation table, the book's memory, the summary's service and batch
 means, the top of book when it was tracked, the design comparison, and a verdict for every
 target in words from a fixed set. On macOS, a bar set on x86 Linux may not be called met
-or missed.
+or missed. Each measured target is held to its bar in BOOK_BARS: its Bar cell gives that
+bar, each figure in its Measured cell is the file's own median from the table that holds it,
+to the range the printed values leave, and its verdict is met exactly when every figure
+meets its bar, missed naming exactly the figures that miss, each with its distance from the
+bar, below floor only with a figure the timer cannot resolve and none that misses, and host
+differs exactly when a macOS figure meets an x86 bar, with each figure's signed distance
+from it. A target not measured in this run has no figure. In every table with a median, a
+min and a max, the median lies between them.
 
 A book file whose `passes` field says `throughput only` ran no latency pass, and the field
 must say why. Its file is held to the opposite: no percentile row, no per-operation row, no
@@ -66,6 +76,11 @@ Its command passes each sibling the machine check read as idle.
 
 A walks ladder file, from scripts/walk_driver.py, is held to scripts/walk_report.py's checks
 of its own tables, and its command passes each sibling the machine check read as idle.
+
+BOOK_BARS, BACKTEST_TARGETS and SPSC_COMPARISONS copy BENCHMARKS.md's bars. --bars holds
+each copy to the words BENCHMARKS.md's Target line gives that bar in (BOOK_BARS' benchmarks,
+BACKTEST_BENCHMARKS, SPSC_BENCHMARKS), so a bar changed in one place and not the other
+fails as `check_results: FAIL bar-differs <target>: <detail>`.
 
 Each violation prints as `check_results: FAIL <code> <file>: <detail>`.
 
@@ -108,6 +123,56 @@ TARGETS = ("T-BOOK-1", "T-BOOK-2", "T-BOOK-3", "T-BOOK-4", "T-LAT-1", "T-LAT-2",
            "T-LAT-4", "T-LAT-5", "T-DESIGN-1")
 # Bars set on x86 hardware, which a macOS figure neither passes nor fails.
 X86_TARGETS = ("T-BOOK-1", "T-BOOK-2", "T-LAT-1", "T-LAT-2", "T-LAT-4", "T-LAT-5")
+_T_LAT_1 = (("add", (60, 447, 683)), ("delete", (70, 599, 768)), ("replace", (110, 709, 945)),
+            ("reduce", (50, 548, 734)))
+# Each book target's bar: every figure it names, as the Measured cell names it, the side of
+# the bar that meets it and the bar; the words of a book file's Bar cell, and the words
+# BENCHMARKS.md's Target line gives it in, each formatted with the bars in order. These are
+# copies of BENCHMARKS.md's bars, and check_bars fails on any that disagrees with it.
+BOOK_BARS = {
+    "T-BOOK-1": {"figures": (("rate", ">=", 16.4),), "cell": "≥ {0:g} M msg/s",
+                 "benchmarks": ("≥ {0:g} M msg/s",)},
+    "T-BOOK-2": {"figures": (("rate", ">=", 12.5),), "cell": "≥ {0:g} M msg/s",
+                 "benchmarks": ("≥ {0:g} M msg/s",)},
+    "T-BOOK-3": {"figures": (("book", "<=", 1.4),), "cell": "≤ {0:g} GB of book",
+                 "benchmarks": ("≤ ~{0:g} GB",)},
+    "T-BOOK-4": {"figures": (("rate", ">=", 14.4),), "cell": "≥ {0:g} M msg/s on 01302019",
+                 "benchmarks": ("≥ {0:g} M msg/s",)},
+    "T-LAT-1": {"figures": tuple((f"{operation} {percentile}", "<=", bar)
+                                 for operation, bars in _T_LAT_1
+                                 for percentile, bar in zip(OPERATION_PERCENTILES, bars)),
+                "cell": "add {0}, {1}, {2}; delete {3}, {4}, {5}; replace {6}, {7}, {8}; reduce "
+                        "{9}, {10}, {11} ns at p50, p99, p99.9, raw",
+                "benchmarks": ("| add | {0} | {1} | {2} |", "| delete | {3} | {4} | {5} |",
+                               "| replace | {6} | {7} | {8} |",
+                               "| reduce (E/C/X) | {9} | {10} | {11} |")},
+    "T-LAT-2": {"figures": (("p50", "<=", 121), ("p99", "<=", 552), ("p99.9", "<=", 874)),
+                "cell": "p50 ≤ {0}, p99 ≤ {1}, p99.9 ≤ {2} ns, raw",
+                "benchmarks": ("p50 ≤ {0} ns, p99 ≤ {1} ns, p99.9 ≤ {2} ns.",)},
+    "T-LAT-3": {"figures": (("mean", "<=", 393), ("p99.9", "<=", 750)),
+                "cell": "mean service ≤ {0} ns a message, p99.9 ≤ {1} ns",
+                "benchmarks": ("mean service time ≤ {0} ns per message on every host, and "
+                               "p99.9 ≤ {1} ns.",)},
+    "T-LAT-4": {"figures": (("p50", "<=", 100), ("p99", "<=", 620), ("p99.9", "<=", 1080),
+                            ("batch mean", "<=", 142.36)),
+                "cell": "p50 ≤ {0}, p99 ≤ {1}, p99.9 ≤ {2:,} ns, pair subtracted; batch mean ≤ "
+                        "{3} ns a book message",
+                "benchmarks": ("p50 ≤ {0} ns, p99 ≤ {1} ns, p99.9 ≤ {2:,} ns, and batch mean ≤ "
+                               "{3} ns per book message.",)},
+    "T-LAT-5": {"figures": (("p50", "<=", 127), ("p99", "<=", 446), ("p99.9", "<=", 778)),
+                "cell": "p50 ≤ {0}, p99 ≤ {1}, p99.9 ≤ {2} ns, raw",
+                "benchmarks": ("p50 ≤ {0} ns, p99 ≤ {1} ns, p99.9 ≤ {2} ns, with nothing "
+                               "subtracted.",)},
+    # A run gives the ratio over each map design that ran beside the fast one, so the Measured
+    # cell may give either or both, in this order.
+    "T-DESIGN-1": {"figures": (("over map-fresh", ">=", 4.0), ("over map-aged", ">=", 4.0)),
+                   "each that ran": True,
+                   "cell": "≥ {0:.1f}× the map book's throughput, same run",
+                   "benchmarks": ("≥ {0:.1f}× the throughput of a `std::map` plus "
+                                  "`unordered_map` book",
+                                  "≥ {1:.1f}× the throughput of a `std::map` plus "
+                                  "`unordered_map` book")},
+}
 # Each backtest workload's target, its bar in millions of messages a second, and whether
 # the bar was set on x86.
 BACKTEST_TARGETS = {"quoting": ("T-BT-1", 2.0, True), "shadow": ("T-BT-3", 4.61, False)}
@@ -243,6 +308,71 @@ SPSC_COMPARISONS = {
         "suite": "pipeline", "value": PIPELINE_RATIO, "op": "<=", "bar": 1.31,
         "host": _T3_HOST, "missing": "no pipelined pass ran"},
 }
+
+
+# The words BENCHMARKS.md's Target line gives each copied bar above in: the bar's side as
+# {op}, the bar as {0}. "At or below" another queue is a ratio of at most 1, so those two
+# comparisons' bar must be 1.00 and their words carry no figure.
+BACKTEST_BENCHMARKS = {"T-BT-1": "{op} {0:.1f} M events/s on one thread",
+                       "T-BT-3": "{op} {0:g} M ITCH messages/s"}
+AT_OR_BELOW = "and at or below moodycamel and rigtorp"
+SPSC_BENCHMARKS = {
+    ("T-SPSC-1", "boost rtt / project rtt"): "at least {0:g}× better RTT than "
+                                             "`boost::lockfree::spsc_queue`",
+    ("T-SPSC-1", "project rtt / moodycamel rtt"): AT_OR_BELOW,
+    ("T-SPSC-1", "project rtt / rigtorp rtt"): AT_OR_BELOW,
+    ("T-SPSC-2", "cached over uncached, with %: modulo / uncached-modulo"):
+        "cached indices {op} {0:g}× over uncached",
+    ("T-SPSC-2", "cached over uncached, with the mask: shipped / uncached"):
+        "cached indices {op} {0:g}× over uncached",
+    ("T-SPSC-2", "mask over %, cached: shipped / modulo"): "mask {op} {0:g}× over `%`",
+    ("T-SPSC-2", "mask over %, uncached: uncached / uncached-modulo"): "mask {op} {0:g}× over `%`",
+    ("T-SPSC-3", "pipelined time / single-threaded time"):
+        "takes {op} {0:g}× the single-threaded replay",
+}
+SYMBOLS = {">=": "≥", "<=": "≤"}
+
+
+def benchmark_target(text, target):
+    """BENCHMARKS.md's Target line for a target, with the table under it if it has one, or
+    None if the target has no section with such a line."""
+    match = re.search(rf"^### {re.escape(target)}: .*?\n(.*?)(?=^##+ |\Z)", text,
+                      re.MULTILINE | re.DOTALL)
+    if match is None or "- **Target:**" not in match[1]:
+        return None
+    body = match[1][match[1].index("- **Target:**"):]
+    end = body.find("\n- **", 1)
+    return body if end < 0 else body[:end]
+
+
+def bar_copies():
+    """Every bar this script holds a result to, as (target, what, the words BENCHMARKS.md
+    must give it in, or None where the bar cannot be what those words say)."""
+    for target, spec in BOOK_BARS.items():
+        values = [value for _, _, value in spec["figures"]]
+        for words in spec["benchmarks"]:
+            yield target, "BOOK_BARS", words.format(*values)
+    for workload, (target, bar, _) in BACKTEST_TARGETS.items():
+        yield target, f"BACKTEST_TARGETS {workload}", BACKTEST_BENCHMARKS[target].format(
+            bar, op=SYMBOLS[">="])
+    for key, spec in SPSC_COMPARISONS.items():
+        words = SPSC_BENCHMARKS.get(key)
+        if words == AT_OR_BELOW and (spec["bar"] != 1.0 or spec["op"] != "<="):
+            words = None
+        yield key[0], f"SPSC_COMPARISONS {key[1]}", \
+            words and words.format(spec["bar"], op=SYMBOLS[spec["op"]])
+
+
+def bar_disagreements(benchmarks):
+    """(target, detail) for each bar here that BENCHMARKS.md's text does not give."""
+    for target, what, words in bar_copies():
+        line = benchmark_target(benchmarks, target)
+        if line is None:
+            yield target, f"{what}: BENCHMARKS.md has no Target line for it"
+        elif words is None:
+            yield target, f"{what}: a bar its Target line's words cannot give: {line[:80]!r}"
+        elif words not in line:
+            yield target, f"{what}: {words!r} is not in its Target line: {line[:120]!r}"
 
 
 def spsc_interference(every):
@@ -686,8 +816,29 @@ def check_private(text, fields):
             yield "private-text", f"{name}: {match.group(0)}"
 
 
+def stub_line(text):
+    """The line just above the Header section, where bench_driver.py puts a stub file's label,
+    or "" for a file with no line there."""
+    above = text.split("\n## Header\n", 1)[0] if "\n## Header\n" in text else ""
+    lines = [line for line in above.splitlines() if line.strip()]
+    return lines[-1] if lines else ""
+
+
 def is_book_file(text):
-    return STUB_LABEL not in text
+    """A book file, unless the line just above its Header is the stub's label: the label
+    anywhere else in the file, a sentence that quotes it included, does not make it a stub."""
+    return not stub_line(text).startswith(f"**{STUB_LABEL} ")
+
+
+def check_stub(text, fields, name=None):
+    """A file labelled the stub's harness proof names no book design and is no book file."""
+    if is_book_file(text):
+        return
+    present = [field for field in BOOK_FIELDS if field in fields]
+    if present:
+        yield "stub-label-on-a-book", f"a stub harness proof with the book's fields {present}"
+    if name is not None and name.startswith("bench_book_"):
+        yield "stub-label-on-a-book", f"{name} is a book file's name, labelled the stub's"
 
 
 def table_rows(text, title):
@@ -851,6 +1002,197 @@ def check_targets(text, fields):
         elif (fields.get("host") == MAC_HOST and cells[0] in X86_TARGETS
               and verdict.startswith(("met", "missed: ", "below floor: "))):
             yield "target-host-blurred", f"{cells[0]} is {verdict.split(':')[0]} on macOS"
+        else:
+            yield from check_book_target(text, fields, cells)
+
+
+# Book figures: what each target's figure is read from in the file's own tables, as (section,
+# row label, column of the median), and how a figure is written in the Measured cell.
+BOOK_MEASURED = re.compile(r"^(.+?) (below floor|[0-9][0-9,]*(?:\.[0-9]+)?)( M msg/s| GB| ns|×)?$")
+BOOK_GAP = re.compile(r"^(.+?) by ([0-9][0-9,]*(?:\.[0-9]+)?)(?: M msg/s| GB| ns|×)$")
+BOOK_DELTA = re.compile(r"^(.+?) ([+-][0-9][0-9,]*(?:\.[0-9]+)?)(?: M msg/s| GB| ns|×)$")
+MIB = 2 ** 20
+
+
+def places_of(cell):
+    """The decimals a printed figure was rounded to."""
+    return len(cell.partition(".")[2]) if re.fullmatch(r"[0-9,]+(?:\.[0-9]+)?", cell) else 0
+
+
+def book_source(text, target, name):
+    """The range the file's own tables leave for a target's figure, its median as printed
+    there, or the string `below floor`, or None if no table holds it."""
+    def cell(title, label, column, first=None):
+        for cells in table_rows(text, title):
+            key = cells[:2] if first is not None else cells[:1]
+            if key == ([first, label] if first is not None else [label]) and len(cells) > column:
+                return cells[column]
+        return None
+
+    def scaled(value, factor):
+        if value is None or value == BELOW_FLOOR:
+            return value
+        if not re.fullmatch(r"[0-9][0-9,]*(?:\.[0-9]+)?", value):
+            return None
+        low, high = printed_range(value, places_of(value))
+        return low * factor, high * factor
+
+    if target in ("T-BOOK-1", "T-BOOK-2"):
+        return scaled(cell("Summary", "Throughput, messages/s", 1), 1e-6)
+    if target == "T-BOOK-3":
+        return scaled(cell("Summary", "Book memory, MiB", 1), MIB / 1e9)
+    if target == "T-DESIGN-1":
+        return scaled(cell("Design comparison", name.removeprefix("over "), 1), 1)
+    if name == "batch mean":
+        return scaled(cell("Summary", "Batch mean per book message, ns", 1), 1)
+    if name == "mean":
+        return scaled(cell("Summary", "Mean service time per message, ns", 1), 1)
+    if target == "T-LAT-1":
+        operation, percentile = name.split(" ")
+        return scaled(cell("Per-operation latency", percentile, 2, first=operation), 1)
+    # T-LAT-2, T-LAT-3's p99.9 and T-LAT-5 are raw; T-LAT-4 takes the pair off each span.
+    return scaled(cell("Latency", name, 6 if target == "T-LAT-4" else 1), 1)
+
+
+def meets(bounds, op, bar):
+    """Whether every value in bounds meets the bar (True), none does (False), or the printed
+    figure leaves it open (None)."""
+    low, high = bounds
+    if op == ">=":
+        return True if low >= bar else False if high < bar else None
+    return True if high <= bar else False if low > bar else None
+
+
+def check_book_target(text, fields, cells):
+    """A measured book target held to its bar: the bar is BOOK_BARS', each figure is the
+    file's own median, and the verdict is met exactly when every figure meets its bar, a miss
+    names exactly the figures that miss with their gaps, and a figure no bar on this host can
+    judge says so with each figure's distance from its bar."""
+    target, bar_cell, _, measured_cell, verdict = cells
+    spec = BOOK_BARS.get(target)
+    if spec is None:
+        return
+    figures = spec["figures"]
+    values = [value for _, _, value in figures]
+    if verdict.startswith(VERDICTS[4]):
+        if measured_cell:
+            yield "target-verdict-wrong", f"{target}: not measured, yet measured {measured_cell!r}"
+        stray = {number(found) for found in re.findall(r"(?<![\w.])[0-9][0-9,.]*(?![\w])",
+                                                         bar_cell) if len(found) != 8}
+        if not stray <= {float(value) for value in values}:
+            yield "target-bar-differs", f"{target}: {bar_cell!r} gives no bar of {values}"
+        return
+    want = spec["cell"].format(*values)
+    if bar_cell != want:
+        yield "target-bar-differs", f"{target}: the bar is {bar_cell!r}, BOOK_BARS' is {want!r}"
+        return
+    parts = [BOOK_MEASURED.match(part) for part in measured_cell.split("; ")]
+    names = [name for name, _, _ in figures]
+    listed = None if None in parts else [part[1] for part in parts]
+    if spec.get("each that ran") and listed and len(set(listed)) == len(listed) and \
+            listed == [name for name in names if name in listed]:
+        figures = [figure for figure in figures if figure[0] in listed]
+        names = listed
+    if listed != names:
+        yield "target-measured-malformed", f"{target}: {measured_cell!r} does not give {names}"
+        return
+    status = {}
+    shown = {}
+    for (name, op, bar), part in zip(figures, parts):
+        source = book_source(text, target, name)
+        if part[2] == BELOW_FLOOR:
+            if source != BELOW_FLOOR:
+                yield "target-measured-differs", f"{target} {name}: below floor, the table {source}"
+            status[name] = BELOW_FLOOR
+            continue
+        bounds = printed_range(part[2], places_of(part[2]))
+        if source is None or source == BELOW_FLOOR or \
+                bounds[0] > source[1] or bounds[1] < source[0]:
+            yield "target-measured-differs", (f"{target} {name}: {part[2]} is not the file's "
+                                              f"median, {source}")
+        shown[name] = (bounds, part[2], bar)
+        status[name] = meets(bounds, op, bar)
+    host_differs = fields.get("host") == MAC_HOST and target in X86_TARGETS
+    word, _, detail = verdict.partition(": ")
+    below = [name for name in names if status[name] == BELOW_FLOOR]
+    if host_differs or word == "host differs":
+        yield from check_host_differs(target, verdict, host_differs, shown, below)
+        return
+    fails = {name for name, held in status.items() if held is False}
+    passes = {name for name, held in status.items() if held is True}
+    if word == "met":
+        if fails or below:
+            yield "target-verdict-wrong", (f"{target} is met, yet {sorted(fails)} miss and "
+                                           f"{below} are below floor")
+    elif word == "missed":
+        gaps = [BOOK_GAP.match(part) for part in detail.split(", ")]
+        listed = [gap[1] for gap in gaps if gap]
+        if None in gaps or not fails <= set(listed) or set(listed) & (passes | set(below)) or \
+                not listed or listed != [name for name in names if name in listed]:
+            yield "target-verdict-wrong", (f"{target} is missed on {listed}, yet the figures "
+                                           f"that miss are {sorted(fails)}")
+            return
+        for gap in gaps:
+            bounds, _, bar = shown[gap[1]]
+            distance = (abs(bounds[0] - bar), abs(bounds[1] - bar))
+            gap_bounds = printed_range(gap[2], places_of(gap[2]))
+            if gap_bounds[0] > max(distance) or gap_bounds[1] < min(distance):
+                yield "target-verdict-wrong", (f"{target} {gap[1]} misses by {gap[2]}, not its "
+                                               "distance from the bar")
+    elif word == "below floor":
+        if fails or not below or not detail.startswith(f"{', '.join(below)} cannot be resolved"):
+            yield "target-verdict-wrong", (f"{target} is below floor, with {below} below floor "
+                                           f"and {sorted(fails)} missing")
+
+
+def check_host_differs(target, verdict, host_differs, shown, below):
+    """A figure from a host the bar was not set on: neither met nor missed, and each figure's
+    signed distance from its bar, and the figures below the floor, as the file's tables give."""
+    if not host_differs:
+        yield "target-verdict-wrong", f"{target} says the host differs on a host its bar judges"
+        return
+    match = re.fullmatch(r"host differs: a macOS figure against a bar set on x86 Linux, neither "
+                         r"a pass nor a fail; against the bar: (.*?)(?:; (.*) below floor, not "
+                         r"measurable here)?", verdict)
+    if match is None:
+        yield "target-verdict-wrong", f"{target}: {verdict!r}"
+        return
+    deltas = [] if match[1] == "nothing resolved" else \
+        [BOOK_DELTA.match(part) for part in match[1].split(", ")]
+    if None in deltas or [delta[1] for delta in deltas] != list(shown) or \
+            (match[2] or "") != ", ".join(below):
+        yield "target-verdict-wrong", (f"{target}: {verdict!r} does not name {list(shown)} "
+                                       f"against the bar and {below} below floor")
+        return
+    for delta in deltas:
+        bounds, _, bar = shown[delta[1]]
+        given = printed_range(delta[2], places_of(delta[2].lstrip("+-")))
+        if given[0] > bounds[1] - bar or given[1] < bounds[0] - bar:
+            yield "target-verdict-wrong", (f"{target} {delta[1]} is {delta[2]} from its bar, "
+                                           f"not {bounds[0] - bar:+.2f}")
+
+
+def check_book_spreads(text):
+    """Every table of the file with a median, a min and a max column holds each median inside
+    its min and max."""
+    for title in re.findall(r"^## (.+)$", text, re.MULTILINE):
+        for table in re.findall(r"(?:^\|.*\n?)+", section(text, title) or "", re.MULTILINE):
+            lines = table.splitlines()
+            heads = [cell.strip() for cell in lines[0].strip().strip("|").split("|")]
+            columns = [next((at for at, head in enumerate(heads) if head.startswith(word)), None)
+                       for word in ("Median", "Min", "Max")]
+            if None in columns:
+                continue
+            for line in lines[2:]:
+                cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+                found = [cells[at] if at < len(cells) else "" for at in columns]
+                if not all(re.fullmatch(r"[0-9][0-9,]*(?:\.[0-9]+)?[%×]?", cell) for cell in found):
+                    continue
+                median, low, high = (cell_value(cell) for cell in found)
+                if not low <= median <= high:
+                    yield "summary-inconsistent", (f"{title}, {' '.join(cells[:columns[0]])}: "
+                                                   f"median {found[0]} outside {found[1]} to "
+                                                   f"{found[2]}")
 
 
 def is_backtest_file(fields):
@@ -1227,12 +1569,14 @@ def check_book(text, fields):
                (check_book_latency(text, fields), check_operations(text, fields)))
     for found in (check_book_fields(fields), *latency, check_book_summary(text),
                   check_memory(text), check_method(text), check_top(text, fields),
-                  check_comparison(text, fields), check_targets(text, fields)):
+                  check_comparison(text, fields), check_targets(text, fields),
+                  check_book_spreads(text)):
         yield from found
 
 
-def check_text(text):
-    """Every violation in one results file, as (code, detail) pairs."""
+def check_text(text, name=None):
+    """Every violation in one results file, as (code, detail) pairs. name is the file's name,
+    which a book file's must not share with a stub's."""
     fields = parse_header(text)
     if not fields:
         return [("header-missing", "no Header section")]
@@ -1261,6 +1605,7 @@ def check_text(text):
     violations.extend(check_percentiles(text, fields))
     violations.extend(check_counters(text))
     violations.extend(check_rdpmc_caveat(text))
+    violations.extend(check_stub(text, fields, name))
     if is_book_file(text):
         violations.extend(check_book(text, fields))
     return violations
@@ -1268,11 +1613,23 @@ def check_text(text):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("files", nargs="+", type=Path)
+    parser.add_argument("files", nargs="*", type=Path)
+    parser.add_argument("--bars", type=Path, metavar="BENCHMARKS.md")
     args = parser.parse_args(argv)
+    if not args.files and args.bars is None:
+        parser.error("give a results file, or --bars")
     failed = 0
+    if args.bars is not None:
+        disagreements = list(bar_disagreements(args.bars.read_text(encoding="utf-8")))
+        for target, detail in disagreements:
+            print(f"check_results: FAIL bar-differs {target}: {detail}")
+        if disagreements:
+            failed += 1
+        else:
+            print(f"check_results: ok, {len(list(bar_copies()))} copied bars agree with "
+                  f"{args.bars.name}")
     for path in args.files:
-        violations = check_text(path.read_text(encoding="utf-8"))
+        violations = check_text(path.read_text(encoding="utf-8"), path.name)
         for code, detail in violations:
             print(f"check_results: FAIL {code} {path.name}: {detail}")
         if violations:

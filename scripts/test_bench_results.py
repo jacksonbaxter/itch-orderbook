@@ -17,6 +17,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -172,6 +173,25 @@ class BookResults(unittest.TestCase):
         self.assertTrue(check_results.is_book_file(BOOK))
         self.assertFalse(check_results.is_book_file(MAC))
 
+    def test_the_label_quoted_in_a_sentence_spares_nothing(self):
+        label = check_results.STUB_LABEL
+        quoted = replace(BOOK, "Numbers from the two hosts are never mixed.",
+                         f"Not the {label} (see P-0001) Numbers from the two hosts are never "
+                         "mixed.")
+        self.assertTrue(check_results.is_book_file(quoted))
+        self.assertIn("target-missing", codes(without_line(quoted, "| T-BOOK-1 |")))
+
+    def test_a_book_file_labelled_the_stub_is_refused(self):
+        label = check_results.STUB_LABEL
+        labelled = replace(BOOK, "\n## Header\n", f"\n**{label} A planted label.**\n\n## Header\n")
+        self.assertFalse(check_results.is_book_file(labelled))
+        self.assertIn("stub-label-on-a-book", codes(labelled))
+
+    def test_a_stub_file_with_a_book_name_is_refused(self):
+        self.assertEqual(check_results.check_text(MAC, "bench_replay_stub_mac_12302019.md"), [])
+        self.assertIn("stub-label-on-a-book",
+                      {code for code, _ in check_results.check_text(MAC, "bench_book_x_mac.md")})
+
     def test_every_book_field_dropped_in_turn(self):
         for name in check_results.BOOK_FIELDS:
             self.assertIn("header-field-missing", codes(without_line(BOOK, f"- {name}: ")), name)
@@ -206,7 +226,8 @@ class BookResults(unittest.TestCase):
         row = "| p99 | below floor | | | | resolved in 0 of 3 repetitions | below floor |"
         broken = replace(BOOK, row, "| p99 | 291.7 | 291.7 | 291.7 | 0.00% | resolved in 3 of 3 "
                                     "repetitions | 120.0 |")
-        self.assertEqual(codes(broken), {"percentile-below-floor"})
+        # The targets table still gives p99 as below floor, which is refused on its own.
+        self.assertEqual(codes(broken) - {"target-measured-differs"}, {"percentile-below-floor"})
 
     def test_a_malformed_subtracted_figure(self):
         row = "| p99 | below floor | | | | resolved in 0 of 3 repetitions | below floor |"
@@ -270,8 +291,136 @@ class BookResults(unittest.TestCase):
                 self.assertIn("target-host-blurred", codes(broken), (target, verdict))
 
     def test_a_host_independent_bar_may_be_met_or_missed_on_macos(self):
-        for verdict in ("met", "missed: by 0.1 GB"):
-            self.assertEqual(codes(target_verdict(BOOK, "T-BOOK-3", verdict)), set())
+        # The fixture meets T-BOOK-3's bar and misses T-DESIGN-1's, both on macOS.
+        self.assertIn("| book 0.22 GB | met |", BOOK)
+        self.assertIn("| missed: over map-fresh by 2.73×, over map-aged by 3.28× |", BOOK)
+        self.assertEqual(codes(BOOK), set())
+
+    def test_a_verdict_the_figure_does_not_bear_out(self):
+        for target, verdict in (("T-BOOK-3", "missed: book by 0.10 GB"),
+                                ("T-DESIGN-1", "met"),
+                                ("T-DESIGN-1", "missed: over map-fresh by 2.73×"),
+                                ("T-DESIGN-1", "missed: over map-aged by 3.28×, over map-fresh by "
+                                               "2.73×"),
+                                ("T-LAT-3", "met")):
+            self.assertIn("target-verdict-wrong", codes(target_verdict(BOOK, target, verdict)),
+                          (target, verdict))
+
+    def test_the_design_ratio_is_given_over_each_map_design_that_ran(self):
+        row = ("| over map-fresh 1.27×; over map-aged 0.72× | missed: over map-fresh by 2.73×, "
+               "over map-aged by 3.28× |")
+        self.assertIn(row, BOOK)
+        for kept in ("| over map-fresh 1.27× | missed: over map-fresh by 2.73× |",
+                     "| over map-aged 0.72× | missed: over map-aged by 3.28× |"):
+            self.assertEqual(codes(replace(BOOK, row, kept)), set(), kept)
+        for wrong in ("| over map-aged 0.72×; over map-fresh 1.27× | missed: over map-aged by "
+                      "3.28×, over map-fresh by 2.73× |",
+                      "| over map-fresh 1.27×; over map-fresh 1.27× | missed: over map-fresh by "
+                      "2.73×, over map-fresh by 2.73× |"):
+            self.assertIn("target-measured-malformed", codes(replace(BOOK, row, wrong)), wrong)
+
+    def test_every_figure_of_another_target_must_be_given(self):
+        broken = replace(BOOK, "| mean 46.85 ns; p99.9 below floor |", "| mean 46.85 ns |")
+        self.assertIn("target-measured-malformed", codes(broken))
+
+    def test_a_gap_that_is_not_the_figure_s_distance_from_its_bar(self):
+        broken = target_verdict(BOOK, "T-DESIGN-1",
+                                "missed: over map-fresh by 2.73×, over map-aged by 3.38×")
+        self.assertEqual(codes(broken), {"target-verdict-wrong"})
+
+    def test_a_measured_figure_that_is_not_the_file_s_median(self):
+        for old, new in (("| book 0.22 GB |", "| book 0.12 GB |"),
+                         ("over map-fresh 1.27×;", "over map-fresh 1.37×;"),
+                         ("| mean 46.85 ns;", "| mean 45.85 ns;")):
+            self.assertIn("target-measured-differs", codes(replace(BOOK, old, new)), old)
+
+    def test_a_figure_the_table_holds_called_below_floor(self):
+        broken = replace(BOOK, "| mean 46.85 ns; p99.9 below floor |",
+                         "| mean below floor; p99.9 below floor |")
+        self.assertIn("target-measured-differs", codes(broken))
+
+    def test_a_bar_cell_that_is_not_the_bar(self):
+        broken = replace(BOOK, "| T-BOOK-3 | ≤ 1.4 GB of book |", "| T-BOOK-3 | ≤ 2.4 GB of book |")
+        self.assertEqual(codes(broken), {"target-bar-differs"})
+        broken = replace(BOOK, "| T-BOOK-4 | ≥ 14.4 M msg/s on 01302019 |",
+                         "| T-BOOK-4 | ≥ 4.4 M msg/s on 01302019 |")
+        self.assertEqual(codes(broken), {"target-bar-differs"})
+
+    def test_a_distance_from_an_x86_bar_that_is_not_the_figure_s(self):
+        for wrong in ("rate +5.95 M msg/s", "rate -4.95 M msg/s"):
+            broken = replace(BOOK, "against the bar: rate +4.95 M msg/s |",
+                             f"against the bar: {wrong} |")
+            self.assertEqual(codes(broken), {"target-verdict-wrong"}, wrong)
+
+    def test_host_differs_where_the_bar_can_judge(self):
+        verdict = ("host differs: a macOS figure against a bar set on x86 Linux, neither a pass "
+                   "nor a fail; against the bar: book -1.18 GB")
+        self.assertIn("target-verdict-wrong", codes(target_verdict(BOOK, "T-BOOK-3", verdict)))
+
+    def test_a_target_not_measured_that_gives_a_figure(self):
+        broken = replace(BOOK, "| T-BOOK-2 | ≥ 12.5 M msg/s | Ryzen 7 9700X, x86 Linux |  |",
+                         "| T-BOOK-2 | ≥ 12.5 M msg/s | Ryzen 7 9700X, x86 Linux | rate 1.00 M "
+                         "msg/s |")
+        self.assertIn("target-verdict-wrong", codes(broken))
+
+    def test_a_median_outside_its_min_and_max(self):
+        for old, new in (("| Book memory, MiB | 211.2 | 211.2 | 211.2 |",
+                          "| Book memory, MiB | 311.2 | 211.2 | 211.2 |"),
+                         ("| map-fresh | 1.27 |", "| map-fresh | 9.27 |")):
+            broken = BOOK.replace(old, new, 1)
+            self.assertNotEqual(broken, BOOK, old)
+            self.assertIn("summary-inconsistent", codes(broken), old)
+
+    def test_the_bars_agree_with_benchmarks_md(self):
+        text = (REPO_ROOT / "BENCHMARKS.md").read_text(encoding="utf-8")
+        self.assertEqual(list(check_results.bar_disagreements(text)), [])
+        copies = list(check_results.bar_copies())
+        self.assertEqual({target for target, _, _ in copies},
+                         set(check_results.BOOK_BARS) | {"T-BT-1", "T-BT-3", "T-SPSC-1",
+                                                         "T-SPSC-2", "T-SPSC-3"})
+
+    def test_a_bar_changed_in_benchmarks_md_alone_is_refused(self):
+        text = (REPO_ROOT / "BENCHMARKS.md").read_text(encoding="utf-8")
+        for old, new, target in (("≥ 2.0 M events/s", "≥ 2.5 M events/s", "T-BT-1"),
+                                 ("p99.9 ≤ 874 ns", "p99.9 ≤ 870 ns", "T-LAT-2"),
+                                 ("| replace | 110 | 709 | 945 |", "| replace | 110 | 709 | 954 |",
+                                  "T-LAT-1"),
+                                 ("at least 1.16× better", "at least 1.20× better", "T-SPSC-1"),
+                                 ("≤ 1.31× the single", "≤ 1.13× the single", "T-SPSC-3")):
+            changed = replace(text, old, new)
+            self.assertEqual([found for found, _ in check_results.bar_disagreements(changed)],
+                             [target], old)
+
+    def test_a_copy_changed_alone_is_refused(self):
+        text = (REPO_ROOT / "BENCHMARKS.md").read_text(encoding="utf-8")
+        backtest = dict(check_results.BACKTEST_TARGETS, shadow=("T-BT-3", 4.16, False))
+        spsc = {key: dict(spec) for key, spec in check_results.SPSC_COMPARISONS.items()}
+        spsc[("T-SPSC-1", "project rtt / rigtorp rtt")]["bar"] = 1.05
+        spsc[("T-SPSC-2", "mask over %, cached: shipped / modulo")]["op"] = "<="
+        book = dict(check_results.BOOK_BARS)
+        book["T-LAT-5"] = dict(book["T-LAT-5"], figures=(("p50", "<=", 127), ("p99", "<=", 446),
+                                                         ("p99.9", "<=", 787)))
+        with mock.patch.multiple(check_results, BACKTEST_TARGETS=backtest, SPSC_COMPARISONS=spsc,
+                                 BOOK_BARS=book):
+            found = sorted(target for target, _ in check_results.bar_disagreements(text))
+        self.assertEqual(found, ["T-BT-3", "T-LAT-5", "T-SPSC-1", "T-SPSC-2"])
+
+    def test_bars_on_the_command_line(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = check_results.main(["--bars", str(REPO_ROOT / "BENCHMARKS.md")])
+        self.assertEqual(code, 0, out.getvalue())
+        scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.addCleanup(scratch.cleanup)
+        changed = Path(scratch.name) / "BENCHMARKS.md"
+        changed.write_text(replace((REPO_ROOT / "BENCHMARKS.md").read_text(encoding="utf-8"),
+                                   "≥ 4.61 M ITCH", "≥ 4.71 M ITCH"), encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = check_results.main(["--bars", str(changed)])
+        self.assertEqual(code, 1, out.getvalue())
+        self.assertIn("check_results: FAIL bar-differs T-BT-3: BACKTEST_TARGETS shadow:",
+                      out.getvalue())
 
 
 class ThroughputOnly(unittest.TestCase):
