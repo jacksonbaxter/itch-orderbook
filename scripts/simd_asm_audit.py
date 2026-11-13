@@ -50,6 +50,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_results  # noqa: E402
+import process_kinds  # noqa: E402
 import simd_report  # noqa: E402
 import stamp_load  # noqa: E402
 
@@ -466,6 +467,7 @@ def report_violations(violations):
 
 
 def main(argv=None):
+    process_kinds.check_map("simd_asm_audit")  # Stops here on a map set and unusable.
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["--check"] and len(argv) == 2:
         path = Path(argv[1])

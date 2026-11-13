@@ -18,7 +18,9 @@ With no map, or a program the map does not hold, a process is "another process".
                                                  command's first word (a kernel thread's
                                                  name may hold a slash)
 
-tried in that order. A map whose kinds are not all in KINDS is refused.
+tried in that order. A map whose kinds are not all in KINDS is refused. A map that is set and
+cannot be used stops the tool that reads it (check_map, default_map), before it writes a row, and
+no message gives the map's path.
 
 cause_breaks() is the run log's grammar. Wherever a row's cause gives a process with its CPU
 share ("saw X at 41.2% CPU", "the first, X, at 100.0%", "X ran at 92% to 100% CPU", "(X, 28.4%)"),
@@ -33,6 +35,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 MAP_ENV = "ITCH_PROCESS_KINDS"
@@ -63,8 +66,10 @@ KINDS = (BROWSER, BROWSER_CONTENT, BACKUP_TOOL, BACKUP_TIMER, FILE_SYNC, VPN_DAE
 UNNAMED = "no process to name, so kernel or interrupt work"
 
 
-class MapError(ValueError):
-    pass
+class MapError(Exception):
+    """A map that cannot be used. Its message never holds the map's path or anything read from
+    the map, and it is not a ValueError, so that no tool's refusal handler, which writes what it
+    catches into a run-log row, takes it for a refusal."""
 
 
 def load(path=None):
@@ -72,30 +77,49 @@ def load(path=None):
     path = path or os.environ.get(MAP_ENV)
     if not path:
         return None
+    unusable = f"{MAP_ENV}: the name-to-kind map it gives"
     try:
         found = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        raise MapError(f"{MAP_ENV}: cannot read {path}: {error}") from error
-    programs = found.get("programs", {})
-    prefixes = [tuple(pair) for pair in found.get("prefixes", [])]
-    patterns = [(re.compile(pattern), kind) for pattern, kind in found.get("patterns", [])]
-    unknown = sorted({kind for kind in [*programs.values(), *(k for _, k in prefixes),
-                                        *(k for _, k in patterns)] if kind not in KINDS})
+    except OSError as error:
+        raise MapError(f"{unusable} cannot be read ({error.strerror or 'an OS error'})") from None
+    except ValueError:
+        raise MapError(f"{unusable} is not JSON") from None
+    try:
+        programs = dict(found.get("programs", {}))
+        prefixes = [(str(prefix), kind) for prefix, kind in found.get("prefixes", [])]
+        patterns = [(re.compile(pattern), kind) for pattern, kind in found.get("patterns", [])]
+    except (AttributeError, TypeError, ValueError, re.error):
+        raise MapError(f"{unusable} is not a map of programs, prefixes and patterns") from None
+    unknown = [kind for kind in [*programs.values(), *(k for _, k in prefixes),
+                                 *(k for _, k in patterns)]
+               if not isinstance(kind, str) or kind not in KINDS]
     if unknown:
-        raise MapError(f"{MAP_ENV}: {path} gives kinds that are not in process_kinds.KINDS: "
-                       f"{unknown}")
+        raise MapError(f"{unusable} gives {len(unknown)} kind(s) that are not in "
+                       "process_kinds.KINDS")
     return {"programs": programs, "prefixes": prefixes, "patterns": patterns}
 
 
 _LOADED = {}
 
 
-def default_map():
-    """load() once per value of $ITCH_PROCESS_KINDS."""
+def default_map(tool="process_kinds"):
+    """load() once per value of $ITCH_PROCESS_KINDS. A map that is set and cannot be used stops
+    the tool (exit 2) with a message that gives no path: it never becomes a row's text."""
     key = os.environ.get(MAP_ENV)
     if key not in _LOADED:
-        _LOADED[key] = load(key)
+        try:
+            _LOADED[key] = load(key)
+        except MapError as error:
+            print(f"{tool}: {error}. Stopped, with no row written for it: point it at a readable "
+                  "map, or unset it to give every process as another process.", file=sys.stderr)
+            raise SystemExit(2) from None
     return _LOADED[key]
+
+
+def check_map(tool):
+    """For a tool's main, before it runs or writes anything: default_map(), so that a map that
+    is set and cannot be used stops the tool there."""
+    default_map(tool)
 
 
 def program_of(command):

@@ -96,6 +96,7 @@ if __name__ == "__main__":
     sys.modules.setdefault("bench_driver", sys.modules["__main__"])
 
 import check_results  # noqa: E402
+import process_kinds  # noqa: E402
 import run_record  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -1453,6 +1454,7 @@ def render_main(argv):
 
 
 def main(argv=None):
+    process_kinds.check_map("bench_driver")  # Stops here on a map set and unusable.
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["render"]:
         return render_main(argv[1:])
