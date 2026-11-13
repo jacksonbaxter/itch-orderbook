@@ -9,7 +9,10 @@ DIR is the driver's run directory: manifest.json, each process's STEM.json recor
 STEM.err that measure.sh and /usr/bin/time -l wrote around it, and on macOS sampler.txt. Only
 the processes the manifest marks published are read, and each is held to the sampler again: a
 published process must have had the sampler over its whole span, with no gap over 5 s and no
-other process above 20% CPU. The withdrawn ones are listed with the reason the driver gave.
+other process above 20% CPU. That span is measure.sh's: from the start line to the end line it
+wrote in the process's STEM.err, which bracket the whole benchmark, since measure.sh runs
+bench_kernels itself and the sampler runs outside it. The withdrawn ones are listed with the
+reason the driver gave.
 
 Every figure comes from the file's own table of every timed pass, so --check rebuilds the
 results and the finding from that table and fails on any difference. It also fails when two
