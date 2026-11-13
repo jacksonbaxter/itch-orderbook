@@ -856,7 +856,7 @@
     },
     {
       "id": "bench-numbers-changed-demo-figure",
-      "breaks": "A demo page figure no longer matches any results file",
+      "breaks": "A demo page figure no longer matches the results file its line cites",
       "check": "gate_numbers.py on the fixture",
       "inputs": [
         {
@@ -874,7 +874,7 @@
         "{tree}/tests/fixtures/gate_numbers"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL docs/index\\.html:\\d+: 1,600 is in no results file",
+        "signature": "gate_numbers: FAIL docs/index\\.html:\\d+: 1,600 is not in results/bench_one\\.md",
         "exit": 1
       }
     },
