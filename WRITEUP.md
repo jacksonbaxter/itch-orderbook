@@ -13,14 +13,14 @@ The data is Nasdaq's free sample files: ten full sessions for correctness, nine 
 
 There are two hosts, and their numbers are never mixed.
 
-- `debian` is an AMD Ryzen Embedded V1605B, a Zen 1 part with 4 cores and 8 threads. Timed threads are pinned, with turbo and SMT on and no isolation. The timer's quantum is 10.010 ns, and no figure under its floor of 40.041 ns is published ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+- `debian` is an AMD Ryzen Embedded V1605B, a Zen 1 part with 4 cores and 8 threads. Timed threads are pinned, with turbo and SMT on and no isolation. The timer's quantum is 10.010 ns, and no percentile under its floor of 40.041 ns is published; a mean over many messages can be lower ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 - The Mac is an Apple M4 Max, and macOS cannot pin a thread. The harness's proof run, a stub book with nothing in it, varied with a CV of 67.35% there ([results/bench_replay_stub_mac_12302019.md](results/bench_replay_stub_mac_12302019.md)).
 
 So the Mac carries the correctness runs, which are counts, and `debian` every headline timing. A Mac timing is labelled macOS.
 
 Zen 1 limits what `debian` can show:
 
-- It has no AVX-512, so the AVX-512 VBMI kernel is built and tested but runs on no host here.
+- It has no AVX-512, so the AVX-512 VBMI kernel is built there but has run on neither host: its test skips on `debian`, naming the missing features.
 - Its `cache-misses` event counts L2 misses. A pointer chase at 1 MB, between L2 and L3, reads 0.7628 `cache-misses` a load and 0.0000 on the DRAM fill event `r0843:u` ([results/chase_debian.md](results/chase_debian.md)). `r0843:u` stands in for last-level misses, as a floor, since lines the prefetcher fetched are not counted.
 - `perf_event_paranoid` is 2 there, so profiles are user space only.
 - No huge pages are reserved; that is a root step outside the project. Transparent huge pages are on.
@@ -29,7 +29,7 @@ Zen 1 limits what `debian` can show:
 ### How a number gets published
 
 - A prediction is committed first, in [results/predictions.md](results/predictions.md), with what would refute it.
-- `machine_check` refuses the run unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is resident in memory.
+- On `debian`, `machine_check` refuses the run unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is resident in memory. On the Mac it enforces only the input's residency and the timer's calibration, and records the rest as things it cannot enforce.
 - Other work beside a timed process withdraws it. On the Mac a sampler reads every other process every 2 s, and a process during which another passed 20% CPU is withdrawn ([results/layout_mac_12302019.md](results/layout_mac_12302019.md)). That rule is why two Mac targets have no result. Mac runs made before it, the book designs' and the backtester's among them, had no sampler beside them.
   On `debian` the same kind of rule started late in the project: a sampler reads /proc every 1 s and withdraws a process whose core, SMT sibling or other cores were busy; T-BT-3's rerun is the one published figure under it so far ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)).
 - Each driver now writes a record of its run beside the raw output: the commit and tree state, each binary's hash, the dataset's hash and an untouched copy of every tool output the file quotes. Files published before that have no such record, and docs/NOTES.md lists what each lacks.
@@ -57,9 +57,9 @@ The baseline is the book most people would start with: `std::map` levels and an 
 The two counter columns are per-message means through `rdpmc`: each span runs from one read to the next, so it holds the counter reads, and no empty span is taken off ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 For scale, that file quotes the empty span measured on this host and design, one read of every event and nothing else, at instructions 308.0001, and at 0.0000 on the floor on DRAM demand fills, so the instruction column is not `apply()`'s own count ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 
-This table is the main finding. The four fast arms run almost the same instructions a message, counter reads included, and their speed follows their DRAM fills: they differ in how long they wait, not in how much they do. On the Mac the six designs rank the same way ([results/bench_book_paged-flat_ram_mac_12302019.md](results/bench_book_paged-flat_ram_mac_12302019.md) and the files beside it), but the Mac read no cache counters, so why the hosts differ so much is not established. Those Mac runs were made before the sampler rule, and no sampler ran beside them, so nothing is known about other load during them.
+This table is the main finding. The four fast arms run almost the same instructions a message, counter reads included, and their speed follows their DRAM fills: they differ in how long they wait, not in how much they do. On the Mac the six designs rank the same way except the two linked arms, which swap: `paged-linked` is ahead of `hash-linked` there in every repetition, while on `debian` their ranges overlap ([results/bench_book_paged-flat_ram_mac_12302019.md](results/bench_book_paged-flat_ram_mac_12302019.md) and the files beside it). But the Mac read no cache counters, so why the hosts differ so much is not established. Those Mac runs were made before the sampler rule, and no sampler ran beside them, so nothing is known about other load during them.
 
-The profile shows where the waiting is. `FastBook::apply` is the widest frame at 42.14% self, and about four fifths of its samples sit on three instructions, each just after a load that depends on the one before ([results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md)). Nothing outside the book, no allocation or system call, shows above 0.1% ([results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md)).
+The profile shows where the waiting is. `FastBook::apply` is the widest frame at 42.14% self, and about four fifths of its samples sit on three instructions, each just after a load that depends on the one before ([results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md)). Nothing outside the pass, no allocation, system call or timer frame, shows above 0.1% ([results/flamegraph_paged-flat_debian_12302019.md](results/flamegraph_paged-flat_debian_12302019.md)).
 
 ### Flat levels against linked
 
@@ -116,7 +116,7 @@ With the pools on base pages, on `debian`:
 
 On transparent huge pages, pool-index's median ratio to malloc-fresh is 1.390; pool-index's median throughput is 2,834,723 messages/s ([results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md)). TLB reach is the obvious suspect, but no TLB counter was read, so the cause is not established.
 
-The index pool also narrows each link, so its lead over the pointer pool is not the allocator's alone. The fastest node book is still slower than both flat-level arms of `FastBook`: under a node design, arrays and indices matter more than any allocator.
+The index pool also narrows each link, so its lead over the pointer pool is not the allocator's alone. The fastest node book is still slower than both flat-level arms of `FastBook`. The two books were timed by different harnesses at different commits, so no finer ranking, of an allocator against a level layout, is drawn from them.
 
 ### The page-fault check fails as published
 
@@ -239,7 +239,7 @@ T-MM-2, reproducing the paper's average spreads, fails on one of three: 3.0317 a
 
 ### The browser replay
 
-The same `FastBook`, compiled to WebAssembly, replays one symbol in the browser demo. On the Mac it ran 13,819,561 messages/s natively and 11,661,713 in the browser, 1.19× native ([results/wasm_replay_mac_12302019.md](results/wasm_replay_mac_12302019.md)). The bar names Google Chrome, which is not installed here; the run used Chrome for Testing, so there is no verdict.
+The same `FastBook`, compiled to WebAssembly, replays one symbol in the browser demo. On the Mac it ran 13,819,561 messages/s natively and 11,661,713 in the browser; a replay in the browser took 1.19× native's time ([results/wasm_replay_mac_12302019.md](results/wasm_replay_mac_12302019.md)). The bar names Google Chrome, which is not installed here; the run used Chrome for Testing, so there is no verdict.
 
 ## Correctness
 
@@ -293,7 +293,7 @@ Every check is tested like code: the fault matrix plants a bug and requires the 
 
 ### Fuzzing
 
-Each of the nine fuzz targets ran for 1,800 s on the Mac under ASan and UBSan, three at a time, from its committed seeds, on the code of commit aef684f, and every one was clean: exit 0, 0 crashes and no input saved ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)). The file says what clean means, and why the fuzzers used the toolchain's symbolizer.
+Each of the nine fuzz targets ran for 1,800 s on the Mac under ASan and UBSan, three at a time, from its committed seeds, on the code of commit aef684f, and every one was clean: exit 0, 0 crashes and no input saved ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)). The file says what clean means, and why the fuzzers used the toolchain's symbolizer. No later commit has changed the fuzz targets or any code they build from: `git diff aef684f -- fuzz src include cmake CMakeLists.txt CMakePresets.json` was empty at the commit this page was last checked at.
 
 - `fuzz_mold` ran 247,377,437 executions and `fuzz_midas` 212,887,115 ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)).
 - `fuzz_book` ran 67,300 executions, since each of its inputs is a stream of order messages replayed through every arm of the fast book and through the reference book, the two compared in full after every message ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)).
@@ -304,7 +304,7 @@ In the final review, reviewers who did not write the code went through it area b
 
 ## What was tried and did not work
 
-Each was measured and lost or did not help.
+Each was measured, and none became the default. Most lost or did not help; the two that won on one host, prefetching on `debian` and NEON on the Mac, stay off for the reasons given.
 
 - Prefetching gained 16.41% on `debian` ([results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md)).
 - On the Mac it lost at every distance, -18.01% at its best, so it is off by default ([results/prefetch_mac_12302019.md](results/prefetch_mac_12302019.md)).
