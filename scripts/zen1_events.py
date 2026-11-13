@@ -17,7 +17,10 @@ On Zen 1, `cache-misses` counts L2 misses and `r0843:u` is a floor on DRAM deman
 every line that names either says so.
 
 --check reads a published file again: the host, nothing private, both machine checks
-passed, the names said, and every state one of the four this script writes.
+passed, the header's perf_event_paranoid the one both checks recorded, the names said, and
+every state one of the four this script writes. The header's value is taken from the machine
+checks, and a check without the line, or one that reads other than 2, the value the prose is
+written for, refuses the file (r5-12).
 
 Each violation prints as `zen1_events: FAIL <code>: <detail>`.
 
@@ -113,7 +116,11 @@ PART_B = {  # event: (low, high) per replayed message, from the prediction
     "r0843:u": (1.5, 2.6), "branch-misses:u": (1.6, 2.6), "branches:u": (60, 160),
     "dTLB-load-misses:u": (0.1, 4)}
 CHECK_CODES = ("host-label", "private-text", "machine-check-failed", "name-unsaid",
-               "state-unknown")
+               "state-unknown", "paranoid-unmatched")
+# r5-12: the header's perf_event_paranoid is the machine checks' own record line, and the
+# prose below the table is written for 2, the setting the user approved.
+PARANOID_LINE = re.compile(r"^machine_check: record perf_event_paranoid: (\S+)$", re.M)
+PROSE_PARANOID = "2"
 
 
 class ReportError(ValueError):
@@ -195,6 +202,20 @@ def figure(value):
     return f"{value:.4f}" if value == 0 or value >= 0.001 else f"{value:.2e}"
 
 
+def paranoid_of(checks):
+    """perf_event_paranoid as both machine checks read it: refused unless each has its record
+    line and every one reads PROSE_PARANOID."""
+    values = [PARANOID_LINE.findall(text) for text in checks]
+    if any(len(found) != 1 for found in values):
+        raise ReportError("each machine check needs one 'record perf_event_paranoid' line, "
+                          f"and they hold {[len(found) for found in values]}")
+    read = {found[0] for found in values}
+    if read != {PROSE_PARANOID}:
+        raise ReportError(f"the machine checks read perf_event_paranoid {sorted(read)}, and "
+                          f"this file is written for {PROSE_PARANOID}")
+    return PROSE_PARANOID
+
+
 def render(args):
     record = json.loads(args.record.read_text(encoding="utf-8"))
     header = dict(record["header"], commit=args.commit, dataset=args.dataset)
@@ -210,7 +231,8 @@ def render(args):
            "committed. Do not edit by hand.", "", "## Header", ""]
     for name in ("host", "cpu", "kernel", "compiler", "flags", "commit", "pinning", "governor"):
         out.append(f"- {name}: {flame_report.scrub(header.get(name, 'unknown'))}")
-    out += ["- perf_event_paranoid: 2", f"- prediction: {args.prediction}",
+    paranoid = paranoid_of([path.read_text(encoding="utf-8") for path in args.machine_check])
+    out += [f"- perf_event_paranoid: {paranoid}", f"- prediction: {args.prediction}",
             f"- run_id: {args.run_id}",
             f"- part_a_input: tests/fixtures/oracle/session.itch, "
             f"{len(states)} `perf stat` and `perf record` runs",
@@ -310,6 +332,10 @@ def check_published(text):
     output = check_results.section(text, "machine_check output") or ""
     if output.count("machine_check: passed") != 2:
         found.append(("machine-check-failed", "wanted a passing check before and after"))
+    read = PARANOID_LINE.findall(output)
+    if len(read) != 2 or set(read) != {fields.get("perf_event_paranoid")}:
+        found.append(("paranoid-unmatched", f"the header says {fields.get('perf_event_paranoid')!r}"
+                                            f", the machine checks {read}"))
     for number, line in enumerate(text.splitlines(), start=1):
         for pattern, said in counts_report.NAME_RULES:
             if pattern.search(line) and said not in line:

@@ -5149,6 +5149,48 @@
         "exit": 1
       },
       "system": "Darwin"
+    },
+    {
+      "id": "bench-zen1-paranoid-taken-on-trust",
+      "breaks": "zen1_events writes the file when a machine check reads a perf_event_paranoid other than the 2 its prose is written for (r5-12)",
+      "check": "test_zen1_events.py test_perf_event_paranoid_is_the_machine_checks_own",
+      "mutations": [
+        {
+          "file": "scripts/zen1_events.py",
+          "old": "    if read != {PROSE_PARANOID}:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_zen1_events.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_perf_event_paranoid_is_the_machine_checks_own",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-zen1-check-paranoid-unchecked",
+      "breaks": "zen1_events --check does not hold the header's perf_event_paranoid to the machine checks' record lines (r5-12)",
+      "check": "test_zen1_events.py test_perf_event_paranoid_is_the_machine_checks_own",
+      "mutations": [
+        {
+          "file": "scripts/zen1_events.py",
+          "old": "    if len(read) != 2 or set(read) != {fields.get(\"perf_event_paranoid\")}:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_zen1_events.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_perf_event_paranoid_is_the_machine_checks_own",
+        "exit": 1
+      }
     }
   ]
 }
