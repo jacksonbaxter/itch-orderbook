@@ -4,8 +4,8 @@
 // The input's first byte is the distance asked for, modulo 72, so that 0, the distances an arm
 // can stage, and the ones on either side it must refuse all come up; the second picks the arm,
 // paged-flat (the default, four stages) or hash-linked (three); the rest is the stream. Each
-// frame the reader hands over is applied to one book, as itch_alloc and itch_oracle apply it,
-// and each frame FrameReader hands over to a second book that nothing looks ahead for.
+// message the reader hands over is applied to the book it looks ahead for, as itch_alloc and
+// itch_oracle apply it, so that the book's stages read a book that changes under them.
 //
 //   - frame for frame, the same status, offset and payload as FrameReader, the same terminal
 //     frame at the end, and again when asked twice more;
@@ -13,11 +13,12 @@
 //   - a distance it must refuse reads with none;
 //   - each stage s of each message k is asked for once, while frame k - lead(s) is being
 //     handed over, where lead(s) = max(distance >> s, stages - s); a frame nearer the start
-//     than lead(s) never gets stage s, and no other frame is ever asked for;
-//   - both books give the same status for every message and end with the same orders and
-//     levels, since prefetch_stage() only reads.
+//     than lead(s) never gets stage s, and no other frame is ever asked for.
 //
-// The book's prefetch_stage() runs on whatever bytes the input holds, under ASan.
+// The book's prefetch_stage() runs on whatever bytes the input holds, under ASan. That the
+// book ends each message as it would have without the stages is Lookahead's unit test
+// EveryArmEndsEveryMessageAsWithoutIt: a second book here costs half the executions, since
+// a fresh book sizes the tops of all 131,072 sides.
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -86,9 +87,8 @@ template <class Book>
 void check(std::span<const std::byte> stream, unsigned asked) {
   constexpr unsigned kStages = Book::kPrefetchStages;
   using Reader = itch::LookaheadReader<Staged<Book>>;
-  Book ahead_book{kCapacity};
-  Book plain_book{kCapacity};
-  Staged<Book> staged{.book = &ahead_book,
+  Book book{kCapacity};
+  Staged<Book> staged{.book = &book,
                       .log = std::vector<typename Staged<Book>::Call>(
                           ((stream.size() / kHeaderBytes) + 1) * kStages)};
   Reader ahead{stream, staged, asked};
@@ -110,8 +110,8 @@ void check(std::span<const std::byte> stream, unsigned asked) {
       break;
     }
     frames.push_back(want);
-    if (want.status == FrameStatus::message) {
-      FUZZ_CHECK(ahead_book.apply(got.payload) == plain_book.apply(want.payload));
+    if (got.status == FrameStatus::message) {
+      static_cast<void>(book.apply(got.payload));
     }
   }
   for (int again = 0; again < 2; ++again) {
@@ -120,8 +120,6 @@ void check(std::span<const std::byte> stream, unsigned asked) {
     FUZZ_CHECK(got.offset == want.offset);
   }
   check_counters(ahead.counters(), plain.counters());
-  FUZZ_CHECK(ahead_book.live_orders() == plain_book.live_orders());
-  FUZZ_CHECK(ahead_book.live_levels() == plain_book.live_levels());
 
   // Where each ask landed, as a frame number, from the payload it named.
   FUZZ_CHECK(staged.count <= staged.log.size());
