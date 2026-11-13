@@ -929,4 +929,7 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0504-01302020-20261113T075153Z` | `P-0504` | `f1604473662f` | Darwin | `published` | yes |
 | `P-0504-01302019_BX-20261113T075153Z` | `P-0504` | `f1604473662f` | Darwin | `published` | yes |
 | `fuzz-30min-20261113T121433Z` | `none: a check, not a measurement` | `aef684f3dd86` | Darwin | `published` | yes |
+| `P-0029-20261113T180428Z` | `P-0029` | `6d53ed4cf1e2` | Linux | `refused at machine_check` | yes |
+| `P-0029-20261113T183529Z` | `P-0029` | `6d53ed4cf1e2` | Linux | `written, pending the load stamp` | no: `run_log.md:358` stands |
+| `P-0029-20261113T183529Z` | `P-0029` | `6d53ed4cf1e2` | Linux | `published` | yes |
 <!-- results table: end -->
