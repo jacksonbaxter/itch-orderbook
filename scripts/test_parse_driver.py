@@ -296,6 +296,26 @@ class Inline(unittest.TestCase):
         _, problems = parse_driver.inline_verdicts(cut)
         self.assertIn("book_decode: not in the binary as a function of its own", problems)
 
+    def test_a_clone_is_checked_as_the_pass(self):
+        clone = X86.replace("0000000000401300 <_ZN4itch5bench5parse11book_decodeESt4span",
+                            "0000000000401200 <_ZN4itch5bench5parse10frame_walkESt4span", 1)
+        clone = clone.replace("EE>:\n  401300:", "EE.isra.0>:\n  401300:", 1)
+        found = parse_driver.pass_functions(clone)
+        self.assertEqual(len(found["frame_walk"]), 2)
+        _, problems = parse_driver.inline_verdicts(clone)
+        self.assertTrue(any(p.startswith("frame_walk: 1 instructions leave the pass") for p in problems),
+                        problems)
+
+    def test_a_branch_into_a_cold_part_is_refused(self):
+        cold = X86.replace("401207:\tjmp    401220 <_ZN4itch5bench5parse10frame_walkESt4spanIKSt4"
+                           "byteLm18446744073709551615EE+0x20>",
+                           "401207:\tjmp    401900 <_ZN4itch5bench5parse10frame_walkESt4spanIKSt4"
+                           "byteLm18446744073709551615EE.cold>", 1)
+        self.assertNotEqual(cold, X86)
+        _, problems = parse_driver.inline_verdicts(cold)
+        self.assertTrue(any(p.startswith("frame_walk: 1 instructions leave the pass") for p in problems),
+                        problems)
+
     def test_the_kept_code_is_the_three_passes(self):
         code = parse_driver.pass_code(X86)
         self.assertIn("401301:", code)

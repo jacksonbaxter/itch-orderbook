@@ -165,19 +165,25 @@ TARGET = re.compile(r"<([^>+]+)(\+0x[0-9a-f]+)?>")
 
 
 def pass_functions(disassembly):
-    """Each pass's own code in objdump -d's text: {pass: (symbol, [instruction lines])}."""
-    found, name, symbol = {}, None, None
+    """Each pass's own code in objdump -d's text: {pass: [(symbol, [instruction lines])]}, the
+    function and any clone the compiler made of it (.isra, .constprop, .part), each checked as
+    the pass itself. A .cold part is not taken in: a branch into it is a branch to another
+    function, refused. GCC 14.2 and Clang 23.1.4 on debian, and Clang on the Mac, made neither
+    (P4 parse asm/)."""
+    found, current = {}, None
     for line in disassembly.splitlines():
         header = FUNCTION_LINE.match(line)
         if header:
             symbol = header.group(2)
             name = next((n for n, mangled in PASS_SYMBOLS.items() if mangled in symbol
-                         and not re.search(r"\.(cold|part)", symbol)), None)
+                         and ".cold" not in symbol), None)
+            current = None
             if name is not None:
-                found.setdefault(name, (symbol, []))
+                current = (symbol, [])
+                found.setdefault(name, []).append(current)
             continue
-        if name is not None and INSTRUCTION.match(line):
-            found[name][1].append(line)
+        if current is not None and INSTRUCTION.match(line):
+            current[1].append(line)
     return found
 
 
@@ -208,14 +214,16 @@ def inline_verdicts(disassembly):
         if name not in found:
             problems.append(f"{name}: not in the binary as a function of its own")
             continue
-        symbol, code = found[name]
-        calls = loop_calls(symbol, code)
+        calls = [call for symbol, code in found[name] for call in loop_calls(symbol, code)]
+        size = sum(len(code) for _, code in found[name])
         if calls:
             problems.append(f"{name}: {len(calls)} instructions leave the pass: "
                             + "; ".join(calls[:5]))
+        elif len(found[name]) == 1:
+            lines.append(f"{name}: {size} instructions, no call and no jump to another function")
         else:
-            lines.append(f"{name}: {len(code)} instructions, no call and no jump to another "
-                         "function")
+            lines.append(f"{name}: {size} instructions in {len(found[name])} functions, the pass "
+                         "and its clones, no call and no jump to another function")
     return lines, problems
 
 
@@ -235,8 +243,7 @@ def pass_code(disassembly):
     found = pass_functions(disassembly)
     out = []
     for name in PASS_SYMBOLS:
-        if name in found:
-            symbol, code = found[name]
+        for symbol, code in found.get(name, []):
             out += [f"<{symbol}>:", *code, ""]
     return "\n".join(out)
 
@@ -739,8 +746,9 @@ def relative_command(args):
 
 # --check
 
-LOOP_LINE = re.compile(r"^- (frame_walk|book_decode|strict_decode): \d+ instructions, no call "
-                       r"and no jump to another function$")
+LOOP_LINE = re.compile(r"^- (frame_walk|book_decode|strict_decode): \d+ instructions"
+                       r"( in \d+ functions, the pass and its clones)?, no call and no jump to "
+                       r"another function$")
 
 
 def caveat_problems(text, day):
