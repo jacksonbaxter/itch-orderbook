@@ -42,7 +42,22 @@ waits for it, writes the row with where the run was, and exits 128 plus the sign
 that writes its files says "written, pending the load stamp", never "published": the load
 rule is applied after it, by scripts/stamp_load.py, which appends each file's outcome row,
 published or withdrawn with the reason. Raw output stays in --raw-dir, which is not
-committed.
+committed. The Commands line in each file holds every argument that reached a child process
+or changed the file.
+
+    bench_driver.py render --raw-dir DIR --published FILE --out-dir DIR [--stderr FILE] \\
+        [--title TEXT] [--note TEXT | --as-published] [--rendered-again REASON]
+
+renders every file of a published run again from the run's raw records in DIR and from
+measure.sh's stderr (DIR/stderr.txt unless --stderr names it), from which the load lines are
+stamped. What the run printed only into its files, its command, run id and times, the
+machine check's output and the swap line, is taken from FILE; nothing is run. --title and
+--note are the run's own, from the script that started it, for a file whose Commands line
+left them out; the title rendered must be the one each file printed. --as-published, for a
+run of no design whose starting command is not on record, takes the title and note as
+printed and says under the Commands line that it leaves them out. Each result passes
+check_results.py or none is written. REASON adds a line saying the files were rendered again
+from the run's own raw records, and why.
 
 Exit codes: 0 results written, 1 refused or failed, 2 bad usage, 128 + N stopped by
 signal N.
@@ -268,6 +283,11 @@ def run_repetition(args, index, commit, digest, design=None):
     passes = "throughput" if design in args.throughput_only else "timed"
     timed = run_process(args, index, commit, digest, design, passes)
     untimed = run_process(args, index, commit, digest, design, "untimed")
+    return merged(timed, untimed, index)
+
+
+def merged(timed, untimed, index):
+    """The timed record with its untimed process's counters and memory."""
     memory = untimed.get("memory", {})
     if not memory.get("complete") or not memory.get("first_book"):
         raise Refused(f"repetition {index}", "the untimed process's memory figure is not the "
@@ -963,7 +983,10 @@ def render(records, args, run_id, started, finished, machine_output, command, ru
     return "\n".join(lines)
 
 
-def relative_command(args):
+def relative_command(args, given=None):
+    """The command as run. given, when a published command is rendered again, is the flags
+    that command held: one it did not hold, that this driver now always prints, is left out,
+    since the run that printed it had no such argument."""
     def shown(path):
         path = Path(path).resolve()
         try:
@@ -980,11 +1003,20 @@ def relative_command(args):
         words += ["--throughput-only", design]
     if args.throughput_only:
         words += ["--throughput-only-why", args.throughput_only_why]
-    words += ["--input-mode", args.input_mode]
+    if given is None or "--input-mode" in given:
+        words += ["--input-mode", args.input_mode]
     if args.track_top:
         words.append("--track-top")
-    if args.core is not None:
-        words += ["--core", str(args.core)]
+    # Every argument that reaches bench_replay or machine_check.sh, or changes the file (r5-4).
+    for flag, value in (("--core", args.core), ("--sibling", args.sibling),
+                        ("--orders", args.orders), ("--levels", args.levels)):
+        if value is not None:
+            words += [flag, str(value)]
+    for argument in args.bench_arg:
+        words += [f"--bench-arg={argument}"]
+    for flag, value in (("--title", args.title), ("--note", args.note)):
+        if value is not None:
+            words += [flag, value]
     text = " ".join(shlex.quote(word) if "<" not in word else word for word in words)
     return f"{args.wrapped_by} {text}" if args.wrapped_by else text
 
@@ -1127,7 +1159,174 @@ def hold_signals():
     stopping = True
 
 
+# render
+
+class PrintedSwap:
+    """The swap line as the published file printed it."""
+
+    def __init__(self, line):
+        self.text = line
+
+    def line(self):
+        return self.text
+
+
+def published_parts(text):
+    """What the run printed only into its files: its arguments, run id and times, the machine
+    check's output and the swap line."""
+    fields = check_results.parse_header(text)
+    command = (check_results.section(text, "Commands") or "").strip().strip("`").strip()
+    wrapped, found, words = command.partition("python3 -B scripts/bench_driver.py ")
+    if not found:
+        raise Refused("published", "no bench_driver.py command in its Commands section")
+    words = shlex.split(words)
+    args = parse_args(words)
+    args.wrapped_by = wrapped.strip() or None
+    args.given = {word.split("=", 1)[0] for word in words if word.startswith("--")}
+    machine = (check_results.section(text, "machine_check output") or "").strip()
+    machine = machine.removeprefix("```").removesuffix("```").strip("\n")
+    swap = next((line for line in text.splitlines()
+                 if line.startswith(("The kernel's pswpout", "Swap-outs are not read"))), None)
+    return args, fields, machine, swap
+
+
+def raw_record(raw_dir, stem):
+    path = raw_dir / f"{stem}.json"
+    if not path.is_file():
+        raise Refused("raw", f"{path.name} is not in the raw folder")
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if record["refusals"]:
+        raise Refused("raw", f"{path.name} refused: {'; '.join(record['refusals'])}")
+    return record
+
+
+def raw_repetition(raw_dir, args, index, design):
+    """One repetition's record as run() put it together. A run of no design that left one
+    record a repetition, as the first stub runs did, has no untimed process to merge."""
+    if design is None and (raw_dir / f"repetition-{index}.json").is_file():
+        return raw_record(raw_dir, f"repetition-{index}")
+    stem = f"{design}-repetition-{index}" if design else f"repetition-{index}"
+    timed = "throughput" if design in args.throughput_only else "timed"
+    return merged(raw_record(raw_dir, f"{stem}-{timed}"),
+                  raw_record(raw_dir, f"{stem}-untimed"), index)
+
+
+AS_PUBLISHED = ("The run was given its title with `--title` and its bold note with `--note`, "
+                "which the driver's command line left out then; the command the run was "
+                "started with is not in its raw records, so the line above leaves them out "
+                "too, rather than guess them.")
+
+
+def printed_title_and_note(published):
+    """The title and the bold note a file of a run of no design printed: for such a run,
+    the --title and --note it was given."""
+    head = published.split("\n## Header\n", 1)[0].split("\n")
+    notes = [line[2:-2] for line in head if line.startswith("**") and line.endswith("**")]
+    if len(notes) > 1:
+        raise Refused("note", "more than one bold line before the header")
+    return head[0].removeprefix("# "), (notes[0] if notes else None)
+
+
+def render_again(raw_dir, published, stderr, title=None, note=None, again=None,
+                 as_published=False):
+    """Every file of the published file's run rendered again from its raw records, stamped:
+    {file name: text}. title and note are the run's own --title and --note, from the
+    script that started it; the Commands line prints them only when given, and each must
+    give back the title and note the run printed. as_published, for a run of no design whose
+    starting command is not on record, takes the title and note the file printed, which for
+    such a run are the --title and --note it was given, and says under the Commands line
+    that the line leaves them out."""
+    import stamp_load  # Here, since stamp_load imports this module.
+
+    args, fields, machine, swap = published_parts(published)
+    args.title = args.title if title is None else title
+    args.note = args.note if note is None else note
+    printed = None
+    if as_published:
+        if args.design or title is not None or note is not None:
+            raise Refused("title", "the title and note as printed stand for --title and --note "
+                                   "only in a run of no design, with neither given")
+        printed = printed_title_and_note(published)
+    designs = args.design or [None]
+    runs = {}
+    for index in range(1, args.repetitions + 1):
+        for design in designs:
+            record = raw_repetition(raw_dir, args, index, design)
+            validate_run(record, latency=design not in args.throughput_only)
+            runs.setdefault(design or "", []).append(record)
+    validate_together(runs)
+    global swap_watch
+    swap_watch = PrintedSwap(swap) if swap else None
+    texts = {}
+    try:
+        for design, records in runs.items():
+            name = Path(str(args.out).replace("{design}", design)).name
+            command = relative_command(args, args.given)
+            if printed is not None:
+                args.title, args.note = printed
+            text = render(records, args, fields["run_id"], fields["run_started"],
+                          fields["run_finished"], machine, command, runs)
+            if printed is not None:
+                args.title, args.note = None, None
+                text += f"\n{AS_PUBLISHED}\n"
+            if again:
+                generated = ("Generated by `scripts/bench_driver.py` from raw records that are "
+                             "not committed. Do not edit by hand.\n\n")
+                text = text.replace(generated, generated + "Rendered again from the run's own "
+                                    f"raw records, unchanged: {again}\n\n", 1)
+            texts[name] = stamp_load.stamp(text, stderr)
+    finally:
+        swap_watch = None
+    return texts
+
+
+def render_main(argv):
+    parser = argparse.ArgumentParser(prog="bench_driver.py render",
+                                     description="render a published run's files again from raw")
+    parser.add_argument("--raw-dir", type=Path, required=True)
+    parser.add_argument("--published", type=Path, required=True,
+                        help="one of the run's files; every file of the run is checked")
+    parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--stderr", type=Path, help="measure.sh's stderr, DIR/stderr.txt unless given")
+    parser.add_argument("--title", help="the run's --title, from the script that started it")
+    parser.add_argument("--note", help="the run's --note, from the script that started it")
+    parser.add_argument("--as-published", action="store_true",
+                        help="a run of no design whose command is not on record: its title "
+                             "and note as printed")
+    parser.add_argument("--rendered-again", metavar="REASON")
+    args = parser.parse_args(argv)
+    try:
+        stderr = (args.stderr or args.raw_dir / "stderr.txt").read_text(encoding="utf-8")
+        texts = render_again(args.raw_dir, args.published.read_text(encoding="utf-8"), stderr,
+                             args.title, args.note, args.rendered_again,
+                             args.as_published)
+        for name, text in texts.items():
+            published = args.published.parent / name
+            if not published.is_file():
+                raise Refused("published", f"{name}, a file of the run, is not beside "
+                                           f"{args.published.name}")
+            first = published.read_text(encoding="utf-8").split("\n", 1)[0]
+            if text.split("\n", 1)[0] != first:
+                raise Refused("title", f"{name}: the render's title is not the published "
+                                       f"{first!r}: give the run's own --title")
+            violations = check_results.check_text(text)
+            if violations:
+                raise Refused("results", f"{name}: " + "; ".join(
+                    f"{code}: {detail}" for code, detail in violations))
+    except (Refused, OSError, ValueError, KeyError) as error:
+        print(f"bench_driver: render refused: {error}", file=sys.stderr)
+        return 1
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    for name, text in texts.items():
+        (args.out_dir / name).write_text(text, encoding="utf-8")
+        print(f"bench_driver: wrote {args.out_dir / name}", file=sys.stderr)
+    return 0
+
+
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["render"]:
+        return render_main(argv[1:])
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, forward_signal)

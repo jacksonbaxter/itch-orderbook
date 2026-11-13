@@ -505,9 +505,20 @@ def relative_command(args):
              "--workload", args.workload, "--date", args.date,
              "--prediction", args.prediction, "--repetitions", str(args.repetitions),
              "--raw-dir", "<raw>", "--out", shown(args.out)]
-    for flag, value in (("--core", args.core), ("--sibling", args.sibling)):
+    for flag, value in (("--core", args.core), ("--sibling", args.sibling),
+                        ("--sampler-cpu", args.sampler_cpu)):
         if value is not None:
             words += [flag, str(value)]
+    # The Linux sampler rule's waits and limits, when they are not the defaults, are part of
+    # what ran; each --bench-arg reaches bench_backtest and can change the workload (r5-4).
+    for flag, value, default in (("--quiet-before", args.quiet_before, QUIET_BEFORE_S),
+                                 ("--quiet-wait", args.quiet_wait, QUIET_WAIT_S),
+                                 ("--most-in-a-row", args.most_in_a_row, MOST_IN_A_ROW),
+                                 ("--most-withdrawn", args.most_withdrawn, MOST_WITHDRAWN)):
+        if value != default:
+            words += [flag, f"{value:g}"]
+    for argument in args.bench_arg:
+        words += [f"--bench-arg={argument}"]
     text = " ".join(shlex.quote(word) if "<" not in word else word for word in words)
     return f"{args.wrapped_by} {text}" if args.wrapped_by else text
 

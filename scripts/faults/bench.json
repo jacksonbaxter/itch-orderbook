@@ -4188,8 +4188,8 @@
       "mutations": [
         {
           "file": "scripts/backtest_driver.py",
-          "old": "    for flag, value in ((\"--core\", args.core), (\"--sibling\", args.sibling)):\n",
-          "new": "    for flag, value in ((\"--core\", args.core),):\n"
+          "old": "    for flag, value in ((\"--core\", args.core), (\"--sibling\", args.sibling),\n                        (\"--sampler-cpu\", args.sampler_cpu)):\n",
+          "new": "    for flag, value in ((\"--core\", args.core),\n                        (\"--sampler-cpu\", args.sampler_cpu)):\n"
         }
       ],
       "command": [
@@ -4489,6 +4489,174 @@
       ],
       "expect": {
         "signature": "^FAIL: test_wasm_bench_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-command-drops-title-and-note",
+      "breaks": "bench_driver's Commands line leaves out --title and --note, which change the file (r5-4)",
+      "check": "test_driver_records.py test_bench_driver_shows_every_argument_that_ran",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    for flag, value in ((\"--title\", args.title), (\"--note\", args.note)):\n",
+          "new": "    for flag, value in ():\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_bench_driver_shows_every_argument_that_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-command-drops-sibling",
+      "breaks": "bench_driver's Commands line leaves out --sibling, which reaches machine_check.sh (r5-4)",
+      "check": "test_driver_records.py test_bench_driver_shows_every_argument_that_ran",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    for flag, value in ((\"--core\", args.core), (\"--sibling\", args.sibling),\n                        (\"--orders\", args.orders), (\"--levels\", args.levels)):\n",
+          "new": "    for flag, value in ((\"--core\", args.core),\n                        (\"--orders\", args.orders), (\"--levels\", args.levels)):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_bench_driver_shows_every_argument_that_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-command-drops-bench-arg",
+      "breaks": "bench_driver's Commands line leaves out each --bench-arg, which reaches bench_replay (r5-4)",
+      "check": "test_driver_records.py test_bench_driver_shows_every_argument_that_ran",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    for argument in args.bench_arg:\n        words += [f\"--bench-arg={argument}\"]\n    for flag, value in ((\"--title\"",
+          "new": "    for argument in ():\n        words += [f\"--bench-arg={argument}\"]\n    for flag, value in ((\"--title\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_bench_driver_shows_every_argument_that_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "backtest-driver-command-drops-bench-arg",
+      "breaks": "backtest_driver's Commands line leaves out each --bench-arg, which reaches bench_backtest (r5-4)",
+      "check": "test_driver_records.py test_backtest_driver_shows_every_argument_that_ran",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    for argument in args.bench_arg:\n        words += [f\"--bench-arg={argument}\"]\n",
+          "new": "    for argument in ():\n        words += [f\"--bench-arg={argument}\"]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_backtest_driver_shows_every_argument_that_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "backtest-driver-command-drops-sampler-limits",
+      "breaks": "backtest_driver's Commands line leaves out the sampler rule's waits and limits when they are not the defaults (r5-4)",
+      "check": "test_driver_records.py test_backtest_driver_shows_every_argument_that_ran",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "        if value != default:\n            words += [flag, f\"{value:g}\"]\n",
+          "new": "        if False:\n            words += [flag, f\"{value:g}\"]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_backtest_driver_shows_every_argument_that_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-render-accepts-another-title",
+      "breaks": "bench_driver.py render writes a file whose title is not the one the run printed, so a --title that is not the run's own enters its Commands line (r5-4)",
+      "check": "test_driver_records.py test_the_title_the_run_was_given_enters_the_command_line",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "            if text.split(\"\\n\", 1)[0] != first:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_title_the_run_was_given_enters_the_command_line",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-render-prints-a-flag-never-given",
+      "breaks": "bench_driver.py render prints --input-mode in the Commands line of a run whose command held no such argument (r5-4)",
+      "check": "test_driver_records.py test_a_flag_the_published_command_never_held_is_not_printed",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "            command = relative_command(args, args.given)\n",
+          "new": "            command = relative_command(args)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_flag_the_published_command_never_held_is_not_printed",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-render-stub-hides-the-unrecorded-title",
+      "breaks": "bench_driver.py render of a run of no design takes its title and note as printed without saying the Commands line leaves them out (r5-4)",
+      "check": "test_driver_records.py test_a_run_of_no_design_keeps_its_title_and_note_as_printed_and_says_so",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "                text += f\"\\n{AS_PUBLISHED}\\n\"\n",
+          "new": "                pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_run_of_no_design_keeps_its_title_and_note_as_printed_and_says_so",
         "exit": 1
       }
     }

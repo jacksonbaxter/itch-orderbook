@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import sys
 import types
 import tempfile
@@ -216,6 +217,184 @@ class FailureRows(unittest.TestCase):
 for _name in [*PENDING_DRIVERS, *OTHER_DRIVERS]:
     setattr(FailureRows, f"test_{_name}_logs_a_run_that_dies_unexpectedly",
             dies_unexpectedly(_name))
+
+BENCH_BASE = ["--bench", "x", "--probe", "x", "--input", "data/day.itch", "--prediction",
+              "P-0999", "--raw-dir", "x", "--out", "results/bench_{design}.md"]
+
+
+class Commands(unittest.TestCase):
+    """r5-4: the Commands line records every argument that reaches a child process or
+    changes the file."""
+
+    def test_bench_driver_shows_every_argument_that_ran(self):
+        plain = bench_driver.relative_command(bench_driver.parse_args(BENCH_BASE))
+        for flag in ("--sibling", "--orders", "--levels", "--bench-arg", "--title", "--note"):
+            self.assertNotIn(flag, plain)
+        command = bench_driver.relative_command(bench_driver.parse_args(
+            [*BENCH_BASE, "--core", "4", "--sibling", "5", "--orders", "1000", "--levels", "64",
+             "--bench-arg=--shadow", "--bench-arg", "7", "--title", "Design {design}, a day",
+             "--note", "A note."]))
+        self.assertIn(" --core 4 --sibling 5 --orders 1000 --levels 64 --bench-arg=--shadow "
+                      "--bench-arg=7 --title 'Design {design}, a day' --note 'A note.'", command)
+
+    def test_backtest_driver_shows_every_argument_that_ran(self):
+        base = ["--bench", "x", "--probe", "x", "--input", "x", "--workload", "quoting",
+                "--date", "20191230", "--prediction", "P-0103", "--raw-dir", "x", "--out", "x"]
+        plain = backtest_driver.relative_command(backtest_driver.parse_args(base))
+        for flag in ("--bench-arg", "--sampler-cpu", "--quiet-before", "--quiet-wait",
+                     "--most-in-a-row", "--most-withdrawn"):
+            self.assertNotIn(flag, plain)
+        command = backtest_driver.relative_command(backtest_driver.parse_args(
+            [*base, "--core", "4", "--sibling", "5", "--sampler-cpu", "1", "--quiet-before", "5",
+             "--quiet-wait", "30", "--most-in-a-row", "2", "--most-withdrawn", "9",
+             "--bench-arg=--symbol", "--bench-arg=AAPL"]))
+        self.assertIn(" --core 4 --sibling 5 --sampler-cpu 1 --quiet-before 5 --quiet-wait 30 "
+                      "--most-in-a-row 2 --most-withdrawn 9 --bench-arg=--symbol "
+                      "--bench-arg=AAPL", command)
+
+
+GOOD_MAC = (FIXTURES / "good_mac.md").read_text(encoding="utf-8")
+HEADER = check_results.parse_header(GOOD_MAC)
+MACHINE = check_results.section(GOOD_MAC, "machine_check output").strip().strip("`").strip()
+# The stub label spares a fixture file the book rules, which records this small cannot meet.
+STUB_NOTE = ["--note", check_results.STUB_LABEL]
+
+
+def raw_record(design=None, rate=100.0, untimed=False):
+    """A record as bench_replay writes one: the stub's, or a design's timed or untimed one."""
+    header = {name: HEADER[name] for name in bench_driver.HEADER_ORDER if name in HEADER}
+    if design:
+        header["design"] = f"{design}: a fixture"
+    return {
+        "header": header,
+        "warmup": {"messages": 10},
+        "throughput": {"messages": 10, "seconds": 0.1, "messages_per_s": rate},
+        "latency_pass": {"messages": 10, "seconds": 0.15, "messages_per_s": rate / 1.5},
+        "instrumentation_ratio": 1.5,
+        "latency": {"percentiles": [{"percentile": 50, "value_ns": None},
+                                    {"percentile": 99, "value_ns": 500.0}],
+                    "mean_ns": 40.0, "max_ns": 900.0, "samples": 10},
+        "counters": {"status": [{"name": "cycles", "state": "measured", "value": 5,
+                                 "ratio": 1.0, "reason": ""}],
+                     "agreement": "x", "per_message_published": False, "per_message": []},
+        "timer": {"quantum_ns": 41.667, "pair_ns": 5.0, "floor_ns": 166.0,
+                  "calibrated_hz": 24e6},
+        "pinned": False, "migrations": 0, "peak_rss_bytes": 1024, "refusals": [],
+        **({"memory": {"complete": True, "first_book": True}} if untimed else {}),
+    }
+
+
+class RenderAgain(unittest.TestCase):
+    """r5-4: bench_driver.py render gives back a published run's files from its raw records,
+    with the Commands line as it now records the run."""
+
+    def setUp(self):
+        self.scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.root = Path(self.scratch.name)
+        self.raw = self.root / "raw"
+        self.raw.mkdir()
+        self.results = self.root / "results"
+        self.results.mkdir()
+
+    def tearDown(self):
+        self.scratch.cleanup()
+
+    def publish(self, argv, designs):
+        """Each design's file as the driver wrote and stamp_load stamped it, its raw records
+        in self.raw, with the given argv as its Commands line holds it."""
+        args = bench_driver.parse_args(argv)
+        runs = {}
+        for index in (1, 2, 3):
+            for design in designs:
+                if design is None:
+                    record = raw_record(rate=100.0 + index)
+                    (self.raw / f"repetition-{index}.json").write_text(json.dumps(record))
+                else:
+                    timed = raw_record(design, 100.0 + index)
+                    stem = self.raw / f"{design}-repetition-{index}"
+                    Path(f"{stem}-timed.json").write_text(json.dumps(timed))
+                    Path(f"{stem}-untimed.json").write_text(
+                        json.dumps(raw_record(design, untimed=True)))
+                    record = bench_driver.merged(timed, raw_record(design, untimed=True), index)
+                runs.setdefault(design or "", []).append(record)
+        command = bench_driver.relative_command(args)
+        published = {}
+        for design, records in runs.items():
+            text = stamp_load.stamp(bench_driver.render(
+                records, args, RUN_ID, "2026-10-31T10:00:01Z", "2026-10-31T10:00:09Z",
+                MACHINE, command, runs), STDERR)
+            name = Path(str(args.out).replace("{design}", design)).name
+            (self.results / name).write_text(text, encoding="utf-8")
+            published[name] = text
+        return published
+
+    def test_a_run_renders_again_to_the_same_files(self):
+        published = self.publish([*BENCH_BASE, "--design", "hash-flat", "--design",
+                                  "paged-flat", "--title", "Design {design}, a day"],
+                                 ["hash-flat", "paged-flat"])
+        first = published["bench_hash-flat.md"]
+        self.assertEqual(bench_driver.render_again(self.raw, first, STDERR), published)
+        again = bench_driver.render_again(self.raw, first, STDERR, again="the reason")
+        self.assertIn("Do not edit by hand.\n\nRendered again from the run's own raw records, "
+                      "unchanged: the reason\n\nHost: ", again["bench_paged-flat.md"])
+
+    def render_main(self, *extra):
+        out = self.root / "out"
+        stderr = self.root / "stderr.txt"
+        stderr.write_text(STDERR, encoding="utf-8")
+        said = io.StringIO()
+        with contextlib.redirect_stderr(said):
+            code = bench_driver.main(["render", "--raw-dir", str(self.raw), "--published",
+                                      str(self.results / "bench_hash-flat.md"), "--stderr",
+                                      str(stderr), "--out-dir", str(out), *extra])
+        self.said = said.getvalue()
+        return code, out
+
+    def test_the_title_the_run_was_given_enters_the_command_line(self):
+        """A file published before the Commands line held --title: the run's own --title,
+        from the script that started it, renders the same title, and the Commands line now
+        shows it; a title that does not give back the published one is refused."""
+        published = self.publish([*BENCH_BASE, "--design", "hash-flat", *STUB_NOTE,
+                                  "--title", "Design {design}, a day"], ["hash-flat"])
+        text = published["bench_hash-flat.md"]
+        command = bench_driver.relative_command(bench_driver.parse_args(
+            [*BENCH_BASE, "--design", "hash-flat", *STUB_NOTE]))
+        old = text.replace(" --title 'Design {design}, a day'", "")
+        self.assertNotEqual(old, text)
+        (self.results / "bench_hash-flat.md").write_text(old, encoding="utf-8")
+        self.assertIn(command, old)
+        for extra in (["--title", "Design {design}, another day"], []):
+            code, out = self.render_main(*extra)
+            self.assertEqual(code, 1)
+            self.assertIn("give the run's own --title", self.said)
+            self.assertFalse(out.exists())
+        code, out = self.render_main("--title", "Design {design}, a day")
+        self.assertEqual(code, 0)
+        self.assertEqual(check_results.check_text(text), [])
+        self.assertEqual((out / "bench_hash-flat.md").read_text(encoding="utf-8"), text)
+
+    def test_a_flag_the_published_command_never_held_is_not_printed(self):
+        published = self.publish([*BENCH_BASE, "--design", "hash-flat"], ["hash-flat"])
+        text = published["bench_hash-flat.md"]
+        old = text.replace(" --input-mode mapped", "")
+        self.assertNotEqual(old, text)
+        again = bench_driver.render_again(self.raw, old, STDERR)["bench_hash-flat.md"]
+        self.assertEqual(again, old)
+
+    def test_a_run_of_no_design_keeps_its_title_and_note_as_printed_and_says_so(self):
+        published = self.publish([*BENCH_BASE[:-1], "results/bench_stub.md", "--title",
+                                  "Stub, a day", "--note", "Stub-book harness proof, not a "
+                                  "book result."], [None])
+        text = published["bench_stub.md"]
+        old = text.replace(" --title 'Stub, a day' --note 'Stub-book harness proof, not a book "
+                           "result.'", "")
+        self.assertNotEqual(old, text)
+        with self.assertRaises(bench_driver.Refused):
+            bench_driver.render_again(self.raw, old, STDERR, title="Stub, a day",
+                                      as_published=True)
+        again = bench_driver.render_again(self.raw, old, STDERR, as_published=True)
+        self.assertEqual(again["bench_stub.md"], f"{old}\n{bench_driver.AS_PUBLISHED}\n")
+
 
 if __name__ == "__main__":
     unittest.main()
