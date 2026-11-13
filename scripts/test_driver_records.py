@@ -269,7 +269,12 @@ GOOD_MAC = (FIXTURES / "good_mac.md").read_text(encoding="utf-8")
 HEADER = check_results.parse_header(GOOD_MAC)
 MACHINE = check_results.section(GOOD_MAC, "machine_check output").strip().strip("`").strip()
 # The stub label spares a fixture file the book rules, which records this small cannot meet.
-STUB_NOTE = ["--note", check_results.STUB_LABEL]
+# The stub's label begins the note, as the published stub files' notes do.
+STUB_NOTE = ["--note", f"{check_results.STUB_LABEL} A fixture."]
+# Some fixtures here are design runs that carry the stub's label, so that the book checks,
+# which records this small cannot meet, stay off. check_results flags that label on a design
+# run, as it should, with this one code, which those tests set aside.
+STUB_ON_A_BOOK = "stub-label-on-a-book"
 
 
 def raw_record(design=None, rate=100.0, untimed=False):
@@ -350,14 +355,14 @@ class RenderAgain(unittest.TestCase):
         self.assertIn("Do not edit by hand.\n\nRendered again from the run's own raw records, "
                       "unchanged: the reason\n\nHost: ", again["bench_paged-flat.md"])
 
-    def render_main(self, *extra):
+    def render_main(self, *extra, published="bench_hash-flat.md"):
         out = self.root / "out"
         stderr = self.root / "stderr.txt"
         stderr.write_text(STDERR, encoding="utf-8")
         said = io.StringIO()
         with contextlib.redirect_stderr(said):
             code = bench_driver.main(["render", "--raw-dir", str(self.raw), "--published",
-                                      str(self.results / "bench_hash-flat.md"), "--stderr",
+                                      str(self.results / published), "--stderr",
                                       str(stderr), "--out-dir", str(out), *extra])
         self.said = said.getvalue()
         return code, out
@@ -366,24 +371,24 @@ class RenderAgain(unittest.TestCase):
         """A file published before the Commands line held --title: the run's own --title,
         from the script that started it, renders the same title, and the Commands line now
         shows it; a title that does not give back the published one is refused."""
-        published = self.publish([*BENCH_BASE, "--design", "hash-flat", *STUB_NOTE,
-                                  "--title", "Design {design}, a day"], ["hash-flat"])
-        text = published["bench_hash-flat.md"]
-        command = bench_driver.relative_command(bench_driver.parse_args(
-            [*BENCH_BASE, "--design", "hash-flat", *STUB_NOTE]))
-        old = text.replace(" --title 'Design {design}, a day'", "")
+        # A stub run: check_results holds it to neither the book checks nor the stub rule.
+        stub = [*BENCH_BASE[:-1], "results/bench_stub.md", *STUB_NOTE]
+        published = self.publish([*stub, "--title", "Stub, a day"], [None])
+        text = published["bench_stub.md"]
+        command = bench_driver.relative_command(bench_driver.parse_args(stub))
+        old = text.replace(" --title 'Stub, a day'", "")
         self.assertNotEqual(old, text)
-        (self.results / "bench_hash-flat.md").write_text(old, encoding="utf-8")
+        (self.results / "bench_stub.md").write_text(old, encoding="utf-8")
         self.assertIn(command, old)
-        for extra in (["--title", "Design {design}, another day"], []):
-            code, out = self.render_main(*extra)
+        for extra in (["--title", "Stub, another day"], []):
+            code, out = self.render_main(*extra, published="bench_stub.md")
             self.assertEqual(code, 1)
             self.assertIn("give the run's own --title", self.said)
             self.assertFalse(out.exists())
-        code, out = self.render_main("--title", "Design {design}, a day")
+        code, out = self.render_main("--title", "Stub, a day", published="bench_stub.md")
         self.assertEqual(code, 0)
         self.assertEqual(check_results.check_text(text), [])
-        self.assertEqual((out / "bench_hash-flat.md").read_text(encoding="utf-8"), text)
+        self.assertEqual((out / "bench_stub.md").read_text(encoding="utf-8"), text)
 
     def test_a_flag_the_published_command_never_held_is_not_printed(self):
         published = self.publish([*BENCH_BASE, "--design", "hash-flat"], ["hash-flat"])
@@ -441,7 +446,8 @@ class DriverSamplerCheck(unittest.TestCase):
              "2026-11-13T04:00:03Z", quiet) for index in (1, 2, 3) for kind in ("timed", "untimed")]}
 
     def codes(self, text):
-        return {code for code, _ in check_results.check_text(text)} - {"load-not-stamped"}
+        return {code for code, _ in check_results.check_text(text)} - {"load-not-stamped",
+                                                                       STUB_ON_A_BOOK}
 
     def test_a_driver_sampled_file_is_held_to_its_sampler_section(self):
         sampled = self.sampled()
@@ -514,7 +520,7 @@ class RdpmcCaveat(unittest.TestCase):
                           "spans |", text)
             self.assertNotIn("Sum over apply()", text)
             self.assertEqual({code for code, _ in check_results.check_text(text)},
-                             {"load-not-stamped"})
+                             {"load-not-stamped", STUB_ON_A_BOOK})
             name = self.counts_file(root, "-O3 -DNDEBUG -std=c++23 -g")
             self.assertIn("is of the build with flags `-O3 -DNDEBUG -std=c++23 -g`, not this "
                           "one's, so its empty span is not quoted.", self.text(root))
