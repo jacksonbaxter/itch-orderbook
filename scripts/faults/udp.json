@@ -851,6 +851,64 @@
       "expect": {
         "signature": "never reached its checkpoint"
       }
+    },
+    {
+      "id": "udp-packets-fuzz-corpus-replay",
+      "breaks": "Each data packet is numbered one past its first message",
+      "check": "corpus_fuzz_packets, every packet's sequence against the slice's frames before it",
+      "mutations": [
+        {
+          "file": "include/itch/mold_packets.hpp",
+          "old": "emit_(Header{.session = plan_.session, .sequence = open_sequence_, .count = open_count_},",
+          "new": "emit_(Header{.session = plan_.session, .sequence = open_sequence_ + 1, .count = open_count_},"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_packets"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_packets$"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: packet\\.header\\.sequence == plan\\.first_sequence \\+ j"
+      }
+    },
+    {
+      "id": "udp-packets-fuzz-oracle",
+      "breaks": "A plan of seven messages a packet, which no seed has, lets each packet take an eighth",
+      "check": "fuzz_packets under libFuzzer, each packet's count against the plan",
+      "mutations": [
+        {
+          "file": "include/itch/mold_packets.hpp",
+          "old": "           open_count_ == plan_.max_messages ||\n",
+          "new": "           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\n"
+        }
+      ],
+      "build": {
+        "preset": "fuzz",
+        "targets": [
+          "fuzz_packets"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{build}/fuzz/fuzz_packets",
+        "-seed=1",
+        "-max_total_time=60",
+        "-artifact_prefix={build}/fuzz/artifacts/",
+        "{build}/fuzz/corpus/fuzz_packets",
+        "{tree}/fuzz/corpus/fuzz_packets"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: count <= plan\\.max_messages"
+      }
     }
   ]
 }

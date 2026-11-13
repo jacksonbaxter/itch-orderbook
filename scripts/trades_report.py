@@ -9,7 +9,13 @@ this recounts what it can from the census pinned in the manifest. The figures in
 PUBLISHED are claims to set ours beside, never expected values.
 
 --no-cross-file says that no CrossStats file exists for this day, so T-TRADE-2 is reported
-as not available. A verdict of NOT_AVAILABLE without it is a failure.
+as not available. A verdict of NOT_AVAILABLE without it is a failure. It is refused on a
+Nasdaq day whose CrossStats file the manifest pins, as crossstats_<YYYYMMDD>: that file
+exists, and a run without it would read as a gap that passes.
+
+The log's `bytes` has to be the manifest's unpacked_bytes for the day, since the header names
+the file replayed by the manifest's SHA-256. The time and memory figures are read from macOS's
+/usr/bin/time -l or GNU time -v, whichever ran; a figure neither gave prints as unavailable.
 
 A day of another venue than Nasdaq names it in the manifest, as `venue` (BX) and
 `midas_exchange`, how MIDAS names it (Boston). The tool has to have compared MIDAS's rows
@@ -46,27 +52,30 @@ CROSS_CLASSES = ("Q_O", "Q_C", "Q_H", "Q_I")
 # Lines that name the arm or say how long it ran. Every other line has to agree across arms.
 ARM_ONLY = {"trades_index", "trades_levels", "elapsed_seconds"}
 
-# Claims from BENCHMARKS.md and the research, set beside ours and not used as expected
-# values. (label, source, value, how to read ours)
+# Claims set beside ours and not used as expected values, each from the BENCHMARKS.md target
+# that names its source and links it. A re-parse is a reading of a file the tool also reads,
+# set beside the tool's: it tests the parse, not the book. (label, source, value, how to read
+# ours)
+KAREEM = "KareemJandali census (BENCHMARKS.md, T-TRADE-1)"
+IRONBOOK = "Ironbook validation output (BENCHMARKS.md, T-TRADE-5)"
+CROSSSTATS = "CrossStats20191230.txt, its TOTAL row (BENCHMARKS.md, T-TRADE-2): a re-parse"
+MIDAS = "SEC MIDAS 2019 Q4, the Nasdaq rows summed (BENCHMARKS.md, T-TRADE-3): a re-parse"
 PUBLISHED = {
     "12302019": [
-        ("Adds, A + F", "KareemJandali census", 118631456, "adds"),
-        ("Deletes", "KareemJandali census", 114360997, "t1_orders_deleted"),
-        ("Orders run out on an execution", "KareemJandali census", 4270459,
-         "t1_orders_ran_out_on_execute"),
-        ("E, market open and state T", "Ironbook", 5683178, "t5_population"),
-        ("Of which at the best price", "Ironbook", 5683178, "t5_at_best"),
-        ("Of which at the queue front", "Ironbook", 5672613, "t5_at_front"),
-        ("CrossStats opening shares", "research, the file's TOTAL row", 19851021,
-         "t2_file_opening"),
-        ("CrossStats closing shares", "research, the file's TOTAL row", 93930336,
-         "t2_file_closing"),
-        ("Halt crosses", "research", 24, "halt_crosses"),
-        ("MIDAS Nasdaq rows", "research", 5772, "t3_rows"),
-        ("MIDAS TradeVol, shares", "research", 620148444, "t3_midas_trade_shares"),
-        ("MIDAS HiddenVol, shares", "research", 105453046, "t3_midas_hidden_shares"),
+        ("Adds, A + F", KAREEM, 118631456, "adds"),
+        ("Deletes", KAREEM, 114360997, "t1_orders_deleted"),
+        ("Orders run out on an execution", KAREEM, 4270459, "t1_orders_ran_out_on_execute"),
+        ("E, market open and state T", IRONBOOK, 5683178, "t5_population"),
+        ("Of which at the best price", IRONBOOK, 5683178, "t5_at_best"),
+        ("Of which at the queue front", IRONBOOK, 5672613, "t5_at_front"),
+        ("CrossStats opening shares", CROSSSTATS, 19851021, "t2_file_opening"),
+        ("CrossStats closing shares", CROSSSTATS, 93930336, "t2_file_closing"),
+        ("MIDAS TradeVol, shares", MIDAS, 620148444, "t3_midas_trade_shares"),
+        ("MIDAS HiddenVol, shares", MIDAS, 105453046, "t3_midas_hidden_shares"),
     ],
 }
+# The classes whose prints MIDAS's volume holds (T-TRADE-3).
+PRINT_CLASSES = ("E", "C_Y", "P")
 
 # What each comparison sets against what, and why the two sides could disagree. A sum
 # compared with itself proves nothing, so a row with no second party does not belong here.
@@ -116,6 +125,22 @@ class ReportError(Exception):
 
 
 KEY_VALUE = re.compile(r"(\w+)=(\S*)")
+# GNU time -v's lines, as `<label>: <value>`, and the key each fills.
+GNU_TIME = {"Maximum resident set size (kbytes)": "max_rss",
+            "Elapsed (wall clock) time (h:mm:ss or m:ss)": "real",
+            "User time (seconds)": "user", "System time (seconds)": "sys"}
+
+
+def gnu_time(key, value):
+    """A GNU time -v value as the macOS figure it stands for: bytes, or seconds."""
+    if key == "max_rss":
+        return int(value) * 1024
+    if key == "real":
+        seconds = 0.0
+        for part in value.split(":"):
+            seconds = seconds * 60 + float(part)
+        return seconds
+    return float(value)
 
 
 def parse_log(text):
@@ -163,6 +188,9 @@ def parse_log(text):
             log["breaks"].append(pairs)
         elif word == "reference_error":
             log["errors"].append(rest)
+        elif stripped.partition(": ")[0] in GNU_TIME:
+            label, _, value = stripped.partition(": ")
+            log["time"][GNU_TIME[label]] = gnu_time(GNU_TIME[label], value.strip())
         elif stripped.endswith("maximum resident set size"):
             log["time"]["max_rss"] = int(word)
         elif stripped.endswith("peak memory footprint"):
@@ -207,7 +235,11 @@ def hard_failures(log, entry, midas_rows, no_cross_file, date):
 
     messages = entry["messages"]
     counts = entry["per_type_counts"]
+    if "unpacked_bytes" not in entry:
+        raise ReportError("the manifest pins no unpacked_bytes for the day")
     require(not log["errors"], f"a reference file failed to parse: {log['errors']}")
+    require(number(log, "bytes") == entry["unpacked_bytes"],
+            f"bytes {number(log, 'bytes')}, manifest unpacked_bytes {entry['unpacked_bytes']}")
     require(number(log, "frames") == messages, f"frames {number(log, 'frames')}, manifest {messages}")
     require(number(log, "messages_checked") == messages,
             f"{number(log, 'messages_checked')} messages checked, manifest {messages}")
@@ -323,7 +355,6 @@ def arm_failures(arms, check):
 
 def arms_section(arms):
     """One row per arm. The verdicts here are not marked up: the table below holds them."""
-    gib = 1024.0 ** 3
     first = arms[0]["name"]
     lines = [
         "",
@@ -341,13 +372,25 @@ def arms_section(arms):
         rows.append((f"`{arm['name']}`",
                      *(log["verdicts"].get(name, ("missing", 0))[0] for name in RESULTS),
                      count(number(log, "messages_checked")),
-                     log["values"].get("elapsed_seconds", "?"),
-                     f"{time.get('max_rss', 0) / gib:.2f}",
-                     f"{time.get('peak_footprint', 0) / gib:.2f}",
+                     log["values"].get("elapsed_seconds", UNAVAILABLE),
+                     gib_or_not(time, "max_rss"), gib_or_not(time, "peak_footprint"),
                      f"`{arm['raw']}`"))
     lines += format_table(("Arm", *RESULTS, "Messages checked", "Replay, s", "Maximum RSS, GiB",
                            "Peak footprint, GiB", "Raw log"), rows)
     return lines
+
+
+UNAVAILABLE = "unavailable"
+
+
+def gib_or_not(time, key):
+    """A memory figure in GiB to two places, or unavailable if the timer gave none."""
+    return f"{time[key] / 1024.0 ** 3:.2f}" if key in time else UNAVAILABLE
+
+
+def seconds_or_not(time, key, words):
+    """`<seconds> s <words>`, or `<words> time unavailable` if the timer gave none."""
+    return f"{time[key]:.1f} s {words}" if key in time else f"{words} time {UNAVAILABLE}"
 
 
 def format_table(header, rows):
@@ -384,8 +427,6 @@ def lot_rule_that_fits(row):
 def our_figure(log, key):
     if key == "adds":
         return log["types"].get("A", 0) + log["types"].get("F", 0)
-    if key == "halt_crosses":
-        return class_of(log, "Q_H")["count"]
     return number(log, key)
 
 
@@ -490,7 +531,9 @@ def render(log, entry, day, no_cross_file, failures, arms):
     run = log["run"]
     values = log["values"]
     time = log["time"]
-    gib = 1024.0 ** 3
+    replay = values.get("elapsed_seconds")
+    rss = gib_or_not(time, "max_rss")
+    footprint = gib_or_not(time, "peak_footprint")
     verdict = {name: log["verdicts"].get(name, ("missing", 0))[0] for name in RESULTS}
     lines = [
         f"# Trade-print verification of {day}",
@@ -506,12 +549,13 @@ def render(log, entry, day, no_cross_file, failures, arms):
         f"above and the detail after the table are `{arms[0]['name']}`.",
         f"- Dataset: `{entry['name']}`, SHA-256 of the unpacked file `{entry['unpacked_sha256']}`",
         f"- Command: `{run.get('run_command', 'unavailable')}`",
-        f"- Elapsed: {values.get('elapsed_seconds', '?')} s in the replay, "
-        f"{time.get('real', 0.0):.1f} s real including any wait for the machine, "
-        f"{time.get('user', 0.0):.1f} s user",
-        f"- Maximum RSS: {time.get('max_rss', 0) / gib:.2f} GiB, which counts resident pages of "
-        "the mapped file",
-        f"- Peak memory footprint: {time.get('peak_footprint', 0) / gib:.2f} GiB",
+        f"- Elapsed: {f'{replay} s in the replay' if replay else f'replay time {UNAVAILABLE}'}, "
+        f"{seconds_or_not(time, 'real', 'real')}"
+        f"{' including any wait for the machine' if 'real' in time else ''}, "
+        f"{seconds_or_not(time, 'user', 'user')}",
+        f"- Maximum RSS: {rss}" + (" GiB, which counts resident pages of the mapped file"
+                                   if rss != UNAVAILABLE else ""),
+        f"- Peak memory footprint: {footprint}" + (" GiB" if footprint != UNAVAILABLE else ""),
     ]
     lines += arms_section(arms)
     lines += [
@@ -550,10 +594,18 @@ def render(log, entry, day, no_cross_file, failures, arms):
     lines += format_table(("Class", "Messages", "Shares", "Checked", "Level", "Violations",
                            "Against the sentence"), per_type_rows(log))
     tally = log["classes"]
-    test_count = sum(row["test_count"] for row in tally.values())
-    test_shares = sum(row["test_shares"] for row in tally.values())
-    lines += ["", f"Test symbols: {count(test_count)} prints and {count(test_shares)} shares. "
-              "They are checked per message, and left out of both external comparisons.", ""]
+
+    def test_sum(names, key):
+        return count(sum(class_of(log, name)[key] for name in names))
+
+    lines += ["", f"Test symbols: {test_sum(PRINT_CLASSES, 'test_count')} prints of "
+              f"`E + C_Y + P` with {test_sum(PRINT_CLASSES, 'test_shares')} shares, and "
+              f"{test_sum(CROSS_CLASSES, 'test_count')} `Q` crosses with "
+              f"{test_sum(CROSS_CLASSES, 'test_shares')} shares. They are checked per message, "
+              "and left out of both external comparisons. Their `C_N`, "
+              f"{test_sum(('C_N',), 'test_count')} with {test_sum(('C_N',), 'test_shares')} "
+              "shares, are in neither count: a `C_N` is not a print, and its shares are those "
+              "of the print or cross beside it.", ""]
     lines += ["### `C` price against the resting order", ""]
     prices = log["c_price"]
     lines += format_table(
@@ -705,8 +757,9 @@ def render(log, entry, day, no_cross_file, failures, arms):
               f"{count(number(log, 'b_shares'))}. `E + C_Y + P` net of those over the whole day: "
               f"{count(number(log, 'b_net_printed_shares'))}.", ""]
     for broken in log["breaks"]:
+        shares = int(broken["shares"])
         lines.append(f"- Match {broken['match']}: `{broken['class']}` on {broken['symbol']}, "
-                     f"{broken['shares']} shares.")
+                     f"{count(shares)} {'share' if shares == 1 else 'shares'}.")
     if log["breaks"]:
         lines.append("")
     lines += ["Whether MIDAS nets a break out cannot be told from these days unless a break "
@@ -715,7 +768,10 @@ def render(log, entry, day, no_cross_file, failures, arms):
     published = PUBLISHED.get(day)
     if published:
         lines += ["", "## Against published figures", "",
-                  "Claims, set beside ours and not used as expected values.", ""]
+                  "Claims, set beside ours and not used as expected values. Each source is the "
+                  "BENCHMARKS.md target named, which links it. A re-parse sets the figure read "
+                  "from a file beside the tool's reading of the same file, so it tests the parse, "
+                  "not the book.", ""]
         lines += format_table(
             ("Figure", "Source", "Published", "Ours", "Difference"),
             [(label, source, count(claim), count(our_figure(log, key)),
@@ -751,8 +807,12 @@ def main(argv=None):
         # The key is MMDDYYYY, with a suffix for a second venue on the same date.
         date = args.day[4:8] + args.day[:4]
         manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
-        midas_rows = pinned_midas_rows(manifest.get("references", {}), date,
-                                       venue_of(entry)[1])
+        references = manifest.get("references", {})
+        midas_rows = pinned_midas_rows(references, date, venue_of(entry)[1])
+        if args.no_cross_file and venue_of(entry)[0] == "Nasdaq" and \
+                f"crossstats_{date}" in references:
+            raise ReportError(f"--no-cross-file on {args.day}, whose CrossStats file the "
+                              f"manifest pins as crossstats_{date}")
 
         def read(path):
             return parse_log(path.read_text(encoding="utf-8", errors="replace"))

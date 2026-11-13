@@ -670,6 +670,92 @@
       }
     },
     {
+      "id": "bookvariants-lookahead-fuzz-corpus-replay",
+      "breaks": "The look-ahead reads one frame fewer ahead, so stage 0 never finds its frame read",
+      "check": "corpus_fuzz_lookahead, each stage of each message asked for once",
+      "mutations": [
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "while (!ended_ && read_ - handed_ <= distance_) {",
+          "new": "while (!ended_ && read_ - handed_ < distance_) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_lookahead"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_lookahead$"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: asks\\[k\\]\\[s\\] == \\(due \\? 1U : 0U\\)"
+      }
+    },
+    {
+      "id": "bookvariants-lookahead-fuzz-stage-on-a-skipped-frame",
+      "breaks": "The look-ahead asks the book to stage frames that are not messages",
+      "check": "corpus_fuzz_lookahead, every ask lands on a message frame",
+      "mutations": [
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "if (at < read_ && ring_[at & kRingMask].status == FrameStatus::message) {",
+          "new": "if (at < read_ && !is_terminal(ring_[at & kRingMask].status)) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "fuzz_lookahead"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^corpus_fuzz_lookahead$"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: (at != frames\\.end\\(\\)|asks\\[k\\]\\[s\\] == \\(due)"
+      }
+    },
+    {
+      "id": "bookvariants-lookahead-fuzz-oracle",
+      "breaks": "A look-ahead of 37, which no seed asks for, is quietly read with none",
+      "check": "fuzz_lookahead under libFuzzer, the distance it reads at against the arm's valid range",
+      "mutations": [
+        {
+          "file": "include/itch/lookahead.hpp",
+          "old": "return distance == 0 || (distance >= kStages && distance <= kMostAhead);",
+          "new": "return distance == 0 || (distance >= kStages && distance <= kMostAhead && distance != 37);"
+        }
+      ],
+      "build": {
+        "preset": "fuzz",
+        "targets": [
+          "fuzz_lookahead"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{build}/fuzz/fuzz_lookahead",
+        "-seed=1",
+        "-max_total_time=60",
+        "-artifact_prefix={build}/fuzz/artifacts/",
+        "{build}/fuzz/corpus/fuzz_lookahead",
+        "{tree}/fuzz/corpus/fuzz_lookahead"
+      ],
+      "expect": {
+        "signature": "FUZZ_CHECK failed: ahead\\.distance\\(\\) == distance"
+      }
+    },
+    {
       "id": "bookvariants-window-u-search-counts-closed-level",
       "breaks": "itch_window never sees a U's old order alone on its level, so it counts the U's add search with that level still in the book, one too many when it was better than the new price (review finding r2-3)",
       "check": "test_tools_cli, itch_window's U search",

@@ -251,6 +251,41 @@ class Variants(unittest.TestCase):
         edited = text.replace("hash policy +25.00%", "hash policy +35.00%", 1)
         self.assertIn("summary-differs", self.violations(edited, "layout"))
 
+    def test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range(self):
+        seconds = {"hash-flat": 0.25, "identity-flat": 0.2, "chained-flat": 0.3,
+                   "paged-flat": 0.2, "paged-flat-scan16": 0.2, "paged-flat-bisect": 0.25}
+        kept, seen = [], {}
+        for record in self.layout_records(seconds):
+            design = record["variant"]["design"]
+            seen[design] = seen.get(design, 0) + 1
+            if seen[design] <= {"chained-flat": 1, "hash-flat": 2}.get(design, 3):
+                kept.append(record)
+        text, _, summary = self.render("layout", kept)
+        # P-0023 planned three processes an arm: chained-flat ran in one, hash-flat in two.
+        self.assertIn("| `chained-flat` | 1 of 3 planned | 3,333,333 | n/a, one process "
+                      "| n/a, one process | n/a, one process | 300.00 |", text)
+        self.assertIn("| `hash-flat` | 2 of 3 planned | 4,000,000 | 4,000,000 | 4,000,000 "
+                      "| 0.00% |", text)
+        self.assertIn("| `identity-flat` | 3 | 5,000,000 |", text)
+        self.assertIn("(chained-flat over hash-flat; chained-flat 1 of 3 processes, hash-flat 2 "
+                      "of 3 processes, one process has no range)", summary)
+        self.assertIn("(3,333,333 messages/s, 1 process of the 3 planned, against 4,000,000, the "
+                      "median of 2 processes of the 3 planned); `chained-flat` ran in one "
+                      "process, so it has no range and the two are not compared by range.", text)
+        self.assertEqual(self.violations(text, "layout"), set())
+        # The file as it read before 2026-11-13, figure by figure: each is caught.
+        for old, new, code in (
+                ("| 1 of 3 planned |", "| 1 |", "count-unsaid"),
+                ("| 2 of 3 planned |", "| 2 |", "count-unsaid"),
+                ("| n/a, one process | n/a, one process | n/a, one process |",
+                 "| 3,333,333 | 3,333,333 | 0.00% |", "range-from-one"),
+                (", 1 process of the 3 planned,", "", "count-unsaid"),
+                ("so it has no range and the two are not compared by range",
+                 "their ranges over the repetitions do not overlap", "range-from-one"),
+                ("chained-flat 1 of 3 processes, ", "", "count-unsaid")):
+            self.assertIn(old, text)
+            self.assertIn(code, self.violations(text.replace(old, new), "layout"), old)
+
     def structure_records(self, fills):
         records = []
         for _ in range(3):

@@ -1,7 +1,20 @@
 {
   "area": "trades",
-  "tree": ["CMakeLists.txt", "CMakePresets.json", ".clang-tidy", ".github", "cmake", "include",
-           "src", "tests", "tools", "fuzz", "bench", "scripts", "docs"],
+  "tree": [
+    "CMakeLists.txt",
+    "CMakePresets.json",
+    ".clang-tidy",
+    ".github",
+    "cmake",
+    "include",
+    "src",
+    "tests",
+    "tools",
+    "fuzz",
+    "bench",
+    "scripts",
+    "docs"
+  ],
   "faults": [
     {
       "id": "trades-itch-e-dead-order",
@@ -8428,6 +8441,258 @@
       ],
       "expect": {
         "signature": "FAIL: test_an_arm_is_held_to_the_hard_checks_on_its_own"
+      }
+    },
+    {
+      "id": "trades-report-break-shares-unseparated",
+      "breaks": "a broken trade's shares print without the thousands separator, and one share as shares",
+      "check": "test_trades_report.py test_a_broken_trade_prints_its_shares_with_the_separator_and_one_share_singular",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "f\"{count(shares)} {'share' if shares == 1 else 'shares'}.\")",
+          "new": "f\"{shares} shares.\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_broken_trade_prints_its_shares_with_the_separator_and_one_share_singular",
+        "exit": 1
+      }
+    },
+    {
+      "id": "trades-report-no-cross-file-on-a-pinned-day",
+      "breaks": "--no-cross-file passes on a Nasdaq day whose CrossStats file the manifest pins, so T-TRADE-2 reads as a gap that passes",
+      "check": "test_trades_report.py test_t_trade_2_can_be_absent_only_when_said_so",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "        if args.no_cross_file and venue_of(entry)[0] == \"Nasdaq\" and \\\n",
+          "new": "        if False and \\\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_t_trade_2_can_be_absent_only_when_said_so ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "trades-report-gnu-time-unread",
+      "breaks": "GNU time -v's lines are not read, so a Linux run's time and memory are lost",
+      "check": "test_trades_report.py test_gnu_time_lines_are_read_and_a_missing_figure_is_unavailable",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "        elif stripped.partition(\": \")[0] in GNU_TIME:\n",
+          "new": "        elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_gnu_time_lines_are_read_and_a_missing_figure_is_unavailable ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "trades-report-gnu-rss-in-kib",
+      "breaks": "GNU time's maximum RSS, in KiB, is read as bytes",
+      "check": "test_trades_report.py test_gnu_time_lines_are_read_and_a_missing_figure_is_unavailable",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "        return int(value) * 1024\n",
+          "new": "        return int(value)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_gnu_time_lines_are_read_and_a_missing_figure_is_unavailable ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "trades-report-missing-memory-as-zero",
+      "breaks": "A memory figure no timer gave prints as 0.00 GiB",
+      "check": "test_trades_report.py test_gnu_time_lines_are_read_and_a_missing_figure_is_unavailable",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "    return f\"{time[key] / 1024.0 ** 3:.2f}\" if key in time else UNAVAILABLE\n",
+          "new": "    return f\"{time.get(key, 0) / 1024.0 ** 3:.2f}\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_gnu_time_lines_are_read_and_a_missing_figure_is_unavailable ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "trades-report-missing-time-as-zero",
+      "breaks": "A time no timer gave prints as 0.0 s",
+      "check": "test_trades_report.py test_gnu_time_lines_are_read_and_a_missing_figure_is_unavailable",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "    return f\"{time[key]:.1f} s {words}\" if key in time else f\"{words} time {UNAVAILABLE}\"\n",
+          "new": "    return f\"{time.get(key, 0.0):.1f} s {words}\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_gnu_time_lines_are_read_and_a_missing_figure_is_unavailable ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "trades-report-bytes-unchecked",
+      "breaks": "A log that replayed another number of bytes than the manifest's file passes under that file's SHA-256",
+      "check": "test_trades_report.py test_the_log_must_have_replayed_the_manifest_s_bytes",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "    require(number(log, \"bytes\") == entry[\"unpacked_bytes\"],\n",
+          "new": "    require(True,\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_log_must_have_replayed_the_manifest_s_bytes ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "trades-report-test-symbols-every-class",
+      "breaks": "The test-symbol line sums every class, C_N and the Q crosses among the prints",
+      "check": "test_trades_report.py test_the_test_symbol_line_sums_what_it_says",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "    lines += [\"\", f\"Test symbols: {test_sum(PRINT_CLASSES, 'test_count')} prints of \"\n",
+          "new": "    lines += [\"\", f\"Test symbols: {test_sum(tally, 'test_count')} prints of \"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_test_symbol_line_sums_what_it_says ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "trades-report-published-source-unnamed",
+      "breaks": "A published figure gives \"research\" as its source, which a reader cannot follow",
+      "check": "test_trades_report.py test_each_published_figure_names_its_source",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "CROSSSTATS = \"CrossStats20191230.txt, its TOTAL row (BENCHMARKS.md, T-TRADE-2): a re-parse\"\n",
+          "new": "CROSSSTATS = \"research, the file's TOTAL row\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_each_published_figure_names_its_source ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "trades-report-re-parse-unlabelled",
+      "breaks": "The MIDAS rows set the tool's parse of a file beside a reading of the same file as if it were a second party",
+      "check": "test_trades_report.py test_each_published_figure_names_its_source",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "MIDAS = \"SEC MIDAS 2019 Q4, the Nasdaq rows summed (BENCHMARKS.md, T-TRADE-3): a re-parse\"\n",
+          "new": "MIDAS = \"SEC MIDAS 2019 Q4, the Nasdaq rows summed (BENCHMARKS.md, T-TRADE-3)\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_each_published_figure_names_its_source ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "real-day-missing-pinned-cross-file-passes",
+      "breaks": "check_real_day.sh runs a Nasdaq day whose pinned CrossStats file is missing with --no-cross-file, and the day passes",
+      "check": "test_trades_report.py test_a_pinned_cross_file_that_is_missing_fails_the_day",
+      "mutations": [
+        {
+          "file": "scripts/check_real_day.sh",
+          "old": "  elif [ -n \"$cross\" ]; then\n",
+          "new": "  elif [ -f \"$cross\" ]; then\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_pinned_cross_file_that_is_missing_fails_the_day ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "real-day-cross-file-unverified",
+      "breaks": "check_real_day.sh gives the tool a CrossStats file without checking it against its pinned SHA-256",
+      "check": "test_trades_report.py test_a_cross_file_that_is_not_the_pinned_one_fails_the_day",
+      "mutations": [
+        {
+          "file": "scripts/check_real_day.sh",
+          "old": "    if ! python3 -B -I scripts/fetch_data.py --ref \"crossstats_$date\" --verify-only; then\n",
+          "new": "    if false; then\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_cross_file_that_is_not_the_pinned_one_fails_the_day ",
+        "exit": 1
       }
     },
     {

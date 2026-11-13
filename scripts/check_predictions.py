@@ -68,10 +68,16 @@ def first_commit_of_block(root, identifier):
     return None, None
 
 
-def first_commit_of_file(root, path):
-    history = git(root, "log", "--diff-filter=A", "--format=%H", "--", path)
-    commits = (history or "").split()
-    return commits[-1] if commits else None
+def first_commit_of_file(root, path, identifier):
+    """The first commit in which the file names the prediction. A file run again under a later
+    prediction, such as T-BT-3 on debian under P-0106, is held to that one from the commit
+    that first named it."""
+    history = git(root, "log", "--reverse", "--format=%H", "--", path)
+    for commit in (history or "").split():
+        text = git(root, "show", f"{commit}:{path}")
+        if text is not None and dict(FIELD.findall(text)).get("prediction") == identifier:
+            return commit
+    return None
 
 
 def check_history(root, identifier, result_path, known):
@@ -81,7 +87,7 @@ def check_history(root, identifier, result_path, known):
         return
     if original != known[identifier]:
         yield "prediction-edited", identifier, f"differs from what {commit[:10]} wrote"
-    result_commit = first_commit_of_file(root, result_path)
+    result_commit = first_commit_of_file(root, result_path, identifier)
     if result_commit is None:
         return
     if commit == result_commit or git(root, "merge-base", "--is-ancestor", commit,

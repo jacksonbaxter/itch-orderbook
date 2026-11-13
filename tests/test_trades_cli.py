@@ -290,18 +290,31 @@ def main():
 
     # The report reads what the tool really prints, so the two cannot drift apart.
     (scratch / "report.log").write_text(done.stdout, encoding="ascii")
-    (scratch / "report_manifest.json").write_text(json.dumps({
-        "days": {"01062020": {"name": "day.itch", "unpacked_sha256": "fixture", "messages": 89,
-                              "per_type_counts": CLEAN_TYPES}},
-        "references": {"midas_2019q4": {"nasdaq_rows": {"20200106": 4}}},
-    }), encoding="ascii")
-    report = subprocess.run(
-        [sys.executable, "-B", str(Path(__file__).resolve().parent.parent / "scripts/trades_report.py"),
-         "--day", "01062020", "--log", str(scratch / "report.log"),
-         "--manifest", str(scratch / "report_manifest.json"), "--out", str(scratch / "report.md")],
-        capture_output=True, text=True, check=False)
+
+    def report_on(entry):
+        (scratch / "report_manifest.json").write_text(json.dumps({
+            "days": {"01062020": entry},
+            "references": {"midas_2019q4": {"nasdaq_rows": {"20200106": 4}}},
+        }), encoding="ascii")
+        return subprocess.run(
+            [sys.executable, "-B",
+             str(Path(__file__).resolve().parent.parent / "scripts/trades_report.py"),
+             "--day", "01062020", "--log", str(scratch / "report.log"),
+             "--manifest", str(scratch / "report_manifest.json"),
+             "--out", str(scratch / "report.md")],
+            capture_output=True, text=True, check=False)
+
+    # The manifest pins the fixture day's true length, which the log's bytes has to match.
+    entry = {"name": "day.itch", "unpacked_sha256": "fixture", "unpacked_bytes": len(day),
+             "messages": 89, "per_type_counts": CLEAN_TYPES}
+    report = report_on(entry)
     if report.returncode != 0:
         failures.append(f"report: exit {report.returncode}: {report.stdout}{report.stderr}")
+    # A manifest that pins no length for the day is refused, not passed.
+    report = report_on({key: value for key, value in entry.items() if key != "unpacked_bytes"})
+    if report.returncode != 2 or "the manifest pins no unpacked_bytes" not in report.stderr:
+        failures.append(f"report without unpacked_bytes: exit {report.returncode}: {report.stderr.strip()};"
+                        " wanted exit 2 refusing a manifest that pins no unpacked_bytes")
 
     # What the tool says when it was not given a reference.
     bare = subprocess.run([tool, str(fixtures / "day.itch"), *SMALL], capture_output=True,
