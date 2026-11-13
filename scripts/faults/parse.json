@@ -502,6 +502,50 @@
         "signature": "FAIL: test_the_best_pass_is_the_fastest",
         "exit": 1
       }
+    },
+    {
+      "id": "parse-check-skips-the-loops",
+      "breaks": "parse_driver.py --check takes a file without one line a pass saying its timed loop makes no call",
+      "check": "test_parse_driver.py Check.test_an_inline_check_line_dropped",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "        if found.count(name) != 1:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_an_inline_check_line_dropped"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_inline_check_line_dropped",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-check-skips-the-prose",
+      "breaks": "parse_driver.py --check takes the caveats' prose reworded",
+      "check": "test_parse_driver.py Check.test_the_caveats_prose_changed",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "                for line in caveat_lines(day, []) if line and not line.startswith(\"#\")\n",
+          "new": "                for line in [] if line and not line.startswith(\"#\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Check.test_the_caveats_prose_changed"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_caveats_prose_changed",
+        "exit": 1
+      }
     }
   ]
 }

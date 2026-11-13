@@ -553,8 +553,9 @@ def caveat_lines(day, loops):
              "- T-PARSE-3: the strict decode reads the variant `itch::decode()` returns by a "
              "switch on its index, not `std::visit`, whose table of functions would put an "
              "indirect call in the loop. Lunary decoded the day memory-mapped; bench_parse, as "
-             "itch-book does, reads a copy into anonymous memory before the warm-up, so no "
-             "timed pass takes a page fault or reads the page cache. Lunary's bar is on "
+             "itch-book does, reads a copy into anonymous memory before the warm-up, and every "
+             "page of it was found resident before and after each timed pass; bench_parse "
+             "counts no page faults. Lunary's bar is on "
              f"{BAR_DAY['T-PARSE-3']}, which is not on this host"]
     table = caveat_rows(day)
     if table:
@@ -716,6 +717,24 @@ def relative_command(args):
 
 # --check
 
+LOOP_LINE = re.compile(r"^- (frame_walk|book_decode|strict_decode): \d+ instructions, no call "
+                       r"and no jump to another function$")
+
+
+def caveat_problems(text, day):
+    """The caveats' prose as the driver writes it, and one inline-check line for each pass."""
+    printed = (check_results.section(text, "Caveats") or "").splitlines()
+    problems = [("parse-figure-differs", f"Caveats: {line}")
+                for line in caveat_lines(day, []) if line and not line.startswith("#")
+                and not line.startswith("|") and line not in printed]
+    found = [match.group(1) for match in map(LOOP_LINE.match, printed) if match]
+    for name in PASS_SYMBOLS:
+        if found.count(name) != 1:
+            problems.append(("parse-loops-missing", f"Caveats: {found.count(name)} lines say "
+                                                    f"{name} makes no call, not 1"))
+    return problems
+
+
 def check_text(text):
     """Every figure of a results file against its own table of timed passes: (code, detail)."""
     fields = check_results.parse_header(text)
@@ -774,6 +793,7 @@ def check_text(text):
         for row in rows:
             if row not in printed.splitlines():
                 problems.append(("parse-figure-differs", f"{title}: {row}"))
+    problems.extend(caveat_problems(text, day))
     return problems
 
 

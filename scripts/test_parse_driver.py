@@ -29,7 +29,9 @@ BYTES = 8_251_407_909
 # The day's messages of S, R, A, F, E, C, X, D, U and P.
 TEN = (6 + 8_906 + 117_145_568 + 1_485_888 + 5_722_824 + 99_917 + 2_787_676 + 114_360_997 +
        21_639_067 + 1_218_602)
-LOOPS = ["frame_walk: 20 instructions, no call and no jump to another function"]
+LOOPS = ["frame_walk: 20 instructions, no call and no jump to another function",
+         "book_decode: 90 instructions, no call and no jump to another function",
+         "strict_decode: 400 instructions, no call and no jump to another function"]
 MACHINE = "machine_check: pass input-resident: 1 of 1 pages\nmachine_check: passed"
 HEADER = dict(test_linux_sampler.DEBIAN, dataset="12302019.NASDAQ_ITCH50",
               counters="unavailable: bench_parse reads no counters",
@@ -208,6 +210,17 @@ class Check(unittest.TestCase):
     def test_a_day_the_manifest_does_not_pin(self):
         text = rendered().replace("- dataset: 12302019.NASDAQ_ITCH50", "- dataset: other.itch")
         self.assertIn("parse-day-unpinned", self.codes(text))
+
+    def test_an_inline_check_line_dropped(self):
+        text = rendered().replace("- " + LOOPS[1] + "\n", "")
+        self.assertIn("parse-loops-missing", self.codes(text))
+        self.assertIn("parse-loops-missing", {c for c, _ in check_results.check_text(text)})
+
+    def test_the_caveats_prose_changed(self):
+        text = rendered().replace("every page of it was found resident before and after each "
+                                  "timed pass", "no timed pass takes a page fault")
+        self.assertNotEqual(text, rendered())
+        self.assertIn("parse-figure-differs", self.codes(text))
 
     def test_a_caveat_figure_changed(self):
         text = rendered().replace("| Bytes a message | 30.732 |", "| Bytes a message | 30.704 |")
