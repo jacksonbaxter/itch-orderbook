@@ -538,16 +538,21 @@ def run_log_file(root):
 
 
 def run_log_kinds(root, files):
-    """Every process a run-log row gives with its CPU share, or as the busiest other work, is
-    one of process_kinds.KINDS: never a program's name. The grammar knows only the kinds."""
+    """The run log's grammar (process_kinds.cause_breaks): each share a row's outcome gives, as
+    N% or N percent, sits in a form the tools write, a process form whose subject is one of
+    process_kinds.KINDS (with its time where a tool wrote it) or a fixed figure form; a share in
+    no form fails, and so does a kind the sampler saw with no share. It holds the forms the tools
+    write. It does not see a name with no share beside it, a share written another way, a name
+    joined to a kind that has the share, or words before a figure form: process_kinds' docstring
+    gives these limits."""
     import process_kinds  # noqa: PLC0415  Here, so that the other gates need nothing beside them.
 
     violations = []
     for path in files:
         for number, cause in process_kinds.run_log_rows(read_text(path) or ""):
-            for subject in process_kinds.cause_breaks(cause):
-                violations.append((path, number, f"a process given as {subject!r}, which is "
-                                                 "not one of process_kinds.KINDS"))
+            for why in process_kinds.cause_breaks(cause):
+                violations.append((path, number, f"the outcome breaks the run log's grammar: "
+                                                 f"{why}"))
     return violations
 
 

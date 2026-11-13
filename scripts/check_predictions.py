@@ -160,10 +160,20 @@ def rewordings(root):
     return json.loads(path.read_text(encoding="utf-8"))["lines"]
 
 
+def later(found, reworded):
+    """Every digest a line's digest became, in order, through the listed rewordings: a line
+    reworded twice, by the kinds and then by the grammar's order (r14-2), became two lines."""
+    chain = []
+    while found in reworded and reworded[found] not in chain and reworded[found] != found:
+        found = reworded[found]
+        chain.append(found)
+    return chain
+
+
 def settled(line, reworded):
-    """A line by its digest, a reworded line by the digest of the line it became."""
+    """A line by its digest, a reworded line by the digest of the last line it became."""
     found = digest(line)
-    return reworded.get(found, found)
+    return (later(found, reworded) or [found])[-1]
 
 
 def dropped_rows(earlier, text, reworded=None):
@@ -175,22 +185,31 @@ def dropped_rows(earlier, text, reworded=None):
 
 
 def extends(earlier, text, reworded):
-    """Whether text starts with earlier, a line listed in reworded read as the line it
-    became, and only that line."""
+    """Whether text starts with earlier, a line listed in reworded read as a line it became,
+    and only such a line."""
     if text.startswith(earlier):
         return True
     before, after = earlier.split("\n"), text.split("\n")
     if len(after) < len(before):
         return False
-    return (all(old == new or reworded.get(digest(old)) == digest(new)
+    return (all(old == new or digest(new) in later(digest(old), reworded)
                 for old, new in zip(before[:-1], after))
             and after[len(before) - 1].startswith(before[-1]))
+
+
+def changed_back(earlier, text, reworded):
+    """The lines of text that are a listed line as it was while the earlier log holds the line
+    it became: a rewording undone, which dropped_rows(), reading both as the line it became,
+    does not see (r14-1)."""
+    held = {digest(line) for line in earlier.splitlines()}
+    return [line for line in text.splitlines() if held & set(later(digest(line), reworded))]
 
 
 def check_log_history(root):
     """Every committed version of the log extends its parents': a commit appends to its first
     parent's log, and a merge also keeps every row of each branch it merges. A line listed in
-    REWORDINGS may have become the line listed beside it, and nothing else."""
+    REWORDINGS may have become the line listed beside it, and nothing else; once a parent holds
+    the line it became, no commit may hold it as it was again, a merge included."""
     reworded = rewordings(root)
     history = git(root, "log", "--full-history", "--reverse", "--format=%H %P", "--", RUN_LOG)
     for line in (history or "").splitlines():
@@ -201,6 +220,10 @@ def check_log_history(root):
         for parent in parents[1:]:
             if dropped_rows(log_at(root, parent), text, reworded):
                 yield "run-log-rewritten", commit[:10], f"a row of merged {parent[:10]} went"
+        for parent in parents:
+            if changed_back(log_at(root, parent), text, reworded):
+                yield ("run-log-rewritten", commit[:10],
+                       f"a row {parent[:10]} holds reworded is back as it was")
     committed = git(root, "show", f"HEAD:{RUN_LOG}")
     current = (root / RUN_LOG).read_text(encoding="utf-8") if (root / RUN_LOG).is_file() else ""
     if committed is not None and not extends(committed, current, reworded):
