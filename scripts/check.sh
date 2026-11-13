@@ -229,7 +229,8 @@ stage_bench() {
     python_test scripts/walk_report.py check "$file" || return 1
   done
   build_preset release &&
-    ctest_only test_bench_platform test_bench_replay test_bench_cli test_bench_backtest_cli \
+    ctest_only test_bench_platform test_bench_platform_cross_core test_bench_replay test_bench_cli \
+      test_bench_backtest_cli \
       test_bench_counts_cli test_bench_variants_cli test_bench_spsc_cli test_bench_kernels_cli \
       test_bench_udp_cli test_bench_walks_cli test_walk_counts
 }
