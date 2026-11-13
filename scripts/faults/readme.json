@@ -402,8 +402,8 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "RUN_ID = r\"P-\\d+-[\\w-]+\"\n",
-          "new": "RUN_ID = r\"P-\\d+-\\w+\"\n"
+          "old": "RUN_ID = r\"(?:P-\\d+|fuzz-30min)-[\\w-]+\"\n",
+          "new": "RUN_ID = r\"(?:P-\\d+|fuzz-30min)-\\w+\"\n"
         },
         {
           "file": "scripts/results_table.py",
@@ -2262,6 +2262,28 @@
       ],
       "expect": {
         "signature": "gates: FAIL spsc-due-time-unmeasured WRITEUP\\.md:1:",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-fuzzing-met-without-every-target-clean",
+      "breaks": "WRITEUP.md's table counts the Fuzzing target met while the fuzz results file shows a target that was not clean",
+      "check": "test_results_table.py ResultsTable.test_fuzzing_is_met_only_while_its_file_shows_every_target_clean",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        if result is None or result[1] != result[2]:\n",
+          "new": "        if result is None:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "ResultsTable.test_fuzzing_is_met_only_while_its_file_shows_every_target_clean"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_fuzzing_is_met_only_while_its_file_shows_every_target_clean",
         "exit": 1
       }
     }

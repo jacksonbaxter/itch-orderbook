@@ -23,9 +23,11 @@ failure that names it. A UDP replay file gives a T-URING-2 row when it
 holds a bisection at 1,400 bytes a datagram, T-URING-2's packet size, and a verdict in a file
 at any other size is refused. Each bisection, at either size, gives each mode's largest
 lossless rate to the T-URING-1 table, which has no verdict, each row labelled with its
-packet size. predictions.md is not a result, and run_log.md gets its own
-table, every row of it, failed runs included; a line of its table that is not a run is
-refused. Each row cites its file, so scripts/gate_numbers.py holds the
+packet size. The fuzzers' long run, a `fuzz_` file from scripts/fuzz_report.py, gives a row
+beside the fault matrix's, and WRITEUP.md's table counts the Fuzzing target met only while the
+file MET_BY_FILE names shows every target clean. predictions.md is not a result, and
+run_log.md gets its own table, every row of it, failed runs included; a line of its table that
+is not a run is refused. Each row cites its file, so scripts/gate_numbers.py holds the
 row's figures to that file.
 
 The headline is a fixed choice of targets, HEADLINE, each read from the results file named
@@ -73,8 +75,10 @@ ARENA_VERDICT = "no bar to meet; fault check "
 SHOWN = {"PASS": "PASS", "FAIL": "**FAIL**", "NOT_AVAILABLE": "**NOT AVAILABLE**"}
 RUN_HEADS = ("Run", "Prediction", "Commit", "OS", "Outcome")
 # A run's id: its prediction, the time it began, and for a run of many processes or a
-# window, what each row is of, as P-0601-20261106T031311Z_scalar-w2-1.
-RUN_ID = r"P-\d+-[\w-]+"
+# window, what each row is of, as P-0601-20261106T031311Z_scalar-w2-1. The fuzzers' long run
+# is a check, not a measurement, and has no prediction: its id is scripts/fuzz_report.py's,
+# fuzz-30min and the time it began.
+RUN_ID = r"(?:P-\d+|fuzz-30min)-[\w-]+"
 
 
 class TableError(Exception):
@@ -325,6 +329,16 @@ def fault_row(name, text):
     commit = header_commit(text, name)
     return ("Fault matrix", "none", host, result, f"{selection}; controls: {controls}",
             f"`{commit}`", source(name))
+
+
+def fuzz_row(name, text):
+    """The fuzzers' long run, a check beside the fault matrix: scripts/fuzz_report.py writes
+    the file only for a run in which every target was clean."""
+    result = find(r"^- Result: (.*)$", text, name)[1]
+    seconds = find(r"^- Seconds a target: (\d{1,3}(?:,\d{3})*)", text, name)[1]
+    return ("Fuzzing", "none", host_label(text, name), result,
+            f"every target {seconds} s, exit 0 and 0 crashes", f"`{header_commit(text, name)}`",
+            source(name))
 
 
 def sampler_note(text):
@@ -690,6 +704,9 @@ def generate(root):
             rows = []
         elif name == "fault_matrix.md":
             faults.append(fault_row(name, text))
+            rows = []
+        elif name.startswith("fuzz_"):
+            faults.append(fuzz_row(name, text))
             rows = []
         elif name.startswith("bench_") and harness_proof(text):
             if name.startswith("bench_book_"):
@@ -1252,8 +1269,6 @@ NOT_MEASURED = (
     ("T-ARENA-1, macOS", ("P-0701",), None, "every try was withdrawn or stopped under the same "
      "rule; debian's arms are above"),
     ("T-TRADE-2, 01302019_BX", (), "trades_01302019_BX.md", None),
-    ("Fuzzing", (), None, "the fuzz runs so far are short smoke runs; no 30-minute run is in "
-     "results/"),
 )
 # Every other target in BENCHMARKS.md, and where it stands, so that none is left out unseen.
 ACCOUNTED = {
@@ -1262,7 +1277,10 @@ ACCOUNTED = {
     "T-TRADE-2": "met on every Nasdaq day", "T-TRADE-4": "held", "T-BT-1": "met",
     "T-BT-2": "met", "T-MM-1": "met", "T-SPSC-3": "met", "T-ARENA-1": "no bar",
     "T-URING-1": "no bar", "T-URING-2": "met", "Flamegraphs": "met",
+    "Fuzzing": "met",
 }
+# A target accounted met with no row of its own here, and the results file that must show it.
+MET_BY_FILE = {"Fuzzing": "fuzz_30min_mac.md"}
 
 
 def benchmark_targets(root):
@@ -1311,6 +1329,13 @@ def missed_targets(root):
     if set(ids) != listed:
         raise TableError(f"BENCHMARKS.md: {sorted(set(ids) - listed)} in no row or account of "
                          f"{WRITEUP_PAGE}'s table, and {sorted(listed - set(ids))} not a target")
+    for target, name in MET_BY_FILE.items():
+        path = root / "results" / name
+        shown = path.read_text(encoding="utf-8") if path.is_file() else ""
+        result = re.search(r"^- Result: (\d+) of (\d+) clean$", shown, re.MULTILINE)
+        if result is None or result[1] != result[2]:
+            raise TableError(f"results/{name}: {WRITEUP_PAGE}'s table accounts {target} met, and "
+                             "the file does not show every target clean")
     rows = []
     for target, name, reader, why in MISSED:
         path = root / "results" / name

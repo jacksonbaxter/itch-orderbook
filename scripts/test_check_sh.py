@@ -32,7 +32,7 @@ BENCH_RESULTS = ["bench_a.md", "backtest_a.md", "spsc_a.md", "alloc_a.md", "walk
                  "counters_zen1_events_debian.md", "flamegraph_a.md", "profile_a.md",
                  "lookup_a.md", "prefetch_a.md", "dispatch_a.md", "layout_a.md",
                  "structure_a.md", "window_a.md", "simd_asm_a.md", "simd_a.md", "udp_a.md",
-                 "walks_counts.md"]
+                 "walks_counts.md", "fuzz_30min_a.md"]
 
 CTEST_STUB = """#!/bin/sh
 for arg in "$@"; do
@@ -133,7 +133,8 @@ class CheckSh(unittest.TestCase):
         self.assertIn("ctest knows no test named test_book\n", self.log("oracle"))
 
     def test_a_results_pattern_that_matches_nothing_fails_the_bench_stage(self):
-        for missing in ("udp_a.md", "chase_debian.md", "simd_asm_a.md", "profile_a.md"):
+        for missing in ("udp_a.md", "chase_debian.md", "simd_asm_a.md", "profile_a.md",
+                        "fuzz_30min_a.md"):
             with self.subTest(missing=missing):
                 for path in (self.repo / "results").glob("*.md"):
                     path.unlink()
@@ -141,7 +142,8 @@ class CheckSh(unittest.TestCase):
                 run = self.check("--only", "bench")
                 self.assertEqual(run.returncode, 1, run.stdout)
                 pattern = {"udp_a.md": "udp_*.md", "chase_debian.md": "chase_debian.md",
-                           "simd_asm_a.md": "simd_asm_*.md", "profile_a.md": "profile_*.md"}
+                           "simd_asm_a.md": "simd_asm_*.md", "profile_a.md": "profile_*.md",
+                           "fuzz_30min_a.md": "fuzz_*.md"}
                 self.assertIn(f"no results file matches results/{pattern[missing]}",
                               self.log("bench"))
 
@@ -155,6 +157,7 @@ class CheckSh(unittest.TestCase):
                       calls)
         self.assertIn("python3 -B scripts/simd_report.py --check results/simd_a.md\n", calls)
         self.assertIn("python3 -B scripts/udp_report.py --check results/udp_a.md\n", calls)
+        self.assertIn("python3 -B scripts/fuzz_report.py check results/fuzz_30min_a.md\n", calls)
         self.assertIn("ctest --preset release -R ^(" + "|".join(BENCH_TESTS) + ")$\n", calls)
 
     def test_the_demo_stage_fails_without_a_browser_and_says_how_to_name_one(self):

@@ -118,7 +118,8 @@ stage_script_tests() {
     python_test scripts/test_fetch_tool.py &&
     python_test scripts/test_check_sh.py &&
     python_test scripts/test_check_benchmark_sources.py &&
-    python_test scripts/test_sanitizer_tests.py
+    python_test scripts/test_sanitizer_tests.py &&
+    python_test scripts/test_fuzz_report.py
 }
 
 # RESULTS.md's tables and the README's headline against a fresh run over results/, and the
@@ -234,6 +235,9 @@ stage_bench() {
   for file in $results; do
     python_test scripts/walk_report.py check "$file" || return 1
   done
+  results=$(results_files 'fuzz_*.md') || return 1
+  # shellcheck disable=SC2086
+  python_test scripts/fuzz_report.py check $results || return 1
   build_preset release &&
     ctest_only test_bench_platform test_bench_platform_cross_core test_bench_replay test_bench_cli \
       test_bench_backtest_cli \

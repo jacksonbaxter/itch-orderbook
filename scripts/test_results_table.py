@@ -199,6 +199,20 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual([line.rsplit(" | ", 1)[1] for line in shown],
                          [f"no: `run_log.md:{len(lines) + 1}` stands |"] * 2 + ["yes |"])
 
+    def test_the_fuzz_run_has_a_row_beside_the_fault_matrix_and_in_the_run_table(self):
+        row = self.row("Fuzzing", "none")
+        self.assertIn("| macOS | 9 of 9 clean | every target 1,800 s, exit 0 and 0 crashes |", row)
+        _, output = self.run_table()
+        self.assertIn("| `fuzz-30min-20261113T121433Z` | `none: a check, not a measurement` |",
+                      output)
+
+    def test_fuzzing_is_met_only_while_its_file_shows_every_target_clean(self):
+        self.edit("results/fuzz_30min_mac.md", "- Result: 9 of 9 clean", "- Result: 8 of 9 clean")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("results/fuzz_30min_mac.md: WRITEUP.md's table accounts Fuzzing met, and "
+                      "the file does not show every target clean", output)
+
     def test_a_run_row_the_table_cannot_place_is_refused(self):
         path = self.root / "results" / "run_log.md"
         path.write_text(path.read_text(encoding="utf-8")

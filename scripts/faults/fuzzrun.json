@@ -1,0 +1,145 @@
+{
+  "area": "fuzzrun",
+  "tree": [
+    "scripts",
+    "fuzz",
+    "results"
+  ],
+  "faults": [
+    {
+      "id": "fuzz-report-target-missing-passes",
+      "breaks": "fuzz_report.py writes a run in which a target fuzz/CMakeLists.txt adds has no status line, and check passes a file with no row for it",
+      "check": "test_fuzz_report.py FuzzReport.test_a_target_missing_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/fuzz_report.py",
+          "old": "    missing = [name for name in expected if name not in targets]\n",
+          "new": "    missing = []\n"
+        },
+        {
+          "file": "scripts/fuzz_report.py",
+          "old": "\"targets\": [(name, targets[name]) for name in expected]}",
+          "new": "\"targets\": [(name, targets[name]) for name in expected if name in targets]}"
+        },
+        {
+          "file": "scripts/fuzz_report.py",
+          "old": "    missing = [name for name in expected if name not in rows]\n    if missing or len(rows) != len(expected):",
+          "new": "    missing = []\n    if missing:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fuzz_report.py",
+        "FuzzReport.test_a_target_missing_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_target_missing_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "fuzz-report-crash-passes",
+      "breaks": "fuzz_report.py publishes a target with one crash, and check passes its row",
+      "check": "test_fuzz_report.py FuzzReport.test_a_crash_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/fuzz_report.py",
+          "old": "    if row[\"crashes\"] > 0:",
+          "new": "    if row[\"crashes\"] > 1:"
+        },
+        {
+          "file": "scripts/fuzz_report.py",
+          "old": "        if crashes > 0 or saved > 0:",
+          "new": "        if crashes > 1 or saved > 0:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fuzz_report.py",
+        "FuzzReport.test_a_crash_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_crash_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "fuzz-report-exit-passes",
+      "breaks": "fuzz_report.py publishes a target that exited 1, reading only a signal's negative exit as a failure, and check does the same",
+      "check": "test_fuzz_report.py FuzzReport.test_an_exit_other_than_0_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/fuzz_report.py",
+          "old": "    if row[\"exit\"] != 0:",
+          "new": "    if row[\"exit\"] < 0:"
+        },
+        {
+          "file": "scripts/fuzz_report.py",
+          "old": "        if exit_code != 0:",
+          "new": "        if exit_code < 0:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fuzz_report.py",
+        "FuzzReport.test_an_exit_other_than_0_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_exit_other_than_0_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "fuzz-report-short-run-passes",
+      "breaks": "fuzz_report.py takes a run of 1,700 s a target as long enough",
+      "check": "test_fuzz_report.py FuzzReport.test_a_run_shorter_than_1800_s_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/fuzz_report.py",
+          "old": "SECONDS = 1800\n",
+          "new": "SECONDS = 1700\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fuzz_report.py",
+        "FuzzReport.test_a_run_shorter_than_1800_s_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_run_shorter_than_1800_s_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "fuzz-report-stopped-run-passes",
+      "breaks": "fuzz_report.py publishes a run whose status file ends without ALL DONE",
+      "check": "test_fuzz_report.py FuzzReport.test_a_status_file_without_all_done_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/fuzz_report.py",
+          "old": "    if not lines or not ALL_DONE.match(lines[-1]):",
+          "new": "    if not lines:"
+        },
+        {
+          "file": "scripts/fuzz_report.py",
+          "old": "\"done\": ALL_DONE.match(lines[-1])[1],",
+          "new": "\"done\": lines[-1].split()[-1],"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fuzz_report.py",
+        "FuzzReport.test_a_status_file_without_all_done_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_status_file_without_all_done_is_refused",
+        "exit": 1
+      }
+    }
+  ]
+}

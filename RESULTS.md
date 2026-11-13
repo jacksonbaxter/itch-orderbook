@@ -122,6 +122,7 @@ T-INV-2 is strict, and it fails on real data: books cross while a symbol is halt
 | PRINTS | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 4 arms | `f160447` | [results/trades_12302019.md](results/trades_12302019.md) |
 | T-URING-2 | 12302019 | debian | PASS | S4 lossless at 2,547,190 msg/s in 10 of 10 repetitions; S4's largest lossless rate in the bisection is 2,830,848 msg/s; gap +283,658 msg/s (+11.1%) against the target | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
 | Fault matrix | none | Darwin arm64 | 1063 of 1063 detected | all areas; controls: 196 commands, 0 failed | `c2ce567` | [results/fault_matrix.md](results/fault_matrix.md) |
+| Fuzzing | none | macOS | 9 of 9 clean | every target 1,800 s, exit 0 and 0 crashes | `aef684f3dd86` | [results/fuzz_30min_mac.md](results/fuzz_30min_mac.md) |
 
 Throughput. These rows prove the harness on the stub book. They say nothing about a real book, and the two hosts are not to be compared.
 
@@ -925,4 +926,5 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0504-10182019-20261113T075153Z` | `P-0504` | `f1604473662f` | Darwin | `published` | yes |
 | `P-0504-01302020-20261113T075153Z` | `P-0504` | `f1604473662f` | Darwin | `published` | yes |
 | `P-0504-01302019_BX-20261113T075153Z` | `P-0504` | `f1604473662f` | Darwin | `published` | yes |
+| `fuzz-30min-20261113T121433Z` | `none: a check, not a measurement` | `aef684f3dd86` | Darwin | `published` | yes |
 <!-- results table: end -->
