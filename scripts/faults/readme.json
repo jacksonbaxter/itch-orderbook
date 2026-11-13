@@ -7,6 +7,7 @@
     "WRITEUP.md",
     "results",
     "scripts",
+    "tests/CMakeLists.txt",
     "tests/fixtures/bench_results",
     "tests/fixtures/gate_numbers"
   ],
@@ -2285,6 +2286,126 @@
       "expect": {
         "signature": "^FAIL: test_fuzzing_is_met_only_while_its_file_shows_every_target_clean",
         "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-one-word-label-ignored",
+      "breaks": "gate_numbers.py lets a figure beside a one-word row label (rigtorp, `switch`) stand for another row's",
+      "check": "test_gate_numbers.py test_a_figure_beside_a_one_word_row_label_is_held_to_its_row",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "    word, straight = beside(source, figure, text)\n",
+          "new": "    word, straight = None, False\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_figure_beside_a_one_word_row_label_is_held_to_its_row"
+      }
+    },
+    {
+      "id": "readme-gate-n-of-m-apart",
+      "breaks": "gate_numbers.py holds the two integers of an `N of M` apart, each anywhere in the file",
+      "check": "test_gate_numbers.py test_the_two_integers_of_n_of_m_stand_together",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "        pair_of_of(members, lines[number - 1])\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_two_integers_of_n_of_m_stand_together"
+      }
+    },
+    {
+      "id": "readme-held-by-tests-names-no-test",
+      "breaks": "RESULTS.md names a test that holds T-BT-2 and that ctest does not have",
+      "check": "test_results_table.py test_the_targets_held_by_tests_name_real_tests_and_no_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "\"test_backtest_validity\", \"test_backtest_cli\")",
+          "new": "\"test_backtest_validity\", \"test_backtest_replay\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_targets_held_by_tests_name_real_tests_and_no_file"
+      }
+    },
+    {
+      "id": "readme-spsc-pinning-one-core",
+      "breaks": "An SPSC row names only the first thread's core for a two-thread run",
+      "check": "test_results_table.py test_an_spsc_file_gets_a_row_for_each_comparison",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    pinning = pinned_cores(text, name)\n",
+          "new": "    pinning = find(r\"^- pinning: (.*?)(?::|$)\", text, name)[1]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_spsc_file_gets_a_row_for_each_comparison"
+      }
+    },
+    {
+      "id": "readme-mm-one-symbol-day",
+      "breaks": "RESULTS.md calls the market maker's two symbol-days one",
+      "check": "test_results_table.py test_the_market_maker_shows_every_run_of_its_report_day",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "\"with every parameter chosen on 10302019, an FOMC day. No \"",
+          "new": "\"with every parameter chosen on 10302019, an FOMC day. One symbol-day. No \""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_market_maker_shows_every_run_of_its_report_day"
+      }
+    },
+    {
+      "id": "readme-trade-gap-is-the-rule",
+      "breaks": "WRITEUP.md's table gives a failing trade-print check's rule as its gap, not its size",
+      "check": "test_results_table.py test_a_failing_trade_check_gives_its_size_from_its_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            trade_gap(target, name, text), host_label(text, name))",
+          "new": "            \"any violation fails\", host_label(text, name))"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_failing_trade_check_gives_its_size_from_its_file"
       }
     }
   ]
