@@ -68,9 +68,12 @@ The steps:
 
 Before and after every step but smoke, the day is read through and its hash checked against
 --dataset-sha256 (bench_udp drops the day's pages after packing, and machine_check.sh refuses
-an input not resident), and the machine check runs as scripts/simd_driver.py runs it,
-`MEASURE_SH taskset -c 4 bash scripts/machine_check.sh ...`; a failed check before refuses
-the run. Before and after every step the manifest also gets perf_event_paranoid, the uptime
+an input not resident), and the machine check runs on every core of the step's mask, the
+sender's, the receiver's and, where the step runs U5, the SQ thread's, each with its SMT
+sibling read from sysfs: `MEASURE_SH taskset -c C bash scripts/machine_check.sh ... --core C
+--sibling S`, one after another, and the manifest lists the cores and siblings checked
+(r5-11; before, one check covered core 4 and its sibling only). A failed check before
+refuses the run. Before and after every step the manifest also gets perf_event_paranoid, the uptime
 and pswpout from /proc/vmstat, and a warning at its top if perf_event_paranoid reads 3.
 
 The run directory, DIR/<run id>/, refused if another run wrote in it, holds every process's
@@ -438,6 +441,66 @@ def mode_cores(args, mode):
     return [args.core, args.receiver_core] + ([args.sq_core] if mode == SQ_MODE else [])
 
 
+# --- The machine checks, one a core in the mask (r5-11) -------------------------------------
+
+def mask_cores(step, modes, cores):
+    """Every core a timed process of the step is pinned to: the sender's and the receiver's
+    (the sender alone runs with the same mask), and U5's SQ thread's where the step runs U5."""
+    found = [cores["sender"], cores["receiver"]]
+    if step != "ceiling" and SQ_MODE in modes:
+        found.append(cores["sq"])
+    return found
+
+
+def sibling_of(core, root="/"):
+    """The core's SMT sibling, from sysfs; Refused if it cannot be read, since the check of
+    a core is a check of its sibling's idleness too."""
+    text = read_text(Path(root) / f"sys/devices/system/cpu/cpu{core}/topology/"
+                                  "thread_siblings_list")
+    listed = set()
+    for part in text.split(","):
+        ends = part.split("-")
+        if not all(end.strip().isdigit() for end in ends) or len(ends) > 2:
+            raise Refused("machine_check", f"cpu{core}'s SMT siblings read {text!r}")
+        listed.update(range(int(ends[0]), int(ends[-1]) + 1))
+    others = sorted(listed - {core})
+    if len(others) != 1:
+        raise Refused("machine_check", f"cpu{core}'s SMT siblings read {text!r}, not one other")
+    return others[0]
+
+
+def core_check_words(args, core, sibling):
+    """machine_check.sh on one core of the mask, pinned there as measure.sh's child."""
+    return [str(args.measure), "taskset", "-c", str(core), "bash",
+            str(REPO_ROOT / "scripts" / "machine_check.sh"), "--input", str(args.input),
+            "--probe", str(args.probe), "--core", str(core), "--sibling", str(sibling)]
+
+
+def machine_checks(args, root="/"):
+    """(every core's machine check output, in order, [[core, sibling], ...]): one check a
+    core in the step's mask, each retried while measure.sh is busy; Refused at the first that
+    fails."""
+    outputs, covered = [], []
+    for core in mask_cores(args.step, args.modes, {"sender": args.core,
+                                                   "receiver": args.receiver_core,
+                                                   "sq": args.sq_core}):
+        sibling = sibling_of(core, root)
+        while True:
+            result = subprocess.run(core_check_words(args, core, sibling), capture_output=True,
+                                    text=True, stdin=subprocess.DEVNULL, check=False)
+            if result.returncode != 75:
+                break
+            time.sleep(RETRY_BUSY_S)
+        if result.returncode != 0:
+            lines = result.stdout.strip().splitlines()
+            raise simd_driver.Refused("machine_check", f"core {core}: " + (
+                lines[-1] if lines else
+                f"exited {result.returncode}: {result.stderr.strip()[-300:]}"))
+        outputs.append(result.stdout.strip())
+        covered.append([core, sibling])
+    return "\n".join(outputs), covered
+
+
 def bench_words(args, mode, extra, stem, commit):
     """One timed process, whole: measure.sh, taskset's mask, bench_udp and its arguments."""
     mask = ",".join(str(core) for core in mode_cores(args, mode))
@@ -553,7 +616,8 @@ class Run:
             raise Refused("input", f"the day's sha256 is {digest}, not {self.args.dataset_sha256}")
         self.record.dataset(self.args.input, digest)
         try:
-            self.manifest[f"machine_check_{when}"] = simd_driver.machine_check(self.args)
+            self.manifest[f"machine_check_{when}"], covered = machine_checks(self.args)
+            self.manifest[f"machine_check_cores_{when}"] = covered
             self.record.output(f"machine_check_{when}.txt", self.manifest[f"machine_check_{when}"])
         except simd_driver.Refused as error:
             if when == "before":

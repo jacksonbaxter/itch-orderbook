@@ -379,12 +379,12 @@ class ProcessTest(unittest.TestCase):
             digest = run_record.sha256_of(folder / "day.itch")
             args = arguments(folder, dataset_sha256=digest)
             run = udp_driver.Run(args, "P-0700-20261111T100000Z", "0123456789ab (clean)")
-            saved = simd_driver.machine_check
-            simd_driver.machine_check = lambda args: "machine_check: passed"
+            saved = udp_driver.machine_checks
+            udp_driver.machine_checks = lambda args: ("machine_check: passed", [[4, 5], [6, 7]])
             try:
                 run.check_machine("before")
             finally:
-                simd_driver.machine_check = saved
+                udp_driver.machine_checks = saved
             self.assertEqual(run.dir.name, "P-0700-20261111T100000Z")
             kept = json.loads((run.dir / "run.json").read_text(encoding="utf-8"))
             self.assertEqual(kept["binaries"], {
@@ -516,14 +516,14 @@ class ProcessTest(unittest.TestCase):
                     str(folder / "bench_udp"), "--probe", str(folder / "bench_probe"),
                     "--measure", str(folder / "measure.sh"), "--repetitions", "3",
                     "--run-log", str(folder / "run_log.md"), "--allow-dirty"]
-            system, check = udp_driver.platform.system, simd_driver.machine_check
+            system, check = udp_driver.platform.system, udp_driver.machine_checks
             udp_driver.platform.system = lambda: "Linux"
-            simd_driver.machine_check = lambda args: "machine_check: passed"
+            udp_driver.machine_checks = lambda args: ("machine_check: passed", [[4, 5], [6, 7]])
             try:
                 with Environment(FAKE_SENDER_FAIL="0002"):
                     code = udp_driver.main(argv)
             finally:
-                udp_driver.platform.system, simd_driver.machine_check = system, check
+                udp_driver.platform.system, udp_driver.machine_checks = system, check
             log = (folder / "run_log.md").read_text(encoding="utf-8")
             manifest = json.loads(next((folder / "raw").glob("*/manifest.json")).read_text(
                 encoding="utf-8"))
@@ -533,6 +533,49 @@ class ProcessTest(unittest.TestCase):
                       "the step is refused", log)
         self.assertNotIn("ceiling", manifest)
         self.assertEqual(len(manifest["processes"]), 2, "no run after the one that failed")
+
+    def test_the_machine_check_covers_every_core_in_the_mask_with_its_sibling(self):
+        """r5-11: one check a core of the step's mask, the sender's, the receiver's and, where
+        U5 runs, the SQ thread's, each with the sibling sysfs gives it; the cores in the
+        manifest; a sibling that cannot be read refuses."""
+        with records.scratch() as folder:
+            folder = Path(folder)
+            self.stand_ins(folder)
+            for core, siblings in ((4, "4-5"), (6, "6,7"), (2, "2-3")):
+                topology = folder / f"sys/devices/system/cpu/cpu{core}/topology"
+                topology.mkdir(parents=True)
+                (topology / "thread_siblings_list").write_text(siblings + "\n")
+            ran = []
+            saved = udp_driver.subprocess.run
+
+            def fake_run(words, **kwargs):
+                ran.append(words)
+                core = words[words.index("--core") + 1]
+                return argparse.Namespace(returncode=0, stderr="",
+                                          stdout=f"machine_check: pass governor: core {core} "
+                                                 "runs performance\nmachine_check: passed\n")
+            udp_driver.subprocess.run = fake_run
+            try:
+                args = arguments(folder, step="bisect", modes=["S3", "U5"])
+                text, covered = udp_driver.machine_checks(args, root=folder)
+                self.assertEqual(covered, [[4, 5], [6, 7], [2, 3]])
+                self.assertEqual([w[2:4] for w in ran], [["-c", "4"], ["-c", "6"], ["-c", "2"]])
+                self.assertEqual([w[-4:] for w in ran], [["--core", "4", "--sibling", "5"],
+                                                         ["--core", "6", "--sibling", "7"],
+                                                         ["--core", "2", "--sibling", "3"]])
+                self.assertEqual(text.count("machine_check: passed"), 3)
+                ran.clear()
+                _, covered = udp_driver.machine_checks(
+                    arguments(folder, step="ceiling", modes=["S3", "U5"]), root=folder)
+                self.assertEqual(covered, [[4, 5], [6, 7]], "the sender alone: no SQ thread")
+                _, covered = udp_driver.machine_checks(
+                    arguments(folder, step="bisect", modes=["S3"]), root=folder)
+                self.assertEqual(covered, [[4, 5], [6, 7]])
+                (folder / "sys/devices/system/cpu/cpu6/topology/thread_siblings_list").unlink()
+                with self.assertRaisesRegex(udp_driver.Refused, "cpu6's SMT siblings"):
+                    udp_driver.machine_checks(args, root=folder)
+            finally:
+                udp_driver.subprocess.run = saved
 
     def test_a_warning_heads_the_manifest_when_perf_is_closed(self):
         with records.scratch() as folder:

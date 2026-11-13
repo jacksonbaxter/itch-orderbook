@@ -967,6 +967,90 @@
         "signature": "^(FAIL|ERROR): test_a_sender_run_that_did_not_pass_refuses_the_ceiling_step",
         "exit": 1
       }
+    },
+    {
+      "id": "udp-runs-machine-check-sender-core-only",
+      "breaks": "udp_driver's machine check covers the sender's core only, not the receiver's or the SQ thread's (r5-11)",
+      "check": "test_udp_driver.py test_the_machine_check_covers_every_core_in_the_mask_with_its_sibling",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "    found = [cores[\"sender\"], cores[\"receiver\"]]\n",
+          "new": "    found = [cores[\"sender\"]]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_the_machine_check_covers_every_core_in_the_mask_with_its_sibling",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-runs-machine-check-sibling-unread",
+      "breaks": "udp_driver's machine check of a core takes machine_check.sh's default sibling, not the core's own (r5-11)",
+      "check": "test_udp_driver.py test_the_machine_check_covers_every_core_in_the_mask_with_its_sibling",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "\"--probe\", str(args.probe), \"--core\", str(core), \"--sibling\", str(sibling)]\n",
+          "new": "\"--probe\", str(args.probe), \"--core\", str(core)]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_driver.py"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_the_machine_check_covers_every_core_in_the_mask_with_its_sibling",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-check-cores-unchecked",
+      "breaks": "udp_report --check does not hold machine_check_cores to the file's machine check output (r5-11)",
+      "check": "test_udp_report.py test_the_header_says_which_cores_the_machine_checks_covered",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "    found += cores_found\n",
+          "new": "    found += []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_the_header_says_which_cores_the_machine_checks_covered",
+        "exit": 1
+      }
+    },
+    {
+      "id": "udp-report-check-cores-unwritten",
+      "breaks": "udp_report writes no machine_check_cores field (r5-11)",
+      "check": "test_udp_report.py test_the_header_says_which_cores_the_machine_checks_covered",
+      "mutations": [
+        {
+          "file": "scripts/udp_report.py",
+          "old": "               (\"machine_check_cores\", covered),\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_udp_report.py"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_the_header_says_which_cores_the_machine_checks_covered",
+        "exit": 1
+      }
     }
   ]
 }
