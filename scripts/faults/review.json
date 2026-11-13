@@ -216,8 +216,8 @@
         {
           "file": "results/final_review.md",
           "op": "replace_text",
-          "old": "- Findings: 168\n",
-          "new": "- Findings: 167\n"
+          "old": "- Findings: 184\n",
+          "new": "- Findings: 183\n"
         }
       ],
       "command": [

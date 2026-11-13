@@ -215,11 +215,17 @@ class ResultsTable(unittest.TestCase):
                       "the file does not show every target clean", output)
 
     def test_the_final_review_has_a_row_that_follows_its_file(self):
+        text = (self.root / "results" / "final_review.md").read_text(encoding="utf-8")
+        header = dict(re.findall(r"^- (\w+): (.*)$", text, re.MULTILINE))
         row = self.row("Final review", "none")
-        self.assertIn("| none | not complete: ", row)
-        self.assertIn("| 14 reviewers, 168 findings (2 BLOCK, 67 FIX, 99 NOTE); 139 fixed,", row)
-        self.edit("results/final_review.md", "- Findings: 168\n", "- Findings: 167\n")
-        self.assertIn("| 14 reviewers, 167 findings (", self.row("Final review", "none"))
+        self.assertIn(f"| none | {header['Result']} |", row)
+        self.assertIn(f"| {header['Reviewers']} reviewers, {header['Findings']} findings "
+                      f"({header['Severities']}); {header['Outcomes']} |", row)
+        findings = int(header["Findings"])
+        self.edit("results/final_review.md", f"- Findings: {findings}\n",
+                  f"- Findings: {findings - 1}\n")
+        self.assertIn(f"| {header['Reviewers']} reviewers, {findings - 1} findings (",
+                      self.row("Final review", "none"))
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
         self.assertIn("results_table: FAIL RESULTS.md:", output)
