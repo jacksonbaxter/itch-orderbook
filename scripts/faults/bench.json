@@ -4323,6 +4323,174 @@
         "signature": "^FAIL: test_a_refused_stamp_gets_its_withdrawn_row_and_stays_withdrawn",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-bench-driver-unexpected-exception-unlogged",
+      "breaks": "bench_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_bench_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_bench_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-backtest-driver-unexpected-exception-unlogged",
+      "breaks": "backtest_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_backtest_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_backtest_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-walk-driver-unexpected-exception-unlogged",
+      "breaks": "walk_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_walk_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/walk_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_walk_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-spsc-driver-unexpected-exception-unlogged",
+      "breaks": "spsc_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_spsc_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_spsc_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-alloc-driver-unexpected-exception-unlogged",
+      "breaks": "alloc_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_alloc_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/alloc_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_alloc_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-simd-driver-unexpected-exception-unlogged",
+      "breaks": "simd_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_simd_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/simd_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_simd_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-udp-driver-unexpected-exception-unlogged",
+      "breaks": "udp_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_udp_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_udp_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-wasm-bench-unexpected-exception-unlogged",
+      "breaks": "wasm_bench.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_wasm_bench_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/wasm_bench.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_wasm_bench_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
     }
   ]
 }

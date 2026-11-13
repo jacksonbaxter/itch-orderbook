@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import io
 import sys
+import types
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,8 +25,11 @@ import backtest_driver  # noqa: E402
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import spsc_driver  # noqa: E402
+import simd_driver  # noqa: E402
 import stamp_load  # noqa: E402
+import udp_driver  # noqa: E402
 import walk_driver  # noqa: E402
+import wasm_bench  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "bench_results"
@@ -150,6 +154,68 @@ class PendingRows(unittest.TestCase):
                                 found[0][4])
                 self.assertNotIn("published:", found[0][4].split(";")[0])
 
+
+def broken(*args, **kwargs):
+    """A run() that dies as r5-8's fake bench_replay made bench_driver die: on a record whose
+    warm-up section is null."""
+    record = {"warmup": None}
+    return record["warmup"]["messages"]
+
+
+# Each driver's whole argument list, and the function its main() calls to do the run.
+OTHER_DRIVERS = {
+    "simd_driver": (simd_driver, "run", lambda root: [
+        "--experiment", "framing", "--prediction", "P-0601", "--raw-dir", str(root / "raw"),
+        "--input", "x", "--dataset", "d", "--dataset-sha256", "0" * 64, "--bench", "x",
+        "--probe", "x", "--measure", "x", "--run-log", str(root / "run_log.md")]),
+    "udp_driver": (udp_driver, "run_step", lambda root: [
+        "--step", "ceiling", "--prediction", "P-0901", "--raw-dir", str(root / "raw"),
+        "--input", "x", "--dataset", "d", "--dataset-sha256", "0" * 64, "--bench", "x",
+        "--probe", "x", "--measure", "x", "--run-log", str(root / "run_log.md")]),
+    "wasm_bench": (wasm_bench, "run", lambda root: [
+        "native", "--bench", "x", "--probe", "x", "--prediction", "P-0401", "--raw-dir",
+        str(root / "raw"), "--run-log", str(root / "run_log.md")]),
+}
+
+
+def dies_unexpectedly(name):
+    """r5-8: the driver promises a row for every run, whatever became of it, so an exception
+    nothing expected, a TypeError here, still gets its row, and exit 1."""
+
+    def test(self):
+        checked = types.SimpleNamespace(returncode=0, stdout="", stderr="")
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            root = Path(directory)
+            try:
+                if name in PENDING_DRIVERS:
+                    code = run_main(name, root, broken)
+                else:
+                    module, function, argv = OTHER_DRIVERS[name]
+                    with mock.patch.object(module, function, broken), \
+                            mock.patch.object(bench_driver, "git_commit",
+                                              lambda root, dirty: "abc123 (clean)"), \
+                            mock.patch("subprocess.run", lambda *a, **k: checked), \
+                            mock.patch("platform.system", lambda: "Linux"):
+                        code = quiet(module.main, argv(root))
+            except TypeError as error:
+                self.fail(f"{name} let {error!r} out with no row")
+            found = rows(root / "run_log.md")
+        self.assertEqual(code, 1)
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("failed: TypeError(", found[0][4])
+        self.assertEqual(found[0][2], "abc123 (clean)")
+
+    test.__doc__ = dies_unexpectedly.__doc__
+    return test
+
+
+class FailureRows(unittest.TestCase):
+    """One test a driver, each named after it."""
+
+
+for _name in [*PENDING_DRIVERS, *OTHER_DRIVERS]:
+    setattr(FailureRows, f"test_{_name}_logs_a_run_that_dies_unexpectedly",
+            dies_unexpectedly(_name))
 
 if __name__ == "__main__":
     unittest.main()

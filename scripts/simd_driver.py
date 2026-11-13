@@ -335,6 +335,9 @@ def main(argv=None):
                                 locals().get("commit", "unknown"), f"refused: {error}")
         print(f"simd_driver: refused: {error}", file=sys.stderr)
         return 1
+    except Exception as error:  # Last, so that no run ends without its row.
+        return bench_driver.log_failure("simd_driver", args.run_log, run_id, args.prediction,
+                                        locals().get("commit", "unknown"), error)
     outcome = ("recorded: every variant's repetitions published under the sampler rule"
                if platform.system() == "Darwin" else
                "recorded: every variant's repetitions published, each under measure.sh taskset "

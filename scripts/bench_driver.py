@@ -1111,6 +1111,16 @@ def parse_args(argv):
     return args
 
 
+def log_failure(program, run_log, run_id, prediction, commit, error, what=""):
+    """The row and the exit code of a run that died on an exception no part of it expected. A
+    driver's promise is a row for every run, whatever became of it, so every driver catches
+    Exception last and comes here (r5-8)."""
+    hold_signals()
+    print(f"{program}: failed: {error!r}", file=sys.stderr)
+    append_log(run_log, run_id, prediction, commit, f"{what}failed: {error!r}")
+    return 1
+
+
 def hold_signals():
     """From here a signal is passed on but no longer stops the driver: its row is next."""
     global stopping
@@ -1143,11 +1153,8 @@ def main(argv=None):
         append_log(args.run_log, run_id, args.prediction, commit,
                    f"refused at {refusal.stage}: {refusal}")
         return 1
-    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
-        hold_signals()
-        print(f"bench_driver: failed: {error!r}", file=sys.stderr)
-        append_log(args.run_log, run_id, args.prediction, commit, f"failed: {error!r}")
-        return 1
+    except Exception as error:  # Last, so that no run ends without its row.
+        return log_failure("bench_driver", args.run_log, run_id, args.prediction, commit, error)
     hold_signals()
     append_written(args.run_log, run_id, args.prediction, commit, written)
     for out in written:

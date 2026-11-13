@@ -685,12 +685,9 @@ def main(argv=None):
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
                                 f"refused at {refusal.stage}: {refusal}")
         return 1
-    except (OSError, ValueError, KeyError, StopIteration, subprocess.SubprocessError) as error:
-        bench_driver.hold_signals()
-        print(f"alloc_driver: failed: {error!r}", file=sys.stderr)
-        bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
-                                f"failed: {error!r}")
-        return 1
+    except Exception as error:  # Last, so that no run ends without its row.
+        return bench_driver.log_failure("alloc_driver", args.run_log, run_id, args.prediction, commit,
+                                        error)
     finally:
         if sampler is not None:
             sampler.done.set()

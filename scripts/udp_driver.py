@@ -895,6 +895,10 @@ def main(argv=None):
                                 f"refused: udp {args.step}: {error}")
         print(f"udp_driver: refused: {error}", file=sys.stderr)
         return 1
+    except Exception as error:  # Last, so that no run ends without its row.
+        return bench_driver.log_failure("udp_driver", args.run_log, run_id, args.prediction,
+                                        locals().get("commit", "unknown"), error,
+                                        f"udp {args.step}: ")
     outcome = (f"recorded: udp {args.step}, {run.count} processes"
                + (", each under measure.sh taskset, the machine checks before and after in "
                   "the manifest" if args.step != "smoke" else ", no figure")

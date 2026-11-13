@@ -690,12 +690,9 @@ def main(argv=None):
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
                                 f"refused at {refusal.stage}: {refusal}")
         return 1
-    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
-        bench_driver.hold_signals()
-        print(f"backtest_driver: failed: {error!r}", file=sys.stderr)
-        bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
-                                f"failed: {error!r}")
-        return 1
+    except Exception as error:  # Last, so that no run ends without its row.
+        return bench_driver.log_failure("backtest_driver", args.run_log, run_id, args.prediction, commit,
+                                        error)
     bench_driver.hold_signals()
     bench_driver.append_written(args.run_log, run_id, args.prediction, commit, [written])
     print(f"backtest_driver: wrote {written}, load lines pending. Now run scripts/stamp_load.py.",
