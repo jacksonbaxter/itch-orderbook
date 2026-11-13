@@ -11,6 +11,7 @@ import contextlib
 import io
 import json
 import signal
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -356,6 +357,27 @@ class CommittedFaults(unittest.TestCase):
         self.assertGreater(len(faults), 0)
         for fault in faults:
             self.assertIsNone(fm.find_stale(fault, fm.REPO_ROOT), fault.id)
+
+    def test_a_tool_that_only_fails_detects_no_tool_fault(self):
+        # Each mm-select and mm-cli fault breaks one rule of its tool; a tool that just exits 1
+        # breaks every case, and its output must match none of their signatures.
+        faults = [fault for fault in fm.load_faults(fm.REPO_ROOT / "scripts" / "faults")
+                  if fault.id.startswith(("mm-select-", "mm-cli-"))]
+        self.assertEqual(len(faults), 10)
+        broken = "/usr/bin/false" if Path("/usr/bin/false").exists() else "/bin/false"
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as scratch:
+            outputs = {}
+            oracle = str(fm.REPO_ROOT / "tests" / "fixtures" / "oracle")
+            for prefix, script, extra in (("mm-select-", "test_select_cli.py", scratch),
+                                          ("mm-cli-", "test_mm_cli.py", oracle)):
+                done = subprocess.run([sys.executable, "-B", str(fm.REPO_ROOT / "tests" / script),
+                                       broken, extra], capture_output=True, text=True,
+                                      check=False, timeout=120)
+                self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+                outputs[prefix] = done.stdout + done.stderr
+        for fault in faults:
+            output = outputs["mm-select-" if fault.id.startswith("mm-select-") else "mm-cli-"]
+            self.assertNotEqual(fm.judge(fault, 1, output)[0], fm.DETECTED, fault.id)
 
     def test_the_six_required_parser_faults_exist(self):
         ids = {fault.id for fault in fm.load_faults(fm.REPO_ROOT / "scripts" / "faults")}

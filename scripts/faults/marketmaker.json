@@ -15,7 +15,8 @@
     "scripts",
     "results",
     "README.md",
-    "RESULTS.md"
+    "RESULTS.md",
+    "BENCHMARKS.md"
   ],
   "faults": [
     {
@@ -908,7 +909,7 @@
         "{build}/select_fault"
       ],
       "expect": {
-        "signature": "select cli: FAIL"
+        "signature": "^select cli: FAIL day: line 5: have 'group A members 3', want 'group A members 4'\\n(?:[^\\n]*\\n)*?select cli: FAIL day: missing '  AEIG locate 12 executed 400 average_spread 0\\.012000 one_tick_pct 80\\.000 "
       }
     },
     {
@@ -937,7 +938,7 @@
         "{build}/select_fault"
       ],
       "expect": {
-        "signature": "select cli: FAIL"
+        "signature": "^select cli: FAIL day: line 3: have 'excluded category 1 issue 1 etp 0 test 1 halted 2 "
       }
     },
     {
@@ -966,7 +967,7 @@
         "{build}/select_fault"
       ],
       "expect": {
-        "signature": "select cli: FAIL"
+        "signature": "^select cli: FAIL day: line 5: have 'group A members 3', want 'group A members 4'\\n(?:[^\\n]*\\n)*?select cli: FAIL day: missing '  ALCK locate 13 executed 50 average_spread 0\\.008889 one_tick_pct 88\\.889 valid_seconds 9\\.000 "
       }
     },
     {
@@ -995,7 +996,7 @@
         "{build}/select_fault"
       ],
       "expect": {
-        "signature": "select cli: FAIL"
+        "signature": "^select cli: FAIL day: line 6: have '  AONE locate 1 executed 1300 average_spread 0\\.010000 "
       }
     },
     {
@@ -1024,7 +1025,7 @@
         "{build}/select_fault"
       ],
       "expect": {
-        "signature": "select cli: FAIL"
+        "signature": "^select cli: FAIL day: line 6: have '  AONE locate 1 executed 800 average_spread 0\\.010000 "
       }
     },
     {
@@ -1053,7 +1054,7 @@
         "{build}/select_fault"
       ],
       "expect": {
-        "signature": "select cli: FAIL"
+        "signature": "^select cli: FAIL day: line 3: have 'excluded category 1 issue 1 etp 1 test 1 halted 1 close 2 "
       }
     },
     {
@@ -1082,7 +1083,7 @@
         "{build}/select_fault"
       ],
       "expect": {
-        "signature": "select cli: FAIL"
+        "signature": "^select cli: FAIL day: line 3: have 'excluded category 1 issue 1 etp 1 test 1 halted 2 close 2 no_valid_book 0'"
       }
     },
     {
@@ -1111,7 +1112,7 @@
         "{tree}/tests/fixtures/oracle"
       ],
       "expect": {
-        "signature": "mm cli: FAIL"
+        "signature": "^mm cli: FAIL L-off: zero latency changed no fill on S1: \\d+ fills both ways$"
       }
     },
     {
@@ -1140,7 +1141,7 @@
         "{tree}/tests/fixtures/oracle"
       ],
       "expect": {
-        "signature": "mm cli: FAIL"
+        "signature": "^mm cli: FAIL Q-off: the queue rule changed no fill on S4: \\{'exact': '(\\d+)', 'conservative': '\\1', 'proportional': '\\1'\\}$"
       }
     },
     {
@@ -1169,7 +1170,7 @@
         "{tree}/tests/fixtures/oracle"
       ],
       "expect": {
-        "signature": "mm cli: FAIL"
+        "signature": "^mm cli: FAIL S1 as exact: exit 1: mm symbol S1 [^\\n]*\\n(?:[^\\n]*\\n)*?attribution refused: mark_undefined$"
       }
     },
     {

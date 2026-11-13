@@ -2471,7 +2471,7 @@
         "^corpus_fuzz_book$"
       ],
       "expect": {
-        "signature": "FUZZ_CHECK failed"
+        "signature": "FUZZ_CHECK failed: (oracle_->fast\\(\\)\\.live_orders\\(\\) == live_\\.size\\(\\)|oracle_->reference\\(\\)\\.live_orders\\(\\) == live_\\.size\\(\\)|oracle_->invariants\\(\\)\\.(crossed\\(\\) == expected_crossed_|locked\\(\\) == expected_locked_|inv1_violations\\(\\) == expected_violations_)|reference_(bid|ask)\\.present == \\((bid|ask) >= 0\\)) at \\S*fuzz_book\\.cpp:\\d+"
       }
     },
     {

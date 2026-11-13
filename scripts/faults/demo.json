@@ -16,7 +16,8 @@
     "results",
     "docs",
     "README.md",
-    "RESULTS.md"
+    "RESULTS.md",
+    "BENCHMARKS.md"
   ],
   "faults": [
     {
