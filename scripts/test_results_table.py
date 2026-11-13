@@ -37,6 +37,7 @@ class ResultsTable(unittest.TestCase):
         shutil.copytree(REPO_ROOT / "results", self.root / "results")
         shutil.copy(REPO_ROOT / "README.md", self.root / "README.md")
         shutil.copy(REPO_ROOT / "RESULTS.md", self.root / "RESULTS.md")
+        shutil.copy(REPO_ROOT / "BENCHMARKS.md", self.root / "BENCHMARKS.md")
 
     def run_table(self, *extra):
         out = io.StringIO()
@@ -314,8 +315,8 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 0, output)
         rows = [line for line in output.splitlines() if f"(results/{name})" in line]
         self.assertEqual(len(rows), 1, output)
-        self.assertIn("| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | 5,425,845 |",
-                      rows[0])
+        self.assertIn("| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | ≥ 4.61 M "
+                      "messages/s | 5,425,845 messages/s |", rows[0])
         self.assertIn("| met | `abc` |", rows[0])
         path = self.root / "results" / name
         path.write_text(test_backtest_results.SHADOW.replace("| Engine events/s |", "| x |"),
@@ -460,11 +461,38 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| p50 140.14 ns; p99 840.86 ns; p99.9 1,472.00 ns; `paged-flat`, file in "
                       "memory, top of book not tracked | debian,", latency)
         self.assertIn("| **missed**: p50 by 19.14 ns,", latency)
-        self.assertIn("| ≥ 2.00 M messages/s | 4.57 M messages/s | debian, AMD Ryzen Embedded "
-                      "V1605B, pinned to core 4 | met |", backtest)
+        self.assertIn("| ≥ 2.00 M events/s | 4,677,511 engine events/s; 4,570,542 messages/s | "
+                      "debian, AMD Ryzen Embedded V1605B, pinned to core 4 | met |", backtest)
         self.assertIn("| ≤ 1.31×, set on Ryzen 9 5950X, Linux, pinned | 0.95×, pipelined time / "
                       "single-threaded time | debian, AMD Ryzen Embedded V1605B, pinned to cores 4 "
                       "and 6 | met |", spsc)
+
+    def test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar(self):
+        # The headline and the backtest table read the Summary's Engine events/s median.
+        self.edit(HEADLINE_BACKTEST, "| Engine events/s | 4,677,511 |",
+                  "| Engine events/s | 4,677,512 |")
+        self.assertIn("| ≥ 2.00 M events/s | 4,677,512 engine events/s; 4,570,542 messages/s |",
+                      self.headline()[4])
+        code, output = self.run_table()
+        self.assertIn("| ≥ 2.00 M events/s | 4,677,512 events/s | 0.98% | 4,570,542 messages/s "
+                      "| met |", output)
+        # A verdict the events/s median does not bear out is refused.
+        self.edit(HEADLINE_BACKTEST, "| Engine events/s | 4,677,512 |",
+                  "| Engine events/s | 1,999,999 |")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL {HEADLINE_BACKTEST}: T-BT-1 is met in the file, and "
+                      "its Engine events/s median, 1,999,999, has it missed against ≥ 2.00 M "
+                      "events/s", output)
+        # A bar whose unit in BENCHMARKS.md is not the one compared is refused.
+        self.edit(HEADLINE_BACKTEST, "| Engine events/s | 1,999,999 |",
+                  "| Engine events/s | 4,677,511 |")
+        self.edit("BENCHMARKS.md", "- **Target:** ≥ 2.0 M events/s on one thread",
+                  "- **Target:** ≥ 2.0 M messages/s on one thread")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL BENCHMARKS.md: T-BT-1's bar is in messages/s, and this "
+                      "script compares it in events/s", output)
 
     def test_a_second_thread_pinned_elsewhere_is_named_as_such(self):
         self.edit("results/spsc_pipeline_debian_12302019.md",
@@ -537,7 +565,7 @@ class ResultsTable(unittest.TestCase):
         self.edit(HEADLINE_BACKTEST, "| T-BT-1 | ≥ 2.00 M", "| T-BT-9 | ≥ 2.00 M")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
-        self.assertIn("0 T-BT-1 rows in its targets table, not 1", output)
+        self.assertIn("T-BT-9 is not a backtest target this script knows the unit of", output)
 
     def test_an_arm_that_allocated_misses_the_alloc_headline(self):
         self.edit(ORACLE, "| `paged_flat` | PASS | PASS | FAIL, 18,958 crossed and 1,018 locked | "

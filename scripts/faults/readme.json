@@ -1,6 +1,7 @@
 {
   "area": "readme",
   "tree": [
+    "BENCHMARKS.md",
     "README.md",
     "RESULTS.md",
     "results",
@@ -257,7 +258,7 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "        elif name.startswith(\"backtest_\"):\n            backtests.append(backtest_row(name, text))\n",
+          "old": "        elif name.startswith(\"backtest_\"):\n            backtests.append(backtest_row(root, name, text))\n",
           "new": "        elif name.startswith(\"backtest_\"):\n            pass\n"
         }
       ],
@@ -937,8 +938,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "| 4.57 M messages/s |",
-          "new": "| 4.75 M messages/s |"
+          "old": "| 4,677,511 engine events/s;",
+          "new": "| 4,677,512 engine events/s;"
         }
       ],
       "command": [
@@ -1165,6 +1166,69 @@
       ],
       "expect": {
         "signature": "FAIL: test_the_mac_figure_follows_its_file"
+      }
+    },
+    {
+      "id": "readme-backtest-t-bt-1-in-messages",
+      "breaks": "T-BT-1 is compared in messages/s, not in events/s, the unit of its bar",
+      "check": "test_results_table.py test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "\"T-BT-1\": (\"Engine events/s\", \"events/s\"),",
+          "new": "\"T-BT-1\": (\"Replay rate, messages/s\", \"events/s\"),"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-backtest-verdict-unheld",
+      "breaks": "a backtest verdict that the median in the bar's unit does not bear out passes",
+      "check": "test_results_table.py test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        if judged != verdict:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-backtest-unit-unheld",
+      "breaks": "a bar whose unit in BENCHMARKS.md is not the one compared passes",
+      "check": "test_results_table.py test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if unit != compared:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
+        "exit": 1
       }
     }
   ]

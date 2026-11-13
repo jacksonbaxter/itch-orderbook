@@ -161,14 +161,14 @@ Book designs. Each row is one design's results file, with its ratio over each ma
 | `paged-linked` | ram | not tracked | 12302019 | debian | pinned to core 4 | 2,542,188 | 1.85% | 399.71 | 648.3 | 1.25× | 1.39× | `e0f9bb8101a2` | [results/bench_book_paged-linked_ram_debian_12302019.md](results/bench_book_paged-linked_ram_debian_12302019.md) |
 | `paged-linked` | ram | not tracked | 12302019 | macOS (M4 Max) | not pinned | 11,934,176 | 5.28% | 85.14 | 648.7 | 2.07× | 2.23× | `9934df5c3b7a` | [results/bench_book_paged-linked_ram_mac_12302019.md](results/bench_book_paged-linked_ram_mac_12302019.md) |
 
-The backtester. Each row is one workload's results file: T-BT-1 replays the whole day with a quoting strategy, T-BT-3 queuetruth's four symbols with its shadow orders. Each file says what one event is and what its rate is over, beside its source's.
+The backtester. Each row is one workload's results file: T-BT-1 replays the whole day with a quoting strategy, T-BT-3 queuetruth's four symbols with its shadow orders. Each file says what one event is and what its rate is over, beside its source's. Each bar is in the unit BENCHMARKS.md gives it, T-BT-1's in events a second and T-BT-3's in ITCH messages a second, and the verdict compares the median in that unit, which the CV is of; the other rate is beside it, labelled.
 
-| Workload | Target | Day | Host | Pinning | Median messages/s | CV | Engine events/s | Verdict | Commit | File |
-|---|---|---|---|---|---|---|---|---|---|---|
-| quoting | T-BT-1 | 12302019 | debian | pinned to core 4 | 4,570,542 | 0.98% | 4,677,511 | met | `c8ca2e2dd09b` | [results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md) |
-| quoting | T-BT-1 | 12302019 | macOS (M4 Max) | not pinned | 16,792,852 | 2.06% | 17,185,873 | host differs | `4fa6701df1cf` | [results/backtest_quoting_mac_12302019.md](results/backtest_quoting_mac_12302019.md) |
-| shadow | T-BT-3 | 12302019 | debian | pinned to core 4 | 3,354,119 | 2.06% | 7,160,445 | missed | `c8ca2e2dd09b` | [results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md) |
-| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | 7,804,654 | 0.24% | 16,661,541 | met | `55978750888d` | [results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md) |
+| Workload | Target | Day | Host | Pinning | Bar | Median, in the bar's unit | CV | The other rate | Verdict | Commit | File |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| quoting | T-BT-1 | 12302019 | debian | pinned to core 4 | ≥ 2.00 M events/s | 4,677,511 events/s | 0.98% | 4,570,542 messages/s | met | `c8ca2e2dd09b` | [results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md) |
+| quoting | T-BT-1 | 12302019 | macOS (M4 Max) | not pinned | ≥ 2.00 M events/s | 17,185,873 events/s | 2.06% | 16,792,852 messages/s | host differs | `4fa6701df1cf` | [results/backtest_quoting_mac_12302019.md](results/backtest_quoting_mac_12302019.md) |
+| shadow | T-BT-3 | 12302019 | debian | pinned to core 4 | ≥ 4.61 M messages/s | 3,354,119 messages/s | 2.06% | 7,160,445 engine events/s | missed | `c8ca2e2dd09b` | [results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md) |
+| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | ≥ 4.61 M messages/s | 7,804,654 messages/s | 0.24% | 16,661,541 engine events/s | met | `55978750888d` | [results/backtest_shadow_mac_12302019.md](results/backtest_shadow_mac_12302019.md) |
 
 The browser demo's replay of one symbol's extract, in a browser and natively on the same Mac, the same C++ on each side. Rates come from whole replays only: the browser cannot time one message. The bar was set in Google Chrome, so another browser neither meets nor misses it.
 

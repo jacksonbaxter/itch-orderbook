@@ -27,6 +27,13 @@ beside it: its bar, what was measured, the host and the verdict all come from th
 headline row whose file gives it no verdict of met or missed is refused, and so is a
 headline with no missed target in it.
 
+A backtest target is compared in its bar's unit. T-BT-1's bar is in events a second and
+T-BT-3's in ITCH messages a second. The bar and its unit are read from BENCHMARKS.md, and a
+unit there other than BACKTEST_UNITS' is refused. The median in that unit comes from the
+file's Summary row (`Engine events/s` or `Replay rate, messages/s`), with the other rate
+labelled beside it. A met or missed verdict that this median does not bear out against the
+bar is refused.
+
 Each violation prints as `results_table: FAIL <place>: <detail>`.
 
 Exit codes: 0 passed, 1 a page differs or a results file cannot be read, 2 bad usage.
@@ -349,18 +356,83 @@ def book_row(name, text):
             f"`{commit}`", source(name))
 
 
-def backtest_row(name, text):
-    """One backtester run: its workload, its rate and its target's verdict."""
+# Each backtest target's bar is in the unit BENCHMARKS.md gives it: T-BT-1's in events a
+# second, T-BT-3's in ITCH messages a second. Here, the row of a results file's Summary that
+# holds the median in that unit, and the unit. backtest_bar holds the unit to BENCHMARKS.md.
+BACKTEST_UNITS = {"T-BT-1": ("Engine events/s", "events/s"),
+                  "T-BT-3": ("Replay rate, messages/s", "messages/s")}
+BENCHMARKS_PAGE = "BENCHMARKS.md"
+BACKTEST_SECOND = {"Engine events/s": ("Replay rate, messages/s", "messages/s"),
+                   "Replay rate, messages/s": ("Engine events/s", "engine events/s")}
+
+
+def backtest_bar(root, target):
+    """A backtest target's bar from BENCHMARKS.md, in millions, and its unit; TableError if
+    the unit there is not the one BACKTEST_UNITS compares the target in."""
+    path = root / BENCHMARKS_PAGE
+    if not path.is_file():
+        raise TableError(f"{BENCHMARKS_PAGE}: not there, and {target}'s bar is read from it")
+    match = re.search(rf"^### {re.escape(target)}: .*\n- \*\*Target:\*\* ≥ ([0-9.]+) M "
+                      r"(?:ITCH )?(events|messages)/s\b", path.read_text(encoding="utf-8"),
+                      re.MULTILINE)
+    if match is None:
+        raise TableError(f"{BENCHMARKS_PAGE}: no bar in M events/s or M messages/s for {target}")
+    unit = f"{match[2]}/s"
+    compared = BACKTEST_UNITS.get(target, ("", "no unit"))[1]
+    if unit != compared:
+        raise TableError(f"{BENCHMARKS_PAGE}: {target}'s bar is in {unit}, and this script "
+                         f"compares it in {compared}")
+    return float(match[1]), unit
+
+
+def backtest_judged(root, name, text):
+    """A backtest file's target, its bar, the median in the bar's unit from the file's
+    Summary, and the verdict, which must agree with that median against the bar."""
+    cells = find(r"^\| (T-BT-\d) \| [^|]+ \| [^|]+ \| ([^|]+) \|$", text, name)
+    target, verdict_text = cells[1], cells[2].strip()
+    if target not in BACKTEST_UNITS:
+        raise TableError(f"results/{name}: {target} is not a backtest target this script "
+                         "knows the unit of")
+    bar, unit = backtest_bar(root, target)
+    label = BACKTEST_UNITS[target][0]
+    median = summary_median(text, label, name)
+    verdict, _, gap = verdict_text.partition(": ")
+    if verdict in ("met", "missed"):
+        judged = "met" if float(median.replace(",", "")) >= bar * 1e6 else "missed"
+        if judged != verdict:
+            raise TableError(f"results/{name}: {target} is {verdict} in the file, and its "
+                             f"{label} median, {median}, has it {judged} against ≥ {bar:.2f} M "
+                             f"{unit}")
+    return target, f"≥ {bar:.2f} M {unit}", label, median, verdict, gap
+
+
+def backtest_row(root, name, text):
+    """One backtester run: its workload, its bar, the median in the bar's unit with its CV,
+    the other rate labelled beside it, and the target's verdict."""
     workload = header_field(text, "workload", name)
     host = header_field(text, "host", name)
     pinning = find(r"^- pinning: (.*?)(?::|$)", text, name)[1]
-    rate = summary_median(text, "Replay rate, messages/s", name)
-    spread = table_row("Replay rate, messages/s", text, name)[3]
-    events = summary_median(text, "Engine events/s", name)
-    target = find(r"^\| (T-BT-\d) \| [^|]+ \| [^|]+ \| ([^|:]+)", text, name)
+    target, bar, label, median, verdict, _ = backtest_judged(root, name, text)
+    spread = table_row(label, text, name)[3]
+    other_label, other_unit = BACKTEST_SECOND[label]
+    other = f"{summary_median(text, other_label, name)} {other_unit}"
     commit = header_commit(text, name)
-    return (workload, target[1], day_of(name), host, pinning, rate, spread, events,
-            target[2].strip(), f"`{commit}`", source(name))
+    return (workload, target, day_of(name), host, pinning, bar,
+            f"{median} {BACKTEST_UNITS[target][1]}", spread, other, verdict, f"`{commit}`",
+            source(name))
+
+
+def backtest_headline(target, name, text, root):
+    """T-BT-1's headline row: the median in the bar's unit against the bar, the other rate
+    labelled after it, and the verdict, held to that median."""
+    found, bar, label, median, verdict, gap = backtest_judged(root, name, text)
+    if found != target:
+        raise TableError(f"results/{name}: its targets table is {found}'s, not {target}'s")
+    other_label, other_unit = BACKTEST_SECOND[label]
+    unit = BACKTEST_UNITS[target][1]
+    measured = (f"{median} {'engine ' if label == 'Engine events/s' else ''}{unit}; "
+                f"{summary_median(text, other_label, name)} {other_unit}")
+    return bar, measured, debian_host(text, name), verdict, gap if unit in gap else ""
 
 
 def spsc_rows(name, text):
@@ -526,7 +598,7 @@ def generate(root):
             books.append(book_row(name, text))
             rows = []
         elif name.startswith("backtest_"):
-            backtests.append(backtest_row(name, text))
+            backtests.append(backtest_row(root, name, text))
             rows = []
         elif name.startswith("spsc_"):
             spsc += spsc_rows(name, text)
@@ -573,9 +645,12 @@ def generate(root):
         lines += ["", "The backtester. Each row is one workload's results file: T-BT-1 replays the "
                       "whole day with a quoting strategy, T-BT-3 queuetruth's four symbols with "
                       "its shadow orders. Each file says what one event is and what its rate is "
-                      "over, beside its source's.", ""]
-        lines += markdown_table(("Workload", "Target", "Day", "Host", "Pinning",
-                                 "Median messages/s", "CV", "Engine events/s", "Verdict",
+                      "over, beside its source's. Each bar is in the unit BENCHMARKS.md gives it, "
+                      "T-BT-1's in events a second and T-BT-3's in ITCH messages a second, and "
+                      "the verdict compares the median in that unit, which the CV is of; the "
+                      "other rate is beside it, labelled.", ""]
+        lines += markdown_table(("Workload", "Target", "Day", "Host", "Pinning", "Bar",
+                                 "Median, in the bar's unit", "CV", "The other rate", "Verdict",
                                  "Commit", "File"), backtests)
     if browsers:
         lines += ["", "The browser demo's replay of one symbol's extract, in a browser and natively "
@@ -740,7 +815,7 @@ HEADLINE = (
      "Every symbol's L3 book rebuilt over a whole day"),
     ("T-LAT-2", "bench_book_paged-flat_ram_debian_12302019.md", book_headline,
      "Latency of one book update, over every message of the day"),
-    ("T-BT-1", "backtest_quoting_debian_12302019.md", targets_headline,
+    ("T-BT-1", "backtest_quoting_debian_12302019.md", backtest_headline,
      "The backtester replaying the whole day with a quoting strategy and its queue model"),
     ("T-SPSC-3", "spsc_pipeline_debian_12302019.md", targets_headline,
      "Parser and book on two cores through the SPSC ring, against one thread doing both"),
@@ -766,7 +841,11 @@ def headline(root, chosen=HEADLINE, unjudged=UNJUDGED):
         if not path.is_file():
             raise TableError(f"results/{name}: the headline's {target} row names it, and it is "
                              "not there")
-        bar, measured, host, verdict, gap = reader(target, name, path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        # The backtester's bar and its unit come from BENCHMARKS.md, under the root.
+        bar, measured, host, verdict, gap = (reader(target, name, text, root)
+                                             if reader is backtest_headline else
+                                             reader(target, name, text))
         if verdict not in ("met", "missed"):
             raise TableError(f"results/{name}: {target}'s verdict is {verdict!r}, neither met "
                              "nor missed, so it cannot be in the headline")
