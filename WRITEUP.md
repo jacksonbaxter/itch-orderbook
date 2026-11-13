@@ -272,7 +272,9 @@ T-TRADE-3 fails on four days and T-TRADE-5 on two, each a row of the table below
 
 Every check is tested like code: the fault matrix plants a bug and requires the named check to fail with the expected message, the number gate that holds this page included.
 
-> **Final review, placeholder.** This paragraph is filled in at the end of the final review, with what the review found in the code, the checks and the documents, and what was fixed. It is not written yet.
+### The final review
+
+Before this page was written, reviewers who did not write the code went through it area by area. What they found was either fixed, with a test and a fault-matrix row that shows the fix holding, or is listed in docs/NOTES.md under "Found by the final review and left as it is", with the reason; the fixes are listed in the section above that one. The review of the documents themselves, this page included, comes after this pass.
 
 ## What was tried and did not work
 
