@@ -4200,6 +4200,299 @@
       "expect": {
         "signature": "FAIL: test_the_command_shown_carries_the_core_and_its_sibling"
       }
+    },
+    {
+      "id": "bench-book-verdict-unjudged",
+      "breaks": "A book target's verdict is never compared with its bar and figures",
+      "check": "test_bench_results.py test_a_verdict_the_figure_does_not_bear_out",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "            yield from check_book_target(text, fields, cells)\n",
+          "new": "            pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_verdict_the_figure_does_not_bear_out"
+      }
+    },
+    {
+      "id": "bench-book-miss-list-unchecked",
+      "breaks": "A book miss may name figures that meet the bar, or leave out one that misses",
+      "check": "test_bench_results.py test_a_verdict_the_figure_does_not_bear_out",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if None in gaps or not fails <= set(listed) or set(listed) & (passes | set(below)) or \\\n                not listed or listed != [name for name in names if name in listed]:\n",
+          "new": "        if None in gaps or not listed:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_verdict_the_figure_does_not_bear_out"
+      }
+    },
+    {
+      "id": "bench-book-gap-unchecked",
+      "breaks": "A book miss's gap need not be the figure's distance from its bar",
+      "check": "test_bench_results.py test_a_gap_that_is_not_the_figure_s_distance_from_its_bar",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "            if gap_bounds[0] > max(distance) or gap_bounds[1] < min(distance):\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_gap_that_is_not_the_figure_s_distance_from_its_bar"
+      }
+    },
+    {
+      "id": "bench-book-measured-untied",
+      "breaks": "A book target's measured figure need not be the file's own median",
+      "check": "test_bench_results.py test_a_measured_figure_that_is_not_the_file_s_median",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if source is None or source == BELOW_FLOOR or \\\n                bounds[0] > source[1] or bounds[1] < source[0]:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_measured_figure_that_is_not_the_file_s_median"
+      }
+    },
+    {
+      "id": "bench-book-below-floor-untied",
+      "breaks": "A figure the file's table resolves may be called below floor in the targets table",
+      "check": "test_bench_results.py test_a_figure_the_table_holds_called_below_floor",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "            if source != BELOW_FLOOR:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_figure_the_table_holds_called_below_floor"
+      }
+    },
+    {
+      "id": "bench-book-bar-cell-unchecked",
+      "breaks": "A book file's Bar cell may give another bar than BOOK_BARS",
+      "check": "test_bench_results.py test_a_bar_cell_that_is_not_the_bar",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if bar_cell != want:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_bar_cell_that_is_not_the_bar"
+      }
+    },
+    {
+      "id": "bench-book-delta-unchecked",
+      "breaks": "A macOS figure's distance from an x86 bar need not be its own",
+      "check": "test_bench_results.py test_a_distance_from_an_x86_bar_that_is_not_the_figure_s",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if given[0] > bounds[1] - bar or given[1] < bounds[0] - bar:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_distance_from_an_x86_bar_that_is_not_the_figure_s"
+      }
+    },
+    {
+      "id": "bench-book-host-differs-anywhere",
+      "breaks": "Host differs may stand for a bar the host can judge",
+      "check": "test_bench_results.py test_host_differs_where_the_bar_can_judge",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if not host_differs:\n        yield \"target-verdict-wrong\"",
+          "new": "    if False:\n        yield \"target-verdict-wrong\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_host_differs_where_the_bar_can_judge"
+      }
+    },
+    {
+      "id": "bench-book-spreads-unchecked",
+      "breaks": "A book table's median may lie outside its min and max",
+      "check": "test_bench_results.py test_a_median_outside_its_min_and_max",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "                if not low <= median <= high:\n",
+          "new": "                if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_median_outside_its_min_and_max"
+      }
+    },
+    {
+      "id": "bench-bars-compare-off",
+      "breaks": "A copied bar that BENCHMARKS.md's words do not give passes",
+      "check": "test_bench_results.py test_a_bar_changed_in_benchmarks_md_alone_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        elif words not in line:\n",
+          "new": "        elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_bar_changed_in_benchmarks_md_alone_is_refused"
+      }
+    },
+    {
+      "id": "bench-bars-benchmarks-moved",
+      "breaks": "T-BT-1's bar changes in BENCHMARKS.md and not in check_results.py",
+      "check": "check_results.py --bars BENCHMARKS.md",
+      "inputs": [
+        {
+          "file": "BENCHMARKS.md",
+          "op": "replace_text",
+          "old": "≥ 2.0 M events/s",
+          "new": "≥ 2.5 M events/s"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "--bars",
+        "{tree}/BENCHMARKS.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL bar-differs T-BT-1: BACKTEST_TARGETS quoting: ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-bars-backtest-copy-moved",
+      "breaks": "T-BT-3's bar changes in check_results.py and not in BENCHMARKS.md",
+      "check": "check_results.py --bars BENCHMARKS.md",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "\"shadow\": (\"T-BT-3\", 4.61, False)}",
+          "new": "\"shadow\": (\"T-BT-3\", 4.16, False)}"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "--bars",
+        "{tree}/BENCHMARKS.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL bar-differs T-BT-3: BACKTEST_TARGETS shadow: ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-bars-book-copy-moved",
+      "breaks": "T-LAT-2's p99.9 bar changes in BOOK_BARS and not in BENCHMARKS.md",
+      "check": "check_results.py --bars BENCHMARKS.md",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "(\"p99.9\", \"<=\", 874)",
+          "new": "(\"p99.9\", \"<=\", 847)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "--bars",
+        "{tree}/BENCHMARKS.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL bar-differs T-LAT-2: BOOK_BARS: ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-bars-spsc-copy-moved",
+      "breaks": "T-SPSC-3's bar changes in SPSC_COMPARISONS and not in BENCHMARKS.md",
+      "check": "check_results.py --bars BENCHMARKS.md",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "\"value\": PIPELINE_RATIO, \"op\": \"<=\", \"bar\": 1.31,",
+          "new": "\"value\": PIPELINE_RATIO, \"op\": \"<=\", \"bar\": 1.13,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "--bars",
+        "{tree}/BENCHMARKS.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL bar-differs T-SPSC-3: SPSC_COMPARISONS pipelined time / single-threaded time: ",
+        "exit": 1
+      }
     }
   ]
 }

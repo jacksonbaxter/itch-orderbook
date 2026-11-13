@@ -75,7 +75,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MAX_JOBS = max(1, min(6, int(os.environ.get("ITCH_CHECK_JOBS", "6"))))
 DEFAULT_TIMEOUT = 300
 DEFAULT_TREE = ("CMakeLists.txt", "CMakePresets.json", ".clang-tidy", ".github", "cmake", "include",
-                "src", "tests", "tools", "fuzz", "bench", "scripts")
+                "src", "tests", "tools", "fuzz", "bench", "scripts", "BENCHMARKS.md")
 GTEST_LIBRARY = "lib/libgtest.a"
 
 DETECTED = "detected"

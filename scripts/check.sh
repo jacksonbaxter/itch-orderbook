@@ -125,7 +125,8 @@ stage_bench() {
     python_test scripts/test_simd_asm_audit.py &&
     python_test scripts/test_zen1_events.py &&
     python_test scripts/gate_numbers.py &&
-    python_test scripts/check_predictions.py || return 1
+    python_test scripts/check_predictions.py &&
+    python_test scripts/check_results.py --bars BENCHMARKS.md || return 1
   results=$(find results -name 'bench_*.md' -o -name 'backtest_*.md' -o -name 'spsc_*.md' \
     -o -name 'alloc_*.md' -o -name 'walks_ladder_*.md')
   if [ -n "$results" ]; then

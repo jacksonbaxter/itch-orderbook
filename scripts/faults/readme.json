@@ -1252,6 +1252,52 @@
         "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-book-headline-miss-called-met",
+      "breaks": "The headline book file says T-LAT-2 is met at p50 140.14 ns against p50 ≤ 121 (r7-1's plant)",
+      "check": "check_results.py on the book file",
+      "inputs": [
+        {
+          "file": "results/bench_book_paged-flat_ram_debian_12302019.md",
+          "op": "replace_text",
+          "old": "| missed: p50 by 19.14 ns, p99 by 288.86 ns, p99.9 by 598.00 ns |",
+          "new": "| met |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/results/bench_book_paged-flat_ram_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL target-verdict-wrong bench_book_paged-flat_ram_debian_12302019\\.md: T-LAT-2 is met, yet \\['p50', 'p99', 'p99\\.9'\\] miss",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-book-median-outside-its-range",
+      "breaks": "The headline book file's throughput median is moved outside its min and max (r7-1's plant)",
+      "check": "check_results.py on the book file",
+      "inputs": [
+        {
+          "file": "results/bench_book_paged-flat_ram_debian_12302019.md",
+          "op": "replace_text",
+          "old": "| Throughput, messages/s | 5,145,430 |",
+          "new": "| Throughput, messages/s | 9,145,430 |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/check_results.py",
+        "{tree}/results/bench_book_paged-flat_ram_debian_12302019.md"
+      ],
+      "expect": {
+        "signature": "check_results: FAIL summary-inconsistent bench_book_paged-flat_ram_debian_12302019\\.md: Summary, Throughput, messages/s: median 9,145,430 outside",
+        "exit": 1
+      }
     }
   ]
 }
