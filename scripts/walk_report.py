@@ -5,8 +5,10 @@
     walk_report.py check FILE...
 
 `counts` writes the counts file from bench_walks records, one record a schedule of shadow
-orders, the first being T-BT-3's: for each schedule the walks, their level and order steps,
-by site and a message, and the depth of the side at each walk in power-of-two buckets. The
+orders, the first being T-BT-3's, its header the first record's: every record must give the
+same host, CPU, kernel, compiler, flags, commit, dataset and extract, or they are refused.
+For each schedule it gives the walks, their level and order steps, by site and a message,
+and the depth of the side at each walk in power-of-two buckets. The
 counts are untimed and the same on any host; each record's counted engine gave the engine's
 own stats and event hash, and a record that did not is refused.
 
@@ -59,6 +61,9 @@ SITE_NAMES = {
     "rest": "rest (an order arriving)",
 }
 ALL = "all sites"
+# What every record must give alike: the header prints the first record's.
+SAME_FIELDS = ("host", "cpu", "kernel", "compiler", "flags", "commit", "dataset",
+               "dataset_sha256")
 TBT3 = {"shadow_orders": 100_000, "shadow_span_ns": 23_340_000_000_000,
         "shadow_life_ns": 60_000_000_000}
 COUNT_TITLE = "The walks of the backtester's simulated levels, counted"
@@ -269,6 +274,13 @@ def table(text, title):
 
 
 def render_counts(records, command):
+    for field in SAME_FIELDS:
+        values = {record["header"][field] for record in records}
+        if len(values) != 1:
+            raise Refused(f"the records differ in {field}: {sorted(values)}")
+    if len({record["symbols"] for record in records}) != 1:
+        raise Refused(f"the records ran different extracts: "
+                      f"{sorted({record['symbols'] for record in records})}")
     first = records[0]
     header = first["header"]
     lines = [f"# {COUNT_TITLE}, on {header['host']}, {header['dataset'].split('.')[0]}", "",
@@ -598,7 +610,11 @@ def main(argv=None):
             + ["python3 -B scripts/walk_report.py counts --out "
                f"results/{args.out.name} " + " ".join(f"<raw>/{path.name}"
                                                       for path in args.records)])
-        text = render_counts(records, command)
+        try:
+            text = render_counts(records, command)
+        except Refused as error:
+            print(f"walk_report: refused: {error}", file=sys.stderr)
+            return 2
         violations = check_text(text)
         if violations:
             for code, detail in violations:

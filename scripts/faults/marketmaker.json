@@ -14,6 +14,7 @@
     "bench",
     "scripts",
     "results",
+    "BENCHMARKS.md",
     "README.md",
     "RESULTS.md"
   ],
@@ -1558,8 +1559,8 @@
       "mutations": [
         {
           "file": "scripts/mm_report.py",
-          "old": "        if figures[\"checks\"].get(name) != \"pass\":\n",
-          "new": "        if figures[\"checks\"].get(name) not in (\"pass\", \"FAIL\"):\n"
+          "old": "        if result != \"pass\":\n",
+          "new": "        if result not in (\"pass\", \"FAIL\"):\n"
         }
       ],
       "command": [
@@ -1737,6 +1738,174 @@
       "expect": {
         "signature": "mm_report: FAIL total-not-ledger AMD, AS Base",
         "exit": 1
+      }
+    },
+    {
+      "id": "mm-report-sigma-in-dollars",
+      "breaks": "The parameters table gives σ in dollars per √second, not ticks",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "| σ, ticks/√s |",
+          "new": "| σ, $/√s |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_sigma_is_in_ticks_per_root_second"
+      }
+    },
+    {
+      "id": "mm-pnl-sigma-unit-edited",
+      "breaks": "results/mm_pnl_12302019.md gives σ in dollars per √second again",
+      "check": "mm_report.py check",
+      "mutations": [
+        {
+          "file": "results/mm_pnl_12302019.md",
+          "old": "| σ, ticks/√s |",
+          "new": "| σ, $/√s |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/mm_report.py",
+        "check",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "mm_report: FAIL differs-from-output mm_pnl_12302019\\.md: line 16",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-report-only-committed-checks-read",
+      "breaks": "A failed check under a name the report does not list is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "    for name, result in figures[\"checks\"].items():\n        if result != \"pass\":\n",
+          "new": "    for name, result in figures[\"checks\"].items():\n        if result != \"pass\" and name in CHECK_LINES:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_failed_check_the_report_does_not_know"
+      }
+    },
+    {
+      "id": "mm-report-check-names-not-held",
+      "breaks": "A run missing a committed check line is accepted",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "    if missing or unknown:\n",
+          "new": "    if unknown:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_committed_check_missing"
+      }
+    },
+    {
+      "id": "mm-report-duplicate-check-overwrites",
+      "breaks": "A second line for one check overwrites the first, so a FAIL followed by a pass reads as a pass",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "            if name in run[\"checks\"]:\n",
+          "new": "            if name in run[\"checks\"] and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_two_lines_for_one_check_are_unusable"
+      }
+    },
+    {
+      "id": "mm-report-run-exit-status-unread",
+      "breaks": "A run whose exit status the check lines do not explain is published",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "            if failed != (done.returncode == 1):\n",
+          "new": "            if failed != (done.returncode == 1) and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_an_exit_status_the_check_lines_do_not_explain"
+      }
+    },
+    {
+      "id": "mm-pnl-unlisted-check-failed",
+      "breaks": "results/mm_pnl_12302019.md carries a failed check under a name the report does not list",
+      "check": "mm_report.py check",
+      "mutations": [
+        {
+          "file": "results/mm_pnl_12302019.md",
+          "old": "check identity: pass\n27.04 real        18.41 user         1.52 sys\n",
+          "new": "check identity: pass\ncheck queue position sane: FAIL\n27.04 real        18.41 user         1.52 sys\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/mm_report.py",
+        "check",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "mm_report: FAIL tool-check-failed AMD, AS Base: check queue position sane: FAIL",
+        "exit": 1
+      }
+    },
+    {
+      "id": "mm-report-render-ignores-raw-dir",
+      "breaks": "render --raw-dir renders from the file's own blocks, not the raw records",
+      "check": "test_mm_report.py",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "        outputs = (raw_outputs(evaluation, args.raw_dir, text) if args.raw_dir\n",
+          "new": "        outputs = (raw_outputs(evaluation, args.raw_dir, text) if False\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_tool_output_comes_from_the_raw_records"
       }
     }
   ]

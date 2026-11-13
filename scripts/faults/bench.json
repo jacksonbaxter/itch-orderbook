@@ -3576,8 +3576,8 @@
       "mutations": [
         {
           "file": "scripts/counts_report.py",
-          "old": "            if not total == listed == whole:",
-          "new": "            if False:"
+          "old": "            if not total == said == pass_:\n",
+          "new": "            if False:\n"
         }
       ],
       "command": [
@@ -3979,8 +3979,8 @@
       "mutations": [
         {
           "file": "scripts/counts_report.py",
-          "old": "        if not total == listed == whole:\n            found.append((\"not-tiled\", f\"{name}: slots add up",
-          "new": "        if False:\n            found.append((\"not-tiled\", f\"{name}: slots add up"
+          "old": "            if not total == said == pass_:\n",
+          "new": "            if False:\n"
         }
       ],
       "command": [
@@ -4279,6 +4279,869 @@
       ],
       "expect": {
         "signature": "FAIL: test_a_file_run_again_under_a_later_prediction"
+      }
+    },
+    {
+      "id": "bench-variants-count-unsaid",
+      "breaks": "variants_report prints a variant that ran in fewer processes than its prediction planned with its bare count, not set against the plan",
+      "check": "test_variants_report.py test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "    return str(reps) if reps >= PLANNED else f\"{reps} of {PLANNED} planned\"",
+          "new": "    return str(reps)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-variants-range-from-one-process",
+      "breaks": "variants_report prints a min, a max and a CV of 0.00% for a variant that ran in one process",
+      "check": "test_variants_report.py test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "    if f[\"reps\"] < 2:\n        return [ONE]",
+          "new": "    if False:\n        return [ONE]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-variants-check-ignores-short-variants",
+      "breaks": "variants_report --check no longer reads the counts from the table of passes, so a file that prints a figure from fewer processes than planned without its count, or a range from one process, passes",
+      "check": "test_variants_report.py test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/variants_report.py",
+          "old": "        if count >= PLANNED:\n            continue",
+          "new": "        if True:\n            continue"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_variants_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_variant_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-age-summary-count-unsaid",
+      "breaks": "counts_report's summary of a file by type and age from fewer processes than P-0025 planned leaves the count out",
+      "check": "test_counts_report.py test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "               if len(summaries) < PLANNED else \"\"))",
+          "new": "               if False else \"\"))"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-range-from-one-process",
+      "breaks": "counts_report prints a min and a max equal to the figure for a count from one process",
+      "check": "test_counts_report.py test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    if len(values) < 2:\n        return [ONE, ONE]",
+          "new": "    if False:\n        return [ONE, ONE]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-check-ignores-short-counts",
+      "breaks": "counts_report --check accepts a file from fewer processes than planned whose summary and medians do not say so",
+      "check": "test_counts_report.py test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    if count < PLANNED:\n        said = ",
+          "new": "    if False:\n        said = "
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-check-accepts-range-from-one",
+      "breaks": "counts_report --check accepts a min and max printed from one process",
+      "check": "test_counts_report.py test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if at is not None and cells[at] != ONE:",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_from_fewer_processes_than_planned_says_so_and_claims_no_range",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-late-check-unsaid",
+      "breaks": "counts_report says nothing when the machine check after began long after the run ended, as P-0025's hash-flat check did",
+      "check": "test_counts_report.py test_each_machine_check_is_placed_against_the_run",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if seconds > CHECK_GAP:\n            text +=",
+          "new": "        if False:\n            text +="
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_machine_check_is_placed_against_the_run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-check-ignores-placement",
+      "breaks": "counts_report --check no longer holds each machine check to its time against the run",
+      "check": "test_counts_report.py test_each_machine_check_is_placed_against_the_run",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    return found + count_violations(text, fields) + placement_violations(text, fields)",
+          "new": "    return found + count_violations(text, fields)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_machine_check_is_placed_against_the_run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-check-inside-the-run",
+      "breaks": "counts_report accepts a machine check after that began before the run ended",
+      "check": "test_counts_report.py test_each_machine_check_is_placed_against_the_run",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    if lead < 0 or gap < 0:\n        raise",
+          "new": "    if False:\n        raise"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_machine_check_is_placed_against_the_run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-alike-unsaid",
+      "breaks": "a flamegraph's table ranks a template's instantiations apart without saying that merged they would enter the list",
+      "check": "test_flame_report.py test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    alike = alike_lines(stacks)\n",
+          "new": "    alike = []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-alike-merge-takes-one",
+      "breaks": "the merged instantiations are ranked by the largest one's samples alone, so a merge that would enter the list goes unsaid",
+      "check": "test_flame_report.py test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "        merged_own = sum(own[frame] for frame in members)\n",
+          "new": "        merged_own = own[members[0]]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-alike-drops-the-wrong-frame",
+      "breaks": "the sentence names the hottest frame, not the last, as the one a merge would push out of the list",
+      "check": "test_flame_report.py test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "`{brief(listed[-1])}` would drop",
+          "new": "`{brief(listed[0])}` would drop"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_instantiations_printed_alike_are_ranked_apart_and_the_merge_is_said",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-machine-check-unread",
+      "breaks": "A run whose machine check failed is rendered like any other",
+      "check": "test_chase_report.py",
+      "mutations": [
+        {
+          "file": "scripts/chase_report.py",
+          "old": "        if failure is not None:\n            raise ValueError(f\"run {run}'s machine check",
+          "new": "        if False:\n            raise ValueError(f\"run {run}'s machine check"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_chase_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_failed_machine_check_refuses_the_run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-record-check-failed",
+      "breaks": "One run's machine check holds a FAIL line",
+      "check": "chase_report.py machine-check refusal",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/check-2.out",
+          "op": "replace_text",
+          "old": "machine_check: pass pin-readback",
+          "new": "machine_check: FAIL pin-readback"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--record",
+        "{tree}/tests/fixtures/chase/run-1.json",
+        "{tree}/tests/fixtures/chase/run-2.json",
+        "{tree}/tests/fixtures/chase/run-3.json",
+        "--load",
+        "{tree}/tests/fixtures/chase/run-1.err",
+        "{tree}/tests/fixtures/chase/run-2.err",
+        "{tree}/tests/fixtures/chase/run-3.err",
+        "--machine-check",
+        "{tree}/tests/fixtures/chase/check-1.out",
+        "{tree}/tests/fixtures/chase/check-2.out",
+        "{tree}/tests/fixtures/chase/check-3.out",
+        "--sysfs",
+        "{tree}/tests/fixtures/chase/sysfs_events.txt",
+        "--prediction",
+        "P-0002",
+        "--out",
+        "{tree}/tests/fixtures/chase/generated.md"
+      ],
+      "expect": {
+        "signature": "run 2's machine check did not pass",
+        "exit": 2
+      }
+    },
+    {
+      "id": "bench-chase-file-check-count",
+      "breaks": "--check takes one passing machine check for three runs",
+      "check": "test_chase_report.py",
+      "mutations": [
+        {
+          "file": "scripts/chase_report.py",
+          "old": "    if not runs.isdigit() or passes != int(runs):",
+          "new": "    if not runs.isdigit() or passes < 1:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_chase_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_one_run_without_a_passing_machine_check",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-file-check-failed",
+      "breaks": "A published file's machine check output holds a FAIL line beside three passes",
+      "check": "chase_report.py --check machine-check-failed",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/published.md",
+          "op": "replace_text",
+          "old": "```\n\n## measure.sh load lines",
+          "new": "machine_check: FAIL governor: core 4 runs schedutil\n```\n\n## measure.sh load lines"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--check",
+        "{tree}/tests/fixtures/chase/published.md"
+      ],
+      "expect": {
+        "signature": "chase_report: FAIL machine-check-failed: machine_check: FAIL governor",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-written-unchecked",
+      "breaks": "The report writes a file that its own --check would refuse",
+      "check": "test_chase_report.py",
+      "mutations": [
+        {
+          "file": "scripts/chase_report.py",
+          "old": "    violations = check_published(text)\n    if violations:\n        report_violations(violations)\n        raise",
+          "new": "    violations = []\n    if violations:\n        report_violations(violations)\n        raise"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_chase_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_that_fails_its_own_check_is_not_written",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-header-unchecked",
+      "breaks": "Runs whose headers differ are rendered under the first run's",
+      "check": "test_chase_report.py",
+      "mutations": [
+        {
+          "file": "scripts/chase_report.py",
+          "old": "        if len(values) != 1:\n            raise ValueError(f\"the records differ in {field}",
+          "new": "        if False:\n            raise ValueError(f\"the records differ in {field}"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_chase_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_runs_that_differ_in_their_header_are_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-chase-record-other-commit",
+      "breaks": "One run of three was built at another commit",
+      "check": "chase_report.py header equality",
+      "inputs": [
+        {
+          "file": "tests/fixtures/chase/run-2.json",
+          "op": "json_set",
+          "path": [
+            "header",
+            "commit"
+          ],
+          "value": "fedcba987654 (exported by debian_sync.sh)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/chase_report.py",
+        "--record",
+        "{tree}/tests/fixtures/chase/run-1.json",
+        "{tree}/tests/fixtures/chase/run-2.json",
+        "{tree}/tests/fixtures/chase/run-3.json",
+        "--load",
+        "{tree}/tests/fixtures/chase/run-1.err",
+        "{tree}/tests/fixtures/chase/run-2.err",
+        "{tree}/tests/fixtures/chase/run-3.err",
+        "--machine-check",
+        "{tree}/tests/fixtures/chase/check-1.out",
+        "{tree}/tests/fixtures/chase/check-2.out",
+        "{tree}/tests/fixtures/chase/check-3.out",
+        "--sysfs",
+        "{tree}/tests/fixtures/chase/sysfs_events.txt",
+        "--prediction",
+        "P-0002",
+        "--out",
+        "{tree}/tests/fixtures/chase/generated.md"
+      ],
+      "expect": {
+        "signature": "the records differ in commit",
+        "exit": 2
+      }
+    },
+    {
+      "id": "bench-counts-header-unchecked",
+      "breaks": "Count records whose headers differ are rendered under the first record's",
+      "check": "test_counts_report.py",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if len(values) != 1:\n            raise ReportError(f\"the records differ in {field}",
+          "new": "        if False:\n            raise ReportError(f\"the records differ in {field}"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_records_that_differ_in_their_header_are_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-plain-header-unchecked",
+      "breaks": "A record counted by type alone from another build sits beside the type-age records",
+      "check": "test_counts_report.py",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    same_header(records + list(plain or []))",
+          "new": "    same_header(records)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_records_that_differ_in_their_header_are_refused \\(__main__\\.CountsByAge",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-figures-unrecomputed",
+      "breaks": "--check takes the figures as printed and never works them out again from the totals",
+      "check": "test_counts_report.py test_a_median_and_verdict_typed_in_together_are_caught",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if want != got:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_median_and_verdict_typed_in_together_are_caught ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-one-repetition-published",
+      "breaks": "Only repetition 1's totals are published again",
+      "check": "test_counts_report.py test_a_clean_report_passes_its_own_check",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "    return out + totals_sections(summaries, \"Totals by type\", \"type\")",
+          "new": "    return out + totals_sections(summaries[:1], \"Totals by type\", \"type\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_clean_report_passes_its_own_check \\(__main__\\.CountsReport",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-plain-totals-unpublished",
+      "breaks": "A type-age file leaves out the totals of the records by type alone beside it",
+      "check": "test_counts_report.py test_a_clean_report_passes_its_own_check",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "            + totals_sections(plain_summaries, \"Totals by type alone\", \"type\"))",
+          "new": "            + [])"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_clean_report_passes_its_own_check \\(__main__\\.CountsByAge",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-repetition-count-unchecked",
+      "breaks": "--check accepts a file missing a repetition's totals",
+      "check": "test_counts_report.py test_check_works_every_figure_out_again_from_each_repetition",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if (name == \"repetitions\" and not count) or fields.get(name) != str(count):",
+          "new": "        if name == \"repetitions\" and not count:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_works_every_figure_out_again_from_each_repetition ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-header-figures-unchecked",
+      "breaks": "--check leaves the header's counts and the age summary unchecked against the totals",
+      "check": "test_counts_report.py test_check_works_every_figure_out_again_from_each_repetition",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if fields.get(name) != value:\n            found.append((\"figures-differ\", f\"header",
+          "new": "        if False:\n            found.append((\"figures-differ\", f\"header"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_works_every_figure_out_again_from_each_repetition ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-shares-unrecomputed",
+      "breaks": "--check takes the hottest frames' shares as printed",
+      "check": "test_flame_report.py test_check_works_the_shares_out_again_from_the_folded_stacks",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    if hottest_body != section_text(hottest_lines(stacks)):",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_works_the_shares_out_again_from_the_folded_stacks ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-ratio-unrecomputed",
+      "breaks": "--check takes the frame-pointer ratio as printed",
+      "check": "test_flame_report.py test_check_works_the_ratio_out_again_from_the_two_builds",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "        if fields.get(\"frame_pointer_ratio\") != f\"{ratio:.4f}\":",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_works_the_ratio_out_again_from_the_two_builds ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-delta-section-unrecomputed",
+      "breaks": "--check takes the frame-pointer build's table and sentence as printed",
+      "check": "test_flame_report.py test_check_works_the_ratio_out_again_from_the_two_builds",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "        if (check_results.section(text, \"The frame-pointer build\") or \"\").strip() != \\\n                section_text(lines):",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_works_the_ratio_out_again_from_the_two_builds ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-summary-unrecomputed",
+      "breaks": "--check takes the summary as printed",
+      "check": "test_flame_report.py test_check_works_the_shares_out_again_from_the_folded_stacks",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    if fields.get(\"summary\") != summary:",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_works_the_shares_out_again_from_the_folded_stacks ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-svg-unmatched",
+      "breaks": "Frames the SVG draws are never held to the folded stacks",
+      "check": "test_flame_report.py test_every_frame_the_svg_draws_is_a_node_of_the_folded_stacks",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    return sorted(f\"{name} ({count:,} samples)\" for name, count in (drawn - held).elements())",
+          "new": "    return []"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_frame_the_svg_draws_is_a_node_of_the_folded_stacks ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-folded-unwritten",
+      "breaks": "render leaves the folded stacks out, so nothing can be worked out again",
+      "check": "test_flame_report.py test_a_debian_graph_renders_and_passes_its_own_check",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    args.out.with_suffix(\".folded\").write_text(folded, encoding=\"utf-8\")\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_debian_graph_renders_and_passes_its_own_check ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-folded-private-unchecked",
+      "breaks": "--check never looks for private text in the folded stacks",
+      "check": "test_flame_report.py test_check_catches_a_private_name_in_the_folded_stacks",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    leaked = private_found(raw)\n",
+          "new": "    leaked = None\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_catches_a_private_name_in_the_folded_stacks ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-load-end-from-the-type-age-processes",
+      "breaks": "A type-age file's end load line is the last type-age process's, not the run's last",
+      "check": "test_counts_report.py test_the_load_lines_bracket_every_process",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "            f\"- measure_load_end: {span_of(lines + plain_lines)[1]}\",",
+          "new": "            f\"- measure_load_end: {lines[-1][1]}\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_load_lines_bracket_every_process ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-load-line-unplaced-unchecked",
+      "breaks": "--check takes load lines that do not bracket the run",
+      "check": "test_counts_report.py test_the_load_lines_bracket_every_process",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if at is None or at.group(1) != fields.get(said):",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_load_lines_bracket_every_process ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-arm-unnamed",
+      "breaks": "The summary gives the frame-pointer ratio as the graph's own build's",
+      "check": "test_flame_report.py test_the_summary_names_the_arm_the_two_builds_ran",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "                    f\"throughput, both measured on `{arm}`\")",
+          "new": "                    \"throughput\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_summary_names_the_arm_the_two_builds_ran ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-arms-unmatched",
+      "breaks": "A delta from builds of two different arms is published",
+      "check": "test_flame_report.py test_the_summary_names_the_arm_the_two_builds_ran",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    if not normal[\"design\"] or normal[\"design\"] != frame_pointer[\"design\"]:",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_summary_names_the_arm_the_two_builds_ran ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-no-ok-after-a-failure",
+      "breaks": "--check prints no ok for any file after one that fails",
+      "check": "test_flame_report.py test_check_says_ok_for_each_file_that_passes_after_one_that_fails",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "        if not found:\n            print(f\"flame_report: ok {path.name}\")\n        failed = failed or bool(found)",
+          "new": "        failed = failed or bool(found)\n        if not failed:\n            print(f\"flame_report: ok {path.name}\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_says_ok_for_each_file_that_passes_after_one_that_fails ",
+        "exit": 1
       }
     }
   ]

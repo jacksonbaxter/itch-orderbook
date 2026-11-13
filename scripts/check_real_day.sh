@@ -25,10 +25,12 @@
 # oracle_report.py separates that from a broken book, which is status 1.
 #
 # The trade-print checks take a few minutes a day and a few hundred MB beyond the mapped file.
-# They read the SEC MIDAS zip of the day's quarter and data/CrossStats<YYYYMMDD>.txt. A day
-# with no cross file is reported as T-TRADE-2 not available, and says so in its results, and
-# so is a day of another venue than Nasdaq, since CrossStats lists Nasdaq's own crosses. A
-# missing MIDAS zip is a failure.
+# They read the SEC MIDAS zip of the day's quarter and the day's CrossStats file, which the
+# manifest pins as crossstats_<YYYYMMDD>. A pinned cross file that is missing is a failure, as a
+# missing day file is, and the file is checked against its pinned SHA-256 (fetch_data.py
+# --verify-only) before the tool reads it. A day whose manifest pins no cross file is reported
+# as T-TRADE-2 not available, and says so in its results, and so is a day of another venue than
+# Nasdaq, since CrossStats lists Nasdaq's own crosses. A missing MIDAS zip is a failure.
 #
 # The map check replays the day through the map book, the T-DESIGN-1 baseline, beside the
 # fast book's default arm, once on a fresh heap and once on an aged one, and passes only if
@@ -169,9 +171,19 @@ print(found[0])
 ' "$1" "$2"
 }
 
+# The day's CrossStats file as data/<its pinned filename>, or nothing if the manifest pins none.
+cross_file() {
+  python3 -B -c '
+import json, sys
+ref = json.load(open("scripts/data_manifest.json"))["references"].get("crossstats_" + sys.argv[1])
+if ref is not None:
+    print("data/" + ref["filename"])
+' "$1"
+}
+
 trades() {
   local day=$1 date=${1:4:4}${1:0:4} log symbols
-  local file cross=data/CrossStats${date}.txt member rows exchange
+  local file cross member rows exchange
   local months=(jan feb mar apr may jun jul aug sep oct nov dec)
   local month=${months[$((10#${day:0:2} - 1))]}
   member=$month${day:6:2}.csv
@@ -182,6 +194,7 @@ trades() {
   fi
   exchange=$(midas_exchange "$day") || return 1
   rows=$(midas_rows "$date" "$exchange") || return 1
+  cross=$(cross_file "$date") || return 1
   local args=("$file" --date "$date" --midas "build/reference/$member" --midas-rows "$rows")
   local report_args=() arm first= flags word
   if [ "$exchange" != Nasdaq ]; then
@@ -189,10 +202,18 @@ trades() {
     args+=(--exchange "$exchange")
     echo "real day: $day is a feed of MIDAS's $exchange, so T-TRADE-2 is not available"
     report_args=(--no-cross-file)
-  elif [ -f "$cross" ]; then
+  elif [ -n "$cross" ]; then
+    if [ ! -f "$cross" ]; then
+      echo "real day: $day has no cross file $cross, and the manifest pins crossstats_$date" >&2
+      return 1
+    fi
+    if ! python3 -B -I scripts/fetch_data.py --ref "crossstats_$date" --verify-only; then
+      echo "real day: $day's cross file $cross is not the one the manifest pins" >&2
+      return 1
+    fi
     args+=(--crossstats "$cross")
   else
-    echo "real day: $day has no cross file, so T-TRADE-2 is not available"
+    echo "real day: $day has no cross file in the manifest, so T-TRADE-2 is not available"
     report_args=(--no-cross-file)
   fi
   for arm in "${arms[@]}"; do

@@ -256,7 +256,7 @@ struct Stats {
   std::uint64_t broken_trades = 0;
   std::uint64_t expired = 0;
   std::uint64_t no_order_slot = 0;
-  std::uint64_t after_end = 0;  // Sends refused once the input and its round trip ended.
+  std::uint64_t after_end = 0;  // Sends refused once finish() has run every pending event.
   std::uint64_t overflows = 0;
   std::uint64_t fee_errors = 0;
 };
@@ -426,12 +426,12 @@ class Engine {
     }
   }
 
-  // The end of input. Every pending event runs, and the strategy may still act, until one
-  // round trip after the last message: L_md + L_compute + L_oe + L_resp, by which time
-  // everything that message caused has reached the strategy. A wake set past that is
-  // dropped, so a strategy that always sets one cannot keep the run alive. Then the open
-  // orders expire at the time of the last event, their reports are delivered, and any
-  // send from then on is refused with an invalid id.
+  // The end of input. Every pending event runs. Only wakes are bounded: one set later than a
+  // round trip after the last message, L_md + L_compute + L_oe + L_resp, is dropped, so a
+  // strategy that always sets one cannot keep the run alive. Reports are not: a request made on
+  // a report arrives and reports in turn, so one that answers every report keeps this running.
+  // Then the open orders expire at the time of the last event, their reports are delivered,
+  // and any send from then on is refused with an invalid id, and cancels and replaces dropped.
   template <Strategy<Book> S>
   void finish(S& strategy) {
     wake_limit_ =

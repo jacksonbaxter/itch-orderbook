@@ -514,6 +514,74 @@ class UdpReportTest(unittest.TestCase):
         self.assertIn("derived-differs", self.codes(text.replace("| 101.1 |", "| 101.3 |"),
                                                     name))
 
+    def test_the_latency_medians_are_of_the_unrounded_times(self):
+        # S3's p50 10.004 and 10.014 µs print 10.00 and 10.01, whose median prints 10.00; the
+        # times' own median is 10.009, which prints 10.01. U2's 9.996 and 10.006 print the same
+        # cells, and their median, 10.001, prints 10.00: the cells alone allow either.
+        with scratch() as folder:
+            root = Path(folder)
+            run = Written(root / "latency", manifest(
+                "latency", "P-0702-20261111T120000Z",
+                ceiling={"messages_per_s": 3_000_000, "source": "run P-0700-20261111T090000Z"},
+                rate_cap=2_700_000))
+            for mode, times in (("S3", (10_004, 10_014)), ("U2", (9_996, 10_006))):
+                for repetition, p50 in enumerate(times, 1):
+                    record = receive_record(mode, 40_000)
+                    record["latency"]["p50_ns"] = p50
+                    run.add(mode, "latency-low", record, target=40_000, repetition=repetition)
+            name = "udp_latency_debian_12302019.md"
+            text = self.render([smoke_run(root / "smoke"), run.save()], name)[0]
+        latency = udp_report.check_results.section(text, "Latency")
+        self.assertIn("| S3 | latency-low | 40,000 | 2 | 10.01 | 60.00 | 100.00 | 180.00 |",
+                      latency)
+        self.assertIn("| U2 | latency-low | 40,000 | 2 | 10.00 | 60.00 | 100.00 | 180.00 |",
+                      latency)
+        self.assertEqual(udp_report.check_published(text, name), [])
+        # The two cells leave the median anywhere from 10.00 to 10.01; nothing outside it.
+        self.assertIn("derived-differs", self.codes(text.replace("| 2 | 10.01 |", "| 2 | 10.03 |"),
+                                                    name))
+
+    def confirmed_at(self, achieved, repetitions=2):
+        """A bisection whose confirmation runs each achieved `achieved` msg/s."""
+        with scratch() as folder:
+            dirs = [smoke_run(Path(folder) / "smoke"), ceiling_run(Path(folder) / "ceiling"),
+                    bisect_run(Path(folder) / "bisect", confirm=(True,) * repetitions)]
+            for path in dirs[2].glob("bisect-*.json"):
+                record = json.loads(path.read_text(encoding="utf-8"))
+                if record["send"]["target_rate"] == TARGET:
+                    record["send"]["achieved_messages_per_s"] = achieved
+                    path.write_text(json.dumps(record), encoding="utf-8")
+            return self.render(dirs)[0]
+
+    def test_the_pace_is_the_unrounded_rate_s(self):
+        # 0.99 x 2,547,190 is 2,521,718.1. A run at 2,521,718.4 kept pace, as the driver
+        # counts it, and prints 2,521,718, below the line.
+        text = self.confirmed_at(2_521_718.4)
+        self.assertIn("Verdict: **PASS**, U5 lossless at 2,547,190 msg/s in 2 of 2 repetitions",
+                      text)
+        self.assertIn("| 2,521,718 |", text)
+        self.assertEqual(udp_report.check_published(text, NAME), [])
+        # The printed rate leaves the pace either way, so check takes the verdict either gives,
+        self.assertEqual(self.codes(text.replace("in 2 of 2 repetitions", "in 1 of 2 repetitions")
+                                    .replace("**PASS**", "**FAIL**")
+                                    .replace("T-URING-2 PASS", "T-URING-2 FAIL")), [])
+        # and none a printed rate rules out.
+        run = first_run(text, "confirm")
+        self.assertIn("derived-differs", self.codes(edit_cell(text, run, "Achieved msgs/s",
+                                                              "2,521,000")))
+        self.assertIn("derived-differs", self.codes(text.replace("in 2 of 2 repetitions",
+                                                                 "in 0 of 2 repetitions")))
+        text = self.confirmed_at(2_521_717.4)
+        self.assertIn("Verdict: **FAIL**, U5 lossless at 2,547,190 msg/s in 0 of 2 repetitions",
+                      text)
+        self.assertEqual(udp_report.check_published(text, NAME), [])
+
+    def test_check_tries_no_more_than_ten_rows_whose_pace_is_open(self):
+        text = self.confirmed_at(2_521_718.4, repetitions=11)
+        self.assertIn("pace-unreadable", self.codes(text))
+        self.assertEqual(udp_report.check_published(self.confirmed_at(2_521_718.4, 10), NAME),
+                         [])
+
     def test_check_refuses_anything_private(self):
         text = self.bisect_text()
         planted = "/" + "home" + "/someone/raw"  # In two pieces, so that the gate passes.

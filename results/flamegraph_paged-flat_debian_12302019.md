@@ -28,7 +28,7 @@ Host: **debian**. Numbers from the two hosts are never mixed.
 - prediction: P-0018
 - run_id: P-0018-20261105T080854Z
 - frame_pointer_ratio: 0.9755
-- summary: 105,077 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 42.14% self; the frame-pointer build at 0.9755 of the normal build's throughput
+- summary: 105,077 samples, cycles:u at 999 Hz, the hottest frame `itch::FastBook<…>::apply` at 42.14% self; the frame-pointer build at 0.9755 of the normal build's throughput, both measured on `paged-flat`
 
 ## What it shows
 
