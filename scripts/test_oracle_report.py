@@ -25,6 +25,7 @@ SCRATCH.mkdir(exist_ok=True)
 GOOD_DAY = {
     "name": "day.bin",
     "unpacked_sha256": "ab",
+    "unpacked_bytes": 120,
     "messages": 4,
     "per_type_counts": {"A": 2, "U": 1, "S": 1},
 }
@@ -39,6 +40,7 @@ oracle_index hash
 oracle_levels linked
 oracle_hash_every 2
 oracle_exhaustive 0
+bytes 120
 elapsed_seconds 1.5
 frames 4
 type A 2
@@ -55,6 +57,10 @@ write_set_violations 0
 move_reports 5
 moved_checks 1
 empty_moved_checks 0
+order_slot_checks 7
+level_slot_checks 12
+slot_violations 0
+index_checks 4
 periodic_hash_checks 2
 final_hash_checks 1
 production_hash_checks 3
@@ -251,6 +257,7 @@ class OracleReport(unittest.TestCase):
     def test_a_crossed_day_is_reported_failing_with_its_own_code(self):
         self.log = self.log.replace("verdict T-INV-2 PASS crossed=0 locked=0",
                                     "verdict T-INV-2 FAIL crossed=5 locked=0")
+        self.log = self.log.replace("t_inv2_crossed 0", "t_inv2_crossed 5")
         code, output = self.run_report()
         self.assertEqual(code, 3, output)
         self.assertIn("T-INV-2 FAIL", output)
@@ -260,6 +267,8 @@ class OracleReport(unittest.TestCase):
     def test_a_leftover_only_day_keeps_the_t_inv_2_code_and_passes_t_inv_3(self):
         self.log = self.log.replace("verdict T-INV-2 PASS crossed=0 locked=0",
                                     "verdict T-INV-2 FAIL crossed=5 locked=1")
+        self.log = self.log.replace("t_inv2_crossed 0\nt_inv2_locked 0",
+                                    "t_inv2_crossed 5\nt_inv2_locked 1")
         self.log = self.log.replace("t_inv3_leftover crossed=0 locked=0",
                                     "t_inv3_leftover crossed=5 locked=1")
         self.log = self.log.replace("t_inv2_market_open_and_t crossed=0 locked=0",
@@ -274,6 +283,7 @@ class OracleReport(unittest.TestCase):
     def test_a_new_cross_is_a_hard_failure_shown_in_full(self):
         self.log = self.log.replace("verdict T-INV-2 PASS crossed=0 locked=0",
                                     "verdict T-INV-2 FAIL crossed=1 locked=0")
+        self.log = self.log.replace("t_inv2_crossed 0", "t_inv2_crossed 1")
         self.log = self.log.replace("verdict T-INV-3 PASS violations=0",
                                     "verdict T-INV-3 FAIL violations=1")
         self.log = self.log.replace("t_inv3_new crossed=0 locked=0",
@@ -333,11 +343,13 @@ class OracleReport(unittest.TestCase):
         text = (self.root / "out.md").read_text(encoding="utf-8")
         self.assertIn("None. The figures this file could set beside ours were published for "
                       "12302019 only.", text)
-        self.assertNotIn("| book messages, crossed | carteret |", text)
+        self.assertNotIn("| book messages, crossed | [carteret]", text)
         self.day_name = report.COMPARISON_DAY
         code, _ = self.run_report()
         text = (self.root / "out.md").read_text(encoding="utf-8")
-        self.assertIn("| book messages, crossed | carteret | 8,580 |", text)
+        self.assertIn("| book messages, crossed | [carteret](https://github.com/EkanshSingh401/"
+                      "carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/design.md), "
+                      "design.md record 036, Evidence, row Total | 8,580 |", text)
         self.assertNotIn("None. The figures", text)
 
     def test_a_log_with_a_missing_counter_cannot_be_used(self):
@@ -396,6 +408,157 @@ class OracleReport(unittest.TestCase):
         self.log = self.log.replace("oracle_index hash\n", "")
         code, _ = self.run_report()
         self.assertEqual(code, 2)
+
+    def written(self):
+        return (self.root / "out.md").read_text(encoding="utf-8")
+
+    def test_a_hard_failure_is_written_as_one(self):
+        # review r10-1: the file printed the tool's PASS beside the report's own FAIL.
+        self.log = self.log.replace("write_set_violations 0", "write_set_violations 5")
+        self.assert_fails("write-set violations")
+        written = self.written()
+        self.assertIn("## What failed\n", written)
+        self.assertIn("\n- write-set violations\n", written)
+        self.assertIn("## T-ORACLE-1: the reference book agrees after every message\n\n"
+                      "Verdict: **FAIL**", written)
+        self.assertIn("| `hash_linked` | FAIL | PASS | PASS, 0 crossed and 0 locked | PASS | PASS |",
+                      written)
+        self.assertNotIn("Verdict: **PASS**\n\n| Check | Count |", written)
+
+    def test_a_clean_day_has_no_failure_section(self):
+        self.run_report()
+        self.assertNotIn("What failed", self.written())
+
+    def test_another_arms_failure_marks_that_arm_only(self):
+        log, alloc = self.other_arm()
+        self.arms = [(log.replace("divergences 0", "divergences 3"), alloc)]
+        self.assert_fails("arm paged_flat: divergences")
+        written = self.written()
+        self.assertIn("- arm paged_flat: divergences", written)
+        self.assertIn("| `paged_flat` | FAIL |", written)
+        self.assertIn("| `hash_linked` | PASS |", written)
+
+    def test_arms_that_disagree_are_not_said_to_agree(self):
+        log, alloc = self.other_arm()
+        self.arms = [(log.replace("peak_live_orders 2", "peak_live_orders 3"), alloc)]
+        self.assert_fails("arm paged_flat disagrees with hash_linked on peak_live_orders")
+        written = self.written()
+        self.assertNotIn("Every line its logs print agrees", written)
+        self.assertIn("The arms do not all agree with `hash_linked`", written)
+        self.assertIn("- arm paged_flat disagrees with hash_linked on peak_live_orders", written)
+        self.arms = [self.other_arm()]
+        self.run_report()
+        self.assertIn("Every line its logs print agrees with `hash_linked`'s", self.written())
+
+    def test_t_inv_2_is_held_to_its_counts(self):
+        # review r10-3: a PASS word over a crossed day.
+        self.log = self.log.replace("t_inv2_crossed 0", "t_inv2_crossed 18958")
+        self.assert_fails("T-INV-2 verdict is PASS, and 18958 crossed and 0 locked make it FAIL")
+        self.assertIn("Verdict, strict: **FAIL**", self.written())
+        self.log = GOOD_LOG.replace("t_inv2_locked 0", "t_inv2_locked 1")
+        self.assert_fails("make it FAIL")
+        self.log = GOOD_LOG.replace("verdict T-INV-2 PASS", "verdict T-INV-2 FAIL")
+        self.assert_fails("T-INV-2 verdict is FAIL, and 0 crossed and 0 locked make it PASS")
+
+    def test_t_alloc_1_is_held_to_its_count(self):
+        # review r10-3: a PASS word over seven allocations.
+        self.alloc = self.alloc.replace("fast_allocations 0", "fast_allocations 7")
+        self.assert_fails("T-ALLOC-1 verdict is PASS, and 7 fast-book allocations make it FAIL")
+        written = self.written()
+        self.assertIn("## T-ALLOC-1: no allocation on the hot path\n\nVerdict: **FAIL**", written)
+        self.assertIn("| Fast book | 4 | 7 |", written)
+
+    def test_gnu_time_figures_are_read(self):
+        # review r10-4: check_real_day.sh runs GNU time -v on Linux.
+        gnu = ("\tUser time (seconds): 8.25\n"
+               "\tSystem time (seconds): 1.00\n"
+               "\tElapsed (wall clock) time (h:mm:ss or m:ss): 1:02.50\n"
+               "\tMaximum resident set size (kbytes): 1048576\n")
+        self.log = self.log.replace("        9.00 real         8.00 user         1.00 sys\n"
+                                    "          1073741824  maximum resident set size\n"
+                                    "          2147483648  peak memory footprint\n", gnu)
+        code, output = self.run_report()
+        self.assertEqual(code, 0, output)
+        written = self.written()
+        self.assertIn("- Elapsed: 1.5 s in the replay, 62.5 s real, 8.2 s user", written)
+        self.assertIn("- Maximum RSS: 1.00 GiB, which includes the mapped file", written)
+        self.assertIn("- Peak memory footprint: unavailable\n", written)
+        self.assertEqual(report.wall_clock("1:02:03.5"), 3723.5)
+
+    def test_absent_time_figures_are_unavailable_never_zero(self):
+        self.log = self.log.split("        9.00 real")[0]
+        self.arms = [self.other_arm()]
+        code, output = self.run_report()
+        self.assertEqual(code, 0, output)
+        written = self.written()
+        self.assertIn("- Elapsed: 1.5 s in the replay, unavailable real, unavailable user",
+                      written)
+        self.assertIn("- Maximum RSS: unavailable, which includes the mapped file", written)
+        self.assertIn("- Peak memory footprint: unavailable\n", written)
+        self.assertIn("| 1.5 | unavailable | unavailable | `log` |", written)
+        self.assertNotIn("0.00", written)
+
+    def test_a_log_of_another_file_fails(self):
+        # review r10-7: the header names the pinned file, so the log must have replayed it.
+        self.log = self.log.replace("bytes 120", "bytes 1234")
+        self.assert_fails("bytes 1234, manifest 120: not the pinned file")
+
+    def test_a_slot_violation_fails(self):
+        self.log = self.log.replace("slot_violations 0", "slot_violations 1")
+        self.assert_fails("slot violations")
+
+    def test_each_named_reference_must_be_looked_up(self):
+        self.log = self.log.replace("index_checks 4", "index_checks 3")
+        self.assert_fails("index_checks 3, the manifest's messages name 4")
+
+    def test_slot_checks_must_cover_the_writes(self):
+        self.log = self.log.replace("level_slot_checks 12", "level_slot_checks 7")
+        self.assert_fails("fewer level slots checked than choke-point writes")
+        self.log = GOOD_LOG.replace("order_slot_checks 7", "order_slot_checks 4")
+        self.assert_fails("order_slot_checks 4, fewer than the 5")
+
+    def test_a_flat_arm_checks_each_block_against_the_arena(self):
+        log, alloc = self.other_arm()
+        flat = log.replace("empty_moved_checks 0", "empty_moved_checks 0\nlevel_relocations 3")
+        self.arms = [(flat.replace("index_checks 4", "index_checks 4\narena_checks 3"), alloc)]
+        self.assert_fails("arm paged_flat: fewer arena checks than first blocks and relocations")
+        self.arms = [(flat.replace("index_checks 4", "index_checks 4\narena_checks 5"), alloc)]
+        code, output = self.run_report()
+        self.assertEqual(code, 0, output)
+        self.arms = [(flat, alloc)]
+        code, _ = self.run_report()
+        self.assertEqual(code, 2)
+
+    def test_the_slot_and_index_counts_are_shown(self):
+        self.run_report()
+        written = self.written()
+        self.assertIn("| Order slots checked as a write went through them | 7 |", written)
+        self.assertIn("| Level slots checked as a write went through them | 12 |", written)
+        self.assertIn("| Slot violations | 0 |", written)
+        self.assertIn("| References named, each looked up in both books | 4 |", written)
+
+    def test_each_published_figure_names_its_source(self):
+        # review r10-9 and D5.
+        self.day_name = report.COMPARISON_DAY
+        self.run_report()
+        written = self.written()
+        design = ("[carteret](https://github.com/EkanshSingh401/carteret/blob/"
+                  "3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/design.md), design.md record "
+                  "036, Evidence")
+        self.assertIn(f"| not in state T, locked | {design}, row Symbol not in state `T` | 62 |",
+                      written)
+        self.assertIn(f"| reopening window, locked | {design}, row Inside a reopening window | 8 |",
+                      written)
+        self.assertIn(f"| inside 09:30 to 16:00, locked | {design}, row In continuous trading | "
+                      "70 |", written)
+        self.assertIn(f"| reopening windows | {design}, the line under the table | 33 |", written)
+        self.assertIn("| market open and T, checks | [Ironbook]"
+                      "(https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/"
+                      "e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/bench/results/"
+                      "full_day_validation.txt), full_day_validation.txt, line crossed-book "
+                      "checks (continuous) | 136,896,897 |", written)
+        self.assertIn("[BENCHMARKS.md's T-INV-2 entry]"
+                      "(../BENCHMARKS.md#t-inv-2-the-book-is-never-crossed)", written)
 
     def test_flags_keep_no_paths(self):
         commands = self.root / "compile_commands.json"

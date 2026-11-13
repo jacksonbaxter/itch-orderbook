@@ -77,6 +77,17 @@ class WriteCounter {
   void on_level_move(std::uint16_t /*locate*/, Side /*side*/, Price4 /*price*/) noexcept {
     ++writes_;
   }
+  // The slots a write goes through: the calls above have already counted the write.
+  template <class Id, class Levels>
+  static constexpr void on_level_slot(const Id& /*id*/, std::uint32_t /*level*/,
+                                      const Levels& /*levels*/) noexcept {}
+  template <class Orders>
+  static constexpr void on_order_slot(std::uint32_t /*level*/, std::uint32_t /*order*/,
+                                      const Orders& /*orders*/) noexcept {}
+  static constexpr void on_level_take(std::uint32_t /*level*/) noexcept {}
+  static constexpr void on_level_give_back(std::uint32_t /*level*/) noexcept {}
+  static constexpr void on_order_take(std::uint32_t /*order*/) noexcept {}
+  static constexpr void on_order_give_back(std::uint32_t /*order*/) noexcept {}
   [[nodiscard]] std::uint64_t writes() const noexcept { return writes_; }
 
  private:

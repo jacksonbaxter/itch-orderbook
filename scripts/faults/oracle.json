@@ -132,8 +132,8 @@
       "mutations": [
         {
           "file": "include/itch/book.hpp",
-          "old": "                                     .older = level.back,\n                                     .newer = kNoIndex};\n    if (level.back == kNoIndex) {\n      level.front = write.order;\n    } else {\n      orders_[level.back].newer = write.order;\n    }\n    level.back = write.order;\n",
-          "new": "                                     .older = kNoIndex,\n                                     .newer = level.front};\n    if (level.front == kNoIndex) {\n      level.back = write.order;\n    } else {\n      orders_[level.front].older = write.order;\n    }\n    level.front = write.order;\n"
+          "old": "                                     .older = level.back,\n                                     .newer = kNoIndex};\n    if (level.back == kNoIndex) {\n      level.front = write.order;\n    } else {\n      observer_.on_order_slot(write.level, level.back, orders_);\n      orders_[level.back].newer = write.order;\n    }\n    level.back = write.order;\n",
+          "new": "                                     .older = kNoIndex,\n                                     .newer = level.front};\n    if (level.front == kNoIndex) {\n      level.back = write.order;\n    } else {\n      observer_.on_order_slot(write.level, level.front, orders_);\n      orders_[level.front].older = write.order;\n    }\n    level.front = write.order;\n"
         }
       ],
       "build": {
@@ -260,7 +260,7 @@
       "mutations": [
         {
           "file": "include/itch/book.hpp",
-          "old": "    if (levels_[level].front == kNoIndex) {\n      write_level(id, {.op = LevelOp::close, .level = level});\n      levels_.give_back(level);\n    }\n",
+          "old": "    if (levels_[level].front == kNoIndex) {\n      write_level(id, {.op = LevelOp::close, .level = level});\n      observer_.on_level_give_back(level);\n      levels_.give_back(level);\n    }\n",
           "new": ""
         }
       ],
@@ -523,8 +523,8 @@
         },
         {
           "file": "include/itch/book.hpp",
-          "old": "                                     .older = level.back,\n                                     .newer = kNoIndex};\n    if (level.back == kNoIndex) {\n      level.front = write.order;\n    } else {\n      orders_[level.back].newer = write.order;\n    }\n    level.back = write.order;\n",
-          "new": "                                     .older = kNoIndex,\n                                     .newer = level.front};\n    if (level.front == kNoIndex) {\n      level.back = write.order;\n    } else {\n      orders_[level.front].older = write.order;\n    }\n    level.front = write.order;\n"
+          "old": "                                     .older = level.back,\n                                     .newer = kNoIndex};\n    if (level.back == kNoIndex) {\n      level.front = write.order;\n    } else {\n      observer_.on_order_slot(write.level, level.back, orders_);\n      orders_[level.back].newer = write.order;\n    }\n    level.back = write.order;\n",
+          "new": "                                     .older = kNoIndex,\n                                     .newer = level.front};\n    if (level.front == kNoIndex) {\n      level.back = write.order;\n    } else {\n      observer_.on_order_slot(write.level, level.front, orders_);\n      orders_[level.front].older = write.order;\n    }\n    level.front = write.order;\n"
         }
       ],
       "build": {
@@ -631,7 +631,7 @@
         },
         {
           "file": "include/itch/book.hpp",
-          "old": "    if (levels_[level].front == kNoIndex) {\n      write_level(id, {.op = LevelOp::close, .level = level});\n      levels_.give_back(level);\n    }\n",
+          "old": "    if (levels_[level].front == kNoIndex) {\n      write_level(id, {.op = LevelOp::close, .level = level});\n      observer_.on_level_give_back(level);\n      levels_.give_back(level);\n    }\n",
           "new": ""
         },
         {
@@ -662,8 +662,53 @@
     },
     {
       "id": "oracle-off-touched",
-      "breaks": "The whole touched-level compare off, and D does not unlink, on hash with linked levels, where no move compare runs on the level first",
+      "breaks": "The whole touched-level compare off, and D does not unlink, on hash with linked levels, where no move compare runs on the level first, with the per-message index compare off, which would find the order D left behind first",
       "check": "the BBO compare or the hash",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    for (std::size_t i = 0; i < outcome.touched.count; ++i) {\n      compare_level(outcome.touched.levels[i]);\n    }\n",
+          "new": ""
+        },
+        {
+          "file": "include/itch/book.hpp",
+          "old": "      return ApplyStatus::locate_mismatch;\n    }\n    remove_order(order);\n    return ApplyStatus::applied;\n  }\n\n  // The new order keeps",
+          "new": "      return ApplyStatus::locate_mismatch;\n    }\n    return ApplyStatus::applied;\n  }\n\n  // The new order keeps"
+        },
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_index(payload);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--index",
+        "hash",
+        "--levels",
+        "linked"
+      ],
+      "expect": {
+        "signature": "touched_checks 0\\n[\\s\\S]*DIVERGENCE kind=(bbo|periodic-hash) "
+      }
+    },
+    {
+      "id": "oracle-index-catches-d-not-unlinking",
+      "breaks": "The whole touched-level compare off, and D does not unlink, on hash with linked levels",
+      "check": "the index compare, on the first message that names the deleted reference",
       "mutations": [
         {
           "file": "tests/oracle/diff.hpp",
@@ -697,7 +742,7 @@
         "linked"
       ],
       "expect": {
-        "signature": "touched_checks 0\\n[\\s\\S]*DIVERGENCE kind=(bbo|periodic-hash) "
+        "signature": "DIVERGENCE kind=index message=\\d+ type=. reference=\\d+ "
       }
     },
     {
@@ -1457,8 +1502,8 @@
       "mutations": [
         {
           "file": "tests/oracle/invariants.hpp",
-          "old": "    end_leftover(header.stock_locate, header.timestamp_ns, inv3_ended_by_cross_);\n",
-          "new": ""
+          "old": "    end_leftover(locate, timestamp_ns, inv3_ended_by_cross_);\n",
+          "new": "    static_cast<void>(timestamp_ns);\n"
         }
       ],
       "build": {
@@ -1633,7 +1678,7 @@
       "mutations": [
         {
           "file": "scripts/oracle_report.py",
-          "old": "    require(log[\"verdicts\"].get(\"T-INV-3\") == \"PASS\", \"T-INV-3 verdict is not PASS\")\n",
+          "old": "    require(log[\"verdicts\"].get(\"T-INV-3\") == \"PASS\", \"T-INV-3 verdict is not PASS\", \"T-INV-3\")\n",
           "new": ""
         }
       ],
@@ -1673,7 +1718,7 @@
       "mutations": [
         {
           "file": "tests/oracle/invariants.hpp",
-          "old": "    state_[locate] = m.trading_state;\n",
+          "old": "    state_[locate] = trading_state;\n",
           "new": "    state_[locate] = 'T';\n"
         }
       ],
@@ -1702,8 +1747,8 @@
       "mutations": [
         {
           "file": "tests/oracle/invariants.hpp",
-          "old": "    if (m.event_code == 'Q') {\n      market_open_ = true;\n",
-          "new": "    if (m.event_code == 'Q') {\n      market_open_ = false;\n"
+          "old": "    if (event_code == 'Q') {\n      market_open_ = true;\n",
+          "new": "    if (event_code == 'Q') {\n      market_open_ = false;\n"
         }
       ],
       "build": {
@@ -1731,8 +1776,8 @@
       "mutations": [
         {
           "file": "tests/oracle/invariants.hpp",
-          "old": "void on_directory(const StockDirectory& m) { symbol_[m.header.stock_locate] = m.stock; }",
-          "new": "void on_directory(const StockDirectory& m) { static_cast<void>(m); }"
+          "old": "          Stock& stock = symbol_[locate()];\n",
+          "new": "          Stock stock{};\n"
         }
       ],
       "build": {
@@ -1818,8 +1863,8 @@
       "mutations": [
         {
           "file": "tests/oracle/invariants.hpp",
-          "old": "      resumed_ns_[locate] = m.header.timestamp_ns;\n",
-          "new": ""
+          "old": "      resumed_ns_[locate] = timestamp_ns;\n",
+          "new": "      static_cast<void>(timestamp_ns);\n"
         }
       ],
       "build": {
@@ -2536,8 +2581,48 @@
     },
     {
       "id": "oracle-paged-wrong-page",
-      "breaks": "The paged index looks a reference up on the page next to its own",
+      "breaks": "The paged index looks a reference up on the page next to its own, with the per-message index compare off, which would find the wrong page first",
       "check": "the status compare, on the paged arm",
+      "mutations": [
+        {
+          "file": "include/itch/book_index.hpp",
+          "old": "      const std::uint32_t page = directory_[static_cast<std::size_t>(reference >> PageBits)];\n      if (page != kNoIndex) {\n        const std::uint32_t order",
+          "new": "      const std::uint32_t page = directory_[static_cast<std::size_t>((reference >> PageBits) ^ 1U)];\n      if (page != kNoIndex) {\n        const std::uint32_t order"
+        },
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_index(payload);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "100",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096",
+        "--index",
+        "paged",
+        "--max-pages",
+        "64"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=status message=\\d+ type=. "
+      }
+    },
+    {
+      "id": "oracle-index-catches-paged-wrong-page",
+      "breaks": "The paged index looks a reference up on the page next to its own",
+      "check": "the index compare, on the paged arm, on the first message that names the reference",
       "mutations": [
         {
           "file": "include/itch/book_index.hpp",
@@ -2566,7 +2651,7 @@
         "64"
       ],
       "expect": {
-        "signature": "DIVERGENCE kind=status message=\\d+ type=. "
+        "signature": "DIVERGENCE kind=index message=\\d+ type=. reference=\\d+ "
       }
     },
     {
@@ -2973,7 +3058,7 @@
       "mutations": [
         {
           "file": "scripts/oracle_report.py",
-          "old": "            failures += [f\"arm {name}: {text}\" for text in hard_failures(arm[\"log\"], entry)]\n",
+          "old": "            failures += [(name, result, text) for result, text in hard_failures(arm[\"log\"], entry)]\n",
           "new": ""
         }
       ],
@@ -3272,6 +3357,984 @@
       ],
       "expect": {
         "signature": "FAIL: test_a_real_time_shorter_than_the_replay_is_not_shown_as_the_runs"
+      }
+    },
+    {
+      "id": "oracle-free-list-through-older",
+      "breaks": "A freed order's free link is stored in .older, so the free list hands a live order's slot out again (review r2-2)",
+      "check": "the take check, on the message that takes the slot, with periodic hashing off",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    orders_[order].newer = free_order_;\n",
+          "new": "    orders_[order].older = free_order_;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle"
+        ]
+      },
+      "command": [
+        "{build}/tools/itch_oracle",
+        "{tree}/tests/fixtures/oracle/session.itch",
+        "--hash-every",
+        "0",
+        "--max-orders",
+        "4096",
+        "--max-levels",
+        "4096"
+      ],
+      "expect": {
+        "signature": "DIVERGENCE kind=order-slot message=\\d+ type=. order slot handed out while live"
+      }
+    },
+    {
+      "id": "oracle-slot-take-of-live-passes",
+      "breaks": "A pool may hand out a live slot",
+      "check": "the take check",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    if (live[slot] != 0) {\n      fault(taken_live, slot, kNoIndex);\n    }\n",
+          "new": "    static_cast<void>(taken_live);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.AnOrderSlotHandedOutWhileLiveIsCaughtOnThatMessage"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.AnOrderSlotHandedOutWhileLiveIsCaughtOnThatMessage"
+      }
+    },
+    {
+      "id": "oracle-slot-give-back-of-free-passes",
+      "breaks": "A pool may take back a free slot",
+      "check": "the give-back check",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    if (live[slot] == 0) {\n      fault(freed_twice, slot, kNoIndex);\n    }\n",
+          "new": "    static_cast<void>(freed_twice);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.TheRecorderRefusesEachWrongSlot"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.TheRecorderRefusesEachWrongSlot"
+      }
+    },
+    {
+      "id": "oracle-slot-take-range-passes",
+      "breaks": "A take past the pool is not reported",
+      "check": "the take's range check",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    if (slot >= live.size()) {\n      fault(outside, slot, kNoIndex);\n      return;\n    }\n    if (live[slot] != 0) {",
+          "new": "    if (slot >= live.size()) {\n      static_cast<void>(outside);\n      return;\n    }\n    if (live[slot] != 0) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.TheRecorderRefusesEachWrongSlot"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.TheRecorderRefusesEachWrongSlot"
+      }
+    },
+    {
+      "id": "oracle-slot-give-back-range-passes",
+      "breaks": "A take-back past the pool is not reported",
+      "check": "the take-back's range check",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    if (slot >= live.size()) {\n      fault(outside, slot, kNoIndex);\n      return;\n    }\n    if (live[slot] == 0) {",
+          "new": "    if (slot >= live.size()) {\n      static_cast<void>(outside);\n      return;\n    }\n    if (live[slot] == 0) {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.TheRecorderRefusesEachWrongSlot"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.TheRecorderRefusesEachWrongSlot"
+      }
+    },
+    {
+      "id": "oracle-slot-order-of-other-level-passes",
+      "breaks": "An order slot of another level may be read or stored through",
+      "check": "the order slot's level check",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "      fault(SlotFault::order_on_other_level, order, level);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.AFifoLinkIntoAnotherLevelsOrderIsCaughtOnTheStore"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.AFifoLinkIntoAnotherLevelsOrderIsCaughtOnTheStore"
+      }
+    },
+    {
+      "id": "oracle-slot-free-order-passes",
+      "breaks": "A free order slot may be read or stored through",
+      "check": "the order slot's liveness check",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "      fault(SlotFault::order_not_live, order, level);\n      return;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.AWriteThroughAFreeOrderSlotIsCaught"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.AWriteThroughAFreeOrderSlotIsCaught"
+      }
+    },
+    {
+      "id": "oracle-slot-order-range-passes",
+      "breaks": "An order slot past the pool is not reported",
+      "check": "the order slot's range check",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "      fault(SlotFault::order_outside_pool, order, level);\n      return;\n",
+          "new": "      return;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.TheRecorderRefusesEachWrongSlot"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.TheRecorderRefusesEachWrongSlot"
+      }
+    },
+    {
+      "id": "oracle-slot-level-of-other-price-passes",
+      "breaks": "A write may store into another level's slot",
+      "check": "the level slot's identity check",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "      fault(SlotFault::level_of_other_price, slot, kNoIndex);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.TheRecorderRefusesEachWrongSlot"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.TheRecorderRefusesEachWrongSlot"
+      }
+    },
+    {
+      "id": "oracle-slot-free-level-passes",
+      "breaks": "A write may store into a free level slot",
+      "check": "the level slot's liveness check",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "      fault(SlotFault::level_not_live, slot, kNoIndex);\n      return;\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.TheRecorderRefusesEachWrongSlot"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.TheRecorderRefusesEachWrongSlot"
+      }
+    },
+    {
+      "id": "oracle-slot-level-range-passes",
+      "breaks": "A level slot past the pool is not reported",
+      "check": "the level slot's range check",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "      fault(SlotFault::level_outside_pool, slot, kNoIndex);\n      return;\n",
+          "new": "      return;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.TheRecorderRefusesEachWrongSlot"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.TheRecorderRefusesEachWrongSlot"
+      }
+    },
+    {
+      "id": "oracle-off-slot-compare",
+      "breaks": "The slot checks' findings are not read",
+      "check": "the slot compare",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_slots();\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.AnOrderSlotHandedOutWhileLiveIsCaughtOnThatMessage"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.AnOrderSlotHandedOutWhileLiveIsCaughtOnThatMessage"
+      }
+    },
+    {
+      "id": "oracle-off-index-compare",
+      "breaks": "The named references are not looked up",
+      "check": "the index compare",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_index(payload);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.AnIndexEntryLeftForAGoneOrderIsCaughtWhenTheReferenceIsNamed"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.AnIndexEntryLeftForAGoneOrderIsCaughtWhenTheReferenceIsNamed"
+      }
+    },
+    {
+      "id": "oracle-off-arena-compare",
+      "breaks": "The flat arena's blocks are not checked",
+      "check": "the arena compare",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "    compare_arena(outcome.locate);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.AFlatSideOnAnotherSidesBlockIsCaught"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.AFlatSideOnAnotherSidesBlockIsCaught"
+      }
+    },
+    {
+      "id": "oracle-endless-list-silent-at-hash",
+      "breaks": "A list past its pool ends the hash without a word",
+      "check": "the bounded walk before each whole-book hash",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "        ++counter;\n        diverge(kind, *endless);\n        return;\n",
+          "new": "        return;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.ACycledFifoEndsTheWholeBookWalksAsADivergence"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.ACycledFifoEndsTheWholeBookWalksAsADivergence"
+      }
+    },
+    {
+      "id": "oracle-endless-list-silent-at-exhaustive",
+      "breaks": "A list past its pool ends the exhaustive compare without a word",
+      "check": "the bounded walk before each exhaustive compare",
+      "mutations": [
+        {
+          "file": "tests/oracle/diff.hpp",
+          "old": "      ++counters_.exhaustive_checks;\n      diverge(DivergenceKind::exhaustive, *endless);\n      return;\n",
+          "new": "      return;\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_book"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_book",
+        "--gtest_filter=SlotChecks.ACycledFifoEndsTheWholeBookWalksAsADivergence"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] SlotChecks\\.ACycledFifoEndsTheWholeBookWalksAsADivergence"
+      }
+    },
+    {
+      "id": "oracle-silent-slot-counts",
+      "breaks": "The order slot checks are not printed",
+      "check": "test_oracle_cli, on exact counters",
+      "mutations": [
+        {
+          "file": "tools/itch_oracle.cpp",
+          "old": "  std::println(\"order_slot_checks {}\", c.order_slot_checks);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL lifecycle: no line 'order_slot_checks 46'"
+      }
+    },
+    {
+      "id": "oracle-silent-index-counts",
+      "breaks": "The index checks are not printed",
+      "check": "test_oracle_cli, on exact counters",
+      "mutations": [
+        {
+          "file": "tools/itch_oracle.cpp",
+          "old": "  std::println(\"index_checks {}\", c.index_checks);\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL lifecycle: no line 'index_checks 29'"
+      }
+    },
+    {
+      "id": "oracle-silent-arena-counts",
+      "breaks": "The arena checks are not printed",
+      "check": "test_oracle_cli, on the flat arm's moves",
+      "mutations": [
+        {
+          "file": "tools/itch_oracle.cpp",
+          "old": "    std::println(\"arena_checks {}\", oracle.counters().arena_checks);\n",
+          "new": "    static_cast<void>(oracle);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL session flat moves: None arena checks"
+      }
+    },
+    {
+      "id": "oracle-cli-max-slots-flat-only",
+      "breaks": "Only the flat arm reports its arena's size (review r8-5)",
+      "check": "test_oracle_cli, on each flat arm's header",
+      "mutations": [
+        {
+          "file": "tools/itch_oracle.cpp",
+          "old": "  if (options.arm.levels != itch::tools::LevelsArm::linked) {\n",
+          "new": "  if (options.arm.levels == itch::tools::LevelsArm::flat) {\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL session flat-scan16: no line 'oracle_max_slots 8192'"
+      }
+    },
+    {
+      "id": "oracle-cli-pool-range-unchecked",
+      "breaks": "--max-orders and --max-levels take 0 and wrap past 2^32 - 1 (review r2-1)",
+      "check": "test_oracle_cli, on bad usage",
+      "mutations": [
+        {
+          "file": "tools/itch_oracle.cpp",
+          "old": "  if (number == 0 || number > std::numeric_limits<std::uint32_t>::max()) {\n    return false;\n  }\n",
+          "new": ""
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL usage 2\\^32 \\+ 1 orders: exit "
+      }
+    },
+    {
+      "id": "oracle-observations-close-ignored",
+      "breaks": "A short observations file passes for a complete one (review r2-5)",
+      "check": "test_oracle_cli, on a file that cannot grow",
+      "mutations": [
+        {
+          "file": "tools/itch_oracle.cpp",
+          "old": "    observations_lost = std::fclose(observations) != 0 || unwritten;\n",
+          "new": "    static_cast<void>(std::fclose(observations) != 0 || unwritten);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL short observations: exit \\d+, wanted 2"
+      }
+    },
+    {
+      "id": "oracle-invariants-reads-h-state-off-by-one",
+      "breaks": "The invariants read H's trading state one byte early (review r8-10)",
+      "check": "test_oracle_cli, on the crossed fixture's characterisation",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "timestamp(payload), static_cast<char>(field(payload, 19, 1)));\n",
+          "new": "timestamp(payload), static_cast<char>(field(payload, 18, 1)));\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL crossed: no line 't_inv2_not_in_t crossed=3 locked=1'"
+      }
+    },
+    {
+      "id": "oracle-invariants-reads-time-off-by-one",
+      "breaks": "The invariants read the message time one byte early (review r8-10)",
+      "check": "test_oracle_cli, on the crossed fixture's observations",
+      "mutations": [
+        {
+          "file": "tests/oracle/invariants.hpp",
+          "old": "    return payload.size() < 11 ? 0 : field(payload, 5, 6);\n",
+          "new": "    return payload.size() < 11 ? 0 : field(payload, 4, 6);\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_oracle",
+          "itch_alloc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_oracle_cli$"
+      ],
+      "expect": {
+        "signature": "oracle cli: FAIL crossed: no line 't_inv2_clock_0930_1600 crossed=6 locked=2'"
+      }
+    },
+    {
+      "id": "oracle-report-verdict-is-the-tools",
+      "breaks": "A verdict cell shows the tool's word over the report's own failure (review r10-1)",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    if any(name == arm[\"name\"] and owner == result for name, owner, _ in failures):\n        return \"FAIL\"\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_hard_failure_is_written_as_one "
+      }
+    },
+    {
+      "id": "oracle-report-failures-not-written",
+      "breaks": "The file has no section for what failed (review r10-1)",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    if failures:\n        lines += [\"\", \"## What failed\", \"\",",
+          "new": "    if not failures:\n        lines += [\"\", \"## What failed\", \"\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_hard_failure_is_written_as_one "
+      }
+    },
+    {
+      "id": "oracle-report-arms-always-agree",
+      "breaks": "The file says every arm agrees whatever the arms said (review r10-1)",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    if any(arm is None and text.startswith(\"arm \") and \" disagrees with \" in text\n           for arm, _, text in failures):",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_arms_that_disagree_are_not_said_to_agree "
+      }
+    },
+    {
+      "id": "oracle-report-t-inv-2-word-trusted",
+      "breaks": "T-INV-2's verdict word is not held to its counts (review r10-3)",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    require(inv2 == inv2_verdict(log),",
+          "new": "    require(True or inv2 == inv2_verdict(log),"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_inv_2_is_held_to_its_counts "
+      }
+    },
+    {
+      "id": "oracle-report-t-alloc-1-word-trusted",
+      "breaks": "T-ALLOC-1's verdict word is not held to the fast book's count (review r10-3)",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    if verdict != own:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_t_alloc_1_is_held_to_its_count "
+      }
+    },
+    {
+      "id": "oracle-report-gnu-time-ignored",
+      "breaks": "GNU time -v's figures are not read (review r10-4)",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "        elif gnu_time(stripped, log[\"time\"]):\n            pass\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_gnu_time_figures_are_read "
+      }
+    },
+    {
+      "id": "oracle-report-absent-memory-as-zero",
+      "breaks": "A memory figure the log lacks prints as 0 (review r10-4)",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    if key not in time:\n        return \"unavailable\"\n    return f\"{time[key] / GIB:.2f}{unit}\"",
+          "new": "    return f\"{time.get(key, 0) / GIB:.2f}{unit}\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_absent_time_figures_are_unavailable_never_zero "
+      }
+    },
+    {
+      "id": "oracle-report-bytes-unchecked",
+      "breaks": "A log of another file passes for the pinned one (review r10-7)",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    require(number(log, \"bytes\") == entry[\"unpacked_bytes\"],",
+          "new": "    require(True,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_log_of_another_file_fails "
+      }
+    },
+    {
+      "id": "oracle-report-slot-violations-unchecked",
+      "breaks": "Slot violations pass",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    require(number(log, \"slot_violations\") == 0, \"slot violations\")",
+          "new": "    require(number(log, \"slot_violations\") >= 0, \"slot violations\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_slot_violation_fails "
+      }
+    },
+    {
+      "id": "oracle-report-index-checks-short",
+      "breaks": "A run that looked up fewer references than the day names passes",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    require(number(log, \"index_checks\") == named,",
+          "new": "    require(number(log, \"index_checks\") <= named,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_named_reference_must_be_looked_up "
+      }
+    },
+    {
+      "id": "oracle-report-level-slots-short",
+      "breaks": "Fewer level slots checked than writes passes",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    require(number(log, \"level_slot_checks\") >= number(log, \"write_set_writes\"),",
+          "new": "    require(number(log, \"level_slot_checks\") >= 0,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_slot_checks_must_cover_the_writes "
+      }
+    },
+    {
+      "id": "oracle-report-order-slots-short",
+      "breaks": "Fewer order slots checked than the day's messages go through passes",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "    require(number(log, \"order_slot_checks\") >= fewest,",
+          "new": "    require(number(log, \"order_slot_checks\") >= 0,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_slot_checks_must_cover_the_writes "
+      }
+    },
+    {
+      "id": "oracle-report-arena-checks-short",
+      "breaks": "A flat arm with too few arena checks passes",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "        require(number(log, \"arena_checks\") > number(log, \"level_relocations\"),",
+          "new": "        require(number(log, \"arena_checks\") >= 0,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_flat_arm_checks_each_block_against_the_arena "
+      }
+    },
+    {
+      "id": "oracle-report-sources-unnamed",
+      "breaks": "The published figures name no source (review r10-9, D5)",
+      "check": "test_oracle_report.py",
+      "mutations": [
+        {
+          "file": "scripts/oracle_report.py",
+          "old": "CARTERET = f\"[carteret]({CARTERET_DESIGN}), design.md record 036, Evidence\"",
+          "new": "CARTERET = \"carteret\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_oracle_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_each_published_figure_names_its_source "
+      }
+    },
+    {
+      "id": "real-day-unfinished-tool-passes",
+      "breaks": "A tool that exits with no verdict leaves the day to its report (review r5-5)",
+      "check": "test_check_real_day.py",
+      "mutations": [
+        {
+          "file": "scripts/check_real_day.sh",
+          "old": "  if ! verdict_exit \"$tool\" \"$status\"; then\n",
+          "new": "  if false; then\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_real_day.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_tool_that_did_not_finish_fails_the_day "
+      }
+    },
+    {
+      "id": "real-day-exit-not-kept",
+      "breaks": "A tool's exit status is not kept beside its raw log (review r5-5)",
+      "check": "test_check_real_day.py",
+      "mutations": [
+        {
+          "file": "scripts/check_real_day.sh",
+          "old": "  echo \"$status\" >\"${log%.log}.exit\"\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_real_day.py"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_tool_that_did_not_finish_fails_the_day "
+      }
+    },
+    {
+      "id": "real-day-compiler-from-cxx",
+      "breaks": "The results header names $CXX, not the compiler the build tree used (review r5-5)",
+      "check": "test_check_real_day.py",
+      "mutations": [
+        {
+          "file": "scripts/check_real_day.sh",
+          "old": "  compiler=$(build_compiler)\n",
+          "new": "  compiler=$(command -v \"${CXX:-c++}\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_real_day.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_compiler_is_the_build_trees "
       }
     },
     {

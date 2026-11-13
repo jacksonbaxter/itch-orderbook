@@ -18,6 +18,7 @@
 #include <iterator>
 #include <list>
 #include <map>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <unordered_map>
@@ -83,6 +84,21 @@ struct RefOutcome {
   std::uint16_t locate = 0;
   std::uint64_t reference = 0;  // The order the message named, for a report.
   TouchedSet touched;
+};
+
+// A live order, as the reference holds it.
+struct RefOrder {
+  std::uint16_t locate;
+  char side;
+  std::uint32_t price;
+  std::uint32_t shares;
+};
+
+// The references an order message names, read here at this book's own offsets: the order
+// of an A, F, E, C, X or D, and a U's old order and new one.
+struct NamedReferences {
+  std::array<std::uint64_t, 2> references{};
+  std::size_t count = 0;
 };
 
 struct RefTop {
@@ -151,6 +167,37 @@ class ReferenceBook {
       ++top.orders;
     }
     return top;
+  }
+
+  // The live order with this reference, or nothing.
+  [[nodiscard]] std::optional<RefOrder> order(std::uint64_t reference) const {
+    const auto found = orders_.find(reference);
+    if (found == orders_.end()) {
+      return std::nullopt;
+    }
+    const Located& where = found->second;
+    return RefOrder{.locate = where.locate,
+                    .side = where.side,
+                    .price = where.price,
+                    .shares = where.position->shares};
+  }
+
+  // What apply() reads as the message's references. None for a message of another type or
+  // length, which apply() takes as no book effect.
+  [[nodiscard]] static NamedReferences named_references(std::span<const std::byte> payload) {
+    NamedReferences named;
+    if (payload.empty()) {
+      return named;
+    }
+    const char type = static_cast<char>(field(payload, 0, 1));
+    if (order_message_length(type) == 0 || payload.size() != order_message_length(type)) {
+      return named;
+    }
+    named.references[named.count++] = field(payload, 11, 8);
+    if (type == 'U') {
+      named.references[named.count++] = field(payload, 19, 8);
+    }
+    return named;
   }
 
   // Every non-empty side, in (locate, side) order.

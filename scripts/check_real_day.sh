@@ -16,7 +16,16 @@
 # manifest, and the oracle and the allocation check run with it.
 # Set ITCH_HEAVY_WRAPPER to a command to run each check under it, on a shared machine.
 # Raw logs go to ITCH_REAL_DAY_LOGS, default build/real-day-logs. The curated results go
-# to results/oracle_<day>.md and results/trades_<day>.md.
+# to results/oracle_<day>.md and results/trades_<day>.md, or under ITCH_REAL_DAY_RESULTS.
+# The tools are the release build's, or ITCH_REAL_DAY_BUILD's, and the compiler a results
+# file names is the one that build tree was configured with.
+#
+# Each tool's exit status is kept beside its raw log, as <log>.exit. A status the tool
+# documents as a verdict leaves the day to the report, which holds each verdict to its
+# counts: itch_oracle's 0, 1 and 3, itch_alloc's 0 and 1, itch_trades' 0 and 64 plus its
+# failed results' bits, itch_map_compare's 0 and 1. Any other, such as bad usage, an
+# unreadable file or a crash, means the tool did not finish its run, and fails the day
+# whatever its report says.
 #
 # The oracle takes ten minutes a day and about 1.6 GB beyond the mapped file on the default
 # arm, the paged index with flat levels, or 0.7 GB on the hash arms. T-INV-2 is strict
@@ -45,7 +54,9 @@ cd "$repo_root" || exit 2
 
 wrapper=${ITCH_HEAVY_WRAPPER:-}
 log_dir=${ITCH_REAL_DAY_LOGS:-build/real-day-logs}
-mkdir -p "$log_dir"
+results_dir=${ITCH_REAL_DAY_RESULTS:-results}
+build_dir=${ITCH_REAL_DAY_BUILD:-build/release}
+mkdir -p "$log_dir" "$results_dir"
 
 # GNU time spells it -v and macOS -l. A missing one only loses the memory figures.
 timer() {
@@ -81,16 +92,50 @@ census() {
   $wrapper python3 -B scripts/check_census.py --day "$1"
 }
 
+# The C++ compiler the build tree was configured with, as CMake recorded it.
+build_compiler() {
+  sed -n 's/^CMAKE_CXX_COMPILER:[A-Z]*=//p' "$build_dir/CMakeCache.txt" 2>/dev/null | head -n 1
+}
+
 # What built the binaries, for the header of the results file.
 run_header() {
-  local tree=clean
+  local tree=clean compiler
   [ -z "$(git status --porcelain -- include src tests tools fuzz scripts cmake CMakeLists.txt)" ] ||
     tree=dirty
   echo "run_commit $(git rev-parse --short HEAD) ($tree)"
-  echo "run_compiler $("${CXX:-c++}" --version | head -n 1 | sed 's/ (.*//')"
-  echo "run_flags $(python3 -B scripts/oracle_report.py --print-flags build/release/compile_commands.json "${2:-tools/itch_oracle.cpp}")"
+  compiler=$(build_compiler)
+  if [ -n "$compiler" ] && [ -x "$compiler" ]; then
+    echo "run_compiler $("$compiler" --version | head -n 1 | sed 's/ (.*//')"
+  else
+    echo "run_compiler unavailable"
+  fi
+  echo "run_flags $(python3 -B scripts/oracle_report.py --print-flags "$build_dir/compile_commands.json" "${2:-tools/itch_oracle.cpp}")"
   echo "run_host $(uname -s) $(uname -m) $(sysctl -n machdep.cpu.brand_string 2>/dev/null)"
   echo "run_command $1"
+}
+
+# Whether a tool's exit status is one it documents as a verdict.
+verdict_exit() {
+  case $1:$2 in
+    itch_oracle:0 | itch_oracle:1 | itch_oracle:3) return 0 ;;
+    itch_alloc:0 | itch_alloc:1) return 0 ;;
+    itch_map_compare:0 | itch_map_compare:1) return 0 ;;
+    itch_trades:0) return 0 ;;
+    itch_trades:*) [ "$2" -ge 64 ] && [ "$2" -le 95 ] ;;
+    *) return 1 ;;
+  esac
+}
+
+# Keeps a tool's exit status beside its raw log and says it. False for a status the tool
+# does not document as a verdict.
+note_exit() {
+  local tool=$1 label=$2 status=$3 log=$4
+  echo "$status" >"${log%.log}.exit"
+  echo "real day: $label $tool exited $status"
+  if ! verdict_exit "$tool" "$status"; then
+    echo "real day: $label $tool exited $status, which is no verdict: it did not finish its run" >&2
+    return 1
+  fi
 }
 
 # The command-line flags that pick an arm, one word per line. default picks none.
@@ -111,7 +156,7 @@ for flag, value in json.load(open("scripts/data_manifest.json"))["days"][sys.arg
 }
 
 oracle() {
-  local day=$1 file arm first= status mismatch=0 report_args=()
+  local day=$1 file arm first= status mismatch=0 unfinished=0 report_args=()
   local oracle_log alloc_log observations flags word
   file=$(day_file "$day") || return 1
   for arm in "${arms[@]}"; do
@@ -123,14 +168,14 @@ oracle() {
     while read -r word; do flags+=("$word"); done < <(capacity_flags "$day")
     run_header "itch_oracle $file ${flags[*]-}${flags[*]:+ }--observations <raw log>" >"$oracle_log"
     # shellcheck disable=SC2086
-    $(timer) $wrapper build/release/tools/itch_oracle "$file" ${flags[@]+"${flags[@]}"} \
+    $(timer) $wrapper "$build_dir/tools/itch_oracle" "$file" ${flags[@]+"${flags[@]}"} \
       --observations "$observations" >>"$oracle_log" 2>&1
-    echo "real day: $day $arm itch_oracle exited $?"
+    note_exit itch_oracle "$day $arm" $? "$oracle_log" || unfinished=1
     run_header "itch_alloc $file${flags[*]:+ }${flags[*]-}" >"$alloc_log"
     # shellcheck disable=SC2086
-    $(timer) $wrapper build/release/tools/itch_alloc "$file" ${flags[@]+"${flags[@]}"} \
+    $(timer) $wrapper "$build_dir/tools/itch_alloc" "$file" ${flags[@]+"${flags[@]}"} \
       >>"$alloc_log" 2>&1
-    echo "real day: $day $arm itch_alloc exited $?"
+    note_exit itch_alloc "$day $arm" $? "$alloc_log" || unfinished=1
     if [ -z "$first" ]; then
       first=$arm
       report_args=(--log "$oracle_log" --alloc-log "$alloc_log")
@@ -143,9 +188,9 @@ oracle() {
     fi
   done
   python3 -B scripts/oracle_report.py --day "$day" "${report_args[@]}" \
-    --out "results/oracle_$day.md"
+    --out "$results_dir/oracle_$day.md"
   status=$?
-  [ "$mismatch" -eq 0 ] || return 1
+  [ "$mismatch" -eq 0 ] && [ "$unfinished" -eq 0 ] || return 1
   return "$status"
 }
 
@@ -196,7 +241,7 @@ trades() {
   rows=$(midas_rows "$date" "$exchange") || return 1
   cross=$(cross_file "$date") || return 1
   local args=("$file" --date "$date" --midas "build/reference/$member" --midas-rows "$rows")
-  local report_args=() arm first= flags word
+  local report_args=() arm first= flags word unfinished=0 status
   if [ "$exchange" != Nasdaq ]; then
     # CrossStats is Nasdaq's file of its own crosses, so another venue has none to compare.
     args+=(--exchange "$exchange")
@@ -224,9 +269,9 @@ trades() {
     run_header "itch_trades ${args[*]} --symbols <raw log>${flags[*]:+ }${flags[*]-}" \
       tools/itch_trades.cpp >"$log"
     # shellcheck disable=SC2086
-    $(timer) $wrapper build/release/tools/itch_trades "${args[@]}" --symbols "$symbols" \
+    $(timer) $wrapper "$build_dir/tools/itch_trades" "${args[@]}" --symbols "$symbols" \
       ${flags[@]+"${flags[@]}"} >>"$log" 2>&1
-    echo "real day: $day $arm itch_trades exited $?"
+    note_exit itch_trades "$day $arm" $? "$log" || unfinished=1
     if [ -z "$first" ]; then
       first=$arm
       report_args+=(--log "$log")
@@ -235,7 +280,10 @@ trades() {
     fi
   done
   python3 -B scripts/trades_report.py --day "$day" "${report_args[@]}" \
-    --out "results/trades_$day.md"
+    --out "$results_dir/trades_$day.md"
+  status=$?
+  [ "$unfinished" -eq 0 ] || return 1
+  return "$status"
 }
 
 map() {
@@ -245,9 +293,9 @@ map() {
     log=$log_dir/map_${day}_$heap.log
     run_header "itch_map_compare $file --heap $heap" tools/itch_map_compare.cpp >"$log"
     # shellcheck disable=SC2086
-    $(timer) $wrapper build/release/tools/itch_map_compare "$file" --heap "$heap" >>"$log" 2>&1
+    $(timer) $wrapper "$build_dir/tools/itch_map_compare" "$file" --heap "$heap" >>"$log" 2>&1
     status=$?
-    echo "real day: $day $heap itch_map_compare exited $status"
+    note_exit itch_map_compare "$day $heap" "$status" "$log" || failed=1
     [ "$status" -eq 0 ] || failed=1
   done
   return "$failed"
@@ -275,7 +323,7 @@ while [ "${1:-}" = --only ] || [ "${1:-}" = --arms ]; do
 done
 [ ${#checks[@]} -gt 0 ] || checks=(census oracle trades map)
 
-if ! cmake --build --preset release --parallel 6 --target itch_census itch_oracle itch_alloc itch_trades \
+if ! cmake --build "$build_dir" --parallel 6 --target itch_census itch_oracle itch_alloc itch_trades \
   itch_map_compare; then
   echo "real day: could not build the tools. Run: cmake --preset release" >&2
   exit 2
