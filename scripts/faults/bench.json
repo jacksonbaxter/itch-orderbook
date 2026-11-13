@@ -4958,6 +4958,111 @@
         "signature": "^FAIL: test_check_catches_a_private_name_in_the_folded_stacks ",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-counts-load-end-from-the-type-age-processes",
+      "breaks": "A type-age file's end load line is the last type-age process's, not the run's last",
+      "check": "test_counts_report.py",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "            f\"- measure_load_end: {span_of(lines + plain_lines)[1]}\",",
+          "new": "            f\"- measure_load_end: {lines[-1][1]}\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_load_lines_bracket_every_process ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-counts-load-line-unplaced-unchecked",
+      "breaks": "--check takes load lines that do not bracket the run",
+      "check": "test_counts_report.py",
+      "mutations": [
+        {
+          "file": "scripts/counts_report.py",
+          "old": "        if at is None or at.group(1) != fields.get(said):",
+          "new": "        if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_counts_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_load_lines_bracket_every_process ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-arm-unnamed",
+      "breaks": "The summary gives the frame-pointer ratio as the graph's own build's",
+      "check": "test_flame_report.py",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "                    f\"throughput, both measured on `{arm}`\")",
+          "new": "                    \"throughput\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_summary_names_the_arm_the_two_builds_ran ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-arms-unmatched",
+      "breaks": "A delta from builds of two different arms is published",
+      "check": "test_flame_report.py",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "    if not normal[\"design\"] or normal[\"design\"] != frame_pointer[\"design\"]:",
+          "new": "    if False:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_summary_names_the_arm_the_two_builds_ran ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-flame-report-no-ok-after-a-failure",
+      "breaks": "--check prints no ok for any file after one that fails",
+      "check": "test_flame_report.py",
+      "mutations": [
+        {
+          "file": "scripts/flame_report.py",
+          "old": "        if not found:\n            print(f\"flame_report: ok {path.name}\")\n        failed = failed or bool(found)",
+          "new": "        failed = failed or bool(found)\n        if not failed:\n            print(f\"flame_report: ok {path.name}\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_flame_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_check_says_ok_for_each_file_that_passes_after_one_that_fails ",
+        "exit": 1
+      }
     }
   ]
 }

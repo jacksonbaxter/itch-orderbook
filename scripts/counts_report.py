@@ -334,6 +334,12 @@ def timestamp(line):
     return match.group(1)
 
 
+def span_of(lines):
+    """The first start line and the last end line of the processes, by their times."""
+    return (min((start for start, _ in lines), key=timestamp),
+            max((end for _, end in lines), key=timestamp))
+
+
 def design_of(record):
     return record["header"]["design"].split(":", 1)[0]
 
@@ -372,9 +378,10 @@ def render(records, stderrs, machine_checks, prediction):
             "each process",
             f"- migrations_all_repetitions: {migrations}",
             f"- peak_rss: {peak:.2f} GiB, getrusage of bench_counts, largest repetition",
-            f"- measure_load_start: {lines[0][0]}", f"- measure_load_end: {lines[-1][1]}",
-            f"- run_started: {timestamp(lines[0][0])}",
-            f"- run_finished: {timestamp(lines[-1][1])}", "",
+            f"- measure_load_start: {span_of(lines)[0]}",
+            f"- measure_load_end: {span_of(lines)[1]}",
+            f"- run_started: {timestamp(span_of(lines)[0])}",
+            f"- run_finished: {timestamp(span_of(lines)[1])}", "",
             "## How the counts are taken", "",
             METHOD.format(empty=records[0]["empty_before"]["spans"]), ""]
     out += type_figures(summaries)
@@ -653,9 +660,10 @@ def render_ages(records, stderrs, machine_checks, prediction, plain=None, plain_
             "each process",
             f"- migrations_all_repetitions: {migrations}",
             f"- peak_rss: {peak:.2f} GiB, getrusage of bench_counts, largest repetition",
-            f"- measure_load_start: {lines[0][0]}", f"- measure_load_end: {lines[-1][1]}",
-            f"- run_started: {timestamp(lines[0][0])}",
-            f"- run_finished: {timestamp((plain_lines or lines)[-1][1])}",
+            f"- measure_load_start: {span_of(lines + plain_lines)[0]}",
+            f"- measure_load_end: {span_of(lines + plain_lines)[1]}",
+            f"- run_started: {timestamp(span_of(lines + plain_lines)[0])}",
+            f"- run_finished: {timestamp(span_of(lines + plain_lines)[1])}",
             f"- machine_check_before_at: {before}, {lead:,} s before the first repetition began",
             f"- machine_check_after_at: {after}, {gap:,} s after the last repetition ended",
             f"- summary: {age_summary(summaries)}", "",
@@ -980,11 +988,15 @@ def header_violations(text, fields):
     if fields.get("governor") != "performance":
         found.append(("governor", fields.get("governor", "no field")))
     found += list(check_results.check_private(text, fields))
-    for name in ("measure_load_start", "measure_load_end"):
+    for name, said in (("measure_load_start", "run_started"), ("measure_load_end", "run_finished")):
         line = fields.get(name, "")
         code = check_results.EXIT_CODE.search(line)
         if not line.startswith("measure.sh: ") or (code is not None and code.group(1) != "0"):
             found.append(("load-line-invalid", f"{name}: {line!r}"))
+        at = check_results.TIMESTAMP.search(line)
+        if at is None or at.group(1) != fields.get(said):
+            found.append(("load-line-unplaced", f"{name} is at {at and at.group(1)}, and "
+                                                f"{said} is {fields.get(said)}"))
     output = check_results.section(text, "machine_check output") or ""
     if output.count("machine_check: passed") != 2:
         found.append(("machine-check-failed", "wanted a passing check before and after"))

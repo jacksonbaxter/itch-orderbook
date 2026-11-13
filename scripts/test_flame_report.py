@@ -5,6 +5,8 @@ flamegraph.pl is stood in for by a few lines of Perl written here."""
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -49,7 +51,7 @@ def header(host="debian", flags=FP_FLAGS):
 
 def driver_file(median, flags):
     return (f"# Book design\n\n## Header\n\n- flags: {flags}\n- commit: 0123456789ab (exported)\n"
-            "- repetitions: 3\n\n## Summary\n\n| Measure | Median | Min | Max | CV |\n"
+            "- repetitions: 3\n- design: paged-flat: FastBook\n\n## Summary\n\n| Measure | Median | Min | Max | CV |\n"
             f"|---|---|---|---|---|\n| Throughput, messages/s | {median:,} | {median - 9:,} "
             f"| {median + 9:,} | 0.20% |\n")
 
@@ -274,6 +276,42 @@ class FlameReport(unittest.TestCase):
         folded.write_text(folded.read_text(encoding="utf-8") + f"main;{PLANTED} 1\n", "utf-8")
         os.environ["ITCH_PRIVATE_NAMES"] = PLANTED
         self.assertIn("private-text", self.codes(out))
+
+    def test_the_summary_names_the_arm_the_two_builds_ran(self):
+        code, out = self.render()
+        self.assertEqual(code, 0)
+        self.assertIn("; the frame-pointer build at 0.9900 of the normal build's throughput, both "
+                      "measured on `paged-flat`", out.read_text(encoding="utf-8"))
+        fp = out.parent / "fp.md"
+        fp.write_text(fp.read_text(encoding="utf-8").replace("- design: paged-flat:",
+                                                             "- design: hash-flat:"), "utf-8")
+        self.assertIn("delta-unreadable", self.codes(out))
+        self.assertEqual(self.render()[0], 0)
+        fp.write_text(fp.read_text(encoding="utf-8").replace("- design: paged-flat:",
+                                                             "- design: hash-flat:"), "utf-8")
+        args = ["render", "--folded", str(self.root / "stacks.folded"), "--flamegraph",
+                str(self.stub), "--record", str(self.root / "run.json"), "--source", "perf",
+                "--workload", "replay", "--day", "12302019", "--command", "perf record -g",
+                "--prediction", "P-0018", "--notes", str(self.root / "notes.md"),
+                "--out", str(out), "--run-id", "P-0018-20261105T090000Z",
+                "--annotate", str(self.root / "annotate.txt"), "--annotate-symbol", "apply",
+                "--normal", str(out.parent / "normal.md"), "--frame-pointer", str(fp)]
+        self.assertEqual(flame_report.main(args), 2)
+
+    def test_check_says_ok_for_each_file_that_passes_after_one_that_fails(self):
+        code, out = self.render()
+        self.assertEqual(code, 0)
+        broken = out.with_name("flamegraph_y_debian_12302019.md")
+        broken.write_text(out.read_text(encoding="utf-8").replace("- samples: 100",
+                                                                  "- samples: 99"), "utf-8")
+        for suffix in (".svg", ".folded"):
+            broken.with_suffix(suffix).write_text(out.with_suffix(suffix).read_text("utf-8"),
+                                                  "utf-8")
+        printed = io.StringIO()
+        with contextlib.redirect_stdout(printed):
+            self.assertEqual(flame_report.run_check([broken, out]), 1)
+        self.assertIn(f"flame_report: ok {out.name}", printed.getvalue())
+        self.assertNotIn(f"flame_report: ok {broken.name}", printed.getvalue())
 
     def test_a_macos_profile_says_it_does_not_replace_perf(self):
         code, out = self.render(host="macOS (M4 Max)", flags="-O3 -DNDEBUG")

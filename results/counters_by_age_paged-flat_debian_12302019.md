@@ -42,7 +42,7 @@ Host: **debian**. Numbers from the two hosts are never mixed.
 - migrations_all_repetitions: 0
 - peak_rss: 8.87 GiB, getrusage of bench_counts, largest repetition
 - measure_load_start: measure.sh: start load1=0.97 host=debian at=2026-11-10T13:45:02Z cpus=4 governor=performance freq_khz=cpu4:2624676 perf_event_paranoid=2
-- measure_load_end: measure.sh: end load1=1.04 exit=0 at=2026-11-10T15:28:49Z cpus=4 governor=performance freq_khz=cpu4:3015928 perf_event_paranoid=2
+- measure_load_end: measure.sh: end load1=1.01 exit=0 at=2026-11-10T15:35:52Z cpus=4 governor=performance freq_khz=cpu4:3206382 perf_event_paranoid=2
 - run_started: 2026-11-10T13:45:02Z
 - run_finished: 2026-11-10T15:35:52Z
 - machine_check_before_at: 2026-11-10T13:44:58Z, 4 s before the first repetition began

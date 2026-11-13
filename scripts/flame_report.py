@@ -320,12 +320,15 @@ def hottest_lines(stacks):
     return out
 
 
-def summary_line(stacks, event, ratio):
+def summary_line(stacks, event, ratio, arm=None):
+    """The file's one line: the samples, the hottest frame and, on Linux, the frame-pointer
+    build's throughput, with the arm both builds ran, which need not be the graph's."""
     frames, total = hottest(stacks)
     summary = (f"{total:,} samples, {event}, the hottest frame `{brief(frames[0][0])}` at "
                f"{100 * frames[0][1]:.2f}% self")
     if ratio is not None:
-        summary += f"; the frame-pointer build at {ratio:.4f} of the normal build's throughput"
+        summary += (f"; the frame-pointer build at {ratio:.4f} of the normal build's "
+                    f"throughput, both measured on `{arm}`")
     return summary
 
 
@@ -424,6 +427,7 @@ def throughput(path):
     median, low, high = (int(match.group(i).replace(",", "")) for i in (1, 2, 3))
     return {"median": median, "min": low, "max": high, "cv": float(match.group(4)),
             "flags": fields.get("flags", ""), "commit": fields.get("commit", ""),
+            "design": fields.get("design", "").split(":", 1)[0],
             "repetitions": fields.get("repetitions", ""), "name": path.name}
 
 
@@ -433,10 +437,18 @@ def frame_pointer_lines(normal, frame_pointer):
     return ["## The frame-pointer build", "",
             f"The graph is taken on a build with `{' '.join(FRAME_POINTER)}`, which keeps "
             "a frame pointer in every function so that `perf` can walk the stack. Both "
-            "builds ran `paged-flat` mapped, top of book not tracked, throughput only, in "
+            f"builds ran `{arm_of(normal, frame_pointer)}` mapped, top of book not tracked, throughput only, in "
             "the same sitting through `scripts/bench_driver.py`. The frame-pointer build "
             f"ran at {ratio:.4f} times the normal build's median throughput, "
             f"{100 * (ratio - 1):+.2f}%.", ""] + rows
+
+
+def arm_of(normal, frame_pointer):
+    """The arm both builds' files ran. ReportError if they ran different arms or name none."""
+    if not normal["design"] or normal["design"] != frame_pointer["design"]:
+        raise ReportError(f"the two builds ran {normal['design']!r} and "
+                          f"{frame_pointer['design']!r}, not one arm")
+    return normal["design"]
 
 
 def delta_lines(normal, frame_pointer):
@@ -496,12 +508,13 @@ def render(args):
             f"- prediction: {args.prediction}"]
     if args.run_id:
         out.append(f"- run_id: {args.run_id}")
-    ratio_lines, delta_rows, ratio = [], [], None
+    ratio_lines, delta_rows, ratio, arm = [], [], None, None
     if args.normal and args.frame_pointer:
-        ratio_lines, delta_rows, ratio = delta_lines(throughput(args.normal),
-                                                     throughput(args.frame_pointer))
+        normal, frame_pointer = throughput(args.normal), throughput(args.frame_pointer)
+        ratio_lines, delta_rows, ratio = delta_lines(normal, frame_pointer)
+        arm = arm_of(normal, frame_pointer)
         out += ratio_lines[:1]
-    out.append(f"- summary: {summary_line(stacks, args.event, ratio)}")
+    out.append(f"- summary: {summary_line(stacks, args.event, ratio, arm)}")
     out += ["", "## What it shows", "", notes, ""]
     out += hottest_lines(stacks)
     if args.annotate:
@@ -602,7 +615,7 @@ def figure_violations(path, text, image, fields):
     if hottest_body != section_text(hottest_lines(stacks)):
         found.append(("figures-differ", "the Hottest frames section is not what the folded "
                                         "stacks give"))
-    ratio = None
+    ratio = arm = None
     if fields.get("host") == "debian":
         links = dict(DELTA_LINK.findall(check_results.section(text, "The frame-pointer build")
                                         or ""))
@@ -611,8 +624,11 @@ def figure_violations(path, text, image, fields):
                                      for label in ("normal", "frame pointers"))
         except (KeyError, OSError, ReportError) as error:
             return found + [("delta-unreadable", f"the two builds' files: {error!r}")]
-        lines = frame_pointer_lines(normal, frame_pointer)
-        ratio = frame_pointer["median"] / normal["median"]
+        try:
+            lines = frame_pointer_lines(normal, frame_pointer)
+        except ReportError as error:
+            return found + [("delta-unreadable", str(error))]
+        ratio, arm = frame_pointer["median"] / normal["median"], normal["design"]
         if fields.get("frame_pointer_ratio") != f"{ratio:.4f}":
             found.append(("figures-differ", f"frame_pointer_ratio: the two builds' files give "
                                             f"{ratio:.4f}, the file says "
@@ -621,7 +637,7 @@ def figure_violations(path, text, image, fields):
                 section_text(lines):
             found.append(("figures-differ", "the frame-pointer build's section is not what the "
                                             "two builds' files give"))
-    summary = summary_line(stacks, fields.get("event", ""), ratio)
+    summary = summary_line(stacks, fields.get("event", ""), ratio, arm)
     if fields.get("summary") != summary:
         found.append(("figures-differ", f"summary: the figures give {summary!r}, the file says "
                                         f"{fields.get('summary')!r}"))
@@ -631,11 +647,12 @@ def figure_violations(path, text, image, fields):
 def run_check(paths):
     failed = False
     for path in paths:
-        for code, detail in check_file(path):
+        found = check_file(path)
+        for code, detail in found:
             print(f"flame_report: FAIL {code} {path.name}: {detail}")
-            failed = True
-        if not failed:
+        if not found:
             print(f"flame_report: ok {path.name}")
+        failed = failed or bool(found)
     return 1 if failed else 0
 
 

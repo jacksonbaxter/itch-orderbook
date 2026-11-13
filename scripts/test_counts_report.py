@@ -180,6 +180,21 @@ class CountsByAge(unittest.TestCase):
                         text, flags=re.MULTILINE)
         self.assertIn("figures-differ", [code for code, _ in counts_report.check_ages(edited)])
 
+    def test_the_load_lines_bracket_every_process(self):
+        # The process by type alone ran last, to 09:10, after the type-age one ended at 09:05.
+        late = (START.replace("09:00:00Z", "09:06:00Z") + "\n"
+                + END.replace("09:05:00Z", "09:10:00Z") + "\n")
+        text = counts_report.render_ages([age_record()], [f"{START}\n{END}\n"], [CHECK, CHECK],
+                                         "P-0025", [record()], [late],
+                                         [CHECK_LOADS[0], check_load("09:10:02Z")])[0]
+        fields = counts_report.check_results.parse_header(text)
+        self.assertEqual(fields["run_finished"], "2026-11-05T09:10:00Z")
+        self.assertIn("at=2026-11-05T09:10:00Z", fields["measure_load_end"])
+        self.assertEqual(counts_report.check_ages(text), [])
+        edited = text.replace(f"- measure_load_end: {fields['measure_load_end']}",
+                              f"- measure_load_end: {END}")
+        self.assertIn("load-line-unplaced", [code for code, _ in counts_report.check_ages(edited)])
+
     def test_a_plain_record_among_the_aged_is_refused(self):
         with self.assertRaises(counts_report.ReportError):
             self.render([age_record(), record()])
@@ -201,9 +216,6 @@ class CountsByAge(unittest.TestCase):
         self.assertFalse(counts_report.said_near(summary, "at 1 s and over", 5.0405))
         self.assertFalse(counts_report.said_near(summary, "at 1 s and over", 5.0375))
         self.assertFalse(counts_report.said_near("fills: 5.039", "at 1 s and over", 5.039))
-
-    def test_check_catches_a_name_left_unsaid(self):
-        self.assertIn("summary-differs", [code for code, _ in counts_report.check_ages(edited)])
 
     def test_check_catches_a_name_left_unsaid(self):
         text = self.render([age_record()]) + "\nThe cache-misses fell.\n"
