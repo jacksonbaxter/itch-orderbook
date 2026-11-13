@@ -370,7 +370,7 @@ The driver is `measure.sh`'s child here and the benchmark is the driver's, which
 
 ### CI, the comparison queues and the README
 
-**CI has never executed on GitHub.** There is no remote, so `.github/workflows/ci.yml` has not run on any runner. `scripts/lint_workflows.py` reads it with actionlint at a pinned hash, with shellcheck off, so the shell in its steps is not checked. `gates.py pinned-actions` holds every `uses:` to a 40-hex SHA with its tag.
+**CI had not yet run on GitHub when this was written.** There was no remote, so `.github/workflows/ci.yml` had not run on any runner. It first ran on GitHub at 2810183 ("CI's first runs on GitHub", below). `scripts/lint_workflows.py` reads it with actionlint at a pinned hash, with shellcheck off, so the shell in its steps is not checked. `gates.py pinned-actions` holds every `uses:` to a 40-hex SHA with its tag.
 
 What was run by hand instead, at commit `b12d05e`, on presets or the same commands in a separate build dir:
 

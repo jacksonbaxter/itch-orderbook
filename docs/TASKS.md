@@ -86,7 +86,7 @@ All of this is written for arm64 and x86-64, Linux and macOS, so that a Linux ru
 - [x] ASan and UBSan with no recovery and alignment checks on. TSan for all concurrent code. A sanitizer bug exits 134 on macOS.
 - [x] clang-tidy, and `-Wall -Wextra -Werror`.
 - [x] `.github/workflows/ci.yml`: `ubuntu-24.04` (x86-64, GCC and Clang), `ubuntu-24.04-arm` (arm64), `macos-15` (arm64), an Emscripten job. Actions pinned to full SHAs. CI produces no benchmark numbers.
-- [x] Validate CI locally with actionlint from repo tooling. Record that it has never executed on GitHub.
+- [x] Validate CI locally with actionlint from repo tooling. Record that it has never executed on GitHub. True until it first ran there, at 2810183 (the CI item under "Write-up and iteration").
 - [x] `scripts/check.sh` runs every check.
 - [x] Grep gate: no pointer cast to a multi-byte type over wire bytes, no bare branch hints.
 - [x] `scripts/fault_matrix.py`: each check shown failing on an injected fault, with one JSON file per area under `scripts/faults/`, a clean control and a self-test. Results in `results/fault_matrix.md`.
