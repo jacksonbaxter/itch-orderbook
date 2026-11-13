@@ -87,7 +87,7 @@ T-INV-2 is strict, and it fails on real data: books cross while a symbol is halt
 | PRINTS | 01302020 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 1 arm | `dd6a39a` | [results/trades_01302020.md](results/trades_01302020.md) |
 | T-TRADE-1 | 03272019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
 | T-TRADE-2 | 03272019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
-| T-TRADE-3 | 03272019 | Darwin arm64 Apple M4 Max | **FAIL** | trade_shares wrong on PLAB, trades wrong on PLAB; equal_shares 5664 of 5665, equal_prints 5664 of 5665; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
+| T-TRADE-3 | 03272019 | Darwin arm64 Apple M4 Max | **FAIL** | trade_shares wrong on PLAB, trades wrong on PLAB; equal_shares 5664 of 5665, equal_prints 5664 of 5665; shares equal on 5,664 of 5,665; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
 | T-TRADE-5 | 03272019 | Darwin arm64 Apple M4 Max | **FAIL** | 2 violations; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
 | PRINTS | 03272019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 1 arm | `c5d7300` | [results/trades_03272019.md](results/trades_03272019.md) |
 | T-TRADE-1 | 05302019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 1 arm | `5810aa3` | [results/trades_05302019.md](results/trades_05302019.md) |

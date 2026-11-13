@@ -355,6 +355,14 @@ class TradesReport(unittest.TestCase):
             self.replace(old, old[:-1] + "99")
             self.assert_fails(text)
 
+    def test_a_broken_trade_prints_its_shares_with_the_separator_and_one_share_singular(self):
+        # The break's shares no longer match b_shares, so the run fails; the file is written.
+        for shares, line in (("1000", "Match 1060: `E` on ZTST, 1,000 shares."),
+                             ("1", "Match 1060: `E` on ZTST, 1 share.")):
+            self.log = GOOD_LOG.replace("shares=100 printed_at", f"shares={shares} printed_at")
+            self.run_report()
+            self.assertIn(line, (self.root / "out.md").read_text(encoding="utf-8"))
+
     def test_a_break_with_no_print_fails(self):
         self.replace("b_matched 1", "b_matched 0")
         self.assert_fails("a B matched no print")

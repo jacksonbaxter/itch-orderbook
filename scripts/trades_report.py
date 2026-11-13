@@ -705,8 +705,9 @@ def render(log, entry, day, no_cross_file, failures, arms):
               f"{count(number(log, 'b_shares'))}. `E + C_Y + P` net of those over the whole day: "
               f"{count(number(log, 'b_net_printed_shares'))}.", ""]
     for broken in log["breaks"]:
+        shares = int(broken["shares"])
         lines.append(f"- Match {broken['match']}: `{broken['class']}` on {broken['symbol']}, "
-                     f"{broken['shares']} shares.")
+                     f"{count(shares)} {'share' if shares == 1 else 'shares'}.")
     if log["breaks"]:
         lines.append("")
     lines += ["Whether MIDAS nets a break out cannot be told from these days unless a break "

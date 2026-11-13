@@ -8429,6 +8429,27 @@
       "expect": {
         "signature": "FAIL: test_an_arm_is_held_to_the_hard_checks_on_its_own"
       }
+    },
+    {
+      "id": "trades-report-break-shares-unseparated",
+      "breaks": "a broken trade's shares print without the thousands separator, and one share as shares",
+      "check": "test_trades_report.py test_a_broken_trade_prints_its_shares_with_the_separator_and_one_share_singular",
+      "mutations": [
+        {
+          "file": "scripts/trades_report.py",
+          "old": "f\"{count(shares)} {'share' if shares == 1 else 'shares'}.\")",
+          "new": "f\"{shares} shares.\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_trades_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_broken_trade_prints_its_shares_with_the_separator_and_one_share_singular",
+        "exit": 1
+      }
     }
   ]
 }

@@ -176,11 +176,15 @@ def sessions_row(name, text):
 def odd_lot_detail(text, name):
     symbols = sorted(set(re.findall(r"^- `t3_odd_lots .*symbol=(\S+)", text, re.MULTILINE)))
     equal, total = find(r"^- equal_odd_lots (\d+) of (\d+) symbols", text, name).groups()
+    return f"odd-lot columns wrong on {' and '.join(symbols)}, equal on {equal} of {total} symbols"
+
+
+def pinned_shares(text, name):
+    """How many compared symbols agree with MIDAS on shares in the pinned window."""
     window = find(r"Pinned window: `(\w+)`", text, name)[1]
     shares = table_row(window, text, name)[0]
     compared = table_row("Symbols compared", text, name)[0]
-    return (f"odd-lot columns wrong on {' and '.join(symbols)}, equal on {equal} of {total} "
-            f"symbols; shares equal on {shares} of {compared}")
+    return f"shares equal on {shares} of {compared}"
 
 
 def t3_failure_detail(text, name):
@@ -196,6 +200,8 @@ def t3_failure_detail(text, name):
                      + "; " + ", ".join(f"{key} {have} of {of}" for key, have, of in equal))
     if not other or any(check.startswith("t3_odd") for check, _ in found):
         parts.append(odd_lot_detail(text, name))
+    # Every failing row ends with the pinned window's share count, whatever failed.
+    parts.append(pinned_shares(text, name))
     return "; ".join(parts)
 
 

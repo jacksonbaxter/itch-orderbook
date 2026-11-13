@@ -104,6 +104,8 @@ class ResultsTable(unittest.TestCase):
         row = self.row("T-TRADE-3", "10302019")
         self.assertIn("| **FAIL** | trade_shares wrong on PLAB, trades wrong on PLAB; "
                       "equal_shares 5766 of 5767, equal_prints 5766 of 5767;", row)
+        # Every failing row carries the pinned window's share count, odd lots wrong or not.
+        self.assertRegex(row, r"; shares equal on [\d,]+ of [\d,]+;")
         self.assertNotIn("odd-lot", row)
 
     def test_a_day_of_another_venue_keeps_its_suffix_and_says_why_t_trade_2_did_not_run(self):

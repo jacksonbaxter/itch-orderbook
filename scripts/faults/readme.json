@@ -1230,6 +1230,27 @@
         "signature": "FAIL: test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-t-trade-3-shares-clause-only-with-odd-lots",
+      "breaks": "a T-TRADE-3 row that failed outside the odd lots drops the pinned window's share count",
+      "check": "test_results_table.py test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    parts.append(pinned_shares(text, name))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_t_trade_3_failure_outside_the_odd_lots_names_its_column_and_symbol",
+        "exit": 1
+      }
     }
   ]
 }
