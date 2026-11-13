@@ -228,6 +228,11 @@ def steady(first, last, values=QUIET):
     return [(second, values) for second in range(first, last + 1)]
 
 
+def reason(lines, begin, end, pid=None):
+    """judge()'s reason, or "" for a clean span, so that a test expecting a reason fails on none."""
+    return linux_sampler.judge(lines, begin, end, pid) or ""
+
+
 class Judge(unittest.TestCase):
     def test_a_quiet_span_is_clean(self):
         self.assertIsNone(linux_sampler.judge(log(*steady(0, 12)), stamp(0.5), stamp(10.5), 101))
@@ -238,9 +243,9 @@ class Judge(unittest.TestCase):
 
     def test_a_span_the_sampler_did_not_cover(self):
         lines = log(*steady(2, 12))
-        self.assertIn("did not cover", linux_sampler.judge(lines, stamp(1.5), stamp(10), 101))
+        self.assertIn("did not cover", reason(lines, stamp(1.5), stamp(10), 101))
         lines = log(*steady(0, 9))
-        self.assertIn("did not cover", linux_sampler.judge(lines, stamp(1), stamp(9.5), 101))
+        self.assertIn("did not cover", reason(lines, stamp(1), stamp(9.5), 101))
 
     def test_a_gap(self):
         lines = log(*steady(0, 4), *steady(7, 12))
@@ -253,7 +258,7 @@ class Judge(unittest.TestCase):
     def test_a_failed_sample(self):
         lines = log(*steady(0, 12))
         lines.insert(6, f"{stamp(4.5)} failed OSError('no /proc/stat')")
-        self.assertIn("the sampler failed at", linux_sampler.judge(lines, stamp(0.5),
+        self.assertIn("the sampler failed at", reason(lines, stamp(0.5),
                                                                    stamp(10.5), 101))
 
     def test_each_bar(self):
@@ -262,7 +267,7 @@ class Judge(unittest.TestCase):
                               ((0.0, 0.0, 20.01), "the other cores: 20.01% of a CPU busy")):
             lines = log(*steady(0, 5), (6, values), *steady(7, 12),
                         busy=[(6, "busy 20.1% cpu2 another project's process: unit tests [7]")])
-            why = linux_sampler.judge(lines, stamp(0.5), stamp(10.5), 101)
+            why = reason(lines, stamp(0.5), stamp(10.5), 101)
             self.assertIn(words, why)
             self.assertIn(f"at {stamp(6)}, the most of it another project's process", why)
             self.assertNotIn("unit tests", why)
@@ -278,7 +283,7 @@ class Judge(unittest.TestCase):
         self.assertIsNone(linux_sampler.judge(lines, stamp(0.5), stamp(10.5), 101))
         # The first sample after the end closes a second that the span ends inside: judged.
         lines = log(*steady(0, 10), (11, busy), *steady(12, 13))
-        self.assertIn("the other cores", linux_sampler.judge(lines, stamp(0.5), stamp(10.5), 101))
+        self.assertIn("the other cores", reason(lines, stamp(0.5), stamp(10.5), 101))
         # Any later one is not.
         lines = log(*steady(0, 11), (12, busy))
         self.assertIsNone(linux_sampler.judge(lines, stamp(0.5), stamp(10.5), 101))
@@ -300,7 +305,7 @@ class Judge(unittest.TestCase):
         self.assertRaises(ValueError, linux_sampler.judge, lines, stamp(0.5), stamp(10.5), 101)
         lines = [line.replace(" others=0.0", "") if stamp(5) in line else line
                  for line in log(*steady(0, 12))]
-        self.assertIn("the other cores: nan%", linux_sampler.judge(lines, stamp(0.5),
+        self.assertIn("the other cores: nan%", reason(lines, stamp(0.5),
                                                                    stamp(10.5), 101))
 
     def test_the_summary_and_its_check(self):
@@ -315,7 +320,7 @@ class Judge(unittest.TestCase):
                                 ("2.00%", "5.01%", "sibling"),
                                 ("12.50%", "20.01%", "other cores"),
                                 ("12 samples", "1 samples", "cannot cover")):
-            self.assertIn(words, linux_sampler.summary_breaks(text.replace(old, new)))
+            self.assertIn(words, linux_sampler.summary_breaks(text.replace(old, new)) or "")
         self.assertIn("not a sampler summary", linux_sampler.summary_breaks("quiet"))
 
     def test_a_partial_last_line_is_left_for_later(self):
@@ -464,6 +469,8 @@ class DebianFiles(unittest.TestCase):
             stamp_load.stamp(text, stderr, busy)
         with self.assertRaisesRegex(ValueError, "did not cover"):
             stamp_load.stamp(text, stderr, "\n".join(clean.splitlines()[:30]))
+        with self.assertRaisesRegex(ValueError, "no start line"):
+            stamp_load.stamp(text, stderr, "\n".join(clean.splitlines()[1:]))
         with self.assertRaisesRegex(ValueError, "applied the Linux sampler rule already"):
             stamp_load.stamp(debian_text(), stderr, clean)
         broken = stamped.replace("0.00% of a CPU on the other cores",
@@ -551,6 +558,13 @@ class Driver(unittest.TestCase):
         rows = [line for line in self.args.run_log.read_text(encoding="utf-8").splitlines()
                 if line.startswith("| P-0106-")]
         self.assertEqual(len(rows), 3)
+
+    def test_too_many_withdrawn_in_all(self):
+        self.args.most_withdrawn = 1
+        with self.assertRaisesRegex(backtest_driver.Refused, "2 processes withdrawn under the "
+                                                             "Linux sampler rule, over the 1"):
+            self.judged(["30.0", "30.0", "0.0"])
+        self.assertEqual(self.calls, 2)
 
     def test_a_host_that_never_quiets(self):
         self.args.quiet_before, self.args.quiet_wait = 10, 0

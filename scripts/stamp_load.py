@@ -105,7 +105,9 @@ def linux_rule_line(sampler_text, start, end):
     why = linux_sampler.judge(lines, begin, finish)
     if why is not None:
         raise ValueError(f"the Linux sampler rule refuses the run: {why}")
-    first = next(line for line in lines if line.split()[1:2] == ["start"])
+    first = next((line for line in lines if line.split()[1:2] == ["start"]), None)
+    if first is None:
+        raise ValueError("the Linux sampler's log has no start line")
     settings = dict(word.split("=", 1) for word in first.split()[2:])
     return check_results.LINUX_RULE_WHOLE + linux_sampler.summary(
         lines, begin, finish, settings["core"], settings["sibling"])
