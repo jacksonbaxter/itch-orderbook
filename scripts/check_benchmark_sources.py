@@ -7,7 +7,10 @@ looks for the exact text. Run from anywhere:
     python3 -I scripts/check_benchmark_sources.py --cache DIR --log FILE [--only ID]
 
 DIR holds the downloads and must be outside the repo, because they are untrusted
-data. Each source gets its own directory. Exit status is non-zero on any failure.
+data. Each source gets its own directory. Exit status is non-zero on any failure, and an
+--only that names no checked ID is refused. Each needle is the source's own words for the
+claim, long enough that its number sits beside what it counts: a bare number or word could
+be found anywhere in a paper.
 """
 
 import argparse
@@ -311,7 +314,15 @@ CHECKS = [
         ["about 460,000 packets", "300,000 packets"],
     ),
     ("T-URING-2", BANDWIDTH, ["2547190"]),
-    ("T-WASM-1", "https://www.usenix.org/system/files/atc19-jangda.pdf", ["1.55", "1.45"]),
+    (
+        "T-WASM-1",
+        "https://www.usenix.org/system/files/atc19-jangda.pdf",
+        [
+            "WebAssembly runs on average 1.55× slower in Chrome",
+            "and 1.45× slower in Firefox than native code",
+            "Slowdown: geomean – 1.55× 1.45×",
+        ],
+    ),
     ("T-PERF-cook", CPPCON_2017, ["0.22% of all branches", "0.067% of all cache refs"]),
     ("T-PERF-kernel", f"{KERNEL}/arch/x86/events/amd/core.c", ["[PERF_COUNT_HW_CACHE_MISSES] = 0x0964,"]),
     (
@@ -326,7 +337,14 @@ CHECKS = [
     ),
     ("ctx-jane-street", "https://www.janestreet.com/tech-talks/building-an-exchange/", ["about 30% of their time"]),
     ("ctx-liburing-844", "https://github.com/axboe/liburing/issues/844", ["475 000", "430 000"]),
-    ("ctx-menkveld", "https://papers.tinbergen.nl/11076.pdf", ["positioning"]),
+    (
+        "ctx-menkveld",
+        "https://papers.tinbergen.nl/11076.pdf",
+        [
+            "a natural decomposition of its trading profit into a spread and a ‘positioning’ profit",
+            "The gross profit is decomposed into its two main components: positioning profit and net spread.",
+        ],
+    ),
     (
         "ctx-chrome-clamp",
         "https://raw.githubusercontent.com/chromium/chromium/main/third_party/blink/renderer/core/timing/time_clamper.h",
@@ -335,7 +353,8 @@ CHECKS = [
     (
         "ctx-v1605b",
         "https://www.amd.com/content/dam/amd/en/documents/products/embedded/ryzen/v1000-family-product-brief.pdf",
-        ["V1605B", "2400"],
+        # The row's base clock and memory rate, the last column before the ports.
+        ["V1605B 12-25Wb 4/8 2.0 3.6 8 1.1 4 2M FP5 2400 10Gb", "(MT/s)"],
     ),
     (
         "ctx-zen1-sog",
@@ -453,8 +472,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache", required=True, type=pathlib.Path)
     parser.add_argument("--log", required=True, type=pathlib.Path)
-    parser.add_argument("--only")
+    parser.add_argument("--only", help="one target's ID")
     args = parser.parse_args()
+    known = {target for target, _, _ in CHECKS} | {"T-SPSC-1", "T-TRADE-3"}
+    if args.only is not None and args.only not in known:
+        parser.error(f"--only {args.only}: no source is checked for that ID; "
+                     f"the IDs are {', '.join(sorted(known))}")
     args.log.parent.mkdir(parents=True, exist_ok=True)
 
     failures = 0

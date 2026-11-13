@@ -165,6 +165,39 @@ class Matrix(unittest.TestCase):
         self.assertIn("Not run on this host: 1, for Linux only", report)
         self.assertIn("1 for another system not run", self.output)
 
+    def test_a_run_in_which_no_fault_ran_fails(self):
+        self.define(good_fault(id="linux", system="Linux"))
+        self.assertEqual(self.matrix("--system", "Darwin"), 1, self.output)
+        self.assert_verdict(fm.OTHER_HOST, "linux")
+        self.assertIn("fault matrix: FAIL no fault ran", self.output)
+
+    def test_a_later_edit_an_earlier_one_disturbed_is_stale(self):
+        # Each old text occurs once in the file, but the second is gone once the first is made.
+        self.define(good_fault(mutations=[
+            {"file": "payload.txt", "old": "good", "new": "bad"},
+            {"file": "payload.txt", "old": "good\n", "new": "worse\n"}]))
+        self.assertEqual(self.matrix(), 1, self.output)
+        self.assert_verdict(fm.STALE)
+        self.assertIn("occurs 0 times, not once, after the edits before it", self.output)
+
+    def test_a_later_edit_of_the_text_an_earlier_one_made_is_not_stale(self):
+        self.define(good_fault(mutations=[
+            {"file": "payload.txt", "old": "good", "new": "nearly so"},
+            {"file": "payload.txt", "old": "nearly so", "new": "bad"}]))
+        self.assertEqual(self.matrix(), 0, self.output)
+        self.assert_verdict(fm.DETECTED)
+
+    def test_an_input_after_a_mutation_of_its_file_is_tried_on_the_mutated_text(self):
+        self.define(good_fault(mutations=[{"file": "payload.txt", "old": "good", "new": "gone"}],
+                               inputs=[{"file": "payload.txt", "op": "replace_text",
+                                        "old": "good", "new": "bad"}]))
+        # The input's old text is gone once the mutation is made, so the fault is stale: had it
+        # not been found so, inject() would stop the run on it.
+        (fault,) = fm.load_faults(self.root / "faults")
+        self.assertIn("payload.txt: replace_text cannot apply", fm.find_stale(fault, self.root) or "")
+        self.assertEqual(self.matrix(), 1, self.output)
+        self.assert_verdict(fm.STALE)
+
     def test_a_fault_for_this_system_runs(self):
         self.define(good_fault(id="linux", system="Linux",
                                mutations=[{"file": "notes.txt", "old": "twin twin", "new": "x"}]))

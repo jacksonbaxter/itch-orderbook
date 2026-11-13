@@ -1760,6 +1760,86 @@
         "signature": "RESULTS\\.md:\\d+: 27\\.50 is not in results/mm_pnl_12302019\\.md[^\\n]*\\n[^\\n]*RESULTS\\.md:\\d+: 14\\.36 is not in [^\\n]*\\n[^\\n]*RESULTS\\.md:\\d+: 25\\.96 is not in [^\\n]*\\n[^\\n]*RESULTS\\.md:\\d+: 2\\.435 is not in results/mm_pnl_12302019\\.md",
         "exit": 1
       }
+    },
+    {
+      "id": "sources-unknown-only-runs-nothing",
+      "breaks": "check_benchmark_sources.py --only with an ID it does not check runs nothing and exits 0",
+      "check": "test_check_benchmark_sources.py, an unknown --only",
+      "mutations": [
+        {
+          "file": "scripts/check_benchmark_sources.py",
+          "old": "    if args.only is not None and args.only not in known:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_benchmark_sources.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_unknown_only_is_refused_before_anything_is_fetched \\("
+      }
+    },
+    {
+      "id": "sources-wasm-needles-bare",
+      "breaks": "T-WASM-1's source is checked for the bare numbers 1.55 and 1.45",
+      "check": "test_check_benchmark_sources.py, the WASM slowdowns",
+      "mutations": [
+        {
+          "file": "scripts/check_benchmark_sources.py",
+          "old": "            \"WebAssembly runs on average 1.55× slower in Chrome\",\n            \"and 1.45× slower in Firefox than native code\",\n            \"Slowdown: geomean – 1.55× 1.45×\",\n",
+          "new": "            \"1.55\",\n            \"1.45\",\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_benchmark_sources.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_wasm_slowdowns_are_named_with_their_browser \\("
+      }
+    },
+    {
+      "id": "sources-menkveld-needle-one-word",
+      "breaks": "The Menkveld decomposition is checked for the one word positioning",
+      "check": "test_check_benchmark_sources.py, the decomposition",
+      "mutations": [
+        {
+          "file": "scripts/check_benchmark_sources.py",
+          "old": "            \"a natural decomposition of its trading profit into a spread and a ‘positioning’ profit\",\n            \"The gross profit is decomposed into its two main components: positioning profit and net spread.\",\n",
+          "new": "            \"positioning\",\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_benchmark_sources.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_decomposition_is_named_whole \\("
+      }
+    },
+    {
+      "id": "sources-v1605b-memory-anywhere",
+      "breaks": "The V1605B's 2400 MT/s is checked as the number 2400 anywhere in the brief",
+      "check": "test_check_benchmark_sources.py, the V1605B row",
+      "mutations": [
+        {
+          "file": "scripts/check_benchmark_sources.py",
+          "old": "        [\"V1605B 12-25Wb 4/8 2.0 3.6 8 1.1 4 2M FP5 2400 10Gb\", \"(MT/s)\"],\n",
+          "new": "        [\"V1605B\", \"2400\"],\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_benchmark_sources.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_memory_rate_is_on_the_v1605b_row \\("
+      }
     }
   ]
 }

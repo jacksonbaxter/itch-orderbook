@@ -13,7 +13,9 @@
 #                         demo's engine, itch_demo, with its smoke test in node.
 #
 # scripts/check.sh runs actionlint over this file locally. The sanitizers, clang-tidy, the
-# fuzz smoke runs and the fault matrix run there, not here.
+# fuzz smoke runs and the fault matrix run there, not here, and so does the demo page: no job
+# has a browser, so CI runs the demo's engine in node but never opens docs/ in a browser, and
+# does not check that the page runs. check.sh's demo stage does, with ITCH_BROWSER set.
 #
 # CI calls presets only, and produces no benchmark numbers. It needs nothing from data/.
 

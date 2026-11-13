@@ -11,6 +11,8 @@ only if that check fails with the expected signature. The verdicts are:
     timeout          the check did not finish.
     stale            a mutation's old text does not occur exactly once, or an input
                      mutation changes nothing, so the fault no longer injects anything.
+                     Each is tried on the text the ones before it left, as they are
+                     applied, so a later edit an earlier one disturbed is stale too.
     build-error      the mutant did not build. This is not a detection. Faults aimed
                      at the compiler build in their command, with empty build targets.
     not-run          a control failed, so no mutant was run.
@@ -52,7 +54,8 @@ new, which must occur exactly once) and remove_files.
     fault_matrix.py [--only ID] [--area NAME] [--log-dir DIR] [--out FILE] [--keep]
 
 Exit codes: 0 every selected fault this host's system can run detected and every control
-passed, 1 otherwise, 2 the definitions could not be used.
+passed, 1 otherwise, a run in which no fault ran included (every one selected stale or for
+another system), 2 the definitions could not be used.
 """
 
 from __future__ import annotations
@@ -243,14 +246,25 @@ INPUT_OPS = {
 
 
 def find_stale(fault, root):
-    """Why this fault no longer injects what it says, or None."""
+    """Why this fault no longer injects what it says, or None. Each mutation and input is
+    tried on the text as the ones before it left it, the order inject() applies them in."""
+    texts = {}
+
+    def current(name):
+        if name not in texts:
+            texts[name] = (root / name).read_bytes()
+        return texts[name]
+
     for mutation in fault.mutations:
         path = root / mutation["file"]
         if not path.is_file():
             return f"{mutation['file']} does not exist"
-        count = path.read_text(encoding="utf-8").count(mutation["old"])
+        text = current(mutation["file"]).decode("utf-8")
+        count = text.count(mutation["old"])
         if count != 1:
-            return f"{mutation['file']}: old text occurs {count} times, not once"
+            earlier = "" if text == path.read_text(encoding="utf-8") else ", after the edits before it"
+            return f"{mutation['file']}: old text occurs {count} times, not once{earlier}"
+        texts[mutation["file"]] = text.replace(mutation["old"], mutation["new"]).encode("utf-8")
     for spec in fault.inputs:
         path = root / spec["file"]
         if not path.exists():
@@ -259,13 +273,14 @@ def find_stale(fault, root):
             if not path.is_dir() or not any(path.iterdir()):
                 return f"{spec['file']} has nothing to remove"
             continue
-        data = path.read_bytes()
+        data = current(spec["file"])
         try:
             changed = INPUT_OPS[spec["op"]](data, spec)
         except (DefinitionError, KeyError, ValueError, IndexError, TypeError) as error:
             return f"{spec['file']}: {spec['op']} cannot apply: {error!r}"
         if changed == data:
             return f"{spec['file']}: {spec['op']} changes nothing"
+        texts[spec["file"]] = changed
     return None
 
 
@@ -625,6 +640,10 @@ def main(argv=None):
           f"{len(control_failures)} control failures"
           + (f", {len(faults) - run_here} for another system not run" if run_here < len(faults)
              else ""), flush=True)
+    if not live:
+        print("fault matrix: FAIL no fault ran: every one selected is stale or for another "
+              "system", flush=True)
+        return 1
     return 0 if passed == run_here and not control_failures else 1
 
 
