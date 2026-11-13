@@ -89,3 +89,9 @@ target_include_directories(bench_udp PRIVATE "${PROJECT_SOURCE_DIR}/tests")
 target_link_libraries(bench_udp PRIVATE itch_bench_support hdr_histogram::hdr_histogram_static)
 itch_udp_modes(bench_udp)
 itch_apply_options(bench_udp)
+
+# T-PARSE-1 to T-PARSE-3: the framing walk, itch-book's decode and the strict decode of every
+# field, each over a day held in memory.
+add_executable(bench_parse bench_parse.cpp)
+target_link_libraries(bench_parse PRIVATE itch_bench_support)
+itch_apply_options(bench_parse)
