@@ -6,7 +6,7 @@ Working notes, kept as we go. Includes what didn't help.
 
 Eleven subagents ran, all on `claude-opus-5-5` at high effort, confirmed by `verify_models.py` from the API request records. The account usage limit stopped the second round at about 13:00. Those five subagents returned no final message, but all five evidence files had already reached disk with their end sections, so none of that work needed repeating. A twelfth, narrow one ran later to look for anything else missed (below).
 
-Evidence is in `build-research/evidence/` (gitignored). Third-party clones and page snapshots are in `.orchestrator/research-cache/itch-orderbook/`.
+Evidence is in `build-research/evidence/` (gitignored). Third-party clones and page snapshots are kept outside the repository.
 
 ### Verification
 
