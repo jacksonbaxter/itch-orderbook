@@ -2,6 +2,7 @@
 """check_predictions.py on a real, throwaway git history (criterion 31)."""
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -557,6 +558,43 @@ class History(unittest.TestCase):
         code, output = check(self.root, "--no-git")
         self.assertEqual(code, 1)
         self.assertIn("prediction-missing", output)
+
+
+class Rewordings(unittest.TestCase):
+    """r14-5: scripts/run_log_rewordings.json is pinned, so that no entry added later lets an
+    edit of the log through unseen. Its entries are exactly the lines that changed between the
+    log before and after each rewording commit, below; the file's sha256 is pinned too, so that
+    any change to it is a change to this test. In a clone without those commits (a shallow
+    one), the history half is skipped and says so, and the pin on the file's bytes still holds."""
+
+    # (the commit before, the rewording commit): the kinds (2026-11-13), then the grammar's
+    # order (r14-2, the same day).
+    STEPS = (("95772ae", "940484d"), ("731ae85", "4fa29bb"))
+    SHA256 = "31674e48bbec7f4f563675ee8973f2f645d4926352555deab46d0d3ce18e88d7"
+    ENTRIES = 166
+
+    def test_the_file_is_pinned(self):
+        path = REPO_ROOT / check_predictions.REWORDINGS
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), self.SHA256)
+        self.assertEqual(len(check_predictions.rewordings(REPO_ROOT)), self.ENTRIES)
+
+    def test_the_entries_are_the_rewording_commits_changes(self):
+        def log(commit):
+            found = subprocess.run(["git", "-C", str(REPO_ROOT), "show",
+                                    f"{commit}:{check_predictions.RUN_LOG}"],
+                                   capture_output=True, text=True, check=False)
+            return found.stdout if found.returncode == 0 else None
+        expected = {}
+        for before, after in self.STEPS:
+            old, new = log(before), log(after)
+            if old is None or new is None:
+                self.skipTest(f"this clone does not hold {before} and {after} (a shallow one?), "
+                              "so only the pin on the file's bytes is checked")
+            old, new = old.split("\n"), new.split("\n")
+            self.assertEqual(len(old), len(new))
+            expected.update({check_predictions.digest(a): check_predictions.digest(b)
+                             for a, b in zip(old, new) if a != b})
+        self.assertEqual(check_predictions.rewordings(REPO_ROOT), expected)
 
 
 if __name__ == "__main__":

@@ -6803,6 +6803,28 @@
         "signature": "FAIL: test_a_line_reworded_twice",
         "exit": 1
       }
+    },
+    {
+      "id": "bench-run-log-rewording-added-unseen",
+      "breaks": "An entry is added to scripts/run_log_rewordings.json, which would let one more edit of an earlier run-log line through, and no test sees it",
+      "check": "test_check_predictions.py Rewordings",
+      "mutations": [
+        {
+          "file": "scripts/run_log_rewordings.json",
+          "old": "  \"lines\": {\n",
+          "new": "  \"lines\": {\n    \"0000000000000000000000000000000000000000000000000000000000000000\": \"1111111111111111111111111111111111111111111111111111111111111111\",\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_check_predictions.py",
+        "Rewordings"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_file_is_pinned",
+        "exit": 1
+      }
     }
   ]
 }
