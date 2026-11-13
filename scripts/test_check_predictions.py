@@ -3,6 +3,7 @@
 
 import contextlib
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -291,6 +292,85 @@ class History(unittest.TestCase):
     def test_a_merge_that_drops_a_branch_row(self):
         self.merge_two_branches(keep_side=False)
         self.assert_fails("run-log-rewritten")
+
+    # On 2026-11-13 each program a row named that is not this project's was given by its kind;
+    # scripts/run_log_rewordings.json lists each line that changed, by digest, as it was and
+    # as it became, and no other change to an earlier line is allowed.
+    REFUSED = "| P-0001-20261031T090000Z | P-0001 | abc (clean) | Darwin | refused at machine_check |"
+    NAMED = ("| P-0001-20261031T090000Z | P-0001 | abc (clean) | Darwin | withdrawn: the sampler "
+             "saw frobd at 41.2% CPU |")
+    KIND = ("| P-0001-20261031T090000Z | P-0001 | abc (clean) | Darwin | withdrawn: the sampler "
+            "saw a macOS system daemon at 41.2% CPU |")
+
+    def reword(self, old, new, listed):
+        """The log committed with old, then with old become new, the change listed or not."""
+        self.copy("predictions.md")
+        self.commit("predictions.md")
+        log = self.results / "run_log.md"
+        self.copy("run_log.md", "bench_fixture.md")
+        log.write_text(log.read_text(encoding="utf-8").replace(self.REFUSED, old),
+                       encoding="utf-8")
+        self.commit("run_log.md", "bench_fixture.md")
+        (self.root / "scripts").mkdir(exist_ok=True)
+        lines = {check_predictions.digest(old): check_predictions.digest(new)} if listed else {}
+        (self.root / check_predictions.REWORDINGS).write_text(
+            json.dumps({"lines": lines}), encoding="utf-8")
+        log.write_text(log.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+        self.commit("run_log.md")
+
+    def test_a_listed_rewording_of_a_row(self):
+        self.reword(self.NAMED, self.KIND, listed=True)
+        code, output = check(self.root)
+        self.assertEqual(code, 0, output)
+
+    def test_an_unlisted_rewording_of_a_row(self):
+        self.reword(self.NAMED, self.KIND, listed=False)
+        self.assert_fails("run-log-rewritten")
+
+    def test_a_listed_rewording_changed_back(self):
+        self.reword(self.NAMED, self.KIND, listed=True)
+        log = self.results / "run_log.md"
+        log.write_text(log.read_text(encoding="utf-8").replace(self.KIND, self.NAMED),
+                       encoding="utf-8")
+        self.assert_fails("run-log-rewritten")
+        self.commit("run_log.md")
+        self.assert_fails("run-log-rewritten")
+
+    def test_a_listed_rewording_changes_only_its_own_line(self):
+        self.reword(self.NAMED, self.KIND, listed=True)
+        log = self.results / "run_log.md"
+        log.write_text(log.read_text(encoding="utf-8").replace("| published |", "| refused |"),
+                       encoding="utf-8")
+        self.commit("run_log.md")
+        self.assert_fails("run-log-rewritten")
+
+    def test_a_merge_of_a_branch_from_before_a_rewording(self):
+        """A branch made before the rewording appends a row; the trunk rewords; the merge
+        keeps the reworded line and the branch's row."""
+        self.copy("predictions.md")
+        self.commit("predictions.md")
+        log = self.results / "run_log.md"
+        self.copy("run_log.md", "bench_fixture.md")
+        base = log.read_text(encoding="utf-8").replace(self.REFUSED, self.NAMED)
+        log.write_text(base, encoding="utf-8")
+        self.commit("run_log.md", "bench_fixture.md")
+        side = "| P-0001-side | P-0001 | abc | Darwin | published |\n"
+        self.git("checkout", "-q", "-b", "side")
+        log.write_text(base + side, encoding="utf-8")
+        self.commit("run_log.md")
+        self.git("checkout", "-q", "-")
+        (self.root / "scripts").mkdir(exist_ok=True)
+        (self.root / check_predictions.REWORDINGS).write_text(json.dumps({"lines": {
+            check_predictions.digest(self.NAMED): check_predictions.digest(self.KIND)}}),
+            encoding="utf-8")
+        reworded = base.replace(self.NAMED, self.KIND)
+        log.write_text(reworded, encoding="utf-8")
+        self.commit("run_log.md")
+        self.git("merge", "-q", "--no-ff", "--no-commit", "-s", "ours", "side")
+        log.write_text(reworded + side, encoding="utf-8")
+        self.commit("run_log.md")
+        code, output = check(self.root)
+        self.assertEqual(code, 0, output)
 
     def test_require_before_a_run(self):
         code, output = check(self.root, "--require", "P-0001")

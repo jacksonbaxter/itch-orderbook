@@ -28,6 +28,7 @@ import spsc_driver  # noqa: E402
 import run_record  # noqa: E402
 import stamp_load  # noqa: E402
 import test_driver_records  # noqa: E402
+from test_process_kinds import process_map  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
@@ -141,7 +142,7 @@ SAMPLED = {"every": 2.0,
                           "published: 2 samples, the longest gap 2 s, no other process above "
                           "20% CPU")] * 3,
            "withdrawn": [("2026-10-31T10:00:05Z", "2026-10-31T10:00:06Z",
-                          "the CPU sampler saw launchd at 25.0% CPU at 2026-10-31T10:00:05Z")]}
+                          "the CPU sampler saw frobd at 25.0% CPU at 2026-10-31T10:00:05Z")]}
 CROSS_CORE = ("agree: core 6's clock minus core 4's within [-120, 140] ticks, [-60.1, 70.1] ns, "
               "over 1000000 started on each core; the fastest round trip 260 ticks, 130.2 ns; "
               "0 of 2000000 trips read a later stamp below an earlier one")
@@ -379,53 +380,60 @@ class EdgeSamples(unittest.TestCase):
         self.assertIsNone(spsc_driver.span_unquiet(edge, begin, end))
         stamp_load.sampler_line("\n".join(edge), begin, end)
         inside = lines[:2] + ["2026-11-05T09:00:02Z FOREIGN 31.0 /usr/bin/a-backup"] + lines[2:]
-        self.assertIn("a system process at 31.0% CPU",
+        self.assertIn("another process at 31.0% CPU",
                       spsc_driver.span_unquiet(inside, begin, end))
         with self.assertRaises(ValueError):
             stamp_load.sampler_line("\n".join(inside), begin, end)
 
 
 class ForeignByKind(unittest.TestCase):
-    def test_a_new_kind_record_names_a_foreign_process_by_kind_and_an_old_one_as_published(self):
-        """Anything committed names another process by its kind. A run, and a render of a
-        record with run.json, name a FOREIGN line's process by kind with its CPU share and
-        time; a render of a record made before run.json names it by program, as published.
-        The raw log keeps the command either way."""
-        kinds = {"/System/Library/CoreServices/x/y --z": "a system process",
-                 "/usr/libexec/syspolicyd": "a system process",
-                 "/Applications/Some Browser.app/Contents/MacOS/Some Browser --type=gpu":
-                     "an application's process",
-                 "/usr/local/bin/other_job": "another process", "some_fuzzer -runs=0":
-                     "another process"}
-        for command, kind in kinds.items():
-            self.assertEqual(spsc_driver.wasm_bench.foreign_kind(command), kind, command)
+    def test_every_record_gives_a_foreign_process_by_kind(self):
+        """Anything committed gives another process by its kind. A run, and a render of any
+        record, made before run.json or after, give a FOREIGN line's process by the kind the
+        name-to-kind map gives it, with its CPU share and time, or as another process with no
+        map; a published file is held to its raw log by kind, share and time. The raw log keeps
+        the command. The program here is invented."""
         begin, end = "2026-11-05T09:00:01Z", "2026-11-05T09:00:05Z"
         lines = [f"2026-11-05T09:00:{s:02d}Z sample" for s in (0, 2, 4, 6)]
-        lines.insert(2, "2026-11-05T09:00:02Z FOREIGN 31.0 /usr/libexec/a-backup --all")
+        lines.insert(2, "2026-11-05T09:00:02Z FOREIGN 31.0 /opt/fixture/frobd --all")
         said = "the CPU sampler saw {} at 31.0% CPU at 2026-11-05T09:00:02Z"
-        self.assertEqual(spsc_driver.span_unquiet(lines, begin, end), said.format(
-            "a system process"))
-        self.assertEqual(spsc_driver.span_unquiet(lines, begin, end, False), said.format(
-            "a-backup"))
         with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
-            raw = Path(directory)
-            (raw / "sampler.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-            for name, new in (("a-backup", False), ("a system process", True)):
-                if new:
-                    (raw / run_record.RECORD_NAME).write_text("{}", encoding="utf-8")
-                published = ("## Sampler\n\n| Process | Started | Finished | Outcome |\n"
-                             "|---|---|---|---|\n"
-                             f"| withdrawn 1 | {begin} | {end} | withdrawn: "
-                             f"{said.format(name)} |\n")
-                sampled = spsc_driver.published_sampled(published, raw, 2.0)
-                self.assertEqual(sampled["withdrawn"], [(begin, end, said.format(name))])
-                other = "a-backup" if new else "a system process"
-                with self.assertRaisesRegex(spsc_driver.Refused, "sampler.txt gives"):
-                    spsc_driver.published_sampled(
-                        published.replace(said.format(name), said.format(other)), raw, 2.0)
-        with self.assertRaisesRegex(ValueError, "the first a system process at 31.0% CPU at "
-                                                "2026-11-05T09:00:02Z$"):
-            stamp_load.sampler_line("\n".join(lines), begin, end)
+            kinds = Path(directory) / "kinds.json"
+            kinds.write_text(json.dumps({"programs": {"frobd": "a backup tool"}}),
+                             encoding="utf-8")
+            for found, kind in ((None, "another process"), (kinds, "a backup tool")):
+                with self.subTest(kind=kind), process_map(found):
+                    self.assertEqual(spsc_driver.span_unquiet(lines, begin, end),
+                                     said.format(kind))
+                    for new in (False, True):
+                        raw = Path(directory) / f"raw-{kind}-{new}"
+                        raw.mkdir()
+                        (raw / "sampler.txt").write_text("\n".join(lines) + "\n",
+                                                         encoding="utf-8")
+                        if new:
+                            (raw / run_record.RECORD_NAME).write_text("{}", encoding="utf-8")
+                        published = ("## Sampler\n\n| Process | Started | Finished | Outcome |\n"
+                                     "|---|---|---|---|\n"
+                                     f"| withdrawn 1 | {begin} | {end} | withdrawn: "
+                                     f"{said.format(kind)} |\n")
+                        sampled = spsc_driver.published_sampled(published, raw, 2.0)
+                        self.assertEqual(sampled["withdrawn"], [(begin, end, said.format(kind))])
+                        # A file from before the kinds names the process: held by its kind.
+                        named = published.replace(said.format(kind), said.format("frobd"))
+                        self.assertEqual(spsc_driver.published_sampled(named, raw, 2.0),
+                                         sampled)
+                        others = [said.format("a macOS system daemon"),
+                                  said.replace("31.0%", "31.5%").format(kind),
+                                  said.replace("09:00:02Z", "09:00:04Z").format(kind)]
+                        if found:
+                            others.append(said.format("quuxd"))  # Another process by the map.
+                        for other in others:
+                            with self.assertRaisesRegex(spsc_driver.Refused, "sampler.txt gives"):
+                                spsc_driver.published_sampled(published.replace(
+                                    said.format(kind), other), raw, 2.0)
+                    with self.assertRaisesRegex(ValueError, f"the first {kind} at 31.0% CPU at "
+                                                            "2026-11-05T09:00:02Z$"):
+                        stamp_load.sampler_line("\n".join(lines), begin, end)
 
 
 class Debian(unittest.TestCase):
@@ -552,7 +560,7 @@ class Driver(unittest.TestCase):
                  "2026-10-31T10:00:12Z sample"]
         self.assertIsNone(spsc_driver.span_unquiet(lines, "2026-10-31T10:00:03Z",
                                                    "2026-10-31T10:00:04Z"))
-        self.assertIn("saw a system process at 30.0% CPU", spsc_driver.span_unquiet(
+        self.assertIn("saw another process at 30.0% CPU", spsc_driver.span_unquiet(
             lines, "2026-10-31T10:00:01Z", "2026-10-31T10:00:03Z") or "")
         self.assertIn("went 6 s without a sample", spsc_driver.span_unquiet(
             lines, "2026-10-31T10:00:05Z", "2026-10-31T10:00:11Z") or "")
@@ -643,7 +651,7 @@ class EndToEnd(unittest.TestCase):
             result, out, log = self.run_driver(Path(directory), fake, busy_first=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("withdrawn: queues, repetition 1 on the Mac, exit 0; the CPU sampler "
-                          "saw a system process at 50.0% CPU", log)
+                          "saw another process at 50.0% CPU", log)
             # The driver leaves the outcome to stamp_load.py (r5-3).
             self.assertIn("| written, pending the load stamp: ", log)
             self.assertNotIn("| published", log)
@@ -651,7 +659,7 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual(codes(text), {"load-not-stamped", "sampler-stand-in"})
             self.assertIn("; 1 withdrawn under the rule", text)
             self.assertRegex(text, r"\| withdrawn 1 \| .* \| withdrawn: the CPU sampler saw "
-                                   r"a system process at 50.0% CPU")
+                                   r"another process at 50.0% CPU")
             raw = test_driver_records.run_folder_of(Path(directory) / "raw")
             self.assertTrue((raw / "queues-repetition-1-withdrawn-1.json").is_file())
             self.assertIn("FOREIGN 50.0 /usr/bin/other_job",

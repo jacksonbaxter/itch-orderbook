@@ -46,13 +46,28 @@ figure's label is the k-th label; and if a `key: value` line of a cited file who
 clause names (`fault_check` by "fault check") gives that label figures, as "pool-index 136",
 the figure must be one of them, in at least one cited file that gives the label any.
 
+A one-word row label (rigtorp, `switch`) is not a label above, since a lone word names too
+much, but it holds a figure that stands beside it, when a table of the cited file that holds
+the figure has a row of that one word (its first cell, or the part before a comma): the word
+straight before the figure ("`switch` 2.0303"), or, for the first figure of a page table
+row's second cell, the row's first cell ("| rigtorp | 198.5 |"). Such a figure is held only
+by a cell in a row of that word, or a cell or segment where the word stands straight before
+it; the word straight before a figure is nearer than any label further back in its clause.
+
+The two integers of an `N of M` ("22 of 33") must stand together in one cited file: each held
+by the rules above in one table, or in one line outside tables, and twice there if N is M.
+
 What it cannot do. It does not read units, so 5.15 M against a cell of 5.15 ms passes. It
 reads words, not meaning, so a clause that shares a word with the wrong place by chance passes,
 and a clause that names no label is held by any place that shares a word. It does not follow
 arithmetic, so a figure the page derives (a sum, a difference, a rounding) must stand as
 written in the file. Two figures of one clause that both share its words, with no label or
 list to tell them apart, can trade places unseen; the generated tables are held cell by cell
-by `results_table.py --check` instead. Which short integers count is decided by the words
+by `results_table.py --check` instead. So the gate holds that each figure is in its cited file
+beside a word its clause shares, and, where a label, a one-word row label or an `N of M` ties
+it, in that row or beside that partner; it does not hold that it is the figure for that place
+when the file has the same figure elsewhere under a shared word. Counts written in words
+(nine, four) are not read. Which short integers count is decided by the words
 next to them, not by what they count, and on a line that cites no results file none is read:
 there a short integer is as likely a count of something built (48 scenarios) as a
 measurement, so a line whose only numbers are short integers needs no citation.
@@ -189,6 +204,14 @@ def labels_of(cell):
     return {part for part in (label, label.split(",")[0].strip()) if distinct(part)}
 
 
+def one_word(cell):
+    """A row's one-word labels: its first cell, or the part of it before a comma, when that is
+    one plain word (rigtorp, `switch`), which distinct() leaves out."""
+    label = re.sub(r"\s+", " ", plain(cell)).strip()
+    return {part for part in (label, label.split(",")[0].strip())
+            if re.fullmatch(r"[a-z]+", part)}
+
+
 def distinct(label):
     """Whether a label is one: a phrase of two to eight words, or a word holding a digit, `-`
     or `_` (S4, pool-index, T-BOOK-1); a lone plain word (max, add) names too much."""
@@ -204,6 +227,8 @@ class Source:
     def __init__(self, text):
         self.places = defaultdict(list)    # figure -> [Place]
         self.tables = defaultdict(set)     # table number -> its rows' labels
+        self.words = defaultdict(set)      # table number -> its rows' one-word labels
+        self.groups = defaultdict(list)    # group -> the figures in it, as often as they stand
         self.keyed = []                    # (key words, {label: {figures}}), key: value lines
         heads, table, caption, said = [], 0, set(), set()
         lines = text.splitlines()
@@ -220,25 +245,31 @@ class Source:
                     heads, table, caption = cells, table + 1, said
                     continue
                 labels = labels_of(cells[0])
+                word = one_word(cells[0])
                 self.tables[table] |= labels
+                self.words[table] |= word
                 for index, cell in enumerate(cells):
                     head = heads[index] if index < len(heads) else ""
                     words = words_of(head) | (words_of(cell) if index else set())
-                    place = ("cell", labels, words, table, words_of(cells[0]) | caption,
-                             plain(head).strip())
-                    for _, figure in tokens_in(cell):
-                        self.places[figure].append(place)
+                    for position, figure in tokens_in(cell):
+                        self.places[figure].append(
+                            ("cell", labels, words, table, words_of(cells[0]) | caption,
+                             plain(head).strip(), word, ("table", table),
+                             flat(cell)[:position]))
+                        self.groups[("table", table)].append(figure)
                 continue
-            self.read_line(line)
+            self.read_line(line, number)
 
-    def read_line(self, line):
+    def read_line(self, line, number):
         key = KEY_LINE.match(line)
         given = defaultdict(set)
         for segment in CLAUSE_END.split(line):
             words = words_of(segment)
             text = flat(segment)
             for position, figure in tokens_in(segment):
-                self.places[figure].append(("segment", set(), words, None, text[:position], ""))
+                self.places[figure].append(("segment", set(), words, None, text[:position], "",
+                                            set(), ("line", number), text[:position]))
+                self.groups[("line", number)].append(figure)
                 before = re.search(r"([\w.'-]+)\W*$", text[:position])
                 if key and before:
                     given[before.group(1).strip(".'")].add(figure)
@@ -249,6 +280,11 @@ class Source:
         """The labels of every row of every table that holds the figure somewhere."""
         tables = {place[3] for place in self.places.get(figure, ()) if place[0] == "cell"}
         return set().union(*(self.tables[table] for table in tables)) if tables else set()
+
+    def words_holding(self, figure):
+        """The one-word labels of every row of every table that holds the figure somewhere."""
+        tables = {place[3] for place in self.places.get(figure, ()) if place[0] == "cell"}
+        return set().union(*(self.words[table] for table in tables)) if tables else set()
 
 
 def source_text(path):
@@ -281,6 +317,9 @@ class Figure:
         self.cell = span              # where its labels are looked for: in a table row, its
                                       # cell from the last `;` before it
         self.head = ""                # in a table row, its column's head, plain
+        self.first = ""               # in a table row, its row's first cell
+        self.second = False           # whether it stands in a table row's second cell
+        self.partner = None           # the other figure of an `N of M`
 
     def __iter__(self):
         return iter((self.line, self.figure, self.cited))
@@ -362,6 +401,9 @@ def figures_in(text):
                     column = len(left) - (1 if line.lstrip().startswith("|") else 0)
                     if 0 <= column < len(heads):
                         figure.head = plain(heads[column]).strip()
+                    if column > 0:
+                        figure.first = cells_of(line)[0]
+                        figure.second = column == 1
                 yield figure
 
 
@@ -413,17 +455,39 @@ def nearest_label(source, figure, text):
     return best[1] if best else None
 
 
-def held_in(source, figure, text):
-    """Whether one results file holds the figure in a place its clause names."""
+def beside(source, figure, text):
+    """The one-word row label the figure stands beside, when a table of the file that holds the
+    figure has it as a row label, and whether it is the word straight before the figure: the
+    word straight before it (`switch` 2.0303), else, for the first figure of a page table row's
+    second cell, the row's first cell (| rigtorp | 198.5 |)."""
+    words = source.words_holding(figure.value)
+    before = re.search(r"(?<![\w-])([a-z]+)[\s:]*$", text[figure.cell[0]:figure.position])
+    if before and before.group(1) in words:
+        return before.group(1), True
+    first = one_word(figure.first) & words
+    if first and figure.second and not re.search(r"\d", text[figure.cell[0]:figure.position]):
+        return next(iter(first)), False
+    return None, False
+
+
+def held_where(source, figure, text):
+    """The groups (a table, or a line outside tables) of every place in one results file that
+    holds the figure where its clause names it; empty if none does."""
     label = figure.label
     if label is not None:
         given = [figures[label] for key, figures in source.keyed
                  if key and key <= figure.context and label in figures]
         if given:
-            return any(figure.value in figures for figures in given)
+            return {("key", label)} if any(figure.value in figures for figures in given) \
+                else set()
     else:
         label = nearest_label(source, figure, text)
-    for kind, labels, words, _, extra, head in source.places.get(figure.value, ()):
+    word, straight = beside(source, figure, text)
+    if straight and figure.label is None:
+        label = None    # The word straight before the figure is nearer than any label.
+    found = set()
+    for kind, labels, words, _, extra, head, row_words, group, ahead in \
+            source.places.get(figure.value, ()):
         if label is not None:
             if kind == "cell" and label not in labels:
                 continue
@@ -431,9 +495,38 @@ def held_in(source, figure, text):
                 continue
         elif kind == "cell":
             words = words | extra
+        if word is not None and word not in row_words \
+                and not re.search(rf"(?<![\w-]){word}[\s:]*$", ahead):
+            continue
         if shares(words, figure.context) or (head and head == figure.head):
+            found.add(group)
+    return found
+
+
+def held_in(source, figure, text):
+    """Whether one results file holds the figure in a place its clause names."""
+    return bool(held_where(source, figure, text))
+
+
+def together(source, figure, text):
+    """Whether one results file holds an `N of M`'s two figures together: each where its
+    clause names it, both in one table or one line, and twice if N is M."""
+    partner = figure.partner
+    for group in held_where(source, figure, text) & held_where(source, partner, text):
+        if group[0] != "key" and (figure.value != partner.value
+                                  or source.groups[group].count(figure.value) >= 2):
             return True
     return False
+
+
+def pair_of_of(figures, line):
+    """Pair the two integers of each `N of M` on a line."""
+    ordered = sorted(figures, key=lambda figure: figure.position)
+    for first, second in zip(ordered, ordered[1:]):
+        if not all(re.fullmatch(r"\d+", figure.value) for figure in (first, second)):
+            continue
+        if re.fullmatch(r"\s+of\s+", line[first.position + len(first.figure):second.position]):
+            first.partner, second.partner = second, first
 
 
 def check_page(root, page, results):
@@ -451,6 +544,7 @@ def check_page(root, page, results):
             labels |= set().union(*results[name].tables.values()) if results[name].tables \
                 else set()
         pair_lists(members, lines[number - 1], labels)
+        pair_of_of(members, lines[number - 1])
     violations = []
     for figure in found:
         if figure.cited is None and not figure.row:
@@ -466,6 +560,15 @@ def check_page(root, page, results):
             continue
         line = flat(lines[figure.line - 1])
         if any(held_in(results[name], figure, line) for name in names):
+            partner = figure.partner
+            if (partner is None or partner.position < figure.position
+                    or any(together(results[name], figure, line) for name in names)):
+                continue
+            where = (f"results/{names[0]}" if len(names) == 1 and figure.cited is not None
+                     else "any file it cites" if figure.cited is not None else "any results file")
+            violations.append((page, figure.line,
+                               f"{figure.figure} of {partner.figure} is not in {where} together, "
+                               "in one table or one line"))
             continue
         whose = f" as {figure.label}'s" if figure.label else ""
         if figure.cited is None:

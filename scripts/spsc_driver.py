@@ -89,6 +89,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
+import process_kinds  # noqa: E402
 import run_record  # noqa: E402
 import wasm_bench  # noqa: E402
 
@@ -224,10 +225,10 @@ def span_lines(lines, begin, end):
     return [line for line in lines if low <= wasm_bench.at(line.split()[0]) <= high]
 
 
-def span_unquiet(lines, begin, end, by_kind=True):
-    """Why the sampler does not show the span quiet, or None; a foreign process named by kind
-    unless by_kind is False (wasm_bench.unquiet)."""
-    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end, by_kind)
+def span_unquiet(lines, begin, end):
+    """Why the sampler does not show the span quiet, or None; a foreign process given by its
+    kind (wasm_bench.unquiet)."""
+    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end)
 
 
 def span_summary(lines, begin, end):
@@ -934,15 +935,17 @@ def published_sampled(published, raw_dir, every):
     if not path.is_file():
         raise Refused("raw", "the file has a Sampler section and the raw folder no sampler.txt")
     lines = path.read_text(encoding="utf-8").splitlines()
-    # A record of the new kind named a foreign process by kind; one made before, by name.
-    by_kind = run_record.is_new_kind(raw_dir)
+    # Every record, old or new, gives a foreign process by its kind, through the name-to-kind
+    # map ($ITCH_PROCESS_KINDS): a file rendered with the map is checked with it. A file
+    # written before 2026-11-13 names the process; it is held to the raw log by the kind of
+    # the process it names, with the share and the time.
     sampled = {"every": every, "stand_in": check_results.STAND_IN_SAMPLER in published,
                "published": [], "withdrawn": []}
     for cells in check_results.table_rows(published, "Sampler"):
         if len(cells) != 4 or cells[0] == "Process":
             continue
         what, begin, end, said = cells
-        why = span_unquiet(lines, begin, end, by_kind)
+        why = span_unquiet(lines, begin, end)
         if what.startswith("repetition "):
             again = span_summary(lines, begin, end) if why is None else f"unquiet: {why}"
             sampled["published"].append((begin, end, again))
@@ -951,7 +954,7 @@ def published_sampled(published, raw_dir, every):
             sampled["withdrawn"].append((begin, end, why))
         else:
             raise Refused("published", f"a Sampler row of no repetition: {what!r}")
-        if again != said:
+        if again != process_kinds.reworded(said):
             raise Refused("raw", f"{what}: sampler.txt gives {again!r}, the file {said!r}")
     return sampled
 

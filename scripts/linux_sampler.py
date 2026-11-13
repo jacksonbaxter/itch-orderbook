@@ -51,6 +51,9 @@ import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import process_kinds  # noqa: E402
 EVERY_S = 1.0
 LONGEST_GAP_S = 2.5  # 2.5 times the interval, as the Mac rule's 5 s is of its 2 s
 CORE_WAIT_PCT = 1.0
@@ -62,13 +65,16 @@ WRAPPERS = ("measure.sh", "/usr/bin/time")
 PF_KTHREAD = 0x00200000  # include/linux/sched.h
 STAMP = "%Y-%m-%dT%H:%M:%S.%fZ"
 
-# What another process is, for anything committed: never its name.
-KERNEL = "a kernel thread"
-SERVICE = "a system service"
-OTHER_PROJECT = "another project's process"
-THIS_PROJECT = "another process of this project"
-OTHER = "another process of this user"
-UNNAMED = "no process to name, so kernel or interrupt work"
+# What another process is, for anything committed: never its name, always one of
+# process_kinds.KINDS, told from /proc alone (kind_of), so this needs no name-to-kind map.
+KERNEL = process_kinds.KERNEL_THREAD
+SERVICE = process_kinds.LINUX_DAEMON
+OTHER_PROJECT = process_kinds.OTHER_PROJECT
+THIS_PROJECT = process_kinds.THIS_PROJECT
+OTHER = process_kinds.OTHER
+UNNAMED = process_kinds.UNNAMED
+# The words logs written before 2026-11-13 used, read as the kinds they now are.
+EARLIER_WORDS = {"a system service": SERVICE, "another process of this user": OTHER}
 
 
 def stamp_of(moment):
@@ -331,7 +337,8 @@ def top_kind(lines, moment):
     for line in lines:
         words = line.split(None, 4)
         if len(words) == 5 and words[1] == "busy" and at(words[0]) == moment:
-            return words[4].split(":", 1)[0]
+            kind = words[4].split(":", 1)[0]
+            return EARLIER_WORDS.get(kind, kind)
     return UNNAMED
 
 

@@ -119,7 +119,8 @@ stage_script_tests() {
     python_test scripts/test_check_sh.py &&
     python_test scripts/test_check_benchmark_sources.py &&
     python_test scripts/test_sanitizer_tests.py &&
-    python_test scripts/test_fuzz_report.py
+    python_test scripts/test_fuzz_report.py &&
+    python_test scripts/test_process_kinds.py
 }
 
 # RESULTS.md's tables and the README's headline against a fresh run over results/, and the
@@ -132,8 +133,9 @@ stage_readme() {
     python_test scripts/gate_numbers.py --page README.md --page RESULTS.md --page WRITEUP.md
 }
 
-# Reads .github/workflows with the pinned actionlint, fetched into the build tree. No
-# workflow has ever run on GitHub, and this does not run one.
+# Reads .github/workflows with the pinned actionlint, fetched into the build tree. It runs
+# no workflow: the workflow runs on GitHub for every push (docs/NOTES.md, "CI's first runs
+# on GitHub").
 stage_actionlint() { python_test scripts/lint_workflows.py; }
 
 stage_corpus() {

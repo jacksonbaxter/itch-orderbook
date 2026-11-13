@@ -27,7 +27,7 @@ Published server-class and desktop figures will beat `debian`. Targets stay at t
 
 **Other processes' load.** Both hosts are shared, and `measure.sh` keeps only this project's measurements apart, so a reported process is published only if a sampler ran beside it and saw no other work where it could slow it; one that fails is withdrawn, with its own run-log row naming the other work by kind, never by program, and run again under the same prediction, never withdrawn for its numbers. On the Mac the sampler reads every process every 2 s, and a process is withdrawn if another passed 20% of a CPU inside its span or two samples were more than 5 s apart. On `debian`, for every run from 2026-11-13T03:00Z, `scripts/linux_sampler.py` reads /proc every 1 s from a core of its own. A process is withdrawn if, in any second of its span, it waited on its core's run queue for more than 1% of the second, its core's SMT sibling was more than 5% busy, or the other cores together, less the sampler, were more than 20% of one CPU busy; or if the samples left a gap over 2.5 s, failed, or did not cover the span. Three withdrawn in a row, or more than 20 in a run, and the run is refused and tried later; with no clean run the figure stays "not measured", with the count withdrawn. The thresholds and their reasons are in docs/NOTES.md, "The Linux sampler rule".
 
-**Evidence.** IDs such as `OSS-16` point to entries in `build-research/evidence/*.md` (gitignored), which hold the verbatim quotes. Snapshots of the sources are under `.orchestrator/research-cache/itch-orderbook/`.
+**Evidence.** IDs such as `OSS-16` point to entries in the author's private research notes, which hold the verbatim quotes and snapshots of the sources. Those notes, and the note files named below such as `backtester.md`, are not in this repository.
 
 ## Reference days
 
@@ -194,7 +194,7 @@ A replay running flat out measures service time, not response time to an arrival
 ### Counters on `debian`
 - **`cache-misses` counts L2 misses, not last-level misses.** [Linux 6.12 `core.c`](https://github.com/torvalds/linux/blob/v6.12/arch/x86/events/amd/core.c) line 258 maps it to `0x0964` in `amd_zen1_perfmon_event_map`, which is event PMCx064 with bits 3 and 0 set. [AMD's PPR 55570-B1](https://web.archive.org/web/2021id_/https://developer.amd.com/wp-content/resources/55570-B1_PUB.zip), for Family 17h Model 18h, defines PMCx064 as "L2 Cache Request Outcomes (not including L2 Prefetch)", bit 3 as "Data Cache Req Miss in L2 (all types)" and bit 0 as "Instruction Cache Req Miss in L2". The V1605B's exact model has no PPR we could find, and AMD's revision guide for Models 10h to 1Fh could not be found. Any write-up must call this number L2 misses.
 - **The last-level stand-in is raw `r0843:u`.** The same PPR defines PMCx043, "Demand Data Cache Fills by Data Source", with bit 3 "From DRAM (home node local)" (IU counter table). It is a core counter, so it needs no L3 access. It is not in Linux's `amdzen1` event list, so a pointer chase must prove it before any book number uses it, as carteret did for its event: no fills well under the L2 size, nearly one per load far above the L3 size, and `rdpmc` agreeing with `read()`. If that fails, no last-level number is published and the gap is stated.
-- `LLC-load-misses` is unsupported on Zen 1, and L3-side counters are denied at `perf_event_paranoid=2`. The full table is in `io-uring-flamegraph.md`, "Zen 1 counter table".
+- `LLC-load-misses` is unsupported on Zen 1, and L3-side counters are denied at `perf_event_paranoid=2`. The measured table is [results/counters_zen1_events_debian.md](results/counters_zen1_events_debian.md).
 - Measured on `debian`, 2026-11-05: which events count with `:u` and what each counts, [results/counters_zen1_events_debian.md](results/counters_zen1_events_debian.md) (P-0016); T-PERF-1 and T-PERF-2 by message type, [results/counters_by_type_paged-flat_debian_12302019.md](results/counters_by_type_paged-flat_debian_12302019.md) (P-0019).
 
 ## Scalar against SIMD
@@ -226,7 +226,7 @@ A replay running flat out measures service time, not response time to an arrival
 - **Target:** 0 divergences over ten full sessions and at least 3,037,078,470 messages compared. Mac only.
 - **Source:** [carteret correctness.md](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/correctness.md), Layer 4 table.
 - **Measured:** ten sessions from 2019 and 2020, one of them BX and two held out, each `identical`. Raw output is committed for the two held-out sessions only. The rest were transcribed.
-- **Comparability:** the brief asks for one day, and this is the published bar. It depends on downloading that many files, and third parties report throttling (DS-9), so any shortfall is stated as a gap. We keep raw output for every session.
+- **Comparability:** the brief asks for one day, and this is the published bar. It depends on downloading that many files, and third parties report throttling (DS-9), so any shortfall is stated as a gap. We keep the raw output of every session outside the repository; it is not committed.
 - **Decision:** accepted as a stated extension of the brief. It runs after T-ORACLE-1 passes, on the Mac. A shortfall is written up as a gap and must not hold up other work.
 - **Status:** `VERIFIED`
 
@@ -253,7 +253,7 @@ A replay running flat out measures service time, not response time to an arrival
 
 T-TRADE-1, 2, 3 and 5 are the trade-print checks. T-TRADE-4 is held and is not one of them.
 
-The user's sentence cannot hold for two whole classes. `P` references no visible order, and `Q` is a bulk print. `P` and `Q` are each counted and reported per the per-type table, so the reader can see where the user's sentence was refined and why. Non-printable `C` volume is already inside `Q`, so summing it would double-count. The full per-type table is in `trade-verification.md` under "Proposed check definitions", and docs/TASKS.md carries it. No tolerance applies anywhere.
+The user's sentence cannot hold for two whole classes. `P` references no visible order, and `Q` is a bulk print. `P` and `Q` are each counted and reported per the per-type table, so the reader can see where the user's sentence was refined and why. Non-printable `C` volume is already inside `Q`, so summing it would double-count. The full per-type table is in `trade-verification.md`, a private research note, not in this repository, under "Proposed check definitions", and docs/TASKS.md carries it. No tolerance applies anywhere.
 
 Per type: `E` must hit a live order, deducting at the order's price. `C` must hit a live order, leaving the order price unchanged, and the print price may differ. `P` must have reference 0 and change nothing in the book. `Q` is compared with Nasdaq's own per-symbol cross file. `B` reverses a stored match.
 
@@ -300,7 +300,7 @@ Per type: `E` must hit a live order, deducting at the order's price. `C` must hi
 - **Status:** `VERIFIED`
 
 ### T-BT-2: validity gates
-- **Target:** all pass. 48 hand-built scenarios covering queue, latency, fills, ITCH edge cases, fees, and lookahead (`backtester.md`, "Test scenarios"). An injected lookahead bug is caught. The replayed book is identical with and without simulated orders. Identical event log hash on repeat.
+- **Target:** all pass. 48 hand-built scenarios covering queue, latency, fills, ITCH edge cases, fees, and lookahead (`backtester.md`, a private research note, not in this repository, "Test scenarios"). An injected lookahead bug is caught. The replayed book is identical with and without simulated orders. Identical event log hash on repeat.
 - **Source:** `BRIEF`. No published test method for proving a tick backtest has no lookahead was found (BT-57).
 - **Status:** `BRIEF`
 
@@ -325,7 +325,7 @@ Rates per share executed at $1 or more, displayed, non-retail. Base tier, becaus
 | Section 31, sells | $20.70 per $1M | [FR 2019-04800](https://www.govinfo.gov/content/pkg/FR-2019-03-15/pdf/2019-04800.pdf), BT-41 | `VERIFIED` |
 | FINRA TAF, sells | $0.000119, maximum $5.95 | [FR 2020-23141](https://www.govinfo.gov/content/pkg/FR-2020-10-20/pdf/2020-23141.pdf), BT-42 | `VERIFIED` |
 
-Rates for 2019-10-30 and 2026-06-12 are in `backtester.md`, "Fee table", and are `SUBAGENT` until those days are used for reporting. The add and remove rates were read from price-list captures on either side of the date (2019-12-07 and [2020-02-01](https://web.archive.org/web/20200201153207id_/http://www.nasdaqtrader.com/Trader.aspx?id=PriceListTrading2)), which agree. The consolidated 2019 rule text could not be obtained.
+Rates for 2019-10-30 and 2026-06-12 are in `backtester.md`, a private research note, not in this repository, "Fee table", and are `SUBAGENT` until those days are used for reporting. The add and remove rates were read from price-list captures on either side of the date (2019-12-07 and [2020-02-01](https://web.archive.org/web/20200201153207id_/http://www.nasdaqtrader.com/Trader.aspx?id=PriceListTrading2)), which agree. The consolidated 2019 rule text could not be obtained.
 
 ### Latency assumptions
 
@@ -338,7 +338,7 @@ The base run uses 25 µs each way plus 5 µs compute. This is an assumption deri
 ### T-MM-1: PnL components sum exactly
 - **Target:** spread capture + adverse selection + inventory == total mark-to-market PnL, tested with `==` on integers for any fill sequence, with both forms of the computation agreeing.
 - **Formulas:** S = Σ qᵢ(mᵢ⁻ − Pᵢ) − Σ fᵢ; A = Σ qᵢ(mᵢʰ − mᵢ⁻); I = Q₀(m_T − m₀) + Σ qᵢ(m_T − mᵢʰ). Fees and rebates sit inside S, shown as a sub-line. h = 15 s, with the curve shown at 50 ms, 1 s, 15 s, 1 min, 5 min ([amended Rule 605 grid](https://www.govinfo.gov/content/pkg/FR-2025-10-02/pdf/2025-19316.pdf), MK-40, `SUBAGENT`). Inventory is computed separately, never as a residual.
-- **Source:** `BRIEF`. Proof and worked example are in `market-maker.md`, "Attribution identity". The split follows [Menkveld's](https://papers.tinbergen.nl/11076.pdf) net spread and positioning decomposition (MK-42). The session reran the subagent's check: 4,000 random fill sequences at six horizons, 24,000 exact equalities, in Python on a worked model. The C++ test is still to be written.
+- **Source:** `BRIEF`. Proof and worked example are in `market-maker.md`, a private research note, not in this repository, "Attribution identity". The split follows [Menkveld's](https://papers.tinbergen.nl/11076.pdf) net spread and positioning decomposition (MK-42). The session reran the subagent's check: 4,000 random fill sequences at six horizons, 24,000 exact equalities, in Python on a worked model. The C++ test is `tests/test_attribution.cpp`.
 - **Status:** `BRIEF`
 
 ### T-MM-2: reproduce Avellaneda and Stoikov's own tables
@@ -383,7 +383,7 @@ The base run uses 25 µs each way plus 5 µs compute. This is an assumption deri
 ### T-ARENA-1: measured effect on book latency
 - **Target:** `UNCONFIRMED`. No published book changes only the allocator, so no number can be a target. We report throughput, p50, p99 and p99.9 per operation for the same book with only the allocator changed. Zero page faults in the timed region for pool arms.
 - **Context:** N4468 reports 39.577 s against 4.89 s on a fragmented workload, Bloomberg authors, i7-4770, and the same paper shows pools losing where locality is not the issue ([N4468](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2015/n4468.pdf), LC-38, LC-39). itch-book's pooled against inline comparison also changes the index, so it is not a clean allocator result (LC-45).
-- **Looked in:** `oss-throughput.md`, `firm-talks.md`, all cached repo READMEs, web search.
+- **Looked in:** `oss-throughput.md` and `firm-talks.md`, two private research notes not in this repository, all cached repo READMEs, web search.
 - **Status:** `UNCONFIRMED`
 
 ## io_uring UDP receiver
@@ -439,7 +439,7 @@ The demo builds and runs locally from `docs/`. Any data extract is generated by 
 
 ## Code-quality bar
 
-Drawn from a review of 28 ITCH and order-book repos plus low-latency C++ libraries (`code-quality.md`), and carteret, read later by the session. Each criterion can be tested. Links show where a reviewed repo meets it, and counterexamples show where a well-known repo does not. File-and-line claims here are from the code-quality subagent's clones and were not all re-read by the session. Two are marked `above the OSS bar`: no reviewed repo meets them.
+Drawn from a review of 28 ITCH and order-book repos plus low-latency C++ libraries (`code-quality.md`, a private research note, not in this repository), and carteret, read later by the session. Each criterion can be tested. Links show where a reviewed repo meets it, and counterexamples show where a well-known repo does not. File-and-line claims here are from the code-quality subagent's clones and were not all re-read by the session. Two are marked `above the OSS bar`: no reviewed repo meets them.
 
 **Wire parsing**
 

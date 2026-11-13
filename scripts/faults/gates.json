@@ -476,6 +476,110 @@
       "expect": {
         "signature": "^FAIL: test_spsc_due_time_unmeasured \\("
       }
+    },
+    {
+      "id": "gates-run-log-kind-named",
+      "breaks": "A run-log row gives a process beside a run by its program's name, not by its kind",
+      "check": "gates.py --only run-log-kinds",
+      "inputs": [
+        {
+          "file": "results/run_log.md",
+          "op": "replace_text",
+          "old": "a VPN daemon at 27.5% serving",
+          "new": "frobd at 27.5% serving"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gates.py",
+        "--only",
+        "run-log-kinds"
+      ],
+      "expect": {
+        "signature": "^gates: FAIL run-log-kinds results/run_log\\.md:\\d+: a process given as 'frobd'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-run-log-kinds-blind",
+      "breaks": "The run-log grammar passes every process a row gives, kind or name",
+      "check": "test_gates.py, the run-log-kinds gate",
+      "mutations": [
+        {
+          "file": "scripts/process_kinds.py",
+          "old": "    return [subject for subject in cited(cause) if _core(subject) not in KIND_CORES]\n",
+          "new": "    return []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_run_log_kinds \\("
+      }
+    },
+    {
+      "id": "gates-run-log-kinds-share-unread",
+      "breaks": "The run-log grammar reads only the (process, share) form and the busiest process, not a process given at its share",
+      "check": "test_gates.py, the run-log-kinds gate",
+      "mutations": [
+        {
+          "file": "scripts/process_kinds.py",
+          "old": "        if trimmed != before:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_run_log_kinds \\("
+      }
+    },
+    {
+      "id": "gates-process-kinds-map-unread",
+      "breaks": "kind_of reads no program's name from the name-to-kind map, so a process the map gives a kind is another process",
+      "check": "test_process_kinds.py",
+      "mutations": [
+        {
+          "file": "scripts/process_kinds.py",
+          "old": "    if program in kinds[\"programs\"]:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_process_kinds.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_map_gives_each_program_its_kind \\("
+      }
+    },
+    {
+      "id": "gates-process-kinds-map-unchecked",
+      "breaks": "A name-to-kind map that gives a kind outside the fixed set is taken, so its words reach a committed file",
+      "check": "test_process_kinds.py",
+      "mutations": [
+        {
+          "file": "scripts/process_kinds.py",
+          "old": "    if unknown:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_process_kinds.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_map_with_a_kind_outside_the_fixed_set_is_refused \\("
+      }
     }
   ]
 }

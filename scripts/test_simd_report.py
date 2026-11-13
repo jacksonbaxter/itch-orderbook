@@ -315,8 +315,11 @@ class SimdReportTest(unittest.TestCase):
         with self.assertRaisesRegex(simd_report.ReportError, "not quiet"):
             self.render("decode", decode_records(), foreign_at=24)
         text, _ = self.render("decode", decode_records(),
-                              withdrawn=[("neon", "the CPU sampler saw mds_stores at 31.0% CPU")])
-        self.assertIn("- `neon`, repetition 9: the CPU sampler saw mds_stores", text)
+                              withdrawn=[("neon", "the CPU sampler saw frobd at 31.0% CPU")])
+        # A manifest written before 2026-11-13 names the program; the file gives its kind.
+        self.assertIn("- `neon`, repetition 9: the CPU sampler saw another process at 31.0% CPU",
+                      text)
+        self.assertNotIn("frobd", text)
         self.assertIn("- processes: 6 published, 1 withdrawn", text)
 
     def test_bad_records_are_refused(self):

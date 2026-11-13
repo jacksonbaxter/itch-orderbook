@@ -2201,6 +2201,26 @@
       "expect": {
         "signature": "mm cli: FAIL S1 as exact: missing or not an integer: ledger_total 'overflow'"
       }
+    },
+    {
+      "id": "mm-report-one-symbol-day",
+      "breaks": "The market maker's results file calls its two symbol-days one",
+      "check": "test_mm_report.py test_the_fixed_sentences_and_labels",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "FIXED = \"No edge is claimed.\"",
+          "new": "FIXED = \"One symbol-day. No edge is claimed.\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_fixed_sentences_and_labels"
+      }
     }
   ]
 }

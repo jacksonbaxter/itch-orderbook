@@ -560,8 +560,8 @@ def check_free_space(data_dir, compressed, unpacked):
 def unpacked_name(day):
     """The unpacked file's name: the manifest's unpacked_name if it gives one, else the name the
     gzip file has without its .gz. Nasdaq names some days S<MMDDYY>-v50.txt, and macOS types a
-    .txt file as plain text, so Spotlight's text importer reads the whole binary day; such a
-    day is unpacked under a name in the other days' MMDDYYYY.NASDAQ_ITCH50 form instead."""
+    .txt file as plain text, so the system indexer's text importer reads the whole binary day;
+    such a day is unpacked under a name in the other days' MMDDYYYY.NASDAQ_ITCH50 form instead."""
     return day.get("unpacked_name", day["name"])
 
 

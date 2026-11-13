@@ -1049,6 +1049,26 @@
       "expect": {
         "signature": "FUZZ_CHECK failed: got\\.ops == want->ops"
       }
+    },
+    {
+      "id": "simd-report-withdrawn-named",
+      "breaks": "simd_report.py copies a withdrawn process's reason from the manifest, so a run before 2026-11-13 names the program in the file",
+      "check": "test_simd_report.py test_a_published_process_must_have_been_sampled_quiet",
+      "mutations": [
+        {
+          "file": "scripts/simd_report.py",
+          "old": "                f\"{process_kinds.reworded(entry['why'])}\" for entry in withdrawn]",
+          "new": "                f\"{entry['why']}\" for entry in withdrawn]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_report.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_published_process_must_have_been_sampled_quiet"
+      }
     }
   ]
 }

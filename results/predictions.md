@@ -3,7 +3,12 @@
 Each experiment's prediction, committed before it runs and never edited (criterion 31).
 `scripts/check_predictions.py` holds every `results/bench_*.md` to this file and to the
 order of the commits. What became of each run is in `results/run_log.md`, failed runs
-included.
+included. Four predictions ran without a driver, so the run log has no row for them, and
+each result is in docs/NOTES.md: P-0005 under "Harness, 2026-10-30" (the graph is
+`results/flamegraph_stub_debian_12302019.svg`), P-0007 under "Two decisions on the strict
+results, 2026-11-02", P-0501 under "T-ORACLE-2 on carteret's ten sessions, 2026-11-05" (with
+its days' `results/oracle_*.md` and `results/trades_*.md`), and P-0503 under "T-TRADE-2 on
+10302019, 2026-11-10" (with `results/trades_10302019.md`).
 
 ## P-0001: stub-book harness proof on macOS, 12302019
 

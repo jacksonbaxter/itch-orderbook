@@ -61,6 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
 import demo  # noqa: E402
+import process_kinds  # noqa: E402
 import run_record  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -221,31 +222,20 @@ def at(stamp):
     return datetime.datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ")
 
 
-# Where macOS keeps its own programs; /usr/local is not among them.
-SYSTEM_DIRS = ("/System/", "/usr/libexec/", "/usr/sbin/", "/usr/bin/", "/sbin/", "/bin/",
-               "/Library/Apple/")
-
-
 def foreign_kind(command):
-    """What kind of process a FOREIGN line's command is, from the command alone, since the
-    sampler logs no user: a system process if it runs from where macOS keeps its own programs,
-    an application's process if from an application bundle, else just another process. The
-    raw log keeps the command; a record of the new kind names the process by this."""
-    if command.startswith(SYSTEM_DIRS):
-        return "a system process"
-    if command.startswith("/Applications/") or ".app/Contents/" in command:
-        return "an application's process"
-    return "another process"
+    """What kind of process a FOREIGN line's command is (process_kinds.kind_of): one of the
+    fixed kinds through the name-to-kind map outside the repository, or another process with
+    no map. The raw log keeps the command; anything committed gives the kind."""
+    return process_kinds.kind_of(command)
 
 
-def unquiet(lines, started, finished, by_kind=True):
+def unquiet(lines, started, finished):
     """Why the sampler does not show the span from started to finished quiet, or None. The
     span is covered if a sample falls at or before started and one at or after finished, with
     no gap over LONGEST_GAP_S between any two of the samples given; it is quiet if no FOREIGN or
     failed line is stamped inside [started, finished]. Lines outside it, the edge samples
-    included, are not judged (r5-10). A foreign process is named by its kind (foreign_kind);
-    by_kind=False names it by its program, as records made before run.json did, so that their
-    files render as they were published."""
+    included, are not judged (r5-10). A foreign process is given by its kind (foreign_kind),
+    in a run and in a render of any record, old or new."""
     samples = [at(line.split()[0]) for line in lines if line.split()[1:2] == ["sample"]]
     begin, end = at(started), at(finished)
     if not samples or samples[0] > begin or samples[-1] < end:
@@ -259,11 +249,7 @@ def unquiet(lines, started, finished, by_kind=True):
         if len(words) > 1 and words[1] == "failed" and begin <= at(words[0]) <= end:
             return f"the CPU sampler failed at {words[0]}"
         if len(words) == 4 and words[1] == "FOREIGN" and begin <= at(words[0]) <= end:
-            if by_kind:
-                name = foreign_kind(words[3])
-            else:
-                name = words[3].split()[0].rsplit("/", 1)[-1] if words[3].split() else "?"
-            return f"the CPU sampler saw {name} at {words[2]}% CPU at {words[0]}"
+            return f"the CPU sampler saw {foreign_kind(words[3])} at {words[2]}% CPU at {words[0]}"
     return None
 
 
