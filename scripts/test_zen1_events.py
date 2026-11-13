@@ -15,7 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import zen1_events  # noqa: E402
 
 MESSAGES = 1000
-CHECK = "machine_check: pass governor: core 4 runs performance\nmachine_check: passed\n"
+CHECK = ("machine_check: pass governor: core 4 runs performance\n"
+         "machine_check: record perf_event_paranoid: 2\nmachine_check: passed\n")
 
 
 def csv_line(event, value, running="100.00"):
@@ -111,6 +112,28 @@ class Zen1Events(unittest.TestCase):
         self.out.write_text(text.replace("| not supported |", "| works |", 1), encoding="utf-8")
         codes = [code for code, _ in zen1_events.check_published(self.out.read_text("utf-8"))]
         self.assertIn("state-unknown", codes)
+
+    def test_perf_event_paranoid_is_the_machine_checks_own(self):
+        """r5-12: the header's value is read from both machine checks; one that reads other
+        than 2, or has no such line, refuses the file, and --check holds the header to them."""
+        self.assertEqual(self.write(), 0)
+        text = self.out.read_text(encoding="utf-8")
+        self.assertIn("- perf_event_paranoid: 2\n", text)
+        changed = text.replace("- perf_event_paranoid: 2\n", "- perf_event_paranoid: 1\n")
+        codes = [code for code, _ in zen1_events.check_published(changed)]
+        self.assertIn("paranoid-unmatched", codes)
+        # Refused where it is read, not only by the file's own check afterwards.
+        with self.assertRaisesRegex(zen1_events.ReportError, "written for 2"):
+            zen1_events.paranoid_of([CHECK, CHECK.replace("paranoid: 2", "paranoid: 3")])
+        with self.assertRaisesRegex(zen1_events.ReportError, "one 'record perf_event_paranoid'"):
+            zen1_events.paranoid_of([CHECK, "machine_check: passed\n"])
+        self.out.unlink()
+        after = self.root / "after.out"
+        for body in (CHECK.replace("paranoid: 2", "paranoid: 3"),
+                     CHECK.replace("machine_check: record perf_event_paranoid: 2\n", "")):
+            after.write_text(body, encoding="utf-8")
+            self.assertEqual(self.write(), 2)
+            self.assertFalse(self.out.exists())
 
 
 if __name__ == "__main__":

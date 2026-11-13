@@ -124,7 +124,8 @@
       },
       "execution": {
         "noTestsAction": "error",
-        "jobs": 6
+        "jobs": 6,
+        "timeout": 1800
       }
     },
     {

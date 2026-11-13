@@ -5,13 +5,45 @@ add_library(itch_test_support INTERFACE)
 target_include_directories(itch_test_support INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(itch_test_support INTERFACE itch_parser)
 
-# One GoogleTest executable, one ctest entry: itch_add_test(test_name test_name.cpp)
+# Every GoogleTest binary's main (support/gtest_main.cpp). Under ctest, which sets
+# ITCH_CTEST_SKIPS, a binary that passed with a test skipped for a stated reason exits 77, which
+# each entry takes as SKIP_RETURN_CODE: the entry shows as Skipped, never as Passed. A failure
+# fails whatever skipped beside it, and so do a skip with no reason and a filter that matched
+# no test. This is the one skip mechanism; a SKIP_REGULAR_EXPRESSION would take a failing
+# binary that printed a skip as Skipped.
+add_library(itch_gtest_main STATIC support/gtest_main.cpp)
+target_link_libraries(itch_gtest_main PUBLIC GTest::gtest)
+itch_apply_options(itch_gtest_main)
+
+# One ctest entry running a GoogleTest binary: itch_gtest_entry(entry target [args...])
+function(itch_gtest_entry entry target)
+  add_test(NAME ${entry} COMMAND ${target} ${ARGN})
+  set_tests_properties(${entry} PROPERTIES LABELS unit SKIP_RETURN_CODE 77
+    ENVIRONMENT ITCH_CTEST_SKIPS=1)
+endfunction()
+
+# One GoogleTest executable and its ctest entry: itch_add_test(test_name test_name.cpp). Tests
+# that can skip get entries of their own, each "SKIPS entry filter", so that a skip shows as
+# that entry Skipped while the binary's other tests run, and show as passed, in the main entry:
+#   itch_add_test(test_name test_name.cpp SKIPS test_name_x "Suite.Test")
 function(itch_add_test name)
-  add_executable(${name} ${ARGN})
-  target_link_libraries(${name} PRIVATE itch_test_support GTest::gtest_main)
+  cmake_parse_arguments(PARSE_ARGV 1 arg "" "" "SKIPS")
+  add_executable(${name} ${arg_UNPARSED_ARGUMENTS})
+  target_link_libraries(${name} PRIVATE itch_test_support itch_gtest_main)
   itch_apply_options(${name})
-  add_test(NAME ${name} COMMAND ${name})
-  set_tests_properties(${name} PROPERTIES LABELS unit)
+  set(skips ${arg_SKIPS})
+  set(apart "")
+  while(skips)
+    list(POP_FRONT skips entry filter)
+    itch_gtest_entry(${entry} ${name} "--gtest_filter=${filter}")
+    list(APPEND apart "${filter}")
+  endwhile()
+  if(apart)
+    list(JOIN apart ":" apart)
+    itch_gtest_entry(${name} ${name} "--gtest_filter=-${apart}")
+  else()
+    itch_gtest_entry(${name} ${name})
+  endif()
 endfunction()
 
 itch_add_test(test_wire test_wire.cpp)
@@ -43,7 +75,8 @@ target_link_libraries(test_demo_replay PRIVATE itch_demo_engine)
 set_tests_properties(test_backtest test_backtest_validity PROPERTIES TIMEOUT 60)
 # The ring's tests, and the stress tool that runs it without TSan. Both take the
 # negative-control switch; nothing else does.
-itch_add_test(test_spsc test_spsc.cpp)
+itch_add_test(test_spsc test_spsc.cpp
+  SKIPS test_spsc_cache_line SpscRing.PaddingConstantIsTheHardwareLine)
 add_executable(spsc_stress spsc_stress.cpp)
 target_link_libraries(spsc_stress PRIVATE itch_test_support)
 itch_apply_options(spsc_stress)
@@ -61,7 +94,9 @@ endif()
 itch_add_test(test_pipeline test_pipeline.cpp)
 target_include_directories(test_pipeline PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 target_include_directories(test_alloc PRIVATE "${PROJECT_SOURCE_DIR}/bench")
-itch_add_test(test_bench_platform test_bench_platform.cpp)
+# The cross-core clock test skips under a hypervisor, as on the shared CI runners.
+itch_add_test(test_bench_platform test_bench_platform.cpp
+  SKIPS test_bench_platform_cross_core BenchCrossCore.TheLiveClocksAgreeAcrossTwoThreads)
 itch_add_test(test_bench_replay test_bench_replay.cpp)
 target_include_directories(test_bench_platform PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 target_include_directories(test_bench_replay PRIVATE "${PROJECT_SOURCE_DIR}/bench"
@@ -78,7 +113,12 @@ target_compile_definitions(test_mold PRIVATE
   "ITCH_ORACLE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle\""
   "ITCH_TRADE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades\"")
 # The replay sender's pacing on a hand-moved clock, S1, and the two on loopback.
-itch_add_test(test_udp test_udp.cpp)
+# The slot modes are Linux's, the multishot io_uring modes need liburing: with none built,
+# their tests skip.
+itch_add_test(test_udp test_udp.cpp
+  SKIPS test_udp_slot_modes Modes.ADatagramPastTheSlotIsCountedTruncated
+        test_udp_ring_modes
+        "Modes.AMultishotModeOutOfBuffersRearmsAndLosesNothing:Modes.ARingModeWithABadBufferCountFailsItsSetup")
 target_include_directories(test_udp PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 itch_udp_modes(test_udp)
 itch_udp_modes(test_alloc)
@@ -89,20 +129,16 @@ target_compile_definitions(test_udp PRIVATE
 # cannot run shows as skipped, never as passed, and an entry whose filter matches nothing
 # fails. test_kernels runs the rest: selection, the parser's scalar tail, the scalar oracle.
 add_executable(test_kernels test_kernels.cpp)
-target_link_libraries(test_kernels PRIVATE itch_test_support GTest::gtest_main)
+target_link_libraries(test_kernels PRIVATE itch_test_support itch_gtest_main)
 list(JOIN ITCH_KERNELS ", " itch_expected_kernels)
 target_compile_definitions(test_kernels PRIVATE
   "ITCH_ORACLE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle\""
   "ITCH_EXPECTED_KERNELS=\"${itch_expected_kernels}\"")
 itch_apply_options(test_kernels)
-add_test(NAME test_kernels COMMAND test_kernels --gtest_filter=Kernels.*)
-set_tests_properties(test_kernels PROPERTIES LABELS unit)
+itch_gtest_entry(test_kernels test_kernels --gtest_filter=Kernels.*)
 foreach(kernel ${ITCH_KERNELS})
-  add_test(NAME test_kernels_${kernel}
-    COMMAND test_kernels "--gtest_filter=Built/KernelTest.*/${kernel}")
-  set_tests_properties(test_kernels_${kernel} PROPERTIES LABELS unit
-    SKIP_REGULAR_EXPRESSION "\\[  SKIPPED \\]"
-    FAIL_REGULAR_EXPRESSION "Running 0 tests")
+  itch_gtest_entry(test_kernels_${kernel} test_kernels "--gtest_filter=Built/KernelTest.*/${kernel}")
+  set_tests_properties(test_kernels_${kernel} PROPERTIES FAIL_REGULAR_EXPRESSION "Running 0 tests")
 endforeach()
 
 # The receive modes itch_udp_modes() gives this build, for the tools' CLI tests.
@@ -114,6 +150,17 @@ if(TARGET liburing::liburing)
   list(APPEND itch_udp_modes_built U1 U2 U3 U4 U5)
 endif()
 list(JOIN itch_udp_modes_built "," itch_udp_modes_built)
+
+# The skip mechanism itself: the probe's passes, skips and failures through the main, every
+# entry's skip properties, the tests that skip in entries of their own, and the receive mode
+# entries skipping exactly when none of their modes is built.
+add_executable(skip_probe skip_probe.cpp)
+target_link_libraries(skip_probe PRIVATE itch_gtest_main)
+itch_apply_options(skip_probe)
+add_test(NAME test_skips_cli
+  COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_skips_cli.py"
+          "$<TARGET_FILE:skip_probe>" "${PROJECT_BINARY_DIR}" "${itch_udp_modes_built}")
+set_tests_properties(test_skips_cli PROPERTIES LABELS unit)
 
 if(ITCH_BUILD_BENCH)
   # bench_walks' counted engine, made in bench/ (cmake/ItchWalkEngine.cmake), against hand
@@ -163,6 +210,13 @@ if(ITCH_BUILD_BENCH)
 endif()
 
 if(ITCH_BUILD_TOOLS)
+  # Whether the tools that run the node book have its mimalloc arm, so that a CLI test can
+  # tell a build without it from a tool that has lost it.
+  if(TARGET itch::mimalloc)
+    set(itch_mimalloc_built with-mimalloc)
+  else()
+    set(itch_mimalloc_built without-mimalloc)
+  endif()
   add_test(NAME test_census_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_census_cli.py"
             "$<TARGET_FILE:itch_census>" "${CMAKE_CURRENT_BINARY_DIR}/census_cli"
@@ -179,7 +233,7 @@ if(ITCH_BUILD_TOOLS)
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_map_compare_cli.py"
             "$<TARGET_FILE:itch_map_compare>" "${CMAKE_CURRENT_BINARY_DIR}/map_compare_cli"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle"
-            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades")
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/trades" "${itch_mimalloc_built}")
   add_test(NAME test_backtest_cli
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_backtest_cli.py"
             "$<TARGET_FILE:itch_backtest>" "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle")

@@ -359,7 +359,9 @@ class ResultsTable(unittest.TestCase):
         rows = [line for line in output.splitlines()
                 if line.startswith("| `hash-linked` |") and f"(results/{BOOK})" in line]
         self.assertEqual(len(rows), 1, output)
-        self.assertIn("| ram | not tracked | 12302019 | macOS (M4 Max) | not pinned |", rows[0])
+        # r5-2: a Mac run from before the sampler rule says, in its row, that none ran beside it.
+        self.assertIn("| ram | not tracked | 12302019 | macOS (M4 Max) | not pinned; sampler: "
+                      f"{results_table.check_results.SAMPLER_BEFORE_RULE} |", rows[0])
         self.assertIn(f"[results/{BOOK}](results/{BOOK})", rows[0])
         self.assertIn("macOS cannot pin a thread", output)
 
@@ -410,7 +412,8 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 0, output)
         rows = [line for line in output.splitlines() if f"(results/{name})" in line]
         self.assertEqual(len(rows), 1, output)
-        self.assertIn("| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | ≥ 4.61 M "
+        self.assertIn("| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned; sampler: "
+                      f"{results_table.check_results.SAMPLER_BEFORE_RULE} | ≥ 4.61 M "
                       "messages/s | 5,425,845 messages/s |", rows[0])
         self.assertIn("| met | `abc` |", rows[0])
         path = self.root / "results" / name
@@ -694,7 +697,9 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(self.unjudged(), [
             "**T-BOOK-1 on macOS (M4 Max), no verdict:** 21.87 M msg/s, median 21,873,432 msg/s "
             "of 3 repetitions, CV 0.76%; `paged-flat`, file in memory, top of book not tracked; "
-            "not pinned. Its bar is ≥ 16.4 M msg/s, set on Ryzen 7 9700X, x86 Linux: a macOS "
+            "not pinned; sampler: none: the run was made before the sampler rule of 2026-11-05, "
+            "and no sampler ran beside it, so nothing is known about other processes' load "
+            "during it. Its bar is ≥ 16.4 M msg/s, set on Ryzen 7 9700X, x86 Linux: a macOS "
             "figure against a bar set on x86 Linux, neither a pass nor a fail. "
             f"[{UNJUDGED_BOOK}]({UNJUDGED_BOOK})"])
         self.assertFalse(any("21.87" in row for row in self.headline()))

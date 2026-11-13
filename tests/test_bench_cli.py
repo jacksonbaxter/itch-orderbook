@@ -12,6 +12,7 @@ import datetime
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import check_results  # noqa: E402
+import stamp_load  # noqa: E402
 
 BENCH, PROBE, SCRATCH, FIXTURE = (Path(argument) for argument in sys.argv[1:5])
 del sys.argv[1:5]
@@ -39,6 +41,32 @@ def core_arguments():
 
 def fault_in(path):
     path.read_bytes()
+
+
+# What the driver's sampler reads instead of the Mac's process table, so that a run's outcome
+# does not hang on what else the Mac is doing: quiet, loud while a file is there, or always
+# loud. The file says so (check_results.STAND_IN_SAMPLER), and stamp_load.py refuses it.
+def stand_in_ps(loud=None):
+    ps = SCRATCH / "ps.sh"
+    busy = "echo '99999 1 50.0 /usr/bin/a_busy_job'"
+    body = {None: "", "always": busy, "while busy": f"[ -f '{SCRATCH / 'busy'}' ] && {busy}"}
+    ps.write_text(f"#!/bin/sh\n{body[loud]}\nexit 0\n", encoding="utf-8")
+    ps.chmod(0o755)
+    return ["--ps", str(ps), "--sample-every", "0.2"]
+
+
+def busy_first_bench():
+    """bench_replay behind a script that makes the stand-in loud during its first process
+    only, so that one process is withdrawn and run again."""
+    bench = SCRATCH / "bench.sh"
+    once, busy = SCRATCH / "once", SCRATCH / "busy"
+    # The first process is held half a second, so that the sampler, every 0.2 s, sees the
+    # stand-in loud inside its span; the file is gone before the next one starts.
+    bench.write_text(f"#!/bin/sh\n[ -f '{once}' ] && exec '{BENCH}' \"$@\"\n: > '{once}'\n"
+                     f": > '{busy}'\nsleep 0.5\n'{BENCH}' \"$@\"\ncode=$?\nrm -f '{busy}'\n"
+                     "exit $code\n", encoding="utf-8")
+    bench.chmod(0o755)
+    return bench
 
 
 class Cli(unittest.TestCase):
@@ -198,12 +226,13 @@ class Cli(unittest.TestCase):
              "--bench", str(BENCH), "--probe", str(PROBE), "--input", str(FIXTURE),
              "--prediction", "P-0999", "--repetitions", "3", "--raw-dir", str(SCRATCH / "raw"),
              "--out", str(out), "--allow-dirty", "--predictions-root", str(predictions),
-             "--run-log", str(run_log)],
+             "--run-log", str(run_log), *stand_in_ps()],
             capture_output=True, text=True, timeout=120, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         text = out.read_text(encoding="utf-8")
         self.assertEqual({code for code, _ in check_results.check_text(text)},
-                         {"load-not-stamped"})
+                         {"load-not-stamped", "sampler-stand-in"})
+        self.assertIn(check_results.STAND_IN_SAMPLER, text)
         self.assertIn("published", run_log.read_text(encoding="utf-8"))
         fields = check_results.parse_header(text)
         # measure.sh's lines bracket the run, and a quiet sampler's lines every 2 s bracket
@@ -224,13 +253,20 @@ class Cli(unittest.TestCase):
         sampler.write_text("".join(lines), encoding="utf-8")
         result = subprocess.run(
             [sys.executable, "-B", str(REPO_ROOT / "scripts" / "stamp_load.py"), "--results",
-             str(out), "--stderr", str(stderr), "--sampler", str(sampler)], capture_output=True,
-            text=True, timeout=60, check=False)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        stamped = out.read_text(encoding="utf-8")
+             str(out), "--stderr", str(stderr), "--sampler", str(sampler), "--run-log",
+             str(run_log)], capture_output=True, text=True, timeout=60, check=False)
+        # A stand-in sampler's file is a test's: stamp_load refuses it, for that alone, and
+        # says so in the test's own run log.
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("stamp_load.py refused it: sampler-stand-in",
+                      run_log.read_text(encoding="utf-8"))
+        self.assertEqual(re.findall(r"FAIL (\S+):", result.stderr), ["sampler-stand-in"])
+        stamped = stamp_load.stamp(text, stderr.read_text(encoding="utf-8"),
+                                   sampler.read_text(encoding="utf-8"))
         self.assertNotIn("some-machine", stamped)
         self.assertIn(f"host={fields['host']}", stamped)
-        self.assertEqual(check_results.check_text(stamped), [])
+        self.assertEqual({code for code, _ in check_results.check_text(stamped)},
+                         {"sampler-stand-in"})
 
     @unittest.skipUnless(platform.system() == "Darwin", "machine_check needs a measuring machine")
     def test_the_driver_writes_a_file_for_each_design(self):
@@ -246,13 +282,13 @@ class Cli(unittest.TestCase):
              "--out", str(out), "--design", "paged-linked", "--design", "map-fresh",
              "--design", "map-aged", "--input-mode", "ram", "--allow-dirty",
              "--predictions-root", str(predictions),
-             "--run-log", str(predictions / "results" / "run_log.md")],
+             "--run-log", str(predictions / "results" / "run_log.md"), *stand_in_ps()],
             capture_output=True, text=True, timeout=300, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         for design in ("paged-linked", "map-fresh", "map-aged"):
             text = Path(str(out).replace("{design}", design)).read_text(encoding="utf-8")
             self.assertEqual({code for code, _ in check_results.check_text(text)},
-                             {"load-not-stamped"}, design)
+                             {"load-not-stamped", "sampler-stand-in"}, design)
             self.assertIn(f"- design: {design}: ", text)
         fast = Path(str(out).replace("{design}", "paged-linked")).read_text(encoding="utf-8")
         self.assertRegex(fast, r"\| map-fresh \| [0-9.]+ \|")
@@ -272,14 +308,14 @@ class Cli(unittest.TestCase):
              "--out", str(out), "--design", "paged-linked", "--design", "map-fresh",
              "--throughput-only", "map-fresh", "--throughput-only-why", "a test of the option",
              "--input-mode", "ram", "--allow-dirty", "--predictions-root", str(predictions),
-             "--run-log", str(predictions / "results" / "run_log.md")],
+             "--run-log", str(predictions / "results" / "run_log.md"), *stand_in_ps()],
             capture_output=True, text=True, timeout=300, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         texts = {design: Path(str(out).replace("{design}", design)).read_text(encoding="utf-8")
                  for design in ("paged-linked", "map-fresh")}
         for design, text in texts.items():
             self.assertEqual({code for code, _ in check_results.check_text(text)},
-                             {"load-not-stamped"}, design)
+                             {"load-not-stamped", "sampler-stand-in"}, design)
         self.assertIn("- passes: all: ", texts["paged-linked"])
         self.assertRegex(texts["paged-linked"], r"\| p50 \| ")
         self.assertRegex(texts["paged-linked"], r"\| map-fresh \| [0-9.]+ \|")
@@ -287,8 +323,9 @@ class Cli(unittest.TestCase):
         self.assertIn("Why: a test of the option", texts["map-fresh"])
         self.assertNotRegex(texts["map-fresh"], r"\| (p50|max|add) \| ")
         for index in (1, 2, 3):
-            record = json.loads((SCRATCH / "raw" / f"map-fresh-repetition-{index}-throughput.json")
-                                .read_text(encoding="utf-8"))
+            # The run's raw files are in its own folder, named by its run id.
+            path, = (SCRATCH / "raw").glob(f"*/map-fresh-repetition-{index}-throughput.json")
+            record = json.loads(path.read_text(encoding="utf-8"))
             self.assertIsNone(record["latency_pass"])
 
     @unittest.skipUnless(platform.system() == "Darwin", "machine_check needs a measuring machine")
@@ -301,11 +338,46 @@ class Cli(unittest.TestCase):
              "--bench", str(BENCH), "--probe", str(PROBE), "--input", str(FIXTURE),
              "--prediction", "P-0998", "--raw-dir", str(SCRATCH / "raw"),
              "--out", str(SCRATCH / "never.md"), "--allow-dirty",
-             "--predictions-root", str(predictions), "--run-log", str(run_log)],
+             "--predictions-root", str(predictions), "--run-log", str(run_log), *stand_in_ps()],
             capture_output=True, text=True, timeout=120, check=False)
         self.assertEqual(result.returncode, 1)
         self.assertFalse((SCRATCH / "never.md").exists())
         self.assertIn("refused at prediction", run_log.read_text(encoding="utf-8"))
+
+    def sampled_run(self, bench, loud):
+        predictions = SCRATCH / "records"
+        (predictions / "results").mkdir(parents=True)
+        (predictions / "results" / "predictions.md").write_text(
+            "## P-0999: fixture\n\n- Prediction: it runs.\n", encoding="utf-8")
+        out = SCRATCH / "results" / "bench_fixture.md"
+        run_log = predictions / "results" / "run_log.md"
+        result = subprocess.run(
+            [sys.executable, "-B", str(REPO_ROOT / "scripts" / "bench_driver.py"),
+             "--bench", str(bench), "--probe", str(PROBE), "--input", str(FIXTURE),
+             "--prediction", "P-0999", "--repetitions", "3", "--raw-dir", str(SCRATCH / "raw"),
+             "--out", str(out), "--allow-dirty", "--predictions-root", str(predictions),
+             "--run-log", str(run_log), *stand_in_ps(loud)],
+            capture_output=True, text=True, timeout=300, check=False)
+        return result, out, run_log.read_text(encoding="utf-8") if run_log.is_file() else ""
+
+    @unittest.skipUnless(platform.system() == "Darwin", "the Mac's sampler rule runs on macOS")
+    def test_a_process_the_stand_in_shows_beside_a_busy_one_is_withdrawn_then_run_again(self):
+        result, out, log = self.sampled_run(busy_first_bench(), "while busy")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(log.count("| withdrawn: "), 1, log)
+        self.assertIn("the CPU sampler saw a system process at 50.0% CPU", log)
+        text = out.read_text(encoding="utf-8")
+        self.assertIn("; 1 withdrawn under the rule", text)
+        self.assertEqual({code for code, _ in check_results.check_text(text)},
+                         {"load-not-stamped", "sampler-stand-in"})
+
+    @unittest.skipUnless(platform.system() == "Darwin", "the Mac's sampler rule runs on macOS")
+    def test_three_withdrawn_in_a_row_refuse_the_run(self):
+        result, out, log = self.sampled_run(BENCH, "always")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertFalse(out.exists())
+        self.assertEqual(log.count("| withdrawn: "), 3, log)
+        self.assertIn("withdrawn 3 times in a row under the sampler rule", result.stderr)
 
 
 if __name__ == "__main__":

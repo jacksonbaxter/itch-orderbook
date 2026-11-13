@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import json
 import tempfile
 import threading
 import unittest
@@ -14,6 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import run_record  # noqa: E402
 import simd_driver  # noqa: E402
 
 START = "measure.sh: start load1=1.10 host=box at=2026-11-05T09:00:00Z cpus=16"
@@ -83,12 +85,10 @@ class SimdDriverTest(unittest.TestCase):
 
     def test_a_process_is_withdrawn_unless_sampled_quiet(self):
         self.assertIsNone(self.judged(sampler=Sampler(samples())))
-        self.assertIn("mds_stores at 31.0% CPU",
+        self.assertIn("a system process at 31.0% CPU",
                       self.reason(sampler=Sampler(samples(foreign_at=4))))
         self.assertIn("without a sample", self.reason(sampler=Sampler(samples(gap=True))))
         self.assertIn("did not cover", self.reason(sampler=Sampler(samples()[3:])))
-        self.assertIn("start or end line", self.reason(err=f"{START}\n",
-                                                       sampler=Sampler(samples())))
 
     def test_on_linux_every_process_and_check_runs_pinned_under_measure_sh(self):
         args = argparse.Namespace(measure=Path("/q/bin/measure.sh"), input=Path("/q/day"),
@@ -105,11 +105,113 @@ class SimdDriverTest(unittest.TestCase):
         self.assertEqual(words[6:], ["--input", "/q/day", "--probe", "/q/bench_probe", "--core",
                                      "4"])
 
-    def test_a_failed_or_recordless_process_is_withdrawn(self):
-        self.assertEqual(self.judged(code=3, err=f"{START}\nbench_kernels: refused: two work "
-                                                 f"passes disagree\n{END}\n"),
-                         "exited 3: bench_kernels: refused: two work passes disagree")
-        self.assertEqual(self.judged(record=False), "exited 0 with no record")
+    def test_a_failed_or_recordless_process_refuses_the_run(self):
+        """Only the sampler rule withdraws and reruns a process (r5-1): bench_kernels' exit 3,
+        its refusal of its own record, a missing record or missing measure.sh lines refuse the
+        run, sampler or not, so that no rerun can hide what the first process found."""
+        for sampler in (None, Sampler(samples())):
+            with self.assertRaisesRegex(simd_driver.Refused, "exited 3: bench_kernels: refused: "
+                                                             "two work passes disagree"):
+                self.judged(code=3, err=f"{START}\nbench_kernels: refused: two work passes "
+                                        f"disagree\n{END}\n", sampler=sampler)
+            with self.assertRaisesRegex(simd_driver.Refused, "exited 1$"):
+                self.judged(code=1, sampler=sampler)
+            with self.assertRaisesRegex(simd_driver.Refused, "exited 0 with no record"):
+                self.judged(record=False, sampler=sampler)
+            with self.assertRaisesRegex(simd_driver.Refused, "start or end line"):
+                self.judged(err=f"{START}\n", sampler=sampler)
+
+    def test_a_refused_process_ends_the_run_with_its_row(self):
+        """The whole driver on a fake bench_kernels whose first process exits 3: the run stops
+        there, exit 1, one run-log row that names the process and why, and no rerun."""
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            fake = root / "bench_kernels"
+            fake.write_text('#!/bin/sh\nout=""; prev=""; for a in "$@"; do [ "$prev" = "--out" ] '
+                            '&& out=$a; prev=$a; done\necho \'{}\' > "$out"\n'
+                            'case "$out" in *-1.json) echo "bench_kernels: refused: the kernel '
+                            'differed from the scalar kernel 12 times" >&2; exit 3 ;; esac\n',
+                            encoding="utf-8")
+            measure = root / "measure.sh"
+            measure.write_text('#!/bin/sh\necho "measure.sh: start load1=0.10 host=box '
+                               'at=$(date -u +%Y-%m-%dT%H:%M:%SZ) cpus=16" >&2\nshift 3\n"$@"; '
+                               'code=$?\necho "measure.sh: end load1=0.10 exit=$code '
+                               'at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2\nexit $code\n',
+                               encoding="utf-8")
+            fake.chmod(0o755)
+            measure.chmod(0o755)
+            log = root / "run_log.md"
+            system, check = simd_driver.platform.system, simd_driver.machine_check
+            simd_driver.platform.system = lambda: "Linux"
+            simd_driver.machine_check = lambda args: "machine_check: passed"
+            try:
+                code = simd_driver.main(
+                    ["--experiment", "framing", "--prediction", "P-0601", "--raw-dir",
+                     str(root / "raw"), "--input", str(fake), "--dataset", "d",
+                     "--dataset-sha256", run_record.sha256_of(fake), "--bench", str(fake),
+                     "--probe", str(fake),
+                     "--measure", str(measure), "--repetitions", "3", "--run-log", str(log),
+                     "--allow-dirty"])
+            finally:
+                simd_driver.platform.system, simd_driver.machine_check = system, check
+            rows = [line for line in log.read_text(encoding="utf-8").splitlines()
+                    if line.startswith("| P-0601-")]
+            processes = [path.name for path in (root / "raw").glob("*/*.json")
+                         if path.name not in ("manifest.json", "run.json")]
+            # The run's own record (gate item 8), though the run was refused.
+            folder = next((root / "raw").iterdir())
+            kept = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(code, 1)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("refused: length: framing, length, repetition 1: exited 3: bench_kernels: "
+                      "refused: the kernel differed from the scalar kernel 12 times; the run is "
+                      "refused, not rerun", rows[0])
+        self.assertEqual(processes, ["length-1.json"])
+        self.assertEqual(folder.name, rows[0].split(" | ")[0].lstrip("| "))
+        self.assertEqual(kept["binaries"], {str(fake): kept["dataset"]["sha256"],
+                                            str(measure): kept["binaries"][str(measure)]})
+        self.assertEqual(kept["outputs"], {"machine_check_before.txt": kept["outputs"][
+            "machine_check_before.txt"], "machine_check_after.txt": kept["outputs"][
+            "machine_check_after.txt"]})
+
+    def test_a_dataset_that_is_not_the_hash_given_is_refused(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            fake = root / "bench_kernels"
+            fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            log = root / "run_log.md"
+            code = simd_driver.main(
+                ["--experiment", "framing", "--prediction", "P-0601", "--raw-dir",
+                 str(root / "raw"), "--input", str(fake), "--dataset", "d",
+                 "--dataset-sha256", "0" * 64, "--bench", str(fake), "--probe", str(fake),
+                 "--measure", str(fake), "--run-log", str(log), "--allow-dirty"])
+            self.assertEqual(code, 1)
+            self.assertIn(f"hashes to {run_record.sha256_of(fake)}, not the --dataset-sha256 "
+                          + "0" * 64, log.read_text(encoding="utf-8"))
+
+    def test_avx512vbmi_is_refused_where_a_pass_has_no_overread_guard(self):
+        """r1-1, r4-6: decode, consume and parse refuse the kernel, with the reason in the run
+        log's row, before any process runs; the guarded experiments take it."""
+        for experiment in ("decode", "consume", "parse"):
+            with tempfile.TemporaryDirectory() as scratch:
+                root = Path(scratch)
+                fake = root / "bench_kernels"
+                fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                log = root / "run_log.md"
+                code = simd_driver.main(
+                    ["--experiment", experiment, "--prediction", "P-0601", "--raw-dir",
+                     str(root / "raw"), "--input", str(fake), "--dataset", "d",
+                     "--dataset-sha256", run_record.sha256_of(fake), "--bench", str(fake),
+                     "--probe", str(fake), "--measure", str(fake), "--kernels",
+                     "avx2,avx512vbmi", "--run-log", str(log), "--allow-dirty"])
+                self.assertEqual(code, 1, experiment)
+                self.assertIn(f"refused: kernel: avx512vbmi for {experiment}: "
+                              f"{simd_driver.UNGUARDED[experiment]} has no guard for kOverread",
+                              log.read_text(encoding="utf-8"))
+                self.assertFalse((root / "raw").exists(), "no process ran")
+        for experiment in ("field", "filter", "batch", "book", "verify"):
+            simd_driver.refuse_unguarded(experiment, ["avx512vbmi"])
+        simd_driver.refuse_unguarded("decode", ["avx2", "ssse3", "neon"])
 
 
 if __name__ == "__main__":

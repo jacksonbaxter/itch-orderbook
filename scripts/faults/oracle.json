@@ -4336,6 +4336,54 @@
       "expect": {
         "signature": "FAIL: test_the_compiler_is_the_build_trees "
       }
+    },
+    {
+      "id": "oracle-alloc-hot-path-remove-on-empty",
+      "breaks": "The fast book allocates when an E, C or X takes an order's whole remainder and removes it (r8-2)",
+      "check": "test_alloc Allocation.TheFastBookAllocatesNothingAfterConstruction",
+      "mutations": [
+        {
+          "file": "include/itch/book.hpp",
+          "old": "    if (shares == orders_[order].shares) {\n      remove_order(order);\n    } else {",
+          "new": "    if (shares == orders_[order].shares) {\n      ::operator delete(::operator new(8));\n      remove_order(order);\n    } else {"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Allocation\\.TheFastBookAllocatesNothingAfterConstruction"
+      }
+    },
+    {
+      "id": "oracle-alloc-churn-never-empties",
+      "breaks": "The churn stream every allocation window is built on takes one share at a time again, so no E, C or X removes an order",
+      "check": "test_alloc Allocation.TheChurnStreamEmptiesOrdersByEveryExecutionAndCancel",
+      "mutations": [
+        {
+          "file": "tests/support/churn.hpp",
+          "old": "      const std::uint32_t taken = random() % 4 == 0 ? shares[pick] : 1;",
+          "new": "      const std::uint32_t taken = 1;"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_alloc"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_alloc"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Allocation\\.TheChurnStreamEmptiesOrdersByEveryExecutionAndCancel"
+      }
     }
   ]
 }

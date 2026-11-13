@@ -22,6 +22,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import backtest_driver  # noqa: E402
+import test_driver_records  # noqa: E402
 import check_results  # noqa: E402
 import stamp_load  # noqa: E402
 
@@ -312,16 +313,26 @@ class Driver(unittest.TestCase):
                      "machine_check.sh passes the fake probe only on macOS, where pinning and "
                      "the governor are recorded, not enforced")
 class EndToEnd(unittest.TestCase):
-    def run_driver(self, root, fake_record, code=0):
+    def run_driver(self, root, fake_record, code=0, busy=None):
+        """The driver on fakes, under the Mac's sampler rule (r5-2), whose sampler reads a fake
+        ps that shows another process at 50% CPU while `busy` exists: made by the first
+        process with busy="first", by every one with busy="always"."""
         (root / "results").mkdir()
         (root / "results" / "predictions.md").write_text("## P-0101: x\n\nIt runs.\n",
                                                          encoding="utf-8")
         bench = root / "bench.sh"
+        making = {None: "", "always": f"touch '{root}/busy'; sleep 1; rm -f '{root}/busy'\n",
+                  "first": (f"[ -f '{root}/once' ] || {{ touch '{root}/once' '{root}/busy'; "
+                            f"sleep 1; rm -f '{root}/busy'; }}\n")}[busy]
         bench.write_text(
             "#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = --out ] && out=$2; shift; done\n"
-            f"cat > \"$out\" <<'JSON'\n{json.dumps(fake_record)}\nJSON\nexit {code}\n",
+            f"{making}cat > \"$out\" <<'JSON'\n{json.dumps(fake_record)}\nJSON\nexit {code}\n",
             encoding="utf-8")
         bench.chmod(0o755)
+        ps = root / "ps.sh"
+        ps.write_text(f"#!/bin/sh\n[ -f '{root}/busy' ] && echo '99999 1 50.0 /usr/bin/other_job'"
+                      "\nexit 0\n", encoding="utf-8")
+        ps.chmod(0o755)
         out = root / "results" / "backtest_x.md"
         machine = FIXTURES / "machine_check"
         result = subprocess.run(
@@ -330,7 +341,8 @@ class EndToEnd(unittest.TestCase):
              "--input", str(machine / "input.bin"), "--workload", fake_record["workload"],
              "--date", "20191230", "--prediction", "P-0101", "--raw-dir", str(root / "raw"),
              "--out", str(out), "--allow-dirty", "--predictions-root", str(root),
-             "--run-log", str(root / "results" / "run_log.md")],
+             "--run-log", str(root / "results" / "run_log.md"), "--ps", str(ps),
+             "--sample-every", "0.2", "--quiet-before", "0"],
             capture_output=True, text=True, timeout=120, check=False)
         return result, out, (root / "results" / "run_log.md").read_text(encoding="utf-8")
 
@@ -340,8 +352,44 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             text = out.read_text(encoding="utf-8")
             self.assertEqual({code for code, _ in check_results.check_text(text)},
-                             {"load-not-stamped"})
-            self.assertIn("| published |", log)
+                             {"load-not-stamped", "sampler-stand-in"})
+            # The driver leaves the outcome to stamp_load.py (r5-3).
+            self.assertIn("| written, pending the load stamp: ", log)
+            self.assertNotIn("| published", log)
+            # The driver applied the Mac's sampler rule itself (r5-2).
+            self.assertIn(f"- interference: {check_results.driver_interference(0.2)}; 0 "
+                          "withdrawn under the rule\n", text)
+            self.assertIn(check_results.DRIVER_SAMPLER_RULE, text)
+            self.assertEqual(text.count("| T-BT-3, repetition "), 3)
+            # What the run keeps of itself (gate item 8).
+            root, machine = Path(directory), FIXTURES / "machine_check"
+            test_driver_records.assert_run_record(
+                self, root / "raw", text, (root / "bench.sh", machine / "fake_probe.sh"),
+                ("machine_check.txt", "sampler.txt"), machine / "input.bin")
+
+    def test_a_process_beside_another_busy_process_is_withdrawn_and_rerun(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            result, out, log = self.run_driver(Path(directory), record("shadow", 1.0),
+                                               busy="first")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("withdrawn: T-BT-3, repetition 1 on the Mac, exit 0; the CPU sampler "
+                          "saw a system process at 50.0% CPU", log)
+            text = out.read_text(encoding="utf-8")
+            self.assertEqual({code for code, _ in check_results.check_text(text)},
+                             {"load-not-stamped", "sampler-stand-in"})
+            self.assertIn("; 1 withdrawn under the rule", text)
+            self.assertTrue((test_driver_records.run_folder_of(Path(directory) / "raw") /
+                             "shadow-repetition-1-withdrawn-1.json").is_file())
+
+    def test_a_process_withdrawn_three_times_running_ends_the_run(self):
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+            result, out, log = self.run_driver(Path(directory), record("shadow", 1.0),
+                                               busy="always")
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertFalse(out.exists())
+            self.assertEqual(log.count("withdrawn: T-BT-3, repetition 1 on the Mac"), 3)
+            self.assertIn("refused at T-BT-3, repetition 1: withdrawn 3 times in a row under the "
+                          "sampler rule", log)
 
     def test_a_bench_that_refuses_refuses_the_run(self):
         refused = copy.deepcopy(record())

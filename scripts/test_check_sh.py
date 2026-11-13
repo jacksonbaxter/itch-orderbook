@@ -19,7 +19,8 @@ from pathlib import Path
 CHECK_SH = Path(__file__).resolve().parent / "check.sh"
 
 ORACLE_TESTS = ["test_book", "test_alloc", "test_node_book", "test_oracle_cli", "corpus_fuzz_book"]
-BENCH_TESTS = ["test_bench_platform", "test_bench_replay", "test_bench_cli",
+BENCH_TESTS = ["test_bench_platform", "test_bench_platform_cross_core", "test_bench_replay",
+               "test_bench_cli",
                "test_bench_backtest_cli", "test_bench_counts_cli", "test_bench_variants_cli",
                "test_bench_spsc_cli", "test_bench_kernels_cli", "test_bench_udp_cli",
                "test_bench_walks_cli", "test_walk_counts"]

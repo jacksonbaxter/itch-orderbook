@@ -284,6 +284,166 @@
       "expect": {
         "signature": "\\[-Werror,-Wunused-variable\\]"
       }
+    },
+    {
+      "id": "tooling-symbolizer-overwrites-test-environment",
+      "breaks": "the symbolizer's options replace a test's own environment modifications instead of following them",
+      "check": "scripts/test_sanitizer_tests.py test_every_test_in_every_directory_names_the_symbolizer_beside_the_compiler",
+      "mutations": [
+        {
+          "file": "cmake/ItchSanitizerTests.cmake",
+          "old": "APPEND PROPERTY ENVIRONMENT_MODIFICATION",
+          "new": "PROPERTY ENVIRONMENT_MODIFICATION"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_sanitizer_tests.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_test_in_every_directory_names_the_symbolizer_beside_the_compiler \\("
+      }
+    },
+    {
+      "id": "tooling-symbolizer-top-directory-only",
+      "breaks": "only the top directory's tests name the toolchain symbolizer; the tests of tests/ and fuzz/ wait on the system one",
+      "check": "scripts/test_sanitizer_tests.py test_every_test_in_every_directory_names_the_symbolizer_beside_the_compiler",
+      "mutations": [
+        {
+          "file": "cmake/ItchSanitizerTests.cmake",
+          "old": "    itch_tests_under(\"${sub}\" more)\n    list(APPEND pairs ${more})\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_sanitizer_tests.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_test_in_every_directory_names_the_symbolizer_beside_the_compiler \\("
+      }
+    },
+    {
+      "id": "tooling-symbolizer-missing-path-kept",
+      "breaks": "a symbolizer path is named where no llvm-symbolizer is, instead of the empty path that turns the external one off",
+      "check": "scripts/test_sanitizer_tests.py test_no_symbolizer_beside_the_compiler_turns_the_external_one_off",
+      "mutations": [
+        {
+          "file": "cmake/ItchSanitizerTests.cmake",
+          "old": "if(dir STREQUAL \"\" OR NOT EXISTS \"${symbolizer}\" OR IS_DIRECTORY \"${symbolizer}\")",
+          "new": "if(dir STREQUAL \"\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_sanitizer_tests.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_no_symbolizer_beside_the_compiler_turns_the_external_one_off \\("
+      }
+    },
+    {
+      "id": "tooling-symbolizer-not-called-on-macos",
+      "breaks": "the sanitizer tests name the toolchain symbolizer on Linux and not on macOS, where the system one may wait on a dialog",
+      "check": "scripts/test_sanitizer_tests.py test_cmakelists_calls_it_last_for_sanitizer_builds_on_macos_only",
+      "mutations": [
+        {
+          "file": "CMakeLists.txt",
+          "old": "if(APPLE AND ITCH_SANITIZE)\n  itch_sanitizer_symbolizer",
+          "new": "if(LINUX AND ITCH_SANITIZE)\n  itch_sanitizer_symbolizer"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_sanitizer_tests.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_cmakelists_calls_it_last_for_sanitizer_builds_on_macos_only \\("
+      }
+    },
+    {
+      "id": "tooling-test-timeout-dropped",
+      "breaks": "the test presets set no timeout, so a test that hangs stalls the check instead of failing it",
+      "check": "scripts/test_sanitizer_tests.py test_every_test_preset_fails_a_test_that_runs_past_the_timeout",
+      "mutations": [
+        {
+          "file": "CMakePresets.json",
+          "old": "\"jobs\": 6,\n        \"timeout\": 1800\n",
+          "new": "\"jobs\": 6\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_sanitizer_tests.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_test_preset_fails_a_test_that_runs_past_the_timeout \\("
+      }
+    },
+    {
+      "id": "tooling-symbolizer-fault-commands-unset",
+      "breaks": "fault_matrix runs its commands, fuzz targets among them, without the toolchain symbolizer, so on macOS a directly run fuzz target waits on the system one",
+      "check": "scripts/test_sanitizer_tests.py test_every_command_runs_in_that_environment",
+      "mutations": [
+        {
+          "file": "scripts/fault_matrix.py",
+          "old": "start_new_session=True,\n                                   env=command_environment())",
+          "new": "start_new_session=True)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_sanitizer_tests.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_command_runs_in_that_environment \\("
+      }
+    },
+    {
+      "id": "tooling-symbolizer-check-sh-unset",
+      "breaks": "check.sh no longer sets the toolchain symbolizer in its environment, so a sanitizer binary it runs outside ctest waits on the system one on macOS",
+      "check": "scripts/test_sanitizer_tests.py test_check_sh_sources_it_before_any_stage",
+      "mutations": [
+        {
+          "file": "scripts/check.sh",
+          "old": "source scripts/symbolizer_env.sh\n",
+          "new": "\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_sanitizer_tests.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_check_sh_sources_it_before_any_stage \\("
+      }
+    },
+    {
+      "id": "tooling-symbolizer-check-sh-keeps-the-system-one",
+      "breaks": "check.sh's symbolizer setting drops what the options held, a preset's halt_on_error among them",
+      "check": "scripts/test_sanitizer_tests.py test_on_macos_the_check_names_the_symbolizer_after_the_options_set",
+      "mutations": [
+        {
+          "file": "scripts/symbolizer_env.sh",
+          "old": "export ASAN_OPTIONS=\"${ASAN_OPTIONS:-}:external_symbolizer_path=$itch_symbolizer\"",
+          "new": "export ASAN_OPTIONS=\":external_symbolizer_path=$itch_symbolizer\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_sanitizer_tests.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_on_macos_the_check_names_the_symbolizer_after_the_options_set \\("
+      }
     }
   ]
 }

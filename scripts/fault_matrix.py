@@ -316,6 +316,33 @@ def inject(fault, tree):
             path.write_bytes(INPUT_OPS[spec["op"]](path.read_bytes(), spec))
 
 
+SANITIZER_OPTIONS = ("ASAN_OPTIONS", "UBSAN_OPTIONS", "TSAN_OPTIONS")
+
+
+def symbolizer_for(compiler):
+    """The llvm-symbolizer in the compiler's directory, or "" when there is none there."""
+    found = shutil.which(compiler) if compiler else None
+    if not found:
+        return ""
+    candidate = Path(found).parent / "llvm-symbolizer"
+    return str(candidate) if candidate.is_file() else ""
+
+
+def command_environment(environ=None, system=None):
+    """The environment every command runs in. On macOS each sanitizer's options name the
+    llvm-symbolizer beside $CXX, after whatever they held, as cmake/ItchSanitizerTests.cmake
+    does for ctest: the default there is the system symbolizer, which may wait on a system
+    authorization dialog, so a fuzz target or sanitizer binary run directly would stall. An
+    empty path, where there is no llvm-symbolizer, turns the external symbolizer off."""
+    env = dict(os.environ if environ is None else environ)
+    if (system or platform.system()) != "Darwin":
+        return env
+    path = symbolizer_for(env.get("CXX", "c++"))
+    for name in SANITIZER_OPTIONS:
+        env[name] = env.get(name, "") + ":external_symbolizer_path=" + path
+    return env
+
+
 def run_logged(command, cwd, log, timeout):
     """Runs a command with its output going to log. Returns (exit, output), exit None on timeout."""
     with open(log, "a", encoding="utf-8", errors="replace") as out:
@@ -324,7 +351,8 @@ def run_logged(command, cwd, log, timeout):
         start = out.tell()
     with open(log, "ab") as out:
         process = subprocess.Popen(command, cwd=cwd, stdout=out, stderr=subprocess.STDOUT,
-                                   stdin=subprocess.DEVNULL, start_new_session=True)
+                                   stdin=subprocess.DEVNULL, start_new_session=True,
+                                   env=command_environment())
         try:
             code = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:

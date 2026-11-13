@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Stamps a run's measure.sh load lines into its results file.
 
-    stamp_load.py --results FILE --stderr FILE [--sampler LOG] [--out FILE]
+    stamp_load.py --results FILE --stderr FILE [--sampler LOG] [--raw-dir DIR] [--out FILE]
 
 measure.sh prints its end line after the benchmark exits, so the file is finished from
 outside the lock, from the stderr that measure.sh wrote:
 
     measure.sh bench_driver.py ... 2> STDERR
-    stamp_load.py --results RESULTS --stderr STDERR
+    stamp_load.py --results RESULTS --stderr STDERR --raw-dir RAW/RUN_ID
 
 The lines are copied, never written from nothing, and refused if they are missing, doubled,
 or do not bracket the run. measure.sh's start line names the machine's hostname, which
@@ -28,6 +28,16 @@ naming measure.sh's process, and is stamped only if linux_sampler.judge() finds 
 from measure.sh's start to a second past its end, clean: otherwise it is refused, to be
 withdrawn and rerun.
 
+The driver's own row in results/run_log.md (--run-log) says the file is written, pending the
+load stamp. This appends the outcome row under the same run id, naming the file: published, or
+withdrawn with the reason, when the stamp or check_results.py refuses it. No row is ever
+edited. A file that is not pending, or whose run already has an outcome row for it, is refused
+with no row, so that a run once withdrawn is never stamped published after it.
+
+With --raw-dir, the run's own raw folder (scripts/run_record.py), measure.sh's stderr goes into
+its record untouched, as outputs/measure.stderr, refused if the folder is another run's: a
+render refuses a record of that kind without it.
+
 Exit codes: 0 stamped and the file passes check_results.py, 1 refused, 2 bad usage.
 """
 
@@ -41,8 +51,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import linux_sampler  # noqa: E402
+import run_record  # noqa: E402
 
 START = re.compile(r"^measure\.sh: start .*$", re.MULTILINE)
 END = re.compile(r"^measure\.sh: end .*$", re.MULTILINE)
@@ -70,7 +82,9 @@ def seconds(stamp_text):
 
 def sampler_line(sampler_text, start, end):
     """The header value for a sampler that kept watch from start to end. Raises ValueError
-    if it did not cover the span or saw another process busy in it."""
+    if it did not cover the span, from its last sample at or before start to its first at or
+    after end with no gap over SAMPLE_GAP, or has a FOREIGN line stamped inside [start, end].
+    A FOREIGN line at an edge sample outside the span is not judged (r5-10)."""
     samples, foreign = [], []
     for line in sampler_text.splitlines():
         match = SAMPLE.match(line)
@@ -87,8 +101,12 @@ def sampler_line(sampler_text, start, end):
         raise ValueError(f"the sampler stopped for {max(gaps):.0f} s between {start} and {end}")
     inside = [line for time, line in foreign if start <= time <= end]
     if inside:
+        # The reason goes into the run log's row, so the first is named by its kind, with its
+        # share and time; the sampler's log keeps its command.
+        import wasm_bench  # noqa: PLC0415  Here, since wasm_bench imports bench_driver.
+        stamp, _, cpu, command = (inside[0].split(None, 3) + ["", ""])[:4]
         raise ValueError(f"the sampler saw {len(inside)} other busy processes in the run, the "
-                         f"first {inside[0]!r}")
+                         f"first {wasm_bench.foreign_kind(command)} at {cpu}% CPU at {stamp}")
     return (f"quiet: the sampler rule was applied: {len(span)} lines from {span[0]} to "
             f"{span[-1]}, no gap over {SAMPLE_GAP} s, bracket the run from {start} to {end}, "
             "and no other process went above 20% CPU in it")
@@ -143,6 +161,8 @@ def stamp(results_text, stderr_text, sampler_text=None):
         if old not in results_text:
             raise ValueError(f"{name} is not pending in the results file")
         results_text = results_text.replace(old, f"- {name}: {line}")
+    if sampler is None and check_results.before_sampler_rule(fields):
+        sampler = check_results.SAMPLER_BEFORE_RULE
     if sampler is not None:
         results_text = results_text.replace(f"- measure_load_end: {end}",
                                             f"- measure_load_end: {end}\n- sampler: {sampler}")
@@ -161,25 +181,84 @@ def stamp(results_text, stderr_text, sampler_text=None):
     return results_text
 
 
+def system_of(host):
+    """The run's OS, in the run log's word for it, from the file's host label."""
+    return {"debian": "Linux", check_results.MAC_HOST: "Darwin"}.get(host)
+
+
+def settled(log_text, run_id, name):
+    """Whether the run log already has an outcome row for this run's file."""
+    for line in log_text.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) == 5 and cells[0] == run_id and \
+                cells[4].startswith((f"published: {name}", f"withdrawn: {name}")):
+            return True
+    return False
+
+
+def outcome(fields, name, why, sampler_given):
+    """The outcome row's text: published, or withdrawn with why."""
+    if why is None:
+        rule = ("; the sampler rule applied from the sampler's log" if sampler_given else "")
+        return (f"published: {name}, its load lines stamped from measure.sh's stderr by "
+                f"scripts/stamp_load.py{rule}; the file passes check_results.py")
+    return (f"withdrawn: {name}: scripts/stamp_load.py refused it: {why}; nothing from it is "
+            f"published; the row was written by stamp_load.py")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--results", type=Path, required=True)
     parser.add_argument("--stderr", type=Path, required=True)
     parser.add_argument("--sampler", type=Path,
                         help="the CPU sampler's log: a macOS run's, or linux_sampler.py's")
+    parser.add_argument("--raw-dir", type=Path,
+                        help="the run's own raw folder, to keep measure.sh's stderr in")
     parser.add_argument("--out", type=Path, help="default: stamp --results in place")
+    parser.add_argument("--run-log", type=Path,
+                        default=bench_driver.REPO_ROOT / "results" / "run_log.md",
+                        help="where the outcome row goes (default results/run_log.md)")
     args = parser.parse_args(argv)
+    results_text = args.results.read_text(encoding="utf-8")
+    fields = check_results.parse_header(results_text)
+    name = (args.out or args.results).name
+    pending = all(f"- {field}: {check_results.PENDING}" in results_text
+                  for field in ("measure_load_start", "measure_load_end"))
+    log_text = args.run_log.read_text(encoding="utf-8") if args.run_log.is_file() else ""
+    row = pending and all(fields.get(key) for key in ("run_id", "prediction", "commit"))
+    if row and settled(log_text, fields["run_id"], name):
+        print(f"stamp_load: refused: {fields['run_id']} already has an outcome row for {name} "
+              "in the run log", file=sys.stderr)
+        return 1
+    if args.raw_dir is not None:
+        try:
+            run_record.add_measure_stderr(args.raw_dir, fields.get("run_id"), args.stderr)
+        except (run_record.Incomplete, OSError, ValueError) as error:
+            print(f"stamp_load: refused: {error}", file=sys.stderr)
+            return 1
+    why = None
     try:
         sampler = args.sampler.read_text(encoding="utf-8") if args.sampler else None
-        stamped = stamp(args.results.read_text(encoding="utf-8"),
-                        args.stderr.read_text(encoding="utf-8", errors="replace"), sampler)
+        stamped = stamp(results_text, args.stderr.read_text(encoding="utf-8", errors="replace"),
+                        sampler)
     except ValueError as error:
         print(f"stamp_load: refused: {error}", file=sys.stderr)
-        return 1
-    violations = check_results.check_text(stamped)
-    for code, detail in violations:
-        print(f"stamp_load: FAIL {code}: {detail}", file=sys.stderr)
-    if violations:
+        why = str(error)
+    else:
+        violations = check_results.check_text(stamped)
+        for code, detail in violations:
+            print(f"stamp_load: FAIL {code}: {detail}", file=sys.stderr)
+        if violations:
+            why = "; ".join(f"{code}: {detail}" for code, detail in violations)
+    if row and not args.run_log.parent.is_dir():
+        # A scratch copy of the tree with no results/, as the fault matrix makes: said, not hidden.
+        print(f"stamp_load: no folder for the run log at {args.run_log}, so no outcome row",
+              file=sys.stderr)
+    elif row:
+        bench_driver.append_log(args.run_log, fields["run_id"], fields["prediction"],
+                                fields["commit"], outcome(fields, name, why, args.sampler),
+                                system_of(fields.get("host")))
+    if why is not None:
         return 1
     target = args.out or args.results
     target.write_text(stamped, encoding="utf-8")

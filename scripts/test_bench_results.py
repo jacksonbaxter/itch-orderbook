@@ -181,6 +181,25 @@ class BookResults(unittest.TestCase):
         self.assertTrue(check_results.is_book_file(quoted))
         self.assertIn("target-missing", codes(without_line(quoted, "| T-BOOK-1 |")))
 
+    def test_the_label_alone_marks_a_stub(self):
+        """bench_driver writes a --note of the label alone as **label**: a stub's line too."""
+        label = check_results.STUB_LABEL
+        line = f"**{label} Harness test fixture in the Phase 2 format, not a measurement.**"
+        alone = replace(MAC, line, f"**{label}**")
+        self.assertFalse(check_results.is_book_file(alone))
+        self.assertEqual(check_results.check_text(alone), [])
+
+    def test_a_design_file_without_the_label_gets_every_book_check(self):
+        """A bold line above the Header that is not the label, the label cut short among
+        them, leaves a design file a book file, with every book check its own."""
+        label = check_results.STUB_LABEL
+        broken = without_line(BOOK, "| T-BOOK-1 |")
+        for note in ("**A note.**", f"**{label[:-1]}**", f"**{label}x**"):
+            noted = replace(broken, "\n## Header\n", f"\n{note}\n\n## Header\n")
+            self.assertTrue(check_results.is_book_file(noted), note)
+            self.assertEqual(codes(noted), codes(broken), note)
+        self.assertIn("target-missing", codes(broken))
+
     def test_a_book_file_labelled_the_stub_is_refused(self):
         label = check_results.STUB_LABEL
         labelled = replace(BOOK, "\n## Header\n", f"\n**{label} A planted label.**\n\n## Header\n")
@@ -520,7 +539,8 @@ class Stamp(unittest.TestCase):
             stderr.write_text(STDERR.replace("at=2026-10-31T10:00:10Z", "at=2026-10-31T10:00:06Z"),
                               encoding="utf-8")
             with contextlib.redirect_stderr(io.StringIO()):
-                code = stamp_load.main(["--results", str(results), "--stderr", str(stderr)])
+                code = stamp_load.main(["--results", str(results), "--stderr", str(stderr),
+                                        "--run-log", str(Path(directory) / "run_log.md")])
             self.assertEqual(code, 1)
             self.assertEqual(results.read_text(encoding="utf-8"), PENDING)
 
@@ -558,8 +578,18 @@ class Sampler(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "needs the CPU sampler's log"):
             stamp_load.stamp(self.pending, self.stderr)
 
-    def test_a_mac_run_before_the_rule_does_not(self):
-        self.assertNotIn("- sampler:", stamp_load.stamp(PENDING, STDERR))
+    def test_a_mac_run_before_the_rule_says_that_no_sampler_ran(self):
+        """r5-2: a Mac run from before 2026-11-05 needs no sampler's log, and its file says, in
+        the line where a later one gives the sampler's verdict, that none ran beside it."""
+        stamped = stamp_load.stamp(PENDING, STDERR)
+        self.assertIn(f"\n- sampler: {check_results.SAMPLER_BEFORE_RULE}\n", stamped)
+        self.assertEqual(check_results.check_text(stamped), [])
+        dropped = "\n".join(line for line in stamped.splitlines()
+                            if not line.startswith("- sampler:"))
+        self.assertEqual(codes(dropped), {"sampler-before-rule-unsaid"})
+        quiet = stamped.replace(f"- sampler: {check_results.SAMPLER_BEFORE_RULE}",
+                                "- sampler: quiet: the sampler rule was applied: 3 lines")
+        self.assertEqual(codes(quiet), {"sampler-before-rule-unsaid"})
 
     def test_a_gap_in_the_run_is_refused(self):
         with self.assertRaisesRegex(ValueError, "the sampler stopped for 8 s"):
@@ -595,7 +625,8 @@ class Sampler(unittest.TestCase):
             sampler.write_text(sampler_log(foreign_at=6), encoding="utf-8")
             with contextlib.redirect_stderr(io.StringIO()):
                 code = stamp_load.main(["--results", str(results), "--stderr", str(stderr),
-                                        "--sampler", str(sampler)])
+                                        "--sampler", str(sampler),
+                                        "--run-log", str(Path(directory) / "run_log.md")])
             self.assertEqual(code, 1)
             self.assertEqual(results.read_text(encoding="utf-8"), self.pending)
 
@@ -718,6 +749,9 @@ class Driver(unittest.TestCase):
             data.write_bytes(b"x" * 100)
             log = root / "results" / "run_log.md"
             out = root / "out.md"
+            # Files the driver can hash for its record, but not run.
+            for name in ("no-bench", "no-probe"):
+                (root / name).write_text("not a program\n", encoding="utf-8")
             result = subprocess.run(
                 [sys.executable, "-B", str(REPO_ROOT / "scripts" / "bench_driver.py"),
                  "--bench", str(root / "no-bench"), "--probe", str(root / "no-probe"),
@@ -1030,6 +1064,7 @@ class Signals(unittest.TestCase):
             root = Path(directory)
             marker = root / "probe-started"
             probe = self.script(root / "probe.sh", f"touch '{marker}'\nsleep 2\n")
+            (root / "no-bench").write_text("not a program\n", encoding="utf-8")
             driver = self.start(root, probe, root / "no-bench")
             code, stderr = self.stop_when(driver, marker)
             self.assertEqual(code, 128 + signal.SIGTERM, stderr)

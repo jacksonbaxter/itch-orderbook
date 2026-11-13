@@ -7,7 +7,7 @@ Every built mode, paced, passes on the fixture day with its record whole: the bo
 the file's, every message was delivered, latency is from the schedule, and the record says
 loopback is not a network. An unpaced run has no latency; a feed-shaped run has its schedule;
 the sender alone passes; --peaks and --probe say what they find; and bad usage, a mode the
-build lacks and a packing too large for a batching mode's slot exit 2. Nothing here is a
+build lacks and a packing too large for a batching mode's slot exit 2, each saying why. Nothing here is a
 measurement: the figures in these records are never reported.
 
 A failure prints `bench_udp cli: FAIL <case>: <reason>`.
@@ -123,18 +123,26 @@ def main():
         if not said.get(mode, "").startswith(want):
             failures.append((f"probe {mode}", f"said {said.get(mode)!r}, not {want}"))
 
-    bad = [("no mode", (day,)), ("unknown mode", (day, "--mode", "U6")),
-           ("rate and feed", (day, "--mode", "S1", "--rate", "10", "--feed-speedup", "2")),
-           ("zero speedup", (day, "--mode", "S1", "--feed-speedup", "0")),
-           ("no file", ("--mode", "S1")), ("bad number", (day, "--mode", "S1", "--rate", "x")),
-           ("missing file", (str(scratch / "absent.itch"), "--mode", "S1"))]
-    bad += [(f"{mode} not built", (day, "--mode", mode)) for mode in MODES if mode not in built]
-    bad += [(f"{mode} small slot", (day, "--mode", mode, "--slot", "1000"))
+    usage = "usage: bench_udp FILE"
+    bad = [("no mode", (day,), usage), ("unknown mode", (day, "--mode", "U6"), usage),
+           ("rate and feed", (day, "--mode", "S1", "--rate", "10", "--feed-speedup", "2"), usage),
+           ("zero speedup", (day, "--mode", "S1", "--feed-speedup", "0"), usage),
+           ("no file", ("--mode", "S1"), usage),
+           ("bad number", (day, "--mode", "S1", "--rate", "x"), usage),
+           ("missing file", (str(scratch / "absent.itch"), "--mode", "S1"),
+            f"bench_udp: cannot open {scratch / 'absent.itch'}")]
+    bad += [(f"{mode} not built", (day, "--mode", mode),
+             f"bench_udp: mode {mode} is not built here: ")
+            for mode in MODES if mode not in built]
+    bad += [(f"{mode} small slot", (day, "--mode", mode, "--slot", "1000"),
+             "-byte datagram does not fit a 1000-byte slot")
             for mode in ("S3", "S4", "U2", "U3", "U4", "U5") if mode in built]
-    for name, args in bad:
+    for name, args, reason in bad:
         done = run(*args)
         if done.returncode != 2:
             failures.append((name, f"exit {done.returncode}, not 2"))
+        elif reason not in done.stderr:
+            failures.append((name, f"said {done.stderr[-300:]!r}, not {reason!r}"))
 
     for case, reason in failures:
         print(f"bench_udp cli: FAIL {case}: {reason}")

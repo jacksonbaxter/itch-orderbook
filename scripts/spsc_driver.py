@@ -11,7 +11,7 @@ bench_pipeline (T-SPSC-3). On a reported run this is measure.sh's direct child, 
 scripts/bench_driver.py is, and it shares that driver's order and its signal handling:
 
     measure.sh /usr/bin/time -l python3 -B scripts/spsc_driver.py ... 2> STDERR
-    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR
+    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR --raw-dir RAW/RUN_ID
 
 Hash the input, which also faults it in; confirm the prediction is on record; run
 machine_check.sh, refusing on a failure; run the repetitions, one process each, the
@@ -46,8 +46,24 @@ beside it. Every SPSC bar was set on x86, so a macOS file gives each the verdict
 differs` with the ratio and the bar in words; on debian the verdict is met or missed.
 The checks and the comparisons themselves are check_results.py's.
 
-Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
---raw-dir, which is not committed.
+A paced or burst latency is measured from the push, not from the time the message was due,
+so a wait behind earlier slow pushes is in no cell, only in the late count; the file labels
+its columns so and says what that leaves out, with each row's late share (r4-2).
+
+    spsc_driver.py render --raw-dir DIR --published results/FILE --stderr STDERR \\
+        --out-dir OUT [--rendered-again REASON]
+
+renders a published file again from its run's raw records: every figure from the records,
+every Sampler verdict worked out again from DIR/sampler.txt, and only what the run printed
+into the file alone (its command, run id and times, the machine check, the cross-core and
+swap lines) taken from it; from a record of the new kind, which kept the machine check and
+the cross-core output, those two from the record, and a record that lacks any part refused.
+
+Every run gets a row in results/run_log.md, whatever became of it.
+Raw output stays in --raw-dir/<run id>, a folder of the run's own that the driver
+refuses to write into if another run has, with run.json beside it: the commit and tree
+state, each binary's sha256, the dataset hashed, and every tool output the file quotes
+(scripts/run_record.py). None of it is committed.
 
 Exit codes: 0 results written, 1 refused or failed, 2 bad usage, 128 + N stopped by
 signal N.
@@ -60,6 +76,7 @@ import datetime
 import json
 import os
 import platform
+import re
 import shlex
 import signal
 import statistics
@@ -72,6 +89,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
+import run_record  # noqa: E402
 import wasm_bench  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -155,6 +173,8 @@ class Sampler(wasm_bench.Sampler):
         super().__init__(path)
         self.ps = ps
         self.every = every
+        # A test's stand-in for `ps` (--ps): the file says so (check_results.STAND_IN_SAMPLER).
+        self.stand_in = ps != "ps"
 
     def sample(self):
         try:
@@ -190,7 +210,10 @@ def stamp_of(moment):
 
 def span_lines(lines, begin, end):
     """The sampler's lines from its last sample at or before begin to its first at or after
-    end: the span and the samples either side of it, which is what the rule judges."""
+    end: the span and the sample either side of it. The edge samples are kept to show the
+    span covered, and for its gaps; wasm_bench.unquiet judges FOREIGN and failed lines only
+    where they are stamped inside [begin, end], so a FOREIGN line at an edge sample outside
+    the span withdraws nothing (r5-10)."""
     stamps = [wasm_bench.at(line.split()[0]) for line in lines
               if line.split()[1:2] == ["sample"]]
     before = [t for t in stamps if t <= wasm_bench.at(begin)]
@@ -201,9 +224,10 @@ def span_lines(lines, begin, end):
     return [line for line in lines if low <= wasm_bench.at(line.split()[0]) <= high]
 
 
-def span_unquiet(lines, begin, end):
-    """Why the sampler does not show the span quiet, or None."""
-    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end)
+def span_unquiet(lines, begin, end, by_kind=True):
+    """Why the sampler does not show the span quiet, or None; a foreign process named by kind
+    unless by_kind is False (wasm_bench.unquiet)."""
+    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end, by_kind)
 
 
 def span_summary(lines, begin, end):
@@ -280,6 +304,17 @@ def cross_core_check(args):
     verdict = lines.get("cross_core_verdict", f"no verdict, exit {result.returncode}")
     if result.returncode != 0 or not verdict.startswith("agree"):
         raise Refused("cross-core timer", verdict)
+    args.record.output(CROSS_CORE, result.stdout)
+    return cross_core_line(result.stdout)
+
+
+CROSS_CORE = "cross_core.txt"
+
+
+def cross_core_line(stdout):
+    """The header's cross_core_timer line, from bench_probe --cross-core's output."""
+    lines = dict(line.split(": ", 1) for line in stdout.splitlines() if ": " in line)
+    verdict = lines["cross_core_verdict"]
     return (f"{verdict.split(':')[0]}: {lines['cross_core_offset']}, over "
             f"{lines['cross_core_trips']}; the fastest round trip "
             f"{lines['cross_core_fastest_round_trip']}; {lines['cross_core_backwards']}")
@@ -470,6 +505,11 @@ def median_cell(values):
     return check_results.BELOW_FLOOR if middle is None else f"{middle:,.1f}"
 
 
+def late_share(row):
+    """A row's late sends over the sends its late count covers, from the raw counts."""
+    return row["late"] / check_results.spsc_sends(row["protocol"], row["latency"]["samples"])
+
+
 def latency_rows(records):
     rows = []
     keyed = [rows_by_key(record) for record in records]
@@ -479,9 +519,10 @@ def latency_rows(records):
         cells = [median_cell([percentile_value(k[key], value) for k in keyed])
                  for _, value in PERCENTILES]
         late = statistics.median(k[key]["late"] for k in keyed)
+        share = statistics.median(late_share(k[key]) for k in keyed)
         samples = keyed[0][key]["latency"]["samples"]
         rows.append(f"| {key[0]} | {key[1]} | " + " | ".join(cells) +
-                    f" | {late:,.0f} | {samples:,} |")
+                    f" | {late:,.0f} | {check_results.share_cell(share)} | {samples:,} |")
     return sorted(rows, key=lambda row: (row.split(" | ")[1] != "burst", row))
 
 
@@ -649,7 +690,8 @@ def pipeline_sections(records):
 
 def sampler_sections(sampled):
     """Every repetition's span and what the sampler rule made of it, withdrawn ones too."""
-    lines = ["## Sampler", "", check_results.SPSC_SAMPLER_RULE, "",
+    rule = check_results.sampler_rule(check_results.SPSC_SAMPLER_RULE, sampled)
+    lines = ["## Sampler", "", rule, "",
              "| Process | Started | Finished | Outcome |", "|---|---|---|---|"]
     for index, (begin, end, said) in enumerate(sampled["published"], start=1):
         lines.append(f"| repetition {index} | {begin} | {end} | {said} |")
@@ -679,22 +721,27 @@ def render(records, args, run_id, started, finished, machine_output, command, sa
                  "repetition's own, paired." if suite == "pipeline" else
                  "Each runs every row once, in a fresh queue, after its untimed start. An rtt "
                  "figure is the mean of one span over every round trip, a saturated figure the "
-                 "items over the span, and a mean one-way figure the mean of the histogram: of "
+                 "items over the span, and a mean one-way figure the mean of the histogram, "
+                 "measured from the push as the Latency section says: of "
                  "samples each a whole number of timer quanta, read on two cores, so a mean under "
                  "the floor is an average over many reads, not one the clock resolved."),
               "", "| Figure | Median | Min | Max | CV |", "|---|---|---|---|---|"]
     lines += summary
     if suite != "pipeline":
         lines += ["", "## Latency", "",
-                  "One-way, from the sender's clock read to the receiver's, in ns, each cell the "
+                  "One-way, measured from the push: from the sender's clock read just before it "
+                  "pushes the item to the receiver's just after it pops it, in ns, each cell the "
                   "median over the repetitions. The two reads are on two cores, so the pair cost "
                   "is not subtracted. `below floor` is under the timer's floor of "
                   f"{first['header']['floor']}, where this clock cannot resolve a figure. A send "
                   "is late when it goes a whole gap behind its time, or, in burst, after the next "
-                  "message was due.", "",
-                  "| Queue | Protocol | p50 | p90 | p99 | p99.9 | p99.99 | max | Late sends "
-                  "| Samples |", "|---|---|---|---|---|---|---|---|---|---|"]
+                  f"message was due. {check_results.SPSC_LATE_SHARE}", "",
+                  "| Queue | Protocol | " + " | ".join(
+                      f"{name} {check_results.SPSC_FROM_PUSH}" for name, _ in PERCENTILES)
+                  + " | Late sends | Late share | Samples |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|"]
         lines += latency_rows(records)
+        lines += ["", check_results.SPSC_LEFT_OUT]
     else:
         lines += [""] + pipeline_sections(records)[:-1]
     lines += ["", "## Targets", "",
@@ -777,6 +824,7 @@ def run(args, run_id, started, commit, sampler):
     bench_driver.swap_watch = bench_driver.SwapWatch(args.vmstat)
     bench_driver.set_stage("hashing the input")
     digest = bench_driver.hash_and_fault_in(args.input)
+    args.record.dataset(args.input, digest)
     bench_driver.set_stage("checking the prediction")
     code = subprocess.run([sys.executable, "-B", str(REPO_ROOT / "scripts" / "check_predictions.py"),
                            "--root", str(args.predictions_root), "--require", args.prediction],
@@ -785,10 +833,11 @@ def run(args, run_id, started, commit, sampler):
         raise Refused("prediction", code.stdout.strip())
     bench_driver.set_stage("machine_check")
     machine_output = machine_checks(args)
+    args.record.output(bench_driver.MACHINE_CHECK, machine_output)
     cross_core = cross_core_check(args)
     records = []
     sampled = None if sampler is None else {
-        "every": sampler.every, "published": [], "withdrawn": []}
+        "every": sampler.every, "stand_in": sampler.stand_in, "published": [], "withdrawn": []}
     while len(records) < args.repetitions:
         index = len(records) + 1
         wait_for_quiet(sampler, args.quiet_before, args.quiet_wait)
@@ -818,7 +867,7 @@ def run(args, run_id, started, commit, sampler):
     text = render(records, args, run_id, started, bench_driver.utc_now(), machine_output,
                   relative_command(args), sampled=sampled, cross_core=cross_core)
     violations = [found for found in check_results.check_text(text)
-                  if found[0] != "load-not-stamped"]
+                  if found[0] not in check_results.LEFT_TO_STAMP]
     if violations:
         raise Refused("results", f"{args.out.name}: " + "; ".join(
             f"{code}: {detail}" for code, detail in violations))
@@ -869,20 +918,143 @@ def parse_args(argv):
     return args
 
 
+# render
+
+def published_sampled(published, raw_dir, every):
+    """The Sampler section's spans, each outcome worked out again from the raw sampler.txt,
+    refusing one the raw lines do not give back; None for a file with no Sampler section.
+    The log's stamps are to the second, so this gives back the run's own verdicts only for
+    a sampler that took at most one sample a second, as a run's, every 2 s, does."""
+    if check_results.section(published, "Sampler") is None:
+        return None
+    if every is None:
+        raise Refused("published", "a Sampler section with no interference field to say how "
+                                   "often the sampler ran")
+    path = raw_dir / "sampler.txt"
+    if not path.is_file():
+        raise Refused("raw", "the file has a Sampler section and the raw folder no sampler.txt")
+    lines = path.read_text(encoding="utf-8").splitlines()
+    # A record of the new kind named a foreign process by kind; one made before, by name.
+    by_kind = run_record.is_new_kind(raw_dir)
+    sampled = {"every": every, "stand_in": check_results.STAND_IN_SAMPLER in published,
+               "published": [], "withdrawn": []}
+    for cells in check_results.table_rows(published, "Sampler"):
+        if len(cells) != 4 or cells[0] == "Process":
+            continue
+        what, begin, end, said = cells
+        why = span_unquiet(lines, begin, end, by_kind)
+        if what.startswith("repetition "):
+            again = span_summary(lines, begin, end) if why is None else f"unquiet: {why}"
+            sampled["published"].append((begin, end, again))
+        elif what.startswith("withdrawn "):
+            again = "quiet" if why is None else f"withdrawn: {why}"
+            sampled["withdrawn"].append((begin, end, why))
+        else:
+            raise Refused("published", f"a Sampler row of no repetition: {what!r}")
+        if again != said:
+            raise Refused("raw", f"{what}: sampler.txt gives {again!r}, the file {said!r}")
+    return sampled
+
+
+def render_again(raw_dir, published, stderr, again=None):
+    """The published file rendered again from its run's raw records, stamped. What the run
+    printed only into its file, its command, run id and times, the machine check's output,
+    the cross-core line and the swap line, is taken from it; every figure from the raw
+    records, and every sampler verdict from the raw sampler.txt."""
+    import stamp_load  # Here, since stamp_load imports bench_driver.
+
+    fields = check_results.parse_header(published)
+    command = (check_results.section(published, "Commands") or "").strip().split("\n```\n")[0]
+    command = command.strip().strip("`").strip()
+    wrapped, found, words = command.partition("python3 -B scripts/spsc_driver.py ")
+    if not found:
+        raise Refused("published", "no spsc_driver.py command in its Commands section")
+    args = parse_args(shlex.split(words))
+    args.wrapped_by = wrapped.strip() or None
+    if relative_command(args) != command:
+        raise Refused("published", "its command is not the one this driver prints for it")
+    records = []
+    for index in range(1, args.repetitions + 1):
+        record = bench_driver.raw_record(raw_dir, f"{args.suite}-repetition-{index}")
+        validate_run(record, args.suite)
+        records.append(record)
+    validate_together(records)
+    machine = (check_results.section(published, "machine_check output") or "").strip()
+    machine = machine.removeprefix("```").removesuffix("```").strip("\n")
+    cross_core = fields.get("cross_core_timer")
+    needs = (bench_driver.MACHINE_CHECK,
+             *((CROSS_CORE,) if cross_core else ()),
+             *(("sampler.txt",) if check_results.section(published, "Sampler") else ()))
+    run_record.refuse_incomplete(raw_dir, needs, fields.get("run_id"))
+    if run_record.is_new_kind(raw_dir):
+        # The run kept each tool's output: the render quotes those, not the file.
+        machine = run_record.kept_output(raw_dir, bench_driver.MACHINE_CHECK)
+        if cross_core:
+            cross_core = cross_core_line(run_record.kept_output(raw_dir, CROSS_CORE))
+    swap = next((line for line in published.splitlines()
+                 if line.startswith(("The kernel's pswpout", "Swap-outs are not read"))), None)
+    # How often the sampler ran is not on the command line (--sample-every is for tests).
+    every = re.match(r"sampled every ([\d.]+) s ", fields.get("interference", ""))
+    sampled = published_sampled(published, raw_dir, float(every.group(1)) if every else None)
+    bench_driver.swap_watch = bench_driver.PrintedSwap(swap) if swap else None
+    try:
+        text = render(records, args, fields["run_id"], fields["run_started"],
+                      fields["run_finished"], machine, command, sampled=sampled,
+                      cross_core=cross_core)
+    finally:
+        bench_driver.swap_watch = None
+    text = bench_driver.with_earlier_renders(text, published, again)
+    return Path(args.out).name, stamp_load.stamp(text, stderr)
+
+
+def render_main(argv):
+    parser = argparse.ArgumentParser(prog="spsc_driver.py render",
+                                     description="render a published file again from raw")
+    parser.add_argument("--raw-dir", type=Path, required=True)
+    parser.add_argument("--published", type=Path, required=True)
+    parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--stderr", type=Path, required=True, help="measure.sh's stderr")
+    parser.add_argument("--rendered-again", metavar="REASON")
+    args = parser.parse_args(argv)
+    try:
+        published = args.published.read_text(encoding="utf-8")
+        name, text = render_again(args.raw_dir, published,
+                                  args.stderr.read_text(encoding="utf-8"), args.rendered_again)
+        if name != args.published.name:
+            raise Refused("published", f"its command writes {name}, not {args.published.name}")
+        if text.split("\n", 1)[0] != published.split("\n", 1)[0]:
+            raise Refused("title", "the render's title is not the published one")
+        violations = check_results.check_text(text)
+        if violations:
+            raise Refused("results", f"{name}: " + "; ".join(
+                f"{code}: {detail}" for code, detail in violations))
+    except (Refused, run_record.Incomplete, OSError, ValueError, KeyError) as error:
+        print(f"spsc_driver: render refused: {error}", file=sys.stderr)
+        return 1
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    (args.out_dir / name).write_text(text, encoding="utf-8")
+    print(f"spsc_driver: wrote {args.out_dir / name}", file=sys.stderr)
+    return 0
+
+
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["render"]:
+        return render_main(argv[1:])
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)
-    args.raw_dir.mkdir(parents=True, exist_ok=True)
     sampler = None
-    if platform.system() == "Darwin":
-        sampler = Sampler(args.raw_dir / "sampler.txt", args.ps, args.sample_every)
-        sampler.start()
     started = bench_driver.utc_now()
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
     commit = "unknown"
     try:
+        run_record.open_run(args, run_id)
+        if platform.system() == "Darwin":
+            sampler = Sampler(args.raw_dir / "sampler.txt", args.ps, args.sample_every)
+            sampler.start()
         commit = bench_driver.git_commit(REPO_ROOT, args.allow_dirty)
+        run_record.start_record(args, "spsc_driver", run_id, commit, (args.bench, args.probe))
         written = run(args, run_id, started, commit, sampler)
     except Stopped as stop:
         bench_driver.stop_child()
@@ -892,23 +1064,19 @@ def main(argv=None):
                                 f"stopped by {name} at {bench_driver.stage}; nothing from it is "
                                 "published; the row was written by the driver as it stopped")
         return 128 + stop.signum
-    except Refused as refusal:
+    except (Refused, run_record.Incomplete) as refusal:
         bench_driver.hold_signals()
         print(f"spsc_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
                                 f"refused at {refusal.stage}: {refusal}")
         return 1
-    except (OSError, ValueError, KeyError, StopIteration, subprocess.SubprocessError) as error:
-        bench_driver.hold_signals()
-        print(f"spsc_driver: failed: {error!r}", file=sys.stderr)
-        bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
-                                f"failed: {error!r}")
-        return 1
+    except Exception as error:  # Last, so that no run ends without its row.
+        return bench_driver.log_failure("spsc_driver", args.run_log, run_id, args.prediction, commit,
+                                        error)
     finally:
-        if sampler is not None:
-            sampler.done.set()
+        run_record.close_sampler(args, sampler)
     bench_driver.hold_signals()
-    bench_driver.append_log(args.run_log, run_id, args.prediction, commit, "published")
+    bench_driver.append_written(args.run_log, run_id, args.prediction, commit, [written])
     print(f"spsc_driver: wrote {written}, load lines pending. Now run scripts/stamp_load.py.",
           file=sys.stderr)
     return 0

@@ -1742,6 +1742,28 @@
       }
     },
     {
+      "id": "marketmaker-mm-run-dataset-unrecorded",
+      "breaks": "mm_report run keeps no hash of the day it ran on (A2, C8)",
+      "check": "test_mm_report.py Run.test_the_matrix_runs_and_its_file_holds",
+      "mutations": [
+        {
+          "file": "scripts/mm_report.py",
+          "old": "    record.dataset(args.data, run_record.sha256_of(args.data))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_mm_report.py",
+        "Run.test_the_matrix_runs_and_its_file_holds"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_the_matrix_runs_and_its_file_holds",
+        "exit": 1
+      }
+    },
+    {
       "id": "mm-report-sigma-in-dollars",
       "breaks": "The parameters table gives σ in dollars per √second, not ticks",
       "check": "test_mm_report.py",
@@ -2120,6 +2142,64 @@
       "expect": {
         "signature": "calibrate cli: FAIL past nanoseconds: exit 0, not 2",
         "exit": 1
+      }
+    },
+    {
+      "id": "mm-cli-ledger-total-unprinted",
+      "breaks": "itch_mm prints the ledger's total under another name, which the CLI test once read as 0 (r9-15)",
+      "check": "test_mm_cli.py, every figure printed as an integer",
+      "mutations": [
+        {
+          "file": "include/itch/mm/session.hpp",
+          "old": "ledger ? std::format(\"ledger_total {}\\n\", *ledger)",
+          "new": "ledger ? std::format(\"ledger {}\\n\", *ledger)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_mm"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_mm_cli.py",
+        "{build}/tools/itch_mm",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "mm cli: FAIL S1 as exact: missing or not an integer: ledger_total None"
+      }
+    },
+    {
+      "id": "mm-cli-ledger-total-not-a-number",
+      "breaks": "itch_mm prints the ledger's total as overflow, which crashed the CLI test before it could say so",
+      "check": "test_mm_cli.py, every figure printed as an integer",
+      "mutations": [
+        {
+          "file": "include/itch/mm/session.hpp",
+          "old": "ledger ? std::format(\"ledger_total {}\\n\", *ledger)",
+          "new": "!ledger ? std::format(\"ledger_total {}\\n\", *ledger)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "itch_mm"
+        ],
+        "gtest": false
+      },
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/tests/test_mm_cli.py",
+        "{build}/tools/itch_mm",
+        "{tree}/tests/fixtures/oracle"
+      ],
+      "expect": {
+        "signature": "mm cli: FAIL S1 as exact: missing or not an integer: ledger_total 'overflow'"
       }
     }
   ]

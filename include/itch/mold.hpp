@@ -172,7 +172,7 @@ struct SequenceCounts {
   std::uint64_t ends = 0;             // End-of-session packets, the one that ended it included.
   std::uint64_t after_end = 0;        // Well-formed packets after the end, ignored.
   std::uint64_t foreign_session = 0;  // Well-formed packets of another session, ignored.
-  std::uint64_t out_of_range = 0;     // Packets whose last sequence would pass 2^64 - 1.
+  std::uint64_t out_of_range = 0;     // Packets whose last sequence would be 2^64 - 1 or more.
 };
 
 // Which blocks of a packet are new: skip the first `skip`, then hand on the next `take`,

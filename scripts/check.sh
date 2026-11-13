@@ -28,6 +28,9 @@ set -u -o pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 cd "$repo_root" || exit 2
+# On macOS every sanitizer and fuzz binary the check runs names the toolchain's symbolizer.
+# shellcheck source=scripts/symbolizer_env.sh
+source scripts/symbolizer_env.sh
 
 jobs=${ITCH_CHECK_JOBS:-6}
 log_dir=build/check-logs
@@ -114,7 +117,8 @@ stage_script_tests() {
     python_test scripts/test_fault_matrix.py &&
     python_test scripts/test_fetch_tool.py &&
     python_test scripts/test_check_sh.py &&
-    python_test scripts/test_check_benchmark_sources.py
+    python_test scripts/test_check_benchmark_sources.py &&
+    python_test scripts/test_sanitizer_tests.py
 }
 
 # RESULTS.md's tables and the README's headline against a fresh run over results/, and the
@@ -160,6 +164,7 @@ stage_bench() {
     python_test scripts/test_gate_numbers.py &&
     python_test scripts/test_check_predictions.py &&
     python_test scripts/test_bench_results.py &&
+    python_test scripts/test_driver_records.py &&
     python_test scripts/test_backtest_results.py &&
     python_test scripts/test_linux_sampler.py &&
     python_test scripts/test_spsc_results.py &&
@@ -230,7 +235,8 @@ stage_bench() {
     python_test scripts/walk_report.py check "$file" || return 1
   done
   build_preset release &&
-    ctest_only test_bench_platform test_bench_replay test_bench_cli test_bench_backtest_cli \
+    ctest_only test_bench_platform test_bench_platform_cross_core test_bench_replay test_bench_cli \
+      test_bench_backtest_cli \
       test_bench_counts_cli test_bench_variants_cli test_bench_spsc_cli test_bench_kernels_cli \
       test_bench_udp_cli test_bench_walks_cli test_walk_counts
 }

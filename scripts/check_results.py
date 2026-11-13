@@ -8,7 +8,8 @@ Reads the file as published, so it holds whatever wrote it to the same rules: ev
 header field present, an unreadable one written as `unavailable: <reason>`, no pin that
 was not read back, no percentile below the timer's floor, no multiplexed counter called
 measured, the warm-up out of the timed counts, the input resident, load lines stamped
-from a real measure.sh run, a quiet CPU sampler beside any macOS run from 2026-11-05 on,
+from a real measure.sh run, a quiet CPU sampler beside any macOS run from 2026-11-05 on and,
+on one started before that day, a sampler line saying that none ran beside it,
 the Linux sampler rule applied to any debian run from 2026-11-13T03:00Z on (a load_rule field
 whose figures, or whose Sampler section's figures for every repetition, are under the rule's
 bars, scripts/linux_sampler.py), machine_check's output present and passing, and nothing private. scripts/bench_driver.py and scripts/stamp_load.py run the same checks, so that
@@ -49,7 +50,9 @@ and ran every pass.
 An SPSC file, one with a `suite` field (scripts/spsc_driver.py), has no counter table and
 no single percentile column. It is held to its suite's fields, the element and capacity
 every queue shared, a summary with each median inside its min and max, every latency cell
-at or above the floor or written `below floor`, a burst replayed at the day's own pace, the
+at or above the floor or written `below floor`, the latency columns labelled as measured from
+the push with SPSC_LEFT_OUT under them, saying what that leaves out, and each row's late
+share agreeing with its late sends, a burst replayed at the day's own pace, the
 book agreement of a pipeline file, the macOS note that unpinned cross-core latency is weak
 evidence, and a row for each of its suite's comparisons in SPSC_COMPARISONS: the ratio of
 the summary's medians as shown, the bar, and the verdict in the fixed words, consistent with
@@ -190,6 +193,36 @@ RTT_UNIT = "ns a round trip"
 RATE_UNIT = "M items/s"
 PIPELINE_RATIO = "Pipelined time over single-threaded time"
 SPSC_PERCENTILES = ("p50", "p90", "p99", "p99.9", "p99.99", "max")
+# The stamp is read as the push starts, not when the message was due (bench/spsc_protocols.hpp).
+SPSC_FROM_PUSH = "from the push"
+SPSC_LATE_SHARE = (
+    "The late share is of the sends the late count covers: in paced, the timed sends and the "
+    "tenth as many untimed before them, which the histogram leaves out; in burst, every "
+    "message. It is the median of the repetitions' own shares, rounded last.")
+SPSC_LEFT_OUT = (
+    "What these latencies leave out: each is measured from the push, not from the time the "
+    "message was due. A send held back behind an earlier slow push is stamped only when it "
+    "goes, so its wait is in no cell above; it shows only in the late count, and there only "
+    "once it reaches a whole gap, or in burst the next message's due time. In burst, messages "
+    "that share an ITCH timestamp share a due time, so one is late as soon as a tick passes "
+    "when the next shares its time, and the count cannot tell that from a wait behind slow "
+    "pushes. This favours a queue with slow pushes: the slower its pushes, the more of each "
+    "message's wait falls before its stamp, outside the figures.")
+
+
+def spsc_sends(protocol, samples):
+    """The sends a paced or burst row's late count covers: paced counts its untimed tenth
+    too (bench_spsc.cpp passes paced_items / 10 as the warm-up), burst every message."""
+    return samples + samples // 10 if protocol.startswith("paced") else samples
+
+
+def share_cell(share):
+    """A late share as a percentage to three significant figures, never in e notation."""
+    percent = share * 100
+    if percent == 0:
+        return "0%"
+    places = max(0, 2 - math.floor(math.log10(percent)))
+    return f"{percent:.{places}f}%"
 SPSC_MAC_NOTE = ("is not a pinned host.", "Unpinned cross-core latency on the Mac is weak evidence")
 SPSC_SAMPLER_RULE = (
     "The Mac's sampler rule was applied: a CPU sampler ran beside every repetition from before "
@@ -219,6 +252,22 @@ ALLOC_SAMPLER_RULE = (
     "and run again; none was withdrawn for its numbers. The untimed processes, of memory alone, "
     "are not judged.")
 ALLOC_INTERFERENCE = SPSC_INTERFERENCE
+# bench_driver.py and backtest_driver.py on the Mac: the sampler rule applied by the driver to
+# every process it runs (scripts/mac_rule.py), so that no outside sampler's log is needed.
+DRIVER_SAMPLER_RULE = (
+    "The Mac's sampler rule was applied by the driver: a CPU sampler ran beside every process "
+    "from before it started to after it ended, and a process is published only if the sampler "
+    "covered its whole span with no gap over 5 s and saw no other process above 20% CPU in it. "
+    "A process that failed the rule was withdrawn, with its own row in results/run_log.md, and "
+    "run again; none was withdrawn for its numbers.")
+# What a driver's Sampler section says when its sampler read a stand-in for `ps`, as a test
+# gives it (--ps) so that its result does not hang on what else the Mac is doing. Such a file
+# read no real process table, so check_stand_in refuses it as a result.
+STAND_IN_SAMPLER = ("The sampler read a stand-in process table given by --ps, not the Mac's: "
+                    "no other process's load was read, so this file is a test's, not a result.")
+DRIVER_INTERFERENCE = re.compile(r"sampled every [\d.]+ s by the driver over each process's "
+                                 r"whole span; no other process above 20% CPU in any published "
+                                 r"process; \d+ withdrawn under the rule")
 _T1_HOST = "Ryzen 7 5825U, Linux, pinned"
 _T2_HOST = "i7-9700 under WSL2"
 _T3_HOST = "Ryzen 9 5950X, Linux, pinned"
@@ -337,6 +386,13 @@ def spsc_interference(every):
             "other process above 20% CPU in any published repetition")
 
 
+def driver_interference(every):
+    """The start of the interference field bench_driver.py and backtest_driver.py write when
+    they apply the Mac's sampler rule themselves."""
+    return (f"sampled every {every:g} s by the driver over each process's whole span; no other "
+            "process above 20% CPU in any published process")
+
+
 def comparison_value(spec, medians):
     """The comparison's ratio from the summary's medians by label, or None if one is absent."""
     if "value" in spec:
@@ -347,6 +403,10 @@ def comparison_value(spec, medians):
     return num / den
 # From this day every macOS run needs a quiet CPU sampler beside it (stamp_load.py).
 SAMPLER_RULE_FROM = "2026-11-05T00:00:00Z"
+# The sampler line of a macOS run started before that day, where a later one gives its verdict.
+SAMPLER_BEFORE_RULE = ("none: the run was made before the sampler rule of 2026-11-05, and no "
+                       "sampler ran beside it, so nothing is known about other processes' load "
+                       "during it")
 # From this moment every debian run is held to the Linux sampler rule: its driver judged each
 # process (backtest_driver.py), or stamp_load.py judged the whole run from the sampler's log.
 LINUX_RULE_FROM = "2026-11-13T03:00:00Z"
@@ -593,15 +653,51 @@ def check_load(fields):
 
 
 def needs_sampler(fields):
-    """A macOS run from the rule's day on, but for an SPSC file: spsc_driver.py samples each
-    repetition itself, and check_spsc_sampler holds the file to its own Sampler section."""
+    """A macOS run from the rule's day on whose driver did not apply the rule itself: an SPSC,
+    allocator, bench or backtest file with an interference field was sampled by its driver,
+    and is held to its own Sampler section instead (check_spsc_sampler, check_alloc_sampler,
+    check_driver_sampler)."""
     return fields.get("host") == MAC_HOST and fields.get("run_started", "") >= SAMPLER_RULE_FROM \
-        and not is_spsc_file(fields)
+        and not is_spsc_file(fields) and "interference" not in fields
+
+
+def check_driver_sampler(text, fields):
+    """A bench or backtest file whose driver applied the Mac's sampler rule: said, and a quiet
+    span for every process the file publishes, two a repetition for a bench design (timed and
+    untimed) and one for a backtest."""
+    if fields.get("host") != MAC_HOST or fields.get("run_started", "") < SAMPLER_RULE_FROM \
+            or "interference" not in fields or is_spsc_file(fields) or is_alloc_file(fields):
+        return
+    if not DRIVER_INTERFERENCE.fullmatch(fields["interference"]) or \
+            DRIVER_SAMPLER_RULE not in text:
+        yield "sampler-rule-unsaid", repr(fields["interference"])
+        return
+    published = [cells for cells in table_rows(text, "Sampler")
+                 if len(cells) == 4 and not cells[0].startswith(("Process", "withdrawn"))]
+    quiet = [cells for cells in published if cells[3].startswith("published: ")]
+    wanted = (number(fields.get("repetitions", "")) or 0) * (1 if is_backtest_file(fields) else 2)
+    if len(quiet) != len(published) or len(quiet) != wanted:
+        yield "sampler-not-quiet", (f"{len(quiet)} quiet spans of {len(published)} for "
+                                    f"{wanted:g} processes")
+
+
+def before_sampler_rule(fields):
+    """A macOS run started before the sampler rule's day."""
+    return fields.get("host") == MAC_HOST and fields.get("run_started", "") < SAMPLER_RULE_FROM
 
 
 def check_sampler(fields):
-    """A macOS run from the rule's day on was stamped with a sampler that saw it quiet."""
-    if not needs_sampler(fields) or fields.get("measure_load_start") == PENDING:
+    """A macOS run from the rule's day on was stamped with a sampler that saw it quiet; one
+    from before it says that no sampler ran beside it."""
+    if fields.get("measure_load_start") == PENDING:
+        return
+    if before_sampler_rule(fields):
+        if fields.get("sampler") != SAMPLER_BEFORE_RULE:
+            yield "sampler-before-rule-unsaid", (f"a macOS run started before 2026-11-05 has "
+                                                 f"sampler {fields.get('sampler')!r}, not "
+                                                 f"{SAMPLER_BEFORE_RULE!r}")
+        return
+    if not needs_sampler(fields):
         return
     value = fields.get("sampler")
     if value is None:
@@ -649,6 +745,63 @@ def check_linux_rule(text, fields):
                                       f"load_rule says {match.group(1)}")
 
 
+# Under the per-message table of a bench file's counters (r4-1): what each figure holds.
+RDPMC_CAVEAT = (
+    "Each event's mean runs from that event's own `rdpmc` before `apply()` to its own `rdpmc` "
+    "after it, so beside `apply()` it holds the reads of the events after it in the first "
+    "group of reads and before it in the second, and the loop between them. No empty span is "
+    "measured in this pass, and none is taken off, so these are not `apply()`'s own counts.")
+
+
+def check_rdpmc_caveat(text):
+    """A per-message table through rdpmc says what its figures hold."""
+    if "Per-message means, through `rdpmc`:" in text and RDPMC_CAVEAT not in text:
+        yield "rdpmc-caveat-missing", "the per-message table does not say it holds the reads"
+
+
+# The kinds of results file whose drivers can write the Linux sampler rule's line:
+# backtest_driver.py applies it to each process, and the bench, SPSC, allocator and ladder
+# drivers' runs are stamped through stamp_load.py --sampler.
+LINUX_RULE_WIRED = ("bench_", "backtest_", "spsc_", "alloc_", "walks_ladder_")
+RUN_ID_TIME = re.compile(r"P-\d+-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z")
+
+
+def run_start(fields):
+    """When the run began: its run_started field, or else the time its run id gives."""
+    if fields.get("run_started"):
+        return fields["run_started"]
+    match = RUN_ID_TIME.match(fields.get("run_id", ""))
+    if match is None:
+        return None
+    year, month, day, hour, minute, second = match.groups()
+    return f"{year}-{month}-{day}T{hour}:{minute}:{second}Z"
+
+
+def check_linux_rule_any(name, text):
+    """The Linux sampler rule over a results file of any kind, failing closed: a file whose
+    header gives the debian host and a run start from the rule's moment on carries the rule's
+    load_rule line with a passing verdict, held by check_linux_rule, pending or not. A debian
+    file that gives no run start is refused, since the rule cannot be told not to apply."""
+    fields = parse_header(text)
+    if fields.get("host") != "debian":
+        return []
+    start = run_start(fields)
+    if start is None:
+        return [("run-start-unknown", "a debian file with no run_started and no run id that "
+                                      "gives the time, so the Linux sampler rule cannot be "
+                                      "told not to apply")]
+    dated = dict(fields, run_started=start)
+    if not needs_linux_rule(dated):
+        return []
+    if "load_rule" not in fields:
+        why = f"a debian run from {LINUX_RULE_FROM} on has no load_rule line"
+        if not name.startswith(LINUX_RULE_WIRED):
+            why += (f"; no driver of the {name.split('_')[0]} kind writes it yet, so no "
+                    "debian file of that kind can be published until one does")
+        return [("load-rule-missing", why)]
+    return list(check_linux_rule(text, dated))
+
+
 def check_machine(text):
     output = section(text, "machine_check output")
     if output is None:
@@ -659,6 +812,23 @@ def check_machine(text):
     failures = re.findall(r"^machine_check: FAIL .*$", output, re.MULTILINE)
     for line in failures:
         yield "machine-check-failed", line
+
+
+# What a driver's own check before writing leaves to stamp_load.py: the load stamp, and a
+# stand-in sampler's file, which stamp_load.py then refuses, so it is never published.
+LEFT_TO_STAMP = ("load-not-stamped", "sampler-stand-in")
+
+
+def sampler_rule(rule, sampled):
+    """A Sampler section's rule paragraph, saying so when the sampler read a stand-in."""
+    return f"{rule} {STAND_IN_SAMPLER}" if sampled.get("stand_in") else rule
+
+
+def check_stand_in(text):
+    """A file whose sampler read a stand-in process table is a test's, never a result."""
+    if STAND_IN_SAMPLER in text:
+        yield "sampler-stand-in", ("its sampler read a stand-in process table given by --ps, "
+                                   "so no other process's load was read")
 
 
 def check_private(text, fields):
@@ -677,9 +847,11 @@ def stub_line(text):
 
 
 def is_book_file(text):
-    """A book file, unless the line just above its Header is the stub's label: the label
-    anywhere else in the file, a sentence that quotes it included, does not make it a stub."""
-    return not stub_line(text).startswith(f"**{STUB_LABEL} ")
+    """A book file, unless the line just above its Header is the stub's label, alone or
+    followed by more of the note: the label anywhere else in the file, a sentence that quotes
+    it included, does not make it a stub."""
+    line = stub_line(text)
+    return not (line == f"**{STUB_LABEL}**" or line.startswith(f"**{STUB_LABEL} "))
 
 
 def check_stub(text, fields, name=None):
@@ -1180,15 +1352,32 @@ def check_spsc_summary(text):
 
 def check_spsc_latency(text, fields):
     floor = number(fields.get("floor", ""))
-    rows = [cells for cells in table_rows(text, "Latency") if cells[0] != "Queue"]
+    table = table_rows(text, "Latency")
+    heading = next((cells for cells in table if cells[0] == "Queue"), [])
+    labels = [f"{name} {SPSC_FROM_PUSH}" for name in SPSC_PERCENTILES]
+    if heading[2:2 + len(labels)] != labels or SPSC_LEFT_OUT not in (section(text, "Latency")
+                                                                    or ""):
+        yield "latency-push-unsaid", ("the latency columns are not labelled as measured from "
+                                      "the push, with what that leaves out under them")
+    rows = [cells for cells in table if cells[0] != "Queue"]
     if not rows:
         yield "latency-table-missing", "no latency row"
     for cells in rows:
-        if len(cells) != len(SPSC_PERCENTILES) + 4:
+        if len(cells) != len(SPSC_PERCENTILES) + 5:
             yield "latency-value-malformed", f"{cells[0]} has {len(cells)} cells"
             continue
         for name, value in zip(SPSC_PERCENTILES, cells[2:2 + len(SPSC_PERCENTILES)]):
             yield from check_value(f"{cells[0]} {cells[1]} {name}", value, floor)
+        late, share, samples = (number(cell.rstrip("%")) for cell in cells[-3:])
+        if None in (late, share, samples) or not cells[-2].endswith("%") or samples <= 0:
+            yield "late-share-wrong", f"{cells[0]} {cells[1]}: {cells[-3:]}"
+            continue
+        # The share has three significant figures and the late cell is rounded to a whole
+        # send, so the two may differ by both roundings.
+        sends = spsc_sends(cells[1], int(samples))
+        if abs(share - late * 100 / sends) > abs(share) * 0.006 + 50 / sends:
+            yield "late-share-wrong", (f"{cells[0]} {cells[1]}: {cells[-2]} is not "
+                                       f"{cells[-3]} of {sends:,} sends")
 
 
 def check_spsc_targets(text, fields, suite):
@@ -1419,8 +1608,9 @@ def check_text(text, name=None):
     skipped = SPSC_PER_PASS if is_spsc_file(fields) and fields["suite"] != "pipeline" else ()
     for found in (check_fields(fields, skipped), check_host(fields), check_pin(fields),
                   check_residency(fields), check_warmup(fields), check_statistics(text),
-                  check_load(fields), check_sampler(fields), check_linux_rule(text, fields),
-                  check_machine(text),
+                  check_load(fields), check_sampler(fields), check_driver_sampler(text, fields),
+                  check_linux_rule(text, fields),
+                  check_machine(text), check_stand_in(text),
                   check_private(text, fields)):
         violations.extend(found)
     if is_walks_file(fields):
@@ -1438,6 +1628,7 @@ def check_text(text, name=None):
         return violations
     violations.extend(check_percentiles(text, fields))
     violations.extend(check_counters(text))
+    violations.extend(check_rdpmc_caveat(text))
     violations.extend(check_stub(text, fields, name))
     if is_book_file(text):
         violations.extend(check_book(text, fields))

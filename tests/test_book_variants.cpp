@@ -361,6 +361,10 @@ TEST(DispatchForms, EveryFormGivesTheSwitchsBook) {
   expect_forms_agree<itch::PagedIndex<>, itch::FlatLevels>("paged, flat");
 }
 
+// kThreadedBuilt against the compiler's own answer. test_bench_variants_cli takes the flag
+// from the record, runs the threaded form where it says built and wants it refused where not,
+// so a flag set false where [[clang::musttail]] exists would drop the threaded form from
+// every comparison and pass there; it fails here.
 TEST(DispatchForms, TheThreadedFormIsBuiltOnlyWhereATailCallIsGuaranteed) {
 #ifdef __has_cpp_attribute
 #if __has_cpp_attribute(clang::musttail)

@@ -59,3 +59,10 @@ endif()
 if(EMSCRIPTEN)
   add_subdirectory(bench/wasm)
 endif()
+
+# Every test is added by now. On macOS the sanitizer and fuzz tests name the toolchain's own
+# symbolizer, so that no report waits on the system's (cmake/ItchSanitizerTests.cmake).
+include(ItchSanitizerTests)
+if(APPLE AND ITCH_SANITIZE)
+  itch_sanitizer_symbolizer(COMPILER "${CMAKE_CXX_COMPILER}")
+endif()

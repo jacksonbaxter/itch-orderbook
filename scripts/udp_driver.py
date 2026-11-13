@@ -41,7 +41,8 @@ The steps:
   is that each mode delivers, not how fast. A reading that cannot be had is recorded as
   `unreadable: <why>`, never filled in, and no limit is changed.
 - ceiling: the sender alone, unpaced, --repetitions times (the comparison plan's task 2).
-  The manifest gets the median achieved messages/s and packets/s.
+  The manifest gets the median achieved messages/s and packets/s. A sender run that failed or
+  did not PASS refuses the step, with why in the run log, never left out of the median.
 - bisect: each mode's largest lossless message rate. A trial runs min(rate x
   --trial-seconds, --frames-cap) frames from --first. No trial runs above the cap, 0.9 x the
   sender's ceiling: a mode lossless at the cap is "at least the cap, sender limited". A trial
@@ -67,13 +68,18 @@ The steps:
 
 Before and after every step but smoke, the day is read through and its hash checked against
 --dataset-sha256 (bench_udp drops the day's pages after packing, and machine_check.sh refuses
-an input not resident), and the machine check runs as scripts/simd_driver.py runs it,
-`MEASURE_SH taskset -c 4 bash scripts/machine_check.sh ...`; a failed check before refuses
-the run. Before and after every step the manifest also gets perf_event_paranoid, the uptime
+an input not resident), and the machine check runs on every core of the step's mask, the
+sender's, the receiver's and, where the step runs U5, the SQ thread's, each with its SMT
+sibling read from sysfs: `MEASURE_SH taskset -c C bash scripts/machine_check.sh ... --core C
+--sibling S`, one after another, and the manifest lists the cores and siblings checked
+(r5-11; before, one check covered core 4 and its sibling only). A failed check before
+refuses the run. Before and after every step the manifest also gets perf_event_paranoid, the uptime
 and pswpout from /proc/vmstat, and a warning at its top if perf_event_paranoid reads 3.
 
-The run directory, DIR/<run id>/, holds every process's files and manifest.json, which lists
-every process and what became of it. scripts/udp_report.py turns run directories into a
+The run directory, DIR/<run id>/, refused if another run wrote in it, holds every process's
+files, manifest.json, which lists every process and what became of it, and run.json
+(scripts/run_record.py): the commit and tree state, each binary's sha256, the day hashed, and
+each machine check untouched. scripts/udp_report.py turns run directories into a
 results file. results/run_log.md gets a row for the run and one for every process that
 failed, and the prediction must be on record before anything runs (check_predictions.py
 --require). No Mac loopback figure is a result, so the driver runs on Linux only.
@@ -101,6 +107,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
+import run_record  # noqa: E402
 import simd_driver  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -434,6 +441,66 @@ def mode_cores(args, mode):
     return [args.core, args.receiver_core] + ([args.sq_core] if mode == SQ_MODE else [])
 
 
+# --- The machine checks, one a core in the mask (r5-11) -------------------------------------
+
+def mask_cores(step, modes, cores):
+    """Every core a timed process of the step is pinned to: the sender's and the receiver's
+    (the sender alone runs with the same mask), and U5's SQ thread's where the step runs U5."""
+    found = [cores["sender"], cores["receiver"]]
+    if step != "ceiling" and SQ_MODE in modes:
+        found.append(cores["sq"])
+    return found
+
+
+def sibling_of(core, root="/"):
+    """The core's SMT sibling, from sysfs; Refused if it cannot be read, since the check of
+    a core is a check of its sibling's idleness too."""
+    text = read_text(Path(root) / f"sys/devices/system/cpu/cpu{core}/topology/"
+                                  "thread_siblings_list")
+    listed = set()
+    for part in text.split(","):
+        ends = part.split("-")
+        if not all(end.strip().isdigit() for end in ends) or len(ends) > 2:
+            raise Refused("machine_check", f"cpu{core}'s SMT siblings read {text!r}")
+        listed.update(range(int(ends[0]), int(ends[-1]) + 1))
+    others = sorted(listed - {core})
+    if len(others) != 1:
+        raise Refused("machine_check", f"cpu{core}'s SMT siblings read {text!r}, not one other")
+    return others[0]
+
+
+def core_check_words(args, core, sibling):
+    """machine_check.sh on one core of the mask, pinned there as measure.sh's child."""
+    return [str(args.measure), "taskset", "-c", str(core), "bash",
+            str(REPO_ROOT / "scripts" / "machine_check.sh"), "--input", str(args.input),
+            "--probe", str(args.probe), "--core", str(core), "--sibling", str(sibling)]
+
+
+def machine_checks(args, root="/"):
+    """(every core's machine check output, in order, [[core, sibling], ...]): one check a
+    core in the step's mask, each retried while measure.sh is busy; Refused at the first that
+    fails."""
+    outputs, covered = [], []
+    for core in mask_cores(args.step, args.modes, {"sender": args.core,
+                                                   "receiver": args.receiver_core,
+                                                   "sq": args.sq_core}):
+        sibling = sibling_of(core, root)
+        while True:
+            result = subprocess.run(core_check_words(args, core, sibling), capture_output=True,
+                                    text=True, stdin=subprocess.DEVNULL, check=False)
+            if result.returncode != 75:
+                break
+            time.sleep(RETRY_BUSY_S)
+        if result.returncode != 0:
+            lines = result.stdout.strip().splitlines()
+            raise simd_driver.Refused("machine_check", f"core {core}: " + (
+                lines[-1] if lines else
+                f"exited {result.returncode}: {result.stderr.strip()[-300:]}"))
+        outputs.append(result.stdout.strip())
+        covered.append([core, sibling])
+    return "\n".join(outputs), covered
+
+
 def bench_words(args, mode, extra, stem, commit):
     """One timed process, whole: measure.sh, taskset's mask, bench_udp and its arguments."""
     mask = ",".join(str(core) for core in mode_cores(args, mode))
@@ -483,8 +550,12 @@ class Run:
         self.args = args
         self.run_id = run_id
         self.commit = commit
-        self.dir = args.raw_dir / run_id
-        self.dir.mkdir(parents=True, exist_ok=False)
+        self.dir = run_record.run_folder(args.raw_dir, run_id)
+        # The run's own record (gate item 8), beside the manifest.
+        self.record = run_record.Record(self.dir, "udp_driver", run_id, commit)
+        for path in (args.bench, args.probe, args.measure, args.heavy, args.loopback):
+            if path is not None:
+                self.record.binary(path)
         self.count = 0
         self.failed = 0
         self.rng = random.Random(args.seed)
@@ -543,8 +614,11 @@ class Run:
         digest = bench_driver.hash_and_fault_in(self.args.input)
         if digest != self.args.dataset_sha256:
             raise Refused("input", f"the day's sha256 is {digest}, not {self.args.dataset_sha256}")
+        self.record.dataset(self.args.input, digest)
         try:
-            self.manifest[f"machine_check_{when}"] = simd_driver.machine_check(self.args)
+            self.manifest[f"machine_check_{when}"], covered = machine_checks(self.args)
+            self.manifest[f"machine_check_cores_{when}"] = covered
+            self.record.output(f"machine_check_{when}.txt", self.manifest[f"machine_check_{when}"])
         except simd_driver.Refused as error:
             if when == "before":
                 raise Refused("machine_check", f"the check before failed: {error}") from error
@@ -617,16 +691,30 @@ def step_smoke(run):
                              "loopback": smoke["loopback"]}
 
 
+def refuse_unpassed_sender(run, record, repetition):
+    """r5-14: the ceiling is the median of every sender run, so a run that failed or did not
+    PASS refuses the step, with why in the run log's row, and is never left out of it."""
+    if record is None:
+        entry = run.manifest["processes"][-1]
+        raise Refused("ceiling", f"sender run {repetition} ({entry['stem']}) failed: "
+                                 f"{entry['why']}; the ceiling is the median of every run, so "
+                                 "the step is refused, not taken from the rest")
+    if record.get("verdict") != "PASS":
+        stem = run.manifest["processes"][-1]["stem"]
+        raise Refused("ceiling", f"sender run {repetition} ({stem}) gave the verdict "
+                                 f"{record.get('verdict')!r}, not PASS; the ceiling is the "
+                                 "median of every run, so the step is refused, not taken from "
+                                 "the rest")
+
+
 def step_ceiling(run):
     args = run.args
     achieved, packets = [], []
     for repetition in range(1, args.repetitions + 1):
         record = run.timed("sender", "ceiling", slice_args(args, args.frames_cap), repetition)
-        if record is not None and record.get("verdict") == "PASS":
-            achieved.append(record["send"]["achieved_messages_per_s"])
-            packets.append(record["send"]["achieved_packets_per_s"])
-    if not achieved:
-        raise Refused("ceiling", "no sender run passed")
+        refuse_unpassed_sender(run, record, repetition)
+        achieved.append(record["send"]["achieved_messages_per_s"])
+        packets.append(record["send"]["achieved_packets_per_s"])
     run.manifest["ceiling"] = {"messages_per_s": ceiling_of(achieved),
                                "packets_per_s": ceiling_of(packets), "runs": len(achieved),
                                "source": f"run {run.run_id}, the median of {len(achieved)}"}
@@ -889,12 +977,16 @@ def main(argv=None):
         if checked.returncode != 0:
             raise Refused("prediction", f"{args.prediction} is not on record")
         run = run_step(args, run_id, commit)
-    except (Refused, OSError, ValueError, KeyError) as error:
+    except (Refused, run_record.Incomplete, OSError, ValueError, KeyError) as error:
         bench_driver.append_log(args.run_log, run_id, args.prediction,
                                 locals().get("commit", "unknown"),
                                 f"refused: udp {args.step}: {error}")
         print(f"udp_driver: refused: {error}", file=sys.stderr)
         return 1
+    except Exception as error:  # Last, so that no run ends without its row.
+        return bench_driver.log_failure("udp_driver", args.run_log, run_id, args.prediction,
+                                        locals().get("commit", "unknown"), error,
+                                        f"udp {args.step}: ")
     outcome = (f"recorded: udp {args.step}, {run.count} processes"
                + (", each under measure.sh taskset, the machine checks before and after in "
                   "the manifest" if args.step != "smoke" else ", no figure")
