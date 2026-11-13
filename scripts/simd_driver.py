@@ -22,6 +22,8 @@ run falls on all of them.
 The vector kernels are every kernel `bench_kernels --list-kernels` says runs here other than
 scalar, or the --kernels given: on this Mac neon, on debian ssse3 and avx2. Each kernel's
 variant is named after it, so the results file says which instruction set every figure used.
+avx512vbmi is refused for decode, consume and parse (E2, E3 and E4 by type), whose passes have
+no guard for the 45 bytes it reads past a message (r1-1, r4-6): the run log's row says so.
 
 On macOS, where nothing pins a process and other projects share the machine, a CPU sampler
 runs beside the whole run (scripts/wasm_bench.py's): every 2 s a `sample` line, and a `FOREIGN`
@@ -82,6 +84,12 @@ FORMS = {"framing": ("length", "byte", "table", "constant"),
 WIDTHS = (2, 4, 6, 8)
 LINUX_PIN = ("taskset", "-c", "4")
 WATCHLISTS = (8, 64)
+# r1-1, r4-6: the passes of these experiments hand every message to the kernel, with no guard
+# for kOverread, and avx512vbmi loads 64 bytes from each message's first byte: up to 45 bytes
+# past the end of the input after an Order Delete. Refused until the passes are guarded.
+UNGUARDED = {"decode": "E2's decode_pass", "consume": "E3's consume_pass",
+             "parse": "E4's parse_one_type"}
+OVERREADING_KERNELS = ("avx512vbmi",)
 
 
 class Refused(Exception):
@@ -98,6 +106,16 @@ def vector_kernels(bench, given):
                             check=True).stdout
     return [line.split(":")[0] for line in listed.splitlines()
             if line.endswith(": runs") and not line.startswith("scalar:")]
+
+
+def refuse_unguarded(experiment, kernels):
+    """Refused for a kernel that reads past the input in a pass with no overread guard."""
+    for kernel in kernels:
+        if kernel in OVERREADING_KERNELS and experiment in UNGUARDED:
+            raise Refused("kernel", f"{kernel} for {experiment}: {UNGUARDED[experiment]} has no "
+                                    "guard for kOverread, and the kernel loads 64 bytes from each "
+                                    "message's first byte, up to 45 past the end of the input; "
+                                    "refused until the pass is guarded (r1-1)")
 
 
 def variants(experiment, kernels):
@@ -230,9 +248,10 @@ def wait_for_sample(sampler, finished):
 
 
 def run(args, run_id, commit):
-    run_dir = run_record.run_folder(args.raw_dir, run_id)
     kernels = [] if args.experiment in (*FORMS, "asm", "e11") else \
         vector_kernels(args.bench, args.kernels)
+    refuse_unguarded(args.experiment, kernels)
+    run_dir = run_record.run_folder(args.raw_dir, run_id)
     plan = variants(args.experiment, kernels)
     if args.experiment == "e11" and args.node_module is None:
         raise Refused("usage", "--experiment e11 needs --node-module")

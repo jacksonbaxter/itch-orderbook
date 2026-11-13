@@ -756,6 +756,27 @@
         "signature": "^(FAIL|ERROR): test_the_simd_and_udp_reports_refuse_an_incomplete_record",
         "exit": 1
       }
+    },
+    {
+      "id": "simd-driver-avx512vbmi-taken-for-unguarded-passes",
+      "breaks": "simd_driver runs avx512vbmi for decode, consume and parse, whose passes have no overread guard (r1-1, r4-6)",
+      "check": "test_simd_driver.py",
+      "mutations": [
+        {
+          "file": "scripts/simd_driver.py",
+          "old": "        if kernel in OVERREADING_KERNELS and experiment in UNGUARDED:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_simd_driver.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_avx512vbmi_is_refused_where_a_pass_has_no_overread_guard",
+        "exit": 1
+      }
     }
   ]
 }

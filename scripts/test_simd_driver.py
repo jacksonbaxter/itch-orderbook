@@ -189,6 +189,30 @@ class SimdDriverTest(unittest.TestCase):
             self.assertIn(f"hashes to {run_record.sha256_of(fake)}, not the --dataset-sha256 "
                           + "0" * 64, log.read_text(encoding="utf-8"))
 
+    def test_avx512vbmi_is_refused_where_a_pass_has_no_overread_guard(self):
+        """r1-1, r4-6: decode, consume and parse refuse the kernel, with the reason in the run
+        log's row, before any process runs; the guarded experiments take it."""
+        for experiment in ("decode", "consume", "parse"):
+            with tempfile.TemporaryDirectory() as scratch:
+                root = Path(scratch)
+                fake = root / "bench_kernels"
+                fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                log = root / "run_log.md"
+                code = simd_driver.main(
+                    ["--experiment", experiment, "--prediction", "P-0601", "--raw-dir",
+                     str(root / "raw"), "--input", str(fake), "--dataset", "d",
+                     "--dataset-sha256", run_record.sha256_of(fake), "--bench", str(fake),
+                     "--probe", str(fake), "--measure", str(fake), "--kernels",
+                     "avx2,avx512vbmi", "--run-log", str(log), "--allow-dirty"])
+                self.assertEqual(code, 1, experiment)
+                self.assertIn(f"refused: kernel: avx512vbmi for {experiment}: "
+                              f"{simd_driver.UNGUARDED[experiment]} has no guard for kOverread",
+                              log.read_text(encoding="utf-8"))
+                self.assertFalse((root / "raw").exists(), "no process ran")
+        for experiment in ("field", "filter", "batch", "book", "verify"):
+            simd_driver.refuse_unguarded(experiment, ["avx512vbmi"])
+        simd_driver.refuse_unguarded("decode", ["avx2", "ssse3", "neon"])
+
 
 if __name__ == "__main__":
     unittest.main()
