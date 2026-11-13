@@ -274,7 +274,7 @@ Every check is tested like code: the fault matrix plants a bug and requires the 
 
 ### The final review
 
-Before this page was written, reviewers who did not write the code went through it area by area. What they found was either fixed, with a test and a fault-matrix row that shows the fix holding, or is listed in docs/NOTES.md under "Found by the final review and left as it is", with the reason; the fixes are listed in the section above that one. The review of the documents themselves, this page included, comes after this pass.
+In the final review, reviewers who did not write the code went through it area by area. What they found was either fixed, with a test and a fault-matrix row that shows the fix holding, or is listed in docs/NOTES.md under "Found by the final review and left as it is", with the reason; the fixes are listed in the section above that one. The review of the documents themselves, this page included, comes after this pass.
 
 ## What was tried and did not work
 
