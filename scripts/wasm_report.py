@@ -18,6 +18,12 @@ from the fixed set, and the one those figures and the browser give; the load lin
 both runs in results/run_log.md; and no per-message figure. With no FILE it checks every
 results/wasm_*.md.
 
+render works every figure out from the raw times, native's in whole ns, and rounds it only to
+print it. The repetitions table prints the times to the microsecond, so check holds each
+figure to the range those printed times leave (check_results.py, "Figures computed from
+unrounded values"). --rendered-again REASON adds a line saying the file was rendered again
+from the run's own raw records, and why.
+
 T-WASM-1's bar, 1.55 times native, is Jangda et al.'s geomean in Google Chrome. A run in any
 other browser neither meets nor misses it: its verdict is `browser differs: <browser>, not
 Google Chrome`, with the figure against the bar beside it.
@@ -38,6 +44,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import check_results  # noqa: E402
 import wasm_bench  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -74,28 +81,41 @@ class ReportError(Exception):
 
 # Figures, shared by render and check so that both compute them one way.
 
-def spread(values):
-    mean = statistics.fmean(values)
-    deviation = statistics.stdev(values) if len(values) > 1 else 0.0
-    return statistics.median(values), min(values), max(values), deviation / mean
-
+# Each figure is worked out over ranges, (low, high), as check_results.py's helpers take them:
+# render gives each raw time as (time, time), check each printed one as the range it stands for.
 
 def shown(value, kind):
     return f"{value:,.0f}" if kind == "rate" else f"{value:.3f}"
 
 
-def as_shown(ms):
+def printed_ms(ms):
     """A time in ms as the repetitions table writes it."""
-    return float(f"{ms:.3f}")
+    return f"{ms:.3f}"
 
 
-def summary_cells(values, kind):
-    median, low, high, cv = spread(values)
-    return [shown(median, kind), shown(low, kind), shown(high, kind), f"{cv * 100:.2f}%"]
+def rate_ranges(ms_ranges, messages):
+    """Each repetition's messages/s: the longer the time, the lower the rate."""
+    return [(messages / (high / 1000), messages / (low / 1000)) for low, high in ms_ranges]
+
+
+def summary_cells(ranges, kind, cells=None):
+    """Median, min, max and CV as the summary prints them, each the file's own cell in `cells`
+    if the ranges allow it."""
+    cells = cells or [None] * 4
+    figures = (check_results.median_range(ranges), check_results.min_range(ranges),
+               check_results.max_range(ranges))
+    out = [check_results.shown_within(cell, bounds, lambda value: shown(value, kind))
+           for cell, bounds in zip(cells, figures)]
+    low, high = check_results.cv_range(ranges)
+    out.append(check_results.shown_within(cells[3], (low * 100, high * 100),
+                                          lambda value: f"{value:.2f}%"))
+    return out
 
 
 def ratio_of(native_ms, wasm_ms):
-    return statistics.median(wasm_ms) / statistics.median(native_ms)
+    """The browser's median time over native's, as a range."""
+    native, wasm = check_results.median_range(native_ms), check_results.median_range(wasm_ms)
+    return wasm[0] / native[1], wasm[1] / native[0]
 
 
 def is_chrome(browser):
@@ -155,7 +175,7 @@ def gib(value):
     return f"{value / 1024 ** 3:.2f} GiB"
 
 
-def render(native, browser, native_stderr, browser_stderr):
+def render(native, browser, native_stderr, browser_stderr, again=None):
     for record, side in ((native, "native"), (browser, "browser")):
         if record.get("side") != side:
             raise ReportError(f"the {side} record is of side {record.get('side')!r}")
@@ -172,10 +192,9 @@ def render(native, browser, native_stderr, browser_stderr):
         raise ReportError(f"host {header['host']!r}: T-WASM-1 runs on the Mac")
     manifest = native["extract_manifest"]
     messages = manifest["messages"]
-    # Every figure comes from the times as the repetitions table shows them, to the
-    # microsecond, so that check can recompute each one from the file alone.
-    native_ms = [as_shown(repetition["ns"] / 1e6) for repetition in native["repetitions"]]
-    wasm_ms = [as_shown(repetition["ms"]) for repetition in browser["repetitions"]]
+    # Every figure comes from the raw times, rounded only when it is printed.
+    native_ms = [repetition["ns"] / 1e6 for repetition in native["repetitions"]]
+    wasm_ms = [repetition["ms"] for repetition in browser["repetitions"]]
     if len(native_ms) != len(wasm_ms):
         raise ReportError("the two sides ran different numbers of repetitions")
     if any(r["messages"] != messages for r in native["repetitions"] + browser["repetitions"]):
@@ -219,12 +238,16 @@ def render(native, browser, native_stderr, browser_stderr):
         "messages": f"{messages:,}", "digest": native["digest"],
         "run_started": native["run_started"], "run_finished": browser["run_finished"],
     }
-    ratio = ratio_of(native_ms, wasm_ms)
+    native_ranges = [check_results.exact(ms) for ms in native_ms]
+    wasm_ranges = [check_results.exact(ms) for ms in wasm_ms]
+    ratio = ratio_of(native_ranges, wasm_ranges)[0]
     lines = [f"# T-WASM-1: the demo's replay in a browser against native, on {MAC_HOST}, "
              f"{manifest['symbol']} on {day}", "",
              "Generated by `scripts/wasm_report.py` from raw records that are not committed. "
-             "Do not edit by hand.", "",
-             f"Host: **{MAC_HOST}**. A macOS figure, never a Linux one: `debian` has no browser. "
+             "Do not edit by hand.", ""]
+    if again:
+        lines += [f"Rendered again from the run's own raw records, unchanged: {again}", ""]
+    lines += [f"Host: **{MAC_HOST}**. A macOS figure, never a Linux one: `debian` has no browser. "
              "macOS offers no way to pin a thread, so neither side was pinned.", "",
              SAMPLER_RULE, "",
              "## Header", ""]
@@ -251,10 +274,10 @@ def render(native, browser, native_stderr, browser_stderr):
               "## Summary", "",
               "| Figure | Median | Min | Max | CV |", "|---|---|---|---|---|"]
     for label, side, kind in SUMMARY:
-        values = native_ms if side == "native" else wasm_ms
+        ranges = native_ranges if side == "native" else wasm_ranges
         if kind == "rate":
-            values = [messages / (ms / 1000) for ms in values]
-        lines.append(f"| {label} | " + " | ".join(summary_cells(values, kind)) + " |")
+            ranges = rate_ranges(ranges, messages)
+        lines.append(f"| {label} | " + " | ".join(summary_cells(ranges, kind)) + " |")
     lines += ["", "## Target", "",
               "| Target | Bar | Measured | Verdict |", "|---|---|---|---|",
               f"| T-WASM-1 | ≤ {BAR:.2f}× native, in Google Chrome | {ratio:.2f}× | "
@@ -264,7 +287,7 @@ def render(native, browser, native_stderr, browser_stderr):
               "## Repetitions", "",
               "| Repetition | Native ms | Browser ms |", "|---|---|---|"]
     for index, (n, w) in enumerate(zip(native_ms, wasm_ms), start=1):
-        lines.append(f"| {index} | {n:.3f} | {w:.3f} |")
+        lines.append(f"| {index} | {printed_ms(n)} | {printed_ms(w)} |")
     lines += ["", f"Warm-ups, excluded: native {native['warmup']['ns'] / 1e6:.3f} ms, browser "
                   f"{browser['warmup']['ms']:.3f} ms.", "",
               "## machine_check output", "", "Native run:", "", "```", native["machine_check"],
@@ -328,8 +351,8 @@ def check_text(text, run_log):
 
     rows = table_rows(section(text, "Repetitions"))[1:]
     try:
-        native_ms = [float(row[1]) for row in rows]
-        wasm_ms = [float(row[2]) for row in rows]
+        native_ms = [check_results.printed_range(row[1], 3) for row in rows]
+        wasm_ms = [check_results.printed_range(row[2], 3) for row in rows]
         messages = int(fields.get("messages", "0").replace(",", ""))
     except (ValueError, IndexError):
         yield "repetitions-unreadable", "the repetitions table cannot be read"
@@ -339,10 +362,10 @@ def check_text(text, run_log):
         return
     summary = {row[0]: row[1:] for row in table_rows(section(text, "Summary"))[1:]}
     for label, side, kind in SUMMARY:
-        values = native_ms if side == "native" else wasm_ms
+        ranges = native_ms if side == "native" else wasm_ms
         if kind == "rate":
-            values = [messages / (ms / 1000) for ms in values]
-        if summary.get(label) != summary_cells(values, kind):
+            ranges = rate_ranges(ranges, messages)
+        if summary.get(label) != summary_cells(ranges, kind, summary.get(label)):
             yield "summary-differs", f"{label}: {summary.get(label)} against the repetitions"
     targets = table_rows(section(text, "Target"))[1:]
     if len(targets) != 1 or targets[0][0] != "T-WASM-1":
@@ -350,15 +373,17 @@ def check_text(text, run_log):
         return
     _, bar, measured, said = targets[0]
     ratio = ratio_of(native_ms, wasm_ms)
-    if measured != f"{ratio:.2f}×":
-        yield "ratio-differs", f"{measured} against {ratio:.2f}× from the repetitions"
+    want = check_results.shown_within(measured, ratio, lambda value: f"{value:.2f}×")
+    if measured != want:
+        yield "ratio-differs", f"{measured} against {want} from the repetitions"
     if bar != f"≤ {BAR:.2f}× native, in Google Chrome":
         yield "bar-differs", bar
     if not said.startswith(VERDICTS):
         yield "verdict-word", said
     browser = fields.get("browser", "").split(", headless")[0]
-    if said != verdict(ratio, browser):
-        yield "verdict-differs", f"{said!r}, not {verdict(ratio, browser)!r}"
+    # The ratio's range is far narrower than a hundredth, so its ends give every verdict in it.
+    if said not in (verdict(ratio[0], browser), verdict(ratio[1], browser)):
+        yield "verdict-differs", f"{said!r}, not {verdict(ratio[0], browser)!r}"
 
 
 def check(paths):
@@ -380,6 +405,7 @@ def main(argv=None):
     made = sub.add_parser("render")
     for name in ("native", "native-stderr", "browser", "browser-stderr", "out"):
         made.add_argument(f"--{name}", type=Path, required=True)
+    made.add_argument("--rendered-again", metavar="REASON")
     checked = sub.add_parser("check")
     checked.add_argument("files", type=Path, nargs="*")
     args = parser.parse_args(argv)
@@ -389,7 +415,7 @@ def main(argv=None):
         text = render(json.loads(args.native.read_text(encoding="utf-8")),
                       json.loads(args.browser.read_text(encoding="utf-8")),
                       args.native_stderr.read_text(encoding="utf-8"),
-                      args.browser_stderr.read_text(encoding="utf-8"))
+                      args.browser_stderr.read_text(encoding="utf-8"), args.rendered_again)
     except (ReportError, KeyError, ValueError) as error:
         print(f"wasm_report: FAIL refused: {error!r}")
         return 1

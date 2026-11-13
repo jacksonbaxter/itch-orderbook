@@ -174,7 +174,7 @@ The browser demo's replay of one symbol's extract, in a browser and natively on 
 
 | Target | Symbol | Day | Host | Browser | Native messages/s | Browser messages/s | Browser over native | Verdict | Commit | File |
 |---|---|---|---|---|---|---|---|---|---|---|
-| T-WASM-1 | AAPL | 12302019 | macOS (M4 Max) | Google Chrome for Testing 153.0.8010.12 | 13,819,522 | 11,661,713 | 1.19× | browser differs: Google Chrome for Testing 153.0.8010.12, not Google Chrome | `545918cf50d4` | [results/wasm_replay_mac_12302019.md](results/wasm_replay_mac_12302019.md) |
+| T-WASM-1 | AAPL | 12302019 | macOS (M4 Max) | Google Chrome for Testing 153.0.8010.12 | 13,819,561 | 11,661,713 | 1.19× | browser differs: Google Chrome for Testing 153.0.8010.12, not Google Chrome | `545918cf50d4` | [results/wasm_replay_mac_12302019.md](results/wasm_replay_mac_12302019.md) |
 
 Profiles, counter tables and the book's hot-loop experiments. A flamegraph shows where the samples fell, not a rate, and a macOS profile never stands in for `perf` on `debian`. Each file says what it cannot show.
 

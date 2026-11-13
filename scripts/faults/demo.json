@@ -201,7 +201,7 @@
       "mutations": [
         {
           "file": "scripts/wasm_report.py",
-          "old": "    if said != verdict(ratio, browser):",
+          "old": "    if said not in (verdict(ratio[0], browser), verdict(ratio[1], browser)):",
           "new": "    if False:"
         }
       ],
@@ -221,7 +221,7 @@
       "mutations": [
         {
           "file": "scripts/wasm_report.py",
-          "old": "        if summary.get(label) != summary_cells(values, kind):",
+          "old": "        if summary.get(label) != summary_cells(ranges, kind, summary.get(label)):",
           "new": "        if False:"
         }
       ],
@@ -459,13 +459,13 @@
     },
     {
       "id": "demo-report-times-unrounded",
-      "breaks": "wasm_report.py render takes native times past the microsecond the table shows, so its summary disagrees with its own table",
+      "breaks": "wasm_report.py check takes the times the table prints as exact, so a file whose figures come from the native times past the microsecond fails its own check",
       "check": "test_demo test_times_past_the_microsecond_render_a_file_that_passes",
       "mutations": [
         {
           "file": "scripts/wasm_report.py",
-          "old": "native_ms = [as_shown(repetition[\"ns\"] / 1e6)",
-          "new": "native_ms = [(repetition[\"ns\"] / 1e6)"
+          "old": "native_ms = [check_results.printed_range(row[1], 3) for row in rows]",
+          "new": "native_ms = [check_results.exact(float(row[1])) for row in rows]"
         }
       ],
       "command": [
@@ -475,6 +475,26 @@
       ],
       "expect": {
         "signature": "FAIL: test_times_past_the_microsecond_render_a_file_that_passes"
+      }
+    },
+    {
+      "id": "demo-report-rates-from-rounded-times",
+      "breaks": "wasm_report.py render rounds each native time to the microsecond the table prints and works the rates out from that, not from the raw times",
+      "check": "test_demo test_rates_come_from_the_raw_times_and_are_rounded_last",
+      "mutations": [
+        {
+          "file": "scripts/wasm_report.py",
+          "old": "native_ms = [repetition[\"ns\"] / 1e6 for repetition in native[\"repetitions\"]]",
+          "new": "native_ms = [float(printed_ms(repetition[\"ns\"] / 1e6)) for repetition in native[\"repetitions\"]]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_rates_come_from_the_raw_times_and_are_rounded_last"
       }
     },
     {

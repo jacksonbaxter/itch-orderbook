@@ -70,7 +70,9 @@ Exit codes: 0 every file passed, 1 at least one failed, 2 bad usage.
 from __future__ import annotations
 
 import argparse
+import math
 import re
+import statistics
 import sys
 from pathlib import Path
 
@@ -241,6 +243,72 @@ def parse_header(text):
 def number(text):
     match = FIRST_NUMBER.search(text)
     return float(match.group(0).replace(",", "")) if match else None
+
+
+# Figures computed from unrounded values. A report works each figure out from the raw values
+# and rounds it only to print it, but its tables print those values rounded, so a check that
+# reads the file alone cannot work such a figure out again exactly. It holds the figure to the
+# range the printed values leave instead. Each helper takes and gives ranges, (low, high): a
+# value printed to N places stands for anything within half a unit of its last place, and a
+# raw value is the range (value, value), which gives the figure itself.
+
+def printed_range(cell, places):
+    """The values a cell printed to `places` decimals can stand for."""
+    value = cell_value(cell)
+    # A hair over half a unit, so that the binary value of a printed decimal is never left out.
+    half = 0.5 * 10 ** -places * (1 + 1e-9)
+    return value - half, value + half
+
+
+def exact(value):
+    return value, value
+
+
+def cell_value(cell):
+    return float(cell.replace(",", "").rstrip("%×"))
+
+
+def median_range(ranges):
+    return (statistics.median(low for low, _ in ranges),
+            statistics.median(high for _, high in ranges))
+
+
+def min_range(ranges):
+    return min(low for low, _ in ranges), min(high for _, high in ranges)
+
+
+def max_range(ranges):
+    return max(low for low, _ in ranges), max(high for _, high in ranges)
+
+
+def cv_range(ranges):
+    """The coefficient of variation, stdev over mean. Moving each value by at most h_i moves
+    the mean by at most the mean of the h_i, and the stdev by at most sqrt(sum h_i² / (n - 1)),
+    since the stdev is a norm of the values less their mean, scaled."""
+    if len(ranges) < 2:
+        return 0.0, 0.0
+    middles = [(low + high) / 2 for low, high in ranges]
+    halves = [(high - low) / 2 for low, high in ranges]
+    mean, stdev = statistics.fmean(middles), statistics.stdev(middles)
+    mean_half = statistics.fmean(halves)
+    stdev_half = math.sqrt(sum(half * half for half in halves) / (len(ranges) - 1))
+    return max(0.0, stdev - stdev_half) / (mean + mean_half), (stdev + stdev_half) / (mean - mean_half)
+
+
+def shown_within(shown, bounds, fmt):
+    """What a file should print for a figure in `bounds`, printed by `fmt`: its own cell
+    `shown`, if a value in bounds prints as that cell, and otherwise the middle of the bounds.
+    Given a raw value's bounds and no cell, it is the figure printed."""
+    low, high = bounds
+    if shown is not None:
+        try:
+            value = cell_value(shown)
+        except ValueError:
+            value = None
+        if value is not None and fmt(value) == shown and \
+                cell_value(fmt(low)) <= value <= cell_value(fmt(high)):
+            return shown
+    return fmt((low + high) / 2)
 
 
 def check_fields(fields, skipped=()):

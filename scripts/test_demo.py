@@ -376,6 +376,21 @@ class Report(unittest.TestCase):
         text = wasm_report.render(native, browser, stderr, stderr)
         self.assertEqual(self.violations(text), [])
 
+    def test_rates_come_from_the_raw_times_and_are_rounded_last(self):
+        # 40,000,377 ns and on: the table prints 40.000 ms, but the rate is 1,000,000 messages
+        # over the time measured, 24,999,764 messages/s, not 25,000,000.
+        native, browser, stderr = records()
+        for i, repetition in enumerate(native["repetitions"]):
+            repetition["ns"] = 40_000_377 + 100_000 * i
+        text = wasm_report.render(native, browser, stderr, stderr)
+        self.assertIn("| Native, messages/s | 24,875,389 | 24,752,244 | 24,999,764 | ", text)
+        self.assertIn("| 1 | 40.000 | 52.000 |", text)
+        self.assertEqual(self.violations(text), [])
+        again = wasm_report.render(native, browser, stderr, stderr, again="why.")
+        self.assertIn("\n\nRendered again from the run's own raw records, unchanged: why.\n\n",
+                      again)
+        self.assertEqual(self.violations(again), [])
+
     def test_render_refuses_a_side_the_sampler_saw_shared(self):
         native, browser, stderr = records()
         browser["sampler"]["lines"].insert(
