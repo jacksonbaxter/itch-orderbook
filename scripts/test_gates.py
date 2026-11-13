@@ -472,6 +472,9 @@ class Gates(unittest.TestCase):
         "withdrawn: the sampler saw this piece's own read (a system tool, 28.4%) at its first second",
         "withdrawn: the sampler saw the other cores: 25.00% of a CPU busy at "
         "2026-11-10T10:34:28.000000Z, the most of it a kernel thread",
+        "withdrawn: the sampler saw the other cores: 30.00% of a CPU busy at "
+        "2026-11-10T10:34:29.000000Z, the most of it no process to name, so kernel or "
+        "interrupt work",
         "published: paged-flat lookup 8.95 ns, 19.6% of the pass; best look-ahead D=4 at "
         "-18.01% over D=0, hash policy +3.12%, adds outside a window 8.337%",
         "withdrawn: no other process above 20% CPU; cpu5 and cpu7 each 100% busy over 1 s",

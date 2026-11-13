@@ -35,7 +35,7 @@ def quiet_sampler(foreign_at=None):
         at = f"2026-11-10T09:{second // 60:02d}:{second % 60:02d}Z"
         lines.append(f"{at} sample")
         if foreign_at == second:
-            lines.append(f"{at} FOREIGN 93.6 /somewhere/mds_stores")
+            lines.append(f"{at} FOREIGN 93.6 /somewhere/frobd")
     return "\n".join(lines) + "\n"
 
 

@@ -55,6 +55,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_results  # noqa: E402
+import process_kinds  # noqa: E402
 import run_record  # noqa: E402
 import simd_driver  # noqa: E402
 import stamp_load  # noqa: E402
@@ -905,8 +906,10 @@ def render(manifest, records, stderrs, sampler, again=None):
     out += pass_table(rows, events)
     out += ["", "## Withdrawn processes", ""]
     if withdrawn:
-        out += [f"- `{entry['variant']}`, repetition {entry['repetition']}: {entry['why']}"
-                for entry in withdrawn]
+        # A run before 2026-11-13 wrote the program's name into its manifest; the file gives
+        # its kind.
+        out += [f"- `{entry['variant']}`, repetition {entry['repetition']}: "
+                f"{process_kinds.reworded(entry['why'])}" for entry in withdrawn]
     else:
         out += ["None."]
     caveats = DEBIAN_CAVEATS if host == DEBIAN else CAVEATS

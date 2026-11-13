@@ -61,6 +61,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_results  # noqa: E402
+import process_kinds  # noqa: E402
 import stamp_load  # noqa: E402
 
 DEBIAN = "debian"
@@ -902,7 +903,9 @@ def quiet_spans(sampler_text, lines):
             raise ReportError(f"the sampler did not run over the whole of {start_line!r}")
         busy = [line for t, line in foreign if start <= t <= end]
         if busy:
-            raise ReportError(f"another process was busy during {start_line!r}: {busy[0]!r}")
+            stamp, _, cpu, command = (busy[0].split(maxsplit=3) + ["", ""])[:4]
+            raise ReportError(f"another process was busy during {start_line!r}: "
+                              f"{process_kinds.kind_of(command)} at {cpu}% CPU at {stamp}")
 
 
 def check_published(text, name=None):

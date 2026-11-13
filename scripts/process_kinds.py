@@ -59,6 +59,8 @@ OTHER = "another process"
 KINDS = (BROWSER, BROWSER_CONTENT, BACKUP_TOOL, BACKUP_TIMER, FILE_SYNC, VPN_DAEMON, ASSISTANT,
          OTHER_PROJECT, OTHER_PROJECT_TESTS, OTHER_PROJECT_FUZZER, MACOS_DAEMON, INDEXER,
          LINUX_DAEMON, KERNEL_THREAD, SYSTEM_TOOL, LOGIN_SHELL, THIS_PROJECT, OTHER)
+# Where the Linux sampler saw CPU busy with no process to give: no process at all.
+UNNAMED = "no process to name, so kernel or interrupt work"
 
 
 class MapError(ValueError):
@@ -127,6 +129,16 @@ def kind_of(command, kinds=None):
     return OTHER
 
 
+# A reason a driver wrote before 2026-11-13 into a raw record: "the CPU sampler saw <program> at
+# 87.5% CPU at ...", with the program's name where its kind now goes.
+NAMED_REASON = re.compile(r"\bsaw (\S+) at (?=\d)")
+
+
+def reworded(reason, kinds=None):
+    """A sampler's reason with the program it names, if any, given by its kind (kind_of)."""
+    return NAMED_REASON.sub(lambda match: f"saw {kind_of(match.group(1), kinds)} at ", reason)
+
+
 # The run log's grammar.
 
 def _core(phrase):
@@ -134,7 +146,7 @@ def _core(phrase):
     return re.sub(r"^(?:a|an|the|its)\s+", "", phrase.strip())
 
 
-KIND_CORES = frozenset(_core(kind) for kind in KINDS)
+KIND_CORES = frozenset(_core(kind) for kind in KINDS) | {UNNAMED.split(",")[0]}
 SHARE = re.compile(r"(?<![\w.+-])(\d+(?:\.\d+)?)%")
 # What may stand between a process and its share: "X at 41.2%", "X at up to 193.1%",
 # "X up to 199.2%", "X ran at", "X were seen at", "the first, X, at".
