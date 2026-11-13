@@ -9,6 +9,8 @@ a stand-in for the sampler and for bench_parse, so it needs no Linux host.
 """
 
 import argparse
+import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -19,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_results  # noqa: E402
 import parse_driver  # noqa: E402
+import process_kinds  # noqa: E402
 import stamp_load  # noqa: E402
 import test_linux_sampler  # noqa: E402
 
@@ -404,36 +407,49 @@ class Run(unittest.TestCase):
         self.assertIn("withdrawn: T-PARSE-1 to T-PARSE-3, repetition 1",
                       self.log.read_text(encoding="utf-8"))
 
-    def test_a_withdrawal_names_no_process(self):
-        # An invented process name; the sampler's busy line keeps it, the row must not.
-        stamp = "2026-11-13T16:00:01.000000Z"
-        lines = [f"{stamp} sample dt=1.000 wait=0.000 sibling=41.000 others=0.000 measured=7 "
-                 "cpus=0.0,0.0",
-                 f"{stamp} busy 38.5% cpu5 another project's process: zzfakebusy [4242]"]
-        why = (f"the sampler saw the core's SMT sibling: 41.00% busy at {stamp}, the most of it "
-               "another project's process")
-        public = parse_driver.public_why(why, lines)
-        self.assertEqual(public, f"the sampler saw the core's SMT sibling: 41.00% busy at {stamp}, "
-                                 "the most of it another process, at 38.5% of a CPU")
-        self.assertNotIn("zzfakebusy", public)
+    STAMP = "2026-11-13T16:00:01.000000Z"
+    # An invented program name; the sampler's busy line keeps it, a committed row never does.
+    BUSY = [f"{STAMP} sample dt=1.000 wait=0.000 sibling=41.000 others=0.000 measured=7 "
+            "cpus=0.0,0.0",
+            f"{STAMP} busy 38.5% cpu5 another project's process: zzfakebusy --serve [4242]"]
+    WHY = (f"the sampler saw the core's SMT sibling: 41.00% busy at {STAMP}, the most of it "
+           "another project's process")
+
+    def withdrawn_row(self, environment):
         watch = mock.Mock(every=1.0)
-        watch.lines.return_value = lines
-        verdicts = iter([why, None])
+        watch.lines.return_value = self.BUSY
+        verdicts = iter([self.WHY, None])
         args = args_for(input=SCRATCH / "day", raw_dir=SCRATCH, run_log=self.log,
                         quiet_before=0, most_withdrawn=20, most_in_a_row=3)
         sampled = {"every": 1.0, "cpu": 0, "published": [], "withdrawn": []}
-        with mock.patch.object(parse_driver, "fault_in"), \
+        with mock.patch.dict(os.environ, environment, clear=False), \
+                mock.patch.object(parse_driver, "fault_in"), \
                 mock.patch.object(parse_driver, "run_process", return_value=record(1)), \
                 mock.patch.object(parse_driver.linux_sampler, "judge",
                                   side_effect=lambda *a: next(verdicts)), \
                 mock.patch.object(parse_driver.linux_sampler, "summary", return_value="quiet"):
+            if not environment:
+                os.environ.pop(process_kinds.MAP_ENV, None)
             parse_driver.judged_process(args, 1, "abc", "00", watch, sampled, self.day)
-        row = self.log.read_text(encoding="utf-8")
-        self.assertIn("another process, at 38.5% of a CPU", row)
-        self.assertIn(stamp, row)
+        row = self.log.read_text(encoding="utf-8").splitlines()[-1]
+        self.assertIn(sampled["withdrawn"][0][2], row)
+        return row
+
+    def test_a_withdrawal_names_no_process(self):
+        row = self.withdrawn_row({})
+        self.assertIn(f"at {self.STAMP}, the most of it another project's process, at 38.5% of a "
+                      "CPU", row)
         self.assertNotIn("zzfakebusy", row)
-        self.assertNotIn("another project's process", row)
-        self.assertEqual(sampled["withdrawn"][0][2], public)
+        self.assertEqual(process_kinds.cause_breaks(row), [])
+
+    def test_a_withdrawal_takes_the_maps_kind(self):
+        kinds = SCRATCH / "invented_kinds.json"
+        kinds.write_text(json.dumps({"programs": {"zzfakebusy": process_kinds.BROWSER}}),
+                         encoding="utf-8")
+        row = self.withdrawn_row({process_kinds.MAP_ENV: str(kinds)})
+        self.assertIn(f"at {self.STAMP}, the most of it a browser, at 38.5% of a CPU", row)
+        self.assertNotIn("zzfakebusy", row)
+        self.assertEqual(process_kinds.cause_breaks(row), [])
 
     def test_three_withdrawn_in_a_row_refuse_the_run(self):
         watch = mock.Mock(every=1.0)

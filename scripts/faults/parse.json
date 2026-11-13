@@ -548,14 +548,14 @@
       }
     },
     {
-      "id": "parse-withdrawal-gives-the-samplers-kind",
-      "breaks": "A withdrawal's row and the Sampler section carry the sampler's word for the busiest other process, not another process at its share of a CPU",
+      "id": "parse-withdrawal-names-the-process",
+      "breaks": "A withdrawal's row and the Sampler section give the busiest other process by the command the sampler logged, its name",
       "check": "test_parse_driver.py Run.test_a_withdrawal_names_no_process",
       "mutations": [
         {
           "file": "scripts/parse_driver.py",
-          "old": "    return f\"{why[:match.start(2)]}{ANOTHER}, at {share} of a CPU\"\n",
-          "new": "    return why\n"
+          "old": "    return f\"{why[:match.start(2)]}{kind}, at {busy[2]} of a CPU\"\n",
+          "new": "    return f\"{why[:match.start(2)]}{command}, at {busy[2]} of a CPU\"\n"
         }
       ],
       "command": [
@@ -566,6 +566,28 @@
       ],
       "expect": {
         "signature": "FAIL: test_a_withdrawal_names_no_process",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-withdrawal-ignores-the-map",
+      "breaks": "A withdrawal gives the sampler's word for the busiest process even where the map of kinds gives its kind",
+      "check": "test_parse_driver.py Run.test_a_withdrawal_takes_the_maps_kind",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    kind = process_kinds.kind_of(command)\n",
+          "new": "    kind = process_kinds.OTHER\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "Run.test_a_withdrawal_takes_the_maps_kind"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_withdrawal_takes_the_maps_kind",
         "exit": 1
       }
     },

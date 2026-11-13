@@ -73,6 +73,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import linux_sampler  # noqa: E402
+import process_kinds  # noqa: E402
 import run_record  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -360,24 +361,31 @@ def wait_for_quiet(watch, args):
         time.sleep(watch.every)
 
 
-ANOTHER = "another process"  # What a committed row calls a process not this run's (no map).
 MOST_OF_IT = re.compile(r" at (\S+Z), the most of it (.+)$")
 
 
 def public_why(why, lines):
     """A withdrawal's reason as the run log and the results file carry it: what the sampler saw,
-    with its share and time, and the busiest other process as "another process" at its own
-    share of a CPU, never by its name or the sampler's guess at its kind. sampler.txt, in the
-    raw folder, keeps the name."""
+    with its share and time, and the busiest other process by its kind (scripts/process_kinds.py)
+    at its own share of a CPU, never by its name. The kind is the map's ($ITCH_PROCESS_KINDS)
+    for the command the sampler logged, or, where the map gives none, the one the sampler told
+    from /proc. sampler.txt, in the raw folder, keeps the name."""
     match = MOST_OF_IT.search(why)
     if match is None:
         return why
     stamp = match.group(1)
-    share = next((words[2] for words in (line.split(None, 3) for line in lines)
-                  if len(words) > 2 and words[0] == stamp and words[1] == "busy"), None)
-    if share is None:  # No process above the sampler's floor: kernel or interrupt work.
+    busy = next((words for words in (line.split(None, 4) for line in lines)
+                 if len(words) == 5 and words[0] == stamp and words[1] == "busy"), None)
+    if busy is None:  # No process above the sampler's floor: kernel or interrupt work.
         return why
-    return f"{why[:match.start(2)]}{ANOTHER}, at {share} of a CPU"
+    told, _, rest = busy[4].partition(": ")
+    command = rest.rsplit(" [", 1)[0]
+    kind = process_kinds.kind_of(command)
+    if kind == process_kinds.OTHER:
+        kind = linux_sampler.EARLIER_WORDS.get(told, told)
+    if kind not in process_kinds.KINDS:
+        kind = process_kinds.OTHER
+    return f"{why[:match.start(2)]}{kind}, at {busy[2]} of a CPU"
 
 
 def withdraw(args, index, begin, why, sampled, commit):
