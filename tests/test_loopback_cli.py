@@ -38,6 +38,15 @@ def fields(stdout):
     return out
 
 
+def printed(name, got, key, failures):
+    """Whether both paths printed the key; two missing lines would compare equal."""
+    absent = [f"loopback_{path}_{key}" for path in ("file", "udp")
+              if f"loopback_{path}_{key}" not in got]
+    if absent:
+        failures.append((name, f"no line {' or '.join(absent)}"))
+    return not absent
+
+
 def check_pass(name, done, failures):
     if done.returncode != 0:
         failures.append((name, f"exit {done.returncode}: {done.stdout[-2000:]}{done.stderr}"))
@@ -55,7 +64,9 @@ def check_pass(name, done, failures):
         if got.get(f"loopback_{path}_checkpoint") != "reached":
             failures.append((name, f"the {path} path never reached its checkpoint"))
     for key in ("frames", "frame_hash", "checkpoint_hash", "end_hash"):
-        if got.get(f"loopback_file_{key}") != got.get(f"loopback_udp_{key}"):
+        if not printed(name, got, key, failures):
+            continue
+        if got[f"loopback_file_{key}"] != got[f"loopback_udp_{key}"]:
             failures.append((name, f"{key} differs and the verdict passed"))
     if got.get("loopback_lost") != "0" or got.get("loopback_gaps") != "0":
         failures.append((name, "loss was counted and the verdict passed"))
@@ -121,7 +132,8 @@ def main():
     if got.get("loopback_duplicate_messages", "0") == "0":
         failures.append(("duplicate packet", "no duplicate was counted"))
     for key in ("frames", "frame_hash", "end_hash"):
-        if got.get(f"loopback_file_{key}") != got.get(f"loopback_udp_{key}"):
+        if printed("duplicate packet", got, key, failures) and \
+                got[f"loopback_file_{key}"] != got[f"loopback_udp_{key}"]:
             failures.append(("duplicate packet", f"a duplicate was applied: {key} differs"))
 
     # A byte flipped inside a message: framing and sequence whole, so only the two paths'

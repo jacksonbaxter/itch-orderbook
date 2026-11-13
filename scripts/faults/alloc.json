@@ -577,6 +577,29 @@
    }
   },
   {
+   "id": "alloc-driver-compare-tool-unhashed",
+   "breaks": "alloc_driver hashes the bench but not itch_map_compare, which it also runs (r5-9)",
+   "check": "test_alloc_results.py EndToEnd.test_a_run_writes_a_file_that_passes_once_stamped",
+   "mutations": [
+    {
+     "file": "scripts/alloc_driver.py",
+     "old": "                                                               args.compare_tool))",
+     "new": "                                                               ))"
+    }
+   ],
+   "command": [
+    "{python}",
+    "-B",
+    "{tree}/scripts/test_alloc_results.py",
+    "EndToEnd.test_a_run_writes_a_file_that_passes_once_stamped"
+   ],
+   "expect": {
+    "signature": "^FAIL: test_a_run_writes_a_file_that_passes_once_stamped",
+    "exit": 1
+   },
+   "system": "Darwin"
+  },
+  {
    "id": "alloc-driver-peak-of-the-first-arm",
    "breaks": "The header's peak_rss is the largest repetition of the first arm only, as it was before 2026-11-13, not the largest timed process over every arm",
    "check": "test_alloc_results.py test_the_peak_rss_is_the_largest_timed_process_over_every_arm",

@@ -21,6 +21,7 @@
 #include "itch/mold_feed.hpp"
 #include "itch/mold_packets.hpp"
 #include "itch/reader.hpp"
+#include "oracle/canonical.hpp"
 #include "support/churn.hpp"
 #include "support/fixtures.hpp"
 
@@ -318,6 +319,24 @@ TEST(MoldSequence, ASequencePastTheTopIsOutOfRange) {
   EXPECT_EQ(top.take, 0U);
   EXPECT_EQ(tracker.counts().out_of_range, 1U);
   EXPECT_EQ(tracker.counts().lost, 0U);
+}
+
+// One message at the top: a packet whose sequence and count reach 2^64 - 1 is admitted, and
+// one whose last message would be 2^64 - 1 itself is refused, since the next expected
+// sequence after it would not fit.
+TEST(MoldSequence, OneMessageAtTheTopIsAdmittedOnlyBelowTheLastSequence) {
+  constexpr std::uint64_t kTop = 0xFFFFFFFFFFFFFFFFULL;
+  mold::SequenceTracker tracker{kSession, kTop - 1};
+  const mold::Admit below = tracker.admit(header_of(kTop - 1, 1));
+  EXPECT_EQ(below.skip, 0U);
+  EXPECT_EQ(below.take, 1U);
+  EXPECT_EQ(tracker.counts().out_of_range, 0U);
+  EXPECT_EQ(tracker.next_expected(), kTop);
+  const mold::Admit top = tracker.admit(header_of(kTop, 1));
+  EXPECT_EQ(top.take, 0U);
+  EXPECT_EQ(tracker.counts().out_of_range, 1U);
+  EXPECT_EQ(tracker.counts().admitted, 1U);
+  EXPECT_EQ(tracker.next_expected(), kTop);
 }
 
 // --- The packet array -----------------------------------------------------------------
@@ -666,7 +685,8 @@ TEST(MoldFeed, AMalformedPacketIsCountedAndHandsOnNothing) {
   EXPECT_EQ(recorder.payloads.size(), 1U);
 }
 
-// The book after the feed is the book after the file.
+// The book after the feed is the book after the file: each message has the same status, and
+// the two books are the same word for word, every level and order in FIFO order.
 TEST(MoldFeed, TheBookAfterTheFeedIsTheBookAfterTheFile) {
   const Bytes stream = itch::testing::build_stream();
   constexpr itch::BookCapacity kCapacity{
@@ -690,6 +710,13 @@ TEST(MoldFeed, TheBookAfterTheFeedIsTheBookAfterTheFile) {
   }
   EXPECT_EQ(feed_statuses, file_statuses);
   EXPECT_GT(file_statuses.size(), 200000U);
+  itch::oracle::WordList file_words;
+  itch::oracle::WordList feed_words;
+  itch::oracle::emit_fast(by_file, file_words);
+  itch::oracle::emit_fast(by_feed, feed_words);
+  EXPECT_EQ(feed_words.words(), file_words.words());
+  // The churn leaves at least 255 orders live, two words each besides their levels'.
+  EXPECT_GT(file_words.words().size(), 510U) << "the book after the file is nearly empty";
 }
 
 }  // namespace

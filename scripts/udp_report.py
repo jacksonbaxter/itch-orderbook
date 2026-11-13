@@ -55,7 +55,14 @@ figure is such a lower bound.
 
 The header's prediction and run_id are the file's own step's run, as check_predictions.py
 reads them; predictions and runs list every run the file draws on. --rendered-again REASON
-adds a line saying the file was rendered again from the runs' own raw records, and why.
+adds a line saying the file was rendered again from the runs' own raw records, and why; given
+more than once, a line each, in order, so that an earlier render's line is kept.
+
+machine_check_cores says, from the machine check output itself, which cores each run's check
+covered and with which SMT sibling, and which of the sender's, the receiver's and the SQ
+thread's cores it did not: the runs before r5-11 checked core 4 and its sibling only, so the
+receiver's core and the SQ thread's were never shown idle. --check holds the field to the
+file's own machine check output, and counts every core's check.
 
 Each violation prints as `udp_report: FAIL <code>: <detail>`.
 
@@ -77,6 +84,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_results  # noqa: E402
 import results_table  # noqa: E402
+import run_record  # noqa: E402
 import stamp_load  # noqa: E402
 import udp_driver  # noqa: E402
 
@@ -783,11 +791,23 @@ def derived(fields, rows, failed, printed=None):
 
 # --- Reading runs ---------------------------------------------------------------------------
 
+def refuse_incomplete_record(run_dir, manifest):
+    """A run directory of the new kind (scripts/run_record.py, gate item 8) must hold the
+    whole record, with both machine checks of a timed step."""
+    needs = () if manifest["step"] == "smoke" else ("machine_check_before.txt",
+                                                    "machine_check_after.txt")
+    try:
+        run_record.refuse_incomplete(run_dir, needs, manifest.get("run_id"), measure=False)
+    except run_record.Incomplete as error:
+        raise ReportError(str(error)) from error
+
+
 def read_runs(run_dirs):
     """(timed runs, smoke): each timed run (manifest, [(entry, record, stderr)], [failed])."""
     timed, smoke = [], None
     for run_dir in run_dirs:
         manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+        refuse_incomplete_record(run_dir, manifest)
         if manifest["step"] == "smoke":
             smoke = (manifest, json.loads((run_dir / "smoke.json").read_text(encoding="utf-8")))
             continue
@@ -930,6 +950,73 @@ def feed_fields(manifests):
                             "window, each run's idle timeout above it at its speed")]
 
 
+# --- Which cores the machine checks covered (r5-11) ---------------------------------------------
+
+CHECK_CORE = re.compile(r"^machine_check: \S+ (?:pin-readback: allowed on exactly core|"
+                        r"governor: core) (\d+)\b")
+CHECK_SIBLING = re.compile(r"^machine_check: \S+ sibling-idle: cpu(\d+) ")
+CHECK_VERDICT = re.compile(r"^machine_check: (?:passed|refused)")
+CORES_FIELD = re.compile(r"^(\d+) a check: ")
+
+
+def checked_cores(text):
+    """(core, sibling or None) for each machine_check.sh output in text, in order, read off
+    its pin, governor and sibling-idle lines."""
+    pairs, core, sibling = [], None, None
+    for line in text.splitlines():
+        found = CHECK_CORE.match(line)
+        if found and core is None:
+            core = int(found[1])
+        found = CHECK_SIBLING.match(line)
+        if found:
+            sibling = int(found[1])
+        if CHECK_VERDICT.match(line):
+            pairs.append((core, sibling))
+            core = sibling = None
+    return pairs
+
+
+def cores_said(pairs, cores):
+    """The machine_check_cores field: how many checks a run's check is, which core each
+    covered with which sibling, and every core of the cores field it did not cover."""
+    said = ", ".join(f"core {core} with its sibling {sibling}" if sibling is not None else
+                     f"core {core}, its sibling not read" for core, sibling in pairs)
+    covered = {core for core, _ in pairs}
+    left = [f"the {role}'s core {cores[key]}" + (" (U5 only)" if key == "sq" else "")
+            for key, role in (("sender", "sender"), ("receiver", "receiver"), ("sq", "SQ thread"))
+            if cores[key] not in covered]
+    return f"{len(pairs)} a check: {said}" + (
+        f"; not checked, so not known to have been idle: {', '.join(left)}" if left else "")
+
+
+def check_cores_field(checks, cores):
+    """The field, from every check that ran; refused if the runs' checks covered different
+    cores, since the file states one coverage."""
+    seen = {tuple(checked_cores(text)) for text in checks}
+    seen.discard(())
+    if len(seen) != 1:
+        raise ReportError(f"the machine checks covered different cores: {sorted(map(str, seen))}")
+    pairs = seen.pop()
+    return cores_said(pairs, cores), len(pairs)
+
+
+def check_cores_found(fields, output, runs):
+    """(code, detail) pairs for a machine_check_cores field that is missing, or is not what
+    the file's own machine check output covered, and the checks a run's check is."""
+    said = fields.get("machine_check_cores", "")
+    match = CORES_FIELD.match(said)
+    per = int(match[1]) if match else 1
+    cores = dict(zip(("sender", "receiver", "sq"),
+                     (int(n) for n in re.findall(r"\d+", fields.get("cores", "")))))
+    blocks = checked_cores(output)
+    groups = {tuple(blocks[i:i + per]) for i in range(0, len(blocks), per)}
+    if not match or len(cores) != 3 or len(blocks) != 2 * per * len(runs) or \
+            len(groups) != 1 or cores_said(next(iter(groups)), cores) != said:
+        return [("check-cores-unsaid", f"the header says {said!r}; the machine check output "
+                                       f"covers {blocks}")], per
+    return [], per
+
+
 def render(timed, smoke, name, again=None):
     match = FILE_NAME.match(name)
     if match is None:
@@ -987,7 +1074,9 @@ def render(timed, smoke, name, again=None):
                 for when in ("before", "after")]
     checks = [m.get(f"machine_check_{when}") or "missing" for m in manifests
               for when in ("before", "after")]
-    passed = sum(1 for text in checks if text.strip().endswith("machine_check: passed"))
+    covered, per = check_cores_field(checks, cores)
+    passed = sum(len(checked_cores(text)) for text in checks
+                 if text.strip().endswith("machine_check: passed"))
     loads.sort(key=lambda pair: stamp_of(pair[0]))
     first_load = loads[0][0]
     last_load = max((pair[1] for pair in loads), key=stamp_of)
@@ -1018,8 +1107,9 @@ def render(timed, smoke, name, again=None):
                ("rate_cap", cap_text)]
     fields += smoke_fields(smoke)
     fields += feed_fields(manifests)
-    fields += [("machine_checks", f"{passed} of {len(checks)} passed, before and after each "
-                                  "run"),
+    fields += [("machine_checks", f"{passed} of {per * len(checks)} passed, before and after "
+                                  "each run"),
+               ("machine_check_cores", covered),
                ("perf_event_paranoid", f"{before['perf_event_paranoid']} at the start, "
                                        f"{after['perf_event_paranoid']} at the end"),
                ("pswpout", f"{before['pswpout']} at the start, {after['pswpout']} at the end"),
@@ -1040,8 +1130,8 @@ def render(timed, smoke, name, again=None):
     out = [f"# {title}, {host_file}, {day}", "",
            "Generated by `scripts/udp_report.py` from raw records that are not committed. "
            "Do not edit by hand.", ""]
-    if again:
-        out += [f"Rendered again from the runs' own raw records, unchanged: {again}", ""]
+    for reason in [again] if isinstance(again, str) else again or []:
+        out += [f"Rendered again from the runs' own raw records, unchanged: {reason}", ""]
     out += [f"Host: **{DEBIAN}**. Numbers from the two hosts are never mixed.", "",
            COMPARABILITY, ""]
     if "warning" in as_dict:
@@ -1126,7 +1216,9 @@ def check_published(text, name=None):
         found.append(("prediction-missing", f"run_id {fields.get('run_id')!r}, prediction "
                                             f"{fields.get('prediction')!r}"))
     output = check_results.section(text, "machine_check output") or ""
-    wanted = 2 * len(runs)
+    cores_found, per = check_cores_found(fields, output, runs)
+    found += cores_found
+    wanted = 2 * len(runs) * per
     if not runs or output.count("machine_check: passed") != wanted or \
             "machine_check: FAIL" in output or \
             fields.get("machine_checks") != f"{wanted} of {wanted} passed, before and after " \
@@ -1260,7 +1352,7 @@ def main(argv=None):
     parser.add_argument("--out", type=Path)
     parser.add_argument("--run-log", type=Path)
     parser.add_argument("--check", type=Path)
-    parser.add_argument("--rendered-again", metavar="REASON")
+    parser.add_argument("--rendered-again", metavar="REASON", action="append")
     args = parser.parse_args(argv)
     if args.check is None and (not args.run_dir or args.out is None):
         parser.error("wanted --check FILE, or --run-dir and --out")

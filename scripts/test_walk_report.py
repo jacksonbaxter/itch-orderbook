@@ -28,6 +28,7 @@ import check_results  # noqa: E402
 import stamp_load  # noqa: E402
 import walk_driver  # noqa: E402
 import walk_report  # noqa: E402
+import test_driver_records  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
@@ -389,7 +390,15 @@ class EndToEnd(unittest.TestCase):
                              {"load-not-stamped"})
             self.assertEqual(len(re.findall(r"^\| 3 \| (?:T-BT-3|100,000 orders)", text,
                                             re.MULTILINE)), len(LIVES))
-            self.assertIn("| published |", log)
+            # The driver leaves the outcome to stamp_load.py (r5-3).
+            self.assertIn("| written, pending the load stamp: ", log)
+            self.assertNotIn("| published", log)
+            # What the run keeps of itself (gate item 8).
+            root, machine = Path(directory), FIXTURES / "machine_check"
+            test_driver_records.assert_run_record(
+                self, root / "raw", text,
+                (root / "bench.sh", root / "walks.sh", machine / "fake_probe.sh"),
+                ("machine_check.txt",), machine / "input.bin")
 
     def test_a_timed_process_off_its_count_refuses_the_run(self):
         timed = {life: timed_record(life, 1.6) for life in LIVES}

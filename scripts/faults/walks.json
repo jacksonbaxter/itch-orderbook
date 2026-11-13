@@ -799,6 +799,29 @@
       }
     },
     {
+      "id": "walks-driver-walks-unhashed",
+      "breaks": "walk_driver hashes bench_backtest but not bench_walks, which it also runs (r5-9)",
+      "check": "test_walk_report.py EndToEnd.test_a_run_writes_a_file_that_passes_once_stamped",
+      "mutations": [
+        {
+          "file": "scripts/walk_driver.py",
+          "old": "                                (args.bench, args.walks, args.probe))",
+          "new": "                                (args.bench, args.probe))"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_walk_report.py",
+        "EndToEnd.test_a_run_writes_a_file_that_passes_once_stamped"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_run_writes_a_file_that_passes_once_stamped",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
       "id": "walks-counts-header-unchecked",
       "breaks": "Count records whose headers differ are rendered under the first record's",
       "check": "test_walk_report.py",

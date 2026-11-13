@@ -422,6 +422,52 @@ class UdpReportTest(unittest.TestCase):
                                                        "sender not pinned, receiver 6")))
         self.assertIn("unpinned", self.codes(edit_cell(text, run, "Pins", "sender 4")))
 
+    def test_the_header_says_which_cores_the_machine_checks_covered(self):
+        """r5-11: read off the machine check output; a run checked on core 4 alone names the
+        receiver's and the SQ thread's cores as not checked, one checked on every core in the
+        mask names none, and --check holds the field to the output."""
+        text = self.bisect_text()
+        fields = udp_report.check_results.parse_header(text)
+        self.assertEqual(fields["machine_check_cores"],
+                         "1 a check: core 4, its sibling not read; not checked, so not known to "
+                         "have been idle: the receiver's core 6, the SQ thread's core 2 (U5 "
+                         "only)")
+        for edited in (text.replace("- machine_check_cores: 1 a check: core 4, its sibling "
+                                    "not read; not checked, so not known to have been idle: "
+                                    "the receiver's core 6, ", "- machine_check_cores: 1 a "
+                                    "check: core 4, its sibling not read; not checked, so not "
+                                    "known to have been idle: "),
+                       "\n".join(line for line in text.splitlines()
+                                 if not line.startswith("- machine_check_cores: "))):
+            self.assertIn("check-cores-unsaid", self.codes(edited))
+        every = "\n".join(
+            f"machine_check: pass pin-readback: allowed on exactly core {core}\n"
+            f"machine_check: pass sibling-idle: cpu{core + 1} is 0.0% busy over 1 s\n"
+            "machine_check: passed" for core in (4, 6, 2))
+        with scratch() as folder:
+            root = Path(folder)
+            dirs = [smoke_run(root / "smoke"), ceiling_run(root / "ceiling"),
+                    bisect_run(root / "bisect")]
+            for one in dirs[1:]:
+                kept = json.loads((one / "manifest.json").read_text(encoding="utf-8"))
+                kept["machine_check_before"] = kept["machine_check_after"] = every
+                (one / "manifest.json").write_text(json.dumps(kept), encoding="utf-8")
+            text = self.render(dirs)[0]
+            fields = udp_report.check_results.parse_header(text)
+            self.assertEqual(fields["machine_check_cores"], "3 a check: core 4 with its sibling "
+                                                            "5, core 6 with its sibling 7, core 2 "
+                                                            "with its sibling 3")
+            self.assertEqual(fields["machine_checks"], "12 of 12 passed, before and after each "
+                                                       "run")
+            self.assertEqual(udp_report.check_published(text, NAME), [])
+            self.assertIn("machine-check-failed", self.codes(
+                text.replace("machine_check: passed", "machine_check: refused, 1 failed", 1)))
+            kept = json.loads((dirs[1] / "manifest.json").read_text(encoding="utf-8"))
+            kept["machine_check_after"] = CHECK
+            (dirs[1] / "manifest.json").write_text(json.dumps(kept), encoding="utf-8")
+            with self.assertRaisesRegex(udp_report.ReportError, "covered different cores"):
+                self.render(dirs)
+
     def test_check_refuses_a_failed_or_missing_machine_check(self):
         text = self.bisect_text()
         broken = text.replace("machine_check: passed", "machine_check: refused, 1 failed", 1)

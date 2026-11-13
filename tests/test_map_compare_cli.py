@@ -2,7 +2,7 @@
 """Black-box test of itch_map_compare on the committed fixtures.
 
 Usage: test_map_compare_cli.py <itch_map_compare> <scratch dir> <oracle fixtures dir>
-                               <trade fixtures dir>
+                               <trade fixtures dir> [with-mimalloc|without-mimalloc]
 
 Every fixture runs on every arm of the fast book against the map book, on a fresh heap and
 on an aged one, with the whole of both books compared after every message. Every fixture
@@ -10,6 +10,8 @@ also runs the node book of T-ARENA-1 on each allocator arm against the fast book
 same checks, and must end on the same book as the map book did. The counts
 named here come from the fixture builders and the frame counts, not from the tool's own
 output. A book that goes wrong is shown failing by the faults in scripts/faults/mapbook.json.
+The mimalloc arm may say the build has no mimalloc only in a build CMake says has none, and
+then the test prints that it skipped it; with no fifth argument it says so whenever it skips.
 A failure prints `map compare cli: FAIL <case>: <reason>`.
 """
 
@@ -20,7 +22,9 @@ import sys
 from pathlib import Path
 
 SMALL = ("--max-orders", "4096", "--max-levels", "4096")
-ARMS = (("hash", "linked"), ("hash", "flat"), ("paged", "linked"), ("paged", "flat"))
+ARMS = (("hash", "linked"), ("hash", "flat"), ("paged", "linked"), ("paged", "flat"),
+        ("identity", "flat"), ("chained", "flat"), ("paged", "flat-scan16"),
+        ("paged", "flat-bisect"))
 ARM_SMALL = SMALL + ("--max-pages", "8", "--index-bits", "16", "--max-slots", "8192")
 AGED = ("--heap", "aged", "--seed", "7", "--warm-blocks", "4096", "--ring-blocks", "64")
 # Each message the fixture builder marks as refused: 5 unknown, 1 on another locate, 2 too
@@ -46,6 +50,9 @@ def frame_types(data):
 
 def main():
     tool, scratch, oracle_fixtures, trade_fixtures = sys.argv[1:5]
+    mimalloc_built = {"with-mimalloc": True, "without-mimalloc": False}.get(
+        sys.argv[5] if len(sys.argv) > 5 else "", None)
+    skipped = set()
     scratch = Path(scratch)
     scratch.mkdir(parents=True, exist_ok=True)
     fixtures = sorted(Path(oracle_fixtures).glob("*.itch")) + [Path(trade_fixtures) / "day.itch"]
@@ -93,6 +100,9 @@ def main():
             name = f"{path.name} node {allocator}"
             done = run(path, *SMALL, "--allocator", allocator, "--hash-every", "1")
             if done.returncode == 2 and allocator == "mimalloc" and NO_MIMALLOC in done.stderr:
+                if mimalloc_built:
+                    failures.append(f"{name}: the build has mimalloc, and the tool says not")
+                skipped.add(allocator)
                 continue
             lines = done.stdout.splitlines()
             values = dict(line.split(" ", 1) for line in lines if " " in line)
@@ -169,12 +179,14 @@ def main():
                 "nothing mapped" not in done.stdout:
             failures.append(f"a pool with no pages: exit {done.returncode}")
 
+    for allocator in sorted(skipped):
+        print(f"map compare cli: skipped the {allocator} arm: {NO_MIMALLOC}")
     for failure in failures:
         print(f"map compare cli: FAIL {failure}")
     if failures:
         return 1
     print(f"map compare cli: ok, {len(fixtures)} fixtures on {len(ARMS)} arms and two heaps, "
-          f"and the node book on {len(ALLOCATORS)} allocator arms")
+          f"and the node book on {len(ALLOCATORS) - len(skipped)} allocator arms")
     return 0
 
 

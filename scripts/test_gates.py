@@ -387,6 +387,44 @@ class Gates(unittest.TestCase):
         code, output = self.run_gates()
         self.assertEqual(code, 0, output)
 
+    def test_the_linux_sampler_rule_holds_every_kind_of_file(self):
+        """Every kind of results file on record, made up as a debian run after the Linux
+        sampler rule's moment: refused without the rule's line, accepted with a passing one,
+        and accepted with none when dated before the rule."""
+        sys.path.insert(0, str(gates.REPO_ROOT / "scripts"))
+        import check_results  # noqa: PLC0415
+
+        kinds = sorted({path.name.split("_")[0] for path in (gates.REPO_ROOT / "results").glob(
+            "*.md") if path.name not in ("run_log.md", "predictions.md")})
+        self.assertGreaterEqual(len(kinds), 15, kinds)
+        quiet = (f"- load_rule: {check_results.LINUX_RULE_WHOLE}120 samples from "
+                 "2026-11-13T04:00:00.000000Z to 2026-11-13T04:02:00.000000Z, the longest gap "
+                 "1.02 s; at most 0.10% run-queue wait on core 4, 1.20% busy on cpu5, 3.40% of "
+                 "a CPU on the other cores\n")
+        busy = quiet.replace("3.40% of a CPU", "45.00% of a CPU")
+        for kind in kinds:
+            with self.subTest(kind=kind):
+                self.reset()
+                name = f"results/{kind}_made_up_debian.md"
+                header = ("# A made-up file\n\n## Header\n\n- host: debian\n"
+                          "- run_id: P-0999-20261113T040000Z\n")
+                self.assert_only_gate_fails("linux-sampler-rule", name, header)
+                _, output = self.run_gates()
+                self.assertIn("load-rule-missing: a debian run from 2026-11-13T03:00:00Z on has "
+                              "no load_rule line", output)
+                if not f"{kind}_".startswith(check_results.LINUX_RULE_WIRED):
+                    self.assertIn(f"no driver of the {kind} kind writes it yet", output)
+                self.assert_only_gate_fails("linux-sampler-rule", name, header + busy)
+                self.assert_passes(name, header + quiet)
+                self.assert_passes(name, header.replace("20261113T040000Z",
+                                                        "20261113T025959Z"))
+                started = header + "- run_started: 2026-11-13T02:59:59Z\n"
+                self.assert_passes(name, started.replace("20261113T040000Z", "x"))
+                self.assert_only_gate_fails("linux-sampler-rule", name,
+                                            header.replace("20261113T040000Z", "x"))
+                self.assert_passes(name, header.replace("host: debian",
+                                                        f"host: {check_results.MAC_HOST}"))
+
     def test_a_gate_that_scans_nothing_fails(self):
         scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
         self.addCleanup(scratch.cleanup)

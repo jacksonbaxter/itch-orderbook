@@ -22,6 +22,8 @@ run falls on all of them.
 The vector kernels are every kernel `bench_kernels --list-kernels` says runs here other than
 scalar, or the --kernels given: on this Mac neon, on debian ssse3 and avx2. Each kernel's
 variant is named after it, so the results file says which instruction set every figure used.
+avx512vbmi is refused for decode, consume and parse (E2, E3 and E4 by type), whose passes have
+no guard for the 45 bytes it reads past a message (r1-1, r4-6): the run log's row says so.
 
 On macOS, where nothing pins a process and other projects share the machine, a CPU sampler
 runs beside the whole run (scripts/wasm_bench.py's): every 2 s a `sample` line, and a `FOREIGN`
@@ -29,13 +31,20 @@ line for any process above 20% CPU outside this driver and what it runs. A proce
 only if the sampler covered its whole span, from measure.sh's start line to its end line, with
 no gap over 5 s and no foreign process inside it. Otherwise it is withdrawn, with its own row in
 results/run_log.md giving the reason, and run again as a further repetition, at most
-MOST_WITHDRAWN times in a run. On Linux the machine check runs before and after, itself as
+MOST_WITHDRAWN times in a run. The sampler rule is the only reason a process is withdrawn and
+run again, and measure.sh's exit 75, busy, the only one it is retried for: a process that exits
+anything else, bench_kernels' 3 when it refuses its own record among them, or leaves no record or
+no measure.sh lines, refuses the whole run, with the run log's row saying which and why, since a
+rerun that happens to pass would hide what the first one found. On Linux the machine check runs
+before and after, itself as
 `MEASURE_SH taskset -c 4 bash scripts/machine_check.sh ...`, so that it reads the pin and the
 governor the processes run under: outside measure.sh the governor is the host's own, and
 machine_check.sh refuses any other than performance.
 
-The run directory, DIR/<run id>/, holds every process's files, the sampler's log and
-manifest.json, which lists every process and what became of it. scripts/simd_report.py
+The run directory, DIR/<run id>/, refused if another run wrote in it, holds every process's
+files, the sampler's log, manifest.json, which lists every process and what became of it, and
+run.json (scripts/run_record.py): the commit and tree state, the sha256 of each binary, the
+input hashed and refused unless it is --dataset-sha256, and each machine check untouched. scripts/simd_report.py
 turns it into the results file. results/run_log.md gets a row for the run and for each
 process that was not published.
 
@@ -59,6 +68,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_driver  # noqa: E402
+import run_record  # noqa: E402
 import wasm_bench  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -74,10 +84,19 @@ FORMS = {"framing": ("length", "byte", "table", "constant"),
 WIDTHS = (2, 4, 6, 8)
 LINUX_PIN = ("taskset", "-c", "4")
 WATCHLISTS = (8, 64)
+# r1-1, r4-6: the passes of these experiments hand every message to the kernel, with no guard
+# for kOverread, and avx512vbmi loads 64 bytes from each message's first byte: up to 45 bytes
+# past the end of the input after an Order Delete. Refused until the passes are guarded.
+UNGUARDED = {"decode": "E2's decode_pass", "consume": "E3's consume_pass",
+             "parse": "E4's parse_one_type"}
+OVERREADING_KERNELS = ("avx512vbmi",)
 
 
 class Refused(Exception):
-    """The run cannot go on."""
+    """The run cannot go on: Refused(where, why)."""
+
+    def __str__(self):
+        return ": ".join(str(part) for part in self.args)
 
 
 def vector_kernels(bench, given):
@@ -87,6 +106,16 @@ def vector_kernels(bench, given):
                             check=True).stdout
     return [line.split(":")[0] for line in listed.splitlines()
             if line.endswith(": runs") and not line.startswith("scalar:")]
+
+
+def refuse_unguarded(experiment, kernels):
+    """Refused for a kernel that reads past the input in a pass with no overread guard."""
+    for kernel in kernels:
+        if kernel in OVERREADING_KERNELS and experiment in UNGUARDED:
+            raise Refused("kernel", f"{kernel} for {experiment}: {UNGUARDED[experiment]} has no "
+                                    "guard for kOverread, and the kernel loads 64 bytes from each "
+                                    "message's first byte, up to 45 past the end of the input; "
+                                    "refused until the pass is guarded (r1-1)")
 
 
 def variants(experiment, kernels):
@@ -186,16 +215,21 @@ def run_one(args, run_dir, name, extra, repetition, commit):
 
 
 def judge(args, stem, code, sampler):
-    """None if the process is published, else why not."""
+    """None if the process is published, else why the sampler rule withdraws it: through
+    wasm_bench.unquiet, the span covered with no gap over 5 s and no FOREIGN line stamped
+    inside measure.sh's start and end; one at an edge sample outside them is not judged
+    (r5-10). Raises Refused for anything else: a process that exited other than 0 (run_one has retried measure.sh's
+    75 already), left no record, or has no measure.sh lines refuses the run, never a rerun."""
     err = Path(f"{stem}.err").read_text(encoding="utf-8", errors="replace")
     if code != 0:
         refusals = [line for line in err.splitlines() if "refused:" in line]
-        return f"exited {code}" + (f": {'; '.join(refusals)}" if refusals else "")
+        raise Refused(stem.name, f"exited {code}" + (f": {'; '.join(refusals)}" if refusals
+                                                      else ""))
     if not Path(f"{stem}.json").is_file():
-        return "exited 0 with no record"
+        raise Refused(stem.name, "exited 0 with no record")
     span = span_of(err)
     if span is None:
-        return "measure.sh's start or end line is missing"
+        raise Refused(stem.name, "measure.sh's start or end line is missing")
     if sampler is not None:
         wait_for_sample(sampler, span[1])
         return wasm_bench.unquiet(sampler.lines, *span)
@@ -216,14 +250,24 @@ def wait_for_sample(sampler, finished):
 
 
 def run(args, run_id, commit):
-    run_dir = args.raw_dir / run_id
-    run_dir.mkdir(parents=True, exist_ok=False)
     kernels = [] if args.experiment in (*FORMS, "asm", "e11") else \
         vector_kernels(args.bench, args.kernels)
+    refuse_unguarded(args.experiment, kernels)
+    run_dir = run_record.run_folder(args.raw_dir, run_id)
     plan = variants(args.experiment, kernels)
     if args.experiment == "e11" and args.node_module is None:
         raise Refused("usage", "--experiment e11 needs --node-module")
     binary = {"e11": args.node_module, "asm": AUDIT}.get(args.experiment, args.bench)
+    # The run's own record (gate item 8): the input hashed here, never taken on trust from
+    # --dataset-sha256, which it must match (r5-6).
+    record = run_record.Record(run_dir, "simd_driver", run_id, commit)
+    for path in (binary, args.probe, args.measure):
+        record.binary(path)
+    digest = run_record.sha256_of(args.input)
+    if digest != args.dataset_sha256:
+        raise Refused("dataset", f"{args.input.name} hashes to {digest}, not the "
+                                 f"--dataset-sha256 {args.dataset_sha256}")
+    record.dataset(args.input, digest)
     manifest = {"run_id": run_id, "prediction": args.prediction, "experiment": args.experiment,
                 "commit": commit, "host_os": platform.system(), "binary": str(binary.name),
                 "binary_sha256": sha256_of(binary), "dataset": args.dataset,
@@ -233,6 +277,7 @@ def run(args, run_id, commit):
                 "started": bench_driver.utc_now()}
     if platform.system() == "Linux":
         manifest["machine_check_before"] = machine_check(args)
+        record.output("machine_check_before.txt", manifest["machine_check_before"])
     sampler = None
     if platform.system() == "Darwin":
         sampler = wasm_bench.Sampler(run_dir / "sampler.txt")
@@ -251,10 +296,17 @@ def run(args, run_id, commit):
                 if code == 2:
                     raise Refused(name, f"bench exited 2: "
                                         f"{Path(f'{stem}.err').read_text(encoding='utf-8')[-400:]}")
-                why = judge(args, stem, code, sampler)
                 entry = {"variant": name, "repetition": repetition, "stem": stem.name,
-                         "exit": code, "published": why is None, "why": why}
+                         "exit": code}
                 manifest["processes"].append(entry)
+                try:
+                    why = judge(args, stem, code, sampler)
+                except Refused as refusal:
+                    entry.update(published=False, why=refusal.args[1], refused=True)
+                    raise Refused(name, f"{args.experiment}, {name}, repetition {repetition}: "
+                                        f"{refusal.args[1]}; the run is refused, not rerun, "
+                                        "and nothing from it is published") from None
+                entry.update(published=why is None, why=why)
                 (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n",
                                                         encoding="utf-8")
                 if why is None:
@@ -271,10 +323,12 @@ def run(args, run_id, commit):
     finally:
         if sampler is not None:
             sampler.stop()
+            record.kept_file("sampler.txt")
         manifest["finished"] = bench_driver.utc_now()
         if platform.system() == "Linux":
             try:
                 manifest["machine_check_after"] = machine_check(args)
+                record.output("machine_check_after.txt", manifest["machine_check_after"])
             except Refused as error:
                 manifest["machine_check_after"] = f"failed: {error}"
         (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n",
@@ -312,11 +366,14 @@ def main(argv=None):
                           check=False).returncode != 0:
             raise Refused("prediction", f"{args.prediction} is not on record")
         withdrawn = run(args, run_id, commit)
-    except (Refused, bench_driver.Refused) as error:
+    except (Refused, bench_driver.Refused, run_record.Incomplete) as error:
         bench_driver.append_log(args.run_log, run_id, args.prediction,
                                 locals().get("commit", "unknown"), f"refused: {error}")
         print(f"simd_driver: refused: {error}", file=sys.stderr)
         return 1
+    except Exception as error:  # Last, so that no run ends without its row.
+        return bench_driver.log_failure("simd_driver", args.run_log, run_id, args.prediction,
+                                        locals().get("commit", "unknown"), error)
     outcome = ("recorded: every variant's repetitions published under the sampler rule"
                if platform.system() == "Darwin" else
                "recorded: every variant's repetitions published, each under measure.sh taskset "

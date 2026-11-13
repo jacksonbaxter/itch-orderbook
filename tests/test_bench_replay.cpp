@@ -10,6 +10,8 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "designs.hpp"
@@ -580,6 +582,83 @@ TEST(BenchReplay, EveryDesignSeesTheSameMovesOfTheTop) {
     }
   }
   EXPECT_EQ(seen, (std::vector<std::uint64_t>(10, 5)));
+}
+
+// The policy types by their own names, written out here, never taken from book_arms.hpp.
+template <class Index>
+constexpr std::string_view index_type() {
+  if constexpr (std::is_same_v<Index, itch::HashIndex>) {
+    return "HashIndex";
+  } else if constexpr (std::is_same_v<Index, itch::PagedIndex<>>) {
+    return "PagedIndex<>";
+  } else if constexpr (std::is_same_v<Index, itch::IdentityHashIndex>) {
+    return "IdentityHashIndex";
+  } else if constexpr (std::is_same_v<Index, itch::ChainedIndex>) {
+    return "ChainedIndex";
+  } else {
+    return "another index";
+  }
+}
+template <class Levels>
+constexpr std::string_view levels_type() {
+  if constexpr (std::is_same_v<Levels, itch::LinkedLevels>) {
+    return "LinkedLevels";
+  } else if constexpr (std::is_same_v<Levels, itch::FlatLevels>) {
+    return "FlatLevels";
+  } else if constexpr (std::is_same_v<Levels, itch::Scan16FlatLevels>) {
+    return "Scan16FlatLevels";
+  } else if constexpr (std::is_same_v<Levels, itch::BisectFlatLevels>) {
+    return "BisectFlatLevels";
+  } else {
+    return "another levels arm";
+  }
+}
+
+std::string built_types(const itch::tools::BookArm& arm) {
+  return itch::tools::with_book_arm(arm, []<class Index, class Levels> {
+    return std::format("{} {}", index_type<Index>(), levels_type<Levels>());
+  });
+}
+
+// All 16 arms: each name, given to --index and --levels as a tool takes them, and as the
+// design INDEX-LEVELS that bench_replay, bench_variants and bench_counts take, builds the
+// two types it names. The arms give the same moves of the top, so only their types can
+// tell them apart. The default arm builds FastBook<>'s own types.
+TEST(BenchReplay, EveryArmNameBuildsTheTypesItNames) {
+  constexpr std::array<std::array<std::string_view, 2>, 4> kIndexes{
+      {{"hash", "HashIndex"},
+       {"paged", "PagedIndex<>"},
+       {"identity", "IdentityHashIndex"},
+       {"chained", "ChainedIndex"}}};
+  constexpr std::array<std::array<std::string_view, 2>, 4> kLevels{
+      {{"linked", "LinkedLevels"},
+       {"flat", "FlatLevels"},
+       {"flat-scan16", "Scan16FlatLevels"},
+       {"flat-bisect", "BisectFlatLevels"}}};
+  int arms = 0;
+  for (const auto& [index_name, index] : kIndexes) {
+    for (const auto& [levels_name, levels] : kLevels) {
+      const std::string want = std::format("{} {}", index, levels);
+      itch::tools::BookArm arm;
+      itch::BookCapacity capacity;
+      ASSERT_EQ(itch::tools::parse_arm_option("--index", index_name, arm, capacity),
+                itch::tools::ArmOption::taken);
+      ASSERT_EQ(itch::tools::parse_arm_option("--levels", levels_name, arm, capacity),
+                itch::tools::ArmOption::taken);
+      EXPECT_EQ(built_types(arm), want) << index_name << " " << levels_name;
+      const std::string name = std::format("{}-{}", index_name, levels_name);
+      const std::optional<Design> design = parse_design(name);
+      ASSERT_TRUE(design.has_value()) << name;
+      EXPECT_EQ(design->kind, DesignKind::fast) << name;
+      EXPECT_EQ(design_name(*design), name);
+      EXPECT_EQ(built_types(design->arm), want) << name;
+      ++arms;
+    }
+  }
+  EXPECT_EQ(arms, 16);
+  EXPECT_EQ(built_types(itch::tools::BookArm{}),
+            std::format("{} {}", index_type<itch::FastBook<>::Index>(),
+                        levels_type<itch::FastBook<>::LevelArm>()));
 }
 
 TEST(BenchReplay, ADesignNameMustBeOneOfTheDesigns) {

@@ -7990,7 +7990,9 @@
         "{python}",
         "{tree}/scripts/gates.py",
         "--root",
-        "{tree}"
+        "{tree}",
+        "--only",
+        "no-abort-on-wire"
       ],
       "expect": {
         "signature": "gates: FAIL no-abort-on-wire tests/trades/midas\\.hpp:\\d+",
@@ -8012,7 +8014,9 @@
         "{python}",
         "{tree}/scripts/gates.py",
         "--root",
-        "{tree}"
+        "{tree}",
+        "--only",
+        "no-abort-on-wire"
       ],
       "expect": {
         "signature": "gates: FAIL no-abort-on-wire tests/trades/cross_stats\\.hpp:\\d+",
@@ -8751,6 +8755,30 @@
       ],
       "expect": {
         "signature": "trades cli: FAIL symbols unwritable: exit 0, wanted 2"
+      }
+    },
+    {
+      "id": "trades-midas-header-failure-line-zero",
+      "breaks": "A MIDAS file whose header fails says line 0, the whole file, not line 1 (r8-12)",
+      "check": "test_reference_files Midas.ReportsTheLineOfAFailure",
+      "mutations": [
+        {
+          "file": "tests/trades/midas.hpp",
+          "old": "    return fail(columns.error(), 1);",
+          "new": "    return fail(columns.error(), 0);"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "test_reference_files"
+        ]
+      },
+      "command": [
+        "{build}/tests/test_reference_files"
+      ],
+      "expect": {
+        "signature": "\\[  FAILED  \\] Midas\\.ReportsTheLineOfAFailure"
       }
     }
   ]

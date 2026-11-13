@@ -50,10 +50,15 @@ import json
 import platform
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import run_record  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EVALUATION = "scripts/mm_evaluation.json"
@@ -629,6 +634,19 @@ def compiler_and_flags(root, tool):
     return compiler, flags
 
 
+def keep_run_record(args, run_id, commit, status):
+    """The run's own raw folder, named by its run id, and its run.json (scripts/run_record.py,
+    gate item 8): the commit and tree state, the tool and time binaries' sha256 and the day
+    hashed. Each run's .out and .err are the tool output the file quotes, kept beside it."""
+    args.raw_dir = run_record.run_folder(args.raw_dir, run_id)
+    state = "clean" if status == "" else "with uncommitted changes"
+    record = run_record.Record(args.raw_dir, "mm_report", run_id, f"{commit} ({state})")
+    for path in (args.tool, shutil.which(args.time) or args.time):
+        record.binary(path)
+    record.dataset(args.data, run_record.sha256_of(args.data))
+    args.record = record
+
+
 def command_run(args):
     root = args.root.resolve()
     evaluation = load_evaluation(root)
@@ -644,6 +662,14 @@ def command_run(args):
     commit = git(root, "rev-parse", "--short=12", "HEAD") or "unavailable"
     commit_cell = f"{commit} ({'clean' if status == '' else 'modified'})"
     log_path = root / RUN_LOG
+    try:
+        keep_run_record(args, run_id, commit, status)
+    except run_record.Incomplete as error:
+        with log_path.open("a", encoding="utf-8") as log:
+            log.write(f"| {run_id} | {args.prediction} | {commit_cell} | "
+                      f"{platform.system()} | refused at the raw record: {error} |\n")
+        print(f"mm_report: FAIL run: {error}")
+        return 2
     outputs = {}
     for symbol, run in matrix(evaluation):
         name = raw_name(evaluation, symbol, run)
@@ -653,6 +679,8 @@ def command_run(args):
         done = subprocess.run(command, capture_output=True, text=True, check=False)
         (args.raw_dir / f"{name}.out").write_text(done.stdout, encoding="utf-8")
         (args.raw_dir / f"{name}.err").write_text(done.stderr, encoding="utf-8")
+        for suffix in (".out", ".err"):
+            args.record.kept_file(f"{name}{suffix}")
         try:
             if done.returncode not in (0, 1):
                 raise ReportError(f"exited {done.returncode}: {done.stderr.strip()[-200:]}")

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""results_table.py on a copy of the real results: what RESULTS.md and the README's headline
-must show, and what each must refuse."""
+"""results_table.py on a copy of the real results: what RESULTS.md, the README's headline and
+WRITEUP.md's table of missed targets must show, and what each must refuse."""
 
 import contextlib
 import io
@@ -37,6 +37,7 @@ class ResultsTable(unittest.TestCase):
         shutil.copytree(REPO_ROOT / "results", self.root / "results")
         shutil.copy(REPO_ROOT / "README.md", self.root / "README.md")
         shutil.copy(REPO_ROOT / "RESULTS.md", self.root / "RESULTS.md")
+        shutil.copy(REPO_ROOT / "WRITEUP.md", self.root / "WRITEUP.md")
         shutil.copy(REPO_ROOT / "BENCHMARKS.md", self.root / "BENCHMARKS.md")
 
     def run_table(self, *extra):
@@ -358,7 +359,9 @@ class ResultsTable(unittest.TestCase):
         rows = [line for line in output.splitlines()
                 if line.startswith("| `hash-linked` |") and f"(results/{BOOK})" in line]
         self.assertEqual(len(rows), 1, output)
-        self.assertIn("| ram | not tracked | 12302019 | macOS (M4 Max) | not pinned |", rows[0])
+        # r5-2: a Mac run from before the sampler rule says, in its row, that none ran beside it.
+        self.assertIn("| ram | not tracked | 12302019 | macOS (M4 Max) | not pinned; sampler: "
+                      f"{results_table.check_results.SAMPLER_BEFORE_RULE} |", rows[0])
         self.assertIn(f"[results/{BOOK}](results/{BOOK})", rows[0])
         self.assertIn("macOS cannot pin a thread", output)
 
@@ -409,7 +412,8 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(code, 0, output)
         rows = [line for line in output.splitlines() if f"(results/{name})" in line]
         self.assertEqual(len(rows), 1, output)
-        self.assertIn("| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned | ≥ 4.61 M "
+        self.assertIn("| shadow | T-BT-3 | 12302019 | macOS (M4 Max) | not pinned; sampler: "
+                      f"{results_table.check_results.SAMPLER_BEFORE_RULE} | ≥ 4.61 M "
                       "messages/s | 5,425,845 messages/s |", rows[0])
         self.assertIn("| met | `abc` |", rows[0])
         path = self.root / "results" / name
@@ -477,7 +481,8 @@ class ResultsTable(unittest.TestCase):
         path.write_text(wasm_report.render(native, browser, stderr, stderr), encoding="utf-8")
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
-        rows = [line for line in output.splitlines() if f"(results/{name})" in line]
+        results_page = output.split("README.md:\n", 1)[0]
+        rows = [line for line in results_page.splitlines() if f"(results/{name})" in line]
         self.assertEqual(len(rows), 1, output)
         self.assertIn("| T-WASM-1 | TEST | 12302019 | macOS (M4 Max) | Google Chrome for Testing "
                       "153.0.8010.12 | 24,875,622 | 19,083,969 | 1.30× | browser differs: Google "
@@ -493,7 +498,14 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("| **FAIL** | average spread 1.4918, 1.3490, 3.0317 against the paper's "
                       "1.49, 1.35, 3.02: 2 of 3 match at two decimals;", row)
         self.edit("results/mm_as_tables.md", "**Verdict: FAIL**", "**Verdict: PASS**")
-        self.assertIn("| PASS |", self.row("T-MM-2", "none"))
+        rows = [line for line in results_table.generate(self.root)
+                if line.startswith("| T-MM-2 | none |")]
+        self.assertEqual(len(rows), 1)
+        self.assertIn("| PASS |", rows[0])
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL results/mm_as_tables.md: T-MM-2 is PASS, and "
+                      "WRITEUP.md's table names it as a miss", output)
         self.edit("results/mm_as_tables.md", "| 0.01 | 1.35 | 1.3490 |", "| 0.01 | 1.35 | x |")
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
@@ -526,6 +538,7 @@ class ResultsTable(unittest.TestCase):
                 header = None
                 continue
             header = header or line
+            line = line.removesuffix(" " + results_table.NOT_MEASURED_MARK)
             if line.startswith("| T-"):
                 self.assertEqual(len(re.findall(r" \| ", line)),
                                  len(re.findall(r" \| ", header)), line)
@@ -536,7 +549,7 @@ class ResultsTable(unittest.TestCase):
     def headline(self):
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
-        lines = output[output.index("README.md:\n"):].splitlines()[1:]
+        lines = output[output.index("README.md:\n"):output.index("WRITEUP.md:\n")].splitlines()[1:]
         return [line for line in lines if line.startswith("| T-")]
 
     def test_the_headline_has_its_targets_in_order_each_from_its_file(self):
@@ -684,7 +697,9 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(self.unjudged(), [
             "**T-BOOK-1 on macOS (M4 Max), no verdict:** 21.87 M msg/s, median 21,873,432 msg/s "
             "of 3 repetitions, CV 0.76%; `paged-flat`, file in memory, top of book not tracked; "
-            "not pinned. Its bar is ≥ 16.4 M msg/s, set on Ryzen 7 9700X, x86 Linux: a macOS "
+            "not pinned; sampler: none: the run was made before the sampler rule of 2026-11-05, "
+            "and no sampler ran beside it, so nothing is known about other processes' load "
+            "during it. Its bar is ≥ 16.4 M msg/s, set on Ryzen 7 9700X, x86 Linux: a macOS "
             "figure against a bar set on x86 Linux, neither a pass nor a fail. "
             f"[{UNJUDGED_BOOK}]({UNJUDGED_BOOK})"])
         self.assertFalse(any("21.87" in row for row in self.headline()))
@@ -711,6 +726,77 @@ class ResultsTable(unittest.TestCase):
         code, output = self.run_table()
         self.assertEqual(code, 1, output)
         self.assertIn(f"results_table: FAIL {UNJUDGED_BOOK}: its host is debian", output)
+
+
+class MissedTargets(unittest.TestCase):
+    """WRITEUP.md's table of every target missed or not measured."""
+
+    setUp = ResultsTable.setUp
+    run_table = ResultsTable.run_table
+    edit = ResultsTable.edit
+
+    def missed(self):
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        return output.split("WRITEUP.md:\n", 1)[1]
+
+    def test_the_writeup_table_has_every_miss_each_from_its_file(self):
+        table = self.missed()
+        self.assertIn("| T-SPSC-1, project rtt / rigtorp rtt | ≤ 1.00× | 1.16× | 1.16× against "
+                      "≤ 1.00× | debian |", table)
+        for line in table.splitlines()[2:]:
+            if line.startswith("|"):
+                self.assertTrue(line.endswith(results_table.NOT_MEASURED_MARK)
+                                or "](results/" in line.split(" | ")[-1], line)
+        self.assertIn("| T-BOOK-4 |", table)
+        self.assertIn("3 runs logged under P-0502, none published: 2 withdrawn, 1 stopped or "
+                      "refused", table)
+
+    def test_a_writeup_row_typed_over_fails(self):
+        self.edit("WRITEUP.md", "| T-SPSC-1, project rtt / rigtorp rtt | ≤ 1.00× | 1.16× |",
+                  "| T-SPSC-1, project rtt / rigtorp rtt | ≤ 1.00× | 1.17× |")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertRegex(output, r"results_table: FAIL WRITEUP\.md:\d+: differs from a fresh run")
+
+    def test_a_missed_row_whose_file_calls_it_met_is_refused(self):
+        self.edit("results/spsc_queues_debian_12302019.md",
+                  "| missed: 1.16× against ≤ 1.00× |", "| met |")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("T-SPSC-1 is 'met', not missed, and WRITEUP.md's table names it as a miss",
+                      output)
+
+    def test_a_benchmark_target_with_no_row_or_account_is_refused(self):
+        with open(self.root / "BENCHMARKS.md", "a", encoding="utf-8") as benchmarks:
+            benchmarks.write("\n### T-NEW-1: a target no row names\n\n- **Target:** none.\n")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("BENCHMARKS.md: ['T-NEW-1'] in no row or account", output)
+
+    def test_a_not_measured_target_with_a_published_run_is_refused(self):
+        with open(self.root / "results" / "run_log.md", "a", encoding="utf-8") as log:
+            log.write("| P-0502-20991231T000000Z | P-0502 | 000000000000 (clean) | Darwin | "
+                      "published: a run planted by the test |\n")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("P-0502 has a published run or none, and WRITEUP.md's table says T-BOOK-4 "
+                      "was never measured", output)
+
+    def test_a_parse_target_a_prediction_names_is_refused(self):
+        with open(self.root / "results" / "predictions.md", "a", encoding="utf-8") as predictions:
+            predictions.write("\n## P-9999: T-PARSE-1 planted by the test\n")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("P-9999 names T-PARSE-1, which WRITEUP.md's table says no run measured",
+                      output)
+
+    def test_a_missing_writeup_marker_fails(self):
+        self.edit("WRITEUP.md", results_table.MISS_END + "\n", "")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("results_table: FAIL WRITEUP.md: the two marker lines", output)
+
 
 if __name__ == "__main__":
     unittest.main()

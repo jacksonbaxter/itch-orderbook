@@ -10,7 +10,7 @@ On a reported run this is measure.sh's direct child, as scripts/bench_driver.py 
 shares that driver's order and its signal handling:
 
     measure.sh /usr/bin/time -l python3 -B scripts/backtest_driver.py ... 2> STDERR
-    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR
+    python3 -B scripts/stamp_load.py --results FILE --stderr STDERR --raw-dir RAW/RUN_ID
 
 Hash the input, which also faults it in; confirm the prediction is on record; run
 machine_check.sh, refusing on a failure; run the repetitions, one bench_backtest process
@@ -38,8 +38,17 @@ later. Each process first waits until the sampler has seen --quiet-before second
 pass the rule, for at most --quiet-wait seconds (600), and the run is refused if it never
 does. The file's load_rule field and Sampler section say what the rule saw.
 
-Every run gets a row in results/run_log.md, whatever became of it. Raw output stays in
---raw-dir, which is not committed.
+On macOS the Mac's sampler rule applies to each process instead (scripts/mac_rule.py): the
+CPU sampler of spsc_driver.py runs beside the run, and a process is published only if it
+covered the process's whole span with no gap over 5 s and saw no other process above 20%
+CPU in it, with the same withdrawals, waits and limits; the file's interference field and
+Sampler section say what it saw.
+
+Every run gets a row in results/run_log.md, whatever became of it.
+Raw output stays in --raw-dir/<run id>, a folder of the run's own that the driver
+refuses to write into if another run has, with run.json beside it: the commit and tree
+state, each binary's sha256, the dataset hashed, and every tool output the file quotes
+(scripts/run_record.py). None of it is committed.
 
     backtest_driver.py render --raw-dir DIR --published FILE --out FILE [--stderr FILE] \
         [--rendered-again REASON]
@@ -77,6 +86,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_driver  # noqa: E402
 import check_results  # noqa: E402
 import linux_sampler  # noqa: E402
+import mac_rule  # noqa: E402
+import run_record  # noqa: E402
 import stamp_load  # noqa: E402
 
 REPO_ROOT = bench_driver.REPO_ROOT
@@ -249,9 +260,24 @@ def withdraw(args, index, host, begin, why, sampled, commit):
                                              f"sampler rule, over the {args.most_withdrawn} allowed")
 
 
-def judged_process(args, index, commit, digest, watch, sampled):
-    """One repetition, run again until the Linux sampler rule publishes it. With no sampler,
-    on macOS, the process is the repetition."""
+def judged_process(args, index, commit, digest, watch, sampled, mac=None):
+    """One repetition, run again until the Linux sampler rule publishes it, or on macOS the
+    Mac's (scripts/mac_rule.py, with mac its sampler)."""
+    if mac is not None:
+        def set_aside(count):
+            for suffix in (".json", ".log"):
+                path = args.raw_dir / f"{args.workload}-repetition-{index}{suffix}"
+                if path.is_file():
+                    path.rename(args.raw_dir / f"{args.workload}-repetition-{index}-withdrawn-"
+                                               f"{count}{suffix}")
+
+        def one():
+            record = run_process(args, index, commit, digest)
+            validate_run(record, args.workload)
+            return record
+        return mac_rule.judged(args, mac, sampled,
+                               f"{WORKLOADS[args.workload]['target']}, repetition {index}", one,
+                               set_aside, commit)
     in_a_row = 0
     while True:
         if watch is not None:
@@ -453,9 +479,10 @@ def header_lines(records, args, run_id, started, finished, sampled=None):
               f"- input: {first['input']}",
               f"- latency: L_md {latency['market_data']:,} ns, L_oe {latency['order_entry']:,} "
               f"ns, L_resp {latency['response']:,} ns, L_compute {latency['compute']:,} ns",
+              *([mac_rule.interference_line(sampled)] if sampled and "mac" in sampled else []),
               f"- measure_load_start: {check_results.PENDING}",
               f"- measure_load_end: {check_results.PENDING}",
-              *([load_rule_line(sampled)] if sampled else []),
+              *([load_rule_line(sampled)] if sampled and "mac" not in sampled else []),
               *bench_driver.peak_lines(records),
               f"- prediction: {args.prediction}",
               f"- run_id: {run_id}",
@@ -512,7 +539,9 @@ def render(records, args, run_id, started, finished, machine_output, command, sa
     lines += repetition_rows(records)
     if bench_driver.swap_watch is not None:
         lines += ["", bench_driver.swap_watch.line()]
-    if sampled:
+    if sampled and "mac" in sampled:
+        lines += [""] + mac_rule.sampler_section(sampled)
+    elif sampled:
         lines += [""] + sampler_section(sampled)
     if context:
         lines += ["", context.strip()]
@@ -534,9 +563,20 @@ def relative_command(args):
              "--workload", args.workload, "--date", args.date,
              "--prediction", args.prediction, "--repetitions", str(args.repetitions),
              "--raw-dir", "<raw>", "--out", shown(args.out)]
-    for flag, value in (("--core", args.core), ("--sibling", args.sibling)):
+    for flag, value in (("--core", args.core), ("--sibling", args.sibling),
+                        ("--sampler-cpu", args.sampler_cpu)):
         if value is not None:
             words += [flag, str(value)]
+    # The Linux sampler rule's waits and limits, when they are not the defaults, are part of
+    # what ran; each --bench-arg reaches bench_backtest and can change the workload (r5-4).
+    for flag, value, default in (("--quiet-before", args.quiet_before, QUIET_BEFORE_S),
+                                 ("--quiet-wait", args.quiet_wait, QUIET_WAIT_S),
+                                 ("--most-in-a-row", args.most_in_a_row, MOST_IN_A_ROW),
+                                 ("--most-withdrawn", args.most_withdrawn, MOST_WITHDRAWN)):
+        if value != default:
+            words += [flag, f"{value:g}"]
+    for argument in args.bench_arg:
+        words += [f"--bench-arg={argument}"]
     text = " ".join(shlex.quote(word) if "<" not in word else word for word in words)
     return f"{args.wrapped_by} {text}" if args.wrapped_by else text
 
@@ -545,6 +585,7 @@ def run(args, run_id, started, commit):
     bench_driver.swap_watch = bench_driver.SwapWatch(args.vmstat)
     bench_driver.set_stage("hashing the input")
     digest = bench_driver.hash_and_fault_in(args.input)
+    args.record.dataset(args.input, digest)
     bench_driver.set_stage("checking the prediction")
     code = subprocess.run([sys.executable, "-B", str(REPO_ROOT / "scripts" / "check_predictions.py"),
                            "--root", str(args.predictions_root), "--require", args.prediction],
@@ -553,8 +594,14 @@ def run(args, run_id, started, commit):
         raise Refused("prediction", code.stdout.strip())
     bench_driver.set_stage("machine_check")
     machine_output = bench_driver.machine_check(args)
-    watch, sampled = None, None
-    if platform.system() == "Linux":
+    args.record.output(bench_driver.MACHINE_CHECK, machine_output)
+    watch, sampled, mac = None, None, None
+    if platform.system() == "Darwin":
+        bench_driver.set_stage("starting the sampler")
+        mac = mac_rule.start(args)
+        sampled = {"every": mac.every, "mac": True, "stand_in": mac.stand_in, "published": [],
+                   "withdrawn": []}
+    elif platform.system() == "Linux":
         if args.core is None or args.sibling is None:
             raise Refused("sampler", "the Linux sampler rule needs --core and --sibling")
         bench_driver.set_stage("starting the sampler")
@@ -562,17 +609,19 @@ def run(args, run_id, started, commit):
                                                args.sibling, args.sampler_cpu)
         sampled = {"every": watch.every, "cpu": cpu, "published": [], "withdrawn": []}
     try:
-        records = [judged_process(args, index, commit, digest, watch, sampled)
+        records = [judged_process(args, index, commit, digest, watch, sampled, mac)
                    for index in range(1, args.repetitions + 1)]
     finally:
         if watch is not None:
             watch.stop()
+            args.record.kept_file("sampler.txt")
+        run_record.close_sampler(args, mac)
     validate_together(records)
     bench_driver.set_stage("rendering the results file")
     text = render(records, args, run_id, started, bench_driver.utc_now(), machine_output,
                   relative_command(args), sampled)
     violations = [found for found in check_results.check_text(text)
-                  if found[0] != "load-not-stamped"]
+                  if found[0] not in check_results.LEFT_TO_STAMP]
     if violations:
         raise Refused("results", f"{args.out.name}: " + "; ".join(
             f"{code}: {detail}" for code, detail in violations))
@@ -603,6 +652,7 @@ def parse_args(argv):
     parser.add_argument("--quiet-wait", type=float, default=QUIET_WAIT_S, metavar="S")
     parser.add_argument("--most-in-a-row", type=int, default=MOST_IN_A_ROW)
     parser.add_argument("--most-withdrawn", type=int, default=MOST_WITHDRAWN)
+    mac_rule.add_sampler_arguments(parser)
     parser.add_argument("--predictions-root", type=Path, default=REPO_ROOT, help=argparse.SUPPRESS)
     parser.add_argument("--run-log", type=Path, default=REPO_ROOT / "results" / "run_log.md",
                         help=argparse.SUPPRESS)
@@ -679,6 +729,9 @@ def render_again(raw_dir, published, stderr, again=None, context=None):
     """The published file's run rendered again from its raw records, stamped. A sampled run's
     Sampler section is judged again from the raw folder's sampler.txt."""
     args, fields, machine, swap = published_parts(published)
+    run_record.refuse_incomplete(raw_dir, (bench_driver.MACHINE_CHECK,), fields.get("run_id"))
+    if run_record.is_new_kind(raw_dir):
+        machine = run_record.kept_output(raw_dir, bench_driver.MACHINE_CHECK)
     sampled = None
     if check_results.section(published, "Sampler") is not None:
         sampled = sampled_again(published, raw_dir, args)
@@ -691,9 +744,10 @@ def render_again(raw_dir, published, stderr, again=None, context=None):
     validate_together(records)
     bench_driver.swap_watch = PrintedSwap(swap) if swap else None
     try:
-        text = render(records, args, fields["run_id"], fields["run_started"],
-                      fields["run_finished"], machine, relative_command(args), sampled,
-                      again=again, context=context)
+        text = bench_driver.with_earlier_renders(
+            render(records, args, fields["run_id"], fields["run_started"],
+                   fields["run_finished"], machine, relative_command(args), sampled,
+                   context=context), published, again)
     finally:
         bench_driver.swap_watch = None
     stamped = stamp_load.stamp(text, stderr)
@@ -719,7 +773,7 @@ def render_main(argv):
         context = args.context.read_text(encoding="utf-8") if args.context else None
         text = render_again(args.raw_dir, args.published.read_text(encoding="utf-8"), stderr,
                             args.rendered_again, context)
-    except (Refused, OSError, ValueError, KeyError) as error:
+    except (Refused, run_record.Incomplete, OSError, ValueError, KeyError) as error:
         print(f"backtest_driver: render refused: {error}", file=sys.stderr)
         return 1
     args.out.write_text(text, encoding="utf-8")
@@ -734,12 +788,13 @@ def main(argv=None):
     args = parse_args(argv)
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, bench_driver.forward_signal)
-    args.raw_dir.mkdir(parents=True, exist_ok=True)
     started = bench_driver.utc_now()
     run_id = f"{args.prediction}-{started.replace(':', '').replace('-', '')}"
     commit = "unknown"
     try:
+        run_record.open_run(args, run_id)
         commit = bench_driver.git_commit(REPO_ROOT, args.allow_dirty)
+        run_record.start_record(args, "backtest_driver", run_id, commit, (args.bench, args.probe))
         written = run(args, run_id, started, commit)
     except Stopped as stop:
         bench_driver.stop_child()
@@ -749,20 +804,17 @@ def main(argv=None):
                                 f"stopped by {name} at {bench_driver.stage}; nothing from it is "
                                 "published; the row was written by the driver as it stopped")
         return 128 + stop.signum
-    except Refused as refusal:
+    except (Refused, run_record.Incomplete) as refusal:
         bench_driver.hold_signals()
         print(f"backtest_driver: refused at {refusal.stage}: {refusal}", file=sys.stderr)
         bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
                                 f"refused at {refusal.stage}: {refusal}")
         return 1
-    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
-        bench_driver.hold_signals()
-        print(f"backtest_driver: failed: {error!r}", file=sys.stderr)
-        bench_driver.append_log(args.run_log, run_id, args.prediction, commit,
-                                f"failed: {error!r}")
-        return 1
+    except Exception as error:  # Last, so that no run ends without its row.
+        return bench_driver.log_failure("backtest_driver", args.run_log, run_id, args.prediction, commit,
+                                        error)
     bench_driver.hold_signals()
-    bench_driver.append_log(args.run_log, run_id, args.prediction, commit, "published")
+    bench_driver.append_written(args.run_log, run_id, args.prediction, commit, [written])
     print(f"backtest_driver: wrote {written}, load lines pending. Now run scripts/stamp_load.py.",
           file=sys.stderr)
     return 0

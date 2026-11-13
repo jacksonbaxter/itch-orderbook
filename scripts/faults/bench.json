@@ -4188,8 +4188,8 @@
       "mutations": [
         {
           "file": "scripts/backtest_driver.py",
-          "old": "    for flag, value in ((\"--core\", args.core), (\"--sibling\", args.sibling)):\n",
-          "new": "    for flag, value in ((\"--core\", args.core),):\n"
+          "old": "    for flag, value in ((\"--core\", args.core), (\"--sibling\", args.sibling),\n                        (\"--sampler-cpu\", args.sampler_cpu)):\n",
+          "new": "    for flag, value in ((\"--core\", args.core),\n                        (\"--sampler-cpu\", args.sampler_cpu)):\n"
         }
       ],
       "command": [
@@ -4501,7 +4501,7 @@
       "mutations": [
         {
           "file": "scripts/check_results.py",
-          "old": "    return not stub_line(text).startswith(f\"**{STUB_LABEL} \")\n",
+          "old": "    return not (line == f\"**{STUB_LABEL}**\" or line.startswith(f\"**{STUB_LABEL} \"))\n",
           "new": "    return STUB_LABEL not in text\n"
         }
       ],
@@ -4799,6 +4799,937 @@
       ],
       "expect": {
         "signature": "FAIL: test_a_file_with_a_sampler_section"
+      }
+    },
+    {
+      "id": "bench-driver-row-published-before-stamp",
+      "breaks": "A driver writes 'published' to the run log as soon as its file is written, before stamp_load.py applies the load rule (r5-3)",
+      "check": "test_driver_records.py test_no_driver_writes_published_before_the_stamp",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "               f\"{PENDING_ROW}: {names}; scripts/stamp_load.py appends each file's outcome, \"\n",
+          "new": "               f\"published: {names}; scripts/stamp_load.py appends each file's outcome, \"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_no_driver_writes_published_before_the_stamp",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stamp-load-writes-no-outcome-row",
+      "breaks": "stamp_load.py stamps a file and writes no outcome row, so the run log never says the run was published (r5-3)",
+      "check": "test_driver_records.py test_a_stamped_file_gets_its_published_row",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    elif row:\n        bench_driver.append_log(",
+          "new": "    elif False:\n        bench_driver.append_log("
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stamped_file_gets_its_published_row",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stamp-load-publishes-a-withdrawn-run",
+      "breaks": "stamp_load.py stamps a run it has already withdrawn, so a published row follows the withdrawn one (r5-3)",
+      "check": "test_driver_records.py test_a_refused_stamp_gets_its_withdrawn_row_and_stays_withdrawn",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    if row and settled(log_text, fields[\"run_id\"], name):\n",
+          "new": "    if row and False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_refused_stamp_gets_its_withdrawn_row_and_stays_withdrawn",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-bench-driver-unexpected-exception-unlogged",
+      "breaks": "bench_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_bench_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_bench_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-backtest-driver-unexpected-exception-unlogged",
+      "breaks": "backtest_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_backtest_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_backtest_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-walk-driver-unexpected-exception-unlogged",
+      "breaks": "walk_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_walk_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/walk_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_walk_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-spsc-driver-unexpected-exception-unlogged",
+      "breaks": "spsc_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_spsc_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_spsc_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-alloc-driver-unexpected-exception-unlogged",
+      "breaks": "alloc_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_alloc_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/alloc_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_alloc_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-simd-driver-unexpected-exception-unlogged",
+      "breaks": "simd_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_simd_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/simd_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_simd_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-udp-driver-unexpected-exception-unlogged",
+      "breaks": "udp_driver.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_udp_driver_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/udp_driver.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_udp_driver_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-wasm-bench-unexpected-exception-unlogged",
+      "breaks": "wasm_bench.py catches only the exceptions it expects, so a run that dies on a TypeError writes no run-log row (r5-8)",
+      "check": "test_driver_records.py test_wasm_bench_logs_a_run_that_dies_unexpectedly",
+      "mutations": [
+        {
+          "file": "scripts/wasm_bench.py",
+          "old": "    except Exception as error:  # Last, so that no run ends without its row.\n",
+          "new": "    except LookupError as error:  # Last, so that no run ends without its row.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_wasm_bench_logs_a_run_that_dies_unexpectedly",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-command-drops-title-and-note",
+      "breaks": "bench_driver's Commands line leaves out --title and --note, which change the file (r5-4)",
+      "check": "test_driver_records.py test_bench_driver_shows_every_argument_that_ran",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    for flag, value in ((\"--title\", args.title), (\"--note\", args.note)):\n",
+          "new": "    for flag, value in ():\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_bench_driver_shows_every_argument_that_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-command-drops-sibling",
+      "breaks": "bench_driver's Commands line leaves out --sibling, which reaches machine_check.sh (r5-4)",
+      "check": "test_driver_records.py test_bench_driver_shows_every_argument_that_ran",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    for flag, value in ((\"--core\", args.core), (\"--sibling\", args.sibling),\n                        (\"--orders\", args.orders), (\"--levels\", args.levels)):\n",
+          "new": "    for flag, value in ((\"--core\", args.core),\n                        (\"--orders\", args.orders), (\"--levels\", args.levels)):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_bench_driver_shows_every_argument_that_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-command-drops-bench-arg",
+      "breaks": "bench_driver's Commands line leaves out each --bench-arg, which reaches bench_replay (r5-4)",
+      "check": "test_driver_records.py test_bench_driver_shows_every_argument_that_ran",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    for argument in args.bench_arg:\n        words += [f\"--bench-arg={argument}\"]\n    import mac_rule",
+          "new": "    for argument in ():\n        words += [f\"--bench-arg={argument}\"]\n    import mac_rule"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_bench_driver_shows_every_argument_that_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "backtest-driver-command-drops-bench-arg",
+      "breaks": "backtest_driver's Commands line leaves out each --bench-arg, which reaches bench_backtest (r5-4)",
+      "check": "test_driver_records.py test_backtest_driver_shows_every_argument_that_ran",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    for argument in args.bench_arg:\n        words += [f\"--bench-arg={argument}\"]\n",
+          "new": "    for argument in ():\n        words += [f\"--bench-arg={argument}\"]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_backtest_driver_shows_every_argument_that_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "backtest-driver-command-drops-sampler-limits",
+      "breaks": "backtest_driver's Commands line leaves out the sampler rule's waits and limits when they are not the defaults (r5-4)",
+      "check": "test_driver_records.py test_backtest_driver_shows_every_argument_that_ran",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "        if value != default:\n            words += [flag, f\"{value:g}\"]\n",
+          "new": "        if False:\n            words += [flag, f\"{value:g}\"]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_backtest_driver_shows_every_argument_that_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-render-accepts-another-title",
+      "breaks": "bench_driver.py render writes a file whose title is not the one the run printed, so a --title that is not the run's own enters its Commands line (r5-4)",
+      "check": "test_driver_records.py test_the_title_the_run_was_given_enters_the_command_line",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "            if text.split(\"\\n\", 1)[0] != first:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_title_the_run_was_given_enters_the_command_line",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-render-prints-a-flag-never-given",
+      "breaks": "bench_driver.py render prints --input-mode in the Commands line of a run whose command held no such argument (r5-4)",
+      "check": "test_driver_records.py test_a_flag_the_published_command_never_held_is_not_printed",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "            command = relative_command(args, args.given)\n",
+          "new": "            command = relative_command(args)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_flag_the_published_command_never_held_is_not_printed",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-render-stub-hides-the-unrecorded-title",
+      "breaks": "bench_driver.py render of a run of no design takes its title and note as printed without saying the Commands line leaves them out (r5-4)",
+      "check": "test_driver_records.py test_a_run_of_no_design_keeps_its_title_and_note_as_printed_and_says_so",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "                text += f\"\\n{AS_PUBLISHED}\\n\"\n",
+          "new": "                pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_run_of_no_design_keeps_its_title_and_note_as_printed_and_says_so",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-check-before-rule-mac-unsaid",
+      "breaks": "check_results.py accepts a macOS run from before the sampler rule of 2026-11-05 that does not say no sampler ran beside it (r5-2)",
+      "check": "test_bench_results.py test_a_mac_run_before_the_rule_says_that_no_sampler_ran",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if fields.get(\"sampler\") != SAMPLER_BEFORE_RULE:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py",
+        "Sampler"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_mac_run_before_the_rule_says_that_no_sampler_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stamp-before-rule-mac-unsaid",
+      "breaks": "stamp_load.py stamps a macOS run from before the sampler rule with no sampler line, so its file says nothing about other processes' load (r5-2)",
+      "check": "test_bench_results.py test_a_mac_run_before_the_rule_says_that_no_sampler_ran",
+      "mutations": [
+        {
+          "file": "scripts/stamp_load.py",
+          "old": "    if sampler is None and check_results.before_sampler_rule(fields):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py",
+        "Sampler"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_mac_run_before_the_rule_says_that_no_sampler_ran",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-check-driver-sampler-uncounted",
+      "breaks": "check_results.py accepts a driver-sampled Mac file whose Sampler section lacks a published process (r5-2)",
+      "check": "test_driver_records.py test_a_driver_sampled_file_is_held_to_its_sampler_section",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    wanted = (number(fields.get(\"repetitions\", \"\")) or 0) * (1 if is_backtest_file(fields) else 2)\n    if len(quiet) != len(published) or len(quiet) != wanted:\n",
+          "new": "    wanted = (number(fields.get(\"repetitions\", \"\")) or 0) * (1 if is_backtest_file(fields) else 2)\n    if len(quiet) != len(published):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "DriverSamplerCheck"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_driver_sampled_file_is_held_to_its_sampler_section",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-mac-processes-unjudged",
+      "breaks": "bench_driver.py on the Mac runs its processes beside the sampler without judging them, so a later Mac run publishes with no sampler verdict (r5-2)",
+      "check": "test_driver_records.py test_a_run_is_sampled_by_the_driver_and_passes_once_stamped",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if sampler is None:\n        timed = run_process(args, index, commit, digest, design, passes)\n",
+          "new": "    if True:\n        timed = run_process(args, index, commit, digest, design, passes)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "MacSampler"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_run_is_sampled_by_the_driver_and_passes_once_stamped",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "bench-backtest-mac-processes-unjudged",
+      "breaks": "backtest_driver.py on the Mac runs its repetitions without the sampler rule (r5-2)",
+      "check": "test_backtest_results.py test_a_run_writes_a_file_that_passes_once_stamped",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    if mac is not None:\n        def set_aside(count):\n",
+          "new": "    if False:\n        def set_aside(count):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py",
+        "EndToEnd"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_run_writes_a_file_that_passes_once_stamped",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "bench-mac-sampler-script-names-idle-processes",
+      "breaks": "scripts/mac_sampler.sh names every process, not only those above 20% CPU, so an idle one voids a span (r5-2)",
+      "check": "test_driver_records.py test_it_names_every_other_busy_process_and_no_measured_one",
+      "mutations": [
+        {
+          "file": "scripts/mac_sampler.sh",
+          "old": "'NR > 1 && $1 > 20 && $0 !~",
+          "new": "'NR > 1 && $0 !~"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "MacSamplerScript"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_it_names_every_other_busy_process_and_no_measured_one",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-rdpmc-caveat-dropped",
+      "breaks": "bench_driver prints the per-message means through rdpmc with nothing saying they hold the counter reads and that no empty span is taken off (r4-1)",
+      "check": "test_driver_records.py test_the_table_says_what_it_holds_and_quotes_the_empty_span",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "        lines += [\"\", check_results.RDPMC_CAVEAT + empty_span_note(records, results_dir)]\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RdpmcCaveat"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_table_says_what_it_holds_and_quotes_the_empty_span",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-rdpmc-caveat-unchecked",
+      "breaks": "check_results accepts a per-message table through rdpmc without its caveat (r4-1)",
+      "check": "test_driver_records.py test_a_table_without_the_caveat_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if \"Per-message means, through `rdpmc`:\" in text and RDPMC_CAVEAT not in text:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RdpmcCaveat"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_table_without_the_caveat_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-rdpmc-empty-span-of-another-build",
+      "breaks": "bench_driver quotes the empty span of a counters_by_type file of another build (r4-1)",
+      "check": "test_driver_records.py test_the_table_says_what_it_holds_and_quotes_the_empty_span",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    if fields.get(\"flags\") != header.get(\"flags\"):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RdpmcCaveat"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_table_says_what_it_holds_and_quotes_the_empty_span",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-record-version-unwritten",
+      "breaks": "run.json carries no version, so a render cannot tell a record of the new kind from an old one (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "        self.data = {\"version\": RECORD_VERSION, \"driver\": driver, \"run_id\": run_id,\n",
+          "new": "        self.data = {\"driver\": driver, \"run_id\": run_id,\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_record_lacking_any_field_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-record-folder-reused",
+      "breaks": "a driver writes into a raw folder another run has written in, over its evidence (r5-13)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "    if folder.exists() and (not folder.is_dir() or any(folder.iterdir())):\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_raw_folder_another_run_wrote_in_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-record-binary-unhashed",
+      "breaks": "run.json records no sha256 of the binaries the run ran (r5-9)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "        self.data[\"binaries\"][str(path)] = sha256_of(path)\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_record_lacking_any_field_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-record-dataset-pin-unchecked",
+      "breaks": "the dataset's hash is recorded without being checked against data_manifest.json's pin (r5-6)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "        if pin is not None and pin != digest:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_dataset_that_is_not_its_pin_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-record-tree-state-unchecked",
+      "breaks": "a render accepts a record whose commit does not say whether the tree was clean (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "    if commit and not commit.endswith((\"(clean)\", \"(with uncommitted changes)\",\n",
+          "new": "    if False and not commit.endswith((\"(clean)\", \"(with uncommitted changes)\",\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_record_lacking_a_part_of_a_field_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-run-record-edited-output-accepted",
+      "breaks": "a render accepts a kept tool output that no longer has the hash it was kept with (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "        if not kept.is_file() or sha256_of(kept) != digest:\n",
+          "new": "        if not kept.is_file():\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_record_lacking_a_part_of_a_field_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stamp-measure-stderr-not-untouched",
+      "breaks": "stamp_load --raw-dir keeps measure.sh's stderr decoded and written again, not byte for byte (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/run_record.py",
+          "old": "    path.write_bytes(body)\n",
+          "new": "    path.write_text(body.decode(\"utf-8\", errors=\"replace\"), encoding=\"utf-8\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_stamp_load_keeps_measure_stderr_and_refuses_another_runs_folder",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-git-commit-ignores-presets",
+      "breaks": "the dirty check leaves out CMakePresets.json, which sets every build's flags (r5-9)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "                                 \"include\", \"src\", \"tools\", \"scripts\", \"cmake\", \"CMakeLists.txt\",\n                                 \"CMakePresets.json\"],",
+          "new": "                                 \"include\", \"src\", \"tools\", \"scripts\", \"cmake\", \"CMakeLists.txt\"],"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_tree_state_counts_cmake_presets",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-render-accepts-incomplete-record",
+      "breaks": "bench_driver render takes a record of the new kind that lacks measure.sh's stderr (gate item 8)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    run_record.refuse_incomplete(raw_dir, (MACHINE_CHECK,), fields.get(\"run_id\"))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_an_old_record_renders_as_before_and_a_new_one_must_be_complete",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-driver-machine-check-unkept",
+      "breaks": "bench_driver prints the machine check into the file and keeps no copy of it (A4)",
+      "check": "test_driver_records.py RunRecord",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    args.record.output(MACHINE_CHECK, machine_output)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecord"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_bench_run_keeps_its_record",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "bench-driver-dataset-unrecorded",
+      "breaks": "bench_driver keeps no dataset name and hash in its record (A2)",
+      "check": "test_driver_records.py RunRecord",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    args.record.dataset(args.input, digest)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecord"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_a_bench_run_keeps_its_record",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "bench-driver-probe-unhashed",
+      "breaks": "bench_driver hashes the replay binary but not bench_probe, which the machine check runs (r5-9)",
+      "check": "test_driver_records.py RunRecord",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "run_record.start_record(args, \"bench_driver\", run_id, commit, (args.bench, args.probe))",
+          "new": "run_record.start_record(args, \"bench_driver\", run_id, commit, (args.bench,))"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecord"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_bench_run_keeps_its_record",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "bench-backtest-dataset-unrecorded",
+      "breaks": "backtest_driver keeps no dataset name and hash in its record (A2)",
+      "check": "test_backtest_results.py EndToEnd.test_a_run_writes_a_file_that_passes_once_stamped",
+      "mutations": [
+        {
+          "file": "scripts/backtest_driver.py",
+          "old": "    args.record.dataset(args.input, digest)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_backtest_results.py",
+        "EndToEnd.test_a_run_writes_a_file_that_passes_once_stamped"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_a_run_writes_a_file_that_passes_once_stamped",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "bench-zen1-paranoid-taken-on-trust",
+      "breaks": "zen1_events writes the file when a machine check reads a perf_event_paranoid other than the 2 its prose is written for (r5-12)",
+      "check": "test_zen1_events.py test_perf_event_paranoid_is_the_machine_checks_own",
+      "mutations": [
+        {
+          "file": "scripts/zen1_events.py",
+          "old": "    if read != {PROSE_PARANOID}:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_zen1_events.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_perf_event_paranoid_is_the_machine_checks_own",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-zen1-check-paranoid-unchecked",
+      "breaks": "zen1_events --check does not hold the header's perf_event_paranoid to the machine checks' record lines (r5-12)",
+      "check": "test_zen1_events.py test_perf_event_paranoid_is_the_machine_checks_own",
+      "mutations": [
+        {
+          "file": "scripts/zen1_events.py",
+          "old": "    if len(read) != 2 or set(read) != {fields.get(\"perf_event_paranoid\")}:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_zen1_events.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_perf_event_paranoid_is_the_machine_checks_own",
+        "exit": 1
       }
     },
     {
@@ -5681,6 +6612,111 @@
       ],
       "expect": {
         "signature": "^FAIL: test_check_says_ok_for_each_file_that_passes_after_one_that_fails ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-stub-label-alone-read-as-a-book",
+      "breaks": "A stub whose note is the stub's label alone is read as a book file and held to every book check",
+      "check": "test_bench_results.py test_the_label_alone_marks_a_stub",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    return not (line == f\"**{STUB_LABEL}**\" or line.startswith(f\"**{STUB_LABEL} \"))\n",
+          "new": "    return not line.startswith(f\"**{STUB_LABEL} \")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_bench_results.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_label_alone_marks_a_stub \\(",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-sampler-stand-in-unsaid",
+      "breaks": "A driver whose sampler read a test's stand-in for ps writes a Sampler section that does not say so",
+      "check": "test_driver_records.py test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    return f\"{rule} {STAND_IN_SAMPLER}\" if sampled.get(\"stand_in\") else rule\n",
+          "new": "    return rule\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not \\(",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-check-stand-in-unchecked",
+      "breaks": "check_results takes a file whose sampler read a stand-in for ps as a result",
+      "check": "test_driver_records.py test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "    if STAND_IN_SAMPLER in text:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not \\(",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-sampler-stand-in-unmarked",
+      "breaks": "The sampler given a stand-in for ps does not mark itself, so the file reads as the Mac's",
+      "check": "test_driver_records.py test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "        self.stand_in = ps != \"ps\"\n",
+          "new": "        self.stand_in = False\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_stand_in_is_said_and_refused_and_the_real_ps_is_not \\(",
+        "exit": 1
+      }
+    },
+    {
+      "id": "bench-sampler-no-design-drops-processes",
+      "breaks": "A run given no --design keeps none of its sampled processes in its file, so the Mac's rule refuses it",
+      "check": "test_driver_records.py test_a_run_of_no_design_keeps_every_process_it_sampled",
+      "mutations": [
+        {
+          "file": "scripts/bench_driver.py",
+          "old": "    return of_design(design if args.design else \"\")\n",
+          "new": "    return of_design(design)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_run_of_no_design_keeps_every_process_it_sampled \\(",
         "exit": 1
       }
     }

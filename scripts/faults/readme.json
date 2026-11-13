@@ -4,6 +4,7 @@
     "BENCHMARKS.md",
     "README.md",
     "RESULTS.md",
+    "WRITEUP.md",
     "results",
     "scripts",
     "tests/fixtures/bench_results",
@@ -816,8 +817,8 @@
       "mutations": [
         {
           "file": "scripts/gate_numbers.py",
-          "old": "DEFAULT_PAGES = (\"README.md\", \"RESULTS.md\", \"docs/index.html\")",
-          "new": "DEFAULT_PAGES = (\"README.md\", \"docs/index.html\")"
+          "old": "DEFAULT_PAGES = (\"README.md\", \"RESULTS.md\", \"WRITEUP.md\", \"docs/index.html\")",
+          "new": "DEFAULT_PAGES = (\"README.md\", \"WRITEUP.md\", \"docs/index.html\")"
         }
       ],
       "command": [
@@ -1166,6 +1167,27 @@
       ],
       "expect": {
         "signature": "FAIL: test_the_mac_figure_follows_its_file"
+      }
+    },
+    {
+      "id": "readme-mac-row-sampler-note-dropped",
+      "breaks": "RESULTS.md's and the README's rows quoting a macOS run from before the sampler rule leave out its note that no sampler ran beside it (r5-2)",
+      "check": "test_results_table.py test_a_book_file_gets_a_row_of_its_own",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if sampler and sampler[1] == check_results.SAMPLER_BEFORE_RULE:\n        return f\"; sampler: {sampler[1]}\"\n",
+          "new": "    if False:\n        return f\"; sampler: {sampler[1]}\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_book_file_gets_a_row_of_its_own",
+        "exit": 1
       }
     },
     {
@@ -2062,6 +2084,161 @@
       "expect": {
         "signature": "flame_report: FAIL svg-differs flamegraph_paged-flat_debian_12302019.md",
         "exit": 1
+      }
+    },
+    {
+      "id": "readme-writeup-figure-not-in-results",
+      "breaks": "One figure on a WRITEUP.md line is not in the file that line cites",
+      "check": "gate_numbers.py on WRITEUP.md",
+      "mutations": [
+        {
+          "file": "WRITEUP.md",
+          "old": "its median replay rate is 4,570,542 messages/s",
+          "new": "its median replay rate is 4,570,543 messages/s"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "WRITEUP.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 4,570,543 is not in results/backtest_quoting_debian_12302019\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-skips-writeup",
+      "breaks": "gate_numbers.py leaves WRITEUP.md out of the pages it reads by default",
+      "check": "test_gate_numbers.py test_the_writeup_is_gated_without_being_named",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "DEFAULT_PAGES = (\"README.md\", \"RESULTS.md\", \"WRITEUP.md\", \"docs/index.html\")",
+          "new": "DEFAULT_PAGES = (\"README.md\", \"RESULTS.md\", \"docs/index.html\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_writeup_is_gated_without_being_named"
+      }
+    },
+    {
+      "id": "readme-stage-writeup-figure",
+      "breaks": "A figure in WRITEUP.md's prose is changed, and check.sh's readme stage must fail on it",
+      "check": "check.sh readme stage, gate_numbers.py on WRITEUP.md",
+      "mutations": [
+        {
+          "file": "WRITEUP.md",
+          "old": "its median replay rate is 4,570,542 messages/s",
+          "new": "its median replay rate is 4,570,543 messages/s"
+        }
+      ],
+      "command": [
+        "bash",
+        "{tree}/scripts/check.sh",
+        "--only",
+        "readme"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 4,570,543 is not in results/backtest_quoting_debian_12302019\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-writeup-table-typed-over",
+      "breaks": "A row of WRITEUP.md's generated table of missed targets is typed over by hand",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "WRITEUP.md",
+          "old": "| T-SPSC-1, project rtt / rigtorp rtt | ≤ 1.00× | 1.16× |",
+          "new": "| T-SPSC-1, project rtt / rigtorp rtt | ≤ 1.00× | 1.17× |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL WRITEUP\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-writeup-miss-turned-met",
+      "breaks": "A target WRITEUP.md's table lists as missed is met in its file, and the row would stand",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "results/spsc_queues_debian_12302019.md",
+          "old": "| missed: 1.16× against ≤ 1.00× |",
+          "new": "| met |"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL results/spsc_queues_debian_12302019\\.md: T-SPSC-1 is 'met', not missed, and WRITEUP\\.md's table names it as a miss",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-writeup-target-left-out",
+      "breaks": "A BENCHMARKS.md target has neither a row in WRITEUP.md's table nor an account in the script",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    \"T-BOOK-3\": \"met\", \"T-SIMD-1\": \"no bar\",",
+          "new": "    \"T-SIMD-1\": \"no bar\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL BENCHMARKS\\.md: \\['T-BOOK-3'\\] in no row or account",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-writeup-published-run-unchecked",
+      "breaks": "A target WRITEUP.md's table calls never measured could have a published run",
+      "check": "test_results_table.py test_a_not_measured_target_with_a_published_run_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if not outcomes or any(outcome.startswith(\"published\") for outcome in outcomes):",
+          "new": "    if not outcomes:"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_not_measured_target_with_a_published_run_is_refused"
       }
     }
   ]

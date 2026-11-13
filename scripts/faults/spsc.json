@@ -529,7 +529,7 @@
       "mutations": [
         {
           "file": "scripts/spsc_driver.py",
-          "old": "    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end)",
+          "old": "    return wasm_bench.unquiet(span_lines(lines, begin, end), begin, end, by_kind)",
           "new": "    return None"
         }
       ],
@@ -629,7 +629,7 @@
       "mutations": [
         {
           "file": "scripts/check_results.py",
-          "old": "        and not is_spsc_file(fields)\n",
+          "old": "        and not is_spsc_file(fields) and \"interference\" not in fields\n",
           "new": "        and True\n"
         }
       ],
@@ -775,6 +775,284 @@
       ],
       "expect": {
         "signature": "FAIL: test_the_command_shown_carries_every_flag_that_ran"
+      }
+    },
+    {
+      "id": "spsc-latency-columns-not-from-the-push",
+      "breaks": "spsc_driver labels the paced and burst latency columns p50 to max with nothing saying they are measured from the push, not from when the message was due (r4-2)",
+      "check": "test_spsc_results FromThePush",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "                      f\"{name} {check_results.SPSC_FROM_PUSH}\" for name, _ in PERCENTILES)\n",
+          "new": "                      name for name, _ in PERCENTILES)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "FromThePush"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_columns_say_they_are_from_the_push_and_what_that_leaves_out",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-latency-left-out-unsaid",
+      "breaks": "spsc_driver prints the paced and burst latencies without saying that the sender's schedule slip is left out and that this favours a queue with slow pushes (r4-2)",
+      "check": "test_spsc_results FromThePush",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "        lines += [\"\", check_results.SPSC_LEFT_OUT]\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "FromThePush"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_columns_say_they_are_from_the_push_and_what_that_leaves_out",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-check-latency-push-unchecked",
+      "breaks": "check_results accepts an SPSC latency table with no word that it is measured from the push (r4-2)",
+      "check": "test_spsc_results FromThePush",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        yield \"latency-push-unsaid\", (\"the latency columns are not labelled as measured from \"\n                                      \"the push, with what that leaves out under them\")\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "FromThePush"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_columns_say_they_are_from_the_push_and_what_that_leaves_out",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-late-share-over-the-samples",
+      "breaks": "spsc_driver gives a paced row's late share over its timed samples, though the late count covers the untimed tenth too (r4-2)",
+      "check": "test_spsc_results FromThePush",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    return row[\"late\"] / check_results.spsc_sends(row[\"protocol\"], row[\"latency\"][\"samples\"])\n",
+          "new": "    return row[\"late\"] / row[\"latency\"][\"samples\"]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "FromThePush"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_late_share_is_of_the_sends_the_count_covers",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-check-late-share-unchecked",
+      "breaks": "check_results accepts a late share that is not the row's late sends over the sends they cover (r4-2)",
+      "check": "test_spsc_results FromThePush",
+      "mutations": [
+        {
+          "file": "scripts/check_results.py",
+          "old": "        if abs(share - late * 100 / sends) > abs(share) * 0.006 + 50 / sends:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "FromThePush"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_late_share_is_of_the_sends_the_count_covers",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-render-sampler-verdicts-unjudged",
+      "system": "Darwin",
+      "breaks": "spsc_driver render copies the Sampler section's verdicts without working them out again from the raw sampler.txt",
+      "check": "test_spsc_results EndToEnd",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "        if again != said:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "EndToEnd.test_a_published_file_renders_again_from_its_raw_records"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_published_file_renders_again_from_its_raw_records",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-render-command-unchecked",
+      "system": "Darwin",
+      "breaks": "spsc_driver render accepts a published command that this driver would not print for the run",
+      "check": "test_spsc_results EndToEnd",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    if relative_command(args) != command:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "scripts/test_spsc_results.py",
+        "EndToEnd.test_a_published_file_renders_again_from_its_raw_records"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_published_file_renders_again_from_its_raw_records",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-driver-cross-core-unkept",
+      "breaks": "spsc_driver prints the cross-core check's verdict and keeps no copy of bench_probe's output (B4)",
+      "check": "test_driver_records.py RunRecordParts",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    args.record.output(CROSS_CORE, result.stdout)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_driver_records.py",
+        "RunRecordParts"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_spsc_keeps_the_cross_core_check_untouched",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-render-accepts-incomplete-record",
+      "breaks": "spsc_driver render takes a record of the new kind whose sampler log is gone (gate item 8)",
+      "check": "test_spsc_results.py EndToEnd.test_a_published_file_renders_again_from_its_raw_records",
+      "mutations": [
+        {
+          "file": "scripts/spsc_driver.py",
+          "old": "    run_record.refuse_incomplete(raw_dir, needs, fields.get(\"run_id\"))\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_spsc_results.py",
+        "EndToEnd.test_a_published_file_renders_again_from_its_raw_records"
+      ],
+      "expect": {
+        "signature": "^(FAIL|ERROR): test_a_published_file_renders_again_from_its_raw_records",
+        "exit": 1
+      },
+      "system": "Darwin"
+    },
+    {
+      "id": "spsc-foreign-process-named-by-program",
+      "breaks": "The sampler rule names a foreign process by its program, not its kind, in a run and in a render of a record of the new kind",
+      "check": "test_spsc_results.py ForeignByKind",
+      "mutations": [
+        {
+          "file": "scripts/wasm_bench.py",
+          "old": "            if by_kind:\n                name = foreign_kind(words[3])\n",
+          "new": "            if False:\n                name = foreign_kind(words[3])\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_spsc_results.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_new_kind_record_names_a_foreign_process_by_kind_and_an_old_one_as_published",
+        "exit": 1
+      }
+    },
+    {
+      "id": "spsc-observe-relaxed",
+      "breaks": "The consumer reads the producer's index with relaxed, so it may read a slot before the slot's write is seen (r3-5)",
+      "check": "ThreadSanitizer on test_spsc's two threads, no recovery",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "kObserve = std::memory_order_acquire;",
+          "new": "kObserve = std::memory_order_relaxed;"
+        }
+      ],
+      "build": {
+        "preset": "tsan",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "tsan",
+        "-R",
+        "^test_spsc$"
+      ],
+      "expect": {
+        "signature": "ThreadSanitizer: data race"
+      }
+    },
+    {
+      "id": "spsc-return-relaxed",
+      "breaks": "The consumer returns its index with relaxed, so the producer may write over a slot whose read has not finished (r3-5)",
+      "check": "ThreadSanitizer on test_spsc's two threads, no recovery",
+      "mutations": [
+        {
+          "file": "include/itch/spsc.hpp",
+          "old": "kReturn = std::memory_order_release;",
+          "new": "kReturn = std::memory_order_relaxed;"
+        }
+      ],
+      "build": {
+        "preset": "tsan",
+        "targets": [
+          "test_spsc"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "tsan",
+        "-R",
+        "^test_spsc$"
+      ],
+      "expect": {
+        "signature": "ThreadSanitizer: data race"
       }
     }
   ]

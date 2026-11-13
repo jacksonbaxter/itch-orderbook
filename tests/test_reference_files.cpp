@@ -323,16 +323,27 @@ TEST(Midas, EachBadFileFailsAsItself) {
             MidasFailure::number_too_large);
 }
 
+// Each failure names its line, counted from 1 with the header as line 1.
 TEST(Midas, ReportsTheLineOfAFailure) {
   const std::string text =
       std::string{kMidasHeader} + good_row() + bad_row("Bond", "AAA", "1.0", "1.0");
+  // Without its header, the good row is read as the header, and its empty TurnRank is a
+  // column with no name.
   const auto parsed = parse_midas(bytes_of(text.substr(kMidasHeader.size())), kQuery);
   ASSERT_FALSE(parsed.has_value());
+  EXPECT_EQ(parsed.error().failure, MidasFailure::bad_header);
+  EXPECT_EQ(parsed.error().line, 1U);
+  // Whole, its second header is line 3, read as a row whose Date is not a date.
+  const auto repeated = parse_midas(bytes_of(text), kQuery);
+  ASSERT_FALSE(repeated.has_value());
+  EXPECT_EQ(repeated.error().failure, MidasFailure::bad_date);
+  EXPECT_EQ(repeated.error().line, 3U);
   const std::string doubled =
       std::string{kMidasHeader} + good_row() +
       midas_row("20191230", "Bond", "A", "Nasdaq", "1.0", "1.0", "1.0", "1.0", "1.0", "1.0");
   const auto failed = parse_midas(bytes_of(doubled), kQuery);
   ASSERT_FALSE(failed.has_value());
+  EXPECT_EQ(failed.error().failure, MidasFailure::bad_security);
   EXPECT_EQ(failed.error().line, 3U);
 }
 

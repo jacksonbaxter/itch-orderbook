@@ -18,7 +18,7 @@
     "BENCHMARKS.md",
     "README.md",
     "RESULTS.md",
-    "BENCHMARKS.md"
+    "WRITEUP.md"
   ],
   "faults": [
     {
@@ -617,6 +617,50 @@
       ],
       "expect": {
         "signature": "FAIL: test_check_catches_a_sampler_line_that_is_not_quiet"
+      }
+    },
+    {
+      "id": "demo-wasm-machine-check-unkept",
+      "breaks": "wasm_bench keeps no copy of the machine check it quotes (A4)",
+      "check": "test_demo.py Bench.test_native_writes_its_record_and_a_row",
+      "mutations": [
+        {
+          "file": "scripts/wasm_bench.py",
+          "old": "    args.record.output(bench_driver.MACHINE_CHECK, machine_output)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py",
+        "Bench.test_native_writes_its_record_and_a_row"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_native_writes_its_record_and_a_row",
+        "exit": 1
+      }
+    },
+    {
+      "id": "demo-wasm-report-accepts-incomplete-record",
+      "breaks": "wasm_report render takes a raw folder of the new kind that lacks measure.sh's stderr (gate item 8)",
+      "check": "test_demo.py Bench.test_native_writes_its_record_and_a_row",
+      "mutations": [
+        {
+          "file": "scripts/wasm_report.py",
+          "old": "            run_record.refuse_incomplete(path.parent, (MACHINE_CHECK, f\"{side}.sampler.txt\"))\n",
+          "new": "            pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_demo.py",
+        "Bench.test_native_writes_its_record_and_a_row"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_native_writes_its_record_and_a_row",
+        "exit": 1
       }
     },
     {
