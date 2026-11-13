@@ -1166,6 +1166,92 @@
       "expect": {
         "signature": "FAIL: test_the_mac_figure_follows_its_file"
       }
+    },
+    {
+      "id": "readme-book-target-misses-skipped",
+      "breaks": "The Book targets table leaves out every target a book file missed",
+      "check": "results_table.py --check, the guard on Targets-table verdicts",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    for cells in targets_table(name, text):\n        verdict = cells[\"Verdict\"]\n",
+          "new": "    for cells in targets_table(name, text):\n        verdict = cells[\"Verdict\"]\n        if verdict.startswith(\"missed\"):\n            continue\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL results/bench_book_[\\w-]+\\.md: its targets table gives 10 verdicts, and the rows here take up [0-9]: \\[\\(.T-[A-Z]+-[0-9]., .missed.\\)",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-targets-guard-off",
+      "breaks": "A Targets-table verdict that no row of RESULTS.md takes up passes",
+      "check": "test_results_table.py test_a_targets_verdict_no_row_took_up_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        if tabled != sorted(taken):\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_targets_verdict_no_row_took_up_is_refused"
+      }
+    },
+    {
+      "id": "readme-book-targets-table-dropped",
+      "breaks": "RESULTS.md has no Book targets table",
+      "check": "test_results_table.py test_every_book_target_reaches_the_book_targets_table",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if book_targets:\n",
+          "new": "    if not book_targets:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_book_target_reaches_the_book_targets_table"
+      }
+    },
+    {
+      "id": "readme-backtest-gap-dropped",
+      "breaks": "A backtest file's miss reaches RESULTS.md without its gap",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    verdict = f\"**missed**: {detail}\" if word == \"missed\" else target[2]\n",
+          "new": "    verdict = word\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL RESULTS\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
     }
   ]
 }
