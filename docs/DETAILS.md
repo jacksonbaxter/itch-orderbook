@@ -12,7 +12,7 @@ On the Zen 1 host the `cache-misses` event counts L2 misses: a pointer chase at 
 
 ## How a number is published
 
-- On the Zen 1 host the machine check refuses a run unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is in memory. On the Mac it enforces only the input's residency and the timer's calibration, and records the rest as things it cannot enforce.
+- On the Zen 1 host the machine check refuses a run unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is resident in memory: the file in the page cache, or, for the parse rate on 10302019, the bench's own copy of the day, every page of it checked before and after each timed pass. On the Mac it enforces only the input's residency and the timer's calibration, and records the rest as things it cannot enforce.
 - On the Mac a sampler reads every other process every 2 s, and a process during which another rose above 20% CPU is withdrawn ([results/layout_mac_12302019.md](../results/layout_mac_12302019.md)). That rule is why T-BOOK-4 and T-ARENA-1 have no result on the Mac. Mac runs made before it, the book designs' and the backtester's among them, had no sampler beside them, so nothing is known about other load during them.
 - On the Zen 1 host the same kind of rule came later: a sampler reads /proc every 1 s and withdraws a process whose core, SMT sibling or other cores were busy. Every Zen 1 results file made since carries the rule's line; T-BT-3's rerun and the parse rate are the timings published under it ([results/backtest_shadow_debian_12302019.md](../results/backtest_shadow_debian_12302019.md)).
 - No row of [results/run_log.md](../results/run_log.md) is removed or rewritten; the one change, on 2026-11-13, gave other programs by their kinds.
@@ -180,6 +180,8 @@ T-TRADE-2 holds the cross prints against Nasdaq's CrossStats file, and T-TRADE-3
 ### Fuzzing
 
 The fuzz runs were made on the code of commit aef684f, 3 targets at once. The fuzz results file says what clean means, and why the fuzzers used the toolchain's symbolizer ([results/fuzz_30min_mac.md](../results/fuzz_30min_mac.md)).
+
+Since aef684f, only comments have changed in the fuzz targets and the code they build from (`fuzz src include cmake CMakeLists.txt CMakePresets.json`). Built from clean in one folder at 51f568d and after the comment pass (1066e4f), every object file is byte for byte the same, and so are the nine fuzz binaries once linked with the macOS linker's file times zeroed (`ZERO_AR_DATE=1`); as built, they differ only in the object times the linker records in their debug maps.
 
 - `fuzz_mold` ran 247,377,437 executions and `fuzz_midas` 212,887,115 ([results/fuzz_30min_mac.md](../results/fuzz_30min_mac.md)).
 - `fuzz_book` ran 67,300 executions, since each of its inputs is a stream of order messages replayed through every arm of the fast book and through the reference book, both compared in full after every message ([results/fuzz_30min_mac.md](../results/fuzz_30min_mac.md)).
