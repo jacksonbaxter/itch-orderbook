@@ -392,13 +392,13 @@
     },
     {
       "id": "review-page-owner-count-edited",
-      "breaks": "WRITEUP.md's sentence on the final review gives a count of findings left for the owner other than the record's, which gate_numbers.py lets through (r16-8)",
+      "breaks": "WRITEUP.md's sentence on the final review gives an outcome count other than the record's (0 fixed where the record has 163), in place of the owner count the page no longer carries, which gate_numbers.py lets through (r16-8)",
       "check": "review_report.py check",
       "mutations": [
         {
           "file": "WRITEUP.md",
           "old": "Every finding of the final review, with its outcome",
-          "new": "Of the findings, 2 are left for the owner. Every finding of the final review, with its outcome"
+          "new": "0 are fixed. Every finding of the final review, with its outcome"
         }
       ],
       "command": [
@@ -410,7 +410,7 @@
         "{tree}"
       ],
       "expect": {
-        "signature": "review_report: FAIL page WRITEUP\\.md: gives '2 are left for the owner'",
+        "signature": "review_report: FAIL page WRITEUP\\.md: gives '0 are fixed'",
         "exit": 1
       }
     },
