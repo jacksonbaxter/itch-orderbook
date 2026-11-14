@@ -860,16 +860,14 @@ def generate(root):
                                  "Bar set on", "Measured", "Verdict", "Commit", "File"),
                                 book_targets)
     if parses:
+        parses = [bar_day_judged(root, row) for row in parses]
         lines += ["", "The parse rate. Each row is one pass of a parse-rate file over the whole day "
                       "held in memory on one pinned thread: its rate over every framed message, and "
                       "its GB a second over the file's bytes, length prefixes included, as both "
                       "sources count; the verdict is on the median. A bar set on a day other than "
                       "the file's gets no verdict, met or missed: the row says whether the median "
-                      "is above or under the bar on the day measured, and that the bar's own day "
-                      "was not measured. T-PARSE-3's bar is set on 10302019; on `debian` "
-                      "the standalone machine check failed input-resident each time it ran on that "
-                      "day, so P-0030's run was never started (docs/NOTES.md, \"The parse rate on "
-                      "`debian`\").", ""]
+                      "is above or under the bar on the day measured, and where the bar's own day "
+                      "is judged, or that it was not measured.", "", parse_day_line(root), ""]
         lines += markdown_table(("Target", "Pass", "Day", "Host", "Pinning", "Median messages/s",
                                  "Min", "Max", "CV", "Median GB/s", "Bar", "Verdict", "Commit",
                                  "File"), parses)
@@ -1482,9 +1480,33 @@ MISSED = (
 # measured and that a run is registered; once it has one, the row is that file's verdict on
 # the bar's own day, a miss with its gap, or none if met.
 PARSE_BAR_DAY = "parse_rate_debian_10302019.md"
-PARSE3_UNRUN = ("measured: the median on 12302019 only; its bar's day, 10302019, is not measured "
-                "on this host; a run on it is registered as a prediction",
-                "bar's day not measured; a run is registered")
+PARSE3_UNRUN = ("measured: the median on 12302019 only. Its bar is set on 10302019: not measured "
+                "on that day; a run is registered, with the day read into the bench's own memory, "
+                "since on this host the file and a copy of it do not fit in memory together",
+                "not measured on that day; a run is registered")
+# RESULTS.md's line on T-PARSE-3's day, in its own paragraph: (no file yet, the file).
+PARSE_DAY_LINES = (
+    "T-PARSE-3's bar is set on 10302019: not measured on that day; a run is registered "
+    "(docs/NOTES.md, \"The parse rate on `debian`\").",
+    "T-PARSE-3 is judged on its bar's own day, 10302019, in "
+    f"[results/{PARSE_BAR_DAY}](results/{PARSE_BAR_DAY}), whose input condition is the bench's "
+    "own copy of the day, every page of it checked before and after each timed pass (its Input "
+    "condition section); every other file's is the file in the page cache.")
+
+
+def bar_day_judged(root, row):
+    """A parse row of another day, whose file was written before its bar's day had one, says
+    that day was not measured; once it has one, the row says where it is judged instead."""
+    unrun = "; not measured on 10302019"
+    if not (root / "results" / PARSE_BAR_DAY).is_file() or not row[11].endswith(unrun):
+        return row
+    return (*row[:11], row[11][:-len(unrun)] + f"; judged on 10302019, in results/{PARSE_BAR_DAY}",
+            *row[12:])
+
+
+def parse_day_line(root):
+    """RESULTS.md's line on T-PARSE-3's day, by whether the day has a results file."""
+    return PARSE_DAY_LINES[(root / "results" / PARSE_BAR_DAY).is_file()]
 PARSE3_MISSED = ("measured: the median on its bar's own day; not established: how much of the "
                  "gap is the host's, since bench_parse reads no counters",
                  "the host's share not established")

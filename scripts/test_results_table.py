@@ -841,6 +841,58 @@ class MissedTargets(unittest.TestCase):
         self.assertEqual(code, 0, output)
         return output.split("WRITEUP.md:\n", 1)[1]
 
+    def add_bar_day(self, verdict):
+        """A parse-rate file of T-PARSE-3's bar's day, 10302019, made from 12302019's: its own
+        day in its name and title, T-PARSE-1 and -2 judged on 12302019, T-PARSE-3 given verdict.
+        Not a result: a test's copy, so that both states of the pages are held before the run."""
+        text = (self.root / PARSE).read_text(encoding="utf-8").replace("12302019", "10302019")
+        rows = {
+            "T-PARSE-1": "| T-PARSE-1 | ≥ 709 M msg/s and 21.8 GB/s, on 12302019 | 298.98 M msg/s, "
+                         "9.180 GB/s, the median | under the bar on 10302019 by 410.02 M msg/s, a "
+                         "day other than the bar's; judged on 12302019 |",
+            "T-PARSE-2": "| T-PARSE-2 | ≥ 199 M msg/s and 6.1 GB/s, on 12302019 | 140.97 M msg/s, "
+                         "4.328 GB/s, the median | under the bar on 10302019 by 58.03 M msg/s, a day "
+                         "other than the bar's; judged on 12302019 |",
+            "T-PARSE-3": "| T-PARSE-3 | ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | 117.74 M msg/s, "
+                         f"3.615 GB/s, the median | {verdict} |"}
+        lines = [rows.get(line.split(" | ")[0][2:], line) if line.startswith("| T-PARSE-") and
+                 line.count(" | ") == 3 else line for line in text.splitlines()]
+        (self.root / "results" / results_table.PARSE_BAR_DAY).write_text(
+            "\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file(self):
+        # Rule: until 10302019 has a file, its row and RESULTS.md's line say the day is not
+        # measured and a run is registered; then they follow the file, met or missed.
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        self.assertIn("\n\nT-PARSE-3's bar is set on 10302019: not measured on that day; a run is "
+                      "registered", output)
+        self.assertIn("not measured on that day; a run is registered | [file](results/"
+                      "parse_rate_debian_12302019.md)", self.short())
+        self.assertIn("; not measured on 10302019 |", tables_of(output))
+        self.add_bar_day("missed: 1.00 M msg/s under the bar")
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        self.assertNotIn("not measured on that day", output)
+        self.assertIn("T-PARSE-3 is judged on its bar's own day, 10302019, in [results/"
+                      "parse_rate_debian_10302019.md]", output)
+        self.assertNotIn("; not measured on 10302019 |", tables_of(output))
+        self.assertIn("; judged on 10302019, in results/parse_rate_debian_10302019.md |",
+                      tables_of(output))
+        self.assertIn("1.00 M msg/s under the bar | Zen 1 | the host's share not established | "
+                      "[file](results/parse_rate_debian_10302019.md)", self.short())
+        self.assertRegex(output, r"\| T-PARSE-3 \| [^|]* \| \*\*missed\*\* \| debian: 1 missed, ")
+        self.add_bar_day("met")
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        self.assertNotIn("(T-PARSE-3)", self.short())
+        self.assertNotIn("| T-PARSE-3 |", self.missed())
+        self.assertRegex(output, r"\| T-PARSE-3 \| [^|]* \| met \| debian: 1 met, ")
+        code, output = self.run_table("--write")
+        self.assertEqual(code, 0, output)
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 0, output)
+
     def test_the_writeup_table_has_one_short_line_a_target(self):
         table = self.short()
         rows = [line for line in table.splitlines() if line.startswith("| ")][1:]
