@@ -563,8 +563,23 @@ def check_sh_problem(command):
     return None if chosen else "runs check.sh with no --only, so every stage, fuzz_smoke among them"
 
 
+# The values CMake's if() reads as false; any other value, and any ending in -NOTFOUND, is true.
+CMAKE_FALSE = {"0", "OFF", "NO", "FALSE", "N", "IGNORE", "NOTFOUND", ""}
+
+
+def cmake_true(value):
+    """Whether CMake's if() reads a preset's value as true: a string, a JSON boolean or a typed
+    {"type": ..., "value": ...}, in any case. An absent value is false."""
+    if isinstance(value, dict):
+        value = value.get("value")
+    if value is None:
+        return False
+    text = str(value).upper()
+    return not (text in CMAKE_FALSE or text.endswith("-NOTFOUND"))
+
+
 def libfuzzer_presets(presets_text=None):
-    """The configure presets that link libFuzzer (ITCH_FUZZ on, or fuzzer in the value of one
+    """The configure presets that link libFuzzer (ITCH_FUZZ true, or fuzzer in the value of one
     of its cache variables, inherited or not), the test presets that run them, and the build
     folders they write, from CMakePresets.json."""
     if presets_text is None:
@@ -590,7 +605,7 @@ def libfuzzer_presets(presets_text=None):
                 *(value for parent in ([parents] if isinstance(parents, str) else parents)
                   for value in cache_values(parent))]
 
-    fuzzing = {name for name in configure if str(setting(name, "ITCH_FUZZ")).upper() == "ON"
+    fuzzing = {name for name in configure if cmake_true(setting(name, "ITCH_FUZZ"))
                or "fuzzer" in str(cache_values(name)).lower()}
     tests = {preset["name"] for preset in presets.get("testPresets", [])
              if preset.get("configurePreset") in fuzzing}
@@ -616,6 +631,22 @@ class CommittedFaults(unittest.TestCase):
                 inside = any(name == entry or name.startswith(entry.rstrip("/") + "/")
                              for entry in tree)
                 self.assertTrue(inside, f"{fault.id}: {name} is not in the matrix area's tree")
+
+    def test_a_presets_itch_fuzz_is_read_as_cmakes_if_reads_it(self):
+        # For the rule below: ITCH_FUZZ true in any of CMake's spellings, a JSON boolean or the
+        # typed form makes a libFuzzer preset; one of CMake's false constants, or none, does not.
+        presets = json.loads((fm.REPO_ROOT / "CMakePresets.json").read_text(encoding="utf-8"))
+        self.assertEqual(libfuzzer_presets(json.dumps(presets))[:2], ({"fuzz"}, {"fuzz-smoke"}))
+        release = next(preset for preset in presets["configurePresets"]
+                       if preset["name"] == "release")
+        for value, linked in [("TRUE", True), ("1", True), (True, True), ("on", True),
+                              ({"type": "BOOL", "value": "ON"}, True), ("y", True),
+                              ("OFF", False), (False, False), ("0", False), ("", False),
+                              ("no", False), ("Ignore", False), ("ITCH-NOTFOUND", False),
+                              ({"type": "BOOL", "value": "OFF"}, False)]:
+            release.setdefault("cacheVariables", {})["ITCH_FUZZ"] = value
+            self.assertEqual("release" in libfuzzer_presets(json.dumps(presets))[0], linked,
+                             value)
 
     def test_every_fuzz_search_counts_executions_and_reads_no_clock(self):
         # Held by the build. Only a build on a libFuzzer preset (the fuzz preset; read from
@@ -648,8 +679,8 @@ class CommittedFaults(unittest.TestCase):
         # edits of scripts/faults/ and of Markdown pages; and with all of the fault's mutations
         # of CMakePresets.json made in order, the presets can be read (Python's json, which
         # refuses a byte-order mark CMake reads past, and every preset they inherit from found)
-        # and give libFuzzer to no other preset: none has ITCH_FUZZ ON or fuzzer in the value of
-        # a cache variable, its own or inherited.
+        # and give libFuzzer to no other preset: none has ITCH_FUZZ true, as CMake's if() reads
+        # it, or fuzzer in the value of a cache variable, its own or inherited.
         # The rule fails closed, so it refuses some faults that would be honest, each with a
         # message that names what it refused: any edit of fuzz/CMakeLists.txt, such as one that
         # drops a target's registration to show its replay going missing, and any edit whose
@@ -664,14 +695,14 @@ class CommittedFaults(unittest.TestCase):
         # environment variable); code given inline to a program INLINE_CODE does not list (awk,
         # say) or by a flag it does not list for that program (perl -M, node --import, say); and
         # an edit that turns libFuzzer on or starts the smoke run without spelling any of these
-        # words in the text it takes out or puts in: a mutation of CMakePresets.json that gives a
-        # preset ITCH_FUZZ by a value other than ON (TRUE, 1, a typed value) or fuzzer in its
-        # environment, with the words written in JSON escapes (ITCH\u005fFUZZ, say), a mutation
-        # of another build file than fuzz/CMakeLists.txt and CMakePresets.json (the ITCH_FUZZ
-        # option's default turned from OFF to ON, say), an edit, by mutation or input, of a file
-        # that is not a build file (a script, or a file a build file reads), an input's byte
-        # edit (flip_byte, truncate, delete_bytes, duplicate_bytes), whose bytes it does not read
-        # as text, and any edit of scripts/faults/ or of a Markdown page.
+        # words in the text it takes out or puts in: a mutation of CMakePresets.json that puts
+        # fuzzer in a preset's environment in a spelling these patterns do not list (a JSON
+        # escape, fuzz\u0065r, or a preset macro, $env{NAME}), a mutation of another build file
+        # than fuzz/CMakeLists.txt and CMakePresets.json (the ITCH_FUZZ option's default turned
+        # from OFF to ON, say), an edit, by mutation or input, of a file that is not a build file
+        # (a script, or a file a build file reads), an input's byte edit (flip_byte, truncate,
+        # delete_bytes, duplicate_bytes), whose bytes it does not read as text, and any edit of
+        # scripts/faults/ or of a Markdown page.
         targets = {path.stem for path in (fm.REPO_ROOT / "fuzz").glob("fuzz_*.cpp")}
         self.assertGreaterEqual(len(targets), 9)
         presets_text = (fm.REPO_ROOT / "CMakePresets.json").read_text(encoding="utf-8")

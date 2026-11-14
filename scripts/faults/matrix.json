@@ -1439,6 +1439,27 @@
         "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: its mutations of CMakePresets\\.json, made in order, make \\['fuzz', 'fuzz\\-smoke', 'tsan'\\] the libFuzzer presets",
         "exit": 1
       }
+    },
+    {
+      "id": "matrix-fuzz-search-presets-true-escaped",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation of CMakePresets.json gives the release preset ITCH_FUZZ as TRUE, which CMake reads as on, its name written in a JSON escape",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"CMakePresets.json\", \"old\": \"\\\"ITCH_MIMALLOC\\\": \\\"ON\\\"\\n      }\\n    },\\n    {\\n      \\\"name\\\": \\\"sanitized\\\"\", \"new\": \"\\\"ITCH_MIMALLOC\\\": \\\"ON\\\", \\\"ITCH\\\\u005fFUZZ\\\": \\\"TRUE\\\"\\n      }\\n    },\\n    {\\n      \\\"name\\\": \\\"sanitized\\\"\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: its mutations of CMakePresets\\.json, made in order, make \\['fuzz', 'fuzz\\-smoke', 'release'\\] the libFuzzer presets",
+        "exit": 1
+      }
     }
   ]
 }
