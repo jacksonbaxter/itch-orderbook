@@ -240,7 +240,11 @@ def main():
         entries = {entry: gtest_filter(test["command"]) for entry, test in tests.items()
                    if Path(test["command"][0]).name == binary}
         if not entries:
-            continue  # the binary has no entry in this build
+            # Every test source is built as the binary of its own name, in every build that
+            # runs this check; a source built under another name would leave its skips unread.
+            failures.append((name, f"can skip, and no ctest entry runs a binary named {binary}, "
+                                   f"after its source {binary}.cpp, so its entries go unchecked"))
+            continue
         names = sample_names(name, entries.values())
         own = [entry for entry, value in entries.items()
                if entry != binary and any(filter_runs(value, sample) for sample in names)]
