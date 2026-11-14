@@ -641,9 +641,10 @@ class CommittedFaults(unittest.TestCase):
         # The rule fails closed, so it refuses some faults that would be honest, each with a
         # message that names what it refused: any edit of fuzz/CMakeLists.txt, such as one that
         # drops a target's registration to show its replay going missing, and any edit whose
-        # text spans a clock word or a libFuzzer build word, such as one of the smoke run's
-        # length in fuzz_report.py, check.sh, CMakeLists.txt or cmake/ItchOptions.cmake, and
-        # check.sh run by any path but {tree}/scripts/check.sh. It refuses no committed fault.
+        # text spans a clock word or a libFuzzer build word, such as max_total_time in
+        # fuzz_report.py, fuzz_smoke or fuzz-smoke in check.sh, or ITCH_FUZZ in CMakeLists.txt
+        # or cmake/ItchOptions.cmake; and check.sh run by any path but {tree}/scripts/check.sh.
+        # It refuses no committed fault.
         # What the rule cannot see: a program the command runs, a repository script or binary
         # as the tree holds it after the fault's edits, that itself builds or runs a libFuzzer
         # binary or starts the smoke run; a libFuzzer binary, build or preset reached by a
