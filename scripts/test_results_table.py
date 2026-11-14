@@ -30,6 +30,11 @@ HEADLINE_BACKTEST = "results/backtest_quoting_debian_12302019.md"
 PARSE = "results/parse_rate_debian_12302019.md"
 
 
+def tables_of(output):
+    """RESULTS.md's tables, as results_table.py prints them: its second generated block."""
+    return output.split("RESULTS.md:\n")[2]
+
+
 class ResultsTable(unittest.TestCase):
     def setUp(self):
         scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
@@ -515,7 +520,7 @@ class ResultsTable(unittest.TestCase):
         path.write_text(wasm_report.render(native, browser, stderr, stderr), encoding="utf-8")
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
-        results_page = output.split("README.md:\n", 1)[0]
+        results_page = tables_of(output)
         rows = [line for line in results_page.splitlines() if f"(results/{name})" in line]
         self.assertEqual(len(rows), 1, output)
         self.assertIn("| T-WASM-1 | TEST | 12302019 | macOS (M4 Max) | Google Chrome for Testing "
@@ -604,30 +609,30 @@ class ResultsTable(unittest.TestCase):
     def headline(self):
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
-        lines = output[output.index("README.md:\n"):output.index("WRITEUP.md:\n")].splitlines()[1:]
-        return [line for line in lines if line.startswith("| T-")]
+        lines = output.split("README.md:\n", 1)[1].split("RESULTS.md:\n", 1)[0].splitlines()
+        return [line for line in lines if re.match(r"\| .* \((T-[A-Z0-9]+-\d+)\) \|", line)]
 
     def test_the_headline_has_its_targets_in_order_each_from_its_file(self):
         rows = self.headline()
-        self.assertEqual([row.split(" | ")[0][2:] for row in rows],
+        self.assertEqual([re.search(r"\((T-[A-Z0-9]+-\d+)\) \|", row)[1] for row in rows],
                          [target for target, *_ in results_table.HEADLINE])
-        oracle, alloc, book, latency, backtest, spsc = rows
-        self.assertIn("| 0 divergences in 3,081,392,329 messages over 10 sessions | "
-                      "Darwin arm64 Apple M4 Max | met | [results/oracle_sessions.md]", oracle)
+        oracle, alloc, book, design, backtest = rows
+        # Each first cell is what the row measures, then its target.
+        self.assertTrue(oracle.startswith("| Agreement with an independent reference book after "
+                                          "every message (T-ORACLE-2) | "), oracle)
+        self.assertIn("| 0 divergences over 10 full sessions | 0 divergences in 3,081,392,329 "
+                      "messages over 10 sessions | Apple M4 Max | met | "
+                      "[results/oracle_sessions.md]", oracle)
         self.assertIn("| 0 allocations after warm-up in 268,744,780 messages; the control book "
-                      "made 324,511,069; the same on 4 arms | Darwin arm64 Apple M4 Max | met |",
-                      alloc)
-        self.assertIn("| ≥ 16.4 M msg/s, set on Ryzen 7 9700X, x86 Linux | 5.15 M msg/s; `paged-flat`, "
-                      "file in memory, top of book not tracked | debian, AMD Ryzen Embedded V1605B, "
-                      "pinned to core 4 | **missed**: by 11.25 M msg/s |", book)
-        self.assertIn("| p50 140.14 ns; p99 840.86 ns; p99.9 1,472.00 ns; `paged-flat`, file in "
-                      "memory, top of book not tracked | debian,", latency)
-        self.assertIn("| **missed**: p50 by 19.14 ns,", latency)
+                      "made 324,511,069; the same on 4 arms | Apple M4 Max | met |", alloc)
+        self.assertIn("| ≥ 16.4 M msg/s (Ryzen 7 9700X) | 5.15 M msg/s; `paged-flat`, day in "
+                      "memory | Ryzen V1605B, core 4 | **missed**: by 11.25 M msg/s |", book)
+        self.assertIn("| ≥ 4.0× the map book's throughput, same run (a ratio on one host) | over "
+                      "map-fresh 2.54×; over map-aged 2.81×; `paged-flat`, day in memory | Ryzen "
+                      "V1605B, core 4 | **missed**: over map-fresh by 1.46×, over map-aged by "
+                      "1.19× |", design)
         self.assertIn("| ≥ 2.00 M engine events/s | 4.68 M engine events/s (4.57 M messages/s) | "
-                      "debian, AMD Ryzen Embedded V1605B, pinned to core 4 | met |", backtest)
-        self.assertIn("| ≤ 1.31×, set on Ryzen 9 5950X, Linux, pinned | 0.95×, pipelined time / "
-                      "single-threaded time | debian, AMD Ryzen Embedded V1605B, pinned to cores 4 "
-                      "and 6 | met |", spsc)
+                      "Ryzen V1605B, core 4 | met |", backtest)
 
     def test_t_bt_1_is_compared_in_events_a_second_the_unit_of_its_bar(self):
         # The backtest table reads the Summary's Engine events/s median.
@@ -654,10 +659,15 @@ class ResultsTable(unittest.TestCase):
                       "script compares it in engine events/s", output)
 
     def test_a_second_thread_pinned_elsewhere_is_named_as_such(self):
+        code, output = self.run_table()
+        self.assertIn("| T-SPSC-3 | pipelined time / single-threaded time | 12302019 | debian | "
+                      "pinned to cores 4 and 6 |", tables_of(output))
         self.edit("results/spsc_pipeline_debian_12302019.md",
                   "- peer_pinning: pinned to core 6:", "- peer_pinning: not pinned:")
-        self.assertIn("| debian, AMD Ryzen Embedded V1605B, pinned to core 4; the second thread "
-                      "not pinned | met |", self.headline()[5])
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        self.assertIn("| T-SPSC-3 | pipelined time / single-threaded time | 12302019 | debian | "
+                      "pinned to core 4; the second thread not pinned |", tables_of(output))
 
     def test_a_headline_row_typed_over_fails(self):
         self.edit("README.md", "| 5.15 M msg/s; `paged-flat`", "| 16.5 M msg/s; `paged-flat`")
@@ -698,7 +708,7 @@ class ResultsTable(unittest.TestCase):
     def test_a_headline_with_no_missed_target_is_refused(self):
         text = (self.root / HEADLINE_BOOK).read_text(encoding="utf-8")
         text = text.replace("| missed: rate by 11.25 M msg/s |", "| met |")
-        text = text.replace("| missed: p50 by 19.14 ns, p99 by 288.86 ns, p99.9 by 598.00 ns |",
+        text = text.replace("| missed: over map-fresh by 1.46×, over map-aged by 1.19× |",
                             "| met |")
         (self.root / HEADLINE_BOOK).write_text(text, encoding="utf-8")
         code, output = self.run_table()
@@ -735,28 +745,30 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("the arms disagree: paged_flat FAIL", alloc)
         self.assertIn("| **missed** |", alloc)
 
-    def test_the_headline_is_five_or_six_rows(self):
-        for chosen in (results_table.HEADLINE[:4],
+    def test_the_headline_is_four_or_five_rows(self):
+        for chosen in (results_table.HEADLINE[:3],
                        results_table.HEADLINE + results_table.HEADLINE[:1]):
-            with self.assertRaisesRegex(results_table.TableError, "rows, not 5 to 6"):
+            with self.assertRaisesRegex(results_table.TableError, "rows, not 4 to 5"):
                 results_table.headline(self.root, chosen)
-        self.assertEqual(len(results_table.headline(self.root, results_table.HEADLINE[:5], ())), 7)
+        self.assertEqual(len(results_table.headline(self.root, results_table.HEADLINE[:4], ())), 6)
 
     def unjudged(self):
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
-        lines = output[output.index("README.md:\n"):].splitlines()
+        lines = output.split("README.md:\n", 1)[1].split("RESULTS.md:\n", 1)[0].splitlines()
         return [line for line in lines if line.startswith("**")]
 
     def test_the_mac_figure_stands_under_the_table_with_no_verdict(self):
         self.assertEqual(self.unjudged(), [
-            "**T-BOOK-1 on macOS (M4 Max), no verdict:** 21.87 M msg/s, median 21,873,432 msg/s "
-            "of 3 repetitions, CV 0.76%; `paged-flat`, file in memory, top of book not tracked; "
-            "not pinned; sampler: none: the run was made before the sampler rule of 2026-11-05, "
-            "and no sampler ran beside it, so nothing is known about other processes' load "
-            "during it. Its bar is ≥ 16.4 M msg/s, set on Ryzen 7 9700X, x86 Linux: a macOS "
-            "figure against a bar set on x86 Linux, neither a pass nor a fail. "
+            "**The full-depth rebuild (T-BOOK-1) on macOS (M4 Max), no verdict:** 21.87 M msg/s; "
+            "`paged-flat`, day in memory, median 21,873,432 msg/s of 3 repetitions, CV 0.76%; not "
+            "pinned, and no load sampler ran beside it. Its bar is ≥ 16.4 M msg/s (Ryzen 7 "
+            "9700X): a macOS figure against a bar set on x86 Linux, neither a pass nor a fail. "
             f"[{UNJUDGED_BOOK}]({UNJUDGED_BOOK})"])
+        # A run under the sampler rule carries no such words.
+        self.edit(UNJUDGED_BOOK, f"- sampler: {results_table.check_results.SAMPLER_BEFORE_RULE}\n", "")
+        code, output = self.run_table()
+        self.assertNotIn("no load sampler", output[output.index("README.md:\n"):])
         self.assertFalse(any("21.87" in row for row in self.headline()))
 
     def test_the_mac_figure_follows_its_file(self):
@@ -786,7 +798,7 @@ class ResultsTable(unittest.TestCase):
     def test_a_parse_file_gets_a_row_for_each_pass(self):
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
-        results_page = output.split("README.md:\n", 1)[0]
+        results_page = tables_of(output)
         rows = [line for line in results_page.splitlines() if f"]({PARSE})" in line]
         self.assertEqual([row.split(" | ")[0] for row in rows],
                          ["| T-PARSE-1", "| T-PARSE-2", "| T-PARSE-3"], output)
@@ -817,9 +829,38 @@ class MissedTargets(unittest.TestCase):
     edit = ResultsTable.edit
 
     def missed(self):
+        """RESULTS.md's table of every target missed or not measured, each row in full."""
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        block = output.split("RESULTS.md:\n")[3].split("WRITEUP.md:\n", 1)[0]
+        return block[block.index("| Target |"):]
+
+    def short(self):
+        """WRITEUP.md's table: one short line a target."""
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
         return output.split("WRITEUP.md:\n", 1)[1]
+
+    def test_the_writeup_table_has_one_short_line_a_target(self):
+        table = self.short()
+        rows = [line for line in table.splitlines() if line.startswith("| ")][1:]
+        targets = [re.search(r"\((T-[A-Z0-9]+-\d+)\) \|", row)[1] for row in rows]
+        self.assertEqual(len(targets), len(set(targets)), targets)
+        full = {line.split(" | ")[0][2:].split(",")[0] for line in self.missed().splitlines()
+                if line.startswith("| T-")}
+        self.assertEqual(set(targets), full)
+        self.assertIn("| rate budgets (T-LAT-3) | mean service ≤ 393 ns a message, p99.9 ≤ 750 ns "
+                      "| mean 194.35 ns; p99.9 1,472.00 ns | p99.9 by 722.00 ns | Zen 1 |", table)
+        self.assertIn("| round trip against boost, moodycamel and rigtorp (T-SPSC-1) | ≥ 1.16× | "
+                      "1.15× | 1.15× against ≥ 1.16×; two more in RESULTS.md | Zen 1 |", table)
+        self.assertIn("| per-operation latency, FIFO book (T-LAT-1) | add 60, 447, 683 … |", table)
+        self.assertIn("(RESULTS.md#every-target-missed-or-not-measured)", table)
+        self.assertNotIn("P-0", table)
+        self.edit("WRITEUP.md", "| 1.15× | 1.15× against ≥ 1.16×; two more", 
+                  "| 1.14× | 1.15× against ≥ 1.16×; two more")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertRegex(output, r"results_table: FAIL WRITEUP\.md:\d+: differs from a fresh run")
 
     def test_the_writeup_table_has_every_miss_each_from_its_file(self):
         table = self.missed()
@@ -849,12 +890,12 @@ class MissedTargets(unittest.TestCase):
         self.assertIn("results/trades_03272019.md: T-TRADE-3 prints 1 violations in full and "
                       "counts 2, so its gap cannot be given whole", output)
 
-    def test_a_writeup_row_typed_over_fails(self):
-        self.edit("WRITEUP.md", "| T-SPSC-1, project rtt / rigtorp rtt | ≤ 1.00× | 1.16× |",
+    def test_a_full_row_typed_over_fails(self):
+        self.edit("RESULTS.md", "| T-SPSC-1, project rtt / rigtorp rtt | ≤ 1.00× | 1.16× |",
                   "| T-SPSC-1, project rtt / rigtorp rtt | ≤ 1.00× | 1.17× |")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
-        self.assertRegex(output, r"results_table: FAIL WRITEUP\.md:\d+: differs from a fresh run")
+        self.assertRegex(output, r"results_table: FAIL RESULTS\.md:\d+: differs from a fresh run")
 
     def test_a_missed_row_whose_file_calls_it_met_is_refused(self):
         self.edit("results/spsc_queues_debian_12302019.md",
