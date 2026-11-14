@@ -12,6 +12,7 @@ import io
 import json
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -436,10 +437,14 @@ CLOCK_WORDS = ("fuzz-smoke", "fuzz_smoke", "max_total_time")
 # libFuzzer's runtime library.
 LIBFUZZER_BUILD = re.compile(r"ITCH_FUZZ|fsanitize=[\w,-]*fuzzer|SANITIZE\W+[\w,-]*fuzzer"
                              r"|[\w-],fuzzer|clang_rt\.fuzzer|libFuzzer\.a|-lFuzzer\b")
-# Programs that take code inline, and the letters of the flag that gives it: a fault runs files,
-# so that every word it runs is a word this rule reads.
-INLINE_CODE = {"sh": "c", "bash": "c", "zsh": "c", "dash": "c", "ksh": "c", "{python}": "c",
-               "python": "c", "python3": "c", "perl": "ce", "ruby": "ce", "node": "ce"}
+# Programs that take code inline, by name without its version (python3.15 is python), with
+# the letters of the short flag that gives it and its long flags: a fault runs files, so that
+# every word it runs is a word this rule reads.
+INLINE_CODE = {"sh": ("c", ()), "bash": ("c", ()), "zsh": ("c", ()), "dash": ("c", ()),
+               "ksh": ("c", ()), "{python}": ("c", ()), "python": ("c", ()),
+               "perl": ("eE", ()), "ruby": ("e", ()), "node": ("ep", ("--eval", "--print"))}
+# env's flag that splits one word into the words it runs: -S STRING, -SSTRING, --split-string.
+ENV_SPLIT = re.compile(r"-[A-Za-z]*S(.*)|--split-string(?:=(.*))?", re.DOTALL)
 CHECK_SH = re.compile(r"(?<![\w.-])check\.sh(?![\w.-])")
 CHECK_SH_FLAGS = {"--quick", "--without-browser"}
 # Where {tree} stands when a path word is resolved: the matrix puts each fault's tree at
@@ -447,6 +452,40 @@ CHECK_SH_FLAGS = {"--quick", "--without-browser"}
 FAULT_TREE = "/repo/build/faults/fault"
 # The file that decides how each fuzz target builds and what ctest runs of it.
 FUZZ_CMAKE = "fuzz/CMakeLists.txt"
+# The files that decide what is built and how: CMake's lists, its modules and the presets.
+BUILD_FILE_NAMES = {"cmakelists.txt", "cmakepresets.json", "cmakeuserpresets.json"}
+
+
+def normal_name(name):
+    """A file name as the disk reads it: resolved (./fuzz and fuzz/../fuzz are fuzz) and
+    case-folded, since the Mac's disk ignores case."""
+    return os.path.normpath(name).casefold()
+
+
+def is_build_file(name):
+    name = normal_name(name)
+    return name.rsplit("/", 1)[-1] in BUILD_FILE_NAMES or name.endswith(".cmake")
+
+
+def edits_of(fault):
+    """Each edit a fault makes, its mutations then its inputs, the order inject() makes them
+    in: the file as spelled, the files it changes (a folder's files for remove_files), the
+    texts it takes out and puts in, and whether it is an input."""
+    edits = [(mutation["file"], [mutation["file"]],
+              [mutation.get("old", ""), mutation.get("new", "")], False)
+             for mutation in fault.mutations]
+    for spec in fault.inputs:
+        changed, texts = [spec["file"]], []
+        if spec["op"] == "remove_files":
+            folder = fm.REPO_ROOT / spec["file"]
+            if folder.is_dir():
+                changed += [f"{spec['file']}/{entry.name}" for entry in sorted(folder.iterdir())]
+        elif spec["op"] == "replace_text":
+            texts = [spec.get("old", ""), spec.get("new", "")]
+        elif spec["op"] == "json_set":
+            texts = [json.dumps(spec.get("path")), json.dumps(spec.get("value"))]
+        edits.append((spec["file"], changed, texts, True))
+    return edits
 
 
 def path_tokens(word, preset):
@@ -460,11 +499,42 @@ def path_tokens(word, preset):
             for token in re.split(r"[\s'\"=,;:()\[\]]+", word) if token]
 
 
-def runs_code_inline(command):
-    """Whether a shell, Python or another interpreter in the command is given code inline."""
+def program(word):
+    """The program a word runs: its file name in lower case without a version, so that
+    /usr/bin/python3.15 and PERL5.34 are python and perl."""
+    return word if word.startswith("{") else re.sub(r"[\d.-]+$", "", Path(word).name.casefold())
+
+
+def split_env(command):
+    """The command with each argument of env's -S read as the words env makes of it, those
+    split again where they hold another env -S. \\_ is a space there; a string with an open
+    quote is split at its spaces."""
+    words = []
     for at, word in enumerate(command):
-        letters = INLINE_CODE.get(word if word.startswith("{") else Path(word).name)
+        found = ENV_SPLIT.fullmatch(word)
+        if not (found and "env" in map(program, command[:at])):
+            words.append(word)
+            continue
+        text = found[1] or found[2]
+        if not text:
+            text = command[at + 1] if at + 1 < len(command) else ""
+        text = text.replace("\\_", " ")
+        try:
+            split = shlex.split(text)
+        except ValueError:
+            split = text.split()
+        words += [word] + split_env(split)
+    return words
+
+
+def runs_code_inline(command):
+    """Whether a shell, Python or another interpreter in the command is given code inline,
+    env -S's words read as words of the command."""
+    command = split_env(command)
+    for at, word in enumerate(command):
+        letters, longs = INLINE_CODE.get(program(word), ("", ()))
         if letters and any(re.fullmatch(rf"-[A-Za-z]*[{letters}][A-Za-z]*", later)
+                           or later.partition("=")[0] in longs
                            for later in command[at + 1:]):
             return True
     return False
@@ -556,18 +626,38 @@ class CommittedFaults(unittest.TestCase):
         #   A corpus path, {build} or {tree}/fuzz/corpus/<target>[/<file>]: data, not a binary.
         # Outside a search, no word runs a {build}/fuzz/ binary, starts the clock-bound smoke run
         # (CLOCK_WORDS), builds libFuzzer in (LIBFUZZER_BUILD), names a libFuzzer preset after
-        # --preset, or names a libFuzzer build's folder, read as a resolved path in any case. No
-        # fault gives a shell or Python code inline, and check.sh runs only in its direct form
-        # with its stages named. A fault's mutations are read too, but for those of
-        # scripts/faults/ and of Markdown pages: none edits fuzz/CMakeLists.txt, spells a clock
-        # word, a libFuzzer build word or a libFuzzer build's folder in what it replaces or puts
-        # in, or makes CMakePresets.json give libFuzzer to another preset.
+        # --preset or as --preset=, or names a libFuzzer build's folder, read as a resolved path
+        # in any case. No program INLINE_CODE lists, named in any case and with or without a
+        # version, is given code inline by a flag it lists there, the words env -S makes of its
+        # argument read as words of the command; and check.sh runs only in its direct form with
+        # its stages named. A fault's edits are read too, its mutations then its inputs in the
+        # order they are made, each file named as the disk reads it (resolved and case-folded):
+        # no input edits a build file (a CMakeLists.txt, a .cmake file or the presets) or
+        # removes the files of a folder that holds one; nothing edits fuzz/CMakeLists.txt; no
+        # text an edit takes out or puts in (a replace_text's, a json_set's path and value)
+        # spells a clock word, a libFuzzer build word or a libFuzzer build's folder, but in
+        # edits of scripts/faults/ and of Markdown pages; and with all of the fault's mutations
+        # of CMakePresets.json made in order, the presets give libFuzzer to no other preset.
+        # The rule fails closed, so it refuses some faults that would be honest, each with a
+        # message that names what it refused: any edit of fuzz/CMakeLists.txt, such as one that
+        # drops a target's registration to show its replay going missing, and any edit whose
+        # text spans a clock word or a libFuzzer build word, such as max_total_time in
+        # fuzz_report.py, fuzz_smoke or fuzz-smoke in check.sh, or ITCH_FUZZ in CMakeLists.txt
+        # or cmake/ItchOptions.cmake; and check.sh run by any path but {tree}/scripts/check.sh.
+        # It refuses no committed fault.
         # What the rule cannot see: a program the command runs, a repository script or binary
-        # as the tree holds it, that itself builds or runs a libFuzzer binary, or reaches one by
-        # a spelling these patterns do not list (a name put together at run time, a link, an
-        # environment variable); an interpreter other than those in INLINE_CODE given code
-        # inline; and a mutation that turns libFuzzer on in a build file without spelling any
-        # of these words.
+        # as the tree holds it after the fault's edits, that itself builds or runs a libFuzzer
+        # binary or starts the smoke run; a libFuzzer binary, build or preset reached by a
+        # spelling these patterns do not list (a name put together at run time, a link, an
+        # environment variable); code given inline to a program INLINE_CODE does not list (awk,
+        # say) or by a flag it does not list for that program (perl -M, node --import, say); and
+        # an edit that turns libFuzzer on or starts the smoke run without spelling any of these
+        # words in the text it takes out or puts in: a mutation of a build file other than
+        # fuzz/CMakeLists.txt and CMakePresets.json (the ITCH_FUZZ option's default turned from
+        # OFF to ON, say), an edit, by mutation or input, of a file that is not a build file (a
+        # script, or a file a build file reads), an input's byte edit (flip_byte, truncate,
+        # delete_bytes, duplicate_bytes), whose bytes it does not read as text, and any edit of
+        # scripts/faults/ or of a Markdown page.
         targets = {path.stem for path in (fm.REPO_ROOT / "fuzz").glob("fuzz_*.cpp")}
         self.assertGreaterEqual(len(targets), 9)
         presets_text = (fm.REPO_ROOT / "CMakePresets.json").read_text(encoding="utf-8")
@@ -615,35 +705,40 @@ class CommittedFaults(unittest.TestCase):
             problem = check_sh_problem(command)
             if problem:
                 self.fail(f"{fault.id}: {problem}")
-            for mutation in fault.mutations:
-                name = mutation["file"]
-                if name.startswith("scripts/faults/") or name.endswith(".md"):
+            mutated = presets_text
+            for name, changed, texts, is_input in edits_of(fault):
+                kind, normal = "an input" if is_input else "a mutation", normal_name(name)
+                for each in changed:
+                    if is_input and is_build_file(each):
+                        self.fail(f"{fault.id}: an input edits {each}, a build file, which only "
+                                  "a mutation this rule reads may change")
+                if normal.startswith("scripts/faults/") or normal.endswith(".md"):
                     continue
-                if name == FUZZ_CMAKE:
+                if normal == normal_name(FUZZ_CMAKE):
                     self.fail(f"{fault.id}: a mutation of {FUZZ_CMAKE} changes how a fuzz target "
                               "builds and what ctest runs of it")
-                for text in (mutation.get("old", ""), mutation.get("new", "")):
+                for text in texts:
                     for clock in CLOCK_WORDS:
                         if clock in text.lower():
-                            self.fail(f"{fault.id}: a mutation of {name} spells {clock!r}, which "
+                            self.fail(f"{fault.id}: {kind} of {name} spells {clock!r}, which "
                                       "starts a fuzz run that stops on the clock")
                     found = LIBFUZZER_BUILD.search(text)
                     if found:
-                        self.fail(f"{fault.id}: a mutation of {name} spells {found[0]!r}, which "
+                        self.fail(f"{fault.id}: {kind} of {name} spells {found[0]!r}, which "
                                   "builds libFuzzer in")
                     if any(folder.search(token) for token in path_tokens(text, preset)
                            for folder in folders):
-                        self.fail(f"{fault.id}: a mutation of {name} names a libFuzzer build's "
+                        self.fail(f"{fault.id}: {kind} of {name} names a libFuzzer build's "
                                   "folder")
-                if name == "CMakePresets.json" and mutation.get("old", "") in presets_text:
-                    mutated = presets_text.replace(mutation["old"], mutation.get("new", ""), 1)
-                    try:
-                        after = libfuzzer_presets(mutated)[:2]
-                    except (ValueError, KeyError, TypeError):
-                        after = (fuzzing, fuzz_tests)
-                    if after != (fuzzing, fuzz_tests):
-                        self.fail(f"{fault.id}: a mutation of CMakePresets.json makes "
-                                  f"{sorted(after[0] | after[1])} the libFuzzer presets")
+                if normal == "cmakepresets.json" and texts[0]:
+                    mutated = mutated.replace(texts[0], texts[1])
+            try:
+                after = libfuzzer_presets(mutated)[:2]
+            except (ValueError, KeyError, TypeError):
+                after = (fuzzing, fuzz_tests)
+            if after != (fuzzing, fuzz_tests):
+                self.fail(f"{fault.id}: its mutations of CMakePresets.json, made in order, make "
+                          f"{sorted(after[0] | after[1])} the libFuzzer presets")
             if preset in fuzzing and search is None:
                 self.fail(f"{fault.id}: a fault on the {preset} preset runs a search and "
                           "nothing else")
