@@ -2486,7 +2486,7 @@
         {
           "file": "WRITEUP.md",
           "old": "Every finding of the final review, with its outcome",
-          "new": "The reviewers who looked again at the fixes were 13 of 16. Every finding of the final review, with its outcome"
+          "new": "The reviewers who looked again at the fixes were 5 of 21. Every finding of the final review, with its outcome"
         }
       ],
       "command": [
@@ -2498,7 +2498,7 @@
         "WRITEUP.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 13 of 16 is not in results/final_review\\.md",
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 5 of 21 is not in results/final_review\\.md",
         "exit": 1
       }
     },
