@@ -575,6 +575,7 @@ class InputCondition(unittest.TestCase):
             "machine_check: passed", COPY_MACHINE)))
 
     def test_a_copy_file_is_rendered_again_from_its_records(self):
+        SCRATCH.mkdir(parents=True, exist_ok=True)
         scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
         self.addCleanup(scratch.cleanup)
         raw = Path(scratch.name) / "P-0029-x"
