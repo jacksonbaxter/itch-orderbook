@@ -12,6 +12,10 @@
   {
    "what": "r11-3 and every r15 outcome",
    "at": "e40bc4c"
+  },
+  {
+   "what": "every r16 outcome",
+   "at": "4437825"
   }
  ],
  "complete": false,
@@ -3646,61 +3650,85 @@
    "id": "r16-1",
    "severity": "FIX",
    "finding": "The fuzz-search rule's test let through a search that reads the clock or has no fixed seed",
-   "outcome": "open",
-   "detail": "Being fixed on its own branch.",
-   "commits": [],
-   "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "the fuzz-search fix, on its own branch"
+   "outcome": "fixed",
+   "detail": "The rule is closed: every word that names a fuzz target must be a search, a ctest replay of the committed seeds or a corpus path, and a search takes only the listed flags, with -seed at least 1 and -runs at or above its floor, so a flag that reads the clock or unfixes the seed fails.",
+   "commits": [
+    "bcd6958",
+    "cff24cd"
+   ],
+   "tests": [
+    "test_every_fuzz_search_counts_executions_and_reads_no_clock"
+   ],
+   "faults": [
+    "matrix-fuzz-search-seed-zero",
+    "matrix-fuzz-search-flag-outside-the-list",
+    "matrix-fuzz-search-binary-respelled",
+    "matrix-fuzz-search-binary-wrapped"
+   ],
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
   },
   {
    "id": "r16-2",
    "severity": "FIX",
    "finding": "The test's slowest rate for `fuzz_reader` was above every rate measured for its 1,500,000-run search",
-   "outcome": "open",
-   "detail": "Being fixed on its own branch.",
-   "commits": [],
-   "tests": [],
+   "outcome": "fixed",
+   "detail": "`fuzz_reader`'s slowest rate is 25,000 a second, below both its measured averages, and the comment gives both averages for all six targets.",
+   "commits": [
+    "bcd6958"
+   ],
+   "tests": [
+    "test_every_fuzz_search_counts_executions_and_reads_no_clock"
+   ],
    "faults": [],
-   "notes": [],
-   "waits_on": "the fuzz-search fix, on its own branch"
+   "notes": []
   },
   {
    "id": "r16-3",
    "severity": "NOTE",
    "finding": "docs/NOTES.md claimed the same fuzz-search result on any machine; the records show one repeat on one machine",
-   "outcome": "open",
-   "detail": "Being fixed on its own branch.",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "NOTES says the count no longer depends on the machine's load, shown for one build in one tree on this Mac, and lists what can still make two runs of one build differ.",
+   "commits": [
+    "829da87"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "the fuzz-search fix, on its own branch"
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
   },
   {
    "id": "r16-4",
    "severity": "NOTE",
    "finding": "\"No fewer runs than any control\" was true of `fuzz_book` only at the current code",
-   "outcome": "open",
-   "detail": "Being fixed on its own branch.",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "NOTES and the test's comment say \"at this code\", and give the older `fuzz_book` code's controls beside its floor.",
+   "commits": [
+    "bcd6958",
+    "829da87"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "the fuzz-search fix, on its own branch"
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
   },
   {
    "id": "r16-5",
    "severity": "NOTE",
    "finding": "One margin in docs/NOTES.md was truncated, not rounded",
-   "outcome": "open",
-   "detail": "Being fixed on its own branch.",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "NOTES gives 1,149 times.",
+   "commits": [
+    "829da87"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "the fuzz-search fix, on its own branch"
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
   },
   {
    "id": "r16-6",
