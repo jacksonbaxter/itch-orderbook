@@ -1397,6 +1397,90 @@
         "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: '\\-DITCH_SANITIZE:STRING=address,fuzzer' builds libFuzzer in outside a search",
         "exit": 1
       }
+    },
+    {
+      "id": "matrix-fuzz-search-presets-unreadable",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutations of CMakePresets.json put a byte-order mark first, which CMake reads past and Python's json refuses, and make the release preset inherit the fuzz preset",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"CMakePresets.json\", \"old\": \"{\\n  \\\"version\\\": 6\", \"new\": \"\ufeff{\\n  \\\"version\\\": 6\"}, {\"file\": \"CMakePresets.json\", \"old\": \"\\\"displayName\\\": \\\"Optimised build, all checks\\\",\\n      \\\"inherits\\\": \\\"base\\\",\", \"new\": \"\\\"displayName\\\": \\\"Optimised build, all checks\\\",\\n      \\\"inherits\\\": \\\"fuzz\\\",\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: its mutations of CMakePresets\\.json, made in order, leave presets this rule cannot read",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-presets-sanitizer-list",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation of CMakePresets.json puts fuzzer first in the tsan preset's sanitizer list, spelling no libFuzzer build word",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"CMakePresets.json\", \"old\": \"\\\"thread\\\",\", \"new\": \"\\\"fuzzer,thread\\\",\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: its mutations of CMakePresets\\.json, made in order, make \\['fuzz', 'fuzz\\-smoke', 'tsan'\\] the libFuzzer presets",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-presets-true-escaped",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation of CMakePresets.json gives the release preset ITCH_FUZZ as TRUE, which CMake reads as on, its name written in a JSON escape",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"CMakePresets.json\", \"old\": \"\\\"ITCH_MIMALLOC\\\": \\\"ON\\\"\\n      }\\n    },\\n    {\\n      \\\"name\\\": \\\"sanitized\\\"\", \"new\": \"\\\"ITCH_MIMALLOC\\\": \\\"ON\\\", \\\"ITCH\\\\u005fFUZZ\\\": \\\"TRUE\\\"\\n      }\\n    },\\n    {\\n      \\\"name\\\": \\\"sanitized\\\"\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: its mutations of CMakePresets\\.json, made in order, make \\['fuzz', 'fuzz\\-smoke', 'release'\\] the libFuzzer presets",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-presets-notfound-escaped",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation of CMakePresets.json gives the release preset ITCH_FUZZ as notfound, which CMake reads as on, since only NOTFOUND in capitals is off, its name written in a JSON escape",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"CMakePresets.json\", \"old\": \"\\\"ITCH_MIMALLOC\\\": \\\"ON\\\"\\n      }\\n    },\\n    {\\n      \\\"name\\\": \\\"sanitized\\\"\", \"new\": \"\\\"ITCH_MIMALLOC\\\": \\\"ON\\\", \\\"ITCH\\\\u005fFUZZ\\\": \\\"notfound\\\"\\n      }\\n    },\\n    {\\n      \\\"name\\\": \\\"sanitized\\\"\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: its mutations of CMakePresets\\.json, made in order, make \\['fuzz', 'fuzz\\-smoke', 'release'\\] the libFuzzer presets",
+        "exit": 1
+      }
     }
   ]
 }
