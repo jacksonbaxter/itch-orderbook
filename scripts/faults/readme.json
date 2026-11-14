@@ -2456,13 +2456,13 @@
     },
     {
       "id": "readme-writeup-review-figure-not-in-results",
-      "breaks": "WRITEUP.md's final review paragraph gives a count of findings that results/final_review.md does not",
+      "breaks": "WRITEUP.md's sentence on the final review gives a count of findings that results/final_review.md does not",
       "check": "gate_numbers.py on WRITEUP.md",
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "16 reviewers and 193 findings",
-          "new": "16 reviewers and 192 findings"
+          "old": "Every finding of the final review, with its outcome",
+          "new": "Every one of the final review's 192 findings, with its outcome"
         }
       ],
       "command": [
@@ -2480,13 +2480,13 @@
     },
     {
       "id": "readme-writeup-review-looked-again-overstated",
-      "breaks": "WRITEUP.md's final review paragraph says more reviewers looked again at the fixes than results/final_review.md gives (r15-4)",
+      "breaks": "WRITEUP.md's sentence on the final review says more reviewers looked again at the fixes than results/final_review.md gives (r15-4)",
       "check": "gate_numbers.py on WRITEUP.md",
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "looked again at the fixes were 2 of 16,",
-          "new": "looked again at the fixes were 13 of 16,"
+          "old": "Every finding of the final review, with its outcome",
+          "new": "The reviewers who looked again at the fixes were 13 of 16. Every finding of the final review, with its outcome"
         }
       ],
       "command": [

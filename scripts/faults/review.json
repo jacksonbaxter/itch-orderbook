@@ -368,13 +368,13 @@
     },
     {
       "id": "review-page-reviewers-count-edited",
-      "breaks": "WRITEUP.md's paragraph on the final review gives one reviewer fewer than the record has, which gate_numbers.py lets through (r16-8)",
+      "breaks": "WRITEUP.md's sentence on the final review gives one reviewer fewer than the record has, which gate_numbers.py lets through (r16-8)",
       "check": "review_report.py check",
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "There were 16 reviewers",
-          "new": "There were 15 reviewers"
+          "old": "Every finding of the final review, with its outcome",
+          "new": "There were 15 reviewers and 193 findings: 2 BLOCK, 76 FIX and 115 NOTE. Every finding of the final review, with its outcome"
         }
       ],
       "command": [
@@ -392,13 +392,13 @@
     },
     {
       "id": "review-page-owner-count-edited",
-      "breaks": "WRITEUP.md's paragraph on the final review gives one finding fewer left for the owner than the record has, which gate_numbers.py lets through (r16-8)",
+      "breaks": "WRITEUP.md's sentence on the final review gives an outcome count other than the record's (0 fixed where the record has 163), in place of the owner count the page no longer carries, which gate_numbers.py lets through (r16-8)",
       "check": "review_report.py check",
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "and 3 are left for the owner",
-          "new": "and 2 are left for the owner"
+          "old": "Every finding of the final review, with its outcome",
+          "new": "0 are fixed. Every finding of the final review, with its outcome"
         }
       ],
       "command": [
@@ -410,19 +410,19 @@
         "{tree}"
       ],
       "expect": {
-        "signature": "review_report: FAIL page WRITEUP\\.md: gives '2 are left for the owner'",
+        "signature": "review_report: FAIL page WRITEUP\\.md: gives '0 are fixed'",
         "exit": 1
       }
     },
     {
       "id": "review-page-no-change-count-edited",
-      "breaks": "WRITEUP.md's paragraph on the final review gives one finding fewer that needed no change than the record has (r16-8)",
+      "breaks": "WRITEUP.md's sentence on the final review gives fewer findings that needed no change than the record has (r16-8)",
       "check": "review_report.py check",
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "and 4 needed no change",
-          "new": "and 3 needed no change"
+          "old": "Every finding of the final review, with its outcome",
+          "new": "Of the findings, 3 needed no change. Every finding of the final review, with its outcome"
         }
       ],
       "command": [
