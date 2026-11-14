@@ -6,17 +6,18 @@ every verdict word to the result of the target it names (criterion 30).
     gate_numbers.py [--root DIR] [--page PATH]...
 
 What a figure is. A number with a decimal point, a thousands separator, three or more digits, a
-unit or a sign: a `-`, `−` or `+` straight before it, or before its `$`, is read as part of
-it, so -27.50 and -$27.50 are not 27.50, and +11.1% is 11.1%. On a line that cites
+unit or a sign: a `-`, `−` or `+` straight before it, or before its `$`, is read as part of it,
+so -27.50 and -$27.50 are not 27.50, and +11.1% is 11.1%. On a line that cites
 `results/<name>.md`, an integer of one or two digits is a figure too, except straight after a
 name in NAMED_BEFORE (Zen 1, Ryzen 7) or straight before a word in NAMED_AFTER (4 cores, 8
-threads): those name hardware, they count nothing measured. Left out: code spans and code
-blocks (and in HTML the text of <pre>, <code> and <option>), URLs, the text of a link to a URL
-(a source's title), HTML tags, dates (2026-11-12, and eight digits that read as a day,
-12302019), the names in EXEMPT, a number glued to a word (S4, p50, T-BOOK-1, x86-64), and any
-line ending in `<!-- figures: not measured -->`. A count written as a word, zero and two to
-twenty, and one straight before `of` and a count ("one of three"), is a short integer: read on
-a line that cites a results file, except in a block results_table.py generates, whose counts
+threads): those name hardware, they count nothing measured. Left out: code spans and code blocks
+(and in HTML the text of <pre>, <code> and <option>), URLs, the text of a link to a URL (a
+source's title), HTML tags, dates (2026-11-12, 30 December 2019, and eight digits that read as a
+day, 12302019), the names in EXEMPT, a number glued to a word (S4, p50, T-BOOK-1, x86-64), and
+any line ending in `<!-- figures: not measured -->`, a mark refused on a line written by hand
+that cites a results file, whose figures are measured. A count written as a word, zero and two
+to twenty, and one straight before `of` and a count ("one of three"), is a short integer: read
+on a line that cites a results file, except in a block results_table.py generates, whose counts
 its --check holds.
 
 Which file. A figure is held to the files cited in its clause (a clause of prose ends at `;` or
@@ -62,32 +63,38 @@ The two integers of an `N of M` ("22 of 33") must stand together in one cited fi
 by the rules above in one table, or in one line outside tables, and twice there if N is M.
 
 Billions and millions. A figure followed by the word billion or million ("3.08 billion
-messages") is held as a rounding: by a place, by the rules above, that holds the same figure,
-or a figure that, divided by 10^9 or 10^6 and rounded half up to the decimals written, is it.
-So 3.08 billion is held by 3,081,392,329 where its clause shares a word with that place, and
-3.09 billion, or 3.08 million, is held by no figure of that file.
+messages") is held as a rounding: by a place, by the rules above, that holds the same figure, or
+a figure that, divided by 10^9 or 10^6 and rounded half up to the decimals written, is it. So
+3.08 billion is held by 3,081,392,329 where its clause shares a word with that place, and 3.09
+billion, or 3.08 million, is held by no figure of that file. A rounding is held by any figure of
+the file that rounds to it under a shared word, so the bar's 3,037,078,470 holds 3.04 billion.
 
-Verdicts. Outside code blocks and the blocks results_table.py generates (held by its --check),
-a verdict word is read in a sentence of prose or a table row: met, meets, missed, fails,
-failed, failing, passed, PASS and FAIL anywhere; misses, missing and passes only straight after
-a target id or after its gloss between commas or in brackets ("T-PERF-2, the branch-miss rate,
-misses"), since elsewhere each is a noun (branch misses, timed passes); and "a miss by" and the
-phrases of no verdict ("no verdict", "neither a pass nor a fail", "neither met nor missed",
-"neither meets nor misses", "neither passes nor fails") only where a target is named before
-them. Each is tied to the target ids its sentence names after the verdict word before it, or,
-if none, to those that word was tied to: "T-SPSC-1 and T-SPSC-2 are missed and T-SPSC-3 is met".
-The word must agree with each tied target's one verdict, results_table.one_verdict() of its
-rows in RESULTS.md's tables (missed if any row its bar judges is missed or FAIL, met if every
-such row is met or PASS, none if no row is judged; a target with no row, from
-results_table.unrowed_verdict()). When the sentence names a host (Mac, macOS, M4, Apple, Darwin;
-debian, Zen 1, V1605B), a day (12302019, 01302019_BX) or a design (`paged-flat`, base) that
-some of the target's rows have, only those rows count, so "T-BT-3 is met on the Mac" passes
-where "T-BT-3 is met" fails. A target id that is neither BENCHMARKS.md's nor in a row fails. A
-count straight after the verdict word, "fails on four of the ten sessions" or "fails on two",
-must be the number of the target's rows with that verdict, and of all its rows; such a count
-is held here and not read as a figure. A verdict word read anywhere that ties to no target
-fails, unless it is in a heading, beside the word target ("every missed target"), or on a line
-that ends in `<!-- verdicts: no target named -->`.
+Verdicts. Outside code blocks and the blocks results_table.py generates (held by its --check), a
+verdict word is read in a sentence of prose or a table row, one line at a time, with its
+emphasis, code marks, link brackets and HTML tags taken out ("**m**et" is met): met, meets,
+missed, fails, failed, failing, passed, PASS and FAIL anywhere; misses, missing and passes only
+straight after a target id or after its gloss between commas or in brackets ("T-PERF-2, the
+branch-miss rate, misses"), since elsewhere each is a noun (branch misses, timed passes); and "a
+miss by" and the phrases of no verdict ("no verdict", "neither a pass nor a fail", "neither met
+nor missed", "neither meets nor misses", "neither passes nor fails") only where a target is
+named before them. Each is tied to the target ids its sentence names after the verdict word
+before it, or, if none, to those that word was tied to: "T-SPSC-1 and T-SPSC-2 are missed and
+T-SPSC-3 is met". The word must agree with each tied target's one verdict,
+results_table.one_verdict() of its rows in RESULTS.md's tables (missed if any row its bar judges
+is missed or FAIL, met if every such row is met or PASS, none if no row is judged; a target with
+no row, from results_table.unrowed_verdict()). When the sentence names a host (Mac, macOS, M4,
+Apple, Darwin; debian, Zen 1, V1605B), a day (12302019, 01302019_BX) or a design (`paged-flat`,
+base) that some of the target's rows have, only those rows count, so "T-BT-3 is met on the Mac"
+passes where "T-BT-3 is met" fails. A target id that is neither BENCHMARKS.md's nor in a row
+fails. A count straight after the verdict word, after on or in and a comma or none ("fails on
+four of the ten sessions", "fails in two", "fails, on two"), must be the number of the target's
+rows with that verdict, and of all its rows; such a count is held here and not read as a figure.
+A verdict word read anywhere that ties to no target fails, unless it is in a heading, straight
+before the word target ("every missed target", not "targets met"), or on a line that ends in
+`<!-- verdicts: no target named -->`. Outside a heading and such a line, a verdict word turned
+round fails whatever its target: one with not, never or no before it in its clause, after the
+last target id there ("T-SPSC-3 is not met", "No target failed"), or none straight after it
+("missed: none").
 
 What it cannot do. It does not read units, so 5.15 M against a cell of 5.15 ms passes. It reads
 words, not meaning, so a clause that shares a word with the wrong place by chance passes, and a
@@ -100,12 +107,13 @@ that each figure is in its cited file beside a word its clause shares, and, wher
 one-word row label or an `N of M` ties it, in that row or beside that partner; it does not hold
 that it is the figure for that place when the file has the same figure elsewhere under a shared
 word. Which short integers and counts in words count is decided by the words next to them, not
-by what they count, and on a line that cites no results file none is read: there a short
-integer is as likely a count of something built (48 scenarios) as a measurement, so a line
-whose only numbers are short integers needs no citation. A verdict is read by its word, not its
-meaning: one said in other words ("short of its bar", "clean") is not read, nor one left out
-("and T-TRADE-5 on two"), and a target with rows of both verdicts on the host, day and design
-its sentence names is held to the miss.
+by what they count, and on a line that cites no results file none is read: there a short integer
+is as likely a count of something built (48 scenarios) as a measurement, so a line whose only
+numbers are short integers needs no citation. A verdict is read by its word, not its meaning:
+one said in other words ("short of its bar", "clean") is not read, nor one left out ("and
+T-TRADE-5 on two"), nor a negation before the target id or in another clause, nor a sentence
+broken across lines; and a target with rows of both verdicts on the host, day and design its
+sentence names is held to the miss.
 
 The gate runs on whichever pages exist, so a tree with none passes and says so. A page
 named with --page must exist.
@@ -121,6 +129,7 @@ import argparse
 import copy
 import re
 import sys
+from bisect import bisect_left
 from collections import defaultdict
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
@@ -142,11 +151,13 @@ SCALE_WORD = re.compile(r"\s+(billion|million)\b")
 
 FENCE = re.compile(r"^(```|~~~)")
 DAY = r"(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?:19|20)\d\d"
+WRITTEN_DAY = (r"\b(?:[1-9]|[12]\d|3[01]) (?:January|February|March|April|May|June|July|August"
+               r"|September|October|November|December) (?:19|20)\d\d\b")
 STRIPPED = re.compile(
     r"`[^`\n]*`|\[[^\]\n]*\]\(https?://[^)\n]*\)|\]\([^)\n]*\)|https?://\S+"
     r"|<a\s[^>]*href=\"https?://[^\"]*\"[^>]*>.*?</a>"
     r"|<(script|style|pre|code|option)\b.*?</\1>|<[^>]*>"
-    rf"|\b\d{{4}}-\d{{2}}-\d{{2}}\b|(?<![\d,.]){DAY}(?!\d|[.,]\d)"
+    rf"|\b\d{{4}}-\d{{2}}-\d{{2}}\b|(?<![\d,.]){DAY}(?!\d|[.,]\d)|{WRITTEN_DAY}"
     r"|\b(?:phase|step|criterion) \d+\b", re.IGNORECASE | re.DOTALL)
 UNIT = r"(?:%|×|\s?(?:ns|µs|us|ms|s|GB|GiB|MB|MiB|KB|KiB|TB|GHz|MHz|M|K|B|x)\b)"
 FIGURE = re.compile(
@@ -187,20 +198,27 @@ GENERATED_END = re.compile(r"^<!-- [\w ]+: end -->$")
 VERDICT_MARK = "<!-- verdicts: no target named -->"
 ANYWHERE = re.compile(r"(?<![\w-])(?:(?i:met|meets|missed|fails|failed|failing|passed)|PASS|FAIL)"
                       r"(?![\w-])")
-STRAIGHT = re.compile(r"(T-[A-Z0-9]+-\d+)(?:\s*\([^()]*\))?(?:,[^,;]*,)?\s+(?:also\s+|still\s+)?"
-                      r"((?i:misses|missing|passes))(?![\w-])")
+STRAIGHT = re.compile(r"(T-[A-Z0-9]+-\d+)(?:\s*\([^()]*\))?(?:,[^,;]*,)?\s+"
+                      r"(?:(?i:also|still|not|never)\s+)*((?i:misses|missing|passes))(?![\w-])")
 TIED_ONLY = re.compile(
     r"(?<![\w-])(?i:(a miss by)|(no verdict|neither a pass nor a fail|neither met nor missed"
     r"|neither meets nor misses|neither passes nor fails))(?![\w-])")
 NEGATIVE = {"missed", "misses", "missing", "fails", "failed", "failing", "fail", "a miss by"}
 TARGET = re.compile(r"(?<![\w-])T-[A-Z0-9]+-\d+(?![\w-])")
-BESIDE_TARGET = re.compile(r"(?i:targets?\s+$)")
 BEFORE_TARGET = re.compile(r"(?i:^\s+targets?\b)")
 AFTER_VERDICT = re.compile(
-    rf"^\s+(?:strictly\s+)?on\s+({COUNT})(?:\s+of\s+(?:the\s+)?({COUNT})\s+(?:sessions|days)\b"
+    rf"^\s*,?\s+(?:strictly\s+)?(?:on|in)\s+({COUNT})"
+    rf"(?:\s+of\s+(?:the\s+)?({COUNT})\s+(?:sessions|days)\b"
     r"|(?=\s+(?:sessions|days)\b|\s*(?:[,;.)]|$)))", re.I)
 MAC_WORDS = re.compile(r"(?i)(?<![\w-])(?:mac|macos|m4|m4 max|apple|darwin)(?![\w-])")
 LINUX_WORDS = re.compile(r"(?i)(?<![\w-])(?:debian|zen 1|v1605b|linux host)(?![\w-])")
+# A verdict turned round: not, never or no before its word in its clause, after the last
+# target id there, or none straight after it ("is not met", "No target failed", "missed:
+# none"). And the markup a verdict word is read without, taken out rather than blanked, so a
+# word split by emphasis or a tag ("**m**et", "m<b></b>et") reads whole.
+NEGATION = re.compile(r"(?<![\w-])(?i:not|never|no)(?![\w-])")
+NONE_AFTER = re.compile(r"^\W*(?i:none)(?![\w-])")
+MARKUP = re.compile(r"\]\([^)\n]*\)|<!--.*?-->|<[^>]*>|[`*\[\]]|(?<!\w)_+|_+(?!\w)")
 DAY_WORD = re.compile(r"(?<!\d)(\d{8}(?:_[A-Z]+)?)(?![\d\w])")
 
 
@@ -677,6 +695,19 @@ def readable(line):
     return re.sub(r"[`*\[\]]", " ", text)
 
 
+def squeezed(line):
+    """The line with its markup taken out, as MARKUP reads it, and the place on the line of
+    each character left."""
+    kept, where, last = [], [], 0
+    for match in MARKUP.finditer(line):
+        kept.append(line[last:match.start()])
+        where.extend(range(last, match.start()))
+        last = match.end()
+    kept.append(line[last:])
+    where.extend(range(last, len(line)))
+    return "".join(kept), where
+
+
 class Verdicts:
     """Every target's rows as results_table.py reads them from the results files, made the first
     time a page asks, and BENCHMARKS.md's targets."""
@@ -763,22 +794,36 @@ def check_verdicts(page, lines, verdicts):
             continue
         marked = VERDICT_MARK in trailing_marks(line)
         heading = bool(re.match(r"\s*(?:#|<h[1-6]\b)", line))
-        text = readable(line)
         row = line.strip().startswith("|")
-        spans = [(0, len(text))] if row else [
+        blanked = readable(line)
+        text, where = squeezed(line)
+        spans = [(0, len(blanked))] if row else [
             (begin, stop) for begin, stop, *_ in
-            {(sb, se, 0, 0) for _, _, sb, se in clauses_of(text)}]
-        for begin, end in sorted(spans):
+            {(sb, se, 0, 0) for _, _, sb, se in clauses_of(blanked)}]
+        for raw_begin, raw_end in sorted(spans):
+            begin, end = bisect_left(where, raw_begin), bisect_left(where, raw_end)
             sentence = text[begin:end]
-            ids = [(match.start(), match.group(0)) for match in TARGET.finditer(text, begin, end)]
+            ids = [(match.start(), match.end(), match.group(0))
+                   for match in TARGET.finditer(text, begin, end)]
             after, tied = begin, []
             for start, stop, word, kind, how in verdicts_in(text, begin, end):
-                named_here = unique(target for position, target in ids if after <= position < start)
+                named_here = unique(target for position, _, target in ids
+                                    if after <= position < start)
                 tied = named_here or tied
                 after = stop
+                if how != "tied" and not (marked or heading):
+                    clause = max([text.rfind(";", begin, start) + 1, begin]
+                                 + [id_end for _, id_end, _ in ids if id_end <= start])
+                    turned = (NEGATION.search(text, clause, start)
+                              or NONE_AFTER.match(text[stop:end]))
+                    if turned:
+                        negation = turned[0].strip(" :,")
+                        violations.append((page, number, f"'{word}' with '{negation}' beside "
+                                           "it: a verdict turned round by a negation is not "
+                                           "read, so say the target's own verdict"))
+                        continue
                 if not tied:
-                    beside = (BESIDE_TARGET.search(text[begin:start])
-                              or BEFORE_TARGET.match(text[stop:end]))
+                    beside = BEFORE_TARGET.match(text[stop:end])
                     if how == "anywhere" and not (marked or heading or beside):
                         violations.append((page, number, f"'{word}' names no target: name its "
                                            "target in the sentence, reword it, or end the line "
@@ -812,9 +857,26 @@ def check_verdicts(page, lines, verdicts):
                                                f"{' of '.join(map(str, said))}' for {target}: its "
                                                f"rows give {' of '.join(map(str, have))}"))
                 if counted:
-                    held |= {(number, stop + counted.start(group))
+                    held |= {(number, where[stop + counted.start(group)])
                              for group in (1, 2) if counted.group(group)}
     return violations, held
+
+
+def marked_cited(page, lines):
+    """A hand-written line that cites a results file and ends in SKIP_MARK: its figures are
+    measured, so the mark would excuse them from their file. A generated block's lines are
+    held by results_table.py --check, and may carry it."""
+    violations, generated, in_fence = [], generated_lines(lines), False
+    for number, line in enumerate(lines, start=1):
+        if FENCE.match(line.strip()):
+            in_fence = not in_fence
+            continue
+        if (not in_fence and number not in generated and SKIP_MARK in trailing_marks(line)
+                and CITATION.search(line)):
+            violations.append((page, number, f"{SKIP_MARK} on a line that cites "
+                               f"results/{CITATION.search(line)[1]}: a line that cites a "
+                               "results file holds its figures to it"))
+    return violations
 
 
 def check_page(root, page, results, verdicts=None):
@@ -822,6 +884,7 @@ def check_page(root, page, results, verdicts=None):
     lines = text.splitlines()
     verdicts = Verdicts(root) if verdicts is None else verdicts
     violations, held = check_verdicts(page, lines, verdicts)
+    violations += marked_cited(page, lines)
     found = [figure for figure in figures_in(text) if (figure.line, figure.position) not in held]
     every = sorted(results)
     by_line = defaultdict(list)
