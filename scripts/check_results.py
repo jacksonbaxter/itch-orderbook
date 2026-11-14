@@ -17,7 +17,9 @@ a file failing them is never written as finished.
 
 A parse rate file, one with a `parse_passes` field (scripts/parse_driver.py), has no latency
 or counter tables: every figure in it is worked again from its table of timed passes by that
-driver's check_text().
+driver's check_text(), which also holds the input condition the file claims: with none, its
+machine check passes input-resident over the file's own pages; with the bench's own copy
+(--input-condition copy), every reading of the copy is shown and is every page of it.
 
 A backtest file, one with a `workload` field (scripts/backtest_driver.py), has no latency
 or counter tables. It is held instead to its workload's fields, the summary's three rates

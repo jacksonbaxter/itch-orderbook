@@ -453,10 +453,11 @@ class InputCondition(unittest.TestCase):
         self.assertNotIn("input-cached", text)
 
     def test_the_file_condition_runs_every_drivers_machine_check(self):
-        args = args_for()
+        args = args_for(input=Path("day"), probe=Path("probe"))
+        done = mock.Mock(returncode=0, stdout=COPY_MACHINE)
         with mock.patch.object(parse_driver.bench_driver, "machine_check",
                                return_value="checked") as every, \
-                mock.patch.object(parse_driver.subprocess, "run") as ran:
+                mock.patch.object(parse_driver.subprocess, "run", return_value=done) as ran:
             self.assertEqual(parse_driver.machine_check(args), "checked")
         every.assert_called_once_with(args)
         ran.assert_not_called()
