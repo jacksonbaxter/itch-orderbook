@@ -140,6 +140,10 @@ class ReviewReport(unittest.TestCase):
     def test_a_fixed_finding_with_no_commit_is_refused_unless_it_says_why(self):
         self.data["findings"][4]["commits"] = []
         self.assertIn("r12-2: fixed with no commit", self.refused("evidence"))
+        for mark in (" ", "x", "n/a", "none", "not needed"):
+            with self.subTest(no_commit=mark):
+                self.data["findings"][4]["no_commit"] = mark
+                self.assertIn("r12-2: ", self.refused("evidence"))
         self.data["findings"][4]["no_commit"] = "the fix was to a file kept outside the repository"
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
@@ -186,7 +190,8 @@ class ReviewReport(unittest.TestCase):
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
         text = self.out.read_text(encoding="utf-8")
-        self.assertIn("- Result: not complete: r12-1, open; 1 reviewer to come\n", text)
+        self.assertIn("- Result: not complete. Waiting on no one: r12-1, open. 1 reviewer to "
+                      "come.\n", text)
         self.assertIn("- r12-1 (FIX, open): what r12-1 found.", text)
         self.assertIn("- STILL TO COME: the last reviewer reads the pages", text)
 
@@ -207,8 +212,8 @@ class ReviewReport(unittest.TestCase):
         self.data["findings"][4]["outcome"] = "open"
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
-        self.assertIn("- Result: not complete: waiting on the owner: r12-1 (a run on its own day), "
-                      "partly; r1-3, left for the owner; r12-2, open\n",
+        self.assertIn("- Result: not complete. Waiting on the owner: r12-1 (a run on its own day), "
+                      "partly; r1-3, left for the owner. Waiting on no one: r12-2, open.\n",
                       self.out.read_text(encoding="utf-8"))
         self.out.unlink()
         self.data["findings"][4]["outcome"] = "fixed"

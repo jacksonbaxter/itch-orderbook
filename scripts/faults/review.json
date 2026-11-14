@@ -320,6 +320,50 @@
         "signature": "^FAIL: test_the_result_says_what_waits_and_on_whom",
         "exit": 1
       }
+    },
+    {
+      "id": "review-result-groups-run-together",
+      "breaks": "review_report.py's Result line gives a group that waits on no one without saying so, so it reads as part of the group before it (r16-7)",
+      "check": "test_review_report.py ReviewReport.test_the_result_says_what_waits_and_on_whom",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        said.append(f\"waiting on {who or 'no one'}: \" + \"; \".join(parts))\n",
+          "new": "        said.append((f\"waiting on {who}: \" if who else \"\") + \"; \".join(parts))\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_the_result_says_what_waits_and_on_whom"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_result_says_what_waits_and_on_whom",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-no-commit-any-text",
+      "breaks": "review_report.py takes any text as a fixed finding's reason for having no commit (r16-7)",
+      "check": "test_review_report.py ReviewReport.test_a_fixed_finding_with_no_commit_is_refused_unless_it_says_why",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        if no_commit and len(REASON_WORD.findall(no_commit)) < REASON_WORDS:\n",
+          "new": "        if no_commit and not no_commit.strip():\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_fixed_finding_with_no_commit_is_refused_unless_it_says_why"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_fixed_finding_with_no_commit_is_refused_unless_it_says_why",
+        "exit": 1
+      }
     }
   ]
 }

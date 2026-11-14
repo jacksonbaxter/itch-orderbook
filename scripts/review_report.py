@@ -20,15 +20,18 @@ be fixed) or NOTE. Its outcome is one of OUTCOMES. `write` refuses, and writes n
 - id: a finding id that is not `<reviewer>-<number>` of a listed reviewer, or is given twice;
 - count: a reviewer whose findings, counted by severity, are not the counts its looks state;
 - evidence: a finding fixed with no commit, unless its `no_commit` says in words why there is
-  none, or a known limit with no docs/NOTES.md section for its reason;
+  none (at least REASON_WORDS words of two letters or more), or a known limit with no
+  docs/NOTES.md section for its reason;
 - complete: a record said to be complete while a finding is open, partly done or left for the
   owner, while a reviewer is still to come, or while a reviewer's fixes are on a branch not
   merged yet;
 - data: anything else the file should have and does not, or a `waits_on` or `waits_for` on a
   finding that is settled.
 
-The Result line names every finding not settled, grouped by whom it waits on (its `waits_on`,
-or the owner for one left for the owner) and with what waits (its `waits_for`) where given.
+The Result line names every finding not settled, in one group for each one it waits on (its
+`waits_on`, or the owner for one left for the owner), each group starting "waiting on" and whom,
+or "waiting on no one", and ending with a full stop, with what waits (its `waits_for`) where
+given.
 
 The file gives the commit the outcomes were checked at, and any checked again later with the
 commit they were checked at, the reviewers, the counts by reviewer, by
@@ -75,6 +78,11 @@ OUTCOMES = ("fixed", "known limit", "no change needed", "left for the owner", "p
 UNSETTLED = ("open", "partly", "left for the owner")
 FINDING_ID = re.compile(r"^(r\d+)-(\d+)$")
 COMMIT = re.compile(r"^[0-9a-f]{7,40}$")
+# A no_commit must say why a fixed finding has no commit. A reason names what was done and why
+# that needs no commit ("the fix was to a file kept outside the repository"): it cannot be said
+# in fewer than three words, while a mark, a letter or a lone word ("x", "n/a", "none") can.
+REASON_WORD = re.compile(r"[A-Za-z]{2,}")
+REASON_WORDS = 3
 TEST_PLACES = ("tests", "scripts", "fuzz", "bench", "tools")
 TEXT_FIELDS = ("finding", "detail")
 WHAT_A_REVIEWER_IS = (
@@ -192,6 +200,9 @@ def validate(data):
         no_commit = finding.get("no_commit", "")
         if not isinstance(no_commit, str) or "|" in no_commit or "\n" in no_commit:
             raise Refused("data", fid, "its no_commit is not one line of words")
+        if no_commit and len(REASON_WORD.findall(no_commit)) < REASON_WORDS:
+            raise Refused("evidence", fid, f"its no_commit {no_commit!r} is not a reason: a reason "
+                          f"is at least {REASON_WORDS} words")
         if finding["outcome"] == "fixed" and not finding["commits"] and not no_commit:
             raise Refused("evidence", fid, "fixed with no commit, and no words on why there is none")
         if finding["outcome"] == "known limit" and not finding["notes"]:
@@ -268,8 +279,10 @@ def and_list(items):
 
 
 def status(data):
-    """The Result line: complete, or what is not settled, grouped by whom it waits on, with what
-    waits where the data says it, then any reviewer to come and any branch not merged."""
+    """The Result line: complete, or what is not settled, one group for each one it waits on, each
+    group starting with whom it waits on ("waiting on no one" where the data names no one), then
+    any reviewer to come and any branch not merged. Groups end with a full stop; the parts inside
+    a group are joined with "; "."""
     if data["complete"]:
         return "complete: every finding settled, every reviewer reported"
     groups = {}
@@ -277,20 +290,23 @@ def status(data):
         if finding["outcome"] in UNSETTLED:
             groups.setdefault(waiter(finding), {}).setdefault(finding["outcome"], []).append(finding)
     said = []
-    for who, by_outcome in groups.items():
+    for who in sorted(groups, key=lambda name: (name == "", name)):
+        by_outcome = groups[who]
         parts = []
         for outcome in UNSETTLED:
             items = [f["id"] + (f" ({f['waits_for']})" if f.get("waits_for") else "")
                      for f in by_outcome.get(outcome, [])]
             if items:
                 parts.append(f"{and_list(items)}, {outcome}")
-        said.append((f"waiting on {who}: " if who else "") + "; ".join(parts))
+        said.append(f"waiting on {who or 'no one'}: " + "; ".join(parts))
     if data["to_come"]:
         said.append(f"{len(data['to_come'])} reviewer to come")
     branches = [r["id"] for r in data["reviewers"] if r["branch"]]
     if branches:
         said.append(f"{', '.join(branches)}'s fixes not merged yet")
-    return "not complete: " + "; ".join(said) if said else "not complete"
+    said = [part.replace("waiting", "Waiting", 1) if part.startswith("waiting") else part
+            for part in said]
+    return "not complete" + "".join(f". {part}" for part in said) + ("." if said else "")
 
 
 def render(data):
