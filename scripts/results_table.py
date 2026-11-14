@@ -1719,15 +1719,19 @@ def missed_targets(root):
             what = f"not measured{where}, against {bar}"
         else:
             measured, gap = first_clause(measured), first_clause(gap)
+            # "over map-fresh 2.54×" as "2.54× over map-fresh": a design named before the figure
+            # would read, to the number gate, as the row of that design's own table.
+            measured = re.sub(r"^over (\S+) (\S+×)", r"\2 over \1", measured)
             # A gap that only restates the figure and the bar is left out.
-            gap = "" if gap.startswith(measured.rstrip(" …")) else f"; {gap}"
+            gap = "" if gap.startswith(measured.rstrip(" …")) else f", {gap}"
             what = f"{measured} against {bar}{where}{gap}{more}"
             if re.match(r"\d{8}\b", measured):  # A list of days: the gap says it.
                 what = f"bar {bar}{where}{gap}{more}"
-        line = f"- **{benchmark_title(text, target)} ({target}):** {what}; {short}.{cited}"
+        # The figures stay in the clause that names the target, which the number gate reads
+        # against the file the line links.
+        line = f"- **{target}, {benchmark_title(text, target)}:** {what}; {short}.{cited}"
         lines.append(f"{line} {NOT_MEASURED_MARK}" if unmeasured else line)
-    lines += ["", f"One line a target, from its first row; every row, with its why in full, is in "
-                  f"[RESULTS.md](RESULTS.md#{MISSED_ANCHOR})."]
+    lines += ["", f"Every row, with its why in full: [RESULTS.md](RESULTS.md#{MISSED_ANCHOR})."]
     return lines
 
 

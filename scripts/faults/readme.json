@@ -2160,8 +2160,8 @@
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "(T-SPSC-1):** 1.15× against ≥ 1.16×",
-          "new": "(T-SPSC-1):** 1.14× against ≥ 1.16×"
+          "old": "rigtorp:** 1.15× against ≥ 1.16×",
+          "new": "rigtorp:** 1.14× against ≥ 1.16×"
         }
       ],
       "command": [
