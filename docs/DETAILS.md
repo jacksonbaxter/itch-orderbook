@@ -65,6 +65,8 @@ A diagnostic run afterwards (P-0703) recorded each minor fault with its address 
 
 T-PERF-1, DRAM fills per book message, is missed at 2.002 against a bar of 0.623. That bar was set on a Zen 3 with 32 MB of L3 to one core, against this host's 4 MB shared by four, and the source's own book gave 0.983 on its own host ([results/counters_by_type_paged-flat_debian_12302019.md](../results/counters_by_type_paged-flat_debian_12302019.md)). The messages that name an old order are the ones that miss.
 
+T-PERF-2, the branch-miss rate, is missed by 0.062: `paged-flat` makes 2.102 branch misses per message against a bar of at most 2.04, one published day's total on an older Intel Core i3 divided by its messages, and adds, the most common message, take 50.07% of the misses; which branch inside an add misses was not traced ([results/counters_by_type_paged-flat_debian_12302019.md](../results/counters_by_type_paged-flat_debian_12302019.md)).
+
 By type, a replace makes 4.1840 branch misses per message and an add 2.4141 ([results/counters_by_type_paged-flat_debian_12302019.md](../results/counters_by_type_paged-flat_debian_12302019.md)).
 
 An empty counting span costs 308.0001 instructions and 444.0739 cycles but 0.0000 DRAM fills and 0.0001 branch misses, so fills and branch misses need no correction ([results/counters_by_type_paged-flat_debian_12302019.md](../results/counters_by_type_paged-flat_debian_12302019.md)).
@@ -77,11 +79,13 @@ Dispatch, `switch` vs a table vs threaded:
 
 The look-ahead's gain on the Zen 1 host is paid for with branch misses too, 4.7279 per message vs 2.0432 ([results/prefetch_debian_12302019.md](../results/prefetch_debian_12302019.md)).
 
+On the M4 Max the look-ahead raises instructions per message from 384.4524 (D=0) to 640.4915 (D=4), which is why it is off rather than on for one target; a default per target and a cheaper look-ahead were not tried ([results/prefetch_mac_12302019.md](../results/prefetch_mac_12302019.md)).
+
 SIMD parsing, scalar vs vector. ITCH fields are big-endian at fixed offsets, so a scalar decode is loads and byte swaps:
 
 - On the Zen 1 host, decoding an Add Order alone, SSSE3 wins: 0.80 cycles vs scalar's 9.94, with AVX2 at 1.78 ([results/simd_decode_debian_12302019.md](../results/simd_decode_debian_12302019.md)). Why AVX2 trails SSSE3 on the same shuffle plan is not established; Zen 1's split 256-bit operations, clock changes and line-split stores were not tested apart.
 - Over the whole parse the speed-up over scalar in cycles is SSSE3 0.758 and AVX2 0.730 ([results/simd_parse_debian_12302019.md](../results/simd_parse_debian_12302019.md)). The diagnostic counter run that points to the type dispatch and the moves back to integer registers is recorded in docs/NOTES.md and not published.
-- With the book behind it, SSSE3 and scalar tie on cycles, and scalar beats AVX2 with ranges that do not overlap; SSSE3 takes 188.132 ns per message ([results/simd_book_debian_12302019.md](../results/simd_book_debian_12302019.md)).
+- With the book behind it, SSSE3 and scalar tie on cycles, and scalar beats AVX2 with ranges that do not overlap: AVX2 takes 1.012 times scalar's cycles, 190.228 ns per message vs 187.966, and SSSE3 188.132 ns ([results/simd_book_debian_12302019.md](../results/simd_book_debian_12302019.md)).
 - On the Mac, NEON decodes an Add Order in 0.514 times scalar's cycles ([results/simd_decode_mac_12302019.md](../results/simd_decode_mac_12302019.md)), and wins the whole parse by less, 17.574 cycles per message vs 18.790, under the 10% set beforehand as the bar for changing the default ([results/simd_parse_mac_12302019.md](../results/simd_parse_mac_12302019.md)).
 - In WebAssembly SIMD does win. Core WebAssembly has no byte-reverse instruction, so a scalar decode is shifts and ORs, and SIMD128 decodes an Add Order in 1.113 ns vs 2.314 ns, on macOS in node's V8 ([results/simd_e11_mac_12302019.md](../results/simd_e11_mac_12302019.md)).
 - Two experiments could not run. AVX-512 VBMI needs a CPU neither host has. AVX2's first-burst cost needs a Skylake-family Intel server, and there is none here.
@@ -119,7 +123,9 @@ At 72 bytes a datagram the sender was the limit for every mode but U4, which sto
 
 ### The backtester
 
-T-BT-3's bar was set on a Mac, and the Mac meets it, in a run made before the Mac's sampler rule with no sampler beside it ([results/backtest_shadow_mac_12302019.md](../results/backtest_shadow_mac_12302019.md)).
+The backtester queues simulated orders among the real ones by order reference, so only depletion ahead of an order advances it, with Nasdaq's fees as dated for the day. On the Zen 1 host T-BT-3 is missed by 1.10 M messages/s ([results/backtest_shadow_debian_12302019.md](../results/backtest_shadow_debian_12302019.md)).
+
+T-BT-3's bar was published for an Apple M1 Pro, and the Mac meets it, in a run made before the Mac's sampler rule with no sampler beside it ([results/backtest_shadow_mac_12302019.md](../results/backtest_shadow_mac_12302019.md)).
 
 The suspect was the walk over simulated levels and orders. A ladder of schedules timed it at 4.969 ns a step, and on T-BT-3's schedule the walk is 3.51% of a message's 323.88 ns ([results/walks_ladder_debian_12302019.md](../results/walks_ladder_debian_12302019.md)). So the walk is not the cause.
 
@@ -139,7 +145,7 @@ T-MM-2, reproducing the paper's average spreads, fails at γ = 1: 3.0317, 3.03 a
 
 ### The browser replay
 
-On the Mac the book ran 13,819,561 messages/s natively and 11,661,713 in the browser ([results/wasm_replay_mac_12302019.md](../results/wasm_replay_mac_12302019.md)).
+Compiled to WebAssembly, the same `FastBook` replays one symbol in the browser demo at 1.19× native's time; the bar names Google Chrome and the run used Chrome for Testing, so T-WASM-1 has no verdict. On the Mac the book ran 13,819,561 messages/s natively and 11,661,713 in the browser ([results/wasm_replay_mac_12302019.md](../results/wasm_replay_mac_12302019.md)).
 
 ## Correctness
 
@@ -168,7 +174,7 @@ Planted book bugs are caught, each a fault-matrix row. The oracle has one known 
 
 On 12302019 the strict check counted 18,958 crossed and 1,018 locked observations ([results/oracle_12302019.md](../results/oracle_12302019.md)). T-INV-2 fails on nine of the ten sessions. The BX day, 01302019_BX, has no crossed observation ([results/oracle_01302019_BX.md](../results/oracle_01302019_BX.md)).
 
-All 654 crossed observations in normal trading came inside a reopening window, within 50 ms of a resumption, and none in normal trading outside such a window. T-INV-3 passes with 0 violations; on 12302019, 22 of 33 resumptions found the book crossed or locked, and every one cleared ([results/oracle_12302019.md](../results/oracle_12302019.md)).
+Of the 18,958 crossed observations on 12302019, 18,304 came with the symbol not in normal trading. All 654 crossed observations in normal trading came inside a reopening window, within 50 ms of a resumption, and none in normal trading outside such a window. T-INV-3 passes with 0 violations; on 12302019, 22 of 33 resumptions found the book crossed or locked, and every one cleared ([results/oracle_12302019.md](../results/oracle_12302019.md)).
 
 ### The trade prints
 
@@ -201,9 +207,11 @@ Wrong predictions are kept beside their outcomes in [results/predictions.md](../
 
 ## What this does not show, in full
 
+- **One host of each kind.** No x86 host with more cache and newer cores was available to split each gap into the host's share and the design's.
+- **One venue, one timing day.** Other feeds and message mixes may rank the designs differently.
 - **A noisy Mac.** The Mac cannot pin threads and shares its cores with other work, so its timings are context.
 - **No reserved huge pages.** The pools' explicit huge-page arm never ran, since reserving pages needs root on a shared host.
-- **No network.** The UDP replay runs over loopback: system calls and copies.
+- **No network.** The UDP replay runs over loopback: system calls and copies, with no kernel-bypass card, no NIC timestamps and no real packet loss.
 - **No market impact.** The backtester's profit and loss shows the accounting on two symbol-days, not what a strategy would earn.
 - **No kernel view.** Time in the kernel, the UDP receive path's included, is not shown.
-- **One build.** Other compilers and flags were audited for the code they emit, not timed.
+- **One build.** Every timing is Clang 23.1.4 with -O3 and no -march flag; other compilers and flags were audited for the code they emit, not timed ([results/bench_book_paged-flat_ram_debian_12302019.md](../results/bench_book_paged-flat_ram_debian_12302019.md)).
