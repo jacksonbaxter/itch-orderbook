@@ -1767,7 +1767,7 @@ def missed_full(root):
 MISS_OPENING = (
     "Each line is on the Zen 1 host unless it names the M4 Max, and gives the row that decides "
     "the verdict, or the worst. Where a bar is another host's published figure, the host's share "
-    "of the gap was not measured. On the Zen 1 host, messages naming an order a second old or "
+    "of the gap was not measured. In the book's runs, messages naming an order a second old or "
     "more make most DRAM fills.")
 # What each target asks, and whose bar it is, in words a stranger reads alone; and its why in a
 # few plain words, "" for none, or None for a trade check's, which is its row's. Only words are
@@ -1791,7 +1791,7 @@ PLAIN = {
                  "a book), against carteret on a Zen 3", ""),
     "T-PERF-2": ("branch misses per message, against Market-Core, an open-source project", ""),
     "T-INV-2": ("the never-crossed rule",
-                "every cross is the feed's, in a symbol outside normal trading"),
+                "every cross is the feed's, outside normal trading or inside a reopening window"),
     "T-TRADE-3": ("each symbol's continuous volume against SEC MIDAS", None),
     "T-TRADE-5": ("every continuous execution at the best price", None),
     "T-PARSE-1": ("the parser's framing walk, against itch-book", ""),

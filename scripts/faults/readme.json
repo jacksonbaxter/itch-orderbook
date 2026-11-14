@@ -3319,6 +3319,50 @@
         "signature": "(FAIL|ERROR): test_the_writeup_table_has_one_short_line_a_target",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-gate-negation-contraction-unread",
+      "breaks": "gate_numbers.py reads not, never and no but neither cannot nor a word ending in n't, so \"(T-URING-2) isn't met by S4\" passes",
+      "check": "test_gate_numbers.py test_cannot_and_a_contraction_turn_a_verdict_round",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "NEGATION = re.compile(r\"(?<![\\w-])(?i:not|never|no|cannot|\\w+n['’]t)(?![\\w-])\")",
+          "new": "NEGATION = re.compile(r\"(?<![\\w-])(?i:not|never|no)(?![\\w-])\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_cannot_and_a_contraction_turn_a_verdict_round"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_cannot_and_a_contraction_turn_a_verdict_round",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-writeup-list-inv2-why-narrowed",
+      "breaks": "WRITEUP.md's list says every T-INV-2 cross is in a symbol outside normal trading, though the oracle file counts 654 in normal trading inside a reopening window",
+      "check": "test_results_table.py test_the_writeup_table_has_one_short_line_a_target",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "\"every cross is the feed's, outside normal trading or inside a reopening window\"),",
+          "new": "\"every cross is the feed's, in a symbol outside normal trading\"),"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_the_writeup_table_has_one_short_line_a_target"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_the_writeup_table_has_one_short_line_a_target",
+        "exit": 1
+      }
     }
   ]
 }

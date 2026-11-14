@@ -436,6 +436,22 @@ class Gate(unittest.TestCase):
                 code, output = self.real_tree(said + "\n")
                 self.assertEqual(code, 0, output)
 
+    def test_cannot_and_a_contraction_turn_a_verdict_round(self):
+        # r18-32: "isn't" and "cannot" are negations too, with either apostrophe.
+        for said in ("Lossless at the peak (T-URING-2) isn't met by S4.",
+                     "Lossless at the peak (T-URING-2) isn’t met by S4.",
+                     "T-URING-2 cannot be met.", "T-BT-3 wasn't missed.", "T-SPSC-3 won’t be met."):
+            with self.subTest(said=said):
+                code, output = self.real_tree(said + "\n")
+                self.assertEqual(code, 1, output)
+                self.assertIn("turned round by a negation", output)
+        # Only a whole word: a word holding "cannot" and an apostrophe elsewhere are not negations.
+        for said in ("T-SPSC-3 is missed.", "T-SPSC-2, against Frasch's talk, is missed.",
+                     "T-SPSC-3, on Cannotware's ring, is missed."):
+            with self.subTest(said=said):
+                code, output = self.real_tree(said + "\n")
+                self.assertNotIn("turned round by a negation", output)
+
     def test_a_verdict_word_split_by_markup_is_read_whole(self):
         for said in ("T-SPSC-1 is **m**et.", "T-SPSC-1 is m<b></b>et.", "T-SPSC-1 is _met_.",
                      "[T-SPSC-1](RESULTS.md) is met."):

@@ -15,7 +15,9 @@ threads): those name hardware, they count nothing measured. Left out: code spans
 source's title), HTML tags, dates (2026-11-12, 30 December 2019, and eight digits that read as a
 day, 12302019), the names in EXEMPT, a number glued to a word (S4, p50, T-BOOK-1, x86-64), and
 any line ending in `<!-- figures: not measured -->`, a mark refused on a line written by hand
-that cites a results file, whose figures are measured. A count written as a word, zero and two
+that cites a results file, whose figures are measured. The mark is read per physical line: one on
+a continuation line of a bullet whose first line cites a results file is not refused, and it
+excuses that line's figures. A count written as a word, zero and two
 to twenty, and one straight before `of` and a count ("one of three"), is a short integer: read
 on a line that cites a results file, except in a block results_table.py generates, whose counts
 its --check holds.
@@ -92,9 +94,10 @@ rows with that verdict, and of all its rows; such a count is held here and not r
 A verdict word read anywhere that ties to no target fails, unless it is in a heading, straight
 before the word target ("every missed target", not "targets met"), or on a line that ends in
 `<!-- verdicts: no target named -->`. Outside a heading and such a line, a verdict word turned
-round fails whatever its target: one with not, never or no before it in its clause, after the
-last target id there ("T-SPSC-3 is not met", "No target failed"), or none straight after it
-("missed: none").
+round fails whatever its target: one with not, never, no, cannot or a word ending in n't before
+it in its clause, after the last target id there ("T-SPSC-3 is not met", "isn't met", "cannot be
+met", "No target failed"), or none straight after it ("missed: none"). Other ways of negating
+("hardly met", "far from met", "met by none of its runs") are not read.
 
 What it cannot do. It does not read units, so 5.15 M against a cell of 5.15 ms passes. It reads
 words, not meaning, so a clause that shares a word with the wrong place by chance passes, and a
@@ -212,11 +215,13 @@ AFTER_VERDICT = re.compile(
     r"|(?=\s+(?:sessions|days)\b|\s*(?:[,;.)]|$)))", re.I)
 MAC_WORDS = re.compile(r"(?i)(?<![\w-])(?:mac|macos|m4|m4 max|apple|darwin)(?![\w-])")
 LINUX_WORDS = re.compile(r"(?i)(?<![\w-])(?:debian|zen 1|v1605b|linux host)(?![\w-])")
-# A verdict turned round: not, never or no before its word in its clause, after the last
-# target id there, or none straight after it ("is not met", "No target failed", "missed:
-# none"). And the markup a verdict word is read without, taken out rather than blanked, so a
-# word split by emphasis or a tag ("**m**et", "m<b></b>et") reads whole.
-NEGATION = re.compile(r"(?<![\w-])(?i:not|never|no)(?![\w-])")
+# A verdict turned round: not, never, no, cannot or a word ending in n't (either apostrophe)
+# before its word in its clause, after the last target id there, or none straight after it
+# ("is not met", "isn't met", "cannot be met", "No target failed", "missed: none"). Other ways
+# of negating are not read: "hardly met", "far from met", "met by none of its runs" pass. And
+# the markup a verdict word is read without, taken out rather than blanked, so a word split by
+# emphasis or a tag ("**m**et", "m<b></b>et") reads whole.
+NEGATION = re.compile(r"(?<![\w-])(?i:not|never|no|cannot|\w+n['’]t)(?![\w-])")
 NONE_AFTER = re.compile(r"^\W*(?i:none)(?![\w-])")
 MARKUP = re.compile(r"\]\([^)\n]*\)|<!--.*?-->|<[^>]*>|[`*\[\]]|(?<!\w)_+|_+(?!\w)")
 DAY_WORD = re.compile(r"(?<!\d)(\d{8}(?:_[A-Z]+)?)(?![\d\w])")
