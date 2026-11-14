@@ -1016,7 +1016,7 @@
         "{tree}/scripts/test_fault_matrix.py"
       ],
       "expect": {
-        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: a mutation of CMakePresets\\.json makes ",
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: its mutations of CMakePresets\\.json, made in order, make ",
         "exit": 1
       }
     },
@@ -1059,6 +1059,342 @@
       ],
       "expect": {
         "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: a mutation of tests/CMakeLists\\.txt names a libFuzzer build's folder",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-input-fuzz-cmake",
+      "breaks": "check-gate-stage's input, a replace_text, links the release build's fuzz targets with libFuzzer without spelling a word the rule reads",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [{\"file\": \"include/itch/reader.hpp\", \"old\": \"if (remaining == 0) {\", \"new\": \"if (remaining == 0) [[unlikely]] {\"}],\n      \"inputs\": [{\"file\": \"fuzz/CMakeLists.txt\", \"op\": \"replace_text\", \"old\": \"  if(\", \"new\": \"  if(NOT \"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: an input edits fuzz/CMakeLists\\.txt, a build file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-input-only-presets",
+      "breaks": "check-gate-stage, with no mutation, gives an input, a json_set, that makes the release preset inherit the fuzz preset",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [],\n      \"inputs\": [{\"file\": \"CMakePresets.json\", \"op\": \"json_set\", \"path\": [\"configurePresets\", 1, \"inherits\"], \"value\": \"fuzz\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: an input edits CMakePresets\\.json, a build file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-input-removes-cmake",
+      "breaks": "check-gate-stage's input removes the files of cmake/, the build's own modules",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [{\"file\": \"include/itch/reader.hpp\", \"old\": \"if (remaining == 0) {\", \"new\": \"if (remaining == 0) [[unlikely]] {\"}],\n      \"inputs\": [{\"file\": \"cmake\", \"op\": \"remove_files\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: an input edits cmake/ItchCacheLine\\.cmake, a build file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-input-clock-word",
+      "breaks": "check-gate-stage's input, a replace_text, puts in a line that runs the smoke tests by their label",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [{\"file\": \"include/itch/reader.hpp\", \"old\": \"if (remaining == 0) {\", \"new\": \"if (remaining == 0) [[unlikely]] {\"}],\n      \"inputs\": [{\"file\": \"tests/fixtures/chase/check-1.out\", \"op\": \"replace_text\", \"old\": \"machine_check: passed\\n\", \"new\": \"machine_check: passed\\nctest -L fuzz_smoke\\n\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: an input of tests/fixtures/chase/check\\-1\\.out spells 'fuzz_smoke'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-input-json-build-word",
+      "breaks": "check-gate-stage's input, a json_set, puts in a value that turns ITCH_FUZZ on",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [{\"file\": \"include/itch/reader.hpp\", \"old\": \"if (remaining == 0) {\", \"new\": \"if (remaining == 0) [[unlikely]] {\"}],\n      \"inputs\": [{\"file\": \"tests/fixtures/chase/run-1.json\", \"op\": \"json_set\", \"path\": [\"header\", \"flags\"], \"value\": \"-O3 -DNDEBUG -std=c++23 -DITCH_FUZZ=ON\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: an input of tests/fixtures/chase/run\\-1\\.json spells 'ITCH_FUZZ'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-dot-fuzz-cmake",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation of ./fuzz/CMakeLists.txt links the release build's fuzz targets with libFuzzer without spelling a word the rule reads",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"./fuzz/CMakeLists.txt\", \"old\": \"  if(\", \"new\": \"  if(NOT \"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: a mutation of fuzz/CMakeLists\\.txt changes how a fuzz target builds",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-capital-fuzz-cmake",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation of FUZZ/CMakeLists.txt, the same file on the Mac's disk, links the release build's fuzz targets with libFuzzer",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"FUZZ/CMakeLists.txt\", \"old\": \"  if(\", \"new\": \"  if(NOT \"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: a mutation of fuzz/CMakeLists\\.txt changes how a fuzz target builds",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-dot-presets",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation of ./CMakePresets.json makes the release preset inherit the fuzz preset",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"./CMakePresets.json\", \"old\": \"\\\"displayName\\\": \\\"Optimised build, all checks\\\",\\n      \\\"inherits\\\": \\\"base\\\",\", \"new\": \"\\\"displayName\\\": \\\"Optimised build, all checks\\\",\\n      \\\"inherits\\\": \\\"fuzz\\\",\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: its mutations of CMakePresets\\.json, made in order, make ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-chained-presets",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's two mutations of CMakePresets.json, the second on the first's text, make the release preset inherit the fuzz preset",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"CMakePresets.json\", \"old\": \"\\\"displayName\\\": \\\"Optimised build, all checks\\\",\\n      \\\"inherits\\\": \\\"base\\\",\", \"new\": \"\\\"displayName\\\": \\\"Optimised build, all checks\\\",\\n      \\\"inherits\\\": \\\"base\\\", \\\"vendor\\\": {},\"}, {\"file\": \"CMakePresets.json\", \"old\": \"\\\"inherits\\\": \\\"base\\\", \\\"vendor\\\": {},\", \"new\": \"\\\"inherits\\\": \\\"fuzz\\\",\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: its mutations of CMakePresets\\.json, made in order, make ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-inline-env-split",
+      "breaks": "check-gate-stage runs a shell given code inline, inside the one word env -S splits",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"env\", \"-S\", \"sh -c 'exit 1'\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: gives code inline",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-inline-version",
+      "breaks": "check-gate-stage runs Python, named with its version, given code inline",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"python3.15\", \"-c\", \"raise SystemExit(1)\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: gives code inline",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-inline-capitals",
+      "breaks": "check-gate-stage runs bash, named in capitals, which the Mac's disk finds as bash, given code inline",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"BASH\", \"-c\", \"exit 1\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: gives code inline",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-inline-perl-e",
+      "breaks": "check-gate-stage runs perl given code inline with -E",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"perl\", \"-E\", \"exit 1\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: gives code inline",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-inline-node-print",
+      "breaks": "check-gate-stage runs node given code inline with -p",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"node\", \"-p\", \"process.exit(1)\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: gives code inline",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-inline-node-eval",
+      "breaks": "check-gate-stage runs node given code inline with --eval",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"node\", \"--eval\", \"process.exit(1)\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: gives code inline",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-sanitizer-typed",
+      "breaks": "check-gate-stage configures a build with fuzzer second in ITCH_SANITIZE, the variable given with its type",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"cmake\", \"-S\", \"{tree}\", \"-B\", \"{tree}/build/probe\", \"-DITCH_SANITIZE:STRING=address,fuzzer\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: '\\-DITCH_SANITIZE:STRING=address,fuzzer' builds libFuzzer in outside a search",
         "exit": 1
       }
     }
