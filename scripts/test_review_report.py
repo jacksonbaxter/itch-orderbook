@@ -119,7 +119,8 @@ class ReviewReport(unittest.TestCase):
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
         text = self.out.read_text(encoding="utf-8")
-        self.assertIn("- Looked again: 1 of 2 reviewers (r1); every other outcome was checked "
+        self.assertIn("- Looked again at the fixes of their own findings: 1 of 2 reviewers (r1); "
+                      "every other outcome was checked "
                       "against the tree by the record's author\n", text)
         self.assertIn("| Looked again at the fixes | 1 | 2 |\n| Read once | 1 | 2 |\n", text)
 

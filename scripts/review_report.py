@@ -33,10 +33,10 @@ The Result line names every finding not settled, in one group for each one it wa
 or "waiting on no one", and ending with a full stop, with what waits (its `waits_for`) where
 given.
 
-The file gives what no reviewer read (`unread`), the commit the outcomes were checked at, and any checked again later with the
-commit they were checked at, the reviewers, the counts by reviewer, by
-severity and by outcome with their totals, every finding, what is still open, and what is still to
-come; it says "complete" only when the data does and `write` lets it.
+The file gives the commit the outcomes were checked at, and any checked again later with the
+commit they were checked at, the reviewers, the counts by reviewer, by severity and by outcome
+with their totals, every finding, what is still open, what is still to come, and what no
+reviewer read (`unread`); it says "complete" only when the data does and `write` lets it.
 
 `check` reads the data file again and refuses as `write` does, then refuses:
 
@@ -46,8 +46,9 @@ come; it says "complete" only when the data does and `write` lets it.
 - notes: a docs/NOTES.md section named is not a heading there;
 - page: a count that WRITEUP.md's paragraph on the final review gives is not the record's own
   total, a total is not given there, or the paragraph gives an integer that is none of them;
-- commit: a commit named, or one an outcome was checked again at, is not in the history, checked only where git has the full history
-  (not in a shallow clone, and not in a tree copied without .git, which it says).
+- commit: a commit named, or one an outcome was checked again at, is not in the history,
+  checked only where git has the full history (not in a shallow clone, and not in a tree
+  copied without .git, which it says).
 
 What neither step can check is that the evidence named is the right evidence: that a commit
 named fixed that finding, that a test or fault named holds it, or that a section named gives
@@ -333,7 +334,7 @@ def render(data):
         "- Host: none",
         f"- Reviewers: {len(reviewers)}",
         f"- Findings: {len(findings)}",
-        f"- Looked again: {len(again)} of {len(reviewers)} reviewers"
+        f"- Looked again at the fixes of their own findings: {len(again)} of {len(reviewers)} reviewers"
         + (f" ({', '.join(again)})" if again else "")
         + "; every other outcome was checked against the tree by the record's author",
         "- Severities: " + ", ".join(f"{sum(1 for f in findings if f['severity'] == s)} {s}"
