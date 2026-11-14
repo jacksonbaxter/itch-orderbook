@@ -36,10 +36,11 @@ what it was before the option existed. `copy` is asked for where the file and th
 of it do not fit in memory together: the timed passes read only bench_parse's own copy, which
 the bench reads every page of and asks the kernel about (mincore) before and after each timed
 pass, and that is the condition. The machine check then records the file's pages in the page
-cache (input-cached) without requiring them, and enforces every other condition as before; the
-driver refuses the run unless every process's record holds both readings of every timed pass
-and its last reading, each every page of the copy; and the file says so in its input_condition
-field and its Input condition section, which prints every reading.
+cache (input-cached), their count required and no number of them, and enforces every other
+condition as before; the driver refuses the run unless every process's record holds both
+readings of every timed pass and its last reading, each every page of the copy; and the file
+says so in its input_condition field and its Input condition section, which prints every
+reading.
 
 The figures. Each pass's rate is every framed message over the pass's seconds, and its GB/s is
 the file's bytes, length prefixes included, over the same seconds, in 10^9 bytes: so the
@@ -54,9 +55,9 @@ summary, the best passes and each verdict, holds every pass's messages and the f
 the frame count and to the manifest's day, works the caveats' table again from the manifest,
 holds the Counts table to the manifest's ten-type count, the frames and the passes' folds (each
 decode decoding all it should, rejecting none), holds the input condition (a file that claims
-none passes input-resident with every page of the file and carries nothing of the copy's; one
-that claims the copy shows every reading, each every page of it), and exits 1 on any that
-differ.
+none passes input-resident once, with every page of the file, held and in all, and carries
+nothing of the copy's; one that claims the copy shows every reading, each every page of it),
+and exits 1 on any that differ.
 
 render renders a published file again from its run's raw folder (the repetitions' records,
 the machine check's output, the timed loops' code and the sampler's log, judged again), stamps
@@ -1177,12 +1178,16 @@ def condition_problems(text, fields, passes, file_bytes):
                                                           "input condition"))
         held = re.findall(r"^machine_check: pass input-resident: (\d+) of (\d+) pages", machine,
                           re.MULTILINE)
-        # Every page of them: check_results.check_machine holds a pass to that.
         if [of for _, of in held] != [str(pages)]:
             problems.append(("parse-condition-unchecked", "no input condition claimed, and the "
                                                           "machine check does not pass "
                                                           "input-resident once, over the file's "
                                                           f"{pages} pages"))
+        # Every page of them, held here as check_results.check_machine holds it.
+        elif any(resident != of for resident, of in held):
+            problems.append(("machine-check-inconsistent", "input-resident passed with "
+                                                           f"{held[0][0]} of the file's "
+                                                           f"{pages} pages resident"))
         return problems
     if claimed != COPY_CLAIM:
         return [("parse-condition-unknown", f"{CONDITION_FIELD}: {claimed!r}")]

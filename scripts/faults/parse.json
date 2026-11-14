@@ -1183,6 +1183,28 @@
         "signature": "FAIL: test_the_files_cached_pages_must_be_counted",
         "exit": 1
       }
+    },
+    {
+      "id": "parse-check-input-resident-held-short",
+      "breaks": "parse_driver.py --check lets through a file page whose input-resident passed with pages of the file missing",
+      "check": "test_parse_driver.py InputCondition.test_the_drivers_check_holds_the_pages_input_resident_passed_with",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "        elif any(resident != of for resident, of in held):\n",
+          "new": "        elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_the_drivers_check_holds_the_pages_input_resident_passed_with"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_drivers_check_holds_the_pages_input_resident_passed_with",
+        "exit": 1
+      }
     }
   ]
 }

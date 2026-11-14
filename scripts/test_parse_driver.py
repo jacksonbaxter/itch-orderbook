@@ -574,6 +574,27 @@ class InputCondition(unittest.TestCase):
         self.assertIn("parse-condition-unclaimed", all_codes(text.replace(
             "machine_check: passed", COPY_MACHINE)))
 
+    def test_the_drivers_check_holds_the_pages_input_resident_passed_with(self):
+        # Its own check, not only check_results.check_machine: a pass with pages missing.
+        def own(text):
+            return {code for code, _ in parse_driver.check_text(text)}
+
+        text = rendered()
+        line = f"machine_check: pass input-resident: {EVERY_PAGE}\n"
+        self.assertNotIn("machine-check-inconsistent", own(text))
+        self.assertIn("machine-check-inconsistent", own(text.replace(
+            line, line.replace("2014504 of 2014504", "2014057 of 2014504"))))
+        records = [record(index) for index in (1, 2, 3)]
+        for day in records:
+            day["header"]["dataset"] = "10302019.NASDAQ_ITCH50"
+            day["bytes"] = 9_035_016_843
+        lunary = rendered(records)
+        line = "machine_check: pass input-resident: 2205815 of 2205815 pages resident"
+        self.assertEqual(lunary.count(line), 1)
+        self.assertNotIn("machine-check-inconsistent", own(lunary))
+        self.assertIn("machine-check-inconsistent", own(lunary.replace(
+            line, "machine_check: pass input-resident: 2151095 of 2205815 pages resident")))
+
     def test_a_copy_file_is_rendered_again_from_its_records(self):
         SCRATCH.mkdir(parents=True, exist_ok=True)
         scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
