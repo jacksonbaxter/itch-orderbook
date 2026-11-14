@@ -225,6 +225,50 @@
       }
     },
     {
+      "id": "gates-unopened-citation-printed-unlisted",
+      "breaks": "A string a binary prints cites a research id that PRINTED_IDS does not list",
+      "check": "gates.py unopened-citation",
+      "mutations": [
+        {
+          "file": "bench/bench_udp.cpp",
+          "old": "not a network (IU-47)\";",
+          "new": "not a network (IU-48)\";"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL unopened-citation bench/bench_udp\\.cpp:\\d+: prints a private id PRINTED_IDS does not list: IU-48",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-unopened-citation-cmake",
+      "breaks": "A cmake/ comment cites a research id from notes kept outside the repository",
+      "check": "gates.py unopened-citation",
+      "mutations": [
+        {
+          "file": "cmake/ItchCacheLine.cmake",
+          "old": "(hw.cachelinesize, and XNU's L2 line of 1 << 7),",
+          "new": "(LC-21),"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL unopened-citation cmake/ItchCacheLine\\.cmake:\\d+: cites a private id: LC-21",
+        "exit": 1
+      }
+    },
+    {
       "id": "gates-private-name",
       "breaks": "A results file names the machine it was made on",
       "check": "gates.py private-name",

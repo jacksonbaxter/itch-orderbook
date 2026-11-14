@@ -328,6 +328,11 @@ class Gates(unittest.TestCase):
             ("bench/CMakeLists.txt", "# " + "E11: the wasm run\nadd_library(x)\n"),
             ("include/itch/wire.hpp", "// Sources, as the research " + "evidence gives them\n"),
             ("bench/b.cpp", "// the comparison " + "plan's item 3\nint a;\n"),
+            ("cmake/X.cmake", "# 128 on Apple silicon (" + "LC-21)\nset(x 1)\n"),
+            ("tools/tool.cpp", 'int main() { return puts("rule " "MK-' + '75"); }\n'),
+            ("bench/b.cpp", '// E1: printed, but not listed\nconst char* l = "E' + '1";\n'),
+            ("tools/itch_select.cpp", 'int main() { return puts("rule " "MK-' + '76"); }\n'),
+            ("bench/bench_udp.cpp", 'const char* c = "not a network (IU-' + '47)";\n'),
         ]
         for name, text in planted:
             with self.subTest(text=text):
@@ -339,8 +344,10 @@ class Gates(unittest.TestCase):
             ("include/itch/wire.hpp", "// T-BT-3, T-MM-1 and T-SIMD-2 (BENCHMARKS.md), FNV-1a, "
                                       "SHA-256, AVX-512, x86-64, r0843:u, 0xE1, 1E9\nint a;\n"),
             ("src/parser.cpp", "// docs/NOTES.md, \"Queue jumps\"; results/{run,run_log}.md\n"),
-            ("tools/tool.cpp", 'int main() { return puts("rule " "MK-75"); }  // printed\n'),
-            ("bench/b.cpp", '// E1: the field run, labelled as it prints\nconst char* l = "E1";\n'),
+            ("tools/itch_select.cpp", 'int main() { return puts("rule " "MK-75"); }\n'),
+            ("bench/bench_kernels.cpp", "// E1: the field run, labelled as it prints\nconst char* l[] = "
+                                        '{"E1", "E2", "E3", "E4", "E5", "E6", "E9", "E13"};\n'),
+            ("cmake/X.cmake", "# 128 on Apple silicon (hw.cachelinesize)\nset(x 1)\n"),
             ("include/itch/wire.hpp", "// so their execution is not evidence for any other\n"),
             ("tests/fixtures/run.md", "- prediction: P-0999\n"),
         ]

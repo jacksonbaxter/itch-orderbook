@@ -284,15 +284,35 @@ def toolchain_path(root, files):
 # A comment in the code cites only what a reader of the repository can open: no file that is not
 # in it, and no id from the research notes kept outside it (BT-2, DS-72, LC-24, IU-43, MK-75 and
 # the rest of those families), from the experiments (E8), the predictions (P-0021) or the reviews
-# (r8-1). An experiment id is allowed where the file's own code prints it as a label, as
-# bench_kernels.cpp does. It reads comments, not literals: a label a binary prints is output.
+# (r8-1). The string literals of the C++ code are read too, since a literal is what a binary
+# prints: an id in one fails unless PRINTED_IDS lists it for its file, with the reason it stays,
+# and a listed id its file no longer prints fails as well. A comment may name an experiment id its
+# own file prints, as bench_kernels.cpp's do. Python literals are not read: there they are data.
+PRINTED_IDS = {
+    "bench/bench_kernels.cpp": dict.fromkeys(
+        ("E1", "E2", "E3", "E4", "E5", "E6", "E9", "E13"),
+        "the experiment label of each record; scripts/simd_report.py checks it against its own "
+        "table, and the published results/simd_*.md name the experiments by it"),
+    "bench/bench_udp.cpp": {
+        "IU-47": "the comparability field of every record (loopback runs the receive softirq on "
+                 "the sender's CPU, so it measures syscalls and copies, not a network), printed "
+                 "as it was by the binary that made the published results/udp_*.md",
+        "IU-46": "the latency record's from field (latency runs from each packet's scheduled send, "
+                 "so a sender that falls behind is charged), printed as it was by the binary that "
+                 "made results/udp_latency_debian_12302019.md",
+    },
+    "tools/itch_select.cpp": {
+        "MK-75": "the selection rule its header line names (docs/NOTES.md, \"The symbols\"), "
+                 "printed as it was when it chose the published market maker's symbols",
+    },
+}
 CITED_FILE = re.compile(r"(?<![\w./{},-])([\w./{},-]*\w\.md)\b")
 CITED_ID = re.compile(r"(?<![\w-])(?:(?:BT|DS|FR|FT|GS|IU|LC|MK|MM|OSS|SIMD|TV)-\d+|P-\d{4}"
                       r"|r\d{1,2}-\d{1,3}|E\d{1,2})(?![\w-])")
 UNOPENED_RESEARCH = re.compile(r"\bresearch evidence\b|\bthe (?:research|evidence)\b|\bevidence's"
                                r"|\bcomparison plan\b", re.IGNORECASE)
 EXPERIMENT_ID = re.compile(r"E\d{1,2}")
-CITING_CODE = ("include", "src", "bench", "tools", "tests", "fuzz")
+CITING_CODE = ("include", "src", "bench", "tools", "tests", "fuzz", "cmake")
 CITING_SUFFIXES = CXX_SUFFIXES | {".py", ".cmake"}
 CXX_LITERAL = re.compile(r"\"((?:\\.|[^\"\\\n])*)\"")
 HASH_COMMENT = re.compile(r"\"(?:\\.|[^\"\\\n])*\"|(#[^\n]*)")
@@ -346,8 +366,20 @@ def unopened_citation(root, files):
     violations = []
     for path in files:
         text = read_text(path) or ""
-        printed = {m[1] for m in CXX_LITERAL.finditer(code_only_literals(text))
-                   if EXPERIMENT_ID.fullmatch(m[1])} if path.suffix in CXX_SUFFIXES else set()
+        listed = PRINTED_IDS.get(relative(root, path), {})
+        printed = set()
+        if path.suffix in CXX_SUFFIXES:
+            literals = code_only_literals(text)
+            for literal in CXX_LITERAL.finditer(literals):
+                for match in CITED_ID.finditer(literal[1]):
+                    printed.add(match[0])
+                    if match[0] not in listed:
+                        violations.append((path, line_of(literals, literal.start()),
+                                           f"prints a private id PRINTED_IDS does not list: "
+                                           f"{match[0]}"))
+        for name in sorted(set(listed) - printed):
+            violations.append((path, 1, f"PRINTED_IDS lists {name}, which it no longer prints"))
+        printed = {name for name in printed & set(listed) if EXPERIMENT_ID.fullmatch(name)}
         for start, comment in comments_of(path, text):
             for offset, line in enumerate(comment.splitlines()):
                 for match in CITED_FILE.finditer(line):
@@ -700,7 +732,8 @@ def gates():
              toolchain_path, lambda root: list(walk(root))),
         Gate("unopened-citation", "no comment in the code cites a file that is not in the "
              "repository, research kept outside it, or a research, experiment, prediction or "
-             "review id; it reads comments, not the labels a binary prints",
+             "review id, and no string a binary prints cites such an id unless "
+             "PRINTED_IDS lists it with its reason",
              unopened_citation, citing_files),
         Gate("attribution-without-ledger",
              "the attribution and the headers it includes never include or name the ledger",
