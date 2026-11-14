@@ -16,9 +16,11 @@ no row is held by tests (HELD_BY_TESTS) or accounted (ACCOUNTED), or refused. Th
 holds every verdict word in prose to the same rows (target_rows()). The table of every target
 missed or not measured has a row for each file, host, day or comparison, with its why in full,
 each why giving what was measured before what is not established; WRITEUP.md's has one short
-line a target, from its first row, and links the full table. T-PARSE-3's row follows whether
-its bar's day, 10302019, has a results file: with none, the other day's row says that day is not
-measured and a run is registered; with one, the row is that file's miss, or none if it is met.
+line a target, a plain sentence from the row that decides its verdict or the worst, and links
+the full table. T-PARSE-3's row follows whether
+its bar's day, 10302019, has a results file: with none, the other day's row says 10302019 is not
+measured yet and that the prediction for its run is committed; with one, the row is that file's
+miss, or none if it is met.
 
 Every verdict in every results file reaches RESULTS.md, failures included. A results file
 with no reader here is refused, and so is a file with a verdict no row took up, so that
@@ -152,6 +154,12 @@ def across_arms(arms, column, verdict, detail):
     if other:
         return "FAIL", f"{detail}; the arms disagree: {', '.join(other)}"
     return verdict, f"{detail}; the same on {len(arms)} arm{'s' if len(arms) != 1 else ''}"
+
+
+def in_all_designs(measured):
+    """A headline cell's "the same on 4 arms" in words a reader knows."""
+    return re.sub(r"; the same on (\d+) arms$",
+                  lambda match: f"; the same in all {in_words(int(match[1]))} designs", measured)
 
 
 def source(name):
@@ -491,7 +499,8 @@ def book_target_rows(name, text, book):
         word, _, detail = verdict.partition(": ")
         rows.append((cells["Target"], design, input_mode, top, day, host, cells["Bar"],
                      cells["Bar set on"], cells["Measured here"] or "–",
-                     f"**missed**: {detail}" if word == "missed" else verdict, book[-2],
+                     f"**missed**: {ratio_gap(detail)}" if word == "missed" else ratio_gap(verdict),
+                     book[-2],
                      source(name)))
     if not rows:
         raise TableError(f"results/{name}: a book file with no target in its targets table")
@@ -973,10 +982,36 @@ def held_by_tests():
             "entries, and `scripts/check.sh` the gate.")
 
 
+def ratio_gap(text):
+    """A gap between two ratios written as a difference, never as a factor: "over map-fresh by
+    1.46×, over map-aged by 1.19×" as "over map-fresh 1.46 below the bar; over map-aged 1.19 below
+    the bar", and "within the 1.55× bar by 0.36×" as "0.36 inside the 1.55× bar"."""
+    text = re.sub(r"\bover (\S+) by (\d+(?:\.\d+)?)×", r"over \1 \2 below the bar", text)
+    text = text.replace(" below the bar, over ", " below the bar; over ")
+    return re.sub(r"\bwithin the (\S+×) bar by (\d+(?:\.\d+)?)×", r"\2 inside the \1 bar",
+                  text)
+
+
+# The map books as the README's headline names them: a reader does not know map-fresh.
+MAP_WORDS = (("map-fresh", "a `std::map` book on a fresh heap", "below the bar on a fresh heap"),
+             ("map-aged", "one on an aged heap", "on an aged one"))
+
+
+def headline_ratios(measured, gap):
+    """T-DESIGN-1's figures and gap as the headline gives them: each ratio over the map book
+    named in words, and each gap as how far below the bar the ratio is."""
+    for name, book, where in MAP_WORDS:
+        measured = re.sub(rf"\bover {name} (\d+(?:\.\d+)?×)", rf"\1 {book}", measured)
+        gap = re.sub(rf"\bover {name} by (\d+(?:\.\d+)?)×", rf"\1 {where}", gap)
+    return measured, gap
+
+
 def shown_verdict(verdict, gap=""):
-    """A headline verdict, met or missed, with the gap its file gives a miss."""
+    """A headline verdict, met or missed, with the gap its file gives a miss: "by 11.25 M msg/s"
+    as "11.25 M msg/s short"."""
     if verdict == "met":
         return "met"
+    gap = re.sub(r"^by (.+)$", r"\1 short", gap)
     return f"**missed**: {gap}" if gap else "**missed**"
 
 
@@ -1021,8 +1056,8 @@ def alloc_headline(target, name, text):
     control = table_row("Control book, the reference", text, name)[1]
     verdict, measured = across_arms(
         arm_verdicts(text, name), target, verdict,
-        f"{allocations} allocations after warm-up in {messages} messages; the control book "
-        f"made {control}")
+        f"{allocations} allocations after warm-up in {messages} messages, against {control} by "
+        f"the reference book under the same count")
     return (bar, measured, header_host(text, name), "met" if verdict == "PASS" else "missed",
             "")
 
@@ -1084,18 +1119,18 @@ def short_bar(bar):
 
 
 def short_host(host):
-    """A headline host: the Linux host's CPU model and the cores its threads ran on, or the
-    Mac's model."""
-    host = host.removeprefix("Darwin arm64 ")
-    host = re.sub(r"^debian, (?:AMD )?", "", host).replace("Ryzen Embedded ", "Ryzen ")
-    return re.sub(r", pinned to (cores? )", r", \1", host)
+    """A headline host by the name the README's pitch gives it: the Zen 1 host, or the Mac's
+    model; where its threads ran is in RESULTS.md."""
+    if host.startswith("debian"):
+        return "Zen 1 host"
+    return host.removeprefix("Darwin arm64 ")
 
 
 # The README's headline: these targets, in this order, each from the results file beside it.
 # Only the words on what each measures are written here; every value comes from the file.
 HEADLINE = (
     ("T-ORACLE-2", "oracle_sessions.md", sessions_headline,
-     "Agreement with an independent reference book after every message"),
+     "Agreement with an independent reference book over whole sessions"),
     ("T-ALLOC-1", "oracle_12302019.md", alloc_headline,
      "Heap allocations on the hot path over a whole day"),
     ("T-BOOK-1", "bench_book_paged-flat_ram_debian_12302019.md", book_headline,
@@ -1110,8 +1145,9 @@ HEADLINE = (
 UNJUDGED = (
     ("T-BOOK-1", "bench_book_paged-flat_ram_mac_12302019.md"),
 )
-UNJUDGED_WHAT = {"T-BOOK-1": "The full-depth rebuild"}
+UNJUDGED_WHAT = {"T-BOOK-1": "the same full-depth rebuild"}
 HEADLINE_SIZE = (4, 5)
+HEADLINE_FIRST = "What it measures (its row id in RESULTS.md)"
 
 
 def headline(root, chosen=HEADLINE, unjudged=UNJUDGED):
@@ -1136,13 +1172,14 @@ def headline(root, chosen=HEADLINE, unjudged=UNJUDGED):
             raise TableError(f"results/{name}: {target}'s verdict is {verdict!r}, neither met "
                              "nor missed, so it cannot be in the headline")
         missed += verdict == "missed"
-        rows.append((f"{what} ({target})", short_bar(bar), measured, short_host(host),
-                     shown_verdict(verdict, gap), source(name)))
+        if target == "T-DESIGN-1":
+            measured, gap = headline_ratios(measured, gap)
+        rows.append((f"{what} ({target})", short_bar(bar), in_all_designs(measured),
+                     short_host(host), shown_verdict(verdict, ratio_gap(gap)), source(name)))
     if not missed:
         raise TableError("the headline shows no missed target: at least one row must be a "
                          "miss, so that a reader sees one on the first page")
-    lines = markdown_table(("What it measures (target)", "Bar", "Measured", "Host", "Verdict",
-                            "File"), rows)
+    lines = markdown_table((HEADLINE_FIRST, "Bar", "Measured", "Host", "Verdict", "File"), rows)
     for target, name in unjudged:
         lines += ["", unjudged_line(root, target, name)]
     return lines
@@ -1164,14 +1201,17 @@ def unjudged_line(root, target, name):
     if verdict != "host differs":
         raise TableError(f"results/{name}: {target}'s verdict is {verdict!r}, not host differs, "
                          "so it cannot stand as an unjudged figure")
-    median, _, _, spread = table_row("Throughput, messages/s", text, name)
     repetitions = header_field(text, "repetitions", name)
-    _, conditions, _, _, _ = book_headline(target, name, text)
-    unsampled = ", and no load sampler ran beside it" if sampler_note(text) else ""
-    return (f"**{UNJUDGED_WHAT[target]} ({target}) on {host}, no verdict:** {conditions}, "
-            f"median {median} msg/s of {repetitions} repetitions, CV {spread}; "
-            f"{pinned_cores(text, name)}{unsampled}. Its bar is {short_bar(bar)}: "
-            f"{why.split('; against the bar')[0]}. {source(name)}")
+    cpu = header_field(text, "cpu", name)
+    unsampled = " and with no load sampler beside it" if sampler_note(text) else ""
+    figure, _, set_on = bar.partition(", set on ")
+    machine, _, system = set_on.partition(", ")
+    if not (machine and system):
+        raise TableError(f"results/{name}: {target}'s bar {bar!r} names no host and system")
+    return (f"On the {cpu}, {UNJUDGED_WHAT[target]} ({target}) ran at {measured}, the median of "
+            f"{in_words(int(repetitions))} repetitions, {pinned_cores(text, name)}{unsampled} "
+            f"({source(name)}). It has no verdict, since its bar, {figure}, was set on a "
+            f"{machine} under {system}.")
 
 
 # WRITEUP.md's table of every target missed or not measured. Each row is read from the
@@ -1484,18 +1524,20 @@ MISSED = (
       "the bar's browser is not installed")),
 )
 # T-PARSE-3's bar is set on another day than the one its first file measured, 10302019. Until
-# that day has a results file, the row is the other day's, and says the bar's day is not
-# measured and that a run is registered; once it has one, the row is that file's verdict on
-# the bar's own day, a miss with its gap, or none if met.
+# that day has a results file, the row is the other day's, and says 10302019 is not measured
+# yet and that its run's prediction is committed; once it has one, the row is that file's
+# verdict on the bar's own day, a miss with its gap, or none if met.
 PARSE_BAR_DAY = "parse_rate_debian_10302019.md"
-PARSE3_UNRUN = ("measured: the median on 12302019 only. Its bar is set on 10302019: not measured "
-                "on that day; a run is registered, with the day read into the bench's own memory, "
-                "since on this host the file and a copy of it do not fit in memory together",
-                "not measured on that day; a run is registered")
+PARSE3_UNRUN = ("measured: the median on 12302019 only. Its bar is set on 10302019. It has not been "
+                "measured on 10302019 yet; the prediction for that run is committed, with the day "
+                "read into the bench's own memory, since on this host the file and a copy of it do "
+                "not fit in memory together",
+                "It has not been measured on 10302019 yet; the prediction for that run is "
+                "committed")
 # RESULTS.md's line on T-PARSE-3's day, in its own paragraph: (no file yet, the file).
 PARSE_DAY_LINES = (
-    "T-PARSE-3's bar is set on 10302019: not measured on that day; a run is registered "
-    "(docs/NOTES.md, \"The parse rate on `debian`\").",
+    "T-PARSE-3's bar is set on 10302019. It has not been measured on 10302019 yet; the "
+    "prediction for that run is committed (docs/NOTES.md, \"The parse rate on `debian`\").",
     "T-PARSE-3 is judged on its bar's own day, 10302019, in "
     f"[results/{PARSE_BAR_DAY}](results/{PARSE_BAR_DAY}), whose input condition is the bench's "
     "own copy of the day, every page of it checked before and after each timed pass (its Input "
@@ -1525,7 +1567,7 @@ COPY_WORDS = ("the condition is the bench's own copy of the day: every page of i
 
 def input_conditions(parse_files):
     """One plain sentence on the input condition of each parse-rate file, from its header, and,
-    while no file uses the bench's own copy, that this condition is registered, not used."""
+    while no file uses the bench's own copy, that this condition is committed, not yet used."""
     said, copied = [], False
     for name, text in sorted(parse_files):
         copy = CONDITION_LINE.search(text)
@@ -1533,8 +1575,8 @@ def input_conditions(parse_files):
         said.append(f"On [results/{name}](results/{name}) "
                     f"{COPY_WORDS if copy else CACHE_WORDS}.")
     if not copied:
-        said.append("The bench's own copy of the day as the input condition is registered for "
-                    "10302019, and not yet used.")
+        said.append("The bench's own copy of the day is the input condition the prediction for "
+                    "10302019 commits, and no run has used it yet.")
     lead = "Two input conditions are used." if copied and len(said) > 1 else \
         "One input condition is used."
     return " ".join([lead, *said])
@@ -1706,7 +1748,8 @@ def missed_full(root):
              "its bar, what was measured, the gap and why. Each why gives what was measured, then "
              "what is not established.", ""]
     lines += markdown_table(("Target", "Bar", "Measured", "Gap", "Host", "Why", "File"),
-                            [row[:6] + row[7:8] for row in missed_rows(root) if not row[8]])
+                            [row[:3] + (ratio_gap(row[3]),) + row[4:6] + row[7:8]
+                             for row in missed_rows(root) if not row[8]])
     lines += [f"| {target} | {bar} | {measured} | {gap} | {host} | {why} | {cited} | "
               f"{NOT_MEASURED_MARK}"
               for target, bar, measured, gap, host, why, _, cited, unmeasured in missed_rows(root)
@@ -1714,53 +1757,273 @@ def missed_full(root):
     return lines
 
 
-SHORT_CELL = 24
+MISS_OPENING = (
+    "Each line is on the Zen 1 host unless it names the M4 Max, and gives the row that decides "
+    "the verdict, or the worst. Where a bar is another host's published figure, the host's share "
+    "of the gap was not measured. There, it was measured that messages naming an order over a "
+    "second old take most DRAM fills.")
+# What each target asks, and whose bar it is, in words a stranger reads alone; and its why in a
+# few plain words, "" for none, or None for a trade check's, which is its row's. Only words are
+# written here: every figure comes from a row.
+PLAIN = {
+    "T-BOOK-1": ("every symbol's book from a whole day, against itch-book, an open-source book",
+                 ""),
+    "T-BOOK-2": ("the same, tracking the best bid and offer, against itch-book",
+                 ""),
+    "T-LAT-1": ("each operation's latency, against itch-book", ""),
+    "T-LAT-2": ("every message's latency, against nasdaq-feed-handler, an open-source book, "
+                "under WSL2", ""),
+    "T-LAT-3": ("the budget Nasdaq's peak rate sets, on any host", ""),
+    "T-LAT-4": ("every message's latency, against carteret, an open-source FIFO book, same day, "
+                "timer cost subtracted", ""),
+    "T-LAT-5": ("the tightest tail published, PitchFork's, an open-source book, nothing "
+                "subtracted", ""),
+    "T-DESIGN-1": ("speed over a `std::map` book in the same run",
+                   "the map book's extra time is DRAM misses"),
+    "T-PERF-1": ("last-level misses a message, a floor on DRAM fills, against carteret on a Zen 3",
+                 ""),
+    "T-PERF-2": ("branch misses a message, against Market-Core, an open-source project", ""),
+    "T-INV-2": ("the never-crossed rule",
+                "every cross is the feed's, in a symbol outside normal trading"),
+    "T-TRADE-3": ("each symbol's continuous volume against SEC MIDAS", None),
+    "T-TRADE-5": ("every continuous execution at the best price", None),
+    "T-PARSE-1": ("the parser's framing walk, against itch-book", ""),
+    "T-PARSE-2": ("decoding the types that change the book, against itch-book", ""),
+    "T-PARSE-3": ("the strict decode of every field, against Lunary's benchmark", ""),
+    "T-BT-3": ("the backtester's shadow-order replay, against queuetruth, an open-source project, "
+               "on a Mac", "not the queue walk, a small share of the time"),
+    "T-MM-2": ("Avellaneda and Stoikov's own average spreads",
+               "the simulation's time grid moves it"),
+    "T-SPSC-1": ("the ring's round trip against boost, moodycamel and rigtorp",
+                 ""),
+    "T-SPSC-2": ("the known ring techniques' gains, against Frasch's talk",
+                 ""),
+    "T-ARENA-1": ("the pool allocator, with no published bar", ""),
+    "T-WASM-1": ("the browser replay against native", ""),
+    "T-BOOK-4": ("the rebuild on Apple silicon on a busier day", ""),
+    "T-TRADE-2": ("each symbol's cross volume against Nasdaq's CrossStats", ""),
+}
+# A trade-print row's few words, by its short why, in plain words.
+PLAIN_TRADE_WHY = {
+    "TAP listed twice in MIDAS": "MIDAS lists TAP twice that day",
+    "the feed above MIDAS; cause not established":
+        "the feed counts more shares than MIDAS",
+    "just after a crossed resumption; cause not established":
+        "both just after a crossed book resumed",
+}
+# Each ring comparison of T-SPSC-1 and T-SPSC-2 in words.
+RING_WORDS = {
+    "boost rtt / project rtt": "boost's round trip over this ring's",
+    "project rtt / moodycamel rtt": "this ring's round trip over moodycamel's",
+    "project rtt / rigtorp rtt": "this ring's round trip over rigtorp's",
+    "cached over uncached, with %: modulo / uncached-modulo":
+        "caching the indices, with `%` wrapping,",
+    "cached over uncached, with the mask: shipped / uncached":
+        "caching the indices, with a mask wrapping,",
+    "mask over %, cached: shipped / modulo": "a mask over `%`, with cached indices,",
+    "mask over %, uncached: uncached / uncached-modulo": "a mask over `%`, with uncached indices,",
+}
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September",
+          "October", "November", "December")
 
 
-def first_clause(cell):
-    """A cell of more than SHORT_CELL characters cut to its first `; `, then if still longer to
-    its first `, `, with an ellipsis where the rest was cut."""
-    head = cell
-    for mark in ("; ", ", "):
-        if len(head) > SHORT_CELL:
-            head = head.split(mark)[0]
-    return head if head == cell else f"{head} …"
+def day_words(day):
+    """A day as Nasdaq names its file, month first, in words: 12302019 is 30 December 2019."""
+    found = re.fullmatch(r"(\d\d)(\d\d)(\d{4})(?:_BX)?", day)
+    if found is None:
+        raise TableError(f"{day!r} is not a day")
+    return f"{int(found[2])} {MONTHS[int(found[1]) - 1]} {found[3]}"
+
+
+def bar_words(bar):
+    """A bar's first figure, its sign in words: "≥ 16.4 M msg/s (...)" as "16.4 M msg/s"."""
+    bar = re.sub(r" \([^()]*\)$", "", bar).split(" and ")[0].split(", ")[0]
+    return re.sub(r"^[≥≤] ", "", bar)
+
+
+def bounded(bar):
+    """"at least" or "at most", by the bar's sign."""
+    return "at most" if "≤" in bar else "at least"
+
+
+def gap_figure(gap):
+    """The figure of a gap: "rate by 11.25 M msg/s" or "410.02 M msg/s and 12.62 GB/s under the
+    bar" as "11.25 M msg/s" or "410.02 M msg/s"."""
+    gap = re.sub(r"^(?:rate )?by ", "", gap.split(", ")[0])
+    return re.sub(r" under the bar$", "", gap.split(" and ")[0])
+
+
+def rate_line(rows):
+    """A rate against a bar it is under."""
+    _, bar, measured, gap, *_ = rows[0]
+    measured = measured.removeprefix("rate ").split(", ")[0]
+    return (f"{measured} against {bar_words(bar)}, {gap_figure(gap)} short", 0, rows[0])
+
+
+def latency_bar(bar, item):
+    """The bar's figure for one quantile of one operation, or of every message."""
+    operation, _, quantile = item.rpartition(" ")
+    figure = r"\d+(?:,\d{3})*(?:\.\d+)?"
+    found = re.search(rf"(?<![\w.]){re.escape(quantile)} ≤ ({figure})", bar)
+    if found and not operation:
+        return f"{found[1]} ns"
+    quantiles = re.search(r" ns at (p[\d.]+(?:, p[\d.]+)*)", bar)
+    values = re.search(rf"\b{re.escape(operation)} ({figure}(?:, {figure})*)", bar) \
+        if operation else None
+    if quantiles is None or values is None:
+        raise TableError(f"no bar for {item!r} in {bar!r}")
+    return f"{values[1].split(', ')[quantiles[1].split(', ').index(quantile)]} ns"
+
+
+def latency_line(rows):
+    """The first quantile a latency target misses."""
+    _, bar, measured, gap, *_ = rows[0]
+    gaps = gap.split(", ")
+    item, _, over = gaps[0].partition(" by ")
+    value = next(part.removeprefix(item + " ") for part in measured.split("; ")
+                 if part.startswith(item + " "))
+    operation, _, quantile = item.rpartition(" ")
+    who = "a message" if not operation else f"an {operation}" if operation[0] in "aeiou" \
+        else f"a {operation}"
+    return (f"at {quantile} {who} takes {value} against {latency_bar(bar, item)}, {over} over",
+            len(gaps) - 1, rows[0])
+
+
+def ratio_line(rows):
+    """T-DESIGN-1: the ratio over the map book on a fresh heap, and how far below the bar."""
+    _, bar, measured, gap, *_ = rows[0]
+    name, ratio = re.match(r"over (\S+) (\S+×)", measured).groups()
+    below = re.match(rf"over {re.escape(name)} by ([\d.]+)×", gap)[1]
+    book = dict((key, words) for key, words, _ in MAP_WORDS)[name]
+    more = sum(len(row[3].split(", ")) for row in rows) - 1
+    limit = re.match(r"[≥≤] ([\d.]+×)", bar)[1]
+    return (f"measured at {ratio} the speed of {book} against {limit}: missed, {below} below it",
+            more, rows[0])
+
+
+def perf_line(rows):
+    _, bar, measured, gap, *_ = rows[0]
+    figure = measured.split(" ")[0]
+    limit = re.search(r"≤ ([\d.]+)$", bar)[1]
+    return (f"{figure} a message against at most {limit}, {gap.removeprefix('by ')} over", 0,
+            rows[0])
+
+
+def inv_line(rows):
+    return (f"on the M4 Max it {rows[0][3]}", 0, rows[0])
+
+
+def trade_line(rows):
+    """The day with the most violations."""
+    worst = max(rows, key=lambda row: int(row[2].split(" ")[0]))
+    day = worst[0].split(", ")[1]
+    return (f"on the M4 Max, {worst[2]} on {day_words(day)}, none allowed",
+            len(rows) - 1, worst)
+
+
+def parse3_line(rows):
+    """T-PARSE-3 on a day other than its bar's: its figure, and that the bar's day is not yet
+    measured, in the words WRITEUP.md's prose uses too."""
+    _, bar, measured, *_ = rows[0]
+    day = re.search(r", on (\d{8})$", measured)[1]
+    bar_day = re.search(r", on (\d{8})$", bar)[1]
+    return (f"{measured.split(', ')[0]} on {day}, above its bar of {bar_words(bar)}, set on "
+            f"{bar_day}. {PARSE3_UNRUN[1]}", 0, rows[0])
+
+
+def spread_line(rows):
+    """T-MM-2: the spread that does not match the paper's."""
+    _, bar, measured, gap, *_ = rows[0]
+    gammas = re.findall(r"at γ = ([\d.]+)", bar)
+    misses = gap.split("; ")
+    gamma, rest = re.match(r"γ = ([\d.]+): (.*)$", misses[0]).groups()
+    value = measured.split(", ")[gammas.index(gamma)]
+    rest = rest.replace(" against ", " against the paper's ")
+    if not 0 < len(misses) < len(gammas):
+        raise TableError(f"T-MM-2: {len(misses)} of {len(gammas)} spreads do not match")
+    return (f"on the M4 Max the spread at γ = {gamma} is {value}, {rest}", len(misses) - 1,
+            rows[0])
+
+
+def ring_line(rows):
+    """The ring comparison furthest from its bar, named in words."""
+    def distance(row):
+        figure, limit = float(row[2].rstrip("×")), float(bar_words(row[1]).rstrip("×"))
+        return figure / limit if "≤" in row[1] else limit / figure
+    worst = max(rows, key=distance)
+    words = RING_WORDS[worst[0].split(", ", 1)[1]]
+    verb = "is" if "round trip" in words else "gives"
+    return (f"{words} {verb} {worst[2]}, against {bounded(worst[1])} {bar_words(worst[1])}",
+            len(rows) - 1, worst)
+
+
+def arena_line(rows):
+    """T-ARENA-1: the pool arm with the most page faults in its timed passes."""
+    judged = [row for row in rows if not row[8]]
+    found = [(int(count), arm, row) for row in judged
+             for arm, count in re.findall(r"(pool-\w+) (\d+)", row[2])]
+    count, arm, row = max(found, key=lambda item: item[0])
+    pages = row[0].rsplit(" ", 1)[1]
+    return (f"its fault check allows no page fault in a timed pass; on {pages} pages `{arm}` "
+            f"takes {count}", len(found) - 1 + len(rows) - len(judged), row)
+
+
+def wasm_line(rows):
+    _, bar, measured, gap, *_ = rows[0]
+    used, wanted = re.search(r"browser differs: (.+?) [\d.]+, not (.+?);", gap).groups()
+    limit = re.match(r"≤ ([\d.]+×)", bar)[1]
+    return (f"on the M4 Max, {measured} native against at most {limit}, but in {used}, not "
+            f"{wanted}: no verdict", 0, rows[0])
+
+
+def book4_line(rows):
+    figure, day, machine = re.match(r"≥ (.+?) on (\d{8}) \((.+?), ", rows[0][1]).groups()
+    return (f"not measured: its bar, {figure} on {day_words(day)}, is an {machine}'s; every M4 Max "
+            "run was dropped while other work ran", 0, rows[0])
+
+
+def cross_line(rows):
+    day = rows[0][0].split(", ")[1]
+    return (f"not measured on {day_words(day)}, a BX day: CrossStats lists only Nasdaq's own "
+            "crosses", 0, rows[0])
+
+
+PLAIN_LINES = {"T-BOOK-1": rate_line, "T-BOOK-2": rate_line, "T-LAT-1": latency_line,
+               "T-LAT-2": latency_line, "T-LAT-3": latency_line, "T-LAT-4": latency_line,
+               "T-LAT-5": latency_line, "T-DESIGN-1": ratio_line, "T-PERF-1": perf_line,
+               "T-PERF-2": perf_line, "T-INV-2": inv_line, "T-TRADE-3": trade_line,
+               "T-TRADE-5": trade_line, "T-PARSE-1": rate_line, "T-PARSE-2": rate_line,
+               "T-BT-3": rate_line, "T-MM-2": spread_line, "T-SPSC-1": ring_line,
+               "T-SPSC-2": ring_line, "T-ARENA-1": arena_line, "T-WASM-1": wasm_line,
+               "T-BOOK-4": book4_line, "T-TRADE-2": cross_line}
 
 
 def missed_targets(root):
-    """The lines of WRITEUP.md's list of every target missed or not measured: one short line a
-    target, from its first row, the rest in RESULTS.md, or TableError. A list, not a table, so
-    that the page's word count goes to the figures: the host is named only when it is not the
-    Zen 1 host, and the full rows, hosts and whys are in RESULTS.md."""
-    text, _ = benchmark_targets(root)
+    """The lines of WRITEUP.md's list of every target missed or not measured: one plain sentence
+    a target, which a reader can take alone, from the row that decides its verdict or the
+    worst, with how many more rows RESULTS.md has, or TableError. One figure against its bar,
+    the gap in words; whose bar it is in the target's words; no cut cell, ellipsis or code word.
+    That the host's share of a gap is not established is said once, above the lines."""
     groups = {}
     for row in missed_rows(root):
         groups.setdefault(row[0].split(",")[0], []).append(row)
-    lines = ["Every line is on the Zen 1 host unless it names the M4 Max.", ""]
+    lines = [MISS_OPENING, ""]
     for target, rows in groups.items():
-        _, bar, measured, gap, host, _, short, cited, unmeasured = rows[0]
-        more = f"; {in_words(len(rows) - 1)} more in RESULTS.md" if len(rows) > 1 else ""
-        cited = "" if cited == "none" else f" [file]({cited.split('](')[1]}"
-        # Where the bar was set is in RESULTS.md's row: here, the bar alone.
-        bar = re.sub(r" \([^()]*\)$", "", bar)
-        where = "" if host == "debian" else f", {SHORT_HOSTS.get(host, host)}"
-        bar = first_clause(bar)
-        if unmeasured:
-            what = f"not measured{where}, against {bar}"
-        else:
-            measured, gap = first_clause(measured), first_clause(gap)
-            # "over map-fresh 2.54×" as "2.54× over map-fresh": a design named before the figure
-            # would read, to the number gate, as the row of that design's own table.
-            measured = re.sub(r"^over (\S+) (\S+×)", r"\2 over \1", measured)
-            # A gap that only restates the figure and the bar is left out.
-            gap = "" if gap.startswith(measured.rstrip(" …")) else f", {gap}"
-            what = f"{measured} against {bar}{where}{gap}{more}"
-            if re.match(r"\d{8}\b", measured):  # A list of days: the gap says it.
-                what = f"bar {bar}{where}{gap}{more}"
-        # The figures stay in the clause that names the target, which the number gate reads
-        # against the file the line links.
-        line = f"- **{target}, {benchmark_title(text, target)}:** {what}; {short}.{cited}"
-        lines.append(f"{line} {NOT_MEASURED_MARK}" if unmeasured else line)
+        if target not in PLAIN:
+            raise TableError(f"{target} has no plain words in {WRITEUP_PAGE}'s list")
+        gloss, why = PLAIN[target]
+        reader = PLAIN_LINES.get(target)
+        if target == "T-PARSE-3":
+            # On another day than its bar's (other_day_row), else missed on the bar's own day.
+            reader = parse3_line if re.search(r", on \d{8}$", rows[0][2]) else rate_line
+        sentence, more, row = reader(rows)
+        if why is None:
+            why = PLAIN_TRADE_WHY[row[6]]
+        more = f"; {in_words(more)} more in RESULTS.md" if more else ""
+        cited = "" if row[7] == "none" else f" [file]({row[7].split('](')[1]}"
+        tail = f"; {why}" if why else ""
+        line = f"- **{target}, {gloss}:** {sentence[0].upper()}{sentence[1:]}{more}{tail}.{cited}"
+        lines.append(f"{line} {NOT_MEASURED_MARK}" if row[8] else line)
     lines += ["", f"Every row, with its why in full: [RESULTS.md](RESULTS.md#{MISSED_ANCHOR})."]
     return lines
 

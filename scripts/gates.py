@@ -700,21 +700,40 @@ def spsc_due_time_unmeasured(root, files):
 
 
 # The public pages' words (the acceptance gate of 2026-11-14): a decision of the owner's reads "I
-# chose", so no page says "the user" or "the owner"; WRITEUP.md also names no session and no
-# plan, review or experiment id (P-0106, r16-1, E7, LC-17, DS-72), which a reader cannot look
-# up. Not ids: a PMU event (r0843:u), hex (0xE7), a run id's time, or a target (T-BOOK-1).
+# chose", so no page says "the user" or "the owner" (nor "the repository's owner" or "the owner
+# of the project"); WRITEUP.md also names no session and no plan, review or experiment id
+# (P-0106, r16-1, R16, E7, LC-17, DS-72, MK-75, IU-47, FT-22, TV-16, OSS-23), which a reader
+# cannot look up, an id followed by `.` or `:` and a space included. Not ids: a PMU event
+# (r0843:u), hex (0xE7), a run id's time, or a target (T-BOOK-1). Each page is read three ways,
+# so a phrase split by markup is read whole: as written, with any run of whitespace (a line
+# break, two spaces, a non-breaking one) as one space; with HTML comments, tags, emphasis and
+# code marks taken out and each link as its text; and the same with each tag as a space.
+#
+# What the word gates leave unheld, since a pattern for it would refuse honest text: a
+# possessive or a compound of user or session ("the user's buffer", "the user space", "the
+# session's close" in the trading sense), "its owner" (an order's), a lower-case "e" and digits ("the e2 term"), and an
+# id written in other words ("the sixteenth review") or split inside itself by markup and a
+# space.
+#
 # WRITEUP.md runs 2,500 to 4,000 words, and the README's pitch above its headline table at
 # most README_PITCH_WORDS, both counted as `wc -w` counts them, the pitch without its HTML
 # comments. Each bullet of the README's "What is built" list is one line: at most
 # README_BULLET_CHARS characters as rendered (its markup, HTML comments and link targets not
-# counted, a link's text counted) and at most one link, so it says what the part is and at most
-# one fact about it; the list's misses stand counted in the generated line below it.
+# counted, a link's text and an autolink's address counted) and at most one link, so it says
+# what the part is and at most one fact about it; the list's misses stand counted in the
+# generated line below it. A bullet is an item marked `-`, `*`, `+` or a number and `.` or `)`,
+# with every line after it up to a blank line or the next item, indented or not, and any
+# indented line after a blank one; a link is a Markdown link, a reference link (`[text][ref]`),
+# an autolink (`<https://...>`), an `<a` tag in any case, or a bare address.
 OWNER_PAGES = ("README.md", "WRITEUP.md", "RESULTS.md", "BENCHMARKS.md", "docs/DETAILS.md")
-OWNER_WORDS = re.compile(r"\bthe (?:user|owner)(?![\w-])", re.IGNORECASE)
+OWNER_WORDS = re.compile(
+    r"\bthe\s+(?:user(?!['’]s\b|\s+(?:space|mode|level)\b)|owner)(?![\w-])"
+    r"|\b(?:repository|repo|project)['’]s\s+owner(?![\w-])"
+    r"|\bowner\s+of\s+(?:the|this)\s+(?:repository|repo|project)\b", re.IGNORECASE)
 WRITEUP_PAGE = "WRITEUP.md"
 WRITEUP_WORDS = re.compile(
-    r"(?i:\bthe session\b)|(?<![\w-])(?:P-\d{3,4}(?!\w)|r\d{1,2}(?:-\d+)?(?![\w:.-])"
-    r"|[Ee]\d{1,2}(?![\w:.-])|(?:LC|DS)-\d+(?!\w))")
+    r"(?i:\bthe\s+session\b(?!['’]s\b))|(?<![\w-])(?:[Pp]-\d{3,4}(?!\w|[:.]\w)"
+    r"|(?:[rR]\d{1,3}(?:-\d+)?|E\d{1,2}|(?:LC|DS|MK|IU|FT|TV|OSS)-\d+)(?![\w-]|[:.]\w))")
 WRITEUP_LENGTH = (2500, 4000)
 README_PAGE = "README.md"
 README_PITCH_WORDS = 110
@@ -723,6 +742,14 @@ README_BUILT = "## What is built"
 README_BULLET_CHARS = 125
 README_BULLET_LINKS = 1
 MARKDOWN_LINK = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
+REFERENCE_LINK = re.compile(r"!?\[([^\]]*)\]\[[^\]]*\]")
+AUTOLINK = re.compile(r"<((?:https?|ftp)://[^>\s]*|mailto:[^>\s]*|[^>\s@<]+@[^>\s@]+\.[^>\s]+)>",
+                      re.IGNORECASE)
+HTML_LINK = re.compile(r"<a\b", re.IGNORECASE)
+BARE_URL = re.compile(r"(?<![\w/@.-])(?:https?://|www\.)[^\s<>()]+", re.IGNORECASE)
+LIST_ITEM = re.compile(r"(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$)")
+PROSE_MARKUP = re.compile(r"<!--.*?-->|<[^>]*>|!?\[([^\]]*)\]\([^)]*\)|&nbsp;|&#160;|&#xa0;"
+                          r"|[`*]|(?<!\w)_+|_+(?!\w)", re.IGNORECASE | re.DOTALL)
 
 
 def owner_pages(root):
@@ -733,25 +760,51 @@ def one_page(name):
     return lambda root: [root / name] if (root / name).is_file() else []
 
 
+def prose_view(text, tag):
+    """The text with its markup taken out, each link as its text, an entity space as a space
+    and each tag as `tag`, and the offset in the text of each character kept."""
+    kept, where, last = [], [], 0
+    for match in PROSE_MARKUP.finditer(text):
+        kept.append(text[last:match.start()])
+        where.extend(range(last, match.start()))
+        if match.group(1) is not None:
+            put, at = match.group(1), match.start(1)
+        elif match[0].startswith("&"):
+            put, at = " ", match.start()
+        elif match[0].startswith("<") and not match[0].startswith("<!--"):
+            put, at = tag, match.start()
+        else:
+            put, at = "", match.start()
+        kept.append(put)
+        where.extend([at] * len(put) if match.group(1) is None else range(at, at + len(put)))
+        last = match.end()
+    kept.append(text[last:])
+    where.extend(range(last, len(text)))
+    return "".join(kept), where
+
+
+def phrase_hits(text, pattern):
+    """(line, phrase) of each match of pattern in the text as written and in its two prose
+    views, a phrase once a line, its whitespace as one space."""
+    found = {}
+    views = [(text, list(range(len(text))))] + [prose_view(text, tag) for tag in ("", " ")]
+    for view, where in views:
+        for match in pattern.finditer(view):
+            line = text.count("\n", 0, where[match.start()]) + 1
+            found.setdefault((line, " ".join(match[0].split()).lower()), " ".join(match[0].split()))
+    return sorted((line, said) for (line, _), said in found.items())
+
+
 def owner_words(root, files):
-    violations = []
-    for path in files:
-        for number, line in enumerate((read_text(path) or "").splitlines(), start=1):
-            for match in OWNER_WORDS.finditer(line):
-                violations.append((path, number, f"{match[0]!r}: a decision of the owner's "
-                                                 "reads \"I chose\", and the rest needs no "
-                                                 "subject"))
-    return violations
+    return [(path, line, f"{said!r}: a decision of the owner's reads \"I chose\", and the rest "
+             "needs no subject")
+            for path in files for line, said in phrase_hits(read_text(path) or "", OWNER_WORDS)]
 
 
 def writeup_words(root, files):
-    violations = []
-    for path in files:
-        for number, line in enumerate((read_text(path) or "").splitlines(), start=1):
-            for match in WRITEUP_WORDS.finditer(line):
-                violations.append((path, number, f"{match[0]!r}: no session, and no plan, review "
-                                                 "or experiment id a reader cannot look up"))
-    return violations
+    return [(path, line, f"{said!r}: no session, and no plan, review or experiment id a reader "
+             "cannot look up")
+            for path in files for line, said in phrase_hits(read_text(path) or "", WRITEUP_WORDS)]
 
 
 def writeup_length(root, files):
@@ -780,29 +833,48 @@ def readme_pitch_length(root, files):
 
 
 def rendered(markdown):
-    """A line's text as a reader sees it: HTML comments and tags dropped, a link as its text,
-    no emphasis or code marks."""
-    text = re.sub(r"<!--.*?-->|<[^>]*>", "", markdown, flags=re.DOTALL)
-    return re.sub(r"[`*]", "", MARKDOWN_LINK.sub(r"\1", text)).strip()
+    """A line's text as a reader sees it: HTML comments and tags dropped, an autolink as its
+    address, a link as its text, no emphasis or code marks."""
+    text = re.sub(r"<!--.*?-->", "", markdown, flags=re.DOTALL)
+    text = re.sub(r"<[^>]*>", "", AUTOLINK.sub(r"\1", text))
+    text = REFERENCE_LINK.sub(r"\1", MARKDOWN_LINK.sub(r"\1", text))
+    return re.sub(r"[`*]", "", text).strip()
+
+
+def links_in(markdown):
+    """How many links a reader sees in a line: Markdown, reference and autolinks, `<a` tags in
+    any case, and bare addresses, each once."""
+    text, count = re.sub(r"<!--.*?-->", "", markdown, flags=re.DOTALL), 0
+    for pattern in (MARKDOWN_LINK, REFERENCE_LINK, AUTOLINK):
+        count += len(pattern.findall(text))
+        text = pattern.sub(" ", text)
+    count += len(HTML_LINK.findall(text))
+    return count + len(BARE_URL.findall(re.sub(r"<[^>]*>", " ", text)))
 
 
 def built_bullets(text):
     """(line number, bullet) of each bullet under the README's "What is built" heading, a bullet
-    with its indented lines joined, or None when the heading is not there."""
+    with the lines Markdown renders as part of it joined, or None when the heading is not
+    there."""
     lines = text.splitlines()
     if README_BUILT not in lines:
         return None
-    bullets, last = [], None
+    bullets, inside, after_blank = [], False, False
     for number, line in enumerate(lines[lines.index(README_BUILT) + 1:],
                                   start=lines.index(README_BUILT) + 2):
         if line.startswith("#"):
             break
-        if line.startswith(("- ", "* ")):
-            bullets.append((number, line[2:]))
-            last = number
-        elif bullets and last == number - 1 and line.startswith(" ") and line.strip():
+        item = LIST_ITEM.match(line)
+        if item:
+            bullets.append((number, line[item.end():]))
+            inside, after_blank = True, False
+        elif not line.strip():
+            after_blank = True
+        elif inside and (not after_blank or line[:1] in " \t"):
             bullets[-1] = (bullets[-1][0], bullets[-1][1] + " " + line.strip())
-            last = number
+            after_blank = False
+        else:
+            inside = after_blank = False
     return bullets
 
 
@@ -814,7 +886,7 @@ def readme_built_bullets(root, files):
             violations.append((path, 1, f"no list under a {README_BUILT!r} heading"))
             continue
         for number, bullet in bullets:
-            links = len(MARKDOWN_LINK.findall(bullet)) + len(re.findall(r"<a\s", bullet))
+            links = links_in(bullet)
             shown = rendered(bullet)
             if len(shown) > README_BULLET_CHARS:
                 violations.append((path, number, f"{len(shown)} characters as rendered, more "
@@ -822,6 +894,101 @@ def readme_built_bullets(root, files):
             if links > README_BULLET_LINKS:
                 violations.append((path, number, f"{links} links, more than "
                                                  f"{README_BULLET_LINKS}"))
+    return violations
+
+
+# T-PARSE-3 on its bar's own day (r18-16): once results/parse_rate_debian_10302019.md exists,
+# no public page says, in a sentence or table row that names T-PARSE-3, the strict decode or
+# that day, that the day is not measured yet, that its run is registered or its prediction
+# committed, or that T-PARSE-3 has no verdict, whether the words are written by hand or
+# generated. With no such file, the words are true, and pass.
+PARSE_BAR_DAY_FILE = "results/parse_rate_debian_10302019.md"
+PARSE3_NAMED = re.compile(r"T-PARSE-3|strict decode|10302019|30\s+October\s+2019", re.IGNORECASE)
+PARSE3_UNRUN = re.compile(
+    r"\bnot\s+(?:yet\s+)?(?:been\s+)?measured\b|\ba\s+run\s+is\s+registered\b"
+    r"|\bprediction\s+for\s+(?:that|its|the)\s+run\s+is\s+committed\b|\bno\s+verdict\b"
+    r"|\bno\s+run\s+has\s+used\s+it\b", re.IGNORECASE)
+SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[A-Z\[(*`])")
+
+
+def parse3_day_pages(root):
+    return owner_pages(root) + [root / "docs/index.html"] * (root / "docs/index.html").is_file()
+
+
+def units_of(text):
+    """(line, text) of each sentence of prose and each table row, a paragraph's lines joined."""
+    units, paragraph = [], []
+
+    def close():
+        if paragraph:
+            joined = " ".join(line.strip() for _, line in paragraph)
+            units.extend((paragraph[0][0], sentence) for sentence in SENTENCE_BREAK.split(joined))
+            paragraph.clear()
+    for number, line in enumerate(text.splitlines(), start=1):
+        if line.strip().startswith("|"):
+            close()
+            units.append((number, line))
+        elif not line.strip() or LIST_ITEM.match(line.strip()) or line.startswith("#"):
+            close()
+            if line.strip():
+                paragraph.append((number, line))
+        else:
+            paragraph.append((number, line))
+    close()
+    return units
+
+
+def parse3_bar_day(root, files):
+    if not (root / PARSE_BAR_DAY_FILE).is_file():
+        return []
+    violations = []
+    for path in files:
+        for number, unit in units_of(read_text(path) or ""):
+            view = prose_view(unit, " ")[0]
+            said = PARSE3_UNRUN.search(view)
+            if said and PARSE3_NAMED.search(view):
+                violations.append((path, number, f"{' '.join(said[0].split())!r} of T-PARSE-3, "
+                                   f"but {PARSE_BAR_DAY_FILE} exists: say its verdict on "
+                                   "10302019 instead"))
+    return violations
+
+
+# WRITEUP.md's generated list of every target missed or not measured, which a stranger reads
+# alone (the cold read of 2026-11-14): at most MISSED_LIST_WORDS words as `wc -w` counts the
+# lines between its markers, comments included; no ellipsis, no cut cell's "UNCONFIRMED", no
+# PMU event code (r0843:u) and no "raw"; that the host's share of a gap is not measured said
+# once, above the lines, and "not established" at most once a line.
+MISSED_LIST_BEGIN = "<!-- missed targets: begin, generated by scripts/results_table.py"
+MISSED_LIST_END = "<!-- missed targets: end -->"
+MISSED_LIST_WORDS = 800
+MISSED_LIST_REFUSED = re.compile(r"\u2026|\.\.\.|UNCONFIRMED|(?<![\w-])r[0-9a-f]{4}:[a-z]+\b"
+                                 r"|\braw\b", re.IGNORECASE)
+
+
+def writeup_missed_list(root, files):
+    violations = []
+    for path in files:
+        lines = (read_text(path) or "").splitlines()
+        begin = next((i for i, line in enumerate(lines) if line.startswith(MISSED_LIST_BEGIN)),
+                     None)
+        if begin is None or MISSED_LIST_END not in lines[begin:]:
+            violations.append((path, 1, "no generated list of every target missed"))
+            continue
+        end = lines.index(MISSED_LIST_END, begin)
+        block = lines[begin + 1:end]
+        words = sum(len(line.split()) for line in block)
+        if words > MISSED_LIST_WORDS:
+            violations.append((path, begin + 1, f"the list runs {words} words, more than "
+                                                f"{MISSED_LIST_WORDS}"))
+        shares = sum(len(re.findall(r"host's share", line)) for line in block)
+        if shares > 1:
+            violations.append((path, begin + 1, f"\"host's share\" said {shares} times, not "
+                                                "once above the lines"))
+        for number, line in enumerate(block, start=begin + 2):
+            for match in MISSED_LIST_REFUSED.finditer(line):
+                violations.append((path, number, f"{match[0]!r} in the list a stranger reads"))
+            if len(re.findall(r"not established", line)) > 1:
+                violations.append((path, number, "\"not established\" more than once a line"))
     return violations
 
 
@@ -893,6 +1060,12 @@ def gates():
              "words", writeup_length, one_page(WRITEUP_PAGE)),
         Gate("readme-pitch-length", f"the README has at most {README_PITCH_WORDS} words before "
              "its headline table", readme_pitch_length, one_page(README_PAGE)),
+        Gate("parse3-bar-day", "once T-PARSE-3's bar's day has a results file, no public "
+             "page says that day is not measured or that T-PARSE-3 has no verdict",
+             parse3_bar_day, parse3_day_pages),
+        Gate("writeup-missed-list", f"WRITEUP.md's list of every target missed runs at most "
+             f"{MISSED_LIST_WORDS} words, with no ellipsis, cut cell or event code",
+             writeup_missed_list, one_page(WRITEUP_PAGE)),
         Gate("readme-built-bullets", f"each bullet of the README's {README_BUILT!r} list has at "
              f"most {README_BULLET_CHARS} characters as rendered and at most "
              f"{README_BULLET_LINKS} link", readme_built_bullets, one_page(README_PAGE)),

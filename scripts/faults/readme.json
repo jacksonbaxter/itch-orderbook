@@ -498,7 +498,7 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "| **missed**: by 11.25 M msg/s |",
+          "old": "| **missed**: 11.25 M msg/s short |",
           "new": "| met |"
         }
       ],
@@ -1029,8 +1029,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "no verdict:** 21.87 M msg/s;",
-          "new": "no verdict:** 21.78 M msg/s;"
+          "old": "the same full-depth rebuild (T-BOOK-1) ran at 21.87 M msg/s,",
+          "new": "the same full-depth rebuild (T-BOOK-1) ran at 21.78 M msg/s,"
         }
       ],
       "command": [
@@ -1158,8 +1158,8 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "    median, _, _, spread = table_row(\"Throughput, messages/s\", text, name)\n",
-          "new": "    median, spread = \"21,873,432\", \"0.76%\"\n"
+          "old": "    bar, measured, _, verdict, why = targets_headline(target, name, text)\n",
+          "new": "    bar, _, _, verdict, why = targets_headline(target, name, text)\n    measured = \"21.87 M msg/s\"\n"
         }
       ],
       "command": [
@@ -2161,8 +2161,8 @@
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "rigtorp:** 1.15× against ≥ 1.16×",
-          "new": "rigtorp:** 1.14× against ≥ 1.16×"
+          "old": "over moodycamel's is 1.35×, against at most 1.00×",
+          "new": "over moodycamel's is 1.34×, against at most 1.00×"
         }
       ],
       "command": [
@@ -2870,8 +2870,8 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "        groups.setdefault(row[0].split(\",\")[0], []).append(row)\n    lines = [\"Every line",
-          "new": "        groups.setdefault(row[0], []).append(row)\n    lines = [\"Every line"
+          "old": "        groups.setdefault(row[0].split(\",\")[0], []).append(row)\n    lines = [MISS_OPENING, \"\"]",
+          "new": "        groups.setdefault(row[0], []).append(row)\n    lines = [MISS_OPENING, \"\"]"
         }
       ],
       "command": [
@@ -3091,6 +3091,232 @@
       ],
       "expect": {
         "signature": "(FAIL|ERROR): test_the_readme_counts_the_summarys_verdicts",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-negation-unread",
+      "breaks": "gate_numbers.py reads a verdict word without the not, never, no or none beside it, so \"T-SPSC-3 is not met\" passes",
+      "check": "test_gate_numbers.py test_a_verdict_turned_round_by_a_negation_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "                    turned = (NEGATION.search(text, clause, start)\n                              or NONE_AFTER.match(text[stop:end]))\n",
+          "new": "                    turned = None\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_verdict_turned_round_by_a_negation_is_refused"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_verdict_turned_round_by_a_negation_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-verdict-negated",
+      "breaks": "The README says T-URING-2 is not met, a verdict turned round with its word kept",
+      "check": "gate_numbers.py on README.md, the negation rule",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "(T-URING-2) is met by S4 in 10 runs of 10",
+          "new": "(T-URING-2) is not met by S4 in 10 runs of 10"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 'met' with 'not' beside it",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-verdict-markup-blanked",
+      "breaks": "gate_numbers.py blanks markup inside a verdict word, so \"is **m**et\" is not read",
+      "check": "test_gate_numbers.py test_a_verdict_word_split_by_markup_is_read_whole",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "        text, where = squeezed(line)\n",
+          "new": "        text, where = blanked, list(range(len(blanked)))\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_verdict_word_split_by_markup_is_read_whole"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_verdict_word_split_by_markup_is_read_whole",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-count-after-in-unread",
+      "breaks": "gate_numbers.py holds a count after a verdict only after on, so \"fails in three of the ten sessions\" passes",
+      "check": "test_gate_numbers.py test_a_count_after_a_verdict_is_held_to_the_rows",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "    rf\"^\\s*,?\\s+(?:strictly\\s+)?(?:on|in)\\s+({COUNT})\"\n",
+          "new": "    rf\"^\\s+(?:strictly\\s+)?on\\s+({COUNT})\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_count_after_a_verdict_is_held_to_the_rows"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_count_after_a_verdict_is_held_to_the_rows",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-word-after-target-excused",
+      "breaks": "gate_numbers.py excuses a verdict word after \"targets\", so \"All targets met\" passes",
+      "check": "test_gate_numbers.py test_a_verdict_word_that_names_no_target_is_refused_unless_marked",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "                    beside = BEFORE_TARGET.match(text[stop:end])\n",
+          "new": "                    beside = (BEFORE_TARGET.match(text[stop:end])\n                              or re.search(r\"(?i:targets?\\s+$)\", text[begin:start]))\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_verdict_word_that_names_no_target_is_refused_unless_marked"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_verdict_word_that_names_no_target_is_refused_unless_marked",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-marker-on-cited-line",
+      "breaks": "gate_numbers.py lets the figures marker excuse a line written by hand that cites a results file",
+      "check": "test_gate_numbers.py test_the_figures_marker_is_refused_on_a_line_that_cites_a_file",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "    violations += marked_cited(page, lines)\n",
+          "new": ""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_the_figures_marker_is_refused_on_a_line_that_cites_a_file"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_the_figures_marker_is_refused_on_a_line_that_cites_a_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-marker-on-cited-line",
+      "breaks": "The pitch's correctness line, which cites the oracle file, ends in the figures marker",
+      "check": "gate_numbers.py on README.md, the figures marker",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "([results/oracle_sessions.md](results/oracle_sessions.md)); no heap allocation after warm-up.",
+          "new": "([results/oracle_sessions.md](results/oracle_sessions.md)); no heap allocation after warm-up. <!-- figures: not measured -->"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: <!-- figures: not measured --> on a line that cites results/oracle_sessions\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-writeup-list-ellipsis-restored",
+      "breaks": "results_table.py cuts each line of WRITEUP.md's list with an ellipsis",
+      "check": "test_results_table.py test_the_writeup_table_has_one_short_line_a_target",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "{sentence[0].upper()}{sentence[1:]}{more}{tail}.{cited}\"",
+          "new": "{sentence[0].upper()}{sentence[1:]} …{more}{tail}.{cited}\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_the_writeup_table_has_one_short_line_a_target"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_the_writeup_table_has_one_short_line_a_target",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-parse3-day-unnamed",
+      "breaks": "T-PARSE-3's short line says it is not measured on that day, which reads as the day measured",
+      "check": "test_results_table.py test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "                \"It has not been measured on 10302019 yet; the prediction for that run is \"\n",
+          "new": "                \"It has not been measured on that day yet; the prediction for that run is \"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-writeup-list-fills-unnamed",
+      "breaks": "WRITEUP.md's list says old orders take most fills, which reads as executions, not DRAM fills",
+      "check": "test_results_table.py test_the_writeup_table_has_one_short_line_a_target",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "\"second old take most DRAM fills.\")",
+          "new": "\"second old take most fills.\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_the_writeup_table_has_one_short_line_a_target"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_the_writeup_table_has_one_short_line_a_target",
         "exit": 1
       }
     }

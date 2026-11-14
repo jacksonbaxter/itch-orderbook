@@ -820,8 +820,8 @@
       "mutations": [
         {
           "file": "scripts/gates.py",
-          "old": "OWNER_WORDS = re.compile(r\"\\bthe (?:user|owner)(?![\\w-])\", re.IGNORECASE)",
-          "new": "OWNER_WORDS = re.compile(r\"\\bthe (?:user)(?![\\w-])\", re.IGNORECASE)"
+          "old": "    r\"\\bthe\\s+(?:user(?!['’]s\\b|\\s+(?:space|mode|level)\\b)|owner)(?![\\w-])\"",
+          "new": "    r\"\\bthe\\s+(?:user(?!['’]s\\b|\\s+(?:space|mode|level)\\b))(?![\\w-])\""
         }
       ],
       "command": [
@@ -840,8 +840,8 @@
       "mutations": [
         {
           "file": "scripts/gates.py",
-          "old": "r\"(?i:\\bthe session\\b)|(?<![\\w-])(?:P-\\d{3,4}(?!\\w)|",
-          "new": "r\"(?i:\\bthe session\\b)|(?<![\\w-])(?:P-\\d{3,4}(?![\\w-])|"
+          "old": "(?:[Pp]-\\d{3,4}(?!\\w|[:.]\\w)\"",
+          "new": "(?:[Pp]-\\d{3,4}(?![\\w-]|[:.]\\w)\""
         }
       ],
       "command": [
@@ -855,13 +855,13 @@
     },
     {
       "id": "gates-writeup-words-experiment-case",
-      "breaks": "A lower-case experiment id, e11, is not read as an id",
+      "breaks": "A capital review id, R16, is not read as an id (moved from a lower-case experiment id, e11, which r18-18 leaves unheld beside the e2 term)",
       "check": "test_gates.py, the writeup-words gate",
       "mutations": [
         {
           "file": "scripts/gates.py",
-          "old": "r\"|[Ee]\\d{1,2}(?![\\w:.-])|",
-          "new": "r\"|E\\d{1,2}(?![\\w:.-])|"
+          "old": "    r\"|(?:[rR]\\d{1,3}(?:-\\d+)?|",
+          "new": "    r\"|(?:r\\d{1,3}(?:-\\d+)?|"
         }
       ],
       "command": [
@@ -1001,6 +1001,356 @@
       "expect": {
         "signature": "^gates: FAIL readme-built-bullets README\\.md:\\d+: 2 links, more than 1",
         "exit": 1
+      }
+    },
+    {
+      "id": "gates-owner-words-markup-split",
+      "breaks": "The owner gate reads each page as written only, so \"the <!-- x --> user\", \"the [user](x)\" or \"the *owner*\" passes",
+      "check": "test_gates.py, the owner-words gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "    views = [(text, list(range(len(text))))] + [prose_view(text, tag) for tag in (\"\", \" \")]\n",
+          "new": "    views = [(text, list(range(len(text))))]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_owner_words \\("
+      }
+    },
+    {
+      "id": "gates-owner-words-one-space",
+      "breaks": "The owner gate reads \"the user\" with one space only, so a line break or two spaces inside it passes",
+      "check": "test_gates.py, the owner-words gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "    r\"\\bthe\\s+(?:user(?!",
+          "new": "    r\"\\bthe (?:user(?!"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_owner_words \\("
+      }
+    },
+    {
+      "id": "gates-owner-words-possessive-refused",
+      "breaks": "The owner gate refuses \"the user's buffer\" and \"the user space\", which are honest text",
+      "check": "test_gates.py, the owner-words gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "(?:user(?!['’]s\\b|\\s+(?:space|mode|level)\\b)|owner)",
+          "new": "(?:user|owner)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_owner_words \\("
+      }
+    },
+    {
+      "id": "gates-writeup-words-id-before-stop",
+      "breaks": "An id before a full stop or colon, r16-1. or r16-1:, is not read as an id",
+      "check": "test_gates.py, the writeup-words gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "(?:LC|DS|MK|IU|FT|TV|OSS)-\\d+)(?![\\w-]|[:.]\\w))\")",
+          "new": "(?:LC|DS|MK|IU|FT|TV|OSS)-\\d+)(?![\\w:.-]))\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_writeup_words \\("
+      }
+    },
+    {
+      "id": "gates-writeup-words-families",
+      "breaks": "The source-id families MK-, IU-, FT-, TV- and OSS- are not read as ids",
+      "check": "test_gates.py, the writeup-words gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "|(?:LC|DS|MK|IU|FT|TV|OSS)-\\d+)",
+          "new": "|(?:LC|DS)-\\d+)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_writeup_words \\("
+      }
+    },
+    {
+      "id": "gates-writeup-words-e2-refused",
+      "breaks": "The writeup gate refuses a term named by a lower-case letter and digit, the e2 term, which is honest text",
+      "check": "test_gates.py, the writeup-words gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "|E\\d{1,2}|(?:LC|",
+          "new": "|[Ee]\\d{1,2}|(?:LC|"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_writeup_words \\("
+      }
+    },
+    {
+      "id": "gates-readme-bullet-lazy-line",
+      "breaks": "A line after a bullet with no indent, or a tab, is not joined to it, though Markdown renders it as part of the bullet",
+      "check": "test_gates.py, the readme-built-bullets gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "        elif inside and (not after_blank or line[:1] in \" \\t\"):\n",
+          "new": "        elif inside and not after_blank and line[:1] == \" \":\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_readme_built_bullets \\("
+      }
+    },
+    {
+      "id": "gates-readme-bullet-plus-items",
+      "breaks": "Items marked + or with a number are not read as bullets",
+      "check": "test_gates.py, the readme-built-bullets gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "LIST_ITEM = re.compile(r\"(?:[-*+]|\\d{1,9}[.)])(?:[ \\t]+|$)\")",
+          "new": "LIST_ITEM = re.compile(r\"[-*](?:[ \\t]+|$)\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_readme_built_bullets \\("
+      }
+    },
+    {
+      "id": "gates-readme-bullet-link-kinds",
+      "breaks": "A reference link or an autolink in a bullet is not counted as a link",
+      "check": "test_gates.py, the readme-built-bullets gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "    for pattern in (MARKDOWN_LINK, REFERENCE_LINK, AUTOLINK):\n",
+          "new": "    for pattern in (MARKDOWN_LINK,):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_readme_built_bullets \\("
+      }
+    },
+    {
+      "id": "gates-readme-bullet-bare-url",
+      "breaks": "A bare address in a bullet is not counted as a link",
+      "check": "test_gates.py, the readme-built-bullets gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "    return count + len(BARE_URL.findall(re.sub(r\"<[^>]*>\", \" \", text)))\n",
+          "new": "    return count\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_readme_built_bullets \\("
+      }
+    },
+    {
+      "id": "gates-readme-bullet-a-tag-case",
+      "breaks": "An <A HREF link in capitals is not counted as a link",
+      "check": "test_gates.py, the readme-built-bullets gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "HTML_LINK = re.compile(r\"<a\\b\", re.IGNORECASE)",
+          "new": "HTML_LINK = re.compile(r\"<a\\b\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_readme_built_bullets \\("
+      }
+    },
+    {
+      "id": "gates-readme-bullet-autolink-text-dropped",
+      "breaks": "An autolink's address is dropped with the tags, so a long one does not count toward the bullet's length",
+      "check": "test_gates.py, the readme-built-bullets gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "    text = re.sub(r\"<[^>]*>\", \"\", AUTOLINK.sub(r\"\\1\", text))\n",
+          "new": "    text = re.sub(r\"<[^>]*>\", \"\", text)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_readme_built_bullets \\("
+      }
+    },
+    {
+      "id": "gates-parse3-bar-day-unread",
+      "breaks": "Once T-PARSE-3's bar day has a results file, the pages may still say that day is not measured",
+      "check": "test_gates.py, the parse3-bar-day gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "    if not (root / PARSE_BAR_DAY_FILE).is_file():\n        return []\n",
+          "new": "    if True:\n        return []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_parse3_bar_day \\("
+      }
+    },
+    {
+      "id": "gates-parse3-bar-day-pages-as-they-stand",
+      "breaks": "The pages as they stand, read as if T-PARSE-3's bar day had its results file, still say that day is not measured, which a publication must change",
+      "check": "gates.py parse3-bar-day",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "PARSE_BAR_DAY_FILE = \"results/parse_rate_debian_10302019.md\"",
+          "new": "PARSE_BAR_DAY_FILE = \"results/parse_rate_debian_12302019.md\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}",
+        "--only",
+        "parse3-bar-day"
+      ],
+      "expect": {
+        "signature": "^gates: FAIL parse3-bar-day README\\.md:\\d+: 'not been measured' of T-PARSE-3",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-writeup-missed-list-ellipsis",
+      "breaks": "A line of WRITEUP.md's list of every target missed gains an ellipsis",
+      "check": "gates.py writeup-missed-list",
+      "mutations": [
+        {
+          "file": "WRITEUP.md",
+          "old": "against itch-book:** 5.09 M msg/s against 12.5 M msg/s,",
+          "new": "against itch-book:** 5.09 M msg/s … against 12.5 M msg/s,"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}",
+        "--only",
+        "writeup-missed-list"
+      ],
+      "expect": {
+        "signature": "^gates: FAIL writeup-missed-list WRITEUP\\.md:\\d+: '…' in the list a stranger reads",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-writeup-missed-list-word-cap",
+      "breaks": "WRITEUP.md's list of every target missed may run past 800 words",
+      "check": "test_gates.py, the writeup-missed-list gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "        if words > MISSED_LIST_WORDS:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_writeup_missed_list \\("
+      }
+    },
+    {
+      "id": "gates-writeup-missed-list-ellipsis-unread",
+      "breaks": "The list gate does not read an ellipsis",
+      "check": "test_gates.py, the writeup-missed-list gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "MISSED_LIST_REFUSED = re.compile(r\"\\u2026|\\.\\.\\.|UNCONFIRMED|",
+          "new": "MISSED_LIST_REFUSED = re.compile(r\"UNCONFIRMED|"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_writeup_missed_list \\("
       }
     }
   ]

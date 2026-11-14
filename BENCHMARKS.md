@@ -65,7 +65,7 @@ All on one thread, with the whole file in memory before the clock starts, unless
 - **Source:** [Lunary benchmarks](https://lunyn.com/benchmarks), OSS-34.
 - **Measured:** Google Cloud c3-standard-8, Xeon Platinum 8481C 2.70 GHz, 32 GB DDR5, Ubuntu 24.04, Rust `-C target-cpu=native`. Full day 10302019, memory-mapped. Single thread. Every field of every supported type decoded and checksummed, median of 10.
 - **Comparability:** a harder job than T-PARSE-2, under a VM, by a vendor on its own site. Ours is measured on 12302019, so the comparison is across days (docs/NOTES.md, "The parse rate on `debian`").
-- **On 10302019:** not measured on that day; a run is registered (results/predictions.md). On `debian` the file in the page cache and a copy of it do not fit in memory together, so the run reads the day into the bench's own memory and checks every page of that copy before and after each timed pass.
+- **On 10302019:** not measured yet; the prediction for that run is committed (results/predictions.md). On `debian` the file in the page cache and a copy of it do not fit in memory together, so the run reads the day into the bench's own memory and checks every page of that copy before and after each timed pass.
 - **Status:** `VERIFIED`
 
 ### T-BOOK-1: true L3 rebuild, all symbols
