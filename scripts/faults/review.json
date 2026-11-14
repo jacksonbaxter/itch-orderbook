@@ -217,8 +217,8 @@
         {
           "file": "results/final_review.md",
           "op": "replace_text",
-          "old": "- Findings: 193\n",
-          "new": "- Findings: 192\n"
+          "old": ", 59 findings made by its checkers (",
+          "new": ", 60 findings made by its checkers ("
         }
       ],
       "command": [
@@ -831,6 +831,50 @@
       ],
       "expect": {
         "signature": "^FAIL: test_a_file_of_another_ending_or_folder_is_not_a_test",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-gate-checker-count-unpinned",
+      "breaks": "the gate reader's stated count is edited to match its finding not listed being dropped, which review_report.py cannot see, since the counts are typed from the checkers' reports (r18-27)",
+      "check": "test_review_report.py Committed.test_the_gates_checkers_keep_the_counts_of_their_reports",
+      "mutations": [
+        {
+          "file": "scripts/final_review.json",
+          "old": "    \"count\": {\n     \"BLOCK\": 4,\n     \"FIX\": 17,\n     \"NOTE\": 9\n    },\n    \"not_listed\": [\n     {\n      \"severity\": \"BLOCK\",\n      \"reason\": \"it is a question of presentation that is decided outside this record, after it closes\"\n     }\n    ]",
+          "new": "    \"count\": {\n     \"BLOCK\": 3,\n     \"FIX\": 17,\n     \"NOTE\": 9\n    },\n    \"not_listed\": []"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "Committed.test_the_gates_checkers_keep_the_counts_of_their_reports"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_gates_checkers_keep_the_counts_of_their_reports",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-no-change-without-reason-taken",
+      "breaks": "review_report.py takes a finding closed as no change needed with no reason in words, so any open finding can be closed that way and the record rendered complete (r18-28)",
+      "check": "test_review_report.py ReviewReport.test_no_change_needed_needs_a_reason",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        if (finding[\"outcome\"] == \"no change needed\"\n",
+          "new": "        if (finding[\"outcome\"] == \"no change needed\" and False\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_no_change_needed_needs_a_reason"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_no_change_needed_needs_a_reason",
         "exit": 1
       }
     }

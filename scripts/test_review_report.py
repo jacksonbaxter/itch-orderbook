@@ -53,7 +53,7 @@ DATA = {
         finding("r1-1", "BLOCK", "fixed", commits=["1234567"], tests=["Reader.CountsEveryFrame"],
                 faults=["parser-frame-skipped"]),
         finding("r1-2", "FIX", "known limit", notes=[NOTE_SECTION]),
-        finding("r1-3", "NOTE", "no change needed"),
+        finding("r1-3", "NOTE", "no change needed", detail="the code was right as it is"),
         finding("r12-1", "FIX", "fixed", commits=["1234567"], tests=["test_a_page_line"]),
         finding("r12-2", "NOTE", "fixed", commits=["1234567"]),
     ],
@@ -207,10 +207,30 @@ class ReviewReport(unittest.TestCase):
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
         text = self.out.read_text(encoding="utf-8")
-        self.assertIn("- Result: not complete. Waiting on no one: r12-1, open. 1 reviewer to "
-                      "come.\n", text)
+        self.assertIn("- Result: not complete. 1 review still to come. Waiting on no one: r12-1, "
+                      "open.\n", text)
+        self.out.unlink()
+        self.data["to_come"].append("a second reader")
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        self.assertIn("not complete. 2 reviews still to come. Waiting", self.out.read_text(
+            encoding="utf-8"))
         self.assertIn("- r12-1 (FIX, open): what r12-1 found.", text)
         self.assertIn("- STILL TO COME: the last reviewer reads the pages", text)
+
+    def test_no_change_needed_needs_a_reason(self):
+        # r18-28: an open finding set to no change needed, with no words, could make the record
+        # complete; a reason in words is required, of a reviewer's finding and of the gate's.
+        for detail in ("", "n/a", "as is"):
+            with self.subTest(detail=detail):
+                self.data["findings"][2]["detail"] = detail
+                self.assertIn("r1-3: no change needed with no reason", self.refused("evidence"))
+        self.data = copy.deepcopy(DATA)
+        self.data["gate"]["findings"][0].update(outcome="no change needed", commits=[], faults=[])
+        self.assertIn("reader 1: no change needed with no reason", self.refused("evidence"))
+        self.data["gate"]["findings"][0]["detail"] = "the page was right as it was"
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
 
     def test_an_outcome_checked_again_is_named_with_its_commit(self):
         self.data["rechecked"] = [{"what": "r1-2", "at": "fedcba9"}]
@@ -495,8 +515,8 @@ class ReviewReport(unittest.TestCase):
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
         text = self.out.read_text(encoding="utf-8")
-        self.assertIn("- Result: not complete. Waiting on no one: r12-2, open. Of the acceptance "
-                      "gate's findings, 2 open.\n", text)
+        self.assertIn("- Result: not complete. Of the acceptance gate's findings, 2 open. Waiting on "
+                      "no one: r12-2, open.\n", text)
         self.assertIn("- The gate's pages B1 (BLOCK, open): a stale claim.\n", text)
         self.assertIn("| reader | 1 | FIX | too long | open | Commit 1234567. Fault "
                       "`parser-frame-skipped`. |", text)
@@ -525,7 +545,24 @@ class ReviewReport(unittest.TestCase):
         self.assertIn("r1's fixes not merged yet", self.out.read_text(encoding="utf-8"))
 
 
+# The acceptance gate's checkers' counts and their findings not listed, as each checker's report
+# states them. The reports are kept outside the repository, so the data file cannot be held to
+# them by the script; they are pinned here instead (r18-27): a count edited to match a finding
+# dropped, or a finding moved out of the list, fails this test.
+GATE_COUNTS = {"reader": (4, 17, 9), "pages": (2, 2, 11), "code": (0, 2, 4), "raw": (0, 0, 3),
+               "findings": (0, 2, 3)}
+GATE_NOT_LISTED = {"reader": ["BLOCK"], "pages": [], "code": [], "raw": [], "findings": []}
+
+
 class Committed(unittest.TestCase):
+    def test_the_gates_checkers_keep_the_counts_of_their_reports(self):
+        data = json.loads((REPO_ROOT / review_report.DATA).read_text(encoding="utf-8"))
+        checkers = data["gate"]["checkers"]
+        self.assertEqual({c["id"]: tuple(c["count"][s] for s in review_report.SEVERITIES)
+                          for c in checkers}, GATE_COUNTS)
+        self.assertEqual({c["id"]: [n["severity"] for n in c["not_listed"]] for c in checkers},
+                         GATE_NOT_LISTED)
+
     def test_the_committed_file_is_a_fresh_render_with_its_evidence_in_the_tree(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
