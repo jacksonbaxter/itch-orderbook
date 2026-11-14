@@ -61,7 +61,9 @@ On transparent huge pages too, T-ARENA-1's page-fault check fails: page faults i
 
 A diagnostic run afterwards (P-0703) recorded each minor fault with its address and time. Its records point to bursts during the kernel's memory compaction, which migrates base pages under the running book, so that the next touch of a moved page faults, and to a few more from the kernel collapsing the index into huge pages. It ran while the host did other work, so it is not published: its counts are in docs/NOTES.md, not a results file, and none is quoted here.
 
-## Branches and the instruction stream
+## Prefetching and SIMD
+
+### The counter targets and dispatch
 
 T-PERF-1, DRAM fills per book message, is missed at 2.002 against a bar of 0.623. That bar was set on a Zen 3 with 32 MB of L3 to one core, against this host's 4 MB shared by four, and the source's own book gave 0.983 on its own host ([results/counters_by_type_paged-flat_debian_12302019.md](../results/counters_by_type_paged-flat_debian_12302019.md)). The messages that name an old order are the ones that miss.
 
@@ -77,9 +79,15 @@ Dispatch, `switch` vs a table vs threaded:
 - The indirect forms made more branch misses, not fewer: `switch` 2.0303 per message, `table` 2.1005, `threaded` 2.0905 ([results/dispatch_debian_12302019.md](../results/dispatch_debian_12302019.md)).
 - A pass that only frames and classifies messages puts the floor at 7.77 ns per message, and the book forms stand 182.87, 184.62 and 181.61 ns above it ([results/dispatch_debian_12302019.md](../results/dispatch_debian_12302019.md)).
 
-The look-ahead's gain on the Zen 1 host is paid for with branch misses too, 4.7279 per message vs 2.0432 ([results/prefetch_debian_12302019.md](../results/prefetch_debian_12302019.md)). In that harness the rate without look-ahead varied with a CV of 10.83% over its repetitions.
+### Prefetching
+
+The look-ahead's gain on the Zen 1 host is paid for with 697.1053 instructions per message vs 397.7893 without it. Those counts are not comparable with the write-up's table: this harness maps the day and counts each whole timed pass, frame walk and look-ahead included, with no counter reads per message, while the table counts each `apply()` with the reads around it and the frame walk outside ([results/prefetch_debian_12302019.md](../results/prefetch_debian_12302019.md)).
+
+It is paid for with branch misses too, 4.7279 per message vs 2.0432 ([results/prefetch_debian_12302019.md](../results/prefetch_debian_12302019.md)). In that harness the rate without look-ahead varied with a CV of 10.83% over its repetitions.
 
 On the M4 Max the look-ahead raises instructions per message from 384.4524 (D=0) to 640.4915 (D=4), which is why it is off rather than on for one target; a default per target and a cheaper look-ahead were not tried ([results/prefetch_mac_12302019.md](../results/prefetch_mac_12302019.md)).
+
+### SIMD parsing
 
 SIMD parsing, scalar vs vector. ITCH fields are big-endian at fixed offsets, so a scalar decode is loads and byte swaps:
 
@@ -102,6 +110,7 @@ T-PARSE-3's bar of 93.9 M msg/s and 2.89 GB/s was set by Lunary, a vendor of an 
 
 ### The SPSC ring
 
+- The median round trips on the Zen 1 host: atomic_queue 133.5 ns, moodycamel 169.3, rigtorp 198.5, folly 220.9, xenium_vyukov 223.4, project 229.3 (this ring), boost 264.5 and mutex 781.3 ([results/spsc_queues_debian_12302019.md](../results/spsc_queues_debian_12302019.md)).
 - T-SPSC-1 is missed on all three comparisons: boost over this ring 1.15× against a bar of 1.16×, and this ring 1.35× moodycamel's and 1.16× rigtorp's where the bar is to match them ([results/spsc_queues_debian_12302019.md](../results/spsc_queues_debian_12302019.md)).
 - T-SPSC-2, one technique removed at a time: the cached index gave 0.89× and 1.20× against bars of 3.90×, and the mask 1.60× and 1.19× against 4.20× ([results/spsc_ablation_debian_12302019.md](../results/spsc_ablation_debian_12302019.md)).
 
@@ -180,6 +189,8 @@ Of the 18,958 crossed observations on 12302019, 18,304 came with the symbol not 
 
 T-TRADE-2 holds the cross prints against Nasdaq's CrossStats file, and T-TRADE-3 each symbol's continuous volume against SEC MIDAS. An `E` executes a resting order at its price, so T-TRADE-5 requires every `E` in normal trading to hit the best level.
 
+T-TRADE-3, each symbol's volume against the SEC's MIDAS file, fails on four of the ten sessions: on one MIDAS lists a symbol twice, and on the rest a few symbols' feed volume is above MIDAS, unexplained ([RESULTS.md](../RESULTS.md)).
+
 - On 01302020 MIDAS lists TAP twice, and the tool sums both rows ([results/trades_01302020.md](../results/trades_01302020.md)).
 - On 03272019 two `E` on RBZ executed away from the best just after a resumption, with that book crossed; the oracle agrees with the reference book that day ([results/trades_03272019.md](../results/trades_03272019.md)).
 
@@ -193,6 +204,15 @@ Of the 67 C++ files whose comments changed, the object comparison covers the 56 
 
 - `fuzz_mold` ran 247,377,437 executions and `fuzz_midas` 212,887,115 ([results/fuzz_30min_mac.md](../results/fuzz_30min_mac.md)).
 - `fuzz_book` ran 67,300 executions, since each of its inputs is a stream of order messages replayed through every arm of the fast book and through the reference book, both compared in full after every message ([results/fuzz_30min_mac.md](../results/fuzz_30min_mac.md)).
+
+## What a reviewer would ask
+
+- **What does the book give a consumer?** Queries, not a feed: a side's best price, shares and order count, the level at a price, a walk of a side from the best, an order by reference, and a hook told of every level written ([include/itch/book.hpp](../include/itch/book.hpp)).
+- **How is a level found on a delete, and what does a deep insert cost?** Through the order record; a delete that empties the level searches the side again to remove it, and an add at a new price shifts every better entry up one, the whole side at worst ([include/itch/book_levels.hpp](../include/itch/book_levels.hpp)); neither cost is measured.
+- **Why is the ring slower than rigtorp's?** Not measured; here a side's index shares a block with its copy of the other's, and a line for each was not timed ([include/itch/spsc.hpp](../include/itch/spsc.hpp)).
+- **What happens at capacity?** `apply()` refuses the message as `capacity_exhausted`, and the book is wrong from there on; the busiest session peaked at 1,964,977 live orders and 805,782 live levels, with room for `1 << 22` and `1 << 21` ([results/oracle_07302019.md](../results/oracle_07302019.md)).
+- **Is the framing walk one serial chain of loads?** Yes, each length gives the next offset; its cycles per frame are not measured.
+- **Why no `-march=native`?** Every timing is Clang 23.1.4 at -O3 with no -march flag, and the vector kernels name their instruction sets per function; a `-march=native` build of the whole book was not timed ([results/bench_book_paged-flat_ram_debian_12302019.md](../results/bench_book_paged-flat_ram_debian_12302019.md)).
 
 ## Tried and not made the default
 
