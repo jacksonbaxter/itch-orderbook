@@ -227,9 +227,10 @@ class Gates(unittest.TestCase):
 
     def test_a_hint_with_a_measured_reason_is_allowed(self):
         self.assert_passes("src/parser.cpp",
-                           "// measured: 4% fewer branch misses, results/x.md\n"
+                           "// measured: 4% fewer branch misses, results/run.md\n"
                            "if (x) [[likely]] { y(); }\n")
-        self.assert_passes("src/parser.cpp", "__builtin_prefetch(p);  // measured: results/y.md\n")
+        self.assert_passes("src/parser.cpp",
+                           "__builtin_prefetch(p);  // measured: results/run_log.md\n")
 
     def test_a_measured_comment_with_no_reason_is_not_enough(self):
         self.assert_only_gate_fails("bare-branch-hint", "src/parser.cpp",
