@@ -217,8 +217,8 @@
         {
           "file": "results/final_review.md",
           "op": "replace_text",
-          "old": "- Findings: 193\n",
-          "new": "- Findings: 192\n"
+          "old": ", 59 findings made by its checkers (",
+          "new": ", 60 findings made by its checkers ("
         }
       ],
       "command": [
