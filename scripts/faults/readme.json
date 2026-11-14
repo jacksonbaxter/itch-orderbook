@@ -3305,8 +3305,8 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "\"more make most of the DRAM fills.\")",
-          "new": "\"more make most of the fills.\")"
+          "old": "\"more make most DRAM fills.\")",
+          "new": "\"more make most fills.\")"
         }
       ],
       "command": [

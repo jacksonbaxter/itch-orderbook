@@ -1026,8 +1026,8 @@ class MissedTargets(unittest.TestCase):
                       "3.90×", table)
         self.assertIn(results_table.MISS_OPENING, table)
         self.assertEqual(table.count("host's share"), 1)
-        self.assertIn("On the Zen 1 host, messages that name an order a second old or more make "
-                      "most of the DRAM fills.", table)
+        self.assertIn("On the Zen 1 host, messages naming an order a second old or more make "
+                      "most DRAM fills.", table)
         # T-PERF-1 says what its figure is over: book messages, not every message.
         self.assertIn("per book message (one that can change a book), against carteret on a Zen "
                       "3:** 2.002 a book message against at most 0.623, 1.379 over.", table)

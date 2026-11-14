@@ -1767,8 +1767,8 @@ def missed_full(root):
 MISS_OPENING = (
     "Each line is on the Zen 1 host unless it names the M4 Max, and gives the row that decides "
     "the verdict, or the worst. Where a bar is another host's published figure, the host's share "
-    "of the gap was not measured. On the Zen 1 host, messages that name an order a second old or "
-    "more make most of the DRAM fills.")
+    "of the gap was not measured. On the Zen 1 host, messages naming an order a second old or "
+    "more make most DRAM fills.")
 # What each target asks, and whose bar it is, in words a stranger reads alone; and its why in a
 # few plain words, "" for none, or None for a trade check's, which is its row's. Only words are
 # written here: every figure comes from a row.
