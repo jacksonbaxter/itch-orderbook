@@ -992,9 +992,12 @@ def ratio_gap(text):
                   text)
 
 
-# The map books as the README's headline names them: a reader does not know map-fresh.
-MAP_WORDS = (("map-fresh", "a `std::map` book on a fresh heap", "below the bar on a fresh heap"),
-             ("map-aged", "one on an aged heap", "on an aged one"))
+# The map books as the README's headline names them: a reader does not know map-fresh, nor
+# what an aged heap is. Each gap is the ratio's shortfall, named as the ratio's.
+MAP_WORDS = (("map-fresh", "a `std::map` book on a fresh heap",
+              "the ratio {} short of the bar on a fresh heap"),
+             ("map-aged", "one on an aged heap (fragmented on purpose first)",
+              "{} short on an aged one"))
 
 
 def headline_ratios(measured, gap):
@@ -1002,7 +1005,8 @@ def headline_ratios(measured, gap):
     named in words, and each gap as how far below the bar the ratio is."""
     for name, book, where in MAP_WORDS:
         measured = re.sub(rf"\bover {name} (\d+(?:\.\d+)?×)", rf"\1 {book}", measured)
-        gap = re.sub(rf"\bover {name} by (\d+(?:\.\d+)?)×", rf"\1 {where}", gap)
+        gap = re.sub(rf"\bover {name} by (\d+(?:\.\d+)?)×",
+                     lambda match, where=where: where.format(match[1]), gap)
     return measured, gap
 
 
@@ -1049,15 +1053,16 @@ def sessions_headline(target, name, text):
 
 
 def alloc_headline(target, name, text):
-    """T-ALLOC-1 from one day's oracle file: the fast book's count beside its control's, on
-    every arm the file ran."""
+    """T-ALLOC-1 from one day's oracle file: the fast book's count on every arm the file ran, and
+    its control's, which shows the counter does see a book's allocations."""
     bar, verdict = find(r"^## T-ALLOC-1: (.*)\n\nVerdict: \*\*(PASS|FAIL)\*\*", text, name).groups()
     messages, allocations = table_row("Fast book", text, name)
     control = table_row("Control book, the reference", text, name)[1]
     verdict, measured = across_arms(
         arm_verdicts(text, name), target, verdict,
-        f"{allocations} allocations after warm-up in {messages} messages, against {control} by "
-        f"the reference book under the same count")
+        f"{allocations} allocations after warm-up in {messages} messages")
+    measured = (f"{in_all_designs(measured)}; the counter sees {control} in the second, simple "
+                "book, so it does catch allocations")
     return (bar, measured, header_host(text, name), "met" if verdict == "PASS" else "missed",
             "")
 
@@ -1130,7 +1135,8 @@ def short_host(host):
 # Only the words on what each measures are written here; every value comes from the file.
 HEADLINE = (
     ("T-ORACLE-2", "oracle_sessions.md", sessions_headline,
-     "Agreement with an independent reference book over whole sessions"),
+     "Agreement with a second, simple book that shares no code with the fast one, over whole "
+     "sessions"),
     ("T-ALLOC-1", "oracle_12302019.md", alloc_headline,
      "Heap allocations on the hot path over a whole day"),
     ("T-BOOK-1", "bench_book_paged-flat_ram_debian_12302019.md", book_headline,
@@ -1138,7 +1144,8 @@ HEADLINE = (
     ("T-DESIGN-1", "bench_book_paged-flat_ram_debian_12302019.md", book_headline,
      "Speed over a `std::map` book, same run and core"),
     ("T-BT-1", "backtest_quoting_debian_12302019.md", backtest_headline,
-     "The backtester replaying a whole day, quoting, with its queue model"),
+     "The backtester replaying a whole day, quoting, with its queue model; an engine event is a "
+     "message, or a delivery, arrival, report or wake it causes"),
 )
 # Figures under the headline that no bar can judge, because the bar was set on another host:
 # each a line of its own, saying so, never a row with a verdict; each with what it measures.
@@ -1760,8 +1767,8 @@ def missed_full(root):
 MISS_OPENING = (
     "Each line is on the Zen 1 host unless it names the M4 Max, and gives the row that decides "
     "the verdict, or the worst. Where a bar is another host's published figure, the host's share "
-    "of the gap was not measured. There, it was measured that messages naming an order over a "
-    "second old take most DRAM fills.")
+    "of the gap was not measured. On the Zen 1 host, messages that name an order a second old or "
+    "more make most of the DRAM fills.")
 # What each target asks, and whose bar it is, in words a stranger reads alone; and its why in a
 # few plain words, "" for none, or None for a trade check's, which is its row's. Only words are
 # written here: every figure comes from a row.
@@ -1780,9 +1787,9 @@ PLAIN = {
                 "subtracted", ""),
     "T-DESIGN-1": ("speed over a `std::map` book in the same run",
                    "the map book's extra time is DRAM misses"),
-    "T-PERF-1": ("last-level misses a message, a floor on DRAM fills, against carteret on a Zen 3",
-                 ""),
-    "T-PERF-2": ("branch misses a message, against Market-Core, an open-source project", ""),
+    "T-PERF-1": ("last-level misses, a floor on DRAM fills, per book message (one that can change "
+                 "a book), against carteret on a Zen 3", ""),
+    "T-PERF-2": ("branch misses per message, against Market-Core, an open-source project", ""),
     "T-INV-2": ("the never-crossed rule",
                 "every cross is the feed's, in a symbol outside normal trading"),
     "T-TRADE-3": ("each symbol's continuous volume against SEC MIDAS", None),
@@ -1902,10 +1909,11 @@ def ratio_line(rows):
 
 
 def perf_line(rows):
+    """T-PERF-1 or T-PERF-2: the figure a message, or a book message, as its bar counts it."""
     _, bar, measured, gap, *_ = rows[0]
     figure = measured.split(" ")[0]
-    limit = re.search(r"≤ ([\d.]+)$", bar)[1]
-    return (f"{figure} a message against at most {limit}, {gap.removeprefix('by ')} over", 0,
+    over, limit = re.search(r"\bper (book message|message) ≤ ([\d.]+)$", bar).groups()
+    return (f"{figure} a {over} against at most {limit}, {gap.removeprefix('by ')} over", 0,
             rows[0])
 
 

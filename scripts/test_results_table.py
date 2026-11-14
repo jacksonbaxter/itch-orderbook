@@ -668,21 +668,31 @@ class ResultsTable(unittest.TestCase):
         oracle, alloc, book, design, backtest = rows
         # Each first cell is what the row measures, then its target.
         # Not "after every message": what is compared after each message is what it can change.
-        self.assertTrue(oracle.startswith("| Agreement with an independent reference book over "
-                                          "whole sessions (T-ORACLE-2) | "), oracle)
+        # The second book said for what it is, not as a third party's.
+        self.assertTrue(oracle.startswith("| Agreement with a second, simple book that shares no "
+                                          "code with the fast one, over whole sessions "
+                                          "(T-ORACLE-2) | "), oracle)
         self.assertIn("| 0 divergences over 10 full sessions | 0 divergences in 3,081,392,329 "
                       "messages over 10 sessions | Apple M4 Max | met | "
                       "[results/oracle_sessions.md]", oracle)
-        self.assertIn("| 0 allocations after warm-up in 268,744,780 messages, against 324,511,069 "
-                      "by the reference book under the same count; the same in all four designs | "
-                      "Apple M4 Max | met |", alloc)
+        # The control's count says why it is there: the counter does see allocations.
+        self.assertIn("| 0 allocations after warm-up in 268,744,780 messages; the same in all four "
+                      "designs; the counter sees 324,511,069 in the second, simple book, so it "
+                      "does catch allocations | Apple M4 Max | met |", alloc)
         # The gap in words, so that it cannot be read as a factor; the host by its core's name.
         self.assertIn("| ≥ 16.4 M msg/s (Ryzen 7 9700X) | 5.15 M msg/s; `paged-flat`, day in "
                       "memory | Zen 1 host | **missed**: 11.25 M msg/s short |", book)
+        # Each gap is named as the ratio's shortfall, and an aged heap is said in words.
         self.assertIn("| ≥ 4.0× the map book's throughput, same run (a ratio on one host) | 2.54× "
-                      "a `std::map` book on a fresh heap; 2.81× one on an aged heap; `paged-flat`, "
-                      "day in memory | Zen 1 host | **missed**: 1.46 below the bar on a fresh "
-                      "heap, 1.19 on an aged one |", design)
+                      "a `std::map` book on a fresh heap; 2.81× one on an aged heap (fragmented "
+                      "on purpose first); `paged-flat`, day in memory | Zen 1 host | **missed**: "
+                      "the ratio 1.46 short of the bar on a fresh heap, 1.19 short on an aged "
+                      "one |", design)
+        # An engine event is said, beside the messages/s that is not the bar's unit.
+        self.assertTrue(backtest.startswith(
+            "| The backtester replaying a whole day, quoting, with its queue model; an engine "
+            "event is a message, or a delivery, arrival, report or wake it causes (T-BT-1) | "),
+            backtest)
         self.assertIn("| ≥ 2.00 M engine events/s | 4.68 M engine events/s (4.57 M messages/s) | "
                       "Zen 1 host | met |", backtest)
         for row in rows:
@@ -1016,8 +1026,13 @@ class MissedTargets(unittest.TestCase):
                       "3.90×", table)
         self.assertIn(results_table.MISS_OPENING, table)
         self.assertEqual(table.count("host's share"), 1)
-        self.assertIn("it was measured that messages naming an order over a second old take most "
-                      "DRAM fills", table)
+        self.assertIn("On the Zen 1 host, messages that name an order a second old or more make "
+                      "most of the DRAM fills.", table)
+        # T-PERF-1 says what its figure is over: book messages, not every message.
+        self.assertIn("per book message (one that can change a book), against carteret on a Zen "
+                      "3:** 2.002 a book message against at most 0.623, 1.379 over.", table)
+        self.assertIn("branch misses per message, against Market-Core, an open-source project:** "
+                      "2.102 a message against at most 2.04, 0.062 over.", table)
         for line in table.splitlines():
             self.assertLessEqual(line.count("not established"), 1, line)
         for word in ("…", "...", "UNCONFIRMED", "raw", "r0843", "rate by", "withdrawn or stopped",

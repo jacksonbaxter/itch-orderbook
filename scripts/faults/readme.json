@@ -3236,8 +3236,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "([results/oracle_sessions.md](results/oracle_sessions.md)); no heap allocation after warm-up.",
-          "new": "([results/oracle_sessions.md](results/oracle_sessions.md)); no heap allocation after warm-up. <!-- figures: not measured -->"
+          "old": "sharing no code with it ([results/oracle_sessions.md](results/oracle_sessions.md)).",
+          "new": "sharing no code with it ([results/oracle_sessions.md](results/oracle_sessions.md)). <!-- figures: not measured -->"
         }
       ],
       "command": [
@@ -3305,8 +3305,8 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "\"second old take most DRAM fills.\")",
-          "new": "\"second old take most fills.\")"
+          "old": "\"more make most of the DRAM fills.\")",
+          "new": "\"more make most of the fills.\")"
         }
       ],
       "command": [
