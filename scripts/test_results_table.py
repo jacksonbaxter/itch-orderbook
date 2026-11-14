@@ -228,6 +228,22 @@ class ResultsTable(unittest.TestCase):
         self.assertIn("BENCHMARKS.md: ['T-PARSE-9'] in no row or account of RESULTS.md's summary",
                       output)
 
+    def test_the_readme_counts_the_summarys_verdicts(self):
+        shown = [row[2] for row in results_table.summary_rows(self.root)]
+        met, missed, none = (shown.count(word) for word in ("met", "**missed**", "no verdict"))
+        self.assertEqual(met + missed + none, len(shown))
+        self.assertTrue(met and missed and none)
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        self.assertEqual(output.split("README.md:\n")[2].splitlines()[0],
+                         f"Of the {len(shown)} targets in [RESULTS.md's summary]"
+                         f"(RESULTS.md#summary), {met} are met, {missed} are missed and {none} "
+                         "have no verdict.")
+        self.edit("README.md", f", {missed} are missed and", f", {missed - 1} are missed and")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertRegex(output, r"results_table: FAIL README\.md:\d+: differs from a fresh run")
+
     def test_the_fault_matrix_row_says_which_faults_this_host_did_not_run(self):
         code, output = self.run_table()
         self.assertEqual(code, 0, output)

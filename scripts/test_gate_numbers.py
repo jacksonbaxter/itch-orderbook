@@ -314,6 +314,27 @@ class Gate(unittest.TestCase):
             self.assertIn(f"WRITEUP.md:1: {wrong} is not in results/resumptions.md together",
                           output)
 
+    def test_a_figure_in_billions_or_millions_is_held_as_its_rounding(self):
+        self.write("results/sessions.md", "# Sessions\n\n| Sessions | Messages | Rate |\n"
+                   "|---|---|---|\n| all ten | 3,081,392,329 | 5,150,000 |\n")
+        cite = " ([results/sessions.md](results/sessions.md)).\n"
+        for held in ("3.08 billion messages", "3.1 billion messages", "3,081.4 million messages",
+                     "5.15 million a second, the rate", "3,081,392,329 messages"):
+            self.write("WRITEUP.md", f"The sessions ran {held}{cite}")
+            code, output = run(self.root)
+            self.assertEqual(code, 0, f"{held}: {output}")
+        for wrong in ("The sessions ran 3.09 billion messages",
+                      "The sessions ran 3.08 million messages",
+                      "The sessions ran 3.082 billion messages",
+                      "The sessions ran 5.15 billion a second, the rate",
+                      "The day took 3.08 billion faults"):
+            self.write("WRITEUP.md", f"{wrong}{cite}")
+            code, output = run(self.root)
+            self.assertEqual(code, 1, f"{wrong}: {output}")
+            figure = " ".join(wrong.split()[3:5])
+            self.assertIn(f"WRITEUP.md:1: {figure} is not in results/sessions.md, nor a figure "
+                          "that rounds to it,", output)
+
     def real_tree(self, page):
         """A tree of the repository's own results and BENCHMARKS.md, with one page."""
         tree = Path(self.directory.name) / "real"

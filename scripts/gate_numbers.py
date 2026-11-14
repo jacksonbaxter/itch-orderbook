@@ -61,6 +61,12 @@ it; the word straight before a figure is nearer than any label further back in i
 The two integers of an `N of M` ("22 of 33") must stand together in one cited file: each held
 by the rules above in one table, or in one line outside tables, and twice there if N is M.
 
+Billions and millions. A figure followed by the word billion or million ("3.08 billion
+messages") is held as a rounding: by a place, by the rules above, that holds the same figure,
+or a figure that, divided by 10^9 or 10^6 and rounded half up to the decimals written, is it.
+So 3.08 billion is held by 3,081,392,329 where its clause shares a word with that place, and
+3.09 billion, or 3.08 million, is held by no figure of that file.
+
 Verdicts. Outside code blocks and the blocks results_table.py generates (held by its --check),
 a verdict word is read in a sentence of prose or a table row: met, meets, missed, fails,
 failed, failing, passed, PASS and FAIL anywhere; misses, missing and passes only straight after
@@ -83,23 +89,23 @@ is held here and not read as a figure. A verdict word read anywhere that ties to
 fails, unless it is in a heading, beside the word target ("every missed target"), or on a line
 that ends in `<!-- verdicts: no target named -->`.
 
-What it cannot do. It does not read units, so 5.15 M against a cell of 5.15 ms passes. It
-reads words, not meaning, so a clause that shares a word with the wrong place by chance passes,
-and a clause that names no label is held by any place that shares a word. It does not follow
-arithmetic, so a figure the page derives (a sum, a difference, a rounding) must stand as
-written in the file. Two figures of one clause that both share its words, with no label or
-list to tell them apart, can trade places unseen; the generated tables are held cell by cell
-by `results_table.py --check` instead. So the gate holds that each figure is in its cited file
-beside a word its clause shares, and, where a label, a one-word row label or an `N of M` ties
-it, in that row or beside that partner; it does not hold that it is the figure for that place
-when the file has the same figure elsewhere under a shared word. Which short integers and
-counts in words count is decided by the words next to them, not by what they count, and on a
-line that cites no results file none is read: there a short integer is as likely a count of
-something built (48 scenarios) as a measurement, so a line whose only numbers are short
-integers needs no citation. A verdict is read by its word, not its meaning: one said in other
-words ("short of its bar", "clean") is not read, nor one left out ("and T-TRADE-5 on two"),
-and a target with rows of both verdicts on the host, day and design its sentence names is
-held to the miss.
+What it cannot do. It does not read units, so 5.15 M against a cell of 5.15 ms passes. It reads
+words, not meaning, so a clause that shares a word with the wrong place by chance passes, and a
+clause that names no label is held by any place that shares a word. It does not follow
+arithmetic, so a figure the page derives (a sum, a difference, a rounding other than one in
+billions or millions) must stand as written in the file. Two figures of one clause that both
+share its words, with no label or list to tell them apart, can trade places unseen; the
+generated tables are held cell by cell by `results_table.py --check` instead. So the gate holds
+that each figure is in its cited file beside a word its clause shares, and, where a label, a
+one-word row label or an `N of M` ties it, in that row or beside that partner; it does not hold
+that it is the figure for that place when the file has the same figure elsewhere under a shared
+word. Which short integers and counts in words count is decided by the words next to them, not
+by what they count, and on a line that cites no results file none is read: there a short
+integer is as likely a count of something built (48 scenarios) as a measurement, so a line
+whose only numbers are short integers needs no citation. A verdict is read by its word, not its
+meaning: one said in other words ("short of its bar", "clean") is not read, nor one left out
+("and T-TRADE-5 on two"), and a target with rows of both verdicts on the host, day and design
+its sentence names is held to the miss.
 
 The gate runs on whichever pages exist, so a tree with none passes and says so. A page
 named with --page must exist.
@@ -112,9 +118,11 @@ Exit codes: 0 passed, 1 a figure with no source or a verdict that disagrees, 2 b
 from __future__ import annotations
 
 import argparse
+import copy
 import re
 import sys
 from collections import defaultdict
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -129,6 +137,8 @@ EXEMPT = ("ITCH 5.0", "C++23", "BinaryFILE 1.0")
 NAMED_BEFORE = ("Zen", "Ryzen", "GCC", "Clang", "Python", "Layer")
 NAMED_AFTER = ("cores", "threads")
 SKIP_MARK = "<!-- figures: not measured -->"
+SCALES = {"billion": 9, "million": 6}
+SCALE_WORD = re.compile(r"\s+(billion|million)\b")
 
 FENCE = re.compile(r"^(```|~~~)")
 DAY = r"(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?:19|20)\d\d"
@@ -387,6 +397,7 @@ class Figure:
         self.first = ""               # in a table row, its row's first cell
         self.second = False           # whether it stands in a table row's second cell
         self.partner = None           # the other figure of an `N of M`
+        self.scale = None             # 9 or 6 for one followed by "billion" or "million"
 
     def __iter__(self):
         return iter((self.line, self.figure, self.cited))
@@ -467,6 +478,9 @@ def figures_in(text):
             for position, printed, value in sorted(found):
                 figure = Figure(number, printed, value, cited or None, context, row, (begin, end),
                                 position)
+                scaled = SCALE_WORD.match(masked, position + len(printed))
+                if scaled and re.fullmatch(r"-?\d+(?:\.\d+)?", value):
+                    figure.scale = SCALES[scaled.group(1)]
                 if row:
                     bars = [index for index, char in enumerate(line) if char == "|"]
                     left = [index for index in bars if index < position]
@@ -548,9 +562,30 @@ def beside(source, figure, text):
     return None, False
 
 
+def rounds_to(value, figure):
+    """Whether a figure of a results file, divided by the figure's scale and rounded half up to
+    the decimals the page writes, is the figure: 3,081,392,329 is 3.08 billion."""
+    try:
+        written = Decimal(figure.value)
+        rounded = (Decimal(value) / Decimal(10) ** figure.scale).quantize(
+            Decimal(1).scaleb(written.as_tuple().exponent), rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        return False
+    return rounded == written
+
+
 def held_where(source, figure, text):
     """The groups (a table, or a line outside tables) of every place in one results file that
-    holds the figure where its clause names it; empty if none does."""
+    holds the figure where its clause names it; empty if none does. A figure in billions or
+    millions is held where the same figure, or one that rounds to it, is held."""
+    if figure.scale is not None:
+        found = set()
+        for value in source.places:
+            if value == figure.value or rounds_to(value, figure):
+                reading = copy.copy(figure)
+                reading.value, reading.scale = value, None
+                found |= held_where(source, reading, text)
+        return found
     label = figure.label
     if label is not None:
         given = [figures[label] for key, figures in source.keyed
@@ -825,13 +860,17 @@ def check_page(root, page, results, verdicts=None):
                                "in one table or one line"))
             continue
         whose = f" as {figure.label}'s" if figure.label else ""
+        if figure.scale is not None:
+            whose += ", nor a figure that rounds to it,"
         if figure.cited is None:
             detail = f"is in no results file{whose} in a place its words name"
         elif len(names) == 1:
             detail = f"is not in results/{names[0]}{whose} in a place its words name"
         else:
             detail = f"is not in any file it cites{whose} in a place its words name"
-        violations.append((page, figure.line, f"{figure.figure} {detail}"))
+        scale = next((word for word, power in SCALES.items() if power == figure.scale), "")
+        printed = f"{figure.figure} {scale}" if scale else figure.figure
+        violations.append((page, figure.line, f"{printed} {detail}"))
     return len(found), violations
 
 

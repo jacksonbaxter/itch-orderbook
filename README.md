@@ -2,7 +2,7 @@
 
 A Nasdaq TotalView-ITCH 5.0 feed handler and full-depth order book in C++23, with a backtester, market maker, lock-free queue and browser demo.
 
-- **Correct:** 0 divergences from an independent reference book in 3,081,392,329 messages over 10 full sessions ([results/oracle_sessions.md](results/oracle_sessions.md)); no heap allocation after warm-up.
+- **Correct:** 0 divergences from an independent reference book in 3.08 billion messages over 10 full sessions ([results/oracle_sessions.md](results/oracle_sessions.md)); no heap allocation after warm-up.
 - **Fast:** every symbol's book rebuilt at 5.15 M msg/s on one core of an AMD Ryzen Embedded V1605B (Zen 1) ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)), and 21.87 M msg/s on an Apple M4 Max ([results/bench_book_paged-flat_ram_mac_12302019.md](results/bench_book_paged-flat_ram_mac_12302019.md)).
 - **Bars:** most speed bars are other open-source books' best published figures, mostly on newer desktop CPUs; the Zen 1 host misses most. [RESULTS.md](RESULTS.md) has every result.
 
@@ -28,20 +28,25 @@ The strict decode's bar (T-PARSE-3) is set on 30 October 2019: not measured on t
 
 ## What is built
 
-- A parser for the framed feed, designed so that no wire content can abort it and fuzzed for 1,800 s a target under ASan and UBSan ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)), with SIMD kernels for NEON, SSSE3, AVX2, AVX-512 VBMI and WebAssembly SIMD128, each tested against scalar; on both hosts the default stays scalar.
-- `FastBook` in four arms, a hash or paged order index with linked or flat levels, against a `std::map` book on a fresh heap or an aged one; the default, the paged index with flat levels, is the fastest arm on both hosts ([RESULTS.md](RESULTS.md#the-tables)).
-- An oracle that, after every message, compares the state that message can change with a reference book that reads the wire by itself, byte by byte, and compares the whole book by hash every 1,000,000 messages ([results/oracle_12302019.md](results/oracle_12302019.md)); [docs/NOTES.md](docs/NOTES.md) proves that the state it skips cannot have diverged.
-- Trade-print checks against SEC MIDAS and Nasdaq CrossStats: each symbol's volume against MIDAS (T-TRADE-3) fails on four of the ten sessions, and every continuous execution at the best price (T-TRADE-5) fails on two; [RESULTS.md](RESULTS.md#every-target-missed-or-not-measured) gives each failure.
-- Invariants on the book: the strict never-crossed rule (T-INV-2) fails on real data, every cross in a symbol outside normal trading or inside a reopening window, and stays failing; the scoped rule I chose after seeing that data (T-INV-3) is met ([results/oracle_12302019.md](results/oracle_12302019.md)).
-- A benchmark harness that measures any book design, records its host, refuses to publish a run it cannot stand behind, and reads hardware counters on both hosts, cycles and instructions on the Mac and cache and branch misses as well on the Zen 1 host, with flamegraphs from both; on the Zen 1 host the last-level-miss and branch-miss bars (T-PERF-1, T-PERF-2) are missed ([RESULTS.md](RESULTS.md#the-tables)).
-- An event-driven backtester: simulated orders queued among the real ones by their order references, with latencies, a share ledger and per-fill fees, no market impact by construction, checked for lookahead and on 48 hand-worked scenarios ([tests/test_backtest.cpp](tests/test_backtest.cpp), [tests/test_fees.cpp](tests/test_fees.cpp), [tests/test_backtest_validity.cpp](tests/test_backtest_validity.cpp)); on the Zen 1 host the whole-day replay with a quoting strategy (T-BT-1) is met and the replay with shadow orders in real queues (T-BT-3) is missed.
-- An Avellaneda-Stoikov market maker on the backtester, its PnL split into spread capture, adverse selection and inventory, with no edge claimed ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)); the replication of the paper's tables (T-MM-2) fails: one of three average spreads, at γ = 1, is 3.03 at two decimals against the paper's 3.02 ([results/mm_as_tables.md](results/mm_as_tables.md)).
-- An SPSC ring, compared with other queues and ablated one technique at a time ([results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md), [results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md)), and run between a parser thread and a book thread; on the Zen 1 host the round trip against other queues (T-SPSC-1) and the techniques' gains (T-SPSC-2) are missed, and the replay on a parser thread and a book thread (T-SPSC-3) is met.
-- A pool allocator for the book's nodes, whose arms (T-ARENA-1) agree with the fast book and allocate nothing over the day, but the fault check fails, since a pool arm must take no page fault in a timed pass: `pool-index`, `pool-pointer` and `pool-fifo` take 136, 200 and 146 on base pages and 4, 1 and 0 on transparent ones ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md), [results/alloc_arms_transparent_debian_12302019.md](results/alloc_arms_transparent_debian_12302019.md)); a diagnostic run on a host doing other work, not published, points to the kernel moving pages under the running book ([docs/NOTES.md](docs/NOTES.md)).
-- The arm on explicit huge pages has not run: the Zen 1 host reserves none, and this project changes no system setting on a host it shares with other work ([docs/NOTES.md](docs/NOTES.md)).
-- A UDP replay of the feed with receive modes on sockets and on io_uring, timed over loopback on the Zen 1 host: S4 carries the most with no loss, 2,830,848 messages/s, and U2 and S3 tie at 2,735,896; lossless at Nasdaq's peak rate (T-URING-2) is met, by S4 at 2,547,190 messages/s in 10 runs of 10 ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)), and every mode is lossless on a window of the day replayed by its own timestamps ([results/udp_feed_debian_12302019.md](results/udp_feed_debian_12302019.md)).
-- A browser demo in `docs/`: the same `FastBook` compiled to WebAssembly, replaying one symbol's extract that a script cuts locally, with a harness that times it against native on the Mac ([results/wasm_replay_mac_12302019.md](results/wasm_replay_mac_12302019.md)).
-- Fuzz targets, sanitizer builds, and a fault matrix that plants each bug in a scratch copy of the tree and checks that the check named for it catches it ([results/fault_matrix.md](results/fault_matrix.md)).
+- A parser for the framed feed that no wire content can abort, fuzzed under ASan and UBSan ([fuzz run](results/fuzz_30min_mac.md)).
+- SIMD parse kernels for NEON, SSSE3, AVX2, AVX-512 VBMI and WebAssembly SIMD128, each tested against scalar.
+- `FastBook` in four arms, a hash or paged order index with linked or flat levels, against a `std::map` book.
+- An oracle that checks the book after every message against a reference book that reads the wire by itself ([docs/NOTES.md](docs/NOTES.md)).
+- Trade checks against SEC MIDAS and Nasdaq CrossStats; per-symbol volume (T-TRADE-3) fails on four of the ten sessions.
+- Invariants on the book; the strict never-crossed rule (T-INV-2) fails on real data ([RESULTS.md](RESULTS.md#how-to-read-them)).
+- A benchmark harness for any book design, which refuses to publish a run it cannot stand behind.
+- An event-driven backtester with a queue model; on the Zen 1 host its shadow-order replay (T-BT-3) is missed.
+- An Avellaneda-Stoikov market maker with PnL attribution; its replication of the paper's tables (T-MM-2) fails.
+- An SPSC ring between a parser thread and a book thread; its round trip against other queues (T-SPSC-1) is missed.
+- A pool allocator for the book's nodes; its arms take page faults in a timed pass, so its fault check (T-ARENA-1) fails.
+- The pool arm on explicit huge pages has not run: the Zen 1 host reserves none ([docs/NOTES.md](docs/NOTES.md)).
+- A UDP replay on sockets and io_uring; lossless at Nasdaq's peak (T-URING-2) is met by S4 in 10 runs of 10 ([bisect](results/udp_bisect_debian_12302019.md)).
+- A browser demo in `docs/`: the same `FastBook` in WebAssembly, replaying one symbol's day ([timing](results/wasm_replay_mac_12302019.md)).
+- Fuzz targets, sanitizer builds, and a fault matrix that plants each bug in a copy of the tree to show its check catches it.
+
+<!-- verdict count: begin, generated by scripts/results_table.py, do not edit -->
+Of the 41 targets in [RESULTS.md's summary](RESULTS.md#summary), 15 are met, 20 are missed and 6 have no verdict.
+<!-- verdict count: end -->
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` builds the release preset and runs every unit test on x86-64 Linux with GCC and Clang, arm64 Linux with GCC and arm64 macOS with Clang, and builds the parser and the demo's engine with Emscripten. The sanitizers, clang-tidy and the fault matrix run in `scripts/check.sh`, not in CI. [docs/NOTES.md](docs/NOTES.md) says what the first runs on GitHub found.
 

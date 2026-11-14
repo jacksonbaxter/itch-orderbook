@@ -1653,11 +1653,11 @@
     },
     {
       "id": "readme-prose-pool-faults-reordered",
-      "breaks": "The README's pool faults on base pages given to the wrong arms, 136 and 146 swapped (the reviewer's r7-3 edit)",
+      "breaks": "RESULTS.md's pool faults on base pages given to the wrong arms, 136 and 146 swapped (the reviewer's r7-3 edit, moved from the README's list of what is built)",
       "check": "gate_numbers.py on README.md and RESULTS.md",
       "mutations": [
         {
-          "file": "README.md",
+          "file": "RESULTS.md",
           "old": "take 136, 200 and 146 on base pages",
           "new": "take 146, 200 and 136 on base pages"
         }
@@ -1674,17 +1674,17 @@
         "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 146 is not in any file it cites as pool-index's",
+        "signature": "gate_numbers: FAIL RESULTS\\.md:\\d+: 146 is not in any file it cites as pool-index's",
         "exit": 1
       }
     },
     {
       "id": "readme-prose-pool-faults-zeroed",
-      "breaks": "The README's pool faults on transparent pages written as none, 4, 1 and 0 to 0, 0 and 0 (the reviewer's r7-3 edit)",
+      "breaks": "RESULTS.md's pool faults on transparent pages written as none, 4, 1 and 0 to 0, 0 and 0 (the reviewer's r7-3 edit, moved from the README's list of what is built)",
       "check": "gate_numbers.py on README.md and RESULTS.md",
       "mutations": [
         {
-          "file": "README.md",
+          "file": "RESULTS.md",
           "old": "and 4, 1 and 0 on transparent ones",
           "new": "and 0, 0 and 0 on transparent ones"
         }
@@ -1701,17 +1701,17 @@
         "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 0 is not in any file it cites as pool-index's",
+        "signature": "gate_numbers: FAIL RESULTS\\.md:\\d+: 0 is not in any file it cites as pool-index's",
         "exit": 1
       }
     },
     {
       "id": "readme-prose-udp-rates-swapped",
-      "breaks": "The README's UDP rates swapped between S4 and the U2/S3 pair (the reviewer's r7-3 edit)",
+      "breaks": "RESULTS.md's UDP rates swapped between S4 and the U2/S3 pair (the reviewer's r7-3 edit, moved from the README's list of what is built)",
       "check": "gate_numbers.py on README.md and RESULTS.md",
       "mutations": [
         {
-          "file": "README.md",
+          "file": "RESULTS.md",
           "old": "with no loss, 2,830,848 messages/s, and U2 and S3 tie at 2,735,896",
           "new": "with no loss, 2,735,896 messages/s, and U2 and S3 tie at 2,830,848"
         }
@@ -1728,7 +1728,7 @@
         "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 2,735,896 is not in any file it cites",
+        "signature": "gate_numbers: FAIL RESULTS\\.md:\\d+: 2,735,896 is not in any file it cites",
         "exit": 1
       }
     },
@@ -1755,7 +1755,7 @@
         "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 9 is not in any file it cites",
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 9 is not in results/udp_bisect_debian_12302019\\.md",
         "exit": 1
       }
     },
@@ -2948,6 +2948,149 @@
       ],
       "expect": {
         "signature": "(FAIL|ERROR): test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-pitch-billion-edited",
+      "breaks": "The pitch's message count, written in billions, edited, 3.08 to 3.09 billion",
+      "check": "gate_numbers.py on README.md, a figure in billions held as a rounding",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "in 3.08 billion messages",
+          "new": "in 3.09 billion messages"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 3\\.09 billion is not in results/oracle_sessions\\.md, nor a figure that rounds to it,",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-pitch-billion-as-million",
+      "breaks": "The pitch's message count says million where the file's count is in billions, so no figure of the file rounds to it",
+      "check": "gate_numbers.py on README.md, a figure in millions held as a rounding",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "in 3.08 billion messages",
+          "new": "in 3.08 million messages"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 3\\.08 million is not in results/oracle_sessions\\.md, nor a figure that rounds to it,",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-billion-not-rounded",
+      "breaks": "gate_numbers.py takes any figure of the cited file as the one a figure in billions or millions rounds, so 3.09 billion passes beside 3,081,392,329",
+      "check": "test_gate_numbers.py test_a_figure_in_billions_or_millions_is_held_as_its_rounding",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "    return rounded == written\n",
+          "new": "    return True\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_figure_in_billions_or_millions_is_held_as_its_rounding"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_figure_in_billions_or_millions_is_held_as_its_rounding",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-billion-unread",
+      "breaks": "gate_numbers.py reads no billion or million after a figure, so 3.08 billion is held to a 3.08 the file does not have",
+      "check": "test_gate_numbers.py test_a_figure_in_billions_or_millions_is_held_as_its_rounding",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "                if scaled and re.fullmatch(",
+          "new": "                if False and re.fullmatch("
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_figure_in_billions_or_millions_is_held_as_its_rounding"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_figure_in_billions_or_millions_is_held_as_its_rounding",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-built-tally-typed-over",
+      "breaks": "The README's count of the summary's verdicts, under its list of what is built, typed over by hand, one target fewer",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "Of the 41 targets in [RESULTS.md's summary]",
+          "new": "Of the 40 targets in [RESULTS.md's summary]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-built-tally-misses-dropped",
+      "breaks": "results_table.py's count of the summary's verdicts leaves the missed targets out, so the README's short list hides its misses",
+      "check": "test_results_table.py test_the_readme_counts_the_summarys_verdicts",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        counts[shown] += 1\n",
+          "new": "        counts[shown] += shown != \"**missed**\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "ResultsTable.test_the_readme_counts_the_summarys_verdicts"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_the_readme_counts_the_summarys_verdicts",
         "exit": 1
       }
     }
