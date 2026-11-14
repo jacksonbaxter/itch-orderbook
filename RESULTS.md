@@ -121,7 +121,7 @@ T-INV-2 is strict, and it fails on real data: books cross while a symbol is halt
 | T-TRADE-5 | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 4 arms | `f160447` | [results/trades_12302019.md](results/trades_12302019.md) |
 | PRINTS | 12302019 | Darwin arm64 Apple M4 Max | PASS | 0 violations; the same on 4 arms | `f160447` | [results/trades_12302019.md](results/trades_12302019.md) |
 | T-URING-2 | 12302019 | debian | PASS | S4 lossless at 2,547,190 msg/s in 10 of 10 repetitions; S4's largest lossless rate in the bisection is 2,830,848 msg/s; gap +283,658 msg/s (+11.1%) against the target | `d847e8750aac` | [results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md) |
-| Fault matrix | none | Darwin arm64 | 1063 of 1063 detected | all areas; controls: 196 commands, 0 failed | `c2ce567` | [results/fault_matrix.md](results/fault_matrix.md) |
+| Fault matrix | none | Darwin arm64 | 1608 of 1608 detected | all areas; controls: 316 commands, 0 failed | `3af23b2` | [results/fault_matrix.md](results/fault_matrix.md) |
 | Final review | none | none | not complete. Waiting on the owner: r11-3 (T-PARSE-3 on its bar's own day), partly; r14-7, r14-8 and r15-15, left for the owner. | 16 reviewers, 193 findings (2 BLOCK, 76 FIX, 115 NOTE); 163 fixed, 22 known limit, 4 no change needed, 3 left for the owner, 1 partly | `de0e39a` | [results/final_review.md](results/final_review.md) |
 | Fuzzing | none | macOS | 9 of 9 clean | every target 1,800 s, exit 0 and 0 crashes | `aef684f3dd86` | [results/fuzz_30min_mac.md](results/fuzz_30min_mac.md) |
 
