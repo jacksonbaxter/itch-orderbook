@@ -221,6 +221,69 @@
         "signature": "^FAIL: test_the_matrix_area_copies_every_file_a_fault_injects_into \\(",
         "exit": 1
       }
+    },
+    {
+      "id": "matrix-fuzz-search-wall-clock",
+      "breaks": "simd-fuzz-kernels-oracle goes back to a budget of 60 seconds, which finds less on a busy machine",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/simd.json",
+          "old": "\"-runs=2000000\",",
+          "new": "\"-max_total_time=60\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\(",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-reload-on",
+      "breaks": "udp-packets-fuzz-oracle turns libFuzzer's corpus reload back on, which re-runs files at a point the clock sets",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"-reload=0\",",
+          "new": "\"-reload=1\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\(",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-below-floor",
+      "breaks": "bookvariants-lookahead-fuzz-oracle runs a tenth of its floor, only about the runs its recorded searches needed",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/bookvariants.json",
+          "old": "\"-runs=300000\",",
+          "new": "\"-runs=30000\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\(",
+        "exit": 1
+      }
     }
   ]
 }

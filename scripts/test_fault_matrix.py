@@ -10,6 +10,7 @@ in it, so that a build failure is a real one and the whole file runs in seconds.
 import contextlib
 import io
 import json
+import re
 import signal
 import subprocess
 import sys
@@ -384,6 +385,27 @@ class Matrix(unittest.TestCase):
         self.assertIn("<tree>", self.verdict_row())
 
 
+# Each libFuzzer search among the faults, by target: the fewest executions it may run, and the
+# slowest rate, in executions a second, that its timeout must allow for. A search with a budget
+# in seconds finds less on a busy machine, and libFuzzer's corpus reload, once a second, re-runs
+# files at a point the clock sets and so changes the path of the search: the final full check at
+# 6508b0d missed simd-fuzz-kernels-oracle that way. A count of runs with the reload off makes the
+# search the same on any machine. Each floor is at least about ten times the most runs a recorded
+# run needed to find its fault, and no fewer than its old budget in seconds gave on an idle
+# machine (docs/NOTES.md). Each rate is below the average of every idle run of the target seen;
+# fuzz_kernels slows as its inputs grow, so its rate is set below what its longest run showed.
+FUZZ_SEARCHES = {
+    "fuzz_book": (5_000, 30),
+    "fuzz_decode": (700_000, 20_000),
+    "fuzz_kernels": (2_000_000, 2_000),
+    "fuzz_lookahead": (300_000, 700),
+    "fuzz_packets": (10_000_000, 80_000),
+    "fuzz_reader": (1_500_000, 37_000),
+}
+# Flags that let the clock or other processes decide what a search runs.
+CLOCK_FLAGS = {"-max_total_time", "-jobs", "-workers", "-fork"}
+
+
 class CommittedFaults(unittest.TestCase):
     def test_every_committed_fault_loads_and_is_not_stale(self):
         faults = fm.load_faults(fm.REPO_ROOT / "scripts" / "faults")
@@ -403,6 +425,35 @@ class CommittedFaults(unittest.TestCase):
                 inside = any(name == entry or name.startswith(entry.rstrip("/") + "/")
                              for entry in tree)
                 self.assertTrue(inside, f"{fault.id}: {name} is not in the matrix area's tree")
+
+    def test_every_fuzz_search_counts_executions_and_reads_no_clock(self):
+        # Every fault whose check runs a fuzz target directly is a search: a fixed seed, a count
+        # of runs at or above its target's floor, the reload off, nothing that reads the clock,
+        # and a timeout the count fits in at a third of the target's slowest idle rate, so a slow
+        # machine takes longer and never turns a detection into undetected.
+        target = re.compile(r"\{build\}/fuzz/(fuzz_\w+)")
+        searches = 0
+        for fault in fm.load_faults(fm.REPO_ROOT / "scripts" / "faults"):
+            at = [i for i, word in enumerate(fault.command) if target.fullmatch(word)]
+            if not at:
+                continue
+            searches += 1
+            name = target.fullmatch(fault.command[at[0]]).group(1)
+            self.assertIn(name, FUZZ_SEARCHES, f"{fault.id}: no floor for {name} here")
+            floor, rate = FUZZ_SEARCHES[name]
+            flags = [word for word in fault.command[at[0] + 1:] if word.startswith("-")]
+            names = [flag.split("=", 1)[0] for flag in flags]
+            self.assertEqual(CLOCK_FLAGS & set(names), set(), fault.id)
+            self.assertEqual(names.count("-seed"), 1, f"{fault.id}: one fixed -seed")
+            self.assertEqual([flag for flag in flags if flag.startswith("-reload")], ["-reload=0"],
+                             f"{fault.id}: the corpus reload must be off")
+            runs = [int(flag.split("=", 1)[1]) for flag in flags if flag.startswith("-runs=")]
+            self.assertEqual(len(runs), 1, f"{fault.id}: one -runs=N")
+            self.assertGreaterEqual(runs[0], floor, f"{fault.id}: -runs below {name}'s floor")
+            self.assertGreaterEqual(fault.timeout, 3 * runs[0] / rate,
+                                    f"{fault.id}: timeout too short for -runs={runs[0]}")
+        # Seven when this test was written; every one added since is held to the same rule.
+        self.assertGreaterEqual(searches, 7)
 
     def test_a_tool_that_only_fails_detects_no_tool_fault(self):
         # Each mm-select and mm-cli fault breaks one rule of its tool; a tool that just exits 1
