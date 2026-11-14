@@ -189,6 +189,8 @@ The fuzz runs were made on the code of commit aef684f, 3 targets at once. The fu
 
 Since aef684f, only comments have changed in the fuzz targets and the code they build from (`fuzz src include cmake CMakeLists.txt CMakePresets.json`). Built from clean in one folder at 51f568d and after the comment pass (1066e4f), every object file is byte for byte the same, and so are the nine fuzz binaries once linked with the macOS linker's file times zeroed (`ZERO_AR_DATE=1`); as built, they differ only in the object times the linker records in their debug maps.
 
+Of the 67 C++ files whose comments changed, the object comparison covers the 56 that the Mac's release and fuzz builds compile. A comparison with comments stripped, the same number of lines and the same code on every line, covers all 67, among them the 11 x86-64, WebAssembly and Linux-only files the Mac does not compile; three of those lie under the paths above, `include/itch/kernels/arch/x86_64/kernels_built.hpp`, `include/itch/kernels/wasm.hpp` and `src/page_map_linux.cpp`, so for them only the stripped comparison holds.
+
 - `fuzz_mold` ran 247,377,437 executions and `fuzz_midas` 212,887,115 ([results/fuzz_30min_mac.md](../results/fuzz_30min_mac.md)).
 - `fuzz_book` ran 67,300 executions, since each of its inputs is a stream of order messages replayed through every arm of the fast book and through the reference book, both compared in full after every message ([results/fuzz_30min_mac.md](../results/fuzz_30min_mac.md)).
 
