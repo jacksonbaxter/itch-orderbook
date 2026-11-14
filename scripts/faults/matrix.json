@@ -284,6 +284,90 @@
         "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\(",
         "exit": 1
       }
+    },
+    {
+      "id": "matrix-fuzz-search-seed-zero",
+      "breaks": "simd-fuzz-kernels-oracle runs with -seed=0, which asks libFuzzer to make up a seed, so no two runs need search alike",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/simd.json",
+          "old": "\"-seed=1\",",
+          "new": "\"-seed=0\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*-seed must be a fixed seed of at least 1",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-flag-outside-the-list",
+      "breaks": "harness-fuzz-decode-oracle takes -entropic_scale_per_exec_time=1, which makes libFuzzer weigh inputs by their run time even with a fixed seed",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/harness.json",
+          "old": "\"-runs=700000\",",
+          "new": "\"-runs=700000\",\n        \"-entropic_scale_per_exec_time=1\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*-entropic_scale_per_exec_time=1 is not a flag a fuzz search may take",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-binary-respelled",
+      "breaks": "oracle-fuzz-planted-bug names its fuzz binary as {build}/fuzz/./fuzz_book, which the rule would not see as a search",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/oracle.json",
+          "old": "\"{build}/fuzz/fuzz_book\",",
+          "new": "\"{build}/fuzz/./fuzz_book\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*names fuzz target fuzz_book in no form this rule knows",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-binary-wrapped",
+      "breaks": "udp-packets-fuzz-oracle runs its fuzz binary under a shell, which the rule would not see as a search",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"{build}/fuzz/fuzz_packets\",",
+          "new": "\"/bin/sh\",\n        \"-c\",\n        \"exec \\\"$0\\\" \\\"$@\\\"\",\n        \"{build}/fuzz/fuzz_packets\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*names fuzz target fuzz_packets in no form this rule knows",
+        "exit": 1
+      }
     }
   ]
 }
