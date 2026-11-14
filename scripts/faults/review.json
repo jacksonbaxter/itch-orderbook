@@ -459,6 +459,182 @@
         "signature": "^FAIL: test_a_page_count_that_is_not_the_records_total_is_refused",
         "exit": 1
       }
+    },
+    {
+      "id": "review-gate-open-rendered-complete",
+      "breaks": "review_report.py renders the record complete while a finding of the acceptance gate is open, partly done or left for the owner",
+      "check": "test_review_report.py ReviewReport.test_an_open_gate_finding_cannot_be_rendered_complete",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        unsettled_at_gate = [gate_id(f) for f in at_gate if f[\"outcome\"] in UNSETTLED]\n        if unsettled_at_gate:\n",
+          "new": "        unsettled_at_gate = []\n        if unsettled_at_gate:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_an_open_gate_finding_cannot_be_rendered_complete"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_an_open_gate_finding_cannot_be_rendered_complete",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-gate-left-out-of-the-result",
+      "breaks": "review_report.py's Result line says nothing of the acceptance gate's findings not settled",
+      "check": "test_review_report.py ReviewReport.test_the_result_counts_the_gates_findings_not_settled",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    if any(at_gate):\n        said.append(",
+          "new": "    if False:\n        said.append("
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_the_result_counts_the_gates_findings_not_settled"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_result_counts_the_gates_findings_not_settled",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-gate-evidence-unchecked",
+      "breaks": "review_report.py check passes a finding of the acceptance gate whose fault, test or docs/NOTES.md section is not in the tree",
+      "check": "test_review_report.py ReviewReport.test_the_gates_evidence_not_in_the_tree_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    every += [(f, gate_id(f), False) for f in data[\"gate\"][\"findings\"]]\n",
+          "new": "    every += []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_the_gates_evidence_not_in_the_tree_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_gates_evidence_not_in_the_tree_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-gate-finding-of-no-checker-taken",
+      "breaks": "review_report.py writes a finding of the acceptance gate that names no checker the gate lists",
+      "check": "test_review_report.py ReviewReport.test_a_gate_finding_of_no_checker_or_given_twice_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        if of_gate and finding[\"checker\"] not in checkers:\n",
+          "new": "        if of_gate and not finding[\"checker\"]:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_gate_finding_of_no_checker_or_given_twice_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_gate_finding_of_no_checker_or_given_twice_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-gate-findings-left-off-the-page",
+      "breaks": "review_report.py writes the acceptance gate's counts but not its findings, one row each",
+      "check": "test_review_report.py ReviewReport.test_the_gate_is_recorded_beside_the_reviewers",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "                     evidence(f)) for f in at_gate])\n",
+          "new": "                     evidence(f)) for f in []])\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_the_gate_is_recorded_beside_the_reviewers"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_gate_is_recorded_beside_the_reviewers",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-test-file-taken",
+      "breaks": "review_report.py takes a source, script or results file as a finding's test (NOTE-2 of the acceptance gate's findings checker)",
+      "check": "test_review_report.py ReviewReport.test_a_file_given_as_a_test_must_be_a_test",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "            if not isinstance(test, str) or not is_test_name(test):\n",
+          "new": "            if not isinstance(test, str):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_file_given_as_a_test_must_be_a_test"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_file_given_as_a_test_must_be_a_test",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-page-partial-counts-taken",
+      "breaks": "review_report.py check takes WRITEUP's paragraph on the final review giving some of the record's counts and not the others",
+      "check": "test_review_report.py ReviewReport.test_a_paragraph_that_gives_no_count_is_taken",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    counted = any(re.search(pattern, paragraph) for pattern, _, _ in PAGE_COUNTS)\n",
+          "new": "    counted = False\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_paragraph_that_gives_no_count_is_taken"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_paragraph_that_gives_no_count_is_taken",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-page-no-count-refused",
+      "breaks": "review_report.py check refuses WRITEUP's paragraph on the final review when it gives no count at all, as the page's one sentence does",
+      "check": "test_review_report.py ReviewReport.test_a_paragraph_that_gives_no_count_is_taken",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    counted = any(re.search(pattern, paragraph) for pattern, _, _ in PAGE_COUNTS)\n",
+          "new": "    counted = True\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_paragraph_that_gives_no_count_is_taken"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_paragraph_that_gives_no_count_is_taken",
+        "exit": 1
+      }
     }
   ]
 }

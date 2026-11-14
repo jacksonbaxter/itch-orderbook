@@ -429,7 +429,6 @@
     "26c1649"
    ],
    "tests": [
-    "tools/capacity.hpp",
     "tests/test_tools_cli.py",
     "tests/test_trades_cli.py",
     "tests/test_map_compare_cli.py",
@@ -487,8 +486,7 @@
     "a3388a0"
    ],
    "tests": [
-    "tests/test_tools_cli.py",
-    "results/window_12302019.md"
+    "tests/test_tools_cli.py"
    ],
    "faults": [
     "bookvariants-window-u-search-counts-closed-level",
@@ -562,7 +560,6 @@
     "c50b472"
    ],
    "tests": [
-    "tools/framing.hpp",
     "tests/test_backtest_cli.py",
     "test_mm_cli.py",
     "test_select_cli.py",
@@ -590,8 +587,6 @@
     "6ea350d"
    ],
    "tests": [
-    "scripts/mm_report.py",
-    "results/mm_pnl_12302019.md",
     "test_sigma_is_in_ticks_per_root_second"
    ],
    "faults": [
@@ -613,7 +608,6 @@
     "dad303d"
    ],
    "tests": [
-    "docs/demo.js",
     "test_a_hidden_order_print_shows_no_side"
    ],
    "faults": [
@@ -734,7 +728,6 @@
     "11f241e"
    ],
    "tests": [
-    "bench/replay.hpp",
     "test_the_table_says_what_it_holds_and_quotes_the_empty_span",
     "test_a_table_without_the_caveat_is_refused"
    ],
@@ -945,8 +938,6 @@
     "d2f0720"
    ],
    "tests": [
-    "scripts/mac_rule.py",
-    "scripts/mac_sampler.sh",
     "test_a_mac_run_before_the_rule_says_that_no_sampler_ran",
     "test_a_run_is_sampled_by_the_driver_and_passes_once_stamped"
    ],
@@ -1103,7 +1094,6 @@
     "f6f6880"
    ],
    "tests": [
-    "scripts/run_record.py",
     "test_a_bench_run_keeps_its_record",
     "test_the_tree_state_counts_cmake_presets"
    ],
@@ -2475,7 +2465,7 @@
    "severity": "FIX",
    "finding": "The parse-rate targets T-PARSE-1 to T-PARSE-3 have no measured number and no reason given",
    "outcome": "partly",
-   "detail": "T-PARSE-1 and T-PARSE-2 now have their measured number, gap and reason (cause not established) in `results/parse_rate_debian_12302019.md` and the pages. T-PARSE-3 has a number on 12302019 only: its median is above a bar that is set on 10302019, which is not a pass, and the pages say so. Still to do, and left with the owner: T-PARSE-3 on its own day, which could not be measured on `debian`, since the standalone machine check failed input-resident each time, so P-0030's run was never started.",
+   "detail": "T-PARSE-1 and T-PARSE-2 now have their measured number, gap and reason (cause not established) in `results/parse_rate_debian_12302019.md` and the pages. T-PARSE-3 has a number on 12302019 only: its median is above a bar that is set on 10302019, which is not a pass, and the pages say so. Still to do: T-PARSE-3 on its own day, which could not be measured on `debian`, since the standalone machine check failed input-resident each time, so P-0030's run was never started. At the acceptance gate it was ruled how this bench meets that condition, and a run under a new prediction is to come.",
    "commits": [
     "4890abb",
     "c3ecf81",
@@ -2496,8 +2486,7 @@
    "notes": [
     "The parse rate on `debian`"
    ],
-   "waits_on": "the owner",
-   "waits_for": "T-PARSE-3 on its bar's own day"
+   "waits_on": "the run of T-PARSE-3 on its bar's own day"
   },
   {
    "id": "r11-4",
@@ -3317,8 +3306,8 @@
    "id": "r14-7",
    "severity": "NOTE",
    "finding": "`.gitignore` and the gates' list of skipped folders name the coding assistant's settings folder",
-   "outcome": "left for the owner",
-   "detail": "Both lines need the folder's name to do their job. The owner decides.",
+   "outcome": "no change needed",
+   "detail": "Both lines need the folder's name to do their job. Closed as it stands at the acceptance gate: both lines stay.",
    "commits": [],
    "tests": [],
    "faults": [],
@@ -3328,8 +3317,8 @@
    "id": "r14-8",
    "severity": "NOTE",
    "finding": "Six P-0801 run-log rows name the macOS memory-statistics tool",
-   "outcome": "left for the owner",
-   "detail": "The tool is this project's own instrument for counting pageouts, not a process beside a run, and run-log rows are not edited. The owner decides.",
+   "outcome": "no change needed",
+   "detail": "The tool is this project's own instrument for counting pageouts, not a process beside a run, and run-log rows are not edited. Closed as it stands at the acceptance gate: the rows stay.",
    "commits": [],
    "tests": [],
    "faults": [],
@@ -3620,8 +3609,8 @@
    "id": "r15-15",
    "severity": "NOTE",
    "finding": "Home-relative paths of the Linux host, and two paths of scripts kept outside the repository, remain in docs/TASKS.md, docs/NOTES.md and results/predictions.md",
-   "outcome": "left for the owner",
-   "detail": "None names a user or a host address, predictions cannot be edited, and the owner's scan passes them. The owner decides.",
+   "outcome": "no change needed",
+   "detail": "None names a user or a host address, predictions cannot be edited, and the privacy scan passes them. Closed as it stands at the acceptance gate: the paths stay.",
    "commits": [],
    "tests": [],
    "faults": [],
@@ -3792,5 +3781,728 @@
     "The parse rate on `debian`"
    ]
   }
- ]
+ ],
+ "gate": {
+  "at": "51f568d",
+  "checkers": [
+   {
+    "id": "reader",
+    "read": "README.md as a recruiter would read it in 90 seconds, then WRITEUP.md and eight source files as a senior developer would in 20 minutes; nothing built or run"
+   },
+   {
+    "id": "pages",
+    "read": "every figure, verdict and link of README.md, WRITEUP.md and RESULTS.md against the results files they cite, and the number gate against 37 planted edits; nothing built"
+   },
+   {
+    "id": "code",
+    "read": "the C++, build and CI changes from 3f8bacd to 51f568d, and the fuzz-search rule's from c501f27 to 3af23b2; nothing built and no fuzzer run"
+   },
+   {
+    "id": "raw",
+    "read": "the figures of this phase worked out again from their raw records: T-BT-3 on the Zen 1 host, the parse rate, both runs' load records, the figures recomputed from raw, the 30-minute fuzz runs, the final full check and the Linux faults, and the oracle rerun"
+   },
+   {
+    "id": "findings",
+    "read": "the earlier gate's findings and their fixes, six predictions against their runs, 31 sampled outcomes of this record, and the gaps in the record"
+   }
+  ],
+  "findings": [
+   {
+    "checker": "reader",
+    "label": "1",
+    "severity": "BLOCK",
+    "finding": "The README's first screen is 367 words before the table, with target ids, a kHz reading and file-format dates, and its first speed figure is framed as a miss before the bars are said to be other projects' on newer hosts",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "2",
+    "severity": "BLOCK",
+    "finding": "WRITEUP.md is 8,694 words, 2,326 of them a table RESULTS.md already holds, with 328 links to results files",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "3",
+    "severity": "BLOCK",
+    "finding": "WRITEUP.md is written for its author, not its reader: plan, review and experiment ids, \"the user\" and \"the owner\", and an unreadable sentence on the number gate in its opening",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "4",
+    "severity": "FIX",
+    "finding": "The three required figures are not given plainly, and the Mac's figure is said three times to have no verdict",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "5",
+    "severity": "FIX",
+    "finding": "T-DESIGN-1, the same-host ratio over a `std::map` book and the one speed target a host does not decide, is not in the README",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "6",
+    "severity": "FIX",
+    "finding": "The README's parser paragraph gives T-PARSE-1 without its verdict, leaves out T-PARSE-2's miss and hedges T-PARSE-3",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "7",
+    "severity": "FIX",
+    "finding": "The note under the README's table is process jargon",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "8",
+    "severity": "FIX",
+    "finding": "The README's \"What is built\" bullets run to 819 words, two of them essays",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "9",
+    "severity": "FIX",
+    "finding": "WRITEUP says the crossed counts match carteret's exactly; they match only when a crossed replace is counted twice, and the two units beside them are not explained",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "10",
+    "severity": "FIX",
+    "finding": "Causes are stated firmly from diagnostic runs that are not published: the pool arms' page faults and the SIMD whole-parse loss",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "11",
+    "severity": "FIX",
+    "finding": "Why cells of the missed-targets table lead with a cause the text calls not established",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "12",
+    "severity": "FIX",
+    "finding": "\"Not established\" where the host's memory or its settings give the answer: T-PARSE-3 on its bar's day, the steps that need root, the ring against a queue of its family",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "13",
+    "severity": "FIX",
+    "finding": "T-SPSC-3's \"met\" in the headline is within the noise of its own runs",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "14",
+    "severity": "FIX",
+    "finding": "The data-layout section gives no byte sizes and no cache lines an operation touches",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "15",
+    "severity": "FIX",
+    "finding": "WRITEUP.md has no conclusion up front",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "16",
+    "severity": "FIX",
+    "finding": "Names from outside the project are used unexplained (carteret, Lunary, itch-book, the UDP modes, event names, the sampler rule), and target ids without a gloss",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "17",
+    "severity": "FIX",
+    "finding": "Source comments cite files outside the repository and private ids",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "18",
+    "severity": "FIX",
+    "finding": "RESULTS.md is 944 lines with no summary, in the order the rows were made, and opens on four FAILs",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "19",
+    "severity": "FIX",
+    "finding": "Results files open with paragraphs on how they were rendered again, and no page says once that the raw records are not committed and why",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "20",
+    "severity": "FIX",
+    "finding": "The build section lacks the CMake minimum, the compilers tested, the macOS libc++ setting, the data and memory sizes and the command behind the headline file",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "21",
+    "severity": "NOTE",
+    "finding": "\"Compared after every message\" is broader than what is compared after each message",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "22",
+    "severity": "NOTE",
+    "finding": "\"No abort reachable from wire content\" claims what a proof would show, from a design and fuzz runs",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "23",
+    "severity": "NOTE",
+    "finding": "Counts given with no link: the hand-worked scenarios and the fault matrix",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "24",
+    "severity": "NOTE",
+    "finding": "Two baselines for the same arm, and the counter reads inside every instruction figure, are not explained",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "25",
+    "severity": "NOTE",
+    "finding": "\"What was tried and did not work\" lists a gain",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "26",
+    "severity": "NOTE",
+    "finding": "Prose tics: \"against\", \"a message\" for per message, the noun last",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "27",
+    "severity": "NOTE",
+    "finding": "The host name `debian` reads as the distribution, not a machine",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "28",
+    "severity": "NOTE",
+    "finding": "The script tests would sit better under tests/",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "reader",
+    "label": "29",
+    "severity": "NOTE",
+    "finding": "The licence section and the data terms are sound and worth a second look",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "B1",
+    "severity": "BLOCK",
+    "finding": "WRITEUP.md:34 says T-BT-3's rerun is the one published figure under the Linux sampler rule; the parse rate is under it too",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "B2",
+    "severity": "BLOCK",
+    "finding": "README.md:3 says every target has a published source; BENCHMARKS.md's own source classes say otherwise",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "F1",
+    "severity": "FIX",
+    "finding": "Prose outside the generated blocks is held by the number gate alone, which reads figures, not verdict words or counts in words: seven planted edits passed",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "F2",
+    "severity": "FIX",
+    "finding": "WRITEUP.md:164 has a stray \", ;\"",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "N1",
+    "severity": "NOTE",
+    "finding": "WRITEUP and RESULTS give the fault matrix's count without the Linux-only faults, whose run is in no results file",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "N2",
+    "severity": "NOTE",
+    "finding": "docs/index.html adds no figure to the number gate's count",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "N3",
+    "severity": "NOTE",
+    "finding": "WRITEUP's SPSC table leaves out one queue that was measured",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "N4",
+    "severity": "NOTE",
+    "finding": "WRITEUP.md:166 says the kernel does not matter; the SIMD book file says scalar beats avx2",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "N5",
+    "severity": "NOTE",
+    "finding": "README.md:9 gives T-PARSE-1's bar with no verdict or gap, and no T-PARSE-2",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "N6",
+    "severity": "NOTE",
+    "finding": "README.md:35 says the counters and flamegraphs are from `debian`; a Mac profile and Mac counters exist too",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "N7",
+    "severity": "NOTE",
+    "finding": "README.md:7 quotes the highest of the file's three frequency readings of core 4",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "N8",
+    "severity": "NOTE",
+    "finding": "Two T-SPSC-2 bars are printed with more precision than their derivations give",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "N9",
+    "severity": "NOTE",
+    "finding": "The Flamegraphs target has no verdict word on any page, and the Mac's parse rate no reason for not being measured",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "N10",
+    "severity": "NOTE",
+    "finding": "README.md:41's claim that every mode is lossless rests on a file the line does not cite",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "pages",
+    "label": "N11",
+    "severity": "NOTE",
+    "finding": "README.md:3 does not parse",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "code",
+    "label": "F1",
+    "severity": "FIX",
+    "finding": "The fuzz-search rule, called closed in docs/NOTES.md, lets through a clock-bound run whose command does not spell a target's name: the fuzz-smoke preset, a shell, another program, another spelling",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "code",
+    "label": "F2",
+    "severity": "FIX",
+    "finding": "`-seed` and `-runs` are checked as unbounded integers, and libFuzzer truncates them, so a seed of 2^32 becomes 0, which reads the clock",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "code",
+    "label": "F3",
+    "severity": "NOTE",
+    "finding": "The rule's target-name pattern cannot see a name with a second underscore",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "code",
+    "label": "F4",
+    "severity": "NOTE",
+    "finding": "libFuzzer's compare tables may hold pointers that move between runs, so one build's search could differ from run to run; the checker was not sure",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "code",
+    "label": "N1",
+    "severity": "NOTE",
+    "finding": "Three tools' comments say their capacities differ from itch_oracle's, which no longer holds, and itch_oracle keeps its own copy of the capacity check",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "code",
+    "label": "N2",
+    "severity": "NOTE",
+    "finding": "Three tests skip inside test_node_book's main entry, though the skip test says each test that can skip has an entry of its own",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "raw",
+    "label": "NOTE 1",
+    "severity": "NOTE",
+    "finding": "The phase report gives 36 and 189 one-second samples for the two load records; they hold 35 and 188, with an opening and a short closing sample beside them",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "raw",
+    "label": "NOTE 2",
+    "severity": "NOTE",
+    "finding": "What the load records can show: the kind \"another project's process\" is told only by a process's program or folder, the sampler names at most five processes a second, and the parse run's unjudged second also crossed the core's bar",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "raw",
+    "label": "NOTE 3",
+    "severity": "NOTE",
+    "finding": "The phase report says 13 of the 22 faults of the udp_modes area are for Linux only; 14 are",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "findings",
+    "label": "FIX-1",
+    "severity": "FIX",
+    "finding": "The commits that fail their own tests or do not build with GCC 14 are listed only in a report outside the repository",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "findings",
+    "label": "FIX-2",
+    "severity": "FIX",
+    "finding": "The gaps in the record are in docs/NOTES.md only as totals under labels defined outside the repository, with no file named and no total for the commit",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "findings",
+    "label": "NOTE-1",
+    "severity": "NOTE",
+    "finding": "docs/NOTES.md:1747 gives two figures from one process each without that count beside them",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "findings",
+    "label": "NOTE-2",
+    "severity": "NOTE",
+    "finding": "Eight rows of this record list source and results files as tests",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   },
+   {
+    "checker": "findings",
+    "label": "NOTE-3",
+    "severity": "NOTE",
+    "finding": "Runs made by scripts kept outside the repository would still record no commit, dataset hash or machine check if made again; docs/NOTES.md says so",
+    "outcome": "open",
+    "detail": "",
+    "commits": [],
+    "tests": [],
+    "faults": [],
+    "notes": []
+   }
+  ]
+ }
 }
