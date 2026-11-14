@@ -18,7 +18,8 @@ from pathlib import Path
 
 CHECK_SH = Path(__file__).resolve().parent / "check.sh"
 
-ORACLE_TESTS = ["test_book", "test_alloc", "test_node_book", "test_oracle_cli", "corpus_fuzz_book"]
+ORACLE_TESTS = ["test_book", "test_alloc", "test_node_book", "test_node_book_prefault",
+                "test_oracle_cli", "corpus_fuzz_book"]
 BENCH_TESTS = ["test_bench_platform", "test_bench_platform_cross_core", "test_bench_replay",
                "test_bench_cli",
                "test_bench_backtest_cli", "test_bench_counts_cli", "test_bench_variants_cli",
@@ -124,11 +125,11 @@ class CheckSh(unittest.TestCase):
         run = self.check("--only", "oracle")
         self.assertEqual(run.returncode, 0, run.stdout)
         self.assertIn("ctest --preset release -R ^(test_book|test_alloc|test_node_book|"
-                      "test_oracle_cli|corpus_fuzz_book)$\n", self.calls())
+                      "test_node_book_prefault|test_oracle_cli|corpus_fuzz_book)$\n", self.calls())
 
     def test_a_test_name_is_matched_whole(self):
         self.known_tests(["test_book_variants", "test_alloc", "test_node_book",
-                          "test_oracle_cli", "corpus_fuzz_book"])
+                          "test_node_book_prefault", "test_oracle_cli", "corpus_fuzz_book"])
         run = self.check("--only", "oracle")
         self.assertEqual(run.returncode, 1, run.stdout)
         self.assertIn("ctest knows no test named test_book\n", self.log("oracle"))

@@ -151,7 +151,8 @@ stage_asan_ubsan() { preset_with_tests asan-ubsan; }
 # on every allocator arm, and the book corpus.
 stage_oracle() {
   build_preset release &&
-    ctest_only test_book test_alloc test_node_book test_oracle_cli corpus_fuzz_book
+    ctest_only test_book test_alloc test_node_book test_node_book_prefault test_oracle_cli \
+      corpus_fuzz_book
 }
 # The trade-print checks on their fixtures: both reference parsers and their corpora, the
 # faulty-book tests, and every check through the tool. Needs nothing from data/.
