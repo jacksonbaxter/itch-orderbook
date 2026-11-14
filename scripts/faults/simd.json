@@ -1041,14 +1041,17 @@
       "command": [
         "{build}/fuzz/fuzz_kernels",
         "-seed=1",
-        "-max_total_time=60",
+        "-runs=2000000",
+        "-reload=0",
+        "-print_final_stats=1",
         "-artifact_prefix={build}/fuzz/artifacts/",
         "{build}/fuzz/corpus/fuzz_kernels",
         "{tree}/fuzz/corpus/fuzz_kernels"
       ],
       "expect": {
         "signature": "FUZZ_CHECK failed: got\\.ops == want->ops"
-      }
+      },
+      "timeout": 4000
     },
     {
       "id": "simd-report-withdrawn-named",

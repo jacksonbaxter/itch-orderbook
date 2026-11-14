@@ -746,14 +746,17 @@
       "command": [
         "{build}/fuzz/fuzz_lookahead",
         "-seed=1",
-        "-max_total_time=60",
+        "-runs=300000",
+        "-reload=0",
+        "-print_final_stats=1",
         "-artifact_prefix={build}/fuzz/artifacts/",
         "{build}/fuzz/corpus/fuzz_lookahead",
         "{tree}/fuzz/corpus/fuzz_lookahead"
       ],
       "expect": {
         "signature": "FUZZ_CHECK failed: ahead\\.distance\\(\\) == distance"
-      }
+      },
+      "timeout": 1800
     },
     {
       "id": "bookvariants-window-u-search-counts-closed-level",

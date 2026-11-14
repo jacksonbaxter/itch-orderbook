@@ -238,7 +238,9 @@
       "command": [
         "{build}/fuzz/fuzz_reader",
         "-seed=1",
-        "-max_total_time=30",
+        "-runs=1500000",
+        "-reload=0",
+        "-print_final_stats=1",
         "-artifact_prefix={build}/fuzz/artifacts/",
         "{build}/fuzz/corpus/fuzz_reader",
         "{tree}/fuzz/corpus/fuzz_reader"
@@ -268,7 +270,9 @@
       "command": [
         "{build}/fuzz/fuzz_reader",
         "-seed=1",
-        "-max_total_time=30",
+        "-runs=1500000",
+        "-reload=0",
+        "-print_final_stats=1",
         "-artifact_prefix={build}/fuzz/artifacts/",
         "{build}/fuzz/corpus/fuzz_reader",
         "{tree}/fuzz/corpus/fuzz_reader"
@@ -298,7 +302,9 @@
       "command": [
         "{build}/fuzz/fuzz_decode",
         "-seed=1",
-        "-max_total_time=30",
+        "-runs=700000",
+        "-reload=0",
+        "-print_final_stats=1",
         "-artifact_prefix={build}/fuzz/artifacts/",
         "{build}/fuzz/corpus/fuzz_decode",
         "{tree}/fuzz/corpus/fuzz_decode"

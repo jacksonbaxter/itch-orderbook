@@ -2135,7 +2135,9 @@
       "command": [
         "{build}/fuzz/fuzz_book",
         "-seed=1",
-        "-max_total_time=120",
+        "-runs=5000",
+        "-reload=0",
+        "-print_final_stats=1",
         "-artifact_prefix={build}/fuzz/artifacts/",
         "{build}/fuzz/corpus/fuzz_book",
         "{tree}/fuzz/corpus/fuzz_book"
@@ -2143,7 +2145,7 @@
       "expect": {
         "signature": "DIVERGENCE kind=aggregate[\\s\\S]*FUZZ_CHECK failed: same"
       },
-      "timeout": 280
+      "timeout": 600
     },
     {
       "id": "oracle-fuzz-corpus-replay",

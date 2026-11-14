@@ -901,14 +901,17 @@
       "command": [
         "{build}/fuzz/fuzz_packets",
         "-seed=1",
-        "-max_total_time=60",
+        "-runs=10000000",
+        "-reload=0",
+        "-print_final_stats=1",
         "-artifact_prefix={build}/fuzz/artifacts/",
         "{build}/fuzz/corpus/fuzz_packets",
         "{tree}/fuzz/corpus/fuzz_packets"
       ],
       "expect": {
         "signature": "FUZZ_CHECK failed: count <= plan\\.max_messages"
-      }
+      },
+      "timeout": 600
     },
     {
       "id": "udp-bench-missing-file-silent",
