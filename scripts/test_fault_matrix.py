@@ -563,19 +563,21 @@ def check_sh_problem(command):
     return None if chosen else "runs check.sh with no --only, so every stage, fuzz_smoke among them"
 
 
-# The values CMake's if() reads as false; any other value, and any ending in -NOTFOUND, is true.
-CMAKE_FALSE = {"0", "OFF", "NO", "FALSE", "N", "IGNORE", "NOTFOUND", ""}
+# The constants CMake's if() reads a variable holding as false, in any case; NOTFOUND and a
+# value ending in -NOTFOUND are false too, but only in capitals. Any other value is true.
+CMAKE_FALSE = {"0", "OFF", "NO", "FALSE", "N", "IGNORE", ""}
 
 
 def cmake_true(value):
     """Whether CMake's if() reads a preset's value as true: a string, a JSON boolean or a typed
-    {"type": ..., "value": ...}, in any case. An absent value is false."""
+    {"type": ..., "value": ...}, false for CMAKE_FALSE's constants in any case and for NOTFOUND
+    and a -NOTFOUND ending in capitals only. An absent value is false."""
     if isinstance(value, dict):
         value = value.get("value")
     if value is None:
         return False
-    text = str(value).upper()
-    return not (text in CMAKE_FALSE or text.endswith("-NOTFOUND"))
+    text = str(value)
+    return not (text.upper() in CMAKE_FALSE or text == "NOTFOUND" or text.endswith("-NOTFOUND"))
 
 
 def libfuzzer_presets(presets_text=None):
@@ -641,8 +643,10 @@ class CommittedFaults(unittest.TestCase):
                        if preset["name"] == "release")
         for value, linked in [("TRUE", True), ("1", True), (True, True), ("on", True),
                               ({"type": "BOOL", "value": "ON"}, True), ("y", True),
-                              ("OFF", False), (False, False), ("0", False), ("", False),
-                              ("no", False), ("Ignore", False), ("ITCH-NOTFOUND", False),
+                              ("0.0", True), ("notfound", True), ("NotFound", True),
+                              ("itch-notfound", True), ("OFF", False), (False, False),
+                              ("0", False), ("", False), ("no", False), ("Ignore", False),
+                              ("NOTFOUND", False), ("ITCH-NOTFOUND", False),
                               ({"type": "BOOL", "value": "OFF"}, False)]:
             release.setdefault("cacheVariables", {})["ITCH_FUZZ"] = value
             self.assertEqual("release" in libfuzzer_presets(json.dumps(presets))[0], linked,
@@ -680,7 +684,9 @@ class CommittedFaults(unittest.TestCase):
         # of CMakePresets.json made in order, the presets can be read (Python's json, which
         # refuses a byte-order mark CMake reads past, and every preset they inherit from found)
         # and give libFuzzer to no other preset: none has ITCH_FUZZ true, as CMake's if() reads
-        # it, or fuzzer in the value of a cache variable, its own or inherited.
+        # it (anything but absent, 0, OFF, NO, FALSE, N, IGNORE or the empty string, in any case,
+        # or NOTFOUND or a value ending in -NOTFOUND, in capitals), or fuzzer in the value of a
+        # cache variable, its own or inherited.
         # The rule fails closed, so it refuses some faults that would be honest, each with a
         # message that names what it refused: any edit of fuzz/CMakeLists.txt, such as one that
         # drops a target's registration to show its replay going missing, and any edit whose
