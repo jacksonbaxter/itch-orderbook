@@ -13,7 +13,10 @@ what is still to come; the acceptance gate (`gate`): the commit it checked, its 
 each read and the counts of its findings by severity as its own report states them (`count`),
 each checker's findings by the checker's own label, held to the same rules as a reviewer's, and
 any finding of a checker that is not listed (`not_listed`), each with its severity and the reason
-in words; and whether the record is complete.
+in words; and whether the record is complete. A checker's counts and its findings not listed are
+typed from its report, which is kept outside the repository, so nothing here can hold them to it:
+`test_review_report.py`'s Committed tests pin each checker's counts and its findings not listed
+(r18-27).
 
 A reviewer here is a subagent session that did not write the code it read, given the code and
 not the author's conclusions. A finding's severity is BLOCK (it would block a merge), FIX (should
@@ -27,10 +30,11 @@ be fixed) or NOTE. Its outcome is one of OUTCOMES. `write` refuses, and writes n
   checker whose findings listed and not listed, counted by severity, are not its report's;
 - evidence: a finding fixed with no commit, unless its `no_commit` says in words why there is
   none (at least REASON_WORDS words of two letters or more), a known limit with no
-  docs/NOTES.md section for its reason, a test that names a file which is not a test (a file
-  is a test only when it ends in one of TEST_ENDINGS and lies under one of TEST_DIRS, or its name
-  starts `test_` and it lies in one of TEST_PLACES or is named with no folder), or a finding not
-  listed with no reason in words;
+  docs/NOTES.md section for its reason, no change needed with no reason in its detail (at least
+  REASON_WORDS words), a test that names a file which is not a test (a file is a test only when
+  it ends in one of TEST_ENDINGS and lies under one of TEST_DIRS, or its name starts `test_` and
+  it lies in one of TEST_PLACES or is named with no folder), or a finding not listed with no
+  reason in words;
 - complete: a record said to be complete while a finding, the gate's included, is open, partly
   done or left for the owner, while a reviewer is still to come, or while a reviewer's fixes are
   on a branch not merged yet;
@@ -337,6 +341,10 @@ def validate(data):
         if finding["outcome"] == "known limit" and not finding["notes"]:
             raise Refused("evidence", fid, "a known limit with no docs/NOTES.md section for its "
                           "reason")
+        if (finding["outcome"] == "no change needed"
+                and len(REASON_WORD.findall(finding["detail"])) < REASON_WORDS):
+            raise Refused("evidence", fid, "no change needed with no reason: its detail must say "
+                          f"why, in at least {REASON_WORDS} words (r18-28)")
         if match:
             counted[match[1]][finding["severity"]] += 1
         if of_gate and finding["checker"] in by_checker:
@@ -469,7 +477,8 @@ def status(data):
         said.append("of the acceptance gate's findings, " + ", ".join(
             f"{count} {outcome}" for outcome, count in zip(UNSETTLED, at_gate) if count))
     if data["to_come"]:
-        said.append(f"{len(data['to_come'])} reviewer to come")
+        count = len(data["to_come"])
+        said.append(f"{count} {'review' if count == 1 else 'reviews'} still to come")
     branches = [r["id"] for r in data["reviewers"] if r["branch"]]
     if branches:
         said.append(f"{', '.join(branches)}'s fixes not merged yet")
