@@ -207,13 +207,14 @@ class ReviewReport(unittest.TestCase):
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
         text = self.out.read_text(encoding="utf-8")
-        self.assertIn("- Result: not complete. Waiting on no one: r12-1, open. 1 review still "
-                      "to come.\n", text)
+        self.assertIn("- Result: not complete. 1 review still to come. Waiting on no one: r12-1, "
+                      "open.\n", text)
         self.out.unlink()
         self.data["to_come"].append("a second reader")
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
-        self.assertIn(". 2 reviews still to come.\n", self.out.read_text(encoding="utf-8"))
+        self.assertIn("not complete. 2 reviews still to come. Waiting", self.out.read_text(
+            encoding="utf-8"))
         self.assertIn("- r12-1 (FIX, open): what r12-1 found.", text)
         self.assertIn("- STILL TO COME: the last reviewer reads the pages", text)
 
@@ -514,8 +515,8 @@ class ReviewReport(unittest.TestCase):
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
         text = self.out.read_text(encoding="utf-8")
-        self.assertIn("- Result: not complete. Waiting on no one: r12-2, open. Of the acceptance "
-                      "gate's findings, 2 open.\n", text)
+        self.assertIn("- Result: not complete. Of the acceptance gate's findings, 2 open. Waiting on "
+                      "no one: r12-2, open.\n", text)
         self.assertIn("- The gate's pages B1 (BLOCK, open): a stale claim.\n", text)
         self.assertIn("| reader | 1 | FIX | too long | open | Commit 1234567. Fault "
                       "`parser-frame-skipped`. |", text)

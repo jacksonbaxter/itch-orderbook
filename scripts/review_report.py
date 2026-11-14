@@ -41,11 +41,13 @@ be fixed) or NOTE. Its outcome is one of OUTCOMES. `write` refuses, and writes n
 - data: anything else the file should have and does not, or a `waits_on` or `waits_for` on a
   finding that is settled.
 
-The Result line names every reviewer's finding not settled, in one group for each one it waits
-on (its `waits_on`, or the owner for one left for the owner), each group starting "waiting on"
-and whom, or "waiting on no one", and ending with a full stop, with what waits (its
-`waits_for`) where given; then how many of the gate's findings are not settled, by outcome, each
-of them named under "Not settled". Whether it says complete or not, it then says how many
+The Result line says how many of the gate's findings are not settled, by outcome, each of them
+named under "Not settled", and how many reviews are still to come; then it names every
+reviewer's finding not settled, in one group for each one it waits on (its `waits_on`, or the
+owner for one left for the owner), each group starting "waiting on" and whom, or "waiting on no
+one", and ending with a full stop, with what waits (its `waits_for`) where given. The counts come
+first because RESULTS.md's row carries the line, and the number gate takes a finding's id before
+a count there for the count's row label. Whether it says complete or not, it then says how many
 findings of each checker are not listed, of what severity, and why. A finding not listed is
 outside the record: it does not keep the record from being complete, and the page says so where
 it says complete.
@@ -448,20 +450,31 @@ def not_listed_words(data):
 
 
 def status(data):
-    """The Result line: complete, or what is not settled, one group for each one it waits on, each
-    group starting with whom it waits on ("waiting on no one" where the data names no one), then
-    any reviewer to come and any branch not merged. Groups end with a full stop; the parts inside
+    """The Result line: complete, or what is not settled: how many of the gate's findings, by
+    outcome, and how many reviews are to come, then one group for each one a reviewer's finding
+    waits on, each group starting with whom it waits on ("waiting on no one" where the data names
+    no one), then any branch not merged. Groups end with a full stop; the parts inside
     a group are joined with "; ". Either way it ends with the gate's findings not listed."""
     unlisted = "".join(f" {sentence}" for sentence in not_listed_words(data))
     if data["complete"]:
         return ("complete: every finding listed is settled, every reviewer reported."
                 + unlisted if unlisted else "complete: every finding settled, every reviewer "
                 "reported")
+    # The counts come first, so that on RESULTS.md's row, where the number gate reads the line as
+    # one clause, no finding's id stands before a count as if it were the count's row label.
+    said = []
+    at_gate = [sum(1 for f in data["gate"]["findings"] if f["outcome"] == outcome)
+               for outcome in UNSETTLED]
+    if any(at_gate):
+        said.append("of the acceptance gate's findings, " + ", ".join(
+            f"{count} {outcome}" for outcome, count in zip(UNSETTLED, at_gate) if count))
+    if data["to_come"]:
+        count = len(data["to_come"])
+        said.append(f"{count} {'review' if count == 1 else 'reviews'} still to come")
     groups = {}
     for finding in data["findings"]:
         if finding["outcome"] in UNSETTLED:
             groups.setdefault(waiter(finding), {}).setdefault(finding["outcome"], []).append(finding)
-    said = []
     for who in sorted(groups, key=lambda name: (name == "", name)):
         by_outcome = groups[who]
         parts = []
@@ -471,14 +484,6 @@ def status(data):
             if items:
                 parts.append(f"{and_list(items)}, {outcome}")
         said.append(f"waiting on {who or 'no one'}: " + "; ".join(parts))
-    at_gate = [sum(1 for f in data["gate"]["findings"] if f["outcome"] == outcome)
-               for outcome in UNSETTLED]
-    if any(at_gate):
-        said.append("of the acceptance gate's findings, " + ", ".join(
-            f"{count} {outcome}" for outcome, count in zip(UNSETTLED, at_gate) if count))
-    if data["to_come"]:
-        count = len(data["to_come"])
-        said.append(f"{count} {'review' if count == 1 else 'reviews'} still to come")
     branches = [r["id"] for r in data["reviewers"] if r["branch"]]
     if branches:
         said.append(f"{', '.join(branches)}'s fixes not merged yet")
