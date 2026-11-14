@@ -1539,6 +1539,78 @@ def missed_targets(root):
     return lines
 
 
+# A row's verdict as the summary and the number gate read it: met, missed, or None for a row
+# no bar judges (another host, browser or day, not measured, not available, no bar). A fault
+# check that failed is a miss: T-ARENA-1 has no bar, and its check allows no page fault.
+def verdict_class(verdict):
+    word = verdict.replace("**", "").strip()
+    clean = re.fullmatch(r"(\d+) of (\d+) clean", word)
+    if re.match(r"(?:PASS|met)\b", word) or (clean and clean[1] == clean[2]):
+        return "met"
+    if re.match(r"(?:FAIL|missed)\b", word) or "fault check FAIL" in word:
+        return "missed"
+    return None
+
+
+def host_kind(host):
+    """macOS or debian, as a row's host cell names it, else the cell."""
+    if host.startswith(("Darwin", "macOS")):
+        return "macOS"
+    return "debian" if host.startswith("debian") else host
+
+
+def target_rows(root, lines=None):
+    """Every row of RESULTS.md's tables that gives a target, or the fuzzers' run, a verdict,
+    as (target, day, host, design, verdict, class); and T-ARENA-1's fault check, one row for
+    each allocator file. lines are generate()'s, made here when not given."""
+    lines = generate(root) if lines is None else lines
+    rows, heads = [], None
+    for index, line in enumerate(lines):
+        if line.startswith("|---"):
+            continue
+        if not line.startswith("| "):
+            heads = None
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if index + 1 < len(lines) and lines[index + 1].startswith("|---"):
+            heads = cells
+            continue
+        if heads is None or "Verdict" not in heads:
+            continue
+        named = dict(zip(heads, cells))
+        target = named.get("Target", named.get("Check", ""))
+        if not TARGET_ID.fullmatch(target) and target != "Fuzzing":
+            continue
+        design = named.get("Design", named.get("Comparison", named.get("Workload", "")))
+        rows.append((target, named.get("Day", "none"), host_kind(named.get("Host", "none")),
+                     design.strip("`"), named["Verdict"], verdict_class(named["Verdict"])))
+    for path in sorted((root / "results").glob("alloc_*.md")):
+        text = path.read_text(encoding="utf-8")
+        fault_check = header_field(text, "fault_check", path.name)
+        rows.append(("T-ARENA-1", day_of(path.name), host_kind(header_field(text, "host",
+                                                                            path.name)),
+                     header_field(text, "pages_requested", path.name),
+                     f"{ARENA_VERDICT}{fault_check}", verdict_class(fault_check)))
+    return rows
+
+
+def one_verdict(rows):
+    """A target's one verdict from its rows: missed if any row its bar judges is missed or
+    failed, met if every such row is met or passed, None if its bar judges none."""
+    classes = {row[-1] for row in rows} - {None}
+    if not classes:
+        return None
+    return "missed" if "missed" in classes else "met"
+
+
+def unrowed_verdict(target):
+    """The verdict of a target that has no row: met for one held by tests, met or None from
+    ACCOUNTED (no bar, held), and KeyError for a target this script does not account."""
+    if target in {held[0] for held in HELD_BY_TESTS}:
+        return "met"
+    return "met" if ACCOUNTED[target] == "met" else None
+
+
 # Each page, the markers its generated lines sit between, and what generates them.
 PAGES = ((RESULTS_PAGE, BEGIN, END, generate), (README_PAGE, HEAD_BEGIN, HEAD_END, headline),
          (WRITEUP_PAGE, MISS_BEGIN, MISS_END, missed_targets))
