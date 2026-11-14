@@ -281,6 +281,125 @@ def toolchain_path(root, files):
         root, build_files)
 
 
+# A comment in the code cites only what a reader of the repository can open: no file that is not
+# in it, and no id from the research notes kept outside it (BT-2, DS-72, LC-24, IU-43, MK-75 and
+# the rest of those families), from the experiments (E8), the predictions (P-0021) or the reviews
+# (r8-1). The string literals of the C++ code are read too, since a literal is what a binary
+# prints: an id in one fails unless PRINTED_IDS lists it for its file, with the reason it stays,
+# and a listed id its file no longer prints fails as well. A comment may name an experiment id its
+# own file prints, as bench_kernels.cpp's do. Python literals are not read: there they are data.
+PRINTED_IDS = {
+    "bench/bench_kernels.cpp": dict.fromkeys(
+        ("E1", "E2", "E3", "E4", "E5", "E6", "E9", "E13"),
+        "the experiment label of each record; scripts/simd_report.py checks it against its own "
+        "table, and the published results/simd_*.md name the experiments by it"),
+    "bench/bench_udp.cpp": {
+        "IU-47": "the comparability field of every record (loopback runs the receive softirq on "
+                 "the sender's CPU, so it measures syscalls and copies, not a network), printed "
+                 "as it was by the binary that made the published results/udp_*.md",
+        "IU-46": "the latency record's from field (latency runs from each packet's scheduled send, "
+                 "so a sender that falls behind is charged), printed as it was by the binary that "
+                 "made results/udp_latency_debian_12302019.md",
+    },
+    "tools/itch_select.cpp": {
+        "MK-75": "the selection rule its header line names (docs/NOTES.md, \"The symbols\"), "
+                 "printed as it was when it chose the published market maker's symbols",
+    },
+}
+CITED_FILE = re.compile(r"(?<![\w./{},-])([\w./{},-]*\w\.md)\b")
+CITED_ID = re.compile(r"(?<![\w-])(?:(?:BT|DS|FR|FT|GS|IU|LC|MK|MM|OSS|SIMD|TV)-\d+|P-\d{4}"
+                      r"|r\d{1,2}-\d{1,3}|E\d{1,2})(?![\w-])")
+UNOPENED_RESEARCH = re.compile(r"\bresearch evidence\b|\bthe (?:research|evidence)\b|\bevidence's"
+                               r"|\bcomparison plan\b", re.IGNORECASE)
+EXPERIMENT_ID = re.compile(r"E\d{1,2}")
+CITING_CODE = ("include", "src", "bench", "tools", "tests", "fuzz", "cmake")
+CITING_SUFFIXES = CXX_SUFFIXES | {".py", ".cmake"}
+CXX_LITERAL = re.compile(r"\"((?:\\.|[^\"\\\n])*)\"")
+HASH_COMMENT = re.compile(r"\"(?:\\.|[^\"\\\n])*\"|(#[^\n]*)")
+
+
+def citing_files(root):
+    return [path for top in CITING_CODE for path in walk(root, top)
+            if (path.suffix in CITING_SUFFIXES or path.name == "CMakeLists.txt")
+            and "fixtures" not in path.relative_to(root).parts]
+
+
+def comments_of(path, text):
+    """(line, comment) for every comment, a Python docstring counted as one."""
+    if path.suffix in CXX_SUFFIXES:
+        return [(line_of(text, m.start()), m[0]) for m in COMMENT_OR_LITERAL.finditer(text)
+                if m[0].startswith("/")]
+    if path.suffix != ".py":
+        return [(line_of(text, m.start(1)), m[1]) for m in HASH_COMMENT.finditer(text) if m[1]]
+    import ast  # noqa: PLC0415
+    import io  # noqa: PLC0415
+    import tokenize  # noqa: PLC0415
+
+    found = [(token.start[0], token.string)
+             for token in tokenize.generate_tokens(io.StringIO(text).readline)
+             if token.type == tokenize.COMMENT]
+    for node in ast.walk(ast.parse(text)):
+        body = getattr(node, "body", None)
+        if (isinstance(body, list) and body and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant) and isinstance(body[0].value.value, str)):
+            found.append((body[0].lineno, body[0].value.value))
+    return found
+
+
+def cited_file_exists(name, present):
+    import fnmatch  # noqa: PLC0415  Here, so that the block needs nothing beside it.
+
+    alternatives = [name]
+    while any("{" in item for item in alternatives):
+        item = next(item for item in alternatives if "{" in item)
+        alternatives.remove(item)
+        head, _, rest = item.partition("{")
+        inner, _, tail = rest.partition("}")
+        words = inner.split(",") if "," in inner else ["*"]
+        alternatives += [head + word + tail for word in words]
+    return all(any(fnmatch.fnmatchcase(path, item) or fnmatch.fnmatchcase(path, "*/" + item)
+                   for path in present) for item in alternatives)
+
+
+def unopened_citation(root, files):
+    present = [relative(root, path) for path in walk(root)]
+    violations = []
+    for path in files:
+        text = read_text(path) or ""
+        listed = PRINTED_IDS.get(relative(root, path), {})
+        printed = set()
+        if path.suffix in CXX_SUFFIXES:
+            literals = code_only_literals(text)
+            for literal in CXX_LITERAL.finditer(literals):
+                for match in CITED_ID.finditer(literal[1]):
+                    printed.add(match[0])
+                    if match[0] not in listed:
+                        violations.append((path, line_of(literals, literal.start()),
+                                           f"prints a private id PRINTED_IDS does not list: "
+                                           f"{match[0]}"))
+        for name in sorted(set(listed) - printed):
+            violations.append((path, 1, f"PRINTED_IDS lists {name}, which it no longer prints"))
+        printed = {name for name in printed & set(listed) if EXPERIMENT_ID.fullmatch(name)}
+        for start, comment in comments_of(path, text):
+            for offset, line in enumerate(comment.splitlines()):
+                for match in CITED_FILE.finditer(line):
+                    if not cited_file_exists(match[1], present):
+                        violations.append((path, start + offset,
+                                           f"cites a file not in the repository: {match[1]}"))
+                for match in CITED_ID.finditer(line):
+                    if match[0] not in printed:
+                        violations.append((path, start + offset, f"cites a private id: {match[0]}"))
+                for match in UNOPENED_RESEARCH.finditer(line):
+                    violations.append((path, start + offset,
+                                       f"cites research not in the repository: {match[0]}"))
+    return violations
+
+
+def code_only_literals(text):
+    """The text with comments blanked and literals kept, newlines kept."""
+    return COMMENT_OR_LITERAL.sub(lambda m: blank(m) if m[0].startswith("/") else m[0], text)
+
+
 def ledger_free_files(root):
     """The attribution header and every repository header it includes, transitively."""
     found = []
@@ -611,6 +730,11 @@ def gates():
              aborting_call, lambda root: cxx_files(root, PRODUCTION_CODE + REFERENCE_PARSERS)),
         Gate("toolchain-path", "no hardcoded toolchain path in build files or scripts",
              toolchain_path, lambda root: list(walk(root))),
+        Gate("unopened-citation", "no comment in the code cites a file that is not in the "
+             "repository, research kept outside it, or a research, experiment, prediction or "
+             "review id, and no string a binary prints cites such an id unless "
+             "PRINTED_IDS lists it with its reason",
+             unopened_citation, citing_files),
         Gate("attribution-without-ledger",
              "the attribution and the headers it includes never include or name the ledger",
              reads_ledger, ledger_free_files),

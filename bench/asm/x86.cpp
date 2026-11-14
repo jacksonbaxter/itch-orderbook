@@ -1,4 +1,4 @@
-// E12: the three x86-64 kernels, each function in its kernel's target region.
+// The asm audit: the three x86-64 kernels, each function in its kernel's target region.
 #include "functions.hpp"
 #include "itch/kernels/avx2.hpp"
 #include "itch/kernels/avx512vbmi.hpp"

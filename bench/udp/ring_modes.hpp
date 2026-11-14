@@ -1,5 +1,5 @@
 // U1 to U5: the io_uring modes, each a ReceiveMode on the receiver's socket, on liburing
-// 2.15 (io-uring-flamegraph.md, the comparison plan's mode table).
+// 2.15.
 //
 //     U1  IORING_OP_RECV single-shot, re-armed after each datagram   DEFER_TASKRUN, wait
 //     U2  multishot RECV, provided-buffer ring                         DEFER_TASKRUN, wait
@@ -8,8 +8,8 @@
 //     U5  U2 with SQPOLL, its thread on a third core, no taskrun flag  CQ spin
 //
 // U2 is the headline pair's ring side. Every mode sets SINGLE_ISSUER, which each of these
-// flag sets allows (IU-20, IU-21), registers its ring fd and registers the socket as file 0,
-// and none uses SEND_ZC, zcrx, NAPI, SO_BUSY_POLL or IOU_PBUF_RING_INC (IU-24 to IU-31).
+// flag sets allows (io_uring_setup(2)), registers its ring fd and registers the socket as file 0,
+// and none uses SEND_ZC, zcrx, NAPI, SO_BUSY_POLL or IOU_PBUF_RING_INC.
 //
 // Where each step runs. The mode is made on the caller's thread and waits on the receiver's,
 // and both SINGLE_ISSUER and a registered ring fd belong to one task: the kernel takes the
@@ -21,21 +21,21 @@
 // sender starts; one that fails on the receiver's thread fails the first wait().
 //
 // The multishot modes. Each datagram takes one whole provided buffer of slot_bytes, never
-// incremental consumption (IU-31), and release() hands it back to the ring. The CQ is twice
+// incremental consumption, and release() hands it back to the ring. The CQ is twice
 // the buffers or the SQ, whichever is more, so that every buffer's completion fits. A multishot
 // request still ends when the ring runs out of buffers (-ENOBUFS) or the CQ overflows, and a CQE
 // without IORING_CQE_F_MORE says so: the next wait() arms it again, after the batch's buffers have
-// gone back, and counts a re-arm (IU-30). While it is down, datagrams queue on the socket,
+// gone back, and counts a re-arm. While it is down, datagrams queue on the socket,
 // so a mode that re-arms often is measuring buffer starvation, which the counters show.
 // RECV cannot say a datagram was cut short, so U2, U4 and U5 count one that filled its slot as
 // truncated; the tools refuse a packing whose largest datagram does not fit with a byte to spare.
 // U1 counts none: its 64 KiB buffer holds any IPv4 datagram. U3 reads MSG_TRUNC from the kernel.
 //
 // Waiting. U1 to U3 enter the kernel with GETEVENTS and the idle timeout (EXT_ARG), which
-// under DEFER_TASKRUN is also what runs the receive's completions (IU-21). U4 never sleeps:
+// under DEFER_TASKRUN is also what runs the receive's completions. U4 never sleeps:
 // it peeks the CQ and enters only when the kernel has flagged task work or an overflow. U5
 // spins on the CQ while its SQ thread does the kernel's side; its CPU, and U4's, is 100% by
-// construction (IU-46). Both spinning modes keep their own idle clock, as S4 does.
+// construction. Both spinning modes keep their own idle clock, as S4 does.
 //
 // CMake adds this header only to targets that link liburing::liburing, which needs
 // -DITCH_LIBURING_ROOT on Linux, so macOS and every default build have no ring backend and
@@ -85,7 +85,7 @@ enum class RingWait : std::uint8_t {
 inline constexpr int kBufferGroup = 0;
 // The registered socket's index in the ring's file table.
 inline constexpr int kSocketFile = 0;
-// The kernel's own limit on a provided-buffer ring (IU-30).
+// The kernel's own limit on a provided-buffer ring (io_uring_register_buf_ring(3)).
 inline constexpr std::uint32_t kMostRingBuffers = 32768;
 
 [[nodiscard]] constexpr std::string_view ring_mode_id(RingReceive receive, RingWait wait) noexcept {
@@ -103,8 +103,8 @@ inline constexpr std::uint32_t kMostRingBuffers = 32768;
   return "unknown";
 }
 
-// The setup flags of each wait. SQPOLL takes none of the taskrun flags (IU-20), and
-// DEFER_TASKRUN needs SINGLE_ISSUER (IU-21), which every mode sets.
+// The setup flags of each wait. SQPOLL takes none of the taskrun flags, and
+// DEFER_TASKRUN needs SINGLE_ISSUER, which every mode sets (io_uring_setup(2)).
 [[nodiscard]] constexpr unsigned ring_setup_flags(RingWait wait, bool sq_affinity) noexcept {
   unsigned flags = IORING_SETUP_R_DISABLED | IORING_SETUP_SINGLE_ISSUER | IORING_SETUP_CQSIZE;
   switch (wait) {
@@ -509,7 +509,7 @@ static_assert(ReceiveMode<RecvMultishotCoopMode>);
 static_assert(ReceiveMode<RecvMultishotSqpollMode>);
 
 // What the kernel offers, for the smoke test: the receive opcodes its probe lists, and
-// the features a plain ring reports (IU-29 asks that every line be checked on the host).
+// the features a plain ring reports, since every one is to be checked on the host.
 struct RingProbe {
   std::string summary;
 };

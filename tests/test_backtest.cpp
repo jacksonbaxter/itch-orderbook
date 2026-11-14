@@ -1,5 +1,5 @@
-// The backtester's hand-built scenarios, numbered as in the research evidence's "Test
-// scenarios" (T-BT-2). Each states its book, its events and the result by hand: no
+// The backtester's hand-built scenarios, numbered as they were listed before the code
+// was written (T-BT-2). Each states its book, its events and the result by hand: no
 // expected value here is computed by the code under test.
 //
 // Prices are in ITCH's 10^-4 dollars. Unless a test says otherwise the latencies are
@@ -249,7 +249,7 @@ TEST(QueuePosition, S09ReserveRefreshIsBehind) {
   EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1000, 30, kMaker}}));
 }
 
-// 49. Not in the evidence's list: found on the real days (docs/NOTES.md, "Queue jumps"). R1 100
+// 49. Not in the first list: found on the real days (docs/NOTES.md, "Queue jumps"). R1 100
 // (reference 10), S, R2 100 (reference 20). R0 50 is added with reference 5, below what the
 // symbol has shown: an order received before R1 and shown late, as an order held for the
 // open is. It goes ahead of S: ahead 150. A late add at another price moves nothing. R0
@@ -1077,7 +1077,7 @@ TEST(ItchEdges, S31NonPrintableExecutionDoesNotFill) {
   EXPECT_EQ(fills_of(run.fills(kS)), (std::vector<Fill>{{k1000, 50, kMaker}}));
 }
 
-// 50. Not in the evidence's list: found on the real day (docs/NOTES.md, "Queue jumps"). R1 100,
+// 50. Not in the first list: found on the real day (docs/NOTES.md, "Queue jumps"). R1 100,
 // S at 10.00, R2 100 behind; S2 bids 10.01. A printable C executes 50 of R2 at 10.01, a
 // price better for the seller than R2's 10.00, as every printable C in regular trading on
 // 12302019 did: the seller reached 10.01 and no lower. S2, at the trade's price, fills 50;
@@ -1400,7 +1400,7 @@ TEST(ItchEdges, OnlyTheTradedSymbolIsDelivered) {
 
 // ---- What the strategy cannot reach ---------------------------------------------------
 
-// BT-64 check 1, the structural half of the lookahead proof: a Context has no route to
+// Check 1, the structural half of the lookahead proof: a Context has no route to
 // the exchange-side book, the feed or the engine. Each line would fail to compile if it
 // were written in a strategy.
 using Context = itch::backtest::Context<>;

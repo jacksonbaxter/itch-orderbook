@@ -1,5 +1,5 @@
-// The PnL attribution: T-MM-1, property tests 1 to 14 of the research evidence
-// (market-maker.md, "Property tests"), and its worked example. Tests 15 and 16 run the
+// The PnL attribution: T-MM-1, property tests 1 to 14, as listed before the code was
+// written, and its worked example. Tests 15 and 16 run the
 // strategy through the backtester and are in test_market_maker.cpp.
 //
 // Every check is `==` on integers. Each compares the attribution with a ledger computed from
@@ -513,7 +513,7 @@ TEST(Attribution, P14TheIdentityFailsWhenOneSideLosesAFeeAFillOrAMark) {
   EXPECT_GT(marks, 1'000);
 }
 
-// ---- The worked example of market-maker.md, "Attribution identity" --------------------------
+// ---- The worked example of the attribution identity ------------------------------------------
 
 // $100 stock, h = 5 s, Q₀ = 0, T = 20 s. Rebate $0.002 a share to add, $0.003 to remove.
 Case worked_example() {

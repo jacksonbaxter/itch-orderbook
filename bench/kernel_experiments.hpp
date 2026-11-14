@@ -1,4 +1,4 @@
-// The passes of the SIMD experiments (simd.md, "Candidate experiments"), each a whole walk of
+// The passes of the SIMD experiments (docs/NOTES.md, "SIMD parsing kernels"), each a whole walk of
 // the day on one kernel. bench_kernels times them; nothing here is production code.
 //
 // Each experiment's work pass has a walk pass beside it: the same frame walk, the same type
@@ -33,7 +33,7 @@ struct Totals {
   std::uint64_t messages = 0;  // Whole messages walked.
   std::uint64_t items = 0;     // The messages the pass's operation applies to.
   std::uint64_t fold = 0;      // What the pass computed, so that none of it can be dropped.
-  std::uint64_t matches = 0;   // E9: messages whose stock is on the watchlist.
+  std::uint64_t matches = 0;   // filter: messages whose stock is on the watchlist.
   std::uint64_t refused = 0;   // The book refused an op. A clean day has none.
 };
 
@@ -41,7 +41,7 @@ struct Totals {
   return static_cast<unsigned char>(*m);
 }
 
-// E1: where each width's field is read. All four lie inside the first 19 bytes, the length of
+// field: where each width's field is read. All four lie inside the first 19 bytes, the length of
 // the shortest op type, with 8 bytes readable from each, as a vector kernel may read.
 template <std::size_t W>
 consteval std::size_t field_at() {
@@ -58,7 +58,7 @@ inline constexpr std::size_t kFieldAt = field_at<W>();
 static_assert(kFieldAt<2> + 8 <= 19 && kFieldAt<4> + 8 <= 19 && kFieldAt<6> + 8 <= 19 &&
               kFieldAt<8> + 8 <= 19);
 
-// E1: one field of width W from every message of an op type.
+// field: one field of width W from every message of an op type.
 template <class K, std::size_t W, bool Work>
 [[gnu::always_inline]] inline Totals field_pass(std::span<const std::byte> bytes) noexcept {
   FrameReader reader{bytes};
@@ -82,7 +82,7 @@ template <class K, std::size_t W, bool Work>
   return t;
 }
 
-// E2: every Add Order's fields into a ring of records in memory, with no consumer.
+// decode: every Add Order's fields into a ring of records in memory, with no consumer.
 inline constexpr std::size_t kRing = 64;
 
 template <class K, bool Work>
@@ -115,7 +115,7 @@ template <class K, bool Work>
   return t;
 }
 
-// E3: every op decoded and consumed in integer registers: the reference hashed to one of 64K
+// consume: every op decoded and consumed in integer registers: the reference hashed to one of 64K
 // slots, its shares added there, the price compared with the highest so far.
 inline constexpr std::size_t kSlots = std::size_t{1} << 16U;
 
@@ -152,7 +152,7 @@ template <class K, bool Work>
   return {.messages = t.messages, .items = t.items, .fold = t.fold + highest};
 }
 
-// E4: what a parse hands the book, folded.
+// parse: what a parse hands the book, folded.
 struct FoldSink {
   std::uint64_t fold = 0;
   void operator()(const BookOp& op) noexcept {
@@ -162,7 +162,7 @@ struct FoldSink {
   }
 };
 
-// E4: the whole parse on the kernel, every op type, near the end on the scalar kernel.
+// parse: the whole parse on the kernel, every op type, near the end on the scalar kernel.
 template <class K>
 [[gnu::always_inline]] inline Totals parse_pass(std::span<const std::byte> bytes) noexcept {
   FoldSink sink;
@@ -170,7 +170,7 @@ template <class K>
   return {.messages = p.messages, .items = p.ops, .fold = sink.fold};
 }
 
-// E4 by type: the same walk, with only messages of type `only` decoded; or, with `only` zero,
+// parse by type: the same walk, with only messages of type `only` decoded; or, with `only` zero,
 // none decoded, the walk.
 template <class K>
 [[gnu::always_inline]] inline Totals parse_one_type(std::span<const std::byte> bytes,
@@ -201,7 +201,7 @@ template <class K>
   return t;
 }
 
-// E4 end to end: the parse on the kernel feeding the book.
+// book: the parse on the kernel feeding the book.
 template <class Book>
 struct BookSink {
   Book* book;
@@ -223,7 +223,7 @@ template <class K, class Book>
           .refused = sink.refused};
 }
 
-// E5: Add Orders four at a time, into one array a field, where four come in a row; the rest
+// batch: Add Orders four at a time, into one array a field, where four come in a row; the rest
 // one at a time on the scalar kernel, the same for every kernel.
 [[nodiscard]] inline std::uint64_t fold_batch(const kernels::AddBatch& b) noexcept {
   std::uint64_t fold = 0;
@@ -282,7 +282,7 @@ template <class K, bool Work>
   return t;
 }
 
-// E5's other half, untimed: how long runs of one type are. Buckets 1, 2, 3, 4 to 7, 8 to 15,
+// batch's other half, untimed: how long runs of one type are. Buckets 1, 2, 3, 4 to 7, 8 to 15,
 // 16 to 31, 32 and up.
 inline constexpr std::array<std::string_view, 7> kRunBuckets{"1",    "2",     "3",  "4-7",
                                                              "8-15", "16-31", "32+"};
@@ -333,7 +333,7 @@ struct RunLengths {
   return runs;
 }
 
-// E6: the frame walk alone, four ways. Each adds every frame's type byte and counts frames,
+// framing: the frame walk alone, four ways. Each adds every frame's type byte and counts frames,
 // and stops at the first frame that would pass the end.
 enum class Framing : std::uint8_t {
   length,    // p += 2 + be16(p): the data dependency the wire format sets.
@@ -388,7 +388,7 @@ template <Framing Form>
   return {.totals = t, .stopped_at = static_cast<std::size_t>(p - bytes.data())};
 }
 
-// E9: does an Add Order's stock sit on the watchlist? Either compared with every listed stock,
+// filter: does an Add Order's stock sit on the watchlist? Either compared with every listed stock,
 // 8 bytes at a time, on the kernel; or looked up by the order's locate in a bitset, filled from
 // the day's Stock Directory messages as they arrive.
 enum class Filter : std::uint8_t { compare, bitset };
@@ -443,7 +443,7 @@ template <class K, Filter Form, bool Work>
   return t;
 }
 
-// E13: every message's 6-byte timestamp, four ways.
+// timestamp: every message's 6-byte timestamp, four ways.
 enum class Stamp : std::uint8_t {
   exact,      // read_be48: 6 bytes into a zeroed 8, one swap. What the parser ships.
   split,      // a 4-byte and a 2-byte read, swapped and merged.
@@ -482,7 +482,7 @@ template <Stamp Form, bool Work>
 }
 
 // The kernel against the scalar kernel on every message of the input: every op's BookOp,
-// every Add Order's fields, every op's four E1 fields. Untimed.
+// every Add Order's fields, every op's field at each of the four widths. Untimed.
 struct VerifyTotals {
   std::uint64_t compared = 0;
   std::uint64_t mismatches = 0;

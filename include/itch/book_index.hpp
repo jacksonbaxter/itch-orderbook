@@ -68,7 +68,7 @@ class OpenHashIndex {
   static constexpr unsigned kPrefetchStages = 1;
 
   void prefetch_stage(std::uint64_t reference, unsigned /*stage*/) const noexcept {
-    // measured: E8, see FastBook::prefetch_stage.
+    // measured: the look-ahead runs, see FastBook::prefetch_stage.
     __builtin_prefetch(&slots_[home_slot(reference)]);
   }
 
@@ -149,7 +149,7 @@ class ChainedIndex {
   static constexpr unsigned kPrefetchStages = 1;
 
   void prefetch_stage(std::uint64_t reference, unsigned /*stage*/) const noexcept {
-    // measured: E8, see FastBook::prefetch_stage.
+    // measured: the look-ahead runs, see FastBook::prefetch_stage.
     __builtin_prefetch(&heads_[bucket(reference)]);
   }
 
@@ -201,7 +201,7 @@ class ChainedIndex {
 // pages come from a pool sized up front, so a page is held only while one of its
 // references is live.
 //
-// Nothing in the spec bounds a reference (DS-72). A reference past the directory's
+// Nothing in the spec bounds a reference but its 8 bytes. A reference past the directory's
 // reach, or one whose page cannot be had because the pool is empty, goes to a hash table
 // sized for every order instead. A lookup tries its page first and the hash only while the hash
 // holds anything, so a day that never falls back never probes it. Each fallback is
@@ -230,13 +230,13 @@ class PagedIndex {
       return;
     }
     if (stage == 0) {
-      // measured: E8, see FastBook::prefetch_stage.
+      // measured: the look-ahead runs, see FastBook::prefetch_stage.
       __builtin_prefetch(&directory_[static_cast<std::size_t>(reference >> PageBits)]);
       return;
     }
     const std::uint32_t page = directory_[static_cast<std::size_t>(reference >> PageBits)];
     if (page != kNoIndex) {
-      // measured: E8, see FastBook::prefetch_stage.
+      // measured: the look-ahead runs, see FastBook::prefetch_stage.
       __builtin_prefetch(&slots_[slot_of(page, reference)]);
     }
   }

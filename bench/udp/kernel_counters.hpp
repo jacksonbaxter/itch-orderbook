@@ -1,5 +1,5 @@
-// The kernel's own counts around a T-URING run, every layer of IU-43 that a user can read,
-// and the CPU each part of the run took (IU-46).
+// The kernel's own counts around a T-URING run, every layer of drops that a user can read,
+// and the CPU each part of the run took.
 //
 //     /proc/net/snmp      Udp: InDatagrams, InErrors, RcvbufErrors, ...   whole host
 //     /proc/net/softnet_stat  column 2, the per-CPU backlog's drops        whole host
@@ -13,7 +13,7 @@
 // count by control message, is the modes' own (S2, U3). The sequence tracker's gaps are
 // the receiver's own view, in mold::SequenceCounts.
 //
-// On loopback the receive softirq runs on the sender's CPU (IU-39), so that CPU's softirq
+// On loopback the receive softirq runs on the sender's CPU (loopback.c), so that CPU's softirq
 // time is where the kernel's receive work shows. Whether it is also in the sender thread's
 // stime depends on CONFIG_IRQ_TIME_ACCOUNTING, which the smoke test records: without it a
 // tick that lands in softirq is charged to both.
@@ -66,7 +66,7 @@ struct UdpSnmp {
 
 struct SoftnetRow {
   std::uint64_t processed = 0;
-  std::uint64_t dropped = 0;  // Column 2: the backlog was full (IU-43).
+  std::uint64_t dropped = 0;  // Column 2: the backlog was full.
   std::uint64_t squeezed = 0;
 };
 

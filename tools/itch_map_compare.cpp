@@ -17,8 +17,8 @@
 //
 // --heap aged runs the map book on a heap aged as include/itch/heap_ager.hpp says, with
 // --seed, --warm-blocks and --ring-blocks as its knobs. fresh, the default, does not.
-// --index, --levels and the capacities pick the fast book's arm, as in itch_oracle, but for
-// --max-orders and --max-levels, which take 1 to 2^32 - 1 (capacity.hpp).
+// --index, --levels and the capacities pick the fast book's arm, as in itch_oracle, with
+// --max-orders and --max-levels each 1 to 2^32 - 1 (capacity.hpp).
 //
 // --allocator compares the fast book with the node book on one of T-ARENA-1's allocator
 // arms (tools/alloc_arms.hpp) in place of the map book, with the same checks, its pools on

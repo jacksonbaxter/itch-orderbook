@@ -1,8 +1,8 @@
 // The backtester's validity gates, the rest of T-BT-2: scenario 8 (ahead never rises,
 // checked against a recount after every message), the full market-data delay check of
-// scenario 15, and scenarios 42 to 48 of the research evidence.
+// scenario 15, and scenarios 42 to 48 of the list test_backtest.cpp numbers.
 //
-// The lookahead proof (BT-64) has three parts here, beside the compile-time half in
+// The lookahead proof has three parts here, beside the compile-time half in
 // test_backtest.cpp:
 //   - prefix invariance: every decision up to T + min(L_md, L_resp) is the same on the
 //     feed cut after T as on the whole feed;

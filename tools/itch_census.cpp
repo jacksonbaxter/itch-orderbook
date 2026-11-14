@@ -6,8 +6,8 @@
 // proves nothing: the last message is what shows the file is complete.
 //
 // It also counts what the spec leaves out, each case once over the day: directory values
-// (DS-64, DS-65, DS-66), what the test symbols carry (DS-65), Cross Trades by shares and
-// price (DS-69), and what follows System Event 'E' (DS-71). scripts/check_census.py ties
+// (market category, authenticity, round lot), what the test symbols carry, Cross Trades by
+// shares and price, and what follows System Event 'E'. scripts/check_census.py ties
 // the totals back to the manifest.
 #include <array>
 #include <cctype>

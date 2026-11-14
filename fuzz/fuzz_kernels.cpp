@@ -13,7 +13,7 @@
 //
 // Message by message, on each kernel: the input's first bytes as one message of each op type,
 // in a heap block of the message's length plus the kernel's kOverread and not a byte more, so
-// that a read past what the contract allows is an ASan report. The Add Order fields of E2 the
+// that a read past what the contract allows is an ASan report. The decode's Add Order fields the
 // same way, every field width at every offset of the input block, four Add Orders as one
 // batch, and a search of the input read as keys. Any difference from the scalar kernel, or
 // from the shipped decoder where there is one, is a failure.
@@ -169,7 +169,7 @@ struct MessagesMatch {
     }
   }
 
-  // E2's Add Order fields, against the scalar kernel and AddOrder::from_wire.
+  // The decode's Add Order fields, against the scalar kernel and AddOrder::from_wire.
   template <class K>
   [[gnu::always_inline]] void add_fields() const {
     const std::size_t length = itch::message_length(itch::AddOrder::kType);

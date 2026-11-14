@@ -2,7 +2,7 @@
 // a superpage flag that mmap takes in place of a file descriptor. The SDK's
 // mach/vm_statistics.h calls superpages "not supported on any current hardware", and this
 // M4 Max refuses VM_FLAGS_SUPERPAGE_SIZE_2MB with EINVAL from mmap and mach_vm_allocate alike
-// (LC-57). macOS has no call that reports the page size behind a mapping, so a superpage
+// when tried. macOS has no call that reports the page size behind a mapping, so a superpage
 // mapping it did accept would be recorded as unverified.
 #include <mach/vm_statistics.h>
 #include <sys/mman.h>

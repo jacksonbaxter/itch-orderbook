@@ -1,7 +1,7 @@
-// The fee schedule, scenarios 37 to 40 of the research evidence, and the tape mapping.
+// The fee schedule, scenarios 37 to 40 of the backtester's list, and the tape mapping.
 //
 // Every expected amount is worked by hand from the rates in BENCHMARKS.md and the
-// evidence's fee table, in picodollars (10^-12 of a dollar), and written out here. None is
+// price lists fees.hpp names, in picodollars (10^-12 of a dollar), and written out here. None is
 // computed from the table under test.
 #include <gtest/gtest.h>
 

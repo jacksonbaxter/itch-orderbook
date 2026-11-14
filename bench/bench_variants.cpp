@@ -8,8 +8,8 @@
 //                    [--orders N] [--levels N] [--max-pages N] [--index-bits N] [--max-slots N]
 //
 // --pass replay, the default: a warm-up pass and then one timed pass of the whole day, both
-//               with the same --dispatch form (dispatch.hpp, E7) and the same --prefetch
-//               look-ahead (itch/lookahead.hpp, E8), each on a fresh book.
+//               with the same --dispatch form (dispatch.hpp) and the same --prefetch
+//               look-ahead (itch/lookahead.hpp), each on a fresh book.
 // --pass lookup: the order lookup apart from the rest of the message (lookup_script.hpp).
 //               A recording pass, which is also the warm-up, then four timed passes on
 //               fresh books in the order check, answer, answer, check, so that a drift

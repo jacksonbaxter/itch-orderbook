@@ -69,7 +69,7 @@ def window_stream():
     """Four sides, one locate each. FlatLevels searches for a U's new price after the old order
     has gone, so a level that order held alone is closed by then."""
     s = Stream()
-    # 1, review finding r2-3: the best bid, alone at 100.00, moves behind 99.00 to 98.00. Adds
+    # 1, a review's finding: the best bid, alone at 100.00, moves behind 99.00 to 98.00. Adds
     # pass 0 and 1 better levels; the U's search passes 99.00 alone, so 1, not 2. Its old
     # level's close passes 0.
     s.add(1, 1, "B", 100, 100 * DOLLAR)

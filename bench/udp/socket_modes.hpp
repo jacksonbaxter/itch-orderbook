@@ -1,5 +1,5 @@
 // S2, S3 and S4: the socket modes only Linux has, each a ReceiveMode on the receiver's
-// socket (io-uring-flamegraph.md, the comparison plan's mode table).
+// socket.
 //
 //     S2  recvmsg with cmsg                 blocking   one buffer, SO_RXQ_OVFL read back
 //     S3  recvmmsg, vlen 64, MSG_WAITFORONE  blocking   the first datagram waits, the rest do not
@@ -8,8 +8,8 @@
 // S3 is the headline pair's socket side. S2 and S3 block under the socket's receive
 // timeout, as S1 does; S4 never blocks, so it keeps its own idle clock, read once every
 // kSpinsPerClockRead empty calls so that the clock costs the spin almost nothing. A spin
-// mode's CPU is 100% by construction, which the results say instead of a CPU figure
-// (IU-46).
+// mode's CPU is 100% by construction, which the results say instead of giving
+// a CPU figure.
 //
 // CMake adds this header to Linux targets only (recvmmsg, MSG_WAITFORONE and SO_RXQ_OVFL
 // are Linux calls), so a macOS build has no socket backend beyond S1 and no code change.

@@ -7,9 +7,9 @@
 // are here when the build fetched them (-DITCH_COMPARISON_QUEUES=ON), each used through
 // its own non-blocking single-item calls as shipped, with its own padding: rigtorp and
 // folly take std::hardware_destructive_interference_size, boost and atomic_queue pad to
-// 128 on Apple arm64 and 64 elsewhere, and moodycamel pads to 64 everywhere (LC-22).
+// 128 on Apple arm64 and 64 elsewhere, and moodycamel pads to 64 everywhere (their own constants).
 // xenium's Vyukov queue is multi-producer multi-consumer, a control with a
-// compare-and-swap on every call (LC-8, LC-9).
+// compare-and-swap on every call, as Vyukov's design has it.
 #pragma once
 
 #include <array>

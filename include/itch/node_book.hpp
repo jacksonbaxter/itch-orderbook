@@ -9,7 +9,7 @@
 // through std::map, std::list and std::unordered_map, whose node types, bucket arrays and
 // links belong to the standard library, so a pool could not take their nodes by index and
 // an arm would change how the index grows. itch-book's pooled-against-inline comparison
-// changed the index along with the allocator (LC-45). Here the index, the side table, the
+// changed the index along with the allocator (its README). Here the index, the side table, the
 // search and every write are one code path for every arm, and the arm decides only where
 // a node's storage comes from and what a link to it is.
 //
@@ -40,7 +40,7 @@
 // std::pmr's two resources, and node_pool.hpp's pool by index, by pointer and with a FIFO
 // free list. A node's links are as wide as the arm's handle: the index arms' Order is 24
 // bytes and the pointer arms' 40, and that is the comparison the pool's index and pointer
-// arms are there to make (LC-56). Every pointer arm holds the same layout.
+// arms are there to make. Every pointer arm holds the same layout.
 //
 // The index keeps the reference beside the handle in each slot, 16 bytes whatever the
 // handle, so a probe never reads an order and the index is the same size for every arm.

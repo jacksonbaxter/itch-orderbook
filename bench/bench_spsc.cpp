@@ -14,8 +14,8 @@
 //   the batch calls, 32 items a call.
 //
 // The element is an 8-byte std::uint64_t in rtt, saturated and paced, and the 64-byte
-// BurstItem in burst, for every queue; the requested capacity is 2^17 for every queue, as
-// in LC-1 and LC-7. Each row runs once a process, in a fresh queue, the order of the
+// BurstItem in burst, for every queue, whose requested capacity is 2^17, as atomic_queue's
+// and Frasch's benchmarks have it. Each row runs once a process, in a fresh queue, the order of the
 // queues turned by --rotate so that no queue always runs first. burst replays the day's
 // messages from --burst-start-ns, 09:30:00 by default, for --burst-span-ns, 2 s, at the
 // gaps between their timestamps, copied out of the day before any span opens. The

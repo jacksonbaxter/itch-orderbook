@@ -10,8 +10,8 @@
 //
 // Warm-up is the first N messages, 0 by default, so the count starts at the first
 // message after construction. --index and --levels pick the arm of the fast book, the
-// book's default arm if left out, and the capacities are as itch_oracle's, but for
-// --max-orders and --max-levels, which take 1 to 2^32 - 1 (capacity.hpp). --prefetch
+// book's default arm if left out, and the capacities are as itch_oracle's, with
+// --max-orders and --max-levels each 1 to 2^32 - 1 (capacity.hpp). --prefetch
 // walks the fast book's pass with itch/lookahead.hpp's reader, D messages ahead, so that
 // the reader's ring and the book's look-ahead are inside the count. Exit codes: 0 pass,
 // 1 fail, 2 bad usage.

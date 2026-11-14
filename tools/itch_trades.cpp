@@ -18,8 +18,8 @@
 // --symbols     writes one line per symbol, for the raw log.
 // --details     how many violations of each check are printed in full. All are counted.
 // --index, --levels  the arm of the fast book, the book's default arm if left out, and the
-//               capacities are as itch_oracle's, but for --max-orders and --max-levels,
-//               which take 1 to 2^32 - 1 (capacity.hpp).
+//               capacities are as itch_oracle's, with --max-orders and --max-levels
+//               each 1 to 2^32 - 1 (capacity.hpp).
 //
 // Exit codes: 0 every check that ran passed. 2 bad usage, an unreadable file, or a --symbols
 // file that could not be opened or written in full. 3 a reference file failed to parse, with

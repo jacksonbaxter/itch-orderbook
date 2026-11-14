@@ -6,7 +6,7 @@
 // point. Those two report through `moved` each other level whose place in the structure
 // they rewrite, before rewriting it.
 //
-// Stub quotes are real and span almost the whole price field (DS-73), so neither arm
+// Stub quotes are real and span almost the whole price field (Nasdaq's ITCH FAQ), so neither arm
 // indexes a level by its price. Both search by comparing prices, and a far price is just
 // one more entry at the far end.
 //
@@ -140,12 +140,12 @@ class LinkedLevels {
 
   void prefetch_level(std::uint32_t level) const noexcept {
     if (level < levels_.size()) {
-      // measured: E8, see FastBook::prefetch_stage.
+      // measured: the look-ahead runs, see FastBook::prefetch_stage.
       __builtin_prefetch(&levels_[level]);
     }
   }
   void prefetch_side(std::uint16_t locate, Side side) const noexcept {
-    // measured: E8, see FastBook::prefetch_stage.
+    // measured: the look-ahead runs, see FastBook::prefetch_stage.
     __builtin_prefetch(&tops_[side_key(locate, side)]);
   }
   // A search starts at the best level.
@@ -331,19 +331,19 @@ class ScanFlatLevels {
 
   void prefetch_level(std::uint32_t level) const noexcept {
     if (level < levels_.size()) {
-      // measured: E8, see FastBook::prefetch_stage.
+      // measured: the look-ahead runs, see FastBook::prefetch_stage.
       __builtin_prefetch(&levels_[level]);
     }
   }
   void prefetch_side(std::uint16_t locate, Side side) const noexcept {
-    // measured: E8, see FastBook::prefetch_stage.
+    // measured: the look-ahead runs, see FastBook::prefetch_stage.
     __builtin_prefetch(&sides_[side_key(locate, side)]);
   }
   // A search reads keys from the end of the side's block, where the best price is.
   void prefetch_search(std::uint16_t locate, Side side) const noexcept {
     const Top& top = sides_[side_key(locate, side)];
     if (top.count != 0) {
-      // measured: E8, see FastBook::prefetch_stage.
+      // measured: the look-ahead runs, see FastBook::prefetch_stage.
       __builtin_prefetch(&keys_[top.base + top.count - 1]);
     }
   }

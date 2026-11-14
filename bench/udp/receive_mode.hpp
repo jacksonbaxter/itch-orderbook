@@ -13,8 +13,8 @@
 //
 // socket_modes.hpp is Linux only and ring_modes.hpp needs liburing as well; modes.hpp
 // names every mode by its ID for the tools.
-// (io-uring-flamegraph.md, the comparison plan's mode table. U2 and S3 are the headline
-// pair.) A mode does one thing: wait() fills a batch with datagrams, each a view of a
+// U2 and S3 are the headline
+// pair. A mode does one thing: wait() fills a batch with datagrams, each a view of a
 // buffer the mode owns, and release() hands those buffers back once the feed has read
 // them, which for U2 to U5 returns them to the provided-buffer ring and for the socket
 // modes does nothing. Everything after a datagram arrives is mold::FeedHandler, the
@@ -78,13 +78,13 @@ struct ModeCounters {
   // Filled by the Linux modes. MSG_TRUNC on a datagram (S2, S3, S4, U3), or a datagram that
   // filled its whole slot where the call cannot say (U2, U4, U5; U1's 64 KiB buffer cannot); the
   // multishot re-arms after a CQE without IORING_CQE_F_MORE; -ENOBUFS completions; and
-  // the ring's CQ overflow count (IU-30, IU-43).
+  // the ring's CQ overflow count.
   std::uint64_t truncated = 0;
   std::uint64_t rearms = 0;
   std::uint64_t no_buffers = 0;
   std::uint64_t cq_overflow = 0;
   // SO_RXQ_OVFL, for the modes that read a datagram's control messages (S2, U3): whether
-  // the option was set, and the most the socket said it had dropped (IU-28, IU-43). The
+  // the option was set, and the most the socket said it had dropped. The
   // kernel attaches the count only once it is above 0, so a mode that set the option and
   // saw none read 0.
   bool rxq_overflow_set = false;
@@ -102,7 +102,7 @@ struct ModeOptions {
   // than kDatagramBuffer so that a batch's buffers do not all start 64 KiB apart, on the
   // same cache sets; the tools refuse a packing whose largest datagram does not fit.
   std::size_t slot_bytes = 2048;
-  std::uint32_t ring_buffers = 1024;  // Provided buffers, a power of two up to 32768 (IU-30).
+  std::uint32_t ring_buffers = 1024;  // Provided buffers, a power of two up to the kernel's 32768.
   std::uint32_t ring_entries = 64;    // Submission queue entries, U1 to U5.
   // How long a mode that the socket's receive timeout cannot reach (S4, U1 to U5) waits
   // with nothing arriving before it says so.

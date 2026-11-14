@@ -220,7 +220,7 @@ TEST(PageMapping, AHugeRequestClaimsOnlyWhatTheKernelSays) {
 }
 
 #ifdef __APPLE__
-// LC-57: the SDK calls superpages unsupported on current hardware. Whether this Mac
+// The SDK calls superpages unsupported on current hardware. Whether this Mac
 // refuses or not, a refusal must say so and fall back only where the request allows it.
 TEST(PageMapping, OnMacOSASuperpageRefusalIsRecorded) {
   const itch::PageMapping offered{std::size_t{4} << 20U, itch::PageRequest::huge_if_offered};
@@ -259,7 +259,7 @@ TEST(NodeBook, APoolBookWithNoPagesRefusesEveryAdd) {
 #endif
 
 #ifdef __linux__
-// The same two on Linux (r2-6). Explicit pages come only from the kernel's 2 MiB pool, and a
+// The same two on Linux. Explicit pages come only from the kernel's 2 MiB pool, and a
 // private MAP_HUGETLB mapping reserves its pages when it is made, so a request for more pages
 // than the pool has free, plus all it may still overcommit, is refused on any host, whatever it
 // reserved. The bound is read from sysfs, never set. Other processes can meanwhile only take

@@ -1,6 +1,6 @@
 // The UDP sockets of the replay: one pair on 127.0.0.1, each side bound to a port the
-// kernel picks and connect()ed to the other (the comparison plan's item 3, since Brouer
-// shows a connected socket changes the result, IU-2 and IU-4). Plain BSD sockets, the
+// kernel picks and connect()ed to the other, since Jesper Brouer's netdev posts of 2016
+// and 2019 show a connected socket changes the result. Plain BSD sockets, the
 // same calls on macOS and Linux.
 //
 // Addresses come from getaddrinfo() and getsockname() writes the bound port back into the
@@ -150,7 +150,7 @@ struct Bound {
 }
 
 // SO_RCVBUF as asked and as the kernel then reports it. Linux caps the request at
-// rmem_max and doubles it for bookkeeping (IU-42), so the two differ and both go on the
+// rmem_max and doubles it for bookkeeping (socket(7)), so the two differ and both go on the
 // record.
 struct BufferSize {
   int requested = 0;

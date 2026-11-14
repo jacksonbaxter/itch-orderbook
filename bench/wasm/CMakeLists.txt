@@ -1,4 +1,4 @@
-# E11 (simd.md): the Add Order decode on the scalar kernel against the SIMD128 kernel, in node,
+# The wasm run: the Add Order decode on the scalar kernel against the SIMD128 kernel, in node,
 # timed by scripts/simd_wasm_e11.mjs with performance.now(). Emscripten builds only. The day
 # goes through a fixed 64 MiB window of linear memory a piece at a time, so the module never
 # grows and never holds the day.

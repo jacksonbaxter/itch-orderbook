@@ -6,11 +6,11 @@ Usage: test_oracle_cli.py <itch_oracle> <scratch dir> <fixtures dir> <itch_alloc
 
 Each expected line was worked out by hand from scripts/gen_oracle_fixtures.py, not
 copied from the tool's output. Every arm the layout results publish runs through the
-oracle, the look-ahead and itch_alloc (r8-1), and the fast book's allocation check runs on
-lifecycle.itch, whose executions and cancels empty orders, as well as session.itch (r8-2).
+oracle, the look-ahead and itch_alloc, and the fast book's allocation check runs on
+lifecycle.itch, whose executions and cancels empty orders, as well as session.itch.
 itch_alloc's mimalloc arm may say the build has no mimalloc only in a build CMake says has
 none, and then the test prints that it skipped it; with no fifth argument it says so
-whenever it skips (r8-11). A failure prints `oracle cli: FAIL <case>: <reason>`.
+whenever it skips. A failure prints `oracle cli: FAIL <case>: <reason>`.
 """
 
 import resource
@@ -404,7 +404,7 @@ def main():
 
     # T-ALLOC-1 on two fixtures: the fast pass is clean and the control pass is seen. session
     # leaves deep orders resting; lifecycle empties orders by E, C and X, the path where an
-    # execution or cancel removes the order (r8-2).
+    # execution or cancel removes the order.
     alloc_files = (("session", session), ("lifecycle", lifecycle))
     for name, path in alloc_files:
         done = subprocess.run([alloc_tool, str(path), *SMALL], capture_output=True, text=True,

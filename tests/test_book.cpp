@@ -516,14 +516,14 @@ TYPED_TEST(BookScenario, ASideThatIsNeitherBuyNorSellIsRefused) {
 // What the spec leaves out or says otherwise. Neither book reads the directory, so what
 // these show is that the case reaches the book and is treated like any other.
 
-// DS-64. Neither real day has 'M', so this is the only place it runs.
+// Category M is not in the spec. Neither real day has 'M', so this is the only place it runs.
 TYPED_TEST(BookScenario, MarketCategoryMListsAnOrdinarySymbol) {
   EXPECT_EQ(this->book_.apply(wire::directory(kLocate, 'M', 'T', 100)), "no_book_effect");
   EXPECT_EQ(this->book_.apply(wire::add(kLocate, 1, 'B', 100, 5000)), "applied");
   EXPECT_EQ(this->book_.best(kLocate, 'B'), (Top{true, 5000, 100, 1}));
 }
 
-// DS-65. Test symbols carry real order flow. Leaving them out of a statistic is the
+// Test symbols are in the feed, with real order flow. Leaving them out of a statistic is the
 // consumer's business, so the book has to hold them exactly as it holds a live one.
 TYPED_TEST(BookScenario, ATestSymbolTradesLikeALiveOne) {
   constexpr std::uint16_t kLive = kLocate + 1;
@@ -547,7 +547,7 @@ TYPED_TEST(BookScenario, ATestSymbolTradesLikeALiveOne) {
   EXPECT_EQ(this->book_.live_orders(), 2U);
 }
 
-// DS-66. A book holds shares, whatever a round lot is on this symbol.
+// Round lots are not always 100. A book holds shares, whatever a round lot is on this symbol.
 TYPED_TEST(BookScenario, ARoundLotDoesNotShapeTheBook) {
   std::uint16_t locate = kLocate;
   std::uint64_t reference = 1;
@@ -563,7 +563,7 @@ TYPED_TEST(BookScenario, ARoundLotDoesNotShapeTheBook) {
   }
 }
 
-// DS-69. A cross that did not happen prints zero shares at price zero. On both real days
+// A cross that did not happen prints zero shares at price zero. On both real days
 // every zero-share Q is also zero-price and no other Q is. The two mixed forms are here
 // because nothing but those days rules them out.
 TYPED_TEST(BookScenario, ACrossOfNoSharesOrNoPriceChangesNothing) {
@@ -579,7 +579,7 @@ TYPED_TEST(BookScenario, ACrossOfNoSharesOrNoPriceChangesNothing) {
   EXPECT_EQ(this->book_.live_orders(), 2U);
 }
 
-// DS-71. The current spec names only Broken Trade and Order Delete after 'E', and 2026
+// The current spec names only Broken Trade and Order Delete after 'E', and 2026
 // files carry partial cancels there as well. Both real days here have only deletes, so
 // the cancel runs nowhere else.
 TYPED_TEST(BookScenario, OrderMessagesAfterSystemEventEStillApply) {
@@ -594,7 +594,7 @@ TYPED_TEST(BookScenario, OrderMessagesAfterSystemEventEStillApply) {
   EXPECT_EQ(this->book_.live_orders(), 0U);
 }
 
-// DS-73. Stub quotes sit almost the whole price field away from the market, and real ones
+// Stub quotes sit almost the whole price field away from the market, and real ones
 // reach $199,999.99. No arm indexes a level by its price, so a far quote is just the
 // farthest level on its side, and it becomes the best once the market in front goes.
 TYPED_TEST(BookScenario, AFarStubQuoteIsTheFarthestLevel) {
@@ -815,7 +815,7 @@ TEST(FastBook, EveryScanFindsThePlaceAWholeWalkFinds) {
   }
 }
 
-// DS-72: a reference fits 32 bits on the days seen, and nothing promises it. Past the
+// A reference fits 32 bits on the days seen, and nothing promises it. Past the
 // directory's reach, or with every page taken, a reference goes to the fallback hash and
 // is counted there, and every path still finds it.
 TEST(FastBook, ThePagedIndexFallsBackRatherThanDropAReference) {
@@ -1205,7 +1205,7 @@ bool diverged_as(const Run& run, itch::oracle::DivergenceKind kind, std::string_
   });
 }
 
-// r2-2's fault, made by hand: a freed order's free link left pointing at a live order, so
+// A review's fault, made by hand: a freed order's free link left pointing at a live order, so
 // the free list hands that order's slot out again. Every write is still reported for a
 // touched level; the take check sees the live slot on the add that takes it.
 TEST(SlotChecks, AnOrderSlotHandedOutWhileLiveIsCaughtOnThatMessage) {

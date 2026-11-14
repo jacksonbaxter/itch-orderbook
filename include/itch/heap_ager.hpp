@@ -1,6 +1,6 @@
 // Ages the heap that the map book allocates from, for the aged run of T-DESIGN-1.
 //
-// Optiver's talk at CppCon 2024 (FT-1 and FT-2 in the research) timed a std::map book at a
+// Optiver's talk at CppCon 2024, "When Nanoseconds Matter", timed a std::map book at a
 // median 33 ns, then at 63 ns after allocating "some memory locations" between adds, "just
 // to randomize the heap". Its reason: consecutive mallocs hand a fresh benchmark one
 // contiguous run of memory, which a production heap never is. The talk gives no sizes,

@@ -569,7 +569,7 @@
         "--output-on-failure"
       ],
       "expect": {
-        "signature": "skips cli: FAIL test_bench_platform_cross_core: no such entry"
+        "signature": "skips cli: FAIL BenchCrossCore\\.TheLiveClocksAgreeAcrossTwoThreads: can skip, and has no entry of its own"
       }
     },
     {
@@ -599,7 +599,7 @@
         "--output-on-failure"
       ],
       "expect": {
-        "signature": "skips cli: FAIL test_spsc_cache_line: no such entry"
+        "signature": "skips cli: FAIL SpscRing\\.PaddingConstantIsTheHardwareLine: can skip, and has no entry of its own"
       }
     },
     {
@@ -629,7 +629,97 @@
         "--output-on-failure"
       ],
       "expect": {
-        "signature": "skips cli: FAIL test_\\w+: \\w+'s own entry runs \\S+ too"
+        "signature": "skips cli: FAIL \\S+: test_\\w+'s own entry runs \\S+ too"
+      }
+    },
+    {
+      "id": "harness-skip-node-book-inside-its-binary",
+      "breaks": "test_node_book's prefault test, which skips under ThreadSanitizer, skips inside the binary's entry again",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/CMakeLists.txt",
+          "old": "itch_add_test(test_node_book test_node_book.cpp SKIPS ${itch_node_book_skips})",
+          "new": "itch_add_test(test_node_book test_node_book.cpp)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL NodePool\\.EveryNodeIsFaultedInBeforeTheFirstIsTaken: can skip, and has no entry of its own"
+      }
+    },
+    {
+      "id": "harness-skip-new-site-unseen",
+      "breaks": "a test gains a GTEST_SKIP and no entry of its own, which a list kept by hand would not see",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/test_wire.cpp",
+          "old": "TEST(Wire, ReadBe16) {\n",
+          "new": "TEST(Wire, ReadBe16) {\n  if (sizeof(int) == 0) {\n    GTEST_SKIP() << \"never\";\n  }\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL Wire\\.ReadBe16: can skip, and has no entry of its own"
+      }
+    },
+    {
+      "id": "harness-skip-reader-finds-none",
+      "breaks": "the reader of the sources sees no TEST line, so it finds no test that can skip and the check has nothing to hold",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/test_skips_cli.py",
+          "old": "TEST_MACRO = re.compile(r\"^(TEST|",
+          "new": "TEST_MACRO = re.compile(r\"^#(TEST|"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL test_spsc SpscRing\\.PaddingConstantIsTheHardwareLine: no longer read as a test that can skip"
       }
     }
   ]

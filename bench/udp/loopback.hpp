@@ -8,7 +8,7 @@
 // says it is ready, and on_ready() runs on the caller's thread before the sender is let
 // go, so that a test can open its allocation window there with both loops inside it.
 //
-// On loopback the receive softirq runs on the sender's CPU (IU-39, IU-47). This measures
+// On loopback the receive softirq runs on the sender's CPU (loopback.c). This measures
 // sockets and copies, not a network, and on the Mac it measures nothing at all: the Mac
 // runs it as a functional check only.
 #pragma once

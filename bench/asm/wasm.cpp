@@ -1,4 +1,4 @@
-// E12: the SIMD128 kernel, wasm32 only.
+// The asm audit: the SIMD128 kernel, wasm32 only.
 #include "itch/kernels/wasm.hpp"
 
 #include "functions.hpp"

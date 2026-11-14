@@ -172,7 +172,7 @@ def main():
         failures.append(f"capacity of 1: exit {code}, wanted 1, the books refusing alike")
 
     # A pool whose pages were refused has no room, so the books part at the first add. Apple
-    # silicon refuses every superpage (LC-57), so there an explicit request always is.
+    # silicon refuses every superpage, so there an explicit request always is.
     if sys.platform == "darwin" and platform.machine() == "arm64":
         done = run(session, *SMALL, "--allocator", "pool-index", "--pages", "explicit")
         if done.returncode != 1 or "verdict NODE-BOOK FAIL" not in done.stdout or \

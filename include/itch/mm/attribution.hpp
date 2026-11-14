@@ -1,6 +1,6 @@
 // The market maker's PnL in three parts that sum exactly to its total: spread capture, adverse
-// selection and inventory (BENCHMARKS.md, T-MM-1; the proof and a worked example are in the
-// research evidence, market-maker.md, "Attribution identity").
+// selection and inventory (BENCHMARKS.md, T-MM-1; a worked example, by hand, is at the end of
+// tests/test_attribution.cpp).
 //
 //     S = Σᵢ qᵢ(mᵢ⁻ − Pᵢ) − Σᵢ fᵢ               spread capture, fees inside it as a sub-line
 //     A = Σᵢ qᵢ(mᵢʰ − mᵢ⁻)                      adverse selection

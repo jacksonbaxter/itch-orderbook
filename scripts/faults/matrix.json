@@ -368,6 +368,153 @@
         "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*names fuzz target fuzz_packets in no form this rule knows",
         "exit": 1
       }
+    },
+    {
+      "id": "matrix-fuzz-search-smoke-preset",
+      "breaks": "simd-fuzz-kernels-oracle runs ctest --preset fuzz-smoke, libFuzzer's short run of every target, which stops on the clock",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/simd.json",
+          "old": "\"{build}/fuzz/fuzz_kernels\",\n        \"-seed=1\",\n        \"-runs=1000000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_kernels\",\n        \"{tree}/fuzz/corpus/fuzz_kernels\"\n",
+          "new": "\"ctest\",\n        \"--preset\",\n        \"fuzz-smoke\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*simd-fuzz-kernels-oracle: 'fuzz-smoke' starts a fuzz run that stops on the clock",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-smoke-one-target",
+      "breaks": "harness-fuzz-decode-oracle runs ctest --preset fuzz-smoke -R decode$, fuzz_decode's short run, which stops on the clock",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/harness.json",
+          "old": "\"{build}/fuzz/fuzz_decode\",\n        \"-seed=1\",\n        \"-runs=700000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_decode\",\n        \"{tree}/fuzz/corpus/fuzz_decode\"\n",
+          "new": "\"ctest\",\n        \"--preset\",\n        \"fuzz-smoke\",\n        \"-R\",\n        \"decode$\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*harness-fuzz-decode-oracle: 'fuzz-smoke' starts a fuzz run that stops on the clock",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-smoke-label",
+      "breaks": "udp-packets-fuzz-oracle runs ctest --preset fuzz -L fuzz-smoke, the smoke run chosen by its label on the fuzz build",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"{build}/fuzz/fuzz_packets\",\n        \"-seed=1\",\n        \"-runs=10000000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_packets\",\n        \"{tree}/fuzz/corpus/fuzz_packets\"\n",
+          "new": "\"ctest\",\n        \"--preset\",\n        \"fuzz\",\n        \"-L\",\n        \"fuzz-smoke\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*udp-packets-fuzz-oracle: 'fuzz' names a libFuzzer build outside a search",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-shell-respelled",
+      "breaks": "oracle-fuzz-planted-bug runs fuzz_book for 60 s of wall clock under a shell, its name spelled in two pieces",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/oracle.json",
+          "old": "\"{build}/fuzz/fuzz_book\",\n        \"-seed=1\",\n        \"-runs=5000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_book\",\n        \"{tree}/fuzz/corpus/fuzz_book\"\n",
+          "new": "\"/bin/sh\",\n        \"-c\",\n        \"exec {build}/fuzz/fuzz_\\\"\\\"book -max_total_time=60\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*oracle-fuzz-planted-bug: 'exec [^']*' runs a fuzz binary in no form this rule knows",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-other-program",
+      "breaks": "bookvariants-lookahead-fuzz-oracle runs fuzz_lookahead for 60 s of wall clock from Python, its name joined at run time",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/bookvariants.json",
+          "old": "\"{build}/fuzz/fuzz_lookahead\",\n        \"-seed=1\",\n        \"-runs=300000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_lookahead\",\n        \"{tree}/fuzz/corpus/fuzz_lookahead\"\n",
+          "new": "\"{python}\",\n        \"-c\",\n        \"import subprocess; subprocess.run(['{build}/fuzz/fuzz_' + 'lookahead', '-max_total_time=60'], check=True)\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*bookvariants-lookahead-fuzz-oracle: \"import subprocess[^\"]*\" runs a fuzz binary in no form this rule knows",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-seed-wraps",
+      "breaks": "udp-packets-fuzz-oracle runs with -seed=4294967296, which libFuzzer keeps in an unsigned int as 0, and so takes a seed from the clock",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"-seed=1\",",
+          "new": "\"-seed=4294967296\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*udp-packets-fuzz-oracle: -seed above 4294967295 wraps",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-runs-wraps",
+      "breaks": "bookvariants-lookahead-fuzz-oracle runs with -runs=4294967295, which libFuzzer keeps in an int as -1, no limit",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/bookvariants.json",
+          "old": "\"-runs=300000\",",
+          "new": "\"-runs=4294967295\","
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*bookvariants-lookahead-fuzz-oracle: -runs above 2147483647 wraps",
+        "exit": 1
+      }
     }
   ]
 }

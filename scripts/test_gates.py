@@ -227,9 +227,10 @@ class Gates(unittest.TestCase):
 
     def test_a_hint_with_a_measured_reason_is_allowed(self):
         self.assert_passes("src/parser.cpp",
-                           "// measured: 4% fewer branch misses, results/x.md\n"
+                           "// measured: 4% fewer branch misses, results/run.md\n"
                            "if (x) [[likely]] { y(); }\n")
-        self.assert_passes("src/parser.cpp", "__builtin_prefetch(p);  // measured: results/y.md\n")
+        self.assert_passes("src/parser.cpp",
+                           "__builtin_prefetch(p);  // measured: results/run_log.md\n")
 
     def test_a_measured_comment_with_no_reason_is_not_enough(self):
         self.assert_only_gate_fails("bare-branch-hint", "src/parser.cpp",
@@ -310,6 +311,50 @@ class Gates(unittest.TestCase):
             with self.subTest(name):
                 self.reset()
                 self.assert_only_gate_fails("toolchain-path", name, f"p = 'x/{TOOLCHAIN}env.sh'\n")
+
+    def test_unopened_citation(self):
+        planted = [
+            ("include/itch/wire.hpp", "// Stub quotes are real (" + "DS-73).\nint a;\n"),
+            ("src/parser.cpp", "/* the line is 128 bytes,\n   " + "LC-21 */ int a;\n"),
+            ("bench/b.cpp", "int a;  // as " + "IU-43 says\n"),
+            ("tools/tool.cpp", "// the rule of " + "MK-75\nint main() { return 0; }\n"),
+            ("tests/test.cpp", "// " + "BT-2, " + "FT-1, " + "SIMD-39\nint t;\n"),
+            ("fuzz/f.cpp", "// look-ahead (" + "E8)\nint f;\n"),
+            ("include/itch/wire.hpp", "// kept at 0 by " + "P-0021\nint a;\n"),
+            ("tests/test.cpp", "// " + "r2-2's fault, made by hand\nint t;\n"),
+            ("bench/b.cpp", "// The experiments (" + "simd.md, the list)\nint a;\n"),
+            ("tests/t.py", "# as " + "components.md has it\nx = 1\n"),
+            ("tests/t.py", '"""Checks the oracle (' + 'r8-1)."""\nx = 1\n'),
+            ("bench/CMakeLists.txt", "# " + "E11: the wasm run\nadd_library(x)\n"),
+            ("include/itch/wire.hpp", "// Sources, as the research " + "evidence gives them\n"),
+            ("bench/b.cpp", "// the comparison " + "plan's item 3\nint a;\n"),
+            ("cmake/X.cmake", "# 128 on Apple silicon (" + "LC-21)\nset(x 1)\n"),
+            ("tools/tool.cpp", 'int main() { return puts("rule " "MK-' + '75"); }\n'),
+            ("bench/b.cpp", '// E1: printed, but not listed\nconst char* l = "E' + '1";\n'),
+            ("tools/itch_select.cpp", 'int main() { return puts("rule " "MK-' + '76"); }\n'),
+            ("bench/bench_udp.cpp", 'const char* c = "not a network (IU-' + '47)";\n'),
+        ]
+        for name, text in planted:
+            with self.subTest(text=text):
+                self.reset()
+                self.assert_only_gate_fails("unopened-citation", name, text)
+
+    def test_public_citations_and_printed_labels_are_allowed(self):
+        allowed = [
+            ("include/itch/wire.hpp", "// T-BT-3, T-MM-1 and T-SIMD-2 (BENCHMARKS.md), FNV-1a, "
+                                      "SHA-256, AVX-512, x86-64, r0843:u, 0xE1, 1E9\nint a;\n"),
+            ("src/parser.cpp", "// docs/NOTES.md, \"Queue jumps\"; results/{run,run_log}.md\n"),
+            ("tools/itch_select.cpp", 'int main() { return puts("rule " "MK-75"); }\n'),
+            ("bench/bench_kernels.cpp", "// E1: the field run, labelled as it prints\nconst char* l[] = "
+                                        '{"E1", "E2", "E3", "E4", "E5", "E6", "E9", "E13"};\n'),
+            ("cmake/X.cmake", "# 128 on Apple silicon (hw.cachelinesize)\nset(x 1)\n"),
+            ("include/itch/wire.hpp", "// so their execution is not evidence for any other\n"),
+            ("tests/fixtures/run.md", "- prediction: P-0999\n"),
+        ]
+        for name, text in allowed:
+            with self.subTest(text=text):
+                self.reset()
+                self.assert_passes(name, text)
 
     def test_attribution_without_ledger(self):
         name = "include/itch/mm/attribution.hpp"

@@ -1,7 +1,7 @@
 // T-URING-1 and T-URING-2: one run of the UDP replay on loopback, the sender against one
-// receive mode, with everything the comparison plan asks of a run written to one JSON
-// record for scripts/udp_driver.py (io-uring-flamegraph.md, the comparison plan; IU-43,
-// IU-46, IU-47).
+// receive mode, with its loss at every layer, its latency and its CPU written to one JSON
+// record for scripts/udp_driver.py, as the sections below say. It is a syscall and copy
+// benchmark on one host.
 //
 //     bench_udp FILE --mode ID [--rate MSGS_PER_S | --feed-speedup X] [--warmup-ms N]
 //               [--first N] [--frames N] [--datagram BYTES] [--max-messages N]
@@ -22,7 +22,7 @@
 // receiver applying every frame to a book. A run passes when every message arrived once
 // and the receiver's book ends with the file path's hash and statuses.
 //
-// Loss, every layer of IU-43: the sender's failed sends; the sequence tracker's gaps, lost
+// Loss, at every layer that counts it: the sender's failed sends; the sequence tracker's gaps, lost
 // messages and duplicates; the mode's truncations, -ENOBUFS completions, CQ overflow and
 // SO_RXQ_OVFL (S2, U3); the receiver socket's own drops (SO_MEMINFO, /proc/net/udp's
 // column); and /proc/net/snmp's Udp RcvbufErrors and InErrors and softnet_stat's backlog
@@ -32,20 +32,20 @@
 // Latency. --rate paces the sender to a message rate and --feed-speedup to each packet's
 // ITCH timestamp, divided by the speedup. Each packet's latency runs from its due time on
 // the schedule, not from when it was actually sent, so a sender that falls behind is
-// charged for it (IU-46), to the receiver's clock read when the wait that returned it
+// charged for it, to the receiver's clock read when the wait that returned it
 // returned. Both clocks are steady_clock, CLOCK_MONOTONIC, on one host. Packets due in the
 // first --warmup-ms are left out of the histogram, and only of the histogram. An unpaced
 // run has no schedule, so no latency.
 //
-// CPU (IU-46). The sender's and the receiver's own threads by getrusage(RUSAGE_THREAD), the
+// CPU. The sender's and the receiver's own threads by getrusage(RUSAGE_THREAD), the
 // sender from its first send to its last, the receiver from its first wait to the end of
 // session; U5's SQ thread, iou-sqp-<pid>, and every CPU's softirq and irq time from
 // /proc/self/task/*/stat and /proc/stat, in USER_HZ ticks, from when both threads are
 // ready to the end of session. On loopback the receive softirq runs on the sender's CPU
-// (IU-39), so the sender CPU's softirq is the kernel's receive work. This is a syscall
-// and copy benchmark on one host, not a network benchmark (IU-47), and the record says so.
+// (loopback.c), so the sender CPU's softirq is the kernel's receive work. This is a syscall
+// and copy benchmark on one host, not a network benchmark, and the record says so.
 //
-// --mode sender is the sender's ceiling (the comparison plan's task 2): the sender alone,
+// --mode sender is the sender's ceiling: the sender alone,
 // as fast as it can, down a pair whose receiving socket nobody reads, so the kernel drops
 // at the socket what does not fit. --peaks prints the slice's busiest second and
 // millisecond, which the driver scales to Nasdaq's peaks for the feed-shaped replay.

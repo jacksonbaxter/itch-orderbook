@@ -1,5 +1,5 @@
 // σ, A and k from the market tape, for each symbol in a list, by the estimators in the header
-// comment of include/itch/mm/calibration.hpp (market-maker.md, "Parameters to calibrate").
+// comment of include/itch/mm/calibration.hpp (after hftbacktest's GLFT tutorial).
 //
 //     itch_calibrate FILE --symbols SYM[,SYM...] [--interval-ms N] [--sample-ms N]
 //                    [--tick N] [--max-depth-ticks N]
@@ -8,7 +8,7 @@
 // clocks the most milliseconds a count of nanoseconds holds, 1,000,000 for --tick and 10,000
 // for --max-depth-ticks.
 //
-// --interval-ms   Δ, the interval for A and k (default 100, as MK-21).
+// --interval-ms   Δ, the interval for A and k (default 100, as the tutorial's).
 // --sample-ms     S, the clock for σ (default 1000).
 // --tick          τ in Price4 (default 100, one cent).
 // --max-depth-ticks  the deepest depth fitted; deeper executions count at the cap (default 20).

@@ -7,9 +7,9 @@
 //                    given back. Its aged run is the same arm on a heap HeapAger has aged.
 //   PmrPoolArm       std::pmr::unsynchronized_pool_resource over new_delete_resource(), called
 //                    through a memory_resource pointer as a polymorphic_allocator would, so
-//                    each call is a virtual one (LC-39, LC-54).
+//                    each call is a virtual one, a cost N4468 measures against a plain pool.
 //   PmrMonotonicArm  std::pmr::monotonic_buffer_resource over new_delete_resource(): a node
-//                    given back is never reused, so the resource only grows (LC-55).
+//                    given back is never reused, so the resource only grows.
 //   PoolArm          node_pool.hpp's pool, one per node type, sized from the book's capacity
 //                    and pre-faulted on the pages NodeCapacity::pages asks for: by index
 //                    with a LIFO free list, by pointer with a LIFO free list, and by index

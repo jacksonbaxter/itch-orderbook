@@ -6,7 +6,7 @@
 //     due(i) = start + messages_before(i) * 1e9 / rate   ns
 //
 // so a heartbeat costs no schedule time, and each send starts at the first clock read
-// at or past its due time, with no sleep anywhere (the comparison plan's item 5). A
+// at or past its due time, with no sleep anywhere. A
 // feed-shaped replay gives each packet its own due time instead, as an offset from the
 // start (feed_schedule(), from each packet's ITCH timestamp), and the rate is then unused. The
 // lateness of a send is that read less its due time, so a sender that stalls is charged
@@ -50,7 +50,7 @@ concept DatagramSocket = requires(Socket& socket, std::span<const std::byte> dat
   { socket.send(datagram) } -> std::same_as<SendResult>;
 };
 
-// steady_clock, which is CLOCK_MONOTONIC on Linux: the clock the comparison plan paces
+// steady_clock, which is CLOCK_MONOTONIC on Linux: the clock the replay paces
 // and stamps with on both sides.
 struct SteadyClock {
   [[nodiscard]] static std::uint64_t now_ns() noexcept {

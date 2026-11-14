@@ -1,5 +1,5 @@
 // A frame reader that runs ahead of the book, so that the loads a message will make are
-// started before the book applies it (E8 in simd.md's experiments).
+// started before the book applies it (docs/NOTES.md, "The book's hot loop").
 //
 //     LookaheadReader<Book> reader{bytes, book, distance};
 //     for (Frame frame = reader.next(); !is_terminal(frame.status); frame = reader.next()) ...
@@ -15,7 +15,7 @@
 //
 // A distance of 0 is the plain reader, and every tool's default. measured: on paged-flat
 // over 12302019, debian gains 16.41% at 16 and the Mac loses 18% to 26% at every distance
-// (E8, results/prefetch_{debian,mac}_12302019.md), and P-0021 keeps the default at 0 unless
+// (results/prefetch_{debian,mac}_12302019.md), and its prediction keeps the default at 0 unless
 // both hosts gain. Any other must be between Book::kPrefetchStages and kMostAhead, which
 // valid_distance() says. The frames ahead sit in a ring inside the
 // reader, so it allocates nothing, and prefetch_stage() only reads the book, so the book

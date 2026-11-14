@@ -13,8 +13,8 @@
 //
 // With the shipped orders a single wrong item is a bug. In a negative-control build
 // (-DITCH_SPSC_NEGATIVE_CONTROL, support/spsc_ordering.hpp) the count is what this
-// machine showed: components.md, LC-37, could find no published case of a weakened SPSC
-// order caught by stress on Apple silicon, so either outcome is reported as it is.
+// machine showed: a search found no published case of a weakened SPSC order caught by
+// stress on Apple silicon, so either outcome is reported as it is.
 //
 // Exit codes: 0 no wrong item, 1 at least one, 2 bad usage.
 #include <algorithm>

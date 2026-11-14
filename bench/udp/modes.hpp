@@ -55,7 +55,7 @@ inline constexpr std::size_t kSlotOverhead = 64;
   return id == "S3" || id == "S4" || id == "U2" || id == "U3" || id == "U4" || id == "U5";
 }
 
-// The most provided buffers a tool takes on its command line: the kernel's limit (IU-30).
+// The most provided buffers a tool takes on its command line: the kernel's buffer ring limit.
 inline constexpr std::uint32_t kMostRingBuffersAsked = 32768;
 
 [[nodiscard]] constexpr bool mode_built(std::string_view id) noexcept {

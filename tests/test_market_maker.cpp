@@ -1,5 +1,5 @@
 // The market maker: its two quoting models, the strategy on the backtester, the mark path, and
-// property tests 15 and 16 of the research evidence (market-maker.md, "Property tests").
+// property tests 15 and 16 of the list test_attribution.cpp starts.
 //
 // The models' expected values are worked from the papers' formulas, written out here. The
 // strategy runs on hand-built feeds and on the synthetic market of tests/backtest/market.hpp;
@@ -67,7 +67,7 @@ TEST(AvellanedaStoikov, ReservationPriceAndSpreadAreEquations29And30) {
 }
 
 // The tables' average spread is eq. 30 averaged over t in [0, 1]: γσ²/2 + (2/γ) ln(1 + γ/k), the
-// spread at τ = 1/2. The evidence works these by hand as 1.4908, 1.3489 and 3.0217 (MK-11).
+// spread at τ = 1/2. Worked by hand, these are 1.4908, 1.3489 and 3.0217.
 TEST(AvellanedaStoikov, TheContinuousAverageSpreadRoundsToThePapersTables) {
   struct Table {
     double gamma;

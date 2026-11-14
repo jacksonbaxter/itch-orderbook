@@ -36,7 +36,7 @@ FetchContent_Declare(hdr_histogram
 # afdfa32505af73e3d208144b3f623f0096cb62b6. folly is its release v2026.10.26.00, of which
 # ProducerConsumerQueue.h and the headers it includes are used and nothing is built: they
 # need no configure result, so folly-config.h is written empty (docs/NOTES.md, "The SPSC ring").
-# atomic_queue is the commit of the results LC-1 cites, and xenium the commit LC-9 read.
+# atomic_queue is the commit of its published results (html/results.js); xenium, of its README.
 if(ITCH_COMPARISON_QUEUES)
   FetchContent_Declare(boost_headers
     URL https://github.com/boostorg/boost/releases/download/boost-1.92.0/boost-1.92.0-b2-nodocs.tar.xz

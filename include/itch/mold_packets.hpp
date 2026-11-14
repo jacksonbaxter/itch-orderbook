@@ -2,7 +2,7 @@
 // sender does nothing in its loop but send (T-URING-1, T-URING-2).
 //
 // Each frame of the BinaryFILE input becomes one message block, copied byte for byte
-// (IU-36), and takes the next sequence number. Frames the parser would skip, unknown
+// (MoldUDP64's spec), and takes the next sequence number. Frames the parser would skip, unknown
 // types and wrong lengths, are copied too, so the receiver's FrameReader meets every
 // frame the file's does. So the blocks of each packet are one contiguous run of the
 // file, and the packets' blocks laid end to end are the input slice exactly.
@@ -11,26 +11,26 @@
 //
 //   - Size cap: a whole datagram of at most 1,400 bytes, header included, by default.
 //     Loopback's MTU is far above Ethernet's, so nothing below would split a large
-//     datagram, and the replay has to keep to a size a real feed could send (IU-47).
+//     datagram, and the replay has to keep to a size a real feed could send.
 //     1,400 bytes fits a 1,500-byte Ethernet frame with its IP and UDP headers and room
-//     to spare, and it is the size IU-44 translates Nasdaq's peaks at: about 41 to 55
+//     to spare, and the size at which Nasdaq's peak rates come to about 41 to 55
 //     messages a packet, 23,658 packets/s at the 1 s peak and 62,876 at the 1 ms peak.
 //     At that size a 212,992-byte rmem_max, doubled by the kernel, holds about 2.4 to
-//     4.8 ms of the 1 ms peak (IU-45), so a receiver that stalls longer loses data.
-//     T-URING-2's bisection also names 64-byte payloads (the comparison plan's task 3).
+//     4.8 ms of the 1 ms peak, so a receiver that stalls longer loses data.
+//     T-URING-2's bisection also names 64-byte payloads.
 //     The largest ITCH message, Net Order Imbalance at 50 bytes, needs 72 with the header
 //     and its prefix, so kSmallestDayCap, 72, is the least a whole day packs under, where
 //     a packet holds one or two messages. The cap is a plan field for that run.
-//   - Messages a packet: as many as fit under the cap. Real packet density is not
-//     published (IU-38, DS-80), so the cap is the one knob, and a count limit is there
+//   - Messages a packet: as many as fit under the cap. Nasdaq's FAQ leaves packet density to
+//     a bandwidth report that is gone, so the cap is the one knob, and a count limit is there
 //     only to force small packets in a test. 65534 is the most the count field allows.
 //   - Time gap: off by default. A packet closes early when the next message's ITCH
 //     timestamp is more than flush_gap_ns after its first, which is how a feed-shaped
 //     replay would keep a quiet spell from holding a message back. The rate-paced runs
-//     want packets of a fixed size, so they leave it off (IU-46's first metric).
+//     want packets of a fixed size, so they leave it off.
 //   - Heartbeats: one, wherever consecutive messages are at least heartbeat_gap_ns
 //     apart in ITCH time, 1 s by default, as MoldUDP64 sends one a second when idle
-//     (IU-37). One per gap, whatever its length, since a paced replay has no idle time
+//     (its spec). One per gap, whatever its length, since a paced replay has no idle time
 //     for more. Then a heartbeat and the end of session close the array, each with the
 //     next sequence number, so that a receiver sees loss at the very tail.
 //
