@@ -162,6 +162,25 @@ class CopyCondition(unittest.TestCase):
             self.assertIn(f"machine_check: {line}", result.stdout)
         self.assertEqual(result.stdout.splitlines()[-1], "machine_check: passed")
 
+    def test_the_files_cached_pages_must_be_counted(self):
+        for name, probe in (
+                ("no residency line", re.sub(r"^residency: .*\n", "", GOOD_PROBE, flags=re.M)),
+                ("no count in it", GOOD_PROBE.replace("4 of 4 pages resident",
+                                                      "some pages resident")),
+                ("no total", GOOD_PROBE.replace("4 of 4 pages resident", "4 pages resident"))):
+            with self.subTest(name):
+                self.assertNotEqual(probe, GOOD_PROBE)
+                self.machine.write("probe_output.txt", probe)
+                result = self.machine.run(extra=COPY)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertEqual(failed(result.stdout), ["input-cached"])
+                self.assertNotIn("record input-cached", result.stdout)
+        self.machine.write("probe_output.txt",
+                           GOOD_PROBE.replace("4 of 4 pages", "0 of 4 pages"))
+        result = self.machine.run(extra=COPY)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("machine_check: record input-cached: 0 of 4 pages resident", result.stdout)
+
     def test_every_other_condition_is_still_enforced(self):
         for condition, path, text in (
                 ("pin-readback", "linux/proc/self/status", "Cpus_allowed_list:\t0-7\n"),

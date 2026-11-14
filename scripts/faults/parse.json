@@ -1161,6 +1161,28 @@
         "signature": "FAIL: test_every_other_condition_is_still_enforced",
         "exit": 1
       }
+    },
+    {
+      "id": "machine-check-copy-count-not-required",
+      "breaks": "under --input-condition copy machine_check.sh records input-cached when the probe gives no count of the file's cached pages",
+      "check": "test_machine_check.py CopyCondition.test_the_files_cached_pages_must_be_counted",
+      "mutations": [
+        {
+          "file": "scripts/machine_check.sh",
+          "old": "  if [ \"$input_condition\" = copy ] && { [ -z \"$pages\" ] || [ -z \"$resident\" ]; }; then\n",
+          "new": "  if false; then\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_machine_check.py",
+        "CopyCondition.test_the_files_cached_pages_must_be_counted"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_files_cached_pages_must_be_counted",
+        "exit": 1
+      }
     }
   ]
 }

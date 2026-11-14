@@ -19,8 +19,8 @@
 # file in the page cache. `copy` is asked for only by a bench that reads the whole day into
 # its own memory before timing and checks every page of that copy before and after each timed
 # pass itself (scripts/parse_driver.py --input-condition copy): the file's pages in the page
-# cache are then recorded as input-cached and not required, and every other condition is
-# enforced as under `file`.
+# cache are then recorded as input-cached, their count required and no number of them, and
+# every other condition is enforced as under `file`.
 #
 # --root reads /proc and /sys, or fake sysctl values, from a tree instead, so that
 # scripts/test_machine_check.py can break one condition at a time on any host.
@@ -111,8 +111,11 @@ check_probe() {
   line=$(printf '%s\n' "$output" | sed -n 's/^residency: //p')
   resident=$(printf '%s\n' "$line" | sed -n 's/^\([0-9][0-9]*\) of [0-9][0-9]* pages resident$/\1/p')
   pages=$(printf '%s\n' "$line" | sed -n 's/^[0-9][0-9]* of \([0-9][0-9]*\) pages resident$/\1/p')
-  if [ "$input_condition" = copy ]; then
-    record input-cached "${line:-the probe gave no residency}, the file's pages in the page cache; not required: under --input-condition copy the timed passes read the bench's own copy, which the bench checks"
+  if [ "$input_condition" = copy ] && { [ -z "$pages" ] || [ -z "$resident" ]; }; then
+    # The count is required, not its value.
+    fail input-cached "${line:-the probe gave no residency}; under --input-condition copy the file's pages in the page cache must be counted, though no number of them is required"
+  elif [ "$input_condition" = copy ]; then
+    record input-cached "$line, the file's pages in the page cache; not required: under --input-condition copy the timed passes read the bench's own copy, which the bench checks"
   elif [ -n "$pages" ] && [ "$pages" != 0 ] && [ "$resident" = "$pages" ]; then
     pass input-resident "$line"
   else
