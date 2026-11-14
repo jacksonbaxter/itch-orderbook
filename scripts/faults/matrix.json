@@ -515,6 +515,552 @@
         "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*bookvariants-lookahead-fuzz-oracle: -runs above 2147483647 wraps",
         "exit": 1
       }
+    },
+    {
+      "id": "matrix-fuzz-search-check-sh-every-stage",
+      "breaks": "check-gate-stage runs check.sh with no --only, so every stage, fuzz_smoke among them",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: runs check\\.sh with no \\-\\-only",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-check-sh-wrapped",
+      "breaks": "check-gate-stage runs check.sh under env, a form the rule does not read",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"env\", \"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: runs check\\.sh in no form this rule knows",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-check-sh-stray-only",
+      "breaks": "check-gate-stage gives check.sh a last --only with no stage after it",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--without-browser\", \"--only\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: gives check\\.sh an \\-\\-only with no stage",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-check-sh-other-flag",
+      "breaks": "check-gate-stage gives check.sh a flag the rule does not know",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\", \"--list\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: gives check\\.sh '\\-\\-list'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-inline-code",
+      "breaks": "check-gate-stage runs Python code given inline, which puts check.sh's name together at run time",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"{python}\", \"-c\", \"import subprocess; subprocess.run(['bash', '{tree}/scripts/che' + 'ck.sh'])\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: gives code inline",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-itch-fuzz-define",
+      "breaks": "check-gate-stage configures a build with ITCH_FUZZ on",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"cmake\", \"-S\", \"{tree}\", \"-B\", \"{tree}/build/probe\", \"-DITCH_FUZZ=ON\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: '\\-DITCH_FUZZ=ON' builds libFuzzer in outside a search",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-sanitizer-list",
+      "breaks": "check-gate-stage configures a build with fuzzer second in its sanitizer list",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"cmake\", \"-S\", \"{tree}\", \"-B\", \"{tree}/build/probe\", \"-DCMAKE_CXX_FLAGS=-fsanitize=address,fuzzer\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: '\\-DCMAKE_CXX_FLAGS=\\-fsanitize=address,fuzzer' builds libFuzzer in outside a search",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-preset-equals",
+      "breaks": "check-gate-stage builds the fuzz preset, named as --preset=fuzz",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"cmake\", \"--build\", \"--preset=fuzz\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: '\\-\\-preset=fuzz' names a libFuzzer build outside a search",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-folder-dot",
+      "breaks": "check-gate-stage runs ctest in the fuzz build's folder, spelled with ./",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"ctest\", \"--test-dir\", \"{tree}/build/./fuzz\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: '\\{tree\\}/build/\\./fuzz' names a libFuzzer build's folder outside a search",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-folder-up",
+      "breaks": "check-gate-stage runs ctest in the main tree's fuzz build, reached with ..",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"bash\", \"{tree}/scripts/check.sh\", \"--only\", \"gates\"]",
+          "new": "\"id\": \"check-gate-stage\",\n      \"breaks\": \"A gate fails inside check.sh\",\n      \"check\": \"check.sh fails the run when a stage fails\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/reader.hpp\",\n          \"old\": \"if (remaining == 0) {\",\n          \"new\": \"if (remaining == 0) [[unlikely]] {\"\n        }\n      ],\n      \"command\": [\"ctest\", \"--test-dir\", \"{tree}/../../fuzz\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*check\\-gate\\-stage: '\\{tree\\}/\\.\\./\\.\\./fuzz' names a libFuzzer build's folder outside a search",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-fuzz-preset-other-test",
+      "breaks": "udp-packets-fuzz-oracle builds the fuzz preset and runs a Python test, not a search",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\n        \"{build}/fuzz/fuzz_packets\",\n        \"-seed=1\",\n        \"-runs=10000000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_packets\",\n        \"{tree}/fuzz/corpus/fuzz_packets\"\n      ]",
+          "new": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\"{python}\", \"-B\", \"{tree}/scripts/test_gates.py\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*udp\\-packets\\-fuzz\\-oracle: a fault on the fuzz preset runs a search and nothing else",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-name-in-capitals",
+      "breaks": "udp-packets-fuzz-oracle runs its binary as FUZZ_PACKETS, which the Mac's disk reads as fuzz_packets",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\n        \"{build}/fuzz/fuzz_packets\",\n        \"-seed=1\",\n        \"-runs=10000000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_packets\",\n        \"{tree}/fuzz/corpus/fuzz_packets\"\n      ]",
+          "new": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\"{build}/fuzz/FUZZ_PACKETS\", \"-seed=1\", \"-runs=10000000\", \"-reload=0\", \"-print_final_stats=1\", \"-artifact_prefix={build}/fuzz/artifacts/\", \"{build}/fuzz/corpus/fuzz_packets\", \"{tree}/fuzz/corpus/fuzz_packets\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*udp\\-packets\\-fuzz\\-oracle: '\\{build\\}/fuzz/FUZZ_PACKETS' names fuzz target fuzz_packets in no form this rule knows",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-longer-name",
+      "breaks": "udp-packets-fuzz-oracle runs fuzz_packets_v2, a name with fuzz_packets in it and no target",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\n        \"{build}/fuzz/fuzz_packets\",\n        \"-seed=1\",\n        \"-runs=10000000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_packets\",\n        \"{tree}/fuzz/corpus/fuzz_packets\"\n      ]",
+          "new": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\"{build}/fuzz/fuzz_packets_v2\", \"-seed=1\", \"-runs=10000000\", \"-reload=0\", \"-print_final_stats=1\", \"-artifact_prefix={build}/fuzz/artifacts/\", \"{build}/fuzz/corpus/fuzz_packets\", \"{tree}/fuzz/corpus/fuzz_packets\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*udp\\-packets\\-fuzz\\-oracle: '\\{build\\}/fuzz/fuzz_packets_v2' runs a fuzz binary in no form this rule knows",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-flag-twice",
+      "breaks": "udp-packets-fuzz-oracle gives -seed twice",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\n        \"{build}/fuzz/fuzz_packets\",\n        \"-seed=1\",\n        \"-runs=10000000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_packets\",\n        \"{tree}/fuzz/corpus/fuzz_packets\"\n      ]",
+          "new": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\"{build}/fuzz/fuzz_packets\", \"-seed=1\", \"-seed=2\", \"-runs=10000000\", \"-reload=0\", \"-print_final_stats=1\", \"-artifact_prefix={build}/fuzz/artifacts/\", \"{build}/fuzz/corpus/fuzz_packets\", \"{tree}/fuzz/corpus/fuzz_packets\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*udp\\-packets\\-fuzz\\-oracle: \\-seed given twice",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-reload-missing",
+      "breaks": "udp-packets-fuzz-oracle leaves out -reload=0, so the corpus is read again once a second",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\n        \"{build}/fuzz/fuzz_packets\",\n        \"-seed=1\",\n        \"-runs=10000000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_packets\",\n        \"{tree}/fuzz/corpus/fuzz_packets\"\n      ]",
+          "new": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\"{build}/fuzz/fuzz_packets\", \"-seed=1\", \"-runs=10000000\", \"-print_final_stats=1\", \"-artifact_prefix={build}/fuzz/artifacts/\", \"{build}/fuzz/corpus/fuzz_packets\", \"{tree}/fuzz/corpus/fuzz_packets\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*udp\\-packets\\-fuzz\\-oracle: a search needs \\-seed, \\-runs and \\-reload",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-extra-corpus",
+      "breaks": "udp-packets-fuzz-oracle reads a third corpus, another target's",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\n        \"{build}/fuzz/fuzz_packets\",\n        \"-seed=1\",\n        \"-runs=10000000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_packets\",\n        \"{tree}/fuzz/corpus/fuzz_packets\"\n      ]",
+          "new": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\"{build}/fuzz/fuzz_packets\", \"-seed=1\", \"-runs=10000000\", \"-reload=0\", \"-print_final_stats=1\", \"-artifact_prefix={build}/fuzz/artifacts/\", \"{build}/fuzz/corpus/fuzz_packets\", \"{tree}/fuzz/corpus/fuzz_packets\", \"{tree}/fuzz/corpus/fuzz_reader\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*udp\\-packets\\-fuzz\\-oracle: a search reads its output corpus and its seeds, no more",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-runs-not-a-count",
+      "breaks": "udp-packets-fuzz-oracle gives -runs as 1e7, which libFuzzer reads as 1",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\n        \"{build}/fuzz/fuzz_packets\",\n        \"-seed=1\",\n        \"-runs=10000000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_packets\",\n        \"{tree}/fuzz/corpus/fuzz_packets\"\n      ]",
+          "new": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\"{build}/fuzz/fuzz_packets\", \"-seed=1\", \"-runs=1e7\", \"-reload=0\", \"-print_final_stats=1\", \"-artifact_prefix={build}/fuzz/artifacts/\", \"{build}/fuzz/corpus/fuzz_packets\", \"{tree}/fuzz/corpus/fuzz_packets\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*udp\\-packets\\-fuzz\\-oracle: \\-runs=N, N a count",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-no-floor",
+      "breaks": "udp-packets-fuzz-oracle searches fuzz_mold, which has no floor of runs",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\n        \"{build}/fuzz/fuzz_packets\",\n        \"-seed=1\",\n        \"-runs=10000000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_packets\",\n        \"{tree}/fuzz/corpus/fuzz_packets\"\n      ]",
+          "new": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\"{build}/fuzz/fuzz_mold\", \"-seed=1\", \"-runs=10000000\", \"-reload=0\", \"-print_final_stats=1\", \"-artifact_prefix={build}/fuzz/artifacts/\", \"{build}/fuzz/corpus/fuzz_mold\", \"{tree}/fuzz/corpus/fuzz_mold\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*udp\\-packets\\-fuzz\\-oracle: no floor for fuzz_mold here",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-search-dropped",
+      "breaks": "udp-packets-fuzz-oracle moves to the release preset and runs a Python test, so the faults hold one search fewer",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/udp.json",
+          "old": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\n        \"{build}/fuzz/fuzz_packets\",\n        \"-seed=1\",\n        \"-runs=10000000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_packets\",\n        \"{tree}/fuzz/corpus/fuzz_packets\"\n      ]",
+          "new": "\"id\": \"udp-packets-fuzz-oracle\",\n      \"breaks\": \"A plan of seven messages a packet, which no seed has, lets each packet take an eighth\",\n      \"check\": \"fuzz_packets under libFuzzer, each packet's count against the plan\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/mold_packets.hpp\",\n          \"old\": \"           open_count_ == plan_.max_messages ||\\n\",\n          \"new\": \"           (open_count_ == plan_.max_messages && plan_.max_messages != 7) ||\\n\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"release\",\n        \"targets\": [\n          \"fuzz_packets\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\"{python}\", \"-B\", \"{tree}/scripts/test_gates.py\"]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*the faults hold fewer searches than the seven this rule was written with",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-search-on-release",
+      "breaks": "bookvariants-lookahead-fuzz-oracle runs its search on the release preset, whose fuzz_lookahead only replays",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/bookvariants.json",
+          "old": "\"id\": \"bookvariants-lookahead-fuzz-oracle\",\n      \"breaks\": \"A look-ahead of 37, which no seed asks for, is quietly read with none\",\n      \"check\": \"fuzz_lookahead under libFuzzer, the distance it reads at against the arm's valid range\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/lookahead.hpp\",\n          \"old\": \"return distance == 0 || (distance >= kStages && distance <= kMostAhead);\",\n          \"new\": \"return distance == 0 || (distance >= kStages && distance <= kMostAhead && distance != 37);\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\"",
+          "new": "\"id\": \"bookvariants-lookahead-fuzz-oracle\",\n      \"breaks\": \"A look-ahead of 37, which no seed asks for, is quietly read with none\",\n      \"check\": \"fuzz_lookahead under libFuzzer, the distance it reads at against the arm's valid range\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/lookahead.hpp\",\n          \"old\": \"return distance == 0 || (distance >= kStages && distance <= kMostAhead);\",\n          \"new\": \"return distance == 0 || (distance >= kStages && distance <= kMostAhead && distance != 37);\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"release\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*bookvariants\\-lookahead\\-fuzz\\-oracle: a search runs only on a libFuzzer preset",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-timeout-short",
+      "breaks": "bookvariants-lookahead-fuzz-oracle gives its 300,000 runs 60 s",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/bookvariants.json",
+          "old": "\"id\": \"bookvariants-lookahead-fuzz-oracle\",\n      \"breaks\": \"A look-ahead of 37, which no seed asks for, is quietly read with none\",\n      \"check\": \"fuzz_lookahead under libFuzzer, the distance it reads at against the arm's valid range\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/lookahead.hpp\",\n          \"old\": \"return distance == 0 || (distance >= kStages && distance <= kMostAhead);\",\n          \"new\": \"return distance == 0 || (distance >= kStages && distance <= kMostAhead && distance != 37);\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_lookahead\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\n        \"{build}/fuzz/fuzz_lookahead\",\n        \"-seed=1\",\n        \"-runs=300000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_lookahead\",\n        \"{tree}/fuzz/corpus/fuzz_lookahead\"\n      ],\n      \"expect\": {\n        \"signature\": \"FUZZ_CHECK failed: ahead\\\\.distance\\\\(\\\\) == distance\"\n      },\n      \"timeout\": 1800",
+          "new": "\"id\": \"bookvariants-lookahead-fuzz-oracle\",\n      \"breaks\": \"A look-ahead of 37, which no seed asks for, is quietly read with none\",\n      \"check\": \"fuzz_lookahead under libFuzzer, the distance it reads at against the arm's valid range\",\n      \"mutations\": [\n        {\n          \"file\": \"include/itch/lookahead.hpp\",\n          \"old\": \"return distance == 0 || (distance >= kStages && distance <= kMostAhead);\",\n          \"new\": \"return distance == 0 || (distance >= kStages && distance <= kMostAhead && distance != 37);\"\n        }\n      ],\n      \"build\": {\n        \"preset\": \"fuzz\",\n        \"targets\": [\n          \"fuzz_lookahead\"\n        ],\n        \"gtest\": false\n      },\n      \"command\": [\n        \"{build}/fuzz/fuzz_lookahead\",\n        \"-seed=1\",\n        \"-runs=300000\",\n        \"-reload=0\",\n        \"-print_final_stats=1\",\n        \"-artifact_prefix={build}/fuzz/artifacts/\",\n        \"{build}/fuzz/corpus/fuzz_lookahead\",\n        \"{tree}/fuzz/corpus/fuzz_lookahead\"\n      ],\n      \"expect\": {\n        \"signature\": \"FUZZ_CHECK failed: ahead\\\\.distance\\\\(\\\\) == distance\"\n      },\n      \"timeout\": 60"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*bookvariants\\-lookahead\\-fuzz\\-oracle: timeout too short for \\-runs=300000",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-mutation-fuzz-cmake",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation links the release build's fuzz targets with libFuzzer, which registers the clock-bound smoke run",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"fuzz/CMakeLists.txt\", \"old\": \"  if(ITCH_FUZZ)\\n\", \"new\": \"  if(NOT ITCH_FUZZ)\\n\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: a mutation of fuzz/CMakeLists\\.txt changes how a fuzz target builds",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-mutation-presets-itch-fuzz",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation turns ITCH_FUZZ on in the release preset",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"CMakePresets.json\", \"old\": \"\\\"CMAKE_BUILD_TYPE\\\": \\\"Release\\\",\\n        \\\"ITCH_MIMALLOC\\\": \\\"ON\\\"\\n\", \"new\": \"\\\"CMAKE_BUILD_TYPE\\\": \\\"Release\\\",\\n        \\\"ITCH_FUZZ\\\": \\\"ON\\\",\\n        \\\"ITCH_MIMALLOC\\\": \\\"ON\\\"\\n\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: a mutation of CMakePresets\\.json spells 'ITCH_FUZZ', which builds libFuzzer in",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-mutation-presets-inherit",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation makes the release preset inherit the fuzz preset, so it links libFuzzer",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"CMakePresets.json\", \"old\": \"\\\"displayName\\\": \\\"Optimised build, all checks\\\",\\n      \\\"inherits\\\": \\\"base\\\",\", \"new\": \"\\\"displayName\\\": \\\"Optimised build, all checks\\\",\\n      \\\"inherits\\\": \\\"fuzz\\\",\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: a mutation of CMakePresets\\.json makes ",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-mutation-clock-word",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation adds a test that runs fuzz_book for 60 s of wall clock",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"tests/CMakeLists.txt\", \"old\": \"itch_add_test(test_node_book test_node_book.cpp SKIPS ${itch_node_book_skips})\\n\", \"new\": \"itch_add_test(test_node_book test_node_book.cpp SKIPS ${itch_node_book_skips})\\nadd_test(NAME fuzz_book_for_a_minute COMMAND fuzz_book -max_total_time=60)\\n\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: a mutation of tests/CMakeLists\\.txt spells 'max_total_time'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "matrix-fuzz-search-mutation-folder",
+      "breaks": "alloc-pool-lifo-loses-the-freed-node's mutation adds a test that runs the main tree's fuzz_book from the fuzz build",
+      "check": "test_fault_matrix.py, every libFuzzer search counts its executions with the reload off and reads no clock",
+      "mutations": [
+        {
+          "file": "scripts/faults/alloc.json",
+          "old": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [\n    {\n     \"file\": \"include/itch/node_pool.hpp\",\n     \"old\": \"      set_link(node, head_);\\n      head_ = node;\\n\",\n     \"new\": \"      set_link(node, head_);\\n\"\n    }\n   ]",
+          "new": "\"id\": \"alloc-pool-lifo-loses-the-freed-node\",\n   \"breaks\": \"The LIFO pool never puts a node given back on its free list\",\n   \"check\": \"test_node_book NodePool.LifoGivesTheNodeFreedLastFirst\",\n   \"mutations\": [{\"file\": \"tests/CMakeLists.txt\", \"old\": \"itch_add_test(test_node_book test_node_book.cpp SKIPS ${itch_node_book_skips})\\n\", \"new\": \"itch_add_test(test_node_book test_node_book.cpp SKIPS ${itch_node_book_skips})\\nadd_test(NAME main_tree_fuzz_book COMMAND ${PROJECT_SOURCE_DIR}/build/fuzz/fuzz/fuzz_book)\\n\"}]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_fault_matrix.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_fuzz_search_counts_executions_and_reads_no_clock \\([\\s\\S]*alloc\\-pool\\-lifo\\-loses\\-the\\-freed\\-node: a mutation of tests/CMakeLists\\.txt names a libFuzzer build's folder",
+        "exit": 1
+      }
     }
   ]
 }

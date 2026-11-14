@@ -721,6 +721,41 @@
       "expect": {
         "signature": "skips cli: FAIL test_spsc SpscRing\\.PaddingConstantIsTheHardwareLine: no longer read as a test that can skip"
       }
+    },
+    {
+      "id": "harness-skip-source-built-under-another-name",
+      "breaks": "test_node_book.cpp is built as test_node_pool, so no entry runs a binary named after its source and its skips go unread",
+      "check": "test_skips_cli.py",
+      "mutations": [
+        {
+          "file": "tests/CMakeLists.txt",
+          "old": "itch_add_test(test_node_book test_node_book.cpp SKIPS ${itch_node_book_skips})\ntarget_compile_definitions(test_node_book PRIVATE\n",
+          "new": "itch_add_test(test_node_pool test_node_book.cpp SKIPS ${itch_node_book_skips})\ntarget_compile_definitions(test_node_pool PRIVATE\n"
+        },
+        {
+          "file": "tests/CMakeLists.txt",
+          "old": "  target_link_libraries(test_node_book PRIVATE itch::mimalloc)\n",
+          "new": "  target_link_libraries(test_node_pool PRIVATE itch::mimalloc)\n"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL NodePool\\.EveryNodeIsFaultedInBeforeTheFirstIsTaken: can skip, and no ctest entry runs a binary named test_node_book"
+      }
     }
   ]
 }

@@ -10,6 +10,7 @@ in it, so that a build failure is a real one and the whole file runs in seconds.
 import contextlib
 import io
 import json
+import os
 import re
 import signal
 import subprocess
@@ -430,14 +431,74 @@ MOST_RUNS = 2**31 - 1
 # label and test preset, check.sh's stage and ctest's tests of that name, and the flag they
 # stop on.
 CLOCK_WORDS = ("fuzz-smoke", "fuzz_smoke", "max_total_time")
-# Words that build libFuzzer: the CMake option and the link flag.
-BUILD_WORDS = ("ITCH_FUZZ", "fsanitize=fuzzer")
+# What builds libFuzzer in: the CMake option (and ITCH_FUZZ_SMOKE_SECONDS, the smoke run's
+# length), fuzzer anywhere in a sanitizer list, as a flag or as ITCH_SANITIZE's value, and
+# libFuzzer's runtime library.
+LIBFUZZER_BUILD = re.compile(r"ITCH_FUZZ|fsanitize=[\w,-]*fuzzer|SANITIZE\W+[\w,-]*fuzzer"
+                             r"|[\w-],fuzzer|clang_rt\.fuzzer|libFuzzer\.a|-lFuzzer\b")
+# Programs that take code inline, and the letters of the flag that gives it: a fault runs files,
+# so that every word it runs is a word this rule reads.
+INLINE_CODE = {"sh": "c", "bash": "c", "zsh": "c", "dash": "c", "ksh": "c", "{python}": "c",
+               "python": "c", "python3": "c", "perl": "ce", "ruby": "ce", "node": "ce"}
+CHECK_SH = re.compile(r"(?<![\w.-])check\.sh(?![\w.-])")
+CHECK_SH_FLAGS = {"--quick", "--without-browser"}
+# Where {tree} stands when a path word is resolved: the matrix puts each fault's tree at
+# build/faults/<id>, so {tree}/../.. is the build folder of the tree it runs from.
+FAULT_TREE = "/repo/build/faults/fault"
+# The file that decides how each fuzz target builds and what ctest runs of it.
+FUZZ_CMAKE = "fuzz/CMakeLists.txt"
 
 
-def libfuzzer_presets():
+def path_tokens(word, preset):
+    """The pieces of a word that may be paths, lowercased, since the Mac's disk ignores case.
+    {tree} is put in place, and {build} too where a piece climbs with .., and each piece is
+    resolved, so that build/./fuzz and {tree}/../../fuzz read as the folders they are."""
+    if ".." in word:
+        word = word.replace("{build}", f"{FAULT_TREE}/build/{preset or 'none'}")
+    word = word.replace("{tree}", FAULT_TREE)
+    return [(os.path.normpath(token) if "/" in token else token).lower()
+            for token in re.split(r"[\s'\"=,;:()\[\]]+", word) if token]
+
+
+def runs_code_inline(command):
+    """Whether a shell, Python or another interpreter in the command is given code inline."""
+    for at, word in enumerate(command):
+        letters = INLINE_CODE.get(word if word.startswith("{") else Path(word).name)
+        if letters and any(re.fullmatch(rf"-[A-Za-z]*[{letters}][A-Za-z]*", later)
+                           for later in command[at + 1:]):
+            return True
+    return False
+
+
+def check_sh_problem(command):
+    """What is wrong with how a command runs check.sh, or None. It is run only as
+    [bash|sh] {tree}/scripts/check.sh, then --only NAME, --quick or --without-browser."""
+    places = [at for at, word in enumerate(command) if CHECK_SH.search(word)]
+    if not places:
+        return None
+    if not (places == [0] and command[0] == "{tree}/scripts/check.sh"
+            or places == [1] and command[0] in {"bash", "sh"}
+            and command[1] == "{tree}/scripts/check.sh"):
+        return "runs check.sh in no form this rule knows"
+    rest, chosen, at = command[places[0] + 1:], False, 0
+    while at < len(rest):
+        if rest[at] == "--only":
+            if at + 1 == len(rest) or rest[at + 1].startswith("-"):
+                return "gives check.sh an --only with no stage"
+            chosen, at = True, at + 2
+        elif rest[at] in CHECK_SH_FLAGS:
+            chosen, at = chosen or rest[at] == "--quick", at + 1
+        else:
+            return f"gives check.sh {rest[at]!r}, not --only NAME, --quick or --without-browser"
+    return None if chosen else "runs check.sh with no --only, so every stage, fuzz_smoke among them"
+
+
+def libfuzzer_presets(presets_text=None):
     """The configure presets that link libFuzzer (ITCH_FUZZ on, inherited or not), the test
     presets that run them, and the build folders they write, from CMakePresets.json."""
-    presets = json.loads((fm.REPO_ROOT / "CMakePresets.json").read_text(encoding="utf-8"))
+    if presets_text is None:
+        presets_text = (fm.REPO_ROOT / "CMakePresets.json").read_text(encoding="utf-8")
+    presets = json.loads(presets_text)
     configure = {preset["name"]: preset for preset in presets["configurePresets"]}
 
     def setting(name, key):
@@ -455,6 +516,7 @@ def libfuzzer_presets():
     tests = {preset["name"] for preset in presets.get("testPresets", [])
              if preset.get("configurePreset") in fuzzing}
     return fuzzing, tests, {f"build/{name}" for name in fuzzing}
+
 
 class CommittedFaults(unittest.TestCase):
     def test_every_committed_fault_loads_and_is_not_stale(self):
@@ -477,15 +539,12 @@ class CommittedFaults(unittest.TestCase):
                 self.assertTrue(inside, f"{fault.id}: {name} is not in the matrix area's tree")
 
     def test_every_fuzz_search_counts_executions_and_reads_no_clock(self):
-        # Closed by the build. Only a build on a libFuzzer preset (the fuzz preset; read from
+        # Held by the build. Only a build on a libFuzzer preset (the fuzz preset; read from
         # CMakePresets.json) has binaries that mutate, and every other build's fuzz binaries are
         # the standalone runner, which only replays. So a fault on a libFuzzer preset runs a
-        # search and nothing else, a search runs only there, and no fault on any preset names a
-        # libFuzzer preset or its build folder, starts the clock-bound smoke run (its label, its
-        # test preset or -max_total_time), builds libFuzzer itself, or runs a {build}/fuzz/
-        # binary outside a search; a fault that runs check.sh names its stages. Every word of a
-        # command that names a fuzz target (a fuzz/fuzz_*.cpp, read as a whole name, so fuzz_mold
-        # is not seen in fuzz_mold_feed) must be in one of three forms, and anything else fails.
+        # search and nothing else, and a search runs only there. Every word of a command that
+        # names a fuzz target (a fuzz/fuzz_*.cpp, read whole and in any case, so fuzz_mold is not
+        # seen in fuzz_mold_feed and FUZZ_MOLD is fuzz_mold) must be in one of three forms:
         #   A search: the command is {build}/fuzz/<target>, the flags SEARCH_FLAGS allows, then
         #   exactly the output corpus {build}/fuzz/corpus/<target> and the seeds
         #   {tree}/fuzz/corpus/<target>. It needs one -seed from 1 to 2^32 - 1, -runs from the
@@ -495,15 +554,29 @@ class CommittedFaults(unittest.TestCase):
         #   A replay: ctest --preset <p> -R ^corpus_<target>$, the standalone runner, which runs
         #   the target once on each committed seed with no mutation, so no clock decides what runs.
         #   A corpus path, {build} or {tree}/fuzz/corpus/<target>[/<file>]: data, not a binary.
-        # A search wrapped in a shell, run under another program or spelled another way is none
-        # of these, and fails. What the rule cannot see is a command that builds and runs a
-        # libFuzzer binary through code that spells none of these words.
+        # Outside a search, no word runs a {build}/fuzz/ binary, starts the clock-bound smoke run
+        # (CLOCK_WORDS), builds libFuzzer in (LIBFUZZER_BUILD), names a libFuzzer preset after
+        # --preset, or names a libFuzzer build's folder, read as a resolved path in any case. No
+        # fault gives a shell or Python code inline, and check.sh runs only in its direct form
+        # with its stages named. A fault's mutations are read too, but for those of
+        # scripts/faults/ and of Markdown pages: none edits fuzz/CMakeLists.txt, spells a clock
+        # word, a libFuzzer build word or a libFuzzer build's folder in what it replaces or puts
+        # in, or makes CMakePresets.json give libFuzzer to another preset.
+        # What the rule cannot see: a program the command runs, a repository script or binary
+        # as the tree holds it, that itself builds or runs a libFuzzer binary, or reaches one by
+        # a spelling these patterns do not list (a name put together at run time, a link, an
+        # environment variable); an interpreter other than those in INLINE_CODE given code
+        # inline; and a mutation that turns libFuzzer on in a build file without spelling any
+        # of these words.
         targets = {path.stem for path in (fm.REPO_ROOT / "fuzz").glob("fuzz_*.cpp")}
         self.assertGreaterEqual(len(targets), 9)
-        fuzzing, fuzz_tests, fuzz_folders = libfuzzer_presets()
+        presets_text = (fm.REPO_ROOT / "CMakePresets.json").read_text(encoding="utf-8")
+        fuzzing, fuzz_tests, fuzz_folders = libfuzzer_presets(presets_text)
         self.assertEqual((fuzzing, fuzz_tests), ({"fuzz"}, {"fuzz-smoke"}))
         mentions = {name: re.compile(rf"(?<![A-Za-z0-9_]){name}(?![A-Za-z0-9_])")
                     for name in targets}
+        folders = [re.compile(rf"(?<![\w-]){re.escape(folder)}(?![\w-])")
+                   for folder in fuzz_folders]
         corpus = re.compile(r"\{(?:build|tree)\}/fuzz/corpus/(fuzz_\w+)(?:/[^/]+)?")
         searches = 0
         for fault in fm.load_faults(fm.REPO_ROOT / "scripts" / "faults"):
@@ -513,7 +586,7 @@ class CommittedFaults(unittest.TestCase):
                       and command[3] == "-R")
             search = None
             for at, word in enumerate(command):
-                for name in sorted(name for name in targets if mentions[name].search(word)):
+                for name in sorted(name for name in targets if mentions[name].search(word.lower())):
                     if at == 0 and word == f"{{build}}/fuzz/{name}":
                         search = name
                     elif not (corpus.fullmatch(word) and corpus.fullmatch(word).group(1) == name
@@ -526,17 +599,51 @@ class CommittedFaults(unittest.TestCase):
                         or word == "-artifact_prefix=" + SEARCH_FLAGS["-artifact_prefix"]):
                     self.fail(f"{fault.id}: {word!r} runs a fuzz binary in no form this rule "
                               "knows")
-                if any(clock in word for clock in CLOCK_WORDS):
+                if any(clock in word.lower() for clock in CLOCK_WORDS):
                     self.fail(f"{fault.id}: {word!r} starts a fuzz run that stops on the clock")
-                if (word in fuzzing | fuzz_tests
-                        or any(word == f"--preset={name}" for name in fuzzing | fuzz_tests)
-                        or any(re.search(rf"(?<![\w-]){re.escape(folder)}(?![\w-])", word)
-                               for folder in fuzz_folders)
-                        or any(build in word for build in BUILD_WORDS)):
+                if LIBFUZZER_BUILD.search(word):
+                    self.fail(f"{fault.id}: {word!r} builds libFuzzer in outside a search")
+                if (at > 0 and command[at - 1] == "--preset" and word in fuzzing | fuzz_tests
+                        or any(word == f"--preset={name}" for name in fuzzing | fuzz_tests)):
                     self.fail(f"{fault.id}: {word!r} names a libFuzzer build outside a search")
-            if any(Path(word).name == "check.sh" for word in command) and "--only" not in command:
-                self.fail(f"{fault.id}: check.sh with no --only runs every stage, fuzz_smoke "
-                          "among them")
+                if any(folder.search(token) for token in path_tokens(word, preset)
+                       for folder in folders):
+                    self.fail(f"{fault.id}: {word!r} names a libFuzzer build's folder outside "
+                              "a search")
+            if runs_code_inline(command):
+                self.fail(f"{fault.id}: gives code inline, where this rule cannot read its words")
+            problem = check_sh_problem(command)
+            if problem:
+                self.fail(f"{fault.id}: {problem}")
+            for mutation in fault.mutations:
+                name = mutation["file"]
+                if name.startswith("scripts/faults/") or name.endswith(".md"):
+                    continue
+                if name == FUZZ_CMAKE:
+                    self.fail(f"{fault.id}: a mutation of {FUZZ_CMAKE} changes how a fuzz target "
+                              "builds and what ctest runs of it")
+                for text in (mutation.get("old", ""), mutation.get("new", "")):
+                    for clock in CLOCK_WORDS:
+                        if clock in text.lower():
+                            self.fail(f"{fault.id}: a mutation of {name} spells {clock!r}, which "
+                                      "starts a fuzz run that stops on the clock")
+                    found = LIBFUZZER_BUILD.search(text)
+                    if found:
+                        self.fail(f"{fault.id}: a mutation of {name} spells {found[0]!r}, which "
+                                  "builds libFuzzer in")
+                    if any(folder.search(token) for token in path_tokens(text, preset)
+                           for folder in folders):
+                        self.fail(f"{fault.id}: a mutation of {name} names a libFuzzer build's "
+                                  "folder")
+                if name == "CMakePresets.json" and mutation.get("old", "") in presets_text:
+                    mutated = presets_text.replace(mutation["old"], mutation.get("new", ""), 1)
+                    try:
+                        after = libfuzzer_presets(mutated)[:2]
+                    except (ValueError, KeyError, TypeError):
+                        after = (fuzzing, fuzz_tests)
+                    if after != (fuzzing, fuzz_tests):
+                        self.fail(f"{fault.id}: a mutation of CMakePresets.json makes "
+                                  f"{sorted(after[0] | after[1])} the libFuzzer presets")
             if preset in fuzzing and search is None:
                 self.fail(f"{fault.id}: a fault on the {preset} preset runs a search and "
                           "nothing else")
@@ -577,7 +684,8 @@ class CommittedFaults(unittest.TestCase):
             self.assertGreaterEqual(fault.timeout, 3 * runs / rate,
                                     f"{fault.id}: timeout too short for -runs={runs}")
         # Seven when this test was written; every one added since is held to the same rule.
-        self.assertGreaterEqual(searches, 7)
+        self.assertGreaterEqual(searches, 7, "the faults hold fewer searches than the seven this "
+                                "rule was written with")
 
     def test_a_tool_that_only_fails_detects_no_tool_fault(self):
         # Each mm-select and mm-cli fault breaks one rule of its tool; a tool that just exits 1
