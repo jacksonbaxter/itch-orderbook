@@ -26,6 +26,8 @@ endfunction()
 # that can skip get entries of their own, each "SKIPS entry filter", so that a skip shows as
 # that entry Skipped while the binary's other tests run, and show as passed, in the main entry:
 #   itch_add_test(test_name test_name.cpp SKIPS test_name_x "Suite.Test")
+# test_skips_cli.py finds every test that can skip from its GTEST_SKIP, and fails on one that
+# has no entry of its own.
 function(itch_add_test name)
   cmake_parse_arguments(PARSE_ARGV 1 arg "" "" "SKIPS")
   add_executable(${name} ${arg_UNPARSED_ARGUMENTS})
@@ -52,8 +54,16 @@ itch_add_test(test_reader test_reader.cpp)
 itch_add_test(test_guard_page test_guard_page.cpp)
 itch_add_test(test_book test_book.cpp)
 itch_add_test(test_alloc test_alloc.cpp oracle/alloc_counter.cpp)
-# T-ARENA-1's node book on every allocator arm, its pool and its pages.
-itch_add_test(test_node_book test_node_book.cpp)
+# T-ARENA-1's node book on every allocator arm, its pool and its pages. Three of its tests can
+# skip: the prefault count under ThreadSanitizer, and on Linux the two that ask past the free
+# 2 MiB pages, on a host whose pool gives more than a pool of 2^32 - 1 slots asks for.
+set(itch_node_book_skips
+  test_node_book_prefault NodePool.EveryNodeIsFaultedInBeforeTheFirstIsTaken)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND itch_node_book_skips test_node_book_huge_pool
+    "NodePool.OnLinuxAPoolPastTheFreeHugePagesHasNoRoom:NodeBook.OnLinuxAPoolBookPastTheFreeHugePagesRefusesEveryAdd")
+endif()
+itch_add_test(test_node_book test_node_book.cpp SKIPS ${itch_node_book_skips})
 target_compile_definitions(test_node_book PRIVATE
   "ITCH_ORACLE_FIXTURES=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures/oracle\"")
 if(TARGET itch::mimalloc)

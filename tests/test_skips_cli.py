@@ -11,12 +11,16 @@ the build's ctest entries, read from its CTestTestfile.cmake files (`ctest --sho
 the command of a binary not built, as in a fault's build of a few targets): no entry has a skip regex,
 which would take a failing binary that printed a skip as Skipped; every GoogleTest entry has
 SKIP_RETURN_CODE 77 and ITCH_CTEST_SKIPS; each test that can skip has an entry of its own
-that its binary's main entry leaves out. Last, the receive mode entries skip exactly when
-CMake built none of the modes they check. The harness-skip faults in scripts/faults/harness.json
-and two in udp.json break each.
+that its binary's main entry leaves out. Which tests can skip is read from the sources, not
+kept by hand: every GTEST_SKIP in tests/test_*.cpp, in the TEST it sits in or in each test
+that uses the macro it sits in, on this platform's side of any #ifdef __APPLE__ or __linux__.
+A GTEST_SKIP anywhere else fails, since no test could be named for it. Last, the receive mode
+entries skip exactly when CMake built none of the modes they check. The harness-skip faults in
+scripts/faults/harness.json and two in udp.json break each.
 A failure prints `skips cli: FAIL <case>: <reason>`.
 """
 
+import fnmatch
 import os
 import re
 import subprocess
@@ -38,15 +42,108 @@ PROBE_CASES = (
     ("Probe.SkipsWithAReason", False, 0, REASON),
     ("Probe.Fails", False, 1, "the probe fails"),
 )
-# The tests that can skip, each in an entry of its own: entry -> (binary, its tests).
-APART = {
-    "test_bench_platform_cross_core": (
-        "test_bench_platform", ("BenchCrossCore.TheLiveClocksAgreeAcrossTwoThreads",)),
-    "test_spsc_cache_line": ("test_spsc", ("SpscRing.PaddingConstantIsTheHardwareLine",)),
-    "test_udp_slot_modes": ("test_udp", ("Modes.ADatagramPastTheSlotIsCountedTruncated",)),
-    "test_udp_ring_modes": ("test_udp", ("Modes.AMultishotModeOutOfBuffersRearmsAndLosesNothing",
-                                         "Modes.ARingModeWithABadBufferCountFailsItsSetup")),
+# The tests that can skip are read from the sources (skipping_tests). These are the ones
+# there when this was written, so that a reader that finds fewer fails rather than passes.
+KNOWN_SKIPS = {
+    ("test_bench_platform", "BenchCrossCore.TheLiveClocksAgreeAcrossTwoThreads"),
+    ("test_spsc", "SpscRing.PaddingConstantIsTheHardwareLine"),
+    ("test_udp", "Modes.ADatagramPastTheSlotIsCountedTruncated"),
+    ("test_udp", "Modes.AMultishotModeOutOfBuffersRearmsAndLosesNothing"),
+    ("test_udp", "Modes.ARingModeWithABadBufferCountFailsItsSetup"),
+    ("test_node_book", "NodePool.EveryNodeIsFaultedInBeforeTheFirstIsTaken"),
+    ("test_kernels", "Built/KernelTest.BookOpsMatchScalarOnRandomBytes/*"),
 }
+TESTS_DIR = Path(__file__).resolve().parent
+TEST_MACRO = re.compile(r"^(TEST|TEST_F|TEST_P|TYPED_TEST|TYPED_TEST_P)\(\s*(\w+)\s*,\s*(\w+)\s*\)")
+INSTANTIATION = re.compile(r"INSTANTIATE_TEST_SUITE_P\(\s*(\w+)\s*,\s*(\w+)\s*,")
+DEFINE = re.compile(r"^\s*#\s*define\s+(\w+)")
+CONDITION = re.compile(r"^\s*#\s*(ifdef|ifndef|if|elif|else|endif)\b(.*)$")
+PLATFORM = {"__APPLE__": sys.platform == "darwin", "__linux__": sys.platform.startswith("linux")}
+
+
+def compiled_here(kind, rest):
+    """Whether a condition holds on this platform; one that names no platform is taken to."""
+    names = re.findall(r"\b(__APPLE__|__linux__)\b", rest)
+    if not names or not set(re.findall(r"\b\w+\b", rest)) <= set(names) | {"defined"}:
+        return True
+    if kind == "ifdef":
+        return PLATFORM[names[0]]
+    if kind == "ifndef":
+        return not PLATFORM[names[0]]
+    return eval(re.sub(r"defined\s*\(\s*(\w+)\s*\)", lambda m: str(PLATFORM[m[1]]),  # noqa: S307
+                       rest).replace("||", " or ").replace("&&", " and ").replace("!", " not "))
+
+
+def skipping_tests(failures):
+    """{(binary, gtest name)} for every test that can skip on this platform, from the sources.
+    A TEST_P's name is <instantiation>/<suite>.<test>/*, a TYPED_TEST's <suite>/*.<test>."""
+    found = set()
+    for path in sorted(TESTS_DIR.glob("test_*.cpp")):
+        lines = path.read_text(encoding="utf-8").split("\n")
+        instances = {suite: name for name, suite in INSTANTIATION.findall("\n".join(lines))}
+        stack, current, macro, uses = [], None, None, {}
+        skipping_macros = set()
+        for number, line in enumerate(lines, start=1):
+            condition = CONDITION.match(line)
+            if condition:
+                kind, rest = condition.groups()
+                if kind in ("ifdef", "ifndef", "if"):
+                    stack.append(compiled_here(kind, rest))
+                elif kind == "elif":
+                    stack[-1] = not stack[-1] and compiled_here("if", rest)
+                elif kind == "else":
+                    stack[-1] = not stack[-1]
+                else:
+                    stack.pop()
+                continue
+            live = all(stack)
+            defined = DEFINE.match(line)
+            macro = defined[1] if defined else (macro if macro and lines[number - 2].endswith("\\")
+                                                else None)
+            test = TEST_MACRO.match(line)
+            if test:
+                kind, suite, name = test.groups()
+                if kind == "TEST_P":
+                    full = f"{instances.get(suite, '*')}/{suite}.{name}/*"
+                elif kind.startswith("TYPED_TEST"):
+                    full = f"{suite}/*.{name}"
+                else:
+                    full = f"{suite}.{name}"
+                current = full if live else None
+                uses[full] = set()
+            elif line.startswith("}"):
+                current = None
+            if "GTEST_SKIP" not in line or line.lstrip().startswith("//"):
+                if current:
+                    uses[current].update(re.findall(r"\b([A-Z][A-Z0-9_]+)\(", line))
+                continue
+            if macro:
+                skipping_macros.add(macro)
+            elif current:
+                found.add((path.stem, current))
+            elif live:
+                failures.append((f"{path.name}:{number}", "a GTEST_SKIP outside any test and any "
+                                 "macro, so no test can be named for it"))
+        for full, called in uses.items():
+            if called & skipping_macros:
+                found.add((path.stem, full))
+    return found
+
+
+def filter_runs(test_filter, name):
+    """Whether a --gtest_filter value runs the test of that full name."""
+    positive, _, negative = (test_filter or "*").partition("-")
+    def matches(patterns):
+        return any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns.split(":") if pattern)
+    return matches(positive or "*") and not matches(negative)
+
+
+def sample_names(pattern, filters):
+    """Concrete names for a test name with * in it: * taken from each filter's own words."""
+    if "*" not in pattern:
+        return [pattern]
+    words = {word for value in filters for word in re.split(r"[/.:*-]", value or "") if word}
+    return [pattern.replace("*", word) for word in sorted(words)] or [pattern.replace("*", "x")]
 # The modes each receive mode entry checks; with none of them built, it skips.
 MODES_CHECKED = {
     "test_udp_slot_modes": {"S3", "S4", "U2", "U3", "U4", "U5"},
@@ -135,22 +232,23 @@ def main():
     if gtest_entries < 20:
         failures.append(("entries", f"only {gtest_entries} GoogleTest entries found"))
 
-    for entry, (binary, names) in APART.items():
-        test = tests.get(entry)
-        if test is None:
-            failures.append((entry, "no such entry: the test skips inside its binary's entry"))
-            continue
-        if Path(test["command"][0]).name != binary:
-            failures.append((entry, f"does not run {binary}"))
-        own = (gtest_filter(test["command"]) or "").split(":")
-        main_entry = tests.get(binary)
-        left_out = (gtest_filter(main_entry["command"]) or "") if main_entry else ""
-        left_out = left_out.removeprefix("-").split(":") if left_out.startswith("-") else []
-        for name in names:
-            if name not in own:
-                failures.append((entry, f"does not run {name}"))
-            if name not in left_out:
-                failures.append((entry, f"{binary}'s own entry runs {name} too"))
+    skipping = skipping_tests(failures)
+    for binary, name in sorted(KNOWN_SKIPS - skipping):
+        failures.append((f"{binary} {name}", "no longer read as a test that can skip: the "
+                                             "reader of the sources misses it"))
+    for binary, name in sorted(skipping):
+        entries = {entry: gtest_filter(test["command"]) for entry, test in tests.items()
+                   if Path(test["command"][0]).name == binary}
+        if not entries:
+            continue  # the binary has no entry in this build
+        names = sample_names(name, entries.values())
+        own = [entry for entry, value in entries.items()
+               if entry != binary and any(filter_runs(value, sample) for sample in names)]
+        if not own:
+            failures.append((name, f"can skip, and has no entry of its own: it skips inside "
+                                   f"{binary}'s entry"))
+        if binary in entries and any(filter_runs(entries[binary], sample) for sample in names):
+            failures.append((name, f"{binary}'s own entry runs {name} too"))
 
     for entry, checked in MODES_CHECKED.items():
         test = tests.get(entry)
