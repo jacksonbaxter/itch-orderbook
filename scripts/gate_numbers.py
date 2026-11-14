@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Every figure in the README, RESULTS.md and the demo page is held to the results file its
-line cites, and to a place in that file that its words name (criterion 30).
+"""Every figure in the README, RESULTS.md, WRITEUP.md, docs/DETAILS.md and the demo page is
+held to the results file its line cites, and to a place in that file that its words name, and
+every verdict word to the result of the target it names (criterion 30).
 
     gate_numbers.py [--root DIR] [--page PATH]...
 
@@ -13,7 +14,10 @@ threads): those name hardware, they count nothing measured. Left out: code spans
 blocks (and in HTML the text of <pre>, <code> and <option>), URLs, the text of a link to a URL
 (a source's title), HTML tags, dates (2026-11-12, and eight digits that read as a day,
 12302019), the names in EXEMPT, a number glued to a word (S4, p50, T-BOOK-1, x86-64), and any
-line ending in `<!-- figures: not measured -->`.
+line ending in `<!-- figures: not measured -->`. A count written as a word, zero and two to
+twenty, and one straight before `of` and a count ("one of three"), is a short integer: read on
+a line that cites a results file, except in a block results_table.py generates, whose counts
+its --check holds.
 
 Which file. A figure is held to the files cited in its clause (a clause of prose ends at `;` or
 at the end of a sentence; a table row is one clause); if its clause cites none, to those its
@@ -57,45 +61,84 @@ it; the word straight before a figure is nearer than any label further back in i
 The two integers of an `N of M` ("22 of 33") must stand together in one cited file: each held
 by the rules above in one table, or in one line outside tables, and twice there if N is M.
 
-What it cannot do. It does not read units, so 5.15 M against a cell of 5.15 ms passes. It
-reads words, not meaning, so a clause that shares a word with the wrong place by chance passes,
-and a clause that names no label is held by any place that shares a word. It does not follow
-arithmetic, so a figure the page derives (a sum, a difference, a rounding) must stand as
-written in the file. Two figures of one clause that both share its words, with no label or
-list to tell them apart, can trade places unseen; the generated tables are held cell by cell
-by `results_table.py --check` instead. So the gate holds that each figure is in its cited file
-beside a word its clause shares, and, where a label, a one-word row label or an `N of M` ties
-it, in that row or beside that partner; it does not hold that it is the figure for that place
-when the file has the same figure elsewhere under a shared word. Counts written in words
-(nine, four) are not read. Which short integers count is decided by the words
-next to them, not by what they count, and on a line that cites no results file none is read:
-there a short integer is as likely a count of something built (48 scenarios) as a
-measurement, so a line whose only numbers are short integers needs no citation.
+Billions and millions. A figure followed by the word billion or million ("3.08 billion
+messages") is held as a rounding: by a place, by the rules above, that holds the same figure,
+or a figure that, divided by 10^9 or 10^6 and rounded half up to the decimals written, is it.
+So 3.08 billion is held by 3,081,392,329 where its clause shares a word with that place, and
+3.09 billion, or 3.08 million, is held by no figure of that file.
+
+Verdicts. Outside code blocks and the blocks results_table.py generates (held by its --check),
+a verdict word is read in a sentence of prose or a table row: met, meets, missed, fails,
+failed, failing, passed, PASS and FAIL anywhere; misses, missing and passes only straight after
+a target id or after its gloss between commas or in brackets ("T-PERF-2, the branch-miss rate,
+misses"), since elsewhere each is a noun (branch misses, timed passes); and "a miss by" and the
+phrases of no verdict ("no verdict", "neither a pass nor a fail", "neither met nor missed",
+"neither meets nor misses", "neither passes nor fails") only where a target is named before
+them. Each is tied to the target ids its sentence names after the verdict word before it, or,
+if none, to those that word was tied to: "T-SPSC-1 and T-SPSC-2 are missed and T-SPSC-3 is met".
+The word must agree with each tied target's one verdict, results_table.one_verdict() of its
+rows in RESULTS.md's tables (missed if any row its bar judges is missed or FAIL, met if every
+such row is met or PASS, none if no row is judged; a target with no row, from
+results_table.unrowed_verdict()). When the sentence names a host (Mac, macOS, M4, Apple, Darwin;
+debian, Zen 1, V1605B), a day (12302019, 01302019_BX) or a design (`paged-flat`, base) that
+some of the target's rows have, only those rows count, so "T-BT-3 is met on the Mac" passes
+where "T-BT-3 is met" fails. A target id that is neither BENCHMARKS.md's nor in a row fails. A
+count straight after the verdict word, "fails on four of the ten sessions" or "fails on two",
+must be the number of the target's rows with that verdict, and of all its rows; such a count
+is held here and not read as a figure. A verdict word read anywhere that ties to no target
+fails, unless it is in a heading, beside the word target ("every missed target"), or on a line
+that ends in `<!-- verdicts: no target named -->`.
+
+What it cannot do. It does not read units, so 5.15 M against a cell of 5.15 ms passes. It reads
+words, not meaning, so a clause that shares a word with the wrong place by chance passes, and a
+clause that names no label is held by any place that shares a word. It does not follow
+arithmetic, so a figure the page derives (a sum, a difference, a rounding other than one in
+billions or millions) must stand as written in the file. Two figures of one clause that both
+share its words, with no label or list to tell them apart, can trade places unseen; the
+generated tables are held cell by cell by `results_table.py --check` instead. So the gate holds
+that each figure is in its cited file beside a word its clause shares, and, where a label, a
+one-word row label or an `N of M` ties it, in that row or beside that partner; it does not hold
+that it is the figure for that place when the file has the same figure elsewhere under a shared
+word. Which short integers and counts in words count is decided by the words next to them, not
+by what they count, and on a line that cites no results file none is read: there a short
+integer is as likely a count of something built (48 scenarios) as a measurement, so a line
+whose only numbers are short integers needs no citation. A verdict is read by its word, not its
+meaning: one said in other words ("short of its bar", "clean") is not read, nor one left out
+("and T-TRADE-5 on two"), and a target with rows of both verdicts on the host, day and design
+its sentence names is held to the miss.
 
 The gate runs on whichever pages exist, so a tree with none passes and says so. A page
 named with --page must exist.
 
 Each violation prints as `gate_numbers: FAIL <page>:<line>: <detail>`.
 
-Exit codes: 0 passed, 1 a figure with no source, 2 bad usage.
+Exit codes: 0 passed, 1 a figure with no source or a verdict that disagrees, 2 bad usage.
 """
 
 from __future__ import annotations
 
 import argparse
+import copy
 import re
 import sys
 from collections import defaultdict
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import results_table  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_PAGES = ("README.md", "RESULTS.md", "WRITEUP.md", "docs/index.html")
+DEFAULT_PAGES = ("README.md", "RESULTS.md", "WRITEUP.md", "docs/DETAILS.md", "docs/index.html")
 NOT_RESULTS = {"predictions.md", "run_log.md"}
 HEADER_ONLY = {"fault_matrix.md"}
 EXEMPT = ("ITCH 5.0", "C++23", "BinaryFILE 1.0")
 NAMED_BEFORE = ("Zen", "Ryzen", "GCC", "Clang", "Python", "Layer")
 NAMED_AFTER = ("cores", "threads")
 SKIP_MARK = "<!-- figures: not measured -->"
+SCALES = {"billion": 9, "million": 6}
+SCALE_WORD = re.compile(r"\s+(billion|million)\b")
 
 FENCE = re.compile(r"^(```|~~~)")
 DAY = r"(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?:19|20)\d\d"
@@ -125,6 +168,40 @@ ns ms us µs m k b x gb gib mb mib kb kib
 """.split())
 RATES = {"messages/s": "msg/s", "msgs/s": "msg/s", "message": "msg", "messages": "msg",
          "msgs": "msg"}
+
+# Counts written as words, read as figures on a line that cites a results file; `one` only
+# straight before `of` and a count ("one of three"), since it is also a pronoun.
+COUNTS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+          "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+          "eighteen", "nineteen", "twenty")
+COUNT = r"(?:\d+|" + "|".join(COUNTS) + r")"
+COUNT_WORD = re.compile(
+    rf"(?<![\w-])(?i:(one)(?=\s+of\s+{COUNT}(?![\w-]))|({'|'.join(COUNTS[0:1] + COUNTS[2:])}))"
+    r"(?![\w-])")
+GENERATED_BEGIN = re.compile(r"^<!-- [\w ]+: begin, generated by scripts/results_table\.py")
+GENERATED_END = re.compile(r"^<!-- [\w ]+: end -->$")
+
+# Verdict words. Read anywhere: these. Read only straight after a target id or its gloss,
+# since each is also a noun (branch misses, timed passes): STRAIGHT. A miss by a gap, and the
+# phrases of no verdict, are read only where a target is named before them.
+VERDICT_MARK = "<!-- verdicts: no target named -->"
+ANYWHERE = re.compile(r"(?<![\w-])(?:(?i:met|meets|missed|fails|failed|failing|passed)|PASS|FAIL)"
+                      r"(?![\w-])")
+STRAIGHT = re.compile(r"(T-[A-Z0-9]+-\d+)(?:\s*\([^()]*\))?(?:,[^,;]*,)?\s+(?:also\s+|still\s+)?"
+                      r"((?i:misses|missing|passes))(?![\w-])")
+TIED_ONLY = re.compile(
+    r"(?<![\w-])(?i:(a miss by)|(no verdict|neither a pass nor a fail|neither met nor missed"
+    r"|neither meets nor misses|neither passes nor fails))(?![\w-])")
+NEGATIVE = {"missed", "misses", "missing", "fails", "failed", "failing", "fail", "a miss by"}
+TARGET = re.compile(r"(?<![\w-])T-[A-Z0-9]+-\d+(?![\w-])")
+BESIDE_TARGET = re.compile(r"(?i:targets?\s+$)")
+BEFORE_TARGET = re.compile(r"(?i:^\s+targets?\b)")
+AFTER_VERDICT = re.compile(
+    rf"^\s+(?:strictly\s+)?on\s+({COUNT})(?:\s+of\s+(?:the\s+)?({COUNT})\s+(?:sessions|days)\b"
+    r"|(?=\s+(?:sessions|days)\b|\s*(?:[,;.)]|$)))", re.I)
+MAC_WORDS = re.compile(r"(?i)(?<![\w-])(?:mac|macos|m4|m4 max|apple|darwin)(?![\w-])")
+LINUX_WORDS = re.compile(r"(?i)(?<![\w-])(?:debian|zen 1|v1605b|linux host)(?![\w-])")
+DAY_WORD = re.compile(r"(?<!\d)(\d{8}(?:_[A-Z]+)?)(?![\d\w])")
 
 
 def unique(names):
@@ -320,6 +397,7 @@ class Figure:
         self.first = ""               # in a table row, its row's first cell
         self.second = False           # whether it stands in a table row's second cell
         self.partner = None           # the other figure of an `N of M`
+        self.scale = None             # 9 or 6 for one followed by "billion" or "million"
 
     def __iter__(self):
         return iter((self.line, self.figure, self.cited))
@@ -360,11 +438,12 @@ def figures_in(text):
         masked_text = masked_text.replace(name, " " * len(name))
     masked_text = STRIPPED.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), masked_text)
     masked_lines = masked_text.split("\n")
+    generated = generated_lines(lines)
     for number, line in enumerate(lines, start=1):
         if FENCE.match(line.strip()):
             in_fence = not in_fence
             continue
-        if in_fence or line.rstrip().endswith(SKIP_MARK):
+        if in_fence or SKIP_MARK in trailing_marks(line):
             continue
         masked = masked_lines[number - 1]
         cited_line = unique(CITATION.findall(line))
@@ -382,20 +461,33 @@ def figures_in(text):
             cited = (unique(CITATION.findall(line[begin:end]))
                      or unique(CITATION.findall(line[sentence_begin:sentence_end])) or cited_line)
             context = words_of(line[begin:end] + (" " + head if row else ""))
+            found = []
             for match in FIGURE.finditer(masked, begin, end):
                 sign, digits, unit = match.groups()
                 short = not (sign or unit or "." in digits or "," in digits or len(digits) >= 3)
                 if short and (not cited_line or named(masked, match.start(2), digits)):
                     continue
-                figure = Figure(number, (sign or "") + digits, normal(sign, digits),
-                                cited or None, context, row, (begin, end), match.start())
+                found.append((match.start(), (sign or "") + digits, normal(sign, digits)))
+            # A count in words is a short integer: read only where the line cites a results
+            # file, and not in a generated block, whose counts results_table.py --check holds.
+            if cited_line and number not in generated:
+                for match in COUNT_WORD.finditer(masked, begin, end):
+                    if not named(masked, match.start(), match.group(0)):
+                        found.append((match.start(), match.group(0),
+                                      str(COUNTS.index(match.group(0).lower()))))
+            for position, printed, value in sorted(found):
+                figure = Figure(number, printed, value, cited or None, context, row, (begin, end),
+                                position)
+                scaled = SCALE_WORD.match(masked, position + len(printed))
+                if scaled and re.fullmatch(r"-?\d+(?:\.\d+)?", value):
+                    figure.scale = SCALES[scaled.group(1)]
                 if row:
                     bars = [index for index, char in enumerate(line) if char == "|"]
-                    left = [index for index in bars if index < match.start()]
-                    right = [index for index in bars if index > match.start()]
+                    left = [index for index in bars if index < position]
+                    right = [index for index in bars if index > position]
                     start = left[-1] + 1 if left else 0
                     start = max([start] + [index + 1 for index, char in enumerate(line)
-                                           if char == ";" and start <= index < match.start()])
+                                           if char == ";" and start <= index < position])
                     figure.cell = (start, right[0] if right else len(line))
                     heads = cells_of(head)
                     column = len(left) - (1 if line.lstrip().startswith("|") else 0)
@@ -470,9 +562,30 @@ def beside(source, figure, text):
     return None, False
 
 
+def rounds_to(value, figure):
+    """Whether a figure of a results file, divided by the figure's scale and rounded half up to
+    the decimals the page writes, is the figure: 3,081,392,329 is 3.08 billion."""
+    try:
+        written = Decimal(figure.value)
+        rounded = (Decimal(value) / Decimal(10) ** figure.scale).quantize(
+            Decimal(1).scaleb(written.as_tuple().exponent), rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        return False
+    return rounded == written
+
+
 def held_where(source, figure, text):
     """The groups (a table, or a line outside tables) of every place in one results file that
-    holds the figure where its clause names it; empty if none does."""
+    holds the figure where its clause names it; empty if none does. A figure in billions or
+    millions is held where the same figure, or one that rounds to it, is held."""
+    if figure.scale is not None:
+        found = set()
+        for value in source.places:
+            if value == figure.value or rounds_to(value, figure):
+                reading = copy.copy(figure)
+                reading.value, reading.scale = value, None
+                found |= held_where(source, reading, text)
+        return found
     label = figure.label
     if label is not None:
         given = [figures[label] for key, figures in source.keyed
@@ -529,10 +642,187 @@ def pair_of_of(figures, line):
             first.partner, second.partner = second, first
 
 
-def check_page(root, page, results):
+def generated_lines(lines):
+    """The numbers, from 1, of the lines inside a block that results_table.py generates."""
+    inside, found = False, set()
+    for number, line in enumerate(lines, start=1):
+        if GENERATED_BEGIN.match(line):
+            inside = True
+        elif GENERATED_END.match(line):
+            inside = False
+        elif inside:
+            found.add(number)
+    return found
+
+
+def trailing_marks(line):
+    """The marks a line ends with, SKIP_MARK and VERDICT_MARK, in either order."""
+    marks, rest = set(), line.rstrip()
+    while True:
+        for mark in (SKIP_MARK, VERDICT_MARK):
+            if rest.endswith(mark):
+                marks.add(mark)
+                rest = rest[:-len(mark)].rstrip()
+                break
+        else:
+            return marks
+
+
+def readable(line):
+    """The line with its markup blanked, each character where it was: emphasis, code ticks,
+    brackets, a link's target, HTML tags and comments."""
+    blank = lambda match: " " * len(match.group(0))  # noqa: E731
+    text = re.sub(r"\]\([^)\n]*\)", blank, line)
+    text = re.sub(r"<!--.*?-->|<[^>]*>", blank, text)
+    return re.sub(r"[`*\[\]]", " ", text)
+
+
+class Verdicts:
+    """Every target's rows as results_table.py reads them from the results files, made the first
+    time a page asks, and BENCHMARKS.md's targets."""
+
+    def __init__(self, root):
+        self.root = root
+        self.rows = None
+        self.error = None
+        self.targets = set()
+
+    def load(self):
+        if self.rows is None and self.error is None:
+            try:
+                rows = results_table.target_rows(self.root)
+                self.targets = set(results_table.benchmark_targets(self.root)[1])
+            except (results_table.TableError, OSError) as error:
+                self.error = str(error)
+                return
+            self.rows = defaultdict(list)
+            for row in rows:
+                self.rows[row[0]].append(row)
+
+    def judge(self, target, sentence):
+        """(verdict, rows) for a target, from the rows of it that the sentence names by host, day
+        or design when it names any it has; ("unknown", []) for a target that is not one."""
+        self.load()
+        rows = self.rows.get(target, [])
+        if not rows:
+            if target not in self.targets:
+                return "unknown", []
+            try:
+                return results_table.unrowed_verdict(target), []
+            except KeyError:
+                return None, []
+        hosts = {host for host, words in (("macOS", MAC_WORDS), ("debian", LINUX_WORDS))
+                 if words.search(sentence)}
+        days = set(DAY_WORD.findall(sentence))
+        lowered = sentence.lower()
+        for keep in (lambda row: len(hosts) == 1 and row[2] in hosts,
+                     lambda row: row[1] in days,
+                     lambda row: bool(row[3]) and phrase(row[3].lower()).search(lowered)):
+            narrowed = [row for row in rows if keep(row)]
+            if narrowed:
+                rows = narrowed
+        return results_table.one_verdict(rows), rows
+
+
+def verdict_class(word):
+    return "missed" if word.lower() in NEGATIVE else "met"
+
+
+def verdicts_in(text, begin, end):
+    """(start, end, word, class, how) of each verdict word in text[begin:end], in order; how is
+    "anywhere", "straight" or "tied" (read only where a target is named before it)."""
+    found = [(match.start(), match.end(), match.group(0),
+              "missed" if match.group(1) else None, "tied")
+             for match in TIED_ONLY.finditer(text, begin, end)]
+    phrases = [(start, stop) for start, stop, *_ in found]
+    for match in ANYWHERE.finditer(text, begin, end):
+        if not any(start <= match.start() < stop for start, stop in phrases):
+            found.append((match.start(), match.end(), match.group(0),
+                          verdict_class(match.group(0)), "anywhere"))
+    for match in STRAIGHT.finditer(text, begin, end):
+        found.append((match.start(2), match.end(2), match.group(2),
+                      verdict_class(match.group(2)), "straight"))
+    return sorted(found)
+
+
+def count_of(word):
+    return int(word) if word.isdigit() else COUNTS.index(word.lower())
+
+
+def check_verdicts(page, lines, verdicts):
+    """Each verdict word in prose tied to the targets its sentence names and held to their rows;
+    returns the violations and the (line, position) of each count a verdict holds."""
+    violations, held = [], set()
+    generated = generated_lines(lines)
+    in_fence = False
+    for number, line in enumerate(lines, start=1):
+        if FENCE.match(line.strip()):
+            in_fence = not in_fence
+            continue
+        if in_fence or number in generated:
+            continue
+        marked = VERDICT_MARK in trailing_marks(line)
+        heading = bool(re.match(r"\s*(?:#|<h[1-6]\b)", line))
+        text = readable(line)
+        row = line.strip().startswith("|")
+        spans = [(0, len(text))] if row else [
+            (begin, stop) for begin, stop, *_ in
+            {(sb, se, 0, 0) for _, _, sb, se in clauses_of(text)}]
+        for begin, end in sorted(spans):
+            sentence = text[begin:end]
+            ids = [(match.start(), match.group(0)) for match in TARGET.finditer(text, begin, end)]
+            after, tied = begin, []
+            for start, stop, word, kind, how in verdicts_in(text, begin, end):
+                named_here = unique(target for position, target in ids if after <= position < start)
+                tied = named_here or tied
+                after = stop
+                if not tied:
+                    beside = (BESIDE_TARGET.search(text[begin:start])
+                              or BEFORE_TARGET.match(text[stop:end]))
+                    if how == "anywhere" and not (marked or heading or beside):
+                        violations.append((page, number, f"'{word}' names no target: name its "
+                                           "target in the sentence, reword it, or end the line "
+                                           f"with {VERDICT_MARK}"))
+                    continue
+                counted = AFTER_VERDICT.match(text[stop:end]) if kind else None
+                for target in tied:
+                    verdicts.load()
+                    if verdicts.error is not None:
+                        violations.append((page, number, f"'{word}' for {target} cannot be "
+                                           f"held: {verdicts.error}"))
+                        break
+                    verdict, rows = verdicts.judge(target, sentence)
+                    if verdict == "unknown":
+                        violations.append((page, number, f"'{word}' for {target}: no target of "
+                                           "BENCHMARKS.md's and no row in the results"))
+                        continue
+                    if verdict != kind:
+                        violations.append((page, number, f"'{word}' for {target}: its result is "
+                                           f"{verdict or 'no verdict'} on the rows its sentence "
+                                           "names"))
+                        continue
+                    if counted:
+                        said = [count_of(counted.group(1))]
+                        have = [sum(row[-1] == kind for row in rows)]
+                        if counted.group(2):
+                            said.append(count_of(counted.group(2)))
+                            have.append(len(rows))
+                        if said != have:
+                            violations.append((page, number, f"'{word} on "
+                                               f"{' of '.join(map(str, said))}' for {target}: its "
+                                               f"rows give {' of '.join(map(str, have))}"))
+                if counted:
+                    held |= {(number, stop + counted.start(group))
+                             for group in (1, 2) if counted.group(group)}
+    return violations, held
+
+
+def check_page(root, page, results, verdicts=None):
     text = (root / page).read_text(encoding="utf-8")
     lines = text.splitlines()
-    found = list(figures_in(text))
+    verdicts = Verdicts(root) if verdicts is None else verdicts
+    violations, held = check_verdicts(page, lines, verdicts)
+    found = [figure for figure in figures_in(text) if (figure.line, figure.position) not in held]
     every = sorted(results)
     by_line = defaultdict(list)
     for figure in found:
@@ -545,7 +835,6 @@ def check_page(root, page, results):
                 else set()
         pair_lists(members, lines[number - 1], labels)
         pair_of_of(members, lines[number - 1])
-    violations = []
     for figure in found:
         if figure.cited is None and not figure.row:
             violations.append((page, figure.line,
@@ -571,13 +860,17 @@ def check_page(root, page, results):
                                "in one table or one line"))
             continue
         whose = f" as {figure.label}'s" if figure.label else ""
+        if figure.scale is not None:
+            whose += ", nor a figure that rounds to it,"
         if figure.cited is None:
             detail = f"is in no results file{whose} in a place its words name"
         elif len(names) == 1:
             detail = f"is not in results/{names[0]}{whose} in a place its words name"
         else:
             detail = f"is not in any file it cites{whose} in a place its words name"
-        violations.append((page, figure.line, f"{figure.figure} {detail}"))
+        scale = next((word for word, power in SCALES.items() if power == figure.scale), "")
+        printed = f"{figure.figure} {scale}" if scale else figure.figure
+        violations.append((page, figure.line, f"{printed} {detail}"))
     return len(found), violations
 
 
@@ -595,10 +888,11 @@ def main(argv=None):
         print(f"gate_numbers: ok, nothing to gate: none of {', '.join(DEFAULT_PAGES)} exists")
         return 0
     results = load_results(root)
+    verdicts = Verdicts(root)
     total = 0
     failed = False
     for page in pages:
-        checked, violations = check_page(root, page, results)
+        checked, violations = check_page(root, page, results, verdicts)
         total += checked
         for name, line, detail in violations:
             print(f"gate_numbers: FAIL {name}:{line}: {detail}")

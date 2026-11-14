@@ -20,7 +20,7 @@ What top-tier looks like for an ITCH 5.0 feed handler, L3 book and research stac
 
 | Host | Role | Limits |
 |---|---|---|
-| `debian`: Ryzen Embedded V1605B (Zen 1), 2.0 GHz base, 4 MB L3, 15 GB RAM, Linux 6.12 | Headline pinned, `perf` and io_uring numbers | Each 256-bit AVX2 operation runs as two 128-bit ones. TSC reads step by about 10 ns and `rdtscp` costs about 19 ns. About 11 GB free, so the replay input must be confirmed resident before timing. |
+| `debian`: Ryzen Embedded V1605B (Zen 1), 2.0 GHz base, 4 MB L3, 15 GB RAM, Linux 6.12 | Headline pinned, `perf` and io_uring numbers | Each 256-bit AVX2 operation runs as two 128-bit ones. TSC reads step by about 10 ns and `rdtscp` costs about 19 ns. About 11 GB free, so the replay input must be confirmed resident before timing; for the parse rate on 10302019, whose file and the bench's copy of it do not fit together, that is the bench's own copy, checked before and after each timed pass. |
 | Apple M4 Max, 64 GB RAM, macOS | Development, sanitizers, fuzzing, oracle replay. Mac numbers stay labelled macOS. | No pinning. 41.67 ns timer quantum. No branch or cache counters without root or Instruments. |
 
 Published server-class and desktop figures will beat `debian`. Targets stay at the published bar, and any gap is reported with its hardware reason. Reasons we can already cite: base clock and memory topping out at 2400 MT/s ([AMD V1000 brief](https://www.amd.com/content/dam/amd/en/documents/products/embedded/ryzen/v1000-family-product-brief.pdf)), a 128-bit vector datapath, 512 KB L2 and a 1536-entry L2 DTLB, which reaches 6 MB with 4 KB pages ([AMD Family 17h optimization guide](https://web.archive.org/web/2020id_/https://developer.amd.com/wordpress/media/2013/12/55723_SOG_Fam_17h_Processors_3.00.pdf)), plus 4 MB L3 shared by four cores and Retbleed/SRSO mitigations on kernel entry (IU-75, IU-79).
@@ -44,7 +44,7 @@ Decision: the subagent recommended `S061226` as the reference day. Rejected, bec
 
 ## Parse and book throughput
 
-All on one thread, with the whole file resident before the clock starts, unless stated.
+All on one thread, with the whole file in memory before the clock starts, unless stated: in the page cache, or, for the parse rate on 10302019, as the bench's own copy of the day, every page of it checked before and after each timed pass.
 
 ### T-PARSE-1: framing walk
 - **Target:** ≥ 709 M msg/s, ~21.8 GB/s.
@@ -64,7 +64,8 @@ All on one thread, with the whole file resident before the clock starts, unless 
 - **Target:** ≥ 93.9 M msg/s and ≥ 2.89 GB/s on 10302019.
 - **Source:** [Lunary benchmarks](https://lunyn.com/benchmarks), OSS-34.
 - **Measured:** Google Cloud c3-standard-8, Xeon Platinum 8481C 2.70 GHz, 32 GB DDR5, Ubuntu 24.04, Rust `-C target-cpu=native`. Full day 10302019, memory-mapped. Single thread. Every field of every supported type decoded and checksummed, median of 10.
-- **Comparability:** a harder job than T-PARSE-2, under a VM, by a vendor on its own site. Ours is measured on 12302019 only: on `debian`, on 10302019, the standalone machine check failed input-resident each time it ran, so P-0030's run was never started, so the comparison is across days (docs/NOTES.md, "The parse rate on `debian`").
+- **Comparability:** a harder job than T-PARSE-2, under a VM, by a vendor on its own site. Ours is measured on 12302019, so the comparison is across days (docs/NOTES.md, "The parse rate on `debian`").
+- **On 10302019:** not measured on that day; a run is registered (results/predictions.md). On `debian` the file in the page cache and a copy of it do not fit in memory together, so the run reads the day into the bench's own memory and checks every page of that copy before and after each timed pass.
 - **Status:** `VERIFIED`
 
 ### T-BOOK-1: true L3 rebuild, all symbols
@@ -237,13 +238,13 @@ A replay running flat out measures service time, not response time to an arrival
 - **Status:** `VERIFIED`
 
 ### T-INV-2: the book is never crossed
-- **Target:** run the check strictly over the whole day. Count and characterise every violation by symbol, time and trading state. The strict result is reported as failing if it fails. No scoped version is a pass condition. The user decides scope after the Phase 3 run.
+- **Target:** run the check strictly over the whole day. Count and characterise every violation by symbol, time and trading state. The strict result is reported as failing if it fails. No scoped version is a pass condition. I decide the scope after the Phase 3 run.
 - **Published expectation:** on 12302019, carteret reports 8,580 crossed and 70 locked observations, on 13 and 6 symbols, with the deepest crossing $14.00 ([correctness.md](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/correctness.md), [design.md](https://github.com/EkanshSingh401/carteret/blob/3df0e8757c979731b07a991de4ec7e81e81c8c08/docs/design.md), DS-68). Of the crossings, 7,945 are with the symbol not in state `T`, and the other 635 fall within 50 ms of its resumption. 8,372 of the 8,580 are inside 09:30 to 16:00, so clock time does not explain them. The strict invariant is therefore expected to fail, and that is a finding, not a bug. [Ironbook](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/bench/results/full_day_validation.txt) counts only 10 crossed and 0 locked in 136,896,897 checks, but its [check](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/include/ironbook/book/validation.hpp) runs only with the market open and the symbol in state `T`, so the two are different populations, not a contradiction. Our run has to reproduce or contradict both counts.
 - **Status:** `BRIEF` (the published count is `VERIFIED`)
 
 ### T-INV-3: no new cross in normal trading
 - **Target:** 0 violations, as a hard failure, on 12302019 and on 10302019. It has to hold on 10302019 before it counts as adopted. Violations are not refitted away.
-- **The rule, as the user approved it after seeing real data:** "During normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet. Any new cross is a failure."
+- **The rule, as I chose it after seeing real data:** "During normal trading, a book may only be crossed if the cross is left over from a halt and hasn't cleared yet. Any new cross is a failure."
 - **Definition:** the population is every observation with the market open and the symbol in state `T`, the same one T-INV-2 reports as market open and `T`. Crossed and locked are held to the same rule and reported apart. A leftover exists only if the book of that locate is crossed or locked at the moment of a resumption, which is an `H` into `T` from a state other than `T` on a symbol that has had an `H`. It ends on the first observation of that locate that is neither crossed nor locked, or on a cross message for that locate. Any crossed or locked observation in the population with no leftover in force is a violation, reported with symbol, time, message and depth. No time limit of any kind enters the rule, so the 50 ms figure in T-INV-2's rows plays no part here.
 - **Relation to T-INV-2:** a second, separately named check. T-INV-2 strict is not changed by it and is still reported as failing. Its tallies and its 50 ms and window rows stay as they were.
 - **Exit codes:** a violation exits 1, a hard failure. Exit 3 still means only T-INV-2 failed.
@@ -253,7 +254,7 @@ A replay running flat out measures service time, not response time to an arrival
 
 T-TRADE-1, 2, 3 and 5 are the trade-print checks. T-TRADE-4 is held and is not one of them.
 
-The user's sentence cannot hold for two whole classes. `P` references no visible order, and `Q` is a bulk print. `P` and `Q` are each counted and reported per the per-type table, so the reader can see where the user's sentence was refined and why. Non-printable `C` volume is already inside `Q`, so summing it would double-count. The full per-type table is in `trade-verification.md`, a private research note, not in this repository, under "Proposed check definitions", and docs/TASKS.md carries it. No tolerance applies anywhere.
+My sentence cannot hold for two whole classes. `P` references no visible order, and `Q` is a bulk print. `P` and `Q` are each counted and reported per the per-type table, so the reader can see where my sentence was refined and why. Non-printable `C` volume is already inside `Q`, so summing it would double-count. The full per-type table is in `trade-verification.md`, a private research note, not in this repository, under "Proposed check definitions", and docs/TASKS.md carries it. No tolerance applies anywhere.
 
 Per type: `E` must hit a live order, deducting at the order's price. `C` must hit a live order, leaving the order price unchanged, and the print price may differ. `P` must have reference 0 and change nothing in the book. `Q` is compared with Nasdaq's own per-symbol cross file. `B` reverses a stored match.
 
@@ -273,21 +274,21 @@ Per type: `E` must hit a live order, deducting at the order's price. `C` must hi
 - **Target:** exact per-symbol equality of `E + printable C + P` with MIDAS volume, once MIDAS's time window is pinned. If the window cannot be pinned, the per-symbol differences are reported as an open gap with the reason. An inequality is never reported as a pass. On 12302019, Nasdaq rows total 620,148,444 shares, of which 105,453,046 are hidden. The file gives volume in thousands to three decimals.
 - **Source:** [SEC MIDAS 2019 Q4, archived](https://web.archive.org/web/20260312180908id_/https://www.sec.gov/files/node/add/data_distribution/individual_security_exchange_2019_q4.zip), TV-21. `sec.gov` returns 403 to curl, so the capture is the copy that was opened.
 - **Comparability:** the [SEC's terms](https://www.sec.gov/privacy) allow redistribution with citation (TV-27). It covers Stock and ETF names only, and its window is unknown.
-- **Odd lots:** an odd lot is a print below the round lot of the SEC's rule, from its [Market Activity Report method page](https://www.sec.gov/featured-topics/market-structure-analytics/market-activity-report-methodology), last updated July 17, 2026 and read here from a capture of 2026-09-22: "Until Nov 3, 2025, a round lot is defined as 100 shares for all but three tickers. BRK.A and SEB have a round lot of one. BH has a round lot of 10." The rule applies only to dates before 2025-11-03. From that date the SEC's lots come in tiers set from each security's closing price, so the odd-lot columns are not compared, the run says so as its own outcome, and the old rule is never applied in their place. The page's next sentence, "All trades involving nine or fewer shares are considered odd lot trades", adds nothing at a lot of 100 or 10, and at a lot of one MIDAS does not follow it: SEB prints below 10 shares on both held days and MIDAS gives it no odd lots. The directory's own lot stays in the `t3_round_lot` table as information. The user chose this rule after T-TRADE-3 had failed on odd lots with a fixed 100 and then with the directory's lot, from the SEC's published text, with nothing fitted.
+- **Odd lots:** an odd lot is a print below the round lot of the SEC's rule, from its [Market Activity Report method page](https://www.sec.gov/featured-topics/market-structure-analytics/market-activity-report-methodology), last updated July 17, 2026 and read here from a capture of 2026-09-22: "Until Nov 3, 2025, a round lot is defined as 100 shares for all but three tickers. BRK.A and SEB have a round lot of one. BH has a round lot of 10." The rule applies only to dates before 2025-11-03. From that date the SEC's lots come in tiers set from each security's closing price, so the odd-lot columns are not compared, the run says so as its own outcome, and the old rule is never applied in their place. The page's next sentence, "All trades involving nine or fewer shares are considered odd lot trades", adds nothing at a lot of 100 or 10, and at a lot of one MIDAS does not follow it: SEB prints below 10 shares on both held days and MIDAS gives it no odd lots. The directory's own lot stays in the `t3_round_lot` table as information. I chose this rule after T-TRADE-3 had failed on odd lots with a fixed 100 and then with the directory's lot, from the SEC's published text, with nothing fitted.
 - **Status:** `VERIFIED`
 
 ### T-TRADE-4: whole-day venue volume against Cboe
-- **Target:** held. No Cboe data in this project until the user decides. Scripts do not fetch it, no check, result, README or WRITEUP.md depends on it, and no further joins are run. The check it would be, if allowed: per tape, shares and trade count equal, and notional equal, on 12302019 and 10302019. The Cboe figures are deliberately not in this file.
+- **Target:** held. No Cboe data in this project until I decide. Scripts do not fetch it, no check, result, README or WRITEUP.md depends on it, and no further joins are run. The check it would be, if allowed: per tape, shares and trade count equal, and notional equal, on 12302019 and 10302019. The Cboe figures are deliberately not in this file.
 - **Source:** [market_history_2019.csv](https://cdn.cboe.com/resources/us/equities/market-statistics/historical-market-volume/market_history_2019.csv), TV-13, TV-14.
 - **Why it matters:** published per-symbol ITCH sums tie to this file exactly on 2019-12-30 and 2019-08-30 (TV-14), across all three tapes, once test symbols are removed. The session reran the 2019-12-30 join and got the same result. That is the strongest outside check found, and no prior project appears to have run it.
 - **Terms:** [Cboe's terms](https://www.cboe.com/terms) bar using its materials "to verify or correct other data or information" without consent, subject to fair use (TV-26). A free consolidated per-symbol whole-day figure for Nasdaq does not exist (TV-30).
-- **Status:** `HELD`. Use in this project is blocked on the user. `check_benchmark_sources.py` holds no Cboe figures and fetches nothing from Cboe.
+- **Status:** `HELD`. Use in this project waits on my decision. `check_benchmark_sources.py` holds no Cboe figures and fetches nothing from Cboe.
 
 ### T-TRADE-5: continuous executions hit the best price
 - **Target:** every `E` with the market open and the symbol in state `T` executes at the best price level on its side: 5,683,178 of 5,683,178 on 12302019. Hard, with no tolerance. Queue-front share is reported, not gated: published 5,672,613, or 99.8141%.
 - **Source:** [Ironbook validation output](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/bench/results/full_day_validation.txt), with the definition in [`validation.hpp`](https://github.com/Shaan50/nasdaq-itch-matching-engine/blob/e99c55c8f219b1c297761b4ec33f48d90ac6f5e5/include/ironbook/book/validation.hpp), GS-8.
 - **Measured:** Apple M5, full day 12302019, against its own book.
-- **Comparability:** one reimplementation, so a claim until our harness reproduces it. [A second codebase](https://github.com/LukasUser/market-data-pipeline/blob/bf410f4aced4ae3bd360c56f5146f78b4048f123/README.md) reports the same 99.81% at queue front. This is the part of the user's sentence on `E` that can be held strictly.
+- **Comparability:** one reimplementation, so a claim until our harness reproduces it. [A second codebase](https://github.com/LukasUser/market-data-pipeline/blob/bf410f4aced4ae3bd360c56f5146f78b4048f123/README.md) reports the same 99.81% at queue front. This is the part of my sentence on `E` that can be held strictly.
 - **Status:** `VERIFIED`
 
 ## Backtester
@@ -359,7 +360,7 @@ The base run uses 25 µs each way plus 5 µs compute. This is an assumption deri
 - **Status:** `VERIFIED`
 
 ### T-SPSC-2: throughput gains from the known techniques
-- **Target:** on one host, cached indices ≥ 3.9× over uncached (derived: 165,138,887 / 41,859,740), and mask ≥ 4.2× over `%` (derived: 690,662,074 / 165,138,887).
+- **Target:** on one host, cached indices ≥ 3.9× over uncached (derived: 165,138,887 / 41,859,740), and mask ≥ 4.2× over `%` (derived: 690,662,074 / 165,138,887). The derived ratios are 3.945 and 4.182; each bar is its ratio to one decimal, as it was set before any run, so the first is 0.045 under its ratio and the second 0.018 over, and `results/spsc_ablation_debian_12302019.md` prints them as 3.90× and 4.20×. No verdict turns on it: each of the four T-SPSC-2 ratios measured there is 1.60× or less.
 - **Source:** [Frasch, CppCon 2023](https://raw.githubusercontent.com/CppCon/CppCon2023/main/Presentations/SPSC_Lock-free_Wait-Free_Fifo_from_the_Ground_Up_CppCon_2023.pdf), pp. 41-42, LC-7.
 - **Measured:** i7-9700, 8-byte elements, capacity 2^17, 100 runs, under WSL2.
 - **Comparability:** a different microarchitecture, so the ablation may differ. Reported either way.
@@ -407,7 +408,7 @@ The base run uses 25 µs each way plus 5 µs compute. This is an assumption deri
 
 ## Browser demo
 
-The demo builds and runs locally from `docs/`. Any data extract is generated by script and gitignored, so nothing derived from the Nasdaq files is committed. Public deployment is the user's call.
+The demo builds and runs locally from `docs/`. Any data extract is generated by script and gitignored, so nothing derived from the Nasdaq files is committed. Public deployment is my call.
 
 ### T-WASM-1: replay speed against native
 - **Target:** the same replay in WASM within 1.55× of native on the same host, in Chrome.

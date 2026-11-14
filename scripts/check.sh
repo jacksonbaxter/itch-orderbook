@@ -131,7 +131,8 @@ stage_readme() {
   python_test scripts/oracle_sessions.py --check &&
     python_test scripts/results_table.py --check &&
     python_test scripts/test_results_table.py &&
-    python_test scripts/gate_numbers.py --page README.md --page RESULTS.md --page WRITEUP.md
+    python_test scripts/gate_numbers.py --page README.md --page RESULTS.md --page WRITEUP.md \
+      --page docs/DETAILS.md
 }
 
 # Reads .github/workflows with the pinned actionlint, fetched into the build tree. It runs

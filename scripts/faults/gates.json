@@ -2,7 +2,7 @@
   "area": "gates",
   "tree": ["CMakeLists.txt", "CMakePresets.json", ".clang-tidy", ".github", "cmake", "include",
            "src", "tests", "tools", "fuzz", "bench", "scripts", "results", "docs", "BENCHMARKS.md",
-           "RESULTS.md", "WRITEUP.md"],
+           "RESULTS.md", "WRITEUP.md", "README.md"],
   "faults": [
     {
       "id": "gates-wire-pointer-cast",
@@ -811,6 +811,196 @@
       ],
       "expect": {
         "signature": "^FAIL: test_run_log_kinds \\("
+      }
+    },
+    {
+      "id": "gates-owner-words-user-only",
+      "breaks": "The owner gate reads only \"the user\", so \"the owner\" passes on a public page",
+      "check": "test_gates.py, the owner-words gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "OWNER_WORDS = re.compile(r\"\\bthe (?:user|owner)(?![\\w-])\", re.IGNORECASE)",
+          "new": "OWNER_WORDS = re.compile(r\"\\bthe (?:user)(?![\\w-])\", re.IGNORECASE)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_owner_words \\("
+      }
+    },
+    {
+      "id": "gates-writeup-words-run-id",
+      "breaks": "A plan id followed by a run's time, P-0106-20261113T0403Z, is not read as an id",
+      "check": "test_gates.py, the writeup-words gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "r\"(?i:\\bthe session\\b)|(?<![\\w-])(?:P-\\d{3,4}(?!\\w)|",
+          "new": "r\"(?i:\\bthe session\\b)|(?<![\\w-])(?:P-\\d{3,4}(?![\\w-])|"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_writeup_words \\("
+      }
+    },
+    {
+      "id": "gates-writeup-words-experiment-case",
+      "breaks": "A lower-case experiment id, e11, is not read as an id",
+      "check": "test_gates.py, the writeup-words gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "r\"|[Ee]\\d{1,2}(?![\\w:.-])|",
+          "new": "r\"|E\\d{1,2}(?![\\w:.-])|"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_writeup_words \\("
+      }
+    },
+    {
+      "id": "gates-writeup-length-upper-bound",
+      "breaks": "WRITEUP.md may run one word past 4,000",
+      "check": "test_gates.py, the writeup-length gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "        if not low <= words <= high:\n",
+          "new": "        if not low <= words <= high + 1:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_writeup_length \\("
+      }
+    },
+    {
+      "id": "gates-readme-pitch-counts-the-table",
+      "breaks": "The README's pitch is counted to the end of the page, not to its headline table",
+      "check": "test_gates.py, the readme-pitch-length gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "        pitch = re.sub(r\"<!--.*?-->\", \" \", text.split(HEADLINE_BEGIN, 1)[0], flags=re.DOTALL)\n",
+          "new": "        pitch = re.sub(r\"<!--.*?-->\", \" \", text, flags=re.DOTALL)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_readme_pitch_length \\("
+      }
+    },
+    {
+      "id": "gates-readme-bullet-length-off-by-one",
+      "breaks": "A bullet of the README's list of what is built may run one character past 125 as rendered",
+      "check": "test_gates.py, the readme-built-bullets gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "            if len(shown) > README_BULLET_CHARS:\n",
+          "new": "            if len(shown) > README_BULLET_CHARS + 1:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_readme_built_bullets \\("
+      }
+    },
+    {
+      "id": "gates-readme-bullet-links-uncounted",
+      "breaks": "A bullet of the README's list of what is built may hold any number of links",
+      "check": "test_gates.py, the readme-built-bullets gate",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "            if links > README_BULLET_LINKS:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_readme_built_bullets \\("
+      }
+    },
+    {
+      "id": "gates-readme-bullet-too-long",
+      "breaks": "The README's SIMD bullet gains a second fact and runs past 125 characters as rendered",
+      "check": "gates.py readme-built-bullets",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "WebAssembly SIMD128, each tested against scalar.\n",
+          "new": "WebAssembly SIMD128, each tested against scalar, and on both hosts the parser's default stays scalar.\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}",
+        "--only",
+        "readme-built-bullets"
+      ],
+      "expect": {
+        "signature": "^gates: FAIL readme-built-bullets README\\.md:\\d+: \\d+ characters as rendered, more than 125",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-readme-bullet-second-link",
+      "breaks": "The README's invariants bullet gains a second link",
+      "check": "gates.py readme-built-bullets",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "fails on real data ([RESULTS.md](RESULTS.md#how-to-read-them)).",
+          "new": "fails on real data ([RESULTS.md](RESULTS.md#how-to-read-them), [NOTES](docs/NOTES.md))."
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}",
+        "--only",
+        "readme-built-bullets"
+      ],
+      "expect": {
+        "signature": "^gates: FAIL readme-built-bullets README\\.md:\\d+: 2 links, more than 1",
+        "exit": 1
       }
     }
   ]

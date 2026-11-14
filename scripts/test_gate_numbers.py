@@ -257,6 +257,7 @@ class Gate(unittest.TestCase):
     def test_a_wrong_figure_in_a_copy_of_the_writeup_is_caught(self):
         tree = Path(self.directory.name) / "repo"
         shutil.copytree(REPO_ROOT / "results", tree / "results")
+        shutil.copy(REPO_ROOT / "BENCHMARKS.md", tree / "BENCHMARKS.md")
         text = (REPO_ROOT / "WRITEUP.md").read_text(encoding="utf-8")
         (tree / "WRITEUP.md").write_text(text, encoding="utf-8")
         code, output = run(tree, "--page", "WRITEUP.md")
@@ -280,7 +281,7 @@ class Gate(unittest.TestCase):
         self.write("WRITEUP.md", "| Queue | Median round trip, ns | File |\n|---|---|---|\n"
                    "| rigtorp | 198.5 | results/queues.md |\n"
                    "| moodycamel | 169.3 | results/queues.md |\n\n"
-                   "The forms missed `switch` 2.0303 a message and `table` 2.1005 "
+                   "The forms ran `switch` 2.0303 a message and `table` 2.1005 "
                    "([results/queues.md](results/queues.md)).\n")
         code, output = run(self.root)
         self.assertEqual(code, 0, output)
@@ -312,6 +313,123 @@ class Gate(unittest.TestCase):
             self.assertEqual(code, 1, output)
             self.assertIn(f"WRITEUP.md:1: {wrong} is not in results/resumptions.md together",
                           output)
+
+    def test_a_figure_in_billions_or_millions_is_held_as_its_rounding(self):
+        self.write("results/sessions.md", "# Sessions\n\n| Sessions | Messages | Rate |\n"
+                   "|---|---|---|\n| all ten | 3,081,392,329 | 5,150,000 |\n")
+        cite = " ([results/sessions.md](results/sessions.md)).\n"
+        for held in ("3.08 billion messages", "3.1 billion messages", "3,081.4 million messages",
+                     "5.15 million a second, the rate", "3,081,392,329 messages"):
+            self.write("WRITEUP.md", f"The sessions ran {held}{cite}")
+            code, output = run(self.root)
+            self.assertEqual(code, 0, f"{held}: {output}")
+        for wrong in ("The sessions ran 3.09 billion messages",
+                      "The sessions ran 3.08 million messages",
+                      "The sessions ran 3.082 billion messages",
+                      "The sessions ran 5.15 billion a second, the rate",
+                      "The day took 3.08 billion faults"):
+            self.write("WRITEUP.md", f"{wrong}{cite}")
+            code, output = run(self.root)
+            self.assertEqual(code, 1, f"{wrong}: {output}")
+            figure = " ".join(wrong.split()[3:5])
+            self.assertIn(f"WRITEUP.md:1: {figure} is not in results/sessions.md, nor a figure "
+                          "that rounds to it,", output)
+
+    def real_tree(self, page):
+        """A tree of the repository's own results and BENCHMARKS.md, with one page."""
+        tree = Path(self.directory.name) / "real"
+        if not tree.exists():
+            shutil.copytree(REPO_ROOT / "results", tree / "results")
+            shutil.copy(REPO_ROOT / "BENCHMARKS.md", tree / "BENCHMARKS.md")
+        (tree / "README.md").write_text(page, encoding="utf-8")
+        return run(tree, "--page", "README.md")
+
+    def test_a_verdict_word_is_held_to_its_targets_result(self):
+        code, output = self.real_tree("On the Zen 1 host T-BT-1 is met and T-BT-3 is missed.\n")
+        self.assertEqual(code, 0, output)
+        code, output = self.real_tree("On the Zen 1 host T-BT-1 is met and T-BT-3 is met.\n")
+        self.assertEqual(code, 1, output)
+        self.assertIn("README.md:1: 'met' for T-BT-3: its result is missed", output)
+        self.assertEqual(len(re.findall(r"FAIL", output)), 1, output)
+        code, output = self.real_tree("T-BT-3 is met.\n")
+        self.assertEqual(code, 1, output)
+        # Its bar was set on a Mac, and there it is met: a sentence that names the host is held
+        # to that host's rows.
+        code, output = self.real_tree("T-BT-3 is met on the Mac.\n")
+        self.assertEqual(code, 0, output)
+        code, output = self.real_tree("T-SPSC-1 and T-SPSC-2 are missed and T-SPSC-3 is met.\n")
+        self.assertEqual(code, 0, output)
+        code, output = self.real_tree("T-SPSC-1 and T-SPSC-2 are met and T-SPSC-3 is met.\n")
+        self.assertEqual(code, 1, output)
+        self.assertEqual(len(re.findall(r"FAIL", output)), 2, output)
+        code, output = self.real_tree("T-INV-2, the strict check, fails and stays failing.\n")
+        self.assertEqual(code, 0, output)
+        code, output = self.real_tree("T-INV-2, the strict check, passes.\n")
+        self.assertEqual(code, 1, output)
+        code, output = self.real_tree("T-NONE-1 is met.\n")
+        self.assertEqual(code, 1, output)
+        self.assertIn("no target of BENCHMARKS.md's", output)
+
+    def test_no_verdict_is_held_too(self):
+        code, output = self.real_tree("On the Mac T-BOOK-1 has no verdict.\n")
+        self.assertEqual(code, 0, output)
+        code, output = self.real_tree("T-BOOK-1 has no verdict.\n")
+        self.assertEqual(code, 1, output)
+        self.assertIn("its result is missed", output)
+
+    def test_a_count_after_a_verdict_is_held_to_the_rows(self):
+        code, output = self.real_tree("T-TRADE-3 fails on four of the ten sessions, and "
+                                      "T-TRADE-5 fails on two.\n")
+        self.assertEqual(code, 0, output)
+        for wrong in ("three of the ten sessions", "4 of 9 sessions", "four of the eleven days"):
+            code, output = self.real_tree(f"T-TRADE-3 fails on {wrong}.\n")
+            self.assertEqual(code, 1, wrong)
+            self.assertIn("for T-TRADE-3: its rows give 4 of 10", output)
+        code, output = self.real_tree("T-TRADE-5 fails on three.\n")
+        self.assertEqual(code, 1, output)
+        self.assertIn("its rows give 2", output)
+
+    def test_a_verdict_word_that_names_no_target_is_refused_unless_marked(self):
+        code, output = self.real_tree("The check failed.\n")
+        self.assertEqual(code, 1, output)
+        self.assertIn("'failed' names no target", output)
+        code, output = self.real_tree(f"The check failed. {gate_numbers.VERDICT_MARK}\n")
+        self.assertEqual(code, 0, output)
+        code, output = self.real_tree("## Every target missed\n\nEach missed target is below; "
+                                      "targets met are in RESULTS.md.\n")
+        self.assertEqual(code, 0, output)
+
+    def test_a_noun_form_is_read_only_straight_after_a_target(self):
+        code, output = self.real_tree("T-PERF-2 counts branch misses over timed passes.\n")
+        self.assertEqual(code, 0, output)
+        code, output = self.real_tree("T-PERF-2 passes.\n")
+        self.assertEqual(code, 1, output)
+        code, output = self.real_tree("T-PERF-2, the branch-miss rate, misses.\n")
+        self.assertEqual(code, 0, output)
+
+    def test_a_generated_block_is_left_to_results_table(self):
+        begin = "<!-- headline: begin, generated by scripts/results_table.py, do not edit -->"
+        code, output = self.real_tree(f"{begin}\n| T-BT-3 | met |\n<!-- headline: end -->\n")
+        self.assertEqual(code, 0, output)
+
+    def test_a_count_in_words_is_a_figure_where_its_line_cites_a_file(self):
+        self.write("results/runs.md", "# Runs\n\n- repetitions: 3\n")
+        self.write("WRITEUP.md", "It ran three repetitions ([results/runs.md](results/runs.md)).\n"
+                   "It ran four repetitions in all.\n")
+        code, output = run(self.root)
+        self.assertEqual(code, 0, output)
+        self.write("WRITEUP.md", "It ran four repetitions ([results/runs.md](results/runs.md)).\n")
+        code, output = run(self.root)
+        self.assertEqual(code, 1, output)
+        self.assertIn("WRITEUP.md:1: four is not in results/runs.md", output)
+        # Four cores name hardware, and `one` is read only in "one of N".
+        self.write("WRITEUP.md", "On four cores one run of three repetitions "
+                   "([results/runs.md](results/runs.md)).\n")
+        code, output = run(self.root)
+        self.assertEqual(code, 0, output)
+        figures = [figure for _, figure, _ in gate_numbers.figures_in(
+            "One of three ran ([results/runs.md](results/runs.md)).\n")]
+        self.assertEqual(figures, ["One", "three"])
 
     def test_no_pages_at_all_passes_and_says_so(self):
         (self.root / "README.md").unlink()

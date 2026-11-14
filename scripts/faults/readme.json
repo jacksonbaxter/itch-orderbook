@@ -5,6 +5,7 @@
     "README.md",
     "RESULTS.md",
     "WRITEUP.md",
+    "docs/DETAILS.md",
     "results",
     "scripts",
     "tests/CMakeLists.txt",
@@ -42,8 +43,8 @@
       "mutations": [
         {
           "file": "RESULTS.md",
-          "old": "strict: 18,958 crossed",
-          "new": "strict: 18,959 crossed"
+          "old": "| **FAIL** | strict: 18,958 crossed",
+          "new": "| **FAIL** | strict: 18,959 crossed"
         }
       ],
       "command": [
@@ -65,8 +66,8 @@
       "mutations": [
         {
           "file": "RESULTS.md",
-          "old": "strict: 18,958 crossed",
-          "new": "strict: 18,959 crossed"
+          "old": "| **FAIL** | strict: 18,958 crossed",
+          "new": "| **FAIL** | strict: 18,959 crossed"
         }
       ],
       "command": [
@@ -520,8 +521,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "| p50 140.14 ns; p99 840.86 ns;",
-          "new": "| p50 120.14 ns; p99 840.86 ns;"
+          "old": "| 5.15 M msg/s; `paged-flat`",
+          "new": "| 5.25 M msg/s; `paged-flat`"
         }
       ],
       "command": [
@@ -535,7 +536,7 @@
         "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 120\\.14 is not in results/bench_book_paged-flat_ram_debian_12302019\\.md",
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 5\\.25 is not in results/bench_book_paged-flat_ram_debian_12302019\\.md",
         "exit": 1
       }
     },
@@ -635,8 +636,8 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "    (\"T-BOOK-1\", \"bench_book_paged-flat_ram_debian_12302019.md\", book_headline,\n     \"Every symbol's L3 book rebuilt over a whole day\"),\n    (\"T-LAT-2\", \"bench_book_paged-flat_ram_debian_12302019.md\", book_headline,\n     \"Latency of one book update, over every message of the day\"),\n",
-          "new": "    (\"T-BT-1\", \"backtest_quoting_debian_12302019.md\", targets_headline,\n     \"The backtester replaying the whole day with a quoting strategy and its queue model\"),\n"
+          "old": "    (\"T-BOOK-1\", \"bench_book_paged-flat_ram_debian_12302019.md\", book_headline,\n     \"Every symbol's full-depth book rebuilt from a whole day\"),\n    (\"T-DESIGN-1\", \"bench_book_paged-flat_ram_debian_12302019.md\", book_headline,\n     \"Speed over a `std::map` book, same run and core\"),\n",
+          "new": "    (\"T-BOOK-3\", \"bench_book_paged-flat_ram_debian_12302019.md\", book_headline,\n     \"The book's memory\"),\n"
         }
       ],
       "command": [
@@ -774,7 +775,7 @@
     {
       "id": "readme-headline-size-unchecked",
       "breaks": "A headline of any length is accepted",
-      "check": "test_results_table.py test_the_headline_is_five_or_six_rows",
+      "check": "test_results_table.py test_the_headline_is_four_or_five_rows",
       "mutations": [
         {
           "file": "scripts/results_table.py",
@@ -788,7 +789,7 @@
         "{tree}/scripts/test_results_table.py"
       ],
       "expect": {
-        "signature": "FAIL: test_the_headline_is_five_or_six_rows"
+        "signature": "FAIL: test_the_headline_is_four_or_five_rows"
       }
     },
     {
@@ -798,8 +799,8 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "    codes = [check_page(root, page, begin, end, fresh[page]) for page, begin, end, _ in PAGES]\n    return max(codes)\n",
-          "new": "    for page, begin, end, _ in PAGES:\n        if check_page(root, page, begin, end, fresh[page]):\n            return 1\n    return 0\n"
+          "old": "    codes = [check_page(root, page, begin, end, fresh[page, begin])\n             for page, begin, end, _ in PAGES]\n    return max(codes)\n",
+          "new": "    for page, begin, end, _ in PAGES:\n        if check_page(root, page, begin, end, fresh[page, begin]):\n            return 1\n    return 0\n"
         }
       ],
       "command": [
@@ -818,8 +819,8 @@
       "mutations": [
         {
           "file": "scripts/gate_numbers.py",
-          "old": "DEFAULT_PAGES = (\"README.md\", \"RESULTS.md\", \"WRITEUP.md\", \"docs/index.html\")",
-          "new": "DEFAULT_PAGES = (\"README.md\", \"WRITEUP.md\", \"docs/index.html\")"
+          "old": "DEFAULT_PAGES = (\"README.md\", \"RESULTS.md\", \"WRITEUP.md\", \"docs/DETAILS.md\", \"docs/index.html\")",
+          "new": "DEFAULT_PAGES = (\"README.md\", \"WRITEUP.md\", \"docs/DETAILS.md\", \"docs/index.html\")"
         }
       ],
       "command": [
@@ -895,8 +896,8 @@
     },
     {
       "id": "readme-headline-peer-core-dropped",
-      "breaks": "A headline row of a run on two cores names only the first core's pinning",
-      "check": "test_results_table.py test_the_headline_has_its_targets_in_order_each_from_its_file",
+      "breaks": "A row of a run on two cores names only the first core's pinning",
+      "check": "test_results_table.py test_an_spsc_file_gets_a_row_for_each_comparison",
       "mutations": [
         {
           "file": "scripts/results_table.py",
@@ -910,7 +911,7 @@
         "{tree}/scripts/test_results_table.py"
       ],
       "expect": {
-        "signature": "FAIL: test_the_headline_has_its_targets_in_order_each_from_its_file"
+        "signature": "FAIL: test_an_spsc_file_gets_a_row_for_each_comparison"
       }
     },
     {
@@ -1028,8 +1029,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "no verdict:** 21.87 M msg/s,",
-          "new": "no verdict:** 21.78 M msg/s,"
+          "old": "no verdict:** 21.87 M msg/s;",
+          "new": "no verdict:** 21.78 M msg/s;"
         }
       ],
       "command": [
@@ -1050,8 +1051,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "L3 book at 5.15 M messages/s with the day in memory",
-          "new": "L3 book at 5.25 M messages/s with the day in memory"
+          "old": "book rebuilt at 5.15 M msg/s on one core",
+          "new": "book rebuilt at 5.25 M msg/s on one core"
         }
       ],
       "command": [
@@ -1061,7 +1062,7 @@
         "readme"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 5\\.25 is not in results/bench_book_paged-flat_ram_debian_12302019\\.md",
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 5\\.25 is not in any file it cites",
         "exit": 1
       }
     },
@@ -1072,8 +1073,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "the same design runs at 21.87 M messages/s",
-          "new": "the same design runs at 21.97 M messages/s"
+          "old": "and 21.87 M msg/s on an Apple M4 Max",
+          "new": "and 21.97 M msg/s on an Apple M4 Max"
         }
       ],
       "command": [
@@ -1083,7 +1084,7 @@
         "readme"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 21\\.97 is not in results/bench_book_paged-flat_ram_mac_12302019\\.md",
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 21\\.97 is not in any file it cites",
         "exit": 1
       }
     },
@@ -1630,8 +1631,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "over 10 full trading sessions",
-          "new": "over 12 full trading sessions"
+          "old": "messages over 10 full sessions",
+          "new": "messages over 12 full sessions"
         }
       ],
       "command": [
@@ -1652,11 +1653,11 @@
     },
     {
       "id": "readme-prose-pool-faults-reordered",
-      "breaks": "The README's pool faults on base pages given to the wrong arms, 136 and 146 swapped (the reviewer's r7-3 edit)",
+      "breaks": "RESULTS.md's pool faults on base pages given to the wrong arms, 136 and 146 swapped (the reviewer's r7-3 edit, moved from the README's list of what is built)",
       "check": "gate_numbers.py on README.md and RESULTS.md",
       "mutations": [
         {
-          "file": "README.md",
+          "file": "RESULTS.md",
           "old": "take 136, 200 and 146 on base pages",
           "new": "take 146, 200 and 136 on base pages"
         }
@@ -1673,17 +1674,17 @@
         "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 146 is not in any file it cites as pool-index's",
+        "signature": "gate_numbers: FAIL RESULTS\\.md:\\d+: 146 is not in any file it cites as pool-index's",
         "exit": 1
       }
     },
     {
       "id": "readme-prose-pool-faults-zeroed",
-      "breaks": "The README's pool faults on transparent pages written as none, 4, 1 and 0 to 0, 0 and 0 (the reviewer's r7-3 edit)",
+      "breaks": "RESULTS.md's pool faults on transparent pages written as none, 4, 1 and 0 to 0, 0 and 0 (the reviewer's r7-3 edit, moved from the README's list of what is built)",
       "check": "gate_numbers.py on README.md and RESULTS.md",
       "mutations": [
         {
-          "file": "README.md",
+          "file": "RESULTS.md",
           "old": "and 4, 1 and 0 on transparent ones",
           "new": "and 0, 0 and 0 on transparent ones"
         }
@@ -1700,19 +1701,19 @@
         "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 0 is not in any file it cites as pool-index's",
+        "signature": "gate_numbers: FAIL RESULTS\\.md:\\d+: 0 is not in any file it cites as pool-index's",
         "exit": 1
       }
     },
     {
       "id": "readme-prose-udp-rates-swapped",
-      "breaks": "The README's UDP rates swapped between S4 and the U2/S3 pair (the reviewer's r7-3 edit)",
+      "breaks": "RESULTS.md's UDP rates swapped between S4 and the U2/S3 pair (the reviewer's r7-3 edit, moved from the README's list of what is built)",
       "check": "gate_numbers.py on README.md and RESULTS.md",
       "mutations": [
         {
-          "file": "README.md",
-          "old": "with no loss, 2,830,848 messages/s; U2 and S3, the headline pair, tie at 2,735,896",
-          "new": "with no loss, 2,735,896 messages/s; U2 and S3, the headline pair, tie at 2,830,848"
+          "file": "RESULTS.md",
+          "old": "with no loss, 2,830,848 messages/s, and U2 and S3 tie at 2,735,896",
+          "new": "with no loss, 2,735,896 messages/s, and U2 and S3 tie at 2,830,848"
         }
       ],
       "command": [
@@ -1727,7 +1728,7 @@
         "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 2,735,896 is not in results/udp_bisect_debian_12302019\\.md",
+        "signature": "gate_numbers: FAIL RESULTS\\.md:\\d+: 2,735,896 is not in any file it cites",
         "exit": 1
       }
     },
@@ -2118,8 +2119,8 @@
       "mutations": [
         {
           "file": "scripts/gate_numbers.py",
-          "old": "DEFAULT_PAGES = (\"README.md\", \"RESULTS.md\", \"WRITEUP.md\", \"docs/index.html\")",
-          "new": "DEFAULT_PAGES = (\"README.md\", \"RESULTS.md\", \"docs/index.html\")"
+          "old": "DEFAULT_PAGES = (\"README.md\", \"RESULTS.md\", \"WRITEUP.md\", \"docs/DETAILS.md\", \"docs/index.html\")",
+          "new": "DEFAULT_PAGES = (\"README.md\", \"RESULTS.md\", \"docs/DETAILS.md\", \"docs/index.html\")"
         }
       ],
       "command": [
@@ -2155,13 +2156,13 @@
     },
     {
       "id": "readme-writeup-table-typed-over",
-      "breaks": "A row of WRITEUP.md's generated table of missed targets is typed over by hand",
+      "breaks": "A line of WRITEUP.md's generated list of missed targets is typed over by hand",
       "check": "results_table.py --check",
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "| T-SPSC-1, project rtt / rigtorp rtt | ≤ 1.00× | 1.16× |",
-          "new": "| T-SPSC-1, project rtt / rigtorp rtt | ≤ 1.00× | 1.17× |"
+          "old": "rigtorp:** 1.15× against ≥ 1.16×",
+          "new": "rigtorp:** 1.14× against ≥ 1.16×"
         }
       ],
       "command": [
@@ -2570,12 +2571,12 @@
     },
     {
       "id": "readme-parse-target-row-dropped",
-      "breaks": "WRITEUP's table has no row for T-PARSE-2, measured and missed",
+      "breaks": "The table of every target missed or not measured has no row for T-PARSE-2, measured and missed",
       "check": "test_results_table.py MissedTargets.test_the_parse_targets_are_measured_rows_from_their_file",
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "    (\"T-PARSE-2\", PARSE_DEBIAN, missed_row, \"as T-PARSE-1: [The parse rate](#the-parse-rate)\"),\n",
+          "old": "    (\"T-PARSE-2\", PARSE_DEBIAN, missed_row,\n     (\"as T-PARSE-1\", \"the host's share not established\")),\n",
           "new": ""
         }
       ],
@@ -2586,7 +2587,7 @@
         "MissedTargets.test_the_parse_targets_are_measured_rows_from_their_file"
       ],
       "expect": {
-        "signature": "FAIL: test_the_parse_targets_are_measured_rows_from_their_file",
+        "signature": "(FAIL|ERROR): test_the_parse_targets_are_measured_rows_from_their_file",
         "exit": 1
       }
     },
@@ -2631,6 +2632,465 @@
       ],
       "expect": {
         "signature": "(FAIL|ERROR): test_a_passing_input_resident_with_pages_missing_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-bt3-verdict-flipped",
+      "breaks": "The README says T-BT-3 is met on the Zen 1 host, where its row is missed",
+      "check": "gate_numbers.py on README.md, the verdict rule",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "(T-BT-3) is missed.",
+          "new": "(T-BT-3) is met."
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 'met' for T-BT-3: its result is missed",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-trade3-count-edited",
+      "breaks": "The README gives T-TRADE-3 three failing sessions of ten, where its rows give four",
+      "check": "gate_numbers.py on README.md, the count after a verdict",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "fails on four of the ten sessions",
+          "new": "fails on three of the ten sessions"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 'fails on 3 of 10' for T-TRADE-3: its rows give 4 of 10",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-verdict-not-compared",
+      "breaks": "gate_numbers.py refuses a verdict word only for a target with no verdict, so a met for a missed target passes",
+      "check": "test_gate_numbers.py test_a_verdict_word_is_held_to_its_targets_result",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "                    if verdict != kind:\n",
+          "new": "                    if verdict is None:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_verdict_word_is_held_to_its_targets_result"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_verdict_word_is_held_to_its_targets_result",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-verdict-host-ignored",
+      "breaks": "gate_numbers.py holds a verdict word to every row of its target, not to the rows of the host its sentence names",
+      "check": "test_gate_numbers.py test_a_verdict_word_is_held_to_its_targets_result",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "        for keep in (lambda row: len(hosts) == 1 and row[2] in hosts,\n",
+          "new": "        for keep in (lambda row: False,\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_verdict_word_is_held_to_its_targets_result"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_verdict_word_is_held_to_its_targets_result",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-verdict-count-of-unchecked",
+      "breaks": "gate_numbers.py holds the N of \"fails on N of M sessions\" and lets M through",
+      "check": "test_gate_numbers.py test_a_count_after_a_verdict_is_held_to_the_rows",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "                        if said != have:\n",
+          "new": "                        if said[:1] != have[:1]:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_count_after_a_verdict_is_held_to_the_rows"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_count_after_a_verdict_is_held_to_the_rows",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-untied-verdict-let-through",
+      "breaks": "gate_numbers.py refuses an untied verdict word only when it is a noun form, so \"the check failed\" passes",
+      "check": "test_gate_numbers.py test_a_verdict_word_that_names_no_target_is_refused_unless_marked",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "                    if how == \"anywhere\" and not (marked or heading or beside):\n",
+          "new": "                    if how == \"straight\" and not (marked or heading or beside):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_verdict_word_that_names_no_target_is_refused_unless_marked"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_verdict_word_that_names_no_target_is_refused_unless_marked",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-noun-read-as-verdict",
+      "breaks": "gate_numbers.py reads misses and passes anywhere, so \"branch misses\" is refused as a verdict with no target",
+      "check": "test_gate_numbers.py test_a_noun_form_is_read_only_straight_after_a_target",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "(?i:met|meets|missed|fails|failed|failing|passed)",
+          "new": "(?i:met|meets|missed|misses|fails|failed|failing|passed|passes)"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_noun_form_is_read_only_straight_after_a_target"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_noun_form_is_read_only_straight_after_a_target",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-generated-verdicts-read",
+      "breaks": "gate_numbers.py reads the verdict words of a generated block, which results_table.py holds cell by cell",
+      "check": "test_gate_numbers.py test_a_generated_block_is_left_to_results_table",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "        if in_fence or number in generated:\n            continue\n        marked",
+          "new": "        if in_fence:\n            continue\n        marked"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_generated_block_is_left_to_results_table"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_generated_block_is_left_to_results_table",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-count-words-unread",
+      "breaks": "gate_numbers.py reads no count written as a word, so \"three runs\" is held to nothing",
+      "check": "test_gate_numbers.py test_a_count_in_words_is_a_figure_where_its_line_cites_a_file",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "            if cited_line and number not in generated:\n",
+          "new": "            if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_count_in_words_is_a_figure_where_its_line_cites_a_file"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_count_in_words_is_a_figure_where_its_line_cites_a_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-summary-verdict-best-row",
+      "breaks": "RESULTS.md's summary gives a target met when any row is met, so T-BT-3, missed on the Zen 1 host, reads met",
+      "check": "test_results_table.py test_the_summary_gives_each_target_one_verdict_from_its_rows",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    return \"missed\" if \"missed\" in classes else \"met\"\n",
+          "new": "    return \"met\" if \"met\" in classes else \"missed\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "ResultsTable.test_the_summary_gives_each_target_one_verdict_from_its_rows"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_the_summary_gives_each_target_one_verdict_from_its_rows",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-writeup-list-every-row",
+      "breaks": "WRITEUP.md's list of misses gives a line for every row, not one short line a target",
+      "check": "test_results_table.py MissedTargets.test_the_writeup_table_has_one_short_line_a_target",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        groups.setdefault(row[0].split(\",\")[0], []).append(row)\n    lines = [\"Every line",
+          "new": "        groups.setdefault(row[0], []).append(row)\n    lines = [\"Every line"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_the_writeup_table_has_one_short_line_a_target"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_the_writeup_table_has_one_short_line_a_target",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-parse3-day-line-fixed",
+      "breaks": "RESULTS.md says T-PARSE-3's bar day is not measured even when its results file is there",
+      "check": "test_results_table.py MissedTargets.test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    return PARSE_DAY_LINES[(root / \"results\" / PARSE_BAR_DAY).is_file()]\n",
+          "new": "    return PARSE_DAY_LINES[0]\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-fault-row-elsewhere-dropped",
+      "breaks": "RESULTS.md's fault-matrix row leaves out the faults not run on its host, so its count reads as every fault",
+      "check": "test_results_table.py test_the_fault_matrix_row_says_which_faults_this_host_did_not_run",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "            \"their run on a host of that system is recorded in docs/NOTES.md\" if elsewhere else \"\")\n",
+          "new": "            \"their run on a host of that system is recorded in docs/NOTES.md\" if False else \"\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "ResultsTable.test_the_fault_matrix_row_says_which_faults_this_host_did_not_run"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_the_fault_matrix_row_says_which_faults_this_host_did_not_run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-parse-condition-unread",
+      "breaks": "RESULTS.md gives every parse-rate file the page-cache condition, the 10302019 file's own copy of the day included",
+      "check": "test_results_table.py MissedTargets.test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        copy = CONDITION_LINE.search(text)\n",
+          "new": "        copy = None\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-pitch-billion-edited",
+      "breaks": "The pitch's message count, written in billions, edited, 3.08 to 3.09 billion",
+      "check": "gate_numbers.py on README.md, a figure in billions held as a rounding",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "in 3.08 billion messages",
+          "new": "in 3.09 billion messages"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 3\\.09 billion is not in results/oracle_sessions\\.md, nor a figure that rounds to it,",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-prose-pitch-billion-as-million",
+      "breaks": "The pitch's message count says million where the file's count is in billions, so no figure of the file rounds to it",
+      "check": "gate_numbers.py on README.md, a figure in millions held as a rounding",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "in 3.08 billion messages",
+          "new": "in 3.08 million messages"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "README.md",
+        "--page",
+        "RESULTS.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 3\\.08 million is not in results/oracle_sessions\\.md, nor a figure that rounds to it,",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-billion-not-rounded",
+      "breaks": "gate_numbers.py takes any figure of the cited file as the one a figure in billions or millions rounds, so 3.09 billion passes beside 3,081,392,329",
+      "check": "test_gate_numbers.py test_a_figure_in_billions_or_millions_is_held_as_its_rounding",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "    return rounded == written\n",
+          "new": "    return True\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_figure_in_billions_or_millions_is_held_as_its_rounding"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_figure_in_billions_or_millions_is_held_as_its_rounding",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-gate-billion-unread",
+      "breaks": "gate_numbers.py reads no billion or million after a figure, so 3.08 billion is held to a 3.08 the file does not have",
+      "check": "test_gate_numbers.py test_a_figure_in_billions_or_millions_is_held_as_its_rounding",
+      "mutations": [
+        {
+          "file": "scripts/gate_numbers.py",
+          "old": "                if scaled and re.fullmatch(",
+          "new": "                if False and re.fullmatch("
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gate_numbers.py",
+        "Gate.test_a_figure_in_billions_or_millions_is_held_as_its_rounding"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_figure_in_billions_or_millions_is_held_as_its_rounding",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-built-tally-typed-over",
+      "breaks": "The README's count of the summary's verdicts, under its list of what is built, typed over by hand, one target fewer",
+      "check": "results_table.py --check",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "Of the 41 targets in [RESULTS.md's summary]",
+          "new": "Of the 40 targets in [RESULTS.md's summary]"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/results_table.py",
+        "--root",
+        "{tree}",
+        "--check"
+      ],
+      "expect": {
+        "signature": "results_table: FAIL README\\.md:\\d+: differs from a fresh run",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-built-tally-misses-dropped",
+      "breaks": "results_table.py's count of the summary's verdicts leaves the missed targets out, so the README's short list hides its misses",
+      "check": "test_results_table.py test_the_readme_counts_the_summarys_verdicts",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        counts[shown] += 1\n",
+          "new": "        counts[shown] += shown != \"**missed**\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "ResultsTable.test_the_readme_counts_the_summarys_verdicts"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_the_readme_counts_the_summarys_verdicts",
         "exit": 1
       }
     }
