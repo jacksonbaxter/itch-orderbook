@@ -635,6 +635,204 @@
         "signature": "^FAIL: test_a_paragraph_that_gives_no_count_is_taken",
         "exit": 1
       }
+    },
+    {
+      "id": "review-gate-count-unheld",
+      "breaks": "review_report.py takes a checker of the acceptance gate whose findings listed and not listed are not the counts its report states, so dropping the gate's findings renders the record complete (r18-3)",
+      "check": "test_review_report.py ReviewReport.test_a_checkers_findings_are_held_to_its_reports_count",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        if by_checker[cid] != stated:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_checkers_findings_are_held_to_its_reports_count"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_checkers_findings_are_held_to_its_reports_count",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-gate-blank-label-taken",
+      "breaks": "review_report.py takes a finding of the acceptance gate whose label is blank or padded (r18-3)",
+      "check": "test_review_report.py ReviewReport.test_a_blank_label_or_checker_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    if not label.strip() or label != label.strip() or \"|\" in label",
+          "new": "    if not label or \"|\" in label"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_blank_label_or_checker_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_blank_label_or_checker_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-gate-blank-checker-taken",
+      "breaks": "review_report.py takes a checker of the acceptance gate whose id is blank or more than one word",
+      "check": "test_review_report.py ReviewReport.test_a_blank_label_or_checker_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "        if not cid.strip() or cid != cid.strip() or \" \" in cid:\n",
+          "new": "        if not cid:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_blank_label_or_checker_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_blank_label_or_checker_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-gate-not-listed-stands-for-more",
+      "breaks": "review_report.py counts a finding of the acceptance gate not listed as two, so a finding can be dropped from the record and still be counted (r18-4)",
+      "check": "test_review_report.py ReviewReport.test_a_finding_not_listed_is_counted_with_its_severity_and_reason",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "            unlisted[severity] += 1\n",
+          "new": "            unlisted[severity] += 2\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_finding_not_listed_is_counted_with_its_severity_and_reason"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_finding_not_listed_is_counted_with_its_severity_and_reason",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-gate-not-listed-without-reason",
+      "breaks": "review_report.py takes a finding of the acceptance gate not listed with no reason in words (r18-4)",
+      "check": "test_review_report.py ReviewReport.test_a_finding_not_listed_is_counted_with_its_severity_and_reason",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "            if \"|\" in reason or \"\\n\" in reason or len(REASON_WORD.findall(reason)) < REASON_WORDS:\n",
+          "new": "            if \"|\" in reason or \"\\n\" in reason:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_finding_not_listed_is_counted_with_its_severity_and_reason"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_finding_not_listed_is_counted_with_its_severity_and_reason",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-gate-not-listed-unsaid",
+      "breaks": "review_report.py says the record complete without saying, in the same line, which findings of the acceptance gate are not listed and why (r18-4)",
+      "check": "test_review_report.py ReviewReport.test_complete_is_said_with_what_is_not_listed",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    unlisted = \"\".join(f\" {sentence}\" for sentence in not_listed_words(data))\n",
+          "new": "    unlisted = \"\"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_complete_is_said_with_what_is_not_listed"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_complete_is_said_with_what_is_not_listed",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-test-name-any-ending-taken",
+      "breaks": "review_report.py takes a file of an ending it does not list, such as a workflow, as a test's own name (r18-5)",
+      "check": "test_review_report.py ReviewReport.test_a_file_of_another_ending_or_folder_is_not_a_test",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    return \".\" in test and not TEST_OF_ITS_OWN.match(last)\n",
+          "new": "    return \".\" in test and last in (\"py\", \"cpp\", \"hpp\", \"h\", \"sh\", \"md\", \"js\", \"json\", \"txt\")\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_file_of_another_ending_or_folder_is_not_a_test"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_file_of_another_ending_or_folder_is_not_a_test",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-test-file-any-folder-taken",
+      "breaks": "review_report.py takes a file named test_ in any folder as a test (r18-5)",
+      "check": "test_review_report.py ReviewReport.test_a_file_of_another_ending_or_folder_is_not_a_test",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    return parts[-1].startswith(\"test_\") and (len(parts) == 1 or (len(parts) == 2\n",
+          "new": "    return parts[-1].startswith(\"test_\") and (len(parts) >= 1 or (len(parts) == 2\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_file_of_another_ending_or_folder_is_not_a_test"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_file_of_another_ending_or_folder_is_not_a_test",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-test-file-any-ending-taken",
+      "breaks": "review_report.py takes a file named test_ that is not code, such as a results page, as a test (r18-5)",
+      "check": "test_review_report.py ReviewReport.test_a_file_of_another_ending_or_folder_is_not_a_test",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    if not test.endswith(TEST_ENDINGS) or test.startswith(\"/\") or \"..\" in parts:\n",
+          "new": "    if test.startswith(\"/\") or \"..\" in parts:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_file_of_another_ending_or_folder_is_not_a_test"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_file_of_another_ending_or_folder_is_not_a_test",
+        "exit": 1
+      }
     }
   ]
 }
