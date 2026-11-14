@@ -22,7 +22,7 @@ On the Zen 1 host the `cache-misses` event counts L2 misses: a pointer chase at 
 
 On the Mac the designs rank as on the Zen 1 host except the two linked arms, which swap: `paged-linked` is ahead of `hash-linked` there in every repetition, while on the Zen 1 host their ranges overlap. The Mac read no cache counters, so why the hosts differ is not established; those Mac runs were made before the Mac's sampler rule ([results/bench_book_paged-flat_ram_mac_12302019.md](../results/bench_book_paged-flat_ram_mac_12302019.md) and the files beside it).
 
-The profile shows where the waiting is. `FastBook::apply` is the widest frame at 42.14% self, and nothing outside the pass, no allocation, system call or timer frame, shows above 0.1% ([results/flamegraph_paged-flat_debian_12302019.md](../results/flamegraph_paged-flat_debian_12302019.md)).
+The profile shows where the waiting is. `FastBook::apply` is the widest frame at 42.14% self, and nothing outside the pass, no allocation, system call or timer frame, shows above 0.1% ([results/flamegraph_paged-flat_debian_12302019.md](../results/flamegraph_paged-flat_debian_12302019.md)). The flamegraph target in BENCHMARKS.md sets no bar, so it has no verdict: it asks for a user-space profile of each hot path, and the frame-pointer build those profiles need ran at 0.9755 of the normal build's throughput.
 
 About four fifths of `apply`'s samples sit on three instructions, each just after a load that depends on the one before: the page index's slot, then the order record, then its level.
 
