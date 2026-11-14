@@ -42,7 +42,7 @@ Prefetching one structure at a time took 22.7% of the fills off the demand path 
 
 ## Memory
 
-The allocation counter behind the write-up's 0 counts every `operator new`, not `malloc`.
+The allocation counter behind the write-up's 0 counts every `operator new`, not `malloc`, and is checked against a control book that allocates ([results/oracle_12302019.md](../results/oracle_12302019.md)).
 
 T-ARENA-1 asks what the allocator alone is worth, so a separate linked-level book, `NodeBook`, changes only its allocator. The arms are glibc malloc on a fresh and an aged heap, mimalloc, `std::pmr::unsynchronized_pool_resource`, and three pools of this project's: index-linked, pointer-linked, and one that reuses its oldest free node. Each pool touches every node before the timed pass.
 
@@ -77,7 +77,7 @@ Dispatch, `switch` vs a table vs threaded:
 - The indirect forms made more branch misses, not fewer: `switch` 2.0303 per message, `table` 2.1005, `threaded` 2.0905 ([results/dispatch_debian_12302019.md](../results/dispatch_debian_12302019.md)).
 - A pass that only frames and classifies messages puts the floor at 7.77 ns per message, and the book forms stand 182.87, 184.62 and 181.61 ns above it ([results/dispatch_debian_12302019.md](../results/dispatch_debian_12302019.md)).
 
-The look-ahead's gain on the Zen 1 host is paid for with branch misses too, 4.7279 per message vs 2.0432 ([results/prefetch_debian_12302019.md](../results/prefetch_debian_12302019.md)).
+The look-ahead's gain on the Zen 1 host is paid for with branch misses too, 4.7279 per message vs 2.0432 ([results/prefetch_debian_12302019.md](../results/prefetch_debian_12302019.md)). In that harness the rate without look-ahead varied with a CV of 10.83% over its repetitions.
 
 On the M4 Max the look-ahead raises instructions per message from 384.4524 (D=0) to 640.4915 (D=4), which is why it is off rather than on for one target; a default per target and a cheaper look-ahead were not tried ([results/prefetch_mac_12302019.md](../results/prefetch_mac_12302019.md)).
 

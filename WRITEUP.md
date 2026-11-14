@@ -48,19 +48,19 @@ The four designs and the usual baseline (`std::map` levels and an `unordered_map
 
 The fast designs differ in how long they wait, not in how much they do: their instructions are close, and their speed falls as their fills rise. T-DESIGN-1, at least 4.0× the map book's throughput, is the ratio itch-book, an open-source C++ ITCH book, published between its fastest book and a naive one on one machine, a ratio that fell on a slower machine (BENCHMARKS.md, T-DESIGN-1); here T-DESIGN-1 is missed ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 
-Flat levels beat linked ones because a flat side is one array and most adds land near the best: 57.27% of add searches pass one better level or none ([results/window_12302019.md](results/window_12302019.md)). The paged index beats the hash and pays in memory, as the table shows; neither an identity hash nor chaining closed the gap.
+Flat levels beat linked ones because a flat side is one array and most adds land near the best: 57.27% of add searches pass one better level or none ([results/window_12302019.md](results/window_12302019.md)). The paged index beats the hash and pays in memory; neither an identity hash nor chaining closed the gap.
 
 The age of the order a message names decides its cost: a message naming an order under 1 ms old makes 0.0490 DRAM fills; a message naming an order 1 s old or more makes 4.3729; 54.5% of the messages that name an order name one 1 s old or more, and they take 90.66% of those messages' fills ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)).
 
 ## Memory
 
-The fast book made 0 allocations after warm-up in 268,744,780 messages on all four designs, counted at every `operator new` and checked against a control book that allocates ([results/oracle_12302019.md](results/oracle_12302019.md)).
+The fast book made 0 allocations after warm-up in 268,744,780 messages on all four designs, counted at every `operator new` ([results/oracle_12302019.md](results/oracle_12302019.md)).
 
 T-ARENA-1 asks what the allocator alone is worth: on a linked-level book, the index pool ran at 1.238 times glibc malloc's throughput on a fresh heap and mimalloc, an open-source allocator, at 1.128. T-ARENA-1's one hard check fails: a pool that touched every node first must take no page fault in a timed pass, and the index pool took 136, the pointer pool 200 and the oldest-first pool 146 ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)). An unpublished diagnostic run, made while the host was busy, points to memory compaction moving pages; I chose not to turn compaction off on a shared host, so whether that removes the faults is open.
 
 ## Branches and the instruction stream
 
-Prefetching is the largest gain left on the Zen 1 host: a look-ahead of D messages touches a later message's index slot, order record and level early, and D=16 gained 16.41%, 6,159,978 vs 5,291,518 messages/s; DRAM fills fell from 2.0139 to 0.8212 per message, paid for with 697.1053 instructions per message vs 397.7893. Those counts are not comparable with the table's: this harness maps the day and counts each whole timed pass, frame walk and look-ahead included, with no counter reads per message, while the table counts each `apply()` with the reads around it and the frame walk outside; its D=0 rate also varied with a CV of 10.83% ([results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md)).
+Prefetching is the largest gain left on the Zen 1 host: a look-ahead of D messages touches a later message's index slot, order record and level early, and D=16 gained 16.41%, 6,159,978 vs 5,291,518 messages/s; DRAM fills fell from 2.0139 to 0.8212 per message, paid for with 697.1053 instructions per message vs 397.7893. Those counts are not comparable with the table's: this harness maps the day and counts each whole timed pass, frame walk and look-ahead included, with no counter reads per message, while the table counts each `apply()` with the reads around it and the frame walk outside ([results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md)).
 
 On the M4 Max the look-ahead lost at every distance, -18.01% at its best, D=4, so it is off by default; the Mac read no miss counters, so why is not known ([results/prefetch_mac_12302019.md](results/prefetch_mac_12302019.md)).
 
@@ -82,7 +82,7 @@ Against open-source C++ queues on the Zen 1 host this ring's median round trip r
 
 T-SPSC-2, what each technique is worth, is missed by far: the cached copy of the other side's index is worth 1.20× beside the mask and 0.89× beside a modulo, and the mask 1.60× beside the cached index, against bars of 3.90× and 4.20× set under WSL2 on an i7-9700 ([results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md)).
 
-Queue latencies start at the push, so a wait behind a slow push is in no figure. No latency from the due time was measured: it needs the due time carried in each item, a change to the benchmark's measured code that I chose not to make before the runs, so that measurement is open (BENCHMARKS.md, "What the paced and burst latencies measure").
+Queue latencies start at the push, so a wait behind a slow push is in no figure. No latency from the due time was measured: it needs the due time carried in each item, a change to the benchmark's measured code, which was not made before the runs; that measurement is open (BENCHMARKS.md, "What the paced and burst latencies measure").
 
 With the parser on one core and the book on another, the median pipelined time over single-threaded time is 0.954 against a bar of at most 1.31, so T-SPSC-3 is met; but the single-threaded runs varied with a CV of 6.25%, so the saving is within their spread, and in the first repetition the parser's pushes found the ring full 22,248,425,075 times, the book's pops empty 843,507 times ([results/spsc_pipeline_debian_12302019.md](results/spsc_pipeline_debian_12302019.md)).
 
@@ -94,7 +94,7 @@ A paced sender replays the day as MoldUDP64, Nasdaq's UDP framing, over loopback
 
 The backtester queues simulated orders among the real ones by order reference, with latency, Nasdaq's fees and partial fills. T-BT-1, the whole day with a quoting strategy, is met on the Zen 1 host at 4.68 M engine events/s vs a bar of 2.00 M; its median replay rate is 4,570,542 messages/s ([results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md)).
 
-T-BT-3, four symbols with 100,000 simulated orders in real queues, is missed on the Zen 1 host at 3,509,307 messages/s; runs of the same build differed and read no counters, so the cause is not known ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)). On the Mac, the kind of machine its bar was published on, T-BT-3 is met.
+T-BT-3, four symbols with 100,000 simulated orders in real queues, is missed on the Zen 1 host at 3,509,307 messages/s; runs of the same build differed, and none read counters ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)). On the Mac, the kind of machine its bar was published on, T-BT-3 is met.
 
 The market maker, the Avellaneda-Stoikov quoting model, splits its profit and loss into spread capture, adverse selection and inventory, summing exactly to the ledger's. Trading AMD's stock (the symbol, not the chip maker) on 12302019, its total was -25.96 dollars with the backtester's latency model and +1.23 with every latency set to zero: accounting, not an edge ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
 
@@ -108,7 +108,7 @@ Over all ten sessions there were 0 divergences in 3,081,392,329 messages ([resul
 
 ### The book is sometimes crossed, and that is the feed
 
-T-INV-2, the book is never crossed, fails strictly: on 12302019 there were 18,958 crossed observations, none in normal trading outside a reopening window. An open-source ITCH book, carteret, publishes 8,580 crossed book messages for this day. Its unit is a book message after which the book is crossed, not an observation after every message, and it counts one crossed replace twice; counted once per message, its unit gives 8,579 ([results/oracle_12302019.md](results/oracle_12302019.md)).
+T-INV-2, a book that stays uncrossed, fails strictly: on 12302019 there were 18,958 crossed observations, none in normal trading outside a reopening window. An open-source ITCH book, carteret, publishes 8,580 crossed book messages for this day. Its unit is a book message after which the book is crossed, not an observation after every message, and it counts one crossed replace twice; counted once per message, its unit gives 8,579 ([results/oracle_12302019.md](results/oracle_12302019.md)).
 
 I chose a scoped rule as a separate check, T-INV-3: in normal trading a book may be crossed only by a cross left from a halt that has not yet cleared. T-INV-3 passes, and T-INV-2 strict stays beside it.
 
@@ -120,7 +120,7 @@ T-TRADE-3, each symbol's volume against the SEC's MIDAS file, fails on four of t
 
 ### The fault matrix and fuzzing
 
-The fault matrix plants a bug in a scratch copy and requires the named check to catch it. Before planting anything it runs each check once on the clean tree, and those 316 control commands succeeded; the last full run on the Mac then detected 1608 of 1608 faults, and the 14 faults for Linux only, which the Mac does not run, were all detected on the Zen 1 host (docs/NOTES.md) ([results/fault_matrix.md](results/fault_matrix.md)).
+The fault matrix plants a bug in a scratch copy and requires the named check to catch it. Before planting anything it runs each check once on the clean tree, and those 316 control commands succeeded; the last full run on the Mac then detected 1608 of 1608 faults, and the 14 faults for Linux only were all detected on the Zen 1 host (docs/NOTES.md) ([results/fault_matrix.md](results/fault_matrix.md)).
 
 Each of the nine fuzz targets ran for 1,800 s on the Mac under ASan and UBSan, the compiler's memory and undefined-behaviour checks, and every one was clean: 0 crashes and no input saved ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)).
 
@@ -130,14 +130,15 @@ Every finding of the final review, with its outcome and the commit, test or note
 
 ## What a reviewer would ask
 
-- **Is the gap to T-BOOK-1, book throughput, the clock?** Partly, as an estimate: a message's mean service time here, 194.35 ns, is about 698 cycles at the host's 3.59 GHz, and the bar's 61 ns per message on a Ryzen 9700X would be about 335 at AMD's rated 5.5 GHz boost, so the clock explains about 1.5× of the 3.2× gap and the rest is per cycle; the bar's host published no cycle count ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)). <!-- figures: not measured -->
-- **Did you run itch-book on this host?** No; its README says the same code and file ran 3.6× slower on a 2.0 GHz EPYC VM than on the Ryzen 9700X its bar comes from ([BENCHMARKS.md](BENCHMARKS.md)). <!-- figures: not measured -->
+- **Is the gap to T-BOOK-1, book throughput, the clock?** Partly. A message's mean service time here is 194.35 ns, on a core at 3,593,024 kHz, and T-BOOK-1's bar is at least 16.4 M msg/s, set on a Ryzen 7 9700X ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+  As an estimate from those inputs and AMD's rated boost of 5.5 GHz for that part, which is not a measured clock of the bar's run: about 698 cycles per message here against about 335 for the bar, so the clock would explain about 1.5× of the 3.2× gap and the rest is per cycle; the bar's host published no cycle count. <!-- figures: not measured -->
+- **Did you run itch-book on this host?** No. As BENCHMARKS.md reads itch-book's README, the same code and file ran 3.6× slower on a 2.0 GHz EPYC VM than on the Ryzen 9700X its bar comes from, a division of the README's two rates ([BENCHMARKS.md](BENCHMARKS.md)). <!-- figures: not measured -->
 - **What is the latency tail?** The slowest message of each repetition took about 4 ms (a median max of 4014071.4 ns, against a p99.99 of 3014.6 ns); what it waits on was not traced ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 - **Latency from the wire to the book?** Not measured: no run follows a message from its datagram into the book.
 - **What does the book give a consumer?** Queries, not a feed: a side's best price, shares and order count, the level at a price, a walk of a side from the best, an order by reference, and a hook told of every level written ([include/itch/book.hpp](include/itch/book.hpp)).
 - **Why is the ring slower than rigtorp's?** Not measured; here a side's index shares a block with its copy of the other's, and a line for each was not timed ([include/itch/spsc.hpp](include/itch/spsc.hpp)).
 - **What happens at capacity?** `apply()` refuses the message as `capacity_exhausted`, and the book is wrong from there on; the busiest session peaked at 1,964,977 live orders and 805,782 live levels, against `1 << 22` and `1 << 21` sized ([results/oracle_07302019.md](results/oracle_07302019.md)).
-- **How often does the paged index fall back to its hash?** Not measured: the index counts it, and no results file gives the count.
+- **How often does the paged index fall back to its hash?** Not measured; the index counts it, but no file gives the count.
 - **How is a level found on a delete, and what does a deep insert cost?** Through the order record; a delete that empties the level searches the side again in `close()`, and an add at a new price shifts every better entry up one, the whole side at worst ([include/itch/book_levels.hpp](include/itch/book_levels.hpp)); neither cost is measured.
 - **Is the framing walk one serial chain of loads?** Yes, each length gives the next offset; its cycles per frame are not measured.
 - **Why no `-march=native`?** Every timing is Clang 23.1.4 at -O3 with no -march flag, and the vector kernels name their instruction sets per function; a `-march=native` build of the whole book was not timed ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
