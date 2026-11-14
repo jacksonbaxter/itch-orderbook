@@ -1605,15 +1605,14 @@
    "severity": "NOTE",
    "finding": "`fault_matrix` checks staleness per mutation, not on the sequentially mutated text; exits 0 when nothing ran",
    "outcome": "fixed",
-   "detail": "The published fault_matrix.md is still the run at c2ce567, as the reviewer noted.",
+   "detail": "results/fault_matrix.md names in its header the commit whose run it publishes; when the reviewer read it, that was c2ce567, the run before this fix.",
    "commits": [
     "4f42da6",
     "c2ce567"
    ],
    "tests": [
     "test_a_later_edit_an_earlier_one_disturbed_is_stale",
-    "test_a_run_in_which_no_fault_ran_fails",
-    "results/fault_matrix.md"
+    "test_a_run_in_which_no_fault_ran_fails"
    ],
    "faults": [
     "matrix-stale-edits-tried-alone",
@@ -3429,7 +3428,7 @@
    "severity": "FIX",
    "finding": "WRITEUP said most reviewers looked again at the fixes; only r13 and r14 did",
    "outcome": "fixed",
-   "detail": "The record gives how many looked again in a header line and a table, and WRITEUP gives 2 of 14 from it, held by the number gate.",
+   "detail": "The record gives how many reviewers looked again in a header line and a table, and WRITEUP gives that count from it, held by the number gate.",
    "commits": [
     "fb5f8a7"
    ],
