@@ -32,6 +32,10 @@
   {
    "what": "r20's outcomes on the README and the generated list",
    "at": "0dd35bf"
+  },
+  {
+   "what": "r18-24, r18-29 to r18-36, r20-6 and r20-36",
+   "at": "bb90945"
   }
  ],
  "complete": false,
@@ -334,12 +338,13 @@
   },
   {
    "id": "r18",
-   "read": "the round after the acceptance gate, in two stages: at e0a7b50 the fuzz-search rule, the source comments and their proof, the skip check, this record's script and data and the parse change, and at 62bedf7 the pages' gates and generated blocks, with planted edits, faults and a scan of the added lines; its second stage read other changes, not the fixes of the first, so the two are counted as one look. Then, at bc6ea2c and again at abc2364, the fixes of its own findings",
+   "read": "the round after the acceptance gate, in two stages: at e0a7b50 the fuzz-search rule, the source comments and their proof, the skip check, this record's script and data and the parse change, and at 62bedf7 the pages' gates and generated blocks, with planted edits, faults and a scan of the added lines; its second stage read other changes, not the fixes of the first, so the two are counted as one look. Then, at bc6ea2c and again at abc2364, the fixes of its own findings, and then the fuzz-search rule's fix of r18-29 at 4c25d0c",
    "commits": [
     "e0a7b50",
     "62bedf7",
     "bc6ea2c",
-    "abc2364"
+    "abc2364",
+    "4c25d0c"
    ],
    "looks": [
     {
@@ -356,9 +361,14 @@
      "BLOCK": 0,
      "FIX": 2,
      "NOTE": 4
+    },
+    {
+     "BLOCK": 0,
+     "FIX": 1,
+     "NOTE": 1
     }
    ],
-   "last_words": "Last look: nothing is left that I would block the merge for.",
+   "last_words": "r18-29 is fixed for M1 and L1. One FIX is left (r18-35), and it touches a script and a test, not only documents.",
    "branch": ""
   },
   {
@@ -395,7 +405,8 @@
   }
  ],
  "to_come": [
-  "r18, a look at the fixes of its last findings"
+  "r18, the second half of its check",
+  "a third reading of the pages by a reader with no knowledge of the project"
  ],
  "unread": [
   "The fixes of r16's own findings were read by no reviewer, only checked by the record's author: they are held by their tests and faults and by the full check that follows."
@@ -4555,13 +4566,18 @@
    "id": "r18-24",
    "severity": "FIX",
    "finding": "docs/NOTES.md still has the fuzz-search rule's old paragraph, which says the rule is closed",
-   "outcome": "open",
-   "detail": "The paragraph is replaced once the rule's last change, for r18-29, is made, with that change's limits.",
-   "commits": [],
-   "tests": [],
+   "outcome": "fixed",
+   "detail": "docs/NOTES.md's paragraph on the rule gives the rule as it stands, why the old one was wrong, and what it cannot see, word for word as the test's comment gives it.",
+   "commits": [
+    "c14da63"
+   ],
+   "tests": [
+    "test_every_fuzz_search_counts_executions_and_reads_no_clock"
+   ],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the fuzz-search rule"
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
   },
   {
    "id": "r18-25",
@@ -4638,61 +4654,95 @@
    "id": "r18-29",
    "severity": "FIX",
    "finding": "A CMakePresets.json edit that Python's json cannot read is taken by the fuzz-search rule as no change, and a sanitizer list of fuzzer,thread passes it",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
-   "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the fuzz-search rule"
+   "outcome": "fixed",
+   "detail": "The rule refuses a fault whose CMakePresets.json mutations, made in order, leave presets it cannot read, a byte-order mark first among them, and counts a preset with fuzzer in any cache variable's value, its own or inherited, as a libFuzzer preset; a preset's ITCH_FUZZ is read as CMake's if() reads it.",
+   "commits": [
+    "36db39d",
+    "4c25d0c",
+    "c7c03bc"
+   ],
+   "tests": [
+    "test_every_fuzz_search_counts_executions_and_reads_no_clock",
+    "test_a_presets_itch_fuzz_is_read_as_cmakes_if_reads_it"
+   ],
+   "faults": [
+    "matrix-fuzz-search-presets-unreadable",
+    "matrix-fuzz-search-presets-sanitizer-list",
+    "matrix-fuzz-search-presets-true-escaped",
+    "matrix-fuzz-search-presets-notfound-escaped"
+   ],
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
   },
   {
    "id": "r18-30",
    "severity": "FIX",
    "finding": "WRITEUP's generated line on T-INV-2 says every cross is in a symbol outside normal trading, where 654 came in normal trading inside a reopening window",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The list's line for T-INV-2 says every cross is the feed's, outside normal trading or inside a reopening window.",
+   "commits": [
+    "076da28"
+   ],
    "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "faults": [
+    "readme-writeup-list-inv2-why-narrowed"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-31",
    "severity": "NOTE",
    "finding": "The list's opening says of every target whose bar is another host's figure what only the book's runs measured",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The list's opening says that in the book's runs messages naming an order a second old or more make most DRAM fills.",
+   "commits": [
+    "076da28",
+    "95bff0d"
+   ],
    "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "faults": [
+    "readme-writeup-list-fills-unnamed"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-32",
    "severity": "NOTE",
    "finding": "Contractions such as isn't, and cannot, get round the number gate's negation rule",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
-   "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "outcome": "fixed",
+   "detail": "The number gate reads cannot and a word ending in n't as a negation too, and the README and the docstring name exactly the words it reads and say that other negations are not read.",
+   "commits": [
+    "076da28"
+   ],
+   "tests": [
+    "test_cannot_and_a_contraction_turn_a_verdict_round"
+   ],
+   "faults": [
+    "readme-gate-negation-contraction-unread"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-33",
    "severity": "NOTE",
    "finding": "The not-measured marker's rule reads physical lines, so a marker on a continuation line of a cited bullet passes",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "gate_numbers.py's docstring says the figures marker is read per physical line, so one on a continuation line of a cited bullet is not refused and excuses that line's figures.",
+   "commits": [
+    "076da28"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-34",
@@ -4705,6 +4755,36 @@
    "faults": [],
    "notes": [],
    "no_commit": "the rows are changed in the commit that renders this page"
+  },
+  {
+   "id": "r18-35",
+   "severity": "FIX",
+   "finding": "The fuzz-search rule read NOTFOUND and a -NOTFOUND ending as false in any case, where CMake reads them so only in capitals",
+   "outcome": "fixed",
+   "detail": "NOTFOUND and a value ending in -NOTFOUND are false only in capitals, and the test holds notfound and itch-notfound as on.",
+   "commits": [
+    "c7c03bc"
+   ],
+   "tests": [
+    "test_a_presets_itch_fuzz_is_read_as_cmakes_if_reads_it"
+   ],
+   "faults": [
+    "matrix-fuzz-search-presets-notfound-escaped"
+   ],
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
+  },
+  {
+   "id": "r18-36",
+   "severity": "NOTE",
+   "finding": "An account of the fix called a zero number such as 0.0 an over-refusal, where CMake reads it as true",
+   "outcome": "no change needed",
+   "detail": "The sentence is in a report that is not committed, and the rule reads 0.0 as true, as CMake does.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
   },
   {
    "id": "r19-1",
@@ -5314,13 +5394,12 @@
    "id": "r20-6",
    "severity": "NOTE",
    "finding": "README.md:14, the bar comes from another machine, and the host has two names",
-   "outcome": "open",
-   "detail": "",
+   "outcome": "no change needed",
+   "detail": "Kept, as the acceptance gate ruled: the pitch introduces the host once by its model, with Zen 1, and the table uses Zen 1 host as that name; the bar's cell names the machine the bar was set on.",
    "commits": [],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": []
   },
   {
    "id": "r20-7",
@@ -5753,13 +5832,12 @@
    "id": "r20-36",
    "severity": "NOTE",
    "finding": "WRITEUP.md:165, a date in words on a page that names days by their file",
-   "outcome": "open",
-   "detail": "",
+   "outcome": "no change needed",
+   "detail": "Kept, as the acceptance gate ruled: the list writes that date in words, not in the files' format; the eight-digit strings elsewhere are file names.",
    "commits": [],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": []
   },
   {
    "id": "r20-37",
@@ -6214,7 +6292,8 @@
     "detail": "The README's oracle bullet says the oracle compares what each message can change with the second book, and the whole book by hash every million messages; WRITEUP and docs/DETAILS.md say what is compared.",
     "commits": [
      "a08c91c",
-     "34868db"
+     "34868db",
+     "85d78e2"
     ],
     "tests": [],
     "faults": [],
