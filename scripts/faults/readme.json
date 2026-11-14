@@ -774,7 +774,7 @@
     {
       "id": "readme-headline-size-unchecked",
       "breaks": "A headline of any length is accepted",
-      "check": "test_results_table.py test_the_headline_is_five_or_six_rows",
+      "check": "test_results_table.py test_the_headline_is_four_or_five_rows",
       "mutations": [
         {
           "file": "scripts/results_table.py",
@@ -788,7 +788,7 @@
         "{tree}/scripts/test_results_table.py"
       ],
       "expect": {
-        "signature": "FAIL: test_the_headline_is_five_or_six_rows"
+        "signature": "FAIL: test_the_headline_is_four_or_five_rows"
       }
     },
     {
@@ -895,8 +895,8 @@
     },
     {
       "id": "readme-headline-peer-core-dropped",
-      "breaks": "A headline row of a run on two cores names only the first core's pinning",
-      "check": "test_results_table.py test_the_headline_has_its_targets_in_order_each_from_its_file",
+      "breaks": "A row of a run on two cores names only the first core's pinning",
+      "check": "test_results_table.py test_an_spsc_file_gets_a_row_for_each_comparison",
       "mutations": [
         {
           "file": "scripts/results_table.py",
@@ -910,7 +910,7 @@
         "{tree}/scripts/test_results_table.py"
       ],
       "expect": {
-        "signature": "FAIL: test_the_headline_has_its_targets_in_order_each_from_its_file"
+        "signature": "FAIL: test_an_spsc_file_gets_a_row_for_each_comparison"
       }
     },
     {
@@ -1061,7 +1061,7 @@
         "readme"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 5\\.25 is not in results/bench_book_paged-flat_ram_debian_12302019\\.md",
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 5\\.25 is not in any file it cites",
         "exit": 1
       }
     },
@@ -1083,7 +1083,7 @@
         "readme"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 21\\.97 is not in results/bench_book_paged-flat_ram_mac_12302019\\.md",
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 21\\.97 is not in any file it cites",
         "exit": 1
       }
     },
@@ -1727,7 +1727,7 @@
         "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 2,735,896 is not in results/udp_bisect_debian_12302019\\.md",
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 2,735,896 is not in any file it cites",
         "exit": 1
       }
     },
@@ -1754,7 +1754,7 @@
         "RESULTS.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 9 is not in results/udp_bisect_debian_12302019\\.md",
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 9 is not in any file it cites",
         "exit": 1
       }
     },
@@ -2586,7 +2586,7 @@
         "MissedTargets.test_the_parse_targets_are_measured_rows_from_their_file"
       ],
       "expect": {
-        "signature": "FAIL: test_the_parse_targets_are_measured_rows_from_their_file",
+        "signature": "(FAIL|ERROR): test_the_parse_targets_are_measured_rows_from_their_file",
         "exit": 1
       }
     },
