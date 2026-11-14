@@ -205,6 +205,29 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual([line.rsplit(" | ", 1)[1] for line in shown],
                          [f"no: `run_log.md:{len(lines) + 1}` stands |"] * 2 + ["yes |"])
 
+    def test_the_summary_gives_each_target_one_verdict_from_its_rows(self):
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        summary = output.split("RESULTS.md:\n")[1]
+        # Missed if any row its bar judges is missed: T-BT-3 is met on the Mac, missed on Zen 1.
+        self.assertIn("| T-BT-3 | real-day replay with shadow orders in real queues | **missed** | "
+                      "debian: 1 missed; macOS: 1 met |", summary)
+        self.assertIn("| T-INV-2 | the book is never crossed | **missed** | macOS: 9 FAIL, 1 PASS |",
+                      summary)
+        self.assertIn("| T-PARSE-3 | strict decode of every field | no verdict | debian: 1 above "
+                      "the bar on another day |", summary)
+        self.assertIn("| T-BOOK-3 | book memory | met |", summary)
+        _, targets = results_table.benchmark_targets(self.root)
+        rows = [line.split(" | ")[0][2:] for line in summary.splitlines()
+                if line.startswith("| ") and not line.startswith(("| Target |", "|---"))]
+        self.assertEqual(rows, targets)
+        self.edit("BENCHMARKS.md", "### T-PARSE-2:", "### T-PARSE-9: a target with no row\n"
+                  "- **Target:** none.\n\n### T-PARSE-2:")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("BENCHMARKS.md: ['T-PARSE-9'] in no row or account of RESULTS.md's summary",
+                      output)
+
     def test_the_fault_matrix_row_says_which_faults_this_host_did_not_run(self):
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
