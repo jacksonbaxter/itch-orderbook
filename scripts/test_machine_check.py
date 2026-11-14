@@ -2,7 +2,8 @@
 """machine_check.sh on a fake machine, breaking one condition at a time (criterion 29).
 
 Each case changes one thing in a copy of a machine that passes, and requires exactly that
-condition to fail, with every other one still passing.
+condition to fail, with every other one still passing. Under --input-condition copy the file's
+cached pages are recorded, not required, and every other condition is still enforced.
 """
 
 import re
@@ -37,11 +38,11 @@ class Machine:
     def write(self, relative, text):
         (self.root / relative).write_text(text, encoding="utf-8")
 
-    def run(self, os_name="linux", core=4):
+    def run(self, os_name="linux", core=4, extra=()):
         command = ["bash", str(SCRIPT), "--input", str(self.root / "input.bin"),
                    "--probe", str(self.root / "fake_probe.sh"), "--core", str(core),
                    "--sibling", "5", "--os", os_name, "--root", str(self.root / os_name),
-                   "--idle-window", "0"]
+                   "--idle-window", "0", *extra]
         return subprocess.run(command, capture_output=True, text=True, timeout=30, check=False)
 
 
@@ -122,6 +123,61 @@ class LinuxConditions(unittest.TestCase):
     def test_an_unknown_cpu_is_named_unknown(self):
         self.machine.write("linux/proc/cpuinfo", "model name\t: Some Other CPU\n")
         self.assertIn("machine_check: record host: unknown", self.machine.run().stdout)
+
+
+COPY = ("--input-condition", "copy")
+
+
+class CopyCondition(unittest.TestCase):
+    """--input-condition copy: the file's cached pages recorded, every other condition held."""
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.addCleanup(self.directory.cleanup)
+        self.machine = Machine(self.directory.name)
+
+    def assert_only_fails(self, condition):
+        result = self.machine.run(extra=COPY)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(failed(result.stdout), [condition], result.stdout)
+        self.assertIn("machine_check: refused, 1 failed", result.stdout)
+
+    def test_the_file_condition_is_the_default(self):
+        self.assertEqual(self.machine.run(extra=("--input-condition", "file")).stdout,
+                         self.machine.run().stdout)
+        self.assertNotIn("input-cached", self.machine.run().stdout)
+
+    def test_the_files_cached_pages_are_recorded_not_required(self):
+        self.machine.write("probe_output.txt",
+                           GOOD_PROBE.replace("4 of 4 pages", "3 of 4 pages"))
+        result = self.machine.run(extra=COPY)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(failed(result.stdout), [])
+        self.assertIn("machine_check: record input-cached: 3 of 4 pages resident, the file's pages "
+                      "in the page cache; not required: under --input-condition copy the timed "
+                      "passes read the bench's own copy, which the bench checks", result.stdout)
+        self.assertNotIn("input-resident", result.stdout)
+        for line in ("pass pin-readback", "pass governor", "pass sibling-idle",
+                     "pass timer-calibration"):
+            self.assertIn(f"machine_check: {line}", result.stdout)
+        self.assertEqual(result.stdout.splitlines()[-1], "machine_check: passed")
+
+    def test_every_other_condition_is_still_enforced(self):
+        for condition, path, text in (
+                ("pin-readback", "linux/proc/self/status", "Cpus_allowed_list:\t0-7\n"),
+                ("governor", GOVERNOR, "schedutil\n"),
+                ("sibling-idle", "linux/proc/stat.after", "cpu5 150 0 150 850 0 0 0 0 0 0\n"),
+                ("timer-calibration", "probe_output.txt",
+                 GOOD_PROBE.replace("timer_quantum_ns: 10.000", "timer_quantum_ns: 0"))):
+            with self.subTest(condition=condition):
+                self.machine = Machine(tempfile.mkdtemp(dir=self.directory.name))
+                self.machine.write(path, text)
+                self.assert_only_fails(condition)
+
+    def test_an_unknown_condition_is_bad_usage(self):
+        result = self.machine.run(extra=("--input-condition", "mapped"))
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertEqual(result.stdout, "")
 
 
 class MacConditions(unittest.TestCase):
