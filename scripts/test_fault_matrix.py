@@ -390,26 +390,38 @@ class Matrix(unittest.TestCase):
 # in seconds finds less on a busy machine, and libFuzzer's corpus reload, once a second, re-runs
 # files at a point the clock sets and so changes the path of the search: the final full check at
 # 6508b0d missed simd-fuzz-kernels-oracle that way. A count of runs with the reload off makes the
-# search the same on any machine. Each floor is no fewer runs than any control of its old budget
-# in seconds ran. Over the largest count at which an earlier search, under the old command, found
-# its fault (the last progress line before the failure, so a lower bound), each floor is: fuzz_book
-# 10.3 times 486, fuzz_decode 391 times 1,788, fuzz_lookahead 10.0 times 29,979, fuzz_reader 37.2
-# times 40,369, fuzz_packets about 8.2 times 1,221,985 (the gate's run at 6508b0d, after this
-# floor was set), and fuzz_kernels 4.9 times 205,000 and 4.0 times the gate's miss at 251,901,
-# since it slows to about 1,000 runs a second as its inputs grow (docs/NOTES.md). Each rate is
-# below the average of every idle run of the target seen, fuzz_kernels's below that of its
-# 30-minute run.
+# count at which a search finds its fault independent of the machine's load (shown for one build
+# on one Mac, docs/NOTES.md). At this code, each floor is no fewer runs than any control of its
+# old budget in seconds ran; older fuzz_book code ran about 20,800 in 121 s. Over the largest
+# count at which an earlier search, under the old command, found its fault (the last progress
+# line before the failure, so a lower bound), each floor is: fuzz_book 10.3 times 486,
+# fuzz_decode 391 times 1,788, fuzz_lookahead 10.0 times 29,979, fuzz_reader 37.2 times 40,369,
+# fuzz_packets about 8.2 times 1,221,985 (the gate's run at 6508b0d, after this floor was set),
+# and fuzz_kernels 4.9 times 205,000 and 4.0 times the gate's miss at 251,901, since it slows to
+# about 1,000 runs a second as its inputs grow. Each rate is below both averages measured for
+# the target: its control at this floor in the locked run at 9cef38c, and its 30-minute run
+# (fuzz_book 38.8 and 37.4, fuzz_decode 21,875 and 20,990, fuzz_kernels 2,674 and 1,165,
+# fuzz_lookahead 771 and 752, fuzz_packets 119,047 and 101,761, fuzz_reader 30,612 and 25,972).
 FUZZ_SEARCHES = {
     "fuzz_book": (5_000, 30),
     "fuzz_decode": (700_000, 20_000),
     "fuzz_kernels": (1_000_000, 1_000),
     "fuzz_lookahead": (300_000, 700),
     "fuzz_packets": (10_000_000, 80_000),
-    "fuzz_reader": (1_500_000, 37_000),
+    "fuzz_reader": (1_500_000, 25_000),
 }
-# Flags that let the clock or other processes decide what a search runs.
-CLOCK_FLAGS = {"-max_total_time", "-jobs", "-workers", "-fork"}
-
+# The only flags a search may take, each at most once. A value of None is checked in the test
+# (-seed at least 1, since 0 asks libFuzzer to make one up; -runs at or above the floor); any
+# other flag fails, so one that reads the clock or unfixes the seed (-max_total_time, -timeout,
+# -entropic_scale_per_exec_time, -jobs, -fork, ...) cannot slip in, nor a dictionary.
+SEARCH_FLAGS = {
+    "-seed": None,
+    "-runs": None,
+    "-reload": "0",
+    "-print_final_stats": "1",
+    "-artifact_prefix": "{build}/fuzz/artifacts/",
+}
+REQUIRED_SEARCH_FLAGS = {"-seed", "-runs", "-reload"}
 
 class CommittedFaults(unittest.TestCase):
     def test_every_committed_fault_loads_and_is_not_stale(self):
@@ -432,31 +444,64 @@ class CommittedFaults(unittest.TestCase):
                 self.assertTrue(inside, f"{fault.id}: {name} is not in the matrix area's tree")
 
     def test_every_fuzz_search_counts_executions_and_reads_no_clock(self):
-        # Every fault whose check runs a fuzz target directly is a search: a fixed seed, a count
-        # of runs at or above its target's floor, the reload off, nothing that reads the clock,
-        # and a timeout the count fits in at a third of the target's slowest idle rate, so a slow
-        # machine takes longer and never turns a detection into undetected.
-        target = re.compile(r"\{build\}/fuzz/(fuzz_\w+)")
+        # Closed, like the run log's grammar: every word of a fault's command that names a fuzz
+        # target (a fuzz/fuzz_*.cpp) must be in one of three forms, and anything else fails.
+        #   A search: the command is {build}/fuzz/<target>, the flags SEARCH_FLAGS allows, then
+        #   exactly the output corpus {build}/fuzz/corpus/<target> and the seeds
+        #   {tree}/fuzz/corpus/<target>. It needs one -seed of at least 1, -runs at or above
+        #   the floor, -reload=0, and a timeout the count fits in at a third of the target's
+        #   slowest rate, so a slow machine takes longer and never turns a find into undetected.
+        #   A replay: ctest --preset <p> -R ^corpus_<target>$, the standalone runner, which runs
+        #   the target once on each committed seed with no mutation, so no clock decides what runs.
+        #   A corpus path, {build} or {tree}/fuzz/corpus/<target>[/<file>]: data, not a binary.
+        # A search wrapped in a shell, run under another program or spelled another way is none
+        # of these, and fails.
+        targets = {path.stem for path in (fm.REPO_ROOT / "fuzz").glob("fuzz_*.cpp")}
+        self.assertGreaterEqual(len(targets), 9)
+        mention = re.compile(r"fuzz_[a-z0-9]+")
+        corpus = re.compile(r"\{(?:build|tree)\}/fuzz/corpus/(fuzz_[a-z0-9]+)(?:/[^/]+)?")
         searches = 0
         for fault in fm.load_faults(fm.REPO_ROOT / "scripts" / "faults"):
-            at = [i for i, word in enumerate(fault.command) if target.fullmatch(word)]
-            if not at:
+            command = fault.command
+            replay = (len(command) == 5 and command[:2] == ["ctest", "--preset"]
+                      and command[3] == "-R")
+            search = None
+            for at, word in enumerate(command):
+                for name in set(mention.findall(word)) & targets:
+                    if at == 0 and word == f"{{build}}/fuzz/{name}":
+                        search = name
+                    elif not (corpus.fullmatch(word) and corpus.fullmatch(word).group(1) == name
+                              or replay and at == 4 and word == f"^corpus_{name}$"):
+                        self.fail(f"{fault.id}: {word!r} names fuzz target {name} in no form "
+                                  "this rule knows")
+            if search is None:
                 continue
             searches += 1
-            name = target.fullmatch(fault.command[at[0]]).group(1)
-            self.assertIn(name, FUZZ_SEARCHES, f"{fault.id}: no floor for {name} here")
-            floor, rate = FUZZ_SEARCHES[name]
-            flags = [word for word in fault.command[at[0] + 1:] if word.startswith("-")]
-            names = [flag.split("=", 1)[0] for flag in flags]
-            self.assertEqual(CLOCK_FLAGS & set(names), set(), fault.id)
-            self.assertEqual(names.count("-seed"), 1, f"{fault.id}: one fixed -seed")
-            self.assertEqual([flag for flag in flags if flag.startswith("-reload")], ["-reload=0"],
-                             f"{fault.id}: the corpus reload must be off")
-            runs = [int(flag.split("=", 1)[1]) for flag in flags if flag.startswith("-runs=")]
-            self.assertEqual(len(runs), 1, f"{fault.id}: one -runs=N")
-            self.assertGreaterEqual(runs[0], floor, f"{fault.id}: -runs below {name}'s floor")
-            self.assertGreaterEqual(fault.timeout, 3 * runs[0] / rate,
-                                    f"{fault.id}: timeout too short for -runs={runs[0]}")
+            self.assertIn(search, FUZZ_SEARCHES, f"{fault.id}: no floor for {search} here")
+            floor, rate = FUZZ_SEARCHES[search]
+            flags = [word for word in command[1:] if word.startswith("-")]
+            self.assertEqual([word for word in command[1:] if not word.startswith("-")],
+                             [f"{{build}}/fuzz/corpus/{search}", f"{{tree}}/fuzz/corpus/{search}"],
+                             f"{fault.id}: a search reads its output corpus and its seeds, no more")
+            values = {}
+            for flag in flags:
+                name, _, value = flag.partition("=")
+                self.assertIn(name, SEARCH_FLAGS,
+                              f"{fault.id}: {flag} is not a flag a fuzz search may take")
+                self.assertNotIn(name, values, f"{fault.id}: {name} given twice")
+                values[name] = value
+            self.assertEqual(REQUIRED_SEARCH_FLAGS - set(values), set(),
+                             f"{fault.id}: a search needs -seed, -runs and -reload")
+            for name, fixed in SEARCH_FLAGS.items():
+                if fixed is not None and name in values:
+                    self.assertEqual(values[name], fixed, f"{fault.id}: {name} must be {fixed}")
+            self.assertRegex(values["-seed"], r"^[1-9][0-9]*$",
+                             f"{fault.id}: -seed must be a fixed seed of at least 1")
+            self.assertRegex(values["-runs"], r"^[0-9]+$", f"{fault.id}: -runs=N, N a count")
+            runs = int(values["-runs"])
+            self.assertGreaterEqual(runs, floor, f"{fault.id}: -runs below {search}'s floor")
+            self.assertGreaterEqual(fault.timeout, 3 * runs / rate,
+                                    f"{fault.id}: timeout too short for -runs={runs}")
         # Seven when this test was written; every one added since is held to the same rule.
         self.assertGreaterEqual(searches, 7)
 
