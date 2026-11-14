@@ -1183,11 +1183,13 @@ def condition_problems(text, fields, passes, file_bytes):
                                                           "machine check does not pass "
                                                           "input-resident once, over the file's "
                                                           f"{pages} pages"))
-        # Every page of them, held here as check_results.check_machine holds it.
+        # Every page of them, held here as well as by check_results.check_machine, under a
+        # code of its own, so that each check is seen to hold it.
         elif any(resident != of for resident, of in held):
-            problems.append(("machine-check-inconsistent", "input-resident passed with "
-                                                           f"{held[0][0]} of the file's "
-                                                           f"{pages} pages resident"))
+            problems.append(("parse-condition-unchecked", "no input condition claimed, and the "
+                                                          "machine check passes input-resident "
+                                                          f"with {held[0][0]} of the file's "
+                                                          f"{pages} pages"))
         return problems
     if claimed != COPY_CLAIM:
         return [("parse-condition-unknown", f"{CONDITION_FIELD}: {claimed!r}")]

@@ -295,7 +295,9 @@ class Check(unittest.TestCase):
         self.assertEqual(text.count(line), 1)
         found = check_results.check_text(text.replace(line, line.replace(
             "2014504 of", "2014057 of")))
-        self.assertEqual({code for code, _ in found}, {"machine-check-inconsistent"})
+        # check_results.check_machine's code, and the driver's own check's.
+        self.assertEqual({code for code, _ in found},
+                         {"machine-check-inconsistent", "parse-condition-unchecked"})
 
     def test_rates_over_fewer_messages_than_every_frame(self):
         # The framing passes over no message at all, and the decode over the messages it
@@ -581,8 +583,8 @@ class InputCondition(unittest.TestCase):
 
         text = rendered()
         line = f"machine_check: pass input-resident: {EVERY_PAGE}\n"
-        self.assertNotIn("machine-check-inconsistent", own(text))
-        self.assertIn("machine-check-inconsistent", own(text.replace(
+        self.assertNotIn("parse-condition-unchecked", own(text))
+        self.assertIn("parse-condition-unchecked", own(text.replace(
             line, line.replace("2014504 of 2014504", "2014057 of 2014504"))))
         records = [record(index) for index in (1, 2, 3)]
         for day in records:
@@ -591,8 +593,8 @@ class InputCondition(unittest.TestCase):
         lunary = rendered(records)
         line = "machine_check: pass input-resident: 2205815 of 2205815 pages resident"
         self.assertEqual(lunary.count(line), 1)
-        self.assertNotIn("machine-check-inconsistent", own(lunary))
-        self.assertIn("machine-check-inconsistent", own(lunary.replace(
+        self.assertNotIn("parse-condition-unchecked", own(lunary))
+        self.assertIn("parse-condition-unchecked", own(lunary.replace(
             line, "machine_check: pass input-resident: 2151095 of 2205815 pages resident")))
 
     def test_a_copy_file_is_rendered_again_from_its_records(self):
