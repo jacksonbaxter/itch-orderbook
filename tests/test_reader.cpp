@@ -315,7 +315,7 @@ TEST(Reader, EightByteShareCountsTakeTheirFullRange) {
 }
 
 // The spec names only B and D after End of System Hours, and real files also have X
-// there (DS-71). The reader holds no state, so no order of messages can trip it.
+// there (the 2026 files). The reader holds no state, so no order of messages can trip it.
 TEST(Reader, OrderMessagesAfterEndOfSystemHoursAreOrdinaryFrames) {
   auto end_of_system = itch::fixtures::kSystemEvent;
   end_of_system[11] = 0x45;  // Event Code 'E'.

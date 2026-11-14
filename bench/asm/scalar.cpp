@@ -1,4 +1,4 @@
-// E12: the scalar kernel, compiled for every target and flag set the audit asks for.
+// The asm audit: the scalar kernel, compiled for every target and flag set the audit asks for.
 #include "itch/kernels/scalar.hpp"
 
 #include "functions.hpp"

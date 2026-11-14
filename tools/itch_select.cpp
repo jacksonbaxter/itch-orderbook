@@ -1,5 +1,5 @@
-// The market maker's symbols, chosen from one day's tape by the rule of the research evidence
-// (market-maker.md, MK-75), before any strategy runs on any day.
+// The market maker's symbols, chosen from one day's tape by the rule below, before any
+// strategy runs on any day.
 //
 //     itch_select FILE [--from HH:MM:SS] [--to HH:MM:SS] [--top N]
 //
@@ -18,11 +18,11 @@
 //
 //   universe  Market Category Q, G or S (Nasdaq-listed), Issue Classification C (common stock),
 //             ETP flag not Y, Authenticity P (not a test issue), not halted, a close from $5 to
-//             $500, and some valid time in the window (MK-75, 1).
+//             $500, and some valid time in the window.
 //   group A   tick-constrained: average spread at most $0.015 and at one tick at least 80% of
-//             the valid time (MK-75, 3).
+//             the valid time.
 //   group B   not constrained: average spread at least $0.05 and at one tick at most 5% of the
-//             valid time (MK-75, 4).
+//             valid time.
 //
 // Each group's pick is its symbol with the most executed shares, a tie going to the lower
 // locate. It prints the counts behind the universe, each group's top N (default 10) with every

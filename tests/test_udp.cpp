@@ -852,7 +852,7 @@ std::vector<std::string_view> built_modes() {
 }
 
 // True when no built mode passes `wanted`. A test that loops over those modes would check
-// nothing, so it skips and says which modes it needs (r1-2).
+// nothing, so it skips and says which modes it needs.
 template <class Wanted>
 bool none_built(Wanted wanted) {
   return std::ranges::none_of(built_modes(), wanted);
@@ -1057,7 +1057,7 @@ TEST(Modes, TheModesThatReadControlMessagesSeeTheSocketsDrops) {
 }
 
 // A multishot mode that runs out of provided buffers ends its request with -ENOBUFS,
-// arms it again, and still takes every datagram the socket held (IU-30).
+// arms it again, and still takes every datagram the socket held.
 TEST(Modes, AMultishotModeOutOfBuffersRearmsAndLosesNothing) {
   constexpr std::chrono::milliseconds kTimeout{200};
   if (none_built(multishot_ring)) {

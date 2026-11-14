@@ -5,7 +5,7 @@
 // function under target("avx2") is never inlined into one without it. So run() calls the
 // work through a function of that target, and the work's operator() is always_inline: the
 // whole hot loop, frame walk, kernel and consumer, lands inside the target region, as
-// simdjson builds its parsers (simd.md, SIMD-39). Which kernel may run is decided once, at
+// simdjson builds its parsers, one per ISA. Which kernel may run is decided once, at
 // select_kernel(), by __builtin_cpu_supports.
 #pragma once
 

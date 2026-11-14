@@ -330,8 +330,8 @@ TEST(Decode, RejectsEveryLengthButTheExactOne) {
   }
 }
 
-// Real files carry values the spec does not list (DS-64) and values it does not
-// expect (DS-66, DS-69). The decoder has to pass them through.
+// Real files carry values the spec does not list (category M) and values it does not
+// expect (round lots of 40, zero-price crosses). The decoder has to pass them through.
 TEST(Decode, EnumeratedFieldsAreOpenSets) {
   auto directory = itch::fixtures::kStockDirectory;
   directory[19] = 0x4D;  // Market Category 'M', absent from the spec.
@@ -346,7 +346,7 @@ TEST(Decode, EnumeratedFieldsAreOpenSets) {
   EXPECT_EQ(cross.cross_price, 0U);
 }
 
-// DS-66: 1 and 10 are on the 2019 days and 40 on 2026 ones. DS-65: 'T' is what marks a
+// Round lots: 1 and 10 are on the 2019 days and 40 on 2026 ones. Authenticity 'T' marks a
 // test symbol, so it has to arrive as it was sent, next to a value no one has seen.
 TEST(Decode, RoundLotAndAuthenticityArriveAsSent) {
   auto directory = itch::fixtures::kStockDirectory;

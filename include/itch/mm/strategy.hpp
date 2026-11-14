@@ -12,7 +12,7 @@
 //
 // **Requotes.** An order is replaced only when its rounded price changes, and the replace
 // restores the full size. A replace goes to the back of the queue, so a rounded target that
-// has not moved must not cost the order its place (market-maker.md, "Requote rule"). A side
+// has not moved must not cost the order its place. A side
 // with a request in flight waits for its report.
 //
 // **Inventory.** In lots of the order size. A side whose fills could take the position past

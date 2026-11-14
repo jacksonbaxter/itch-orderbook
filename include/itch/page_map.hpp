@@ -10,7 +10,7 @@
 //                    the refusal recorded. On Linux, transparent hugepages through
 //                    madvise(MADV_HUGEPAGE). On macOS, mmap with
 //                    VM_FLAGS_SUPERPAGE_SIZE_2MB, which the SDK calls unsupported on
-//                    current hardware and which this M4 Max refuses with EINVAL (LC-57).
+//                    current hardware and which this M4 Max refuses with EINVAL.
 //   transparent      Linux only: transparent hugepages through madvise, and no fallback.
 //   explicit_huge    2 MiB pages from the kernel's reserved pool, MAP_HUGETLB on Linux and
 //                    the superpage flag on macOS, and no fallback: a refusal leaves the

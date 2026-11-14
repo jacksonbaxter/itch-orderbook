@@ -1,16 +1,16 @@
-// The four protocols bench_spsc runs on each queue, from components.md's plan:
+// The four protocols bench_spsc runs on each queue:
 //
 //   rtt         ping-pong: this thread pushes into one queue, the peer pops and pushes the
 //               item back through a second, so one item is in flight. The mean of a long
-//               span over the round trips, as LC-1 and LC-5 publish it. The coherence
+//               span over the round trips, as atomic_queue and rigtorp publish it. The coherence
 //               floor: no cached-index gain is expected here.
 //   saturated   one-way: the peer pushes sequence numbers as fast as the queue takes them
 //               and this thread pops and checks each. The first lap of the ring is left
-//               out of the span, so the rate is of a ring in steady state (LC-4's short
+//               out of the span, so the rate is of a ring in steady state (atomic_queue's short
 //               runs did not).
 //   paced       one-way at a fixed gap: the peer waits for each send time, stamps the
 //               item with the clock and pushes it; this thread pops it, reads the clock
-//               and records the difference. The Disruptor's protocol (LC-12), the one
+//               and records the difference. The LMAX Disruptor paper's protocol, the one
 //               that gives tails.
 //   burst       one-way, real messages at their real times: a stretch of the day's
 //               messages, each in a 64-byte item with its own length of real bytes, sent

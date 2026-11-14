@@ -8,15 +8,15 @@
 //   kOverread      the most bytes past a message's end that any function may read. The
 //                  parser hands a message to the kernel only when that many bytes follow it
 //                  in the mapped range, and decodes it here otherwise (parse.hpp).
-//   field<W>(p)    one big-endian field of W = 2, 4, 6 or 8 bytes at p (E1). A vector kernel
+//   field<W>(p)    one big-endian field of W = 2, 4, 6 or 8 bytes at p (field). A vector kernel
 //                  may read 8 bytes from p, so 8 must be readable there.
-//   add_fields(m)  an Add Order's fields (E2).
-//   book_op(m, t)  the BookOp of a message of op type t, its whole length readable (E3, E4).
-//   batch4(m, out) four Add Orders' book fields into one array a field (E5).
-//   any_equal(k, list, n)  whether any of n 8-byte keys equals k, n a multiple of 8 (E9).
+//   add_fields(m)  an Add Order's fields (decode).
+//   book_op(m, t)  the BookOp of a message of op type t, whole length readable (consume, parse).
+//   batch4(m, out) four Add Orders' book fields into one array a field (batch).
+//   any_equal(k, list, n)  whether any of n 8-byte keys equals k, n a multiple of 8 (filter).
 //
-// Here every field is read and swapped on its own, which is what "scalar" means in the
-// experiments. The compiler may still merge some of it into vector code; E12 reads the
+// Here every field is read and swapped on its own, which is what "scalar" means in
+// bench_kernels. The compiler may still merge some of it into vector code; the asm audit reads the
 // disassembly to say where it did.
 #pragma once
 

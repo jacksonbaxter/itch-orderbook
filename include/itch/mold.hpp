@@ -6,9 +6,9 @@
 //     offset 20  Message Blocks: each a 2-byte big-endian length, then that many bytes
 //
 // A count of 0 is a heartbeat and 0xFFFF the end of the session. Neither carries a block,
-// and each carries the next sequence number expected (IU-35 to IU-37). Sequence numbers
+// and each carries the next sequence number expected (Nasdaq's MoldUDP64 spec). Sequence numbers
 // count messages, not packets: the messages after a packet's first are numbered on from
-// it. A message block is byte for byte a BinaryFILE frame (IU-36), so the blocks of a
+// it. A message block is byte for byte a BinaryFILE frame (the same spec), so the blocks of a
 // packet are walked by the file's own FrameReader, and every mode of the receiver hands
 // the book exactly the frames the file path does.
 //
@@ -17,7 +17,7 @@
 // then that nothing follows the last. A packet that fails is refused whole and says why.
 // No datagram can make it read outside its bytes or hand on a block it has not checked.
 //
-// SequenceTracker is the receiver's own view of loss (IU-43's last but one row): from the
+// SequenceTracker is the receiver's own view of loss, one of the layers that count it: from the
 // sequence numbers alone it counts the gaps, the messages they skipped and the messages
 // that came again, and tells the caller which blocks of a packet are new. A message
 // skipped by a gap stays lost, even if it turns up later: the book has moved on without

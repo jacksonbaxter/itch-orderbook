@@ -7,7 +7,7 @@
 // run time and costs more on x86 hosts. No load passes a message's end.
 //
 // Core WebAssembly has no byte-reverse instruction, so std::byteswap in the scalar kernel
-// becomes shifts and masks here, unless the runtime spots the pattern. That is why E11 may
+// becomes shifts and masks here, unless the runtime spots the pattern. That is why bench/wasm may
 // come out the other way round from the native kernels.
 #pragma once
 

@@ -229,9 +229,9 @@ struct GuardedWalk {
   }
 };
 
-// batch4 on four copies of one Add Order whose last byte is the last before a guard page. E5's
+// batch4 on four copies of one Add Order whose last byte is the last before a guard page. The
 // batch_pass hands Add Orders to batch4 with no kOverread guard, so batch4 must read inside
-// each Add Order on every kernel, avx512vbmi's included (r4-6). A read past one would fault.
+// each Add Order on every kernel, avx512vbmi's included. A read past one would fault.
 struct GuardedBatch {
   const std::byte* add;
   template <class K>

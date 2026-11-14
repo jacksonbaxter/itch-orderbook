@@ -12,7 +12,7 @@
 // table. The output is the raw input of scripts/as_tables_report.py, which writes the results
 // file. Nothing here reads market data.
 //
-// One step, at t = n·dt for n = 0 to T/dt − 1, fixed by prediction P-0201 before any path ran:
+// One step, at t = n·dt for n = 0 to T/dt − 1, fixed in results/predictions.md before any path ran:
 //   1. The inventory strategy quotes r ± ψ/2, r = s − qγσ²(T − t), ψ = γσ²(T − t) +
 //      (2/γ) ln(1 + γ/k). The symmetric strategy quotes ±ψ̄/2 around s, where ψ̄ is the
 //      inventory strategy's average spread over the steps, which no path changes since ψ does

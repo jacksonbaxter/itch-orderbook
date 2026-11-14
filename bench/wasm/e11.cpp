@@ -1,4 +1,4 @@
-// E11 (simd.md): every Add Order of the day decoded into a 32-byte record, on the scalar kernel
+// The wasm run: every Add Order of the day decoded into a 32-byte record, on the scalar kernel
 // (std::byteswap, which core WebAssembly has no instruction for) or on the SIMD128 kernel
 // (constant i8x16.shuffle), in node. scripts/simd_wasm_e11.mjs copies the day into the window
 // a piece at a time and times each e11_pass() with performance.now(); nothing here reads a

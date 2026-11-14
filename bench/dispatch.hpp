@@ -1,4 +1,4 @@
-// The four forms of message dispatch E7 compares (simd.md's experiments), each a whole pass
+// The four forms of message dispatch that bench_variants --dispatch compares, each a whole pass
 // over the input that walks the frames and hands every message to the book its own way:
 //
 //   switch     FastBook::apply(), one switch on the type byte. What the book ships.

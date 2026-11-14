@@ -5,7 +5,7 @@
 // relaxed: publish (the producer's store of its index), observe (the consumer's load of
 // it), return (the consumer's store of its index) or reclaim (the producer's load of it).
 // That build is the negative control: TSan must report a race on the slots in it, and
-// what spsc_stress sees in it without TSan is recorded either way (components.md, LC-37).
+// what spsc_stress sees in it without TSan is recorded either way.
 // The ring's header has no switch of its own; only these test builds change the orders.
 #pragma once
 

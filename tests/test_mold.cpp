@@ -395,7 +395,7 @@ std::uint64_t frames_in(std::span<const std::byte> stream) {
   return frames;
 }
 
-// IU-36: the blocks are the file's frames, byte for byte, on every fixture day.
+// MoldUDP64: the blocks are the file's frames, byte for byte, on every fixture day.
 TEST(MoldPackets, TheBlocksAreTheFileByteForByte) {
   const auto files = fixture_files();
   ASSERT_GE(files.size(), 8U);

@@ -1,4 +1,4 @@
-// The SIMD experiments (simd.md, "Candidate experiments"), every kernel and every variant
+// The SIMD experiments (docs/NOTES.md, "SIMD parsing kernels"), every kernel and every variant
 // picked at the command line, all in one binary, over one day mapped from the page cache:
 //
 //     bench_kernels --input FILE --out RUN.json --experiment NAME [--kernel NAME]
@@ -110,7 +110,7 @@ std::string_view experiment_name(Experiment e) {
   return "unnamed";
 }
 
-// simd.md's experiment each one is.
+// The experiment's number, as each record and docs/NOTES.md give it.
 std::string_view simd_id(Experiment e) {
   switch (e) {
     case Experiment::field: return "E1";

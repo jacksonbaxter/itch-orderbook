@@ -77,12 +77,12 @@
 //   - A cancel, delete or replace of c shares, from a level of d with a ahead of S, takes
 //     conservative:  from behind S while shares rest behind it, so a becomes min(a, d − c).
 //                    hftbacktest's RiskAverse model, "your order queue position doesn't
-//                    change" on a cancel (backtester.md, BT-2), whose code caps the queue
+//                    change" on a cancel (its docs, order_fill.rst), whose code caps the queue
 //                    ahead at the level's new size, and carteret's conservative attribution,
 //                    "assume every cancel came from behind" (its design record 030).
 //     proportional:  c·a/d from ahead, carteret's proportional attribution ("a cancel of c
 //                    from a level of d with a ahead removes c·a/d from in front", record 030),
-//                    which is hftbacktest's ProbQueueModel with f(x) = x (BT-2). a is held in
+//                    which is hftbacktest's ProbQueueModel with f(x) = x (queue.rs). a is held in
 //                    millionths of a share and each removal is rounded down; shares that reach
 //                    S are counted in whole shares, rounded down.
 //

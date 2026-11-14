@@ -3,7 +3,7 @@
 // bytes and never in which bytes they move.
 //
 // A kernel turns a message into a 32-byte record: a BookOp for the book's seven types, or
-// AddFields for an Add Order (E2 in simd.md). Each output byte is one wire byte or a zero,
+// AddFields for an Add Order (bench_kernels' decode). Each output byte is one wire byte or a zero,
 // and every multi-byte field lands little-endian, so the byte swap is part of the move.
 //
 // Vector loads are 16 bytes. A Gather also says which 16-byte windows of the message to load
@@ -28,7 +28,7 @@ inline constexpr std::size_t kRecord = 32;
 inline constexpr std::uint8_t kZero = 0xFF;  // An output byte that is zero.
 inline constexpr std::size_t kMostWindows = 3;
 
-// An Add Order's fields for E2: every multi-byte field the message has, the stock left out,
+// An Add Order's fields for decode: every multi-byte field the message has, the stock left out,
 // in 32 bytes so that one record is two 16-byte vectors or one 32-byte one.
 struct AddFields {
   std::uint64_t reference = 0;
@@ -45,7 +45,7 @@ struct AddFields {
 static_assert(sizeof(AddFields) == kRecord);
 static_assert(sizeof(BookOp) == kRecord);
 
-// Four Add Orders' book fields, one array a field, for E5's batch: the layout a batched
+// Four Add Orders' book fields, one array a field, for the batch runs: the layout a batched
 // consumer would read, and the one a vector byte swap can fill a register at a time.
 struct AddBatch {
   std::array<std::uint64_t, 4> reference{};

@@ -1,4 +1,4 @@
-// E12: the NEON kernel, arm64 only.
+// The asm audit: the NEON kernel, arm64 only.
 #include "itch/kernels/neon.hpp"
 
 #include "functions.hpp"

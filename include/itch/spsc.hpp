@@ -46,15 +46,15 @@ namespace itch {
 // padded member, set for the build's target by cmake/ItchCacheLine.cmake, since parser
 // code holds no conditional compilation (scripts/gates.py): 128 on Apple silicon, whose
 // cores move 128-byte lines (hw.cachelinesize is 128 on M-series, and XNU sizes its L2
-// line as 1 << 7, LC-21), where 64 would leave both indices on one line; 64 on x86-64,
-// AMD's Zen 1 on debian among them (LC-24), and on other arm64 cores, the Linux CI
+// line as 1 << 7), where 64 would leave both indices on one line; 64 on x86-64,
+// AMD's Zen 1 on debian among them (its optimization guide), and on other arm64 cores, the Linux CI
 // runners' Neoverse among them. A target CMake has no measured size for leaves it
 // undefined, and this does not compile. test_spsc asserts the value against the
 // compiler's own target at compile time and against the line size the system reports at
 // run time. std::hardware_destructive_interference_size is not used: it is the compiler's
 // __GCC_DESTRUCTIVE_SIZE, which on this Mac is 256 under Apple clang 21 and 128 under
 // LLVM 23, and which GCC's own documentation calls unfit for a header because it changes
-// with the compiler (components.md, LC-17 to LC-20).
+// with the compiler (-Winterference-size).
 inline constexpr std::size_t kCacheLine = ITCH_CACHE_LINE;
 static_assert(kCacheLine == 64 || kCacheLine == 128,
               "every line size measured for this project is 64 or 128 bytes");

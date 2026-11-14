@@ -1,5 +1,5 @@
 // σ, A and k for one symbol from the market tape, in ticks and seconds as GLFT use them
-// (market-maker.md, "Parameters to calibrate"). tools/itch_calibrate runs it over a day.
+// (hftbacktest's GLFT market-making tutorial). tools/itch_calibrate runs it over a day.
 //
 // The calibrator is shown each message twice, before the book applies it and after, and reads
 // only the replayed historical book. Everything is measured in regular hours, from System
@@ -7,7 +7,7 @@
 // bid ≤ ask, as the mark path (marks.hpp). Changes inside one nanosecond collapse into one,
 // the state after the last of them. With mid2 = best bid + best ask and τ = tick in Price4:
 //
-// σ, two estimators, both reported (MK-22, MK-26):
+// σ, two estimators, both reported (the tutorial's, and one for a mid that moves in jumps):
 //   - clock: the mid in force at t = open + i·S, the state after every message at or before
 //     t. Each change between two consecutive valid samples is Δ_i = (mid2_{i+1} − mid2_i)/(2τ)
 //     ticks, and σ_clock = sqrt((1/n)·Σ(Δ_i − Δ̄)² / S), S in seconds.
@@ -15,7 +15,7 @@
 //     a change across a spell with no valid mid is not one. σ_jump = sqrt(ΣJ_j² / V), V the
 //     seconds with a valid mid.
 //
-// A and k, λ(δ) = A e^(−kδ) (MK-21): intervals (g, g + Δ] for g = open + i·Δ, each with the
+// A and k, λ(δ) = A e^(−kδ): intervals (g, g + Δ] for g = open + i·Δ, each with the
 // mid in force at g, its start mid. An interval whose start mid is not valid is left out. In
 // each interval and on each side, the deepest depth an aggressor reached from the start mid:
 // (mid2 − 2p)/(2τ) ticks against a resting bid at p, (2p − mid2)/(2τ) against a resting ask,
@@ -29,7 +29,7 @@
 //     λ(δ) = hits / (2 · exposure · Δ),
 // per side, both sides pooled. log λ = log A − kδ is fitted by ordinary least squares over
 // the depths with a hit, and the number of them is reported beside the fit. λ is the
-// market's rate of aggressive executions, not any strategy's fill rate (MK-21, MK-28).
+// market's rate of aggressive executions, not a strategy's fill rate, which queue place also sets.
 #pragma once
 
 #include <algorithm>
@@ -50,8 +50,8 @@
 namespace itch::mm {
 
 struct CalibrationSettings {
-  Nanos interval = 100'000'000;  // Δ, as MK-21.
-  Nanos sample = 1'000'000'000;  // S, coarser than the bounce (MK-22).
+  Nanos interval = 100'000'000;  // Δ, as the tutorial's.
+  Nanos sample = 1'000'000'000;  // S, coarser than the bid-ask bounce.
   Price4 tick = 100;
   std::int64_t max_depth_ticks = 20;
 };

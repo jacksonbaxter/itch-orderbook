@@ -15,10 +15,10 @@
 // The free list is threaded through the free nodes themselves, the next handle written
 // over the first bytes of each, so it costs no memory of its own:
 //   lifo     a node given back is the next taken: the slot freed most recently, which is
-//            the most likely still to be in cache. The shared practice (LC-56).
+//            the most likely still to be in cache. The shared practice (itch-book, folly).
 //   fifo     a node given back is taken after every node freed before it: the slot freed
-//            longest ago. Only the order of reuse differs from lifo (LC-56, the
-//            comparison plan's reuse-recency arm).
+//            longest ago. Only the order of reuse differs from lifo, so the arm
+//            measures how recently a reused slot was freed.
 //
 // A pool whose mapping failed has no room, and its report says why.
 #pragma once

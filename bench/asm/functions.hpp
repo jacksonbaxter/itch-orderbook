@@ -1,4 +1,4 @@
-// E12 (simd.md): each kernel's decode as the compiler emits it, alone, one extern "C" function
+// The asm audit: each kernel's decode as the compiler emits it, alone, one extern "C" function
 // an operation, for scripts/simd_asm_audit.py to compile with -S under each compiler and flag
 // set and count. Not built by CMake. ATTRIBUTE is the kernel's target region, so that the
 // kernel inlines into the function as it inlines into a pass.

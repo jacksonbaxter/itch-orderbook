@@ -2,7 +2,7 @@
 // aligned to 2 MiB, or explicit 2 MiB pages from the reserved pool through MAP_HUGETLB, or
 // base pages with madvise(MADV_NOHUGEPAGE). What backs the mapping is read back from its
 // entry in /proc/self/smaps once every page has been touched, and the host's
-// transparent_hugepage settings go on the record beside it (MM-69).
+// transparent_hugepage settings go on the record beside it (madvise(2), transhuge.rst).
 #include <sys/mman.h>
 #include <unistd.h>
 

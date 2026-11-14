@@ -13,7 +13,7 @@
 // Rates are for displayed, non-retail, non-midpoint orders, which is all the backtester
 // sends.
 //
-// Sources, as BENCHMARKS.md and the research evidence give them:
+// Sources, each a public document; FR is a Federal Register document number:
 //   - Add and remove: Nasdaq's price list, Wayback captures of 2019-10-22 and 2019-11-16
 //     for 2019-10-30, 2019-12-07 and 2020-02-01 for 2019-12-30, and 2026-06-11 and
 //     2026-06-16 for 2026-06-12. Each pair agrees.
@@ -25,7 +25,7 @@
 //   - CAT fee 2026-1: FR 2026-09599, $0.000001 an executed equivalent share from
 //     2026-05-01. None was found for 2019.
 // 2019-12-30 is the report day and its rates are VERIFIED in BENCHMARKS.md. The other two
-// days carry the evidence's SUBAGENT status until a report uses them.
+// days' rates were quoted from their sources and not checked again, as no report uses them.
 #pragma once
 
 #include <array>
@@ -50,7 +50,7 @@ using Picodollars = std::int64_t;
 // 81693): "Tape A for securities listed on the New York Stock Exchange", "Tape B for
 // securities listed on exchanges other than NYSE and Nasdaq", "Tape C for securities
 // listed on Nasdaq". Together these give carteret's mapping. A space, and a code the spec
-// does not list, such as the M seen in 2025 files (DS-64), have no tape.
+// does not list, such as the M seen in 2025 and 2026 files for MTEST, have no tape.
 enum class Tape : std::uint8_t { a, b, c, unknown };
 
 [[nodiscard]] constexpr Tape tape_of(char market_category) noexcept {
