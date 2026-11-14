@@ -9,9 +9,11 @@ findings by severity as its own findings said them, one look at a time, and its 
 it ended on one; every finding, with its severity, the finding in one line, its outcome and the
 evidence for it: the commits that settled it, the tests and faults that hold it, and the
 docs/NOTES.md sections that give it; the outcomes checked again at a later commit, and where;
-what is still to come; the acceptance gate (`gate`): the commit it checked, its checkers and what
-each read, and each checker's findings by the checker's own label, held to the same rules as a
-reviewer's; and whether the record is complete.
+what is still to come; the acceptance gate (`gate`): the commit it checked, its checkers, what
+each read and the counts of its findings by severity as its own report states them (`count`),
+each checker's findings by the checker's own label, held to the same rules as a reviewer's, and
+any finding of a checker that is not listed (`not_listed`), each with its severity and the reason
+in words; and whether the record is complete.
 
 A reviewer here is a subagent session that did not write the code it read, given the code and
 not the author's conclusions. A finding's severity is BLOCK (it would block a merge), FIX (should
@@ -20,12 +22,15 @@ be fixed) or NOTE. Its outcome is one of OUTCOMES. `write` refuses, and writes n
 - severity: a severity not in SEVERITIES;
 - outcome: an outcome not in OUTCOMES;
 - id: a finding id that is not `<reviewer>-<number>` of a listed reviewer, a gate finding of no
-  listed checker or with no label, or either given twice;
-- count: a reviewer whose findings, counted by severity, are not the counts its looks state;
+  listed checker or with a blank label, a blank checker, or any of them given twice;
+- count: a reviewer whose findings, counted by severity, are not the counts its looks state, or a
+  checker whose findings listed and not listed, counted by severity, are not its report's;
 - evidence: a finding fixed with no commit, unless its `no_commit` says in words why there is
   none (at least REASON_WORDS words of two letters or more), a known limit with no
-  docs/NOTES.md section for its reason, or a test that names a file which is not a test (a
-  file is a test only when its name starts `test_` or it lies under one of TEST_DIRS);
+  docs/NOTES.md section for its reason, a test that names a file which is not a test (a file
+  is a test only when it ends in one of TEST_ENDINGS and lies under one of TEST_DIRS, or its name
+  starts `test_` and it lies in one of TEST_PLACES or is named with no folder), or a finding not
+  listed with no reason in words;
 - complete: a record said to be complete while a finding, the gate's included, is open, partly
   done or left for the owner, while a reviewer is still to come, or while a reviewer's fixes are
   on a branch not merged yet;
@@ -36,7 +41,10 @@ The Result line names every reviewer's finding not settled, in one group for eac
 on (its `waits_on`, or the owner for one left for the owner), each group starting "waiting on"
 and whom, or "waiting on no one", and ending with a full stop, with what waits (its
 `waits_for`) where given; then how many of the gate's findings are not settled, by outcome, each
-of them named under "Not settled".
+of them named under "Not settled". Whether it says complete or not, it then says how many
+findings of each checker are not listed, of what severity, and why. A finding not listed is
+outside the record: it does not keep the record from being complete, and the page says so where
+it says complete.
 
 The file gives the commit the outcomes were checked at, and any checked again later with the
 commit they were checked at, the reviewers, the counts by reviewer, by severity and by outcome
@@ -48,7 +56,8 @@ what is still open, what is still to come, and what no reviewer read (`unread`);
 
 - stale: results/final_review.md is not what `write` makes of the data file now;
 - fault: a fault named is not in scripts/faults/*.json;
-- test: a test named is in no file under tests/, scripts/, fuzz/, bench/ or tools/;
+- test: a test named is in no file under tests/, scripts/, fuzz/, bench/ or tools/, or a test
+  file named with its folder is not at that path;
 - notes: a docs/NOTES.md section named is not a heading there;
 - page: a count that WRITEUP.md's paragraph on the final review gives is not the record's own
   total, a total is not given there while the paragraph gives another, or the paragraph gives an
@@ -94,12 +103,17 @@ COMMIT = re.compile(r"^[0-9a-f]{7,40}$")
 REASON_WORD = re.compile(r"[A-Za-z]{2,}")
 REASON_WORDS = 3
 TEST_PLACES = ("tests", "scripts", "fuzz", "bench", "tools")
-# A test may be named as a file. Such a file is a test only when its name starts test_ or it lies
-# under one of these folders; a source, script or results file is not one, though a test may
-# read it. A name with one of these endings names a file; any other is a test's own name.
+# A test is named by its own name or as a file. Its own name is words joined by dots, perhaps
+# after one capitalised word and a slash ("Reader.CountsEveryFrame", "test_a_page_line",
+# "Built/KernelTest.Case"), the last of them a test's: one that starts "test" or a capital. Any
+# other entry names a file ("ci.yml", "tests/test_book.cpp"). A file is a test only when it ends
+# in one of TEST_ENDINGS and lies under one of TEST_DIRS, or its name starts test_ and it lies in
+# one of TEST_PLACES or is given with no folder; a source, script, workflow or results file is
+# not one, though a test may read it.
 TEST_DIRS = ("tests/", "fuzz/")
-FILE_ENDINGS = (".py", ".cpp", ".hpp", ".h", ".sh", ".md", ".js", ".json", ".txt", ".cmake",
-                ".html", ".css")
+TEST_ENDINGS = (".py", ".cpp", ".sh")
+TEST_NAME = re.compile(r"(?:[A-Z]\w*/)?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*")
+TEST_OF_ITS_OWN = re.compile(r"test|[A-Z]")
 TEXT_FIELDS = ("finding", "detail")
 WHAT_A_REVIEWER_IS = (
     "A reviewer here is a subagent session that did not write the code it read. It was given the "
@@ -127,11 +141,14 @@ WHAT_CHECK_CANNOT = (
     "outcome of r15's findings.")
 GATE_WORDS = (
     "The acceptance gate checked the public tree at {at} in {parts} parts, each with its own "
-    "report, and its findings are recorded here beside the reviewers'. Each finding keeps its "
-    "checker's label or, where a checker gave none, its number in the order of that checker's "
-    "summary. The severity is the checker's own, BLOCK, FIX or NOTE, and the outcomes are the "
-    "six above, held to the same rules as a reviewer's finding: the record is not complete while "
-    "one of these is open, partly done or left for the owner.")
+    "report, which states how many findings of each severity it made. Those findings are "
+    "recorded here beside the reviewers', each checker's held to its report's counts, and a "
+    "finding not listed is counted below the table, with its severity and the reason. Each "
+    "finding keeps its checker's label or, where a checker gave none, its number in the order of "
+    "that checker's summary. The severity is the checker's own, BLOCK, FIX or NOTE, and the "
+    "outcomes are the six above, held to the same rules as a reviewer's finding: the record is "
+    "not complete while one of these is open, partly done or left for the owner.")
+NUMBER_WORDS = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
 
 
 class Refused(Exception):
@@ -174,36 +191,75 @@ def gate_id(finding):
     """A gate finding's name, its checker and its label: "pages B1"."""
     checker = need(finding, "checker", str, "a finding of the gate")
     label = need(finding, "label", str, f"a finding of {checker} at the gate")
-    if not label or "|" in label or "\n" in label or "|" in checker:
+    if not label.strip() or label != label.strip() or "|" in label or "\n" in label or "|" in checker:
         raise Refused("id", f"{checker} {label}".strip(), "a gate finding with no label of its own")
     return f"{checker} {label}"
 
 
+def severity_count(record, where):
+    """A count of each of SEVERITIES, held to its form."""
+    if not isinstance(record, dict) or set(record) != set(SEVERITIES) or not all(
+            isinstance(record[s], int) and not isinstance(record[s], bool) and record[s] >= 0
+            for s in SEVERITIES):
+        raise Refused("data", where, f"its count is not a count of each of {SEVERITIES}")
+    return dict(record)
+
+
 def gate_checkers(data):
-    """The gate's header held to its rules; the ids of its checkers."""
+    """The gate's header held to its rules: for each checker's id, the counts its report states
+    and the counts of its findings not listed, by severity."""
     gate = need(data, "gate", dict, str(DATA))
     if not COMMIT.match(need(gate, "at", str, "gate")):
         raise Refused("data", "gate", f"{gate['at']!r} is not a commit")
     need(gate, "findings", list, "gate")
-    checkers = []
+    checkers = {}
     for checker in need(gate, "checkers", list, "gate"):
         cid = need(checker, "id", str, "a checker of the gate")
         read = need(checker, "read", str, cid)
-        if not cid or not read or "|" in cid + read or "\n" in cid + read:
+        if not cid.strip() or cid != cid.strip() or " " in cid:
+            raise Refused("id", repr(cid), "a checker with no id of its own")
+        if not read or "|" in cid + read or "\n" in cid + read:
             raise Refused("data", "gate", f"checker {cid!r} does not say in one line what it read")
         if cid in checkers:
             raise Refused("id", cid, "a checker given twice")
-        checkers.append(cid)
+        stated = severity_count(checker.get("count"), cid)
+        unlisted = dict.fromkeys(SEVERITIES, 0)
+        for item in need(checker, "not_listed", list, cid):
+            severity = need(item, "severity", str, f"{cid}'s finding not listed")
+            reason = need(item, "reason", str, f"{cid}'s finding not listed")
+            if severity not in SEVERITIES:
+                raise Refused("severity", cid, f"a finding not listed is {severity!r}, not one of "
+                              f"{SEVERITIES}")
+            if "|" in reason or "\n" in reason or len(REASON_WORD.findall(reason)) < REASON_WORDS:
+                raise Refused("evidence", cid, f"a finding not listed gives {reason!r} as its "
+                              f"reason: a reason is one line of at least {REASON_WORDS} words")
+            unlisted[severity] += 1
+        checkers[cid] = (stated, unlisted)
     if not checkers:
         raise Refused("data", "gate", "no checker")
     return checkers
 
 
-def is_test_name(test):
-    """A test's own name, or a file that is a test (TEST_DIRS)."""
-    if not test.endswith(FILE_ENDINGS):
+def names_a_file(test):
+    """Whether a test entry names a file rather than a test's own name (TEST_NAME)."""
+    if not TEST_NAME.fullmatch(test):
         return True
-    return Path(test).name.startswith("test_") or test.startswith(TEST_DIRS)
+    last = re.split(r"[./]", test)[-1]
+    return "." in test and not TEST_OF_ITS_OWN.match(last)
+
+
+def is_test_name(test):
+    """A test's own name, or a file that is a test: under TEST_DIRS, or named test_ in one of
+    TEST_PLACES or with no folder, with one of TEST_ENDINGS either way."""
+    if not names_a_file(test):
+        return True
+    parts = Path(test).parts
+    if not test.endswith(TEST_ENDINGS) or test.startswith("/") or ".." in parts:
+        return False
+    if test.startswith(TEST_DIRS):
+        return True
+    return parts[-1].startswith("test_") and (len(parts) == 1 or (len(parts) == 2
+                                                                   and parts[0] in TEST_PLACES))
 
 
 def validate(data):
@@ -236,6 +292,7 @@ def validate(data):
         known[rid] = reviewer_stated(reviewer)
     seen = set()
     counted = {rid: dict.fromkeys(SEVERITIES, 0) for rid in known}
+    by_checker = {cid: dict(unlisted) for cid, (_, unlisted) in checkers.items()}
     for finding, of_gate in [(f, False) for f in findings] + [(f, True) for f in at_gate]:
         fid = gate_id(finding) if of_gate else need(finding, "id", str, "a finding")
         match = None if of_gate else FINDING_ID.match(fid)
@@ -282,10 +339,16 @@ def validate(data):
                           "reason")
         if match:
             counted[match[1]][finding["severity"]] += 1
+        if of_gate and finding["checker"] in by_checker:
+            by_checker[finding["checker"]][finding["severity"]] += 1
     for rid, stated in known.items():
         if counted[rid] != stated:
             raise Refused("count", rid, f"its looks state {stated}, its findings here count "
                           f"{counted[rid]}")
+    for cid, (stated, _) in checkers.items():
+        if by_checker[cid] != stated:
+            raise Refused("count", cid, f"its report states {stated}, its findings listed and not "
+                          f"listed here count {by_checker[cid]}")
     if complete:
         unsettled = [f["id"] for f in findings if f["outcome"] in UNSETTLED]
         if unsettled:
@@ -358,13 +421,34 @@ def and_list(items):
     return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
 
 
+def not_listed_words(data):
+    """For each checker with findings not listed, one sentence: how many, of what severity, why."""
+    said = []
+    for checker in data["gate"]["checkers"]:
+        reasons = {}
+        for item in checker["not_listed"]:
+            reasons.setdefault(item["reason"], []).append(item["severity"])
+        for reason, severities in reasons.items():
+            count = len(severities)
+            many = NUMBER_WORDS[count] if count < len(NUMBER_WORDS) else str(count)
+            kinds = and_list([f"{severities.count(s)} {s}" if count > 1 else f"a {s}"
+                              for s in SEVERITIES if s in severities])
+            said.append(f"{many[0].upper()}{many[1:]} finding{'s' if count > 1 else ''} of the "
+                        f"gate's {checker['id']}, {kinds}, {'are' if count > 1 else 'is'} not "
+                        f"listed here, because {reason}.")
+    return said
+
+
 def status(data):
     """The Result line: complete, or what is not settled, one group for each one it waits on, each
     group starting with whom it waits on ("waiting on no one" where the data names no one), then
     any reviewer to come and any branch not merged. Groups end with a full stop; the parts inside
-    a group are joined with "; "."""
+    a group are joined with "; ". Either way it ends with the gate's findings not listed."""
+    unlisted = "".join(f" {sentence}" for sentence in not_listed_words(data))
     if data["complete"]:
-        return "complete: every finding settled, every reviewer reported"
+        return ("complete: every finding listed is settled, every reviewer reported."
+                + unlisted if unlisted else "complete: every finding settled, every reviewer "
+                "reported")
     groups = {}
     for finding in data["findings"]:
         if finding["outcome"] in UNSETTLED:
@@ -391,7 +475,8 @@ def status(data):
         said.append(f"{', '.join(branches)}'s fixes not merged yet")
     said = [part[0].upper() + part[1:] if part.startswith(("waiting", "of the")) else part
             for part in said]
-    return "not complete" + "".join(f". {part}" for part in said) + ("." if said else "")
+    return ("not complete" + "".join(f". {part}" for part in said)
+            + ("." if said or unlisted else "") + unlisted)
 
 
 def render(data):
@@ -399,6 +484,7 @@ def render(data):
     reviewers, findings = data["reviewers"], data["findings"]
     gate = data["gate"]
     at_gate = gate["findings"]
+    made = {s: sum(c["count"][s] for c in gate["checkers"]) for s in SEVERITIES}
     total = tally(findings)
     again = [r["id"] for r in reviewers if len(r["looks"]) > 1]
     lines = [
@@ -422,10 +508,12 @@ def render(data):
         "- Outcomes: " + ", ".join(f"{count} {outcome}" for outcome, count
                                      in zip(OUTCOMES, total) if count),
         f"- Acceptance gate: at {gate['at']}, {len(gate['checkers'])} checkers, "
-        f"{len(at_gate)} findings ("
+        f"{sum(made.values())} findings made by its checkers ("
+        + ", ".join(f"{made[s]} {s}" for s in SEVERITIES)
+        + f"), {len(at_gate)} listed ("
         + ", ".join(f"{sum(1 for f in at_gate if f['severity'] == s)} {s}" for s in SEVERITIES)
-        + "); " + ", ".join(f"{count} {outcome}" for outcome, count
-                             in zip(OUTCOMES, tally(at_gate)) if count),
+        + "); of those listed, " + ", ".join(f"{count} {outcome}" for outcome, count
+                                              in zip(OUTCOMES, tally(at_gate)) if count),
         f"- Result: {status(data)}",
         "",
         "## What a reviewer is",
@@ -477,10 +565,14 @@ def render(data):
         found = [f for f in at_gate if f["checker"] == checker["id"]]
         rows.append((checker["id"], checker["read"],
                      *(sum(1 for f in found if f["severity"] == s) for s in SEVERITIES),
-                     len(found)))
+                     len(found), len(checker["not_listed"]), sum(checker["count"].values())))
     rows.append(("All", "", *(sum(1 for f in at_gate if f["severity"] == s) for s in SEVERITIES),
-                 len(at_gate)))
-    lines += table(("Checker", "What it read", *SEVERITIES, "Findings"), rows)
+                 len(at_gate), sum(len(c["not_listed"]) for c in gate["checkers"]),
+                 sum(made.values())))
+    lines += table(("Checker", "What it read", *SEVERITIES, "Listed", "Not listed",
+                    "Made, by its report"), rows)
+    lines += ["", "The severities are those of the findings listed. "
+              + (" ".join(not_listed_words(data)) or "Every finding the checkers made is listed.")]
     lines += ["", "By checker and outcome.", ""]
     rows = [(checker["id"], *tally([f for f in at_gate if f["checker"] == checker["id"]]))
             for checker in gate["checkers"]]
@@ -560,9 +652,11 @@ def evidence_problems(root, data):
             if fault not in faults:
                 problems.append(("fault", fid, f"{fault} is not in scripts/faults"))
         for test in finding["tests"]:
-            if test.endswith((".py", ".cpp")):
-                found = any(path.name == Path(test).name for place in TEST_PLACES
-                            for path in (root / place).rglob(Path(test).name))
+            if names_a_file(test) and "/" in test:
+                found = (root / test).is_file()
+            elif names_a_file(test):
+                found = any(path.name == test for place in TEST_PLACES
+                            for path in (root / place).rglob(test))
             else:
                 name = re.split(r"[./]", test)[-1]
                 found = re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text) is not None

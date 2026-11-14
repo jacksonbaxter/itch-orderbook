@@ -3787,23 +3787,58 @@
   "checkers": [
    {
     "id": "reader",
-    "read": "README.md as a recruiter would read it in 90 seconds, then WRITEUP.md and eight source files as a senior developer would in 20 minutes; nothing built or run"
+    "read": "README.md as a recruiter would read it in 90 seconds, then WRITEUP.md and eight source files as a senior developer would in 20 minutes; nothing built or run",
+    "count": {
+     "BLOCK": 4,
+     "FIX": 17,
+     "NOTE": 9
+    },
+    "not_listed": [
+     {
+      "severity": "BLOCK",
+      "reason": "it is a question of presentation that is decided outside this record, after it closes"
+     }
+    ]
    },
    {
     "id": "pages",
-    "read": "every figure, verdict and link of README.md, WRITEUP.md and RESULTS.md against the results files they cite, and the number gate against 37 planted edits; nothing built"
+    "read": "every figure, verdict and link of README.md, WRITEUP.md and RESULTS.md against the results files they cite, and the number gate against 37 planted edits; nothing built",
+    "count": {
+     "BLOCK": 2,
+     "FIX": 2,
+     "NOTE": 11
+    },
+    "not_listed": []
    },
    {
     "id": "code",
-    "read": "the C++, build and CI changes from 3f8bacd to 51f568d, and the fuzz-search rule's from c501f27 to 3af23b2; nothing built and no fuzzer run"
+    "read": "the C++, build and CI changes from 3f8bacd to 51f568d, and the fuzz-search rule's from c501f27 to 3af23b2; nothing built and no fuzzer run",
+    "count": {
+     "BLOCK": 0,
+     "FIX": 2,
+     "NOTE": 4
+    },
+    "not_listed": []
    },
    {
     "id": "raw",
-    "read": "the figures of this phase worked out again from their raw records: T-BT-3 on the Zen 1 host, the parse rate, both runs' load records, the figures recomputed from raw, the 30-minute fuzz runs, the final full check and the Linux faults, and the oracle rerun"
+    "read": "the figures of this phase worked out again from their raw records: T-BT-3 on the Zen 1 host, the parse rate, both runs' load records, the figures recomputed from raw, the 30-minute fuzz runs, the final full check and the Linux faults, and the oracle rerun",
+    "count": {
+     "BLOCK": 0,
+     "FIX": 0,
+     "NOTE": 3
+    },
+    "not_listed": []
    },
    {
     "id": "findings",
-    "read": "the earlier gate's findings and their fixes, six predictions against their runs, 31 sampled outcomes of this record, and the gaps in the record"
+    "read": "the earlier gate's findings and their fixes, six predictions against their runs, 31 sampled outcomes of this record, and the gaps in the record",
+    "count": {
+     "BLOCK": 0,
+     "FIX": 2,
+     "NOTE": 3
+    },
+    "not_listed": []
    }
   ],
   "findings": [

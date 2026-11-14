@@ -59,8 +59,10 @@ DATA = {
     ],
     "gate": {
         "at": "abcdef1",
-        "checkers": [{"id": "reader", "read": "the pages as a stranger would"},
-                     {"id": "pages", "read": "every figure of the pages"}],
+        "checkers": [{"id": "reader", "read": "the pages as a stranger would",
+                      "count": {"BLOCK": 0, "FIX": 1, "NOTE": 0}, "not_listed": []},
+                     {"id": "pages", "read": "every figure of the pages",
+                      "count": {"BLOCK": 1, "FIX": 0, "NOTE": 0}, "not_listed": []}],
         "findings": [
             {"checker": "reader", "label": "1", "severity": "FIX", "finding": "too long",
              "outcome": "fixed", "detail": "", "commits": ["1234567"], "tests": [],
@@ -342,19 +344,44 @@ class ReviewReport(unittest.TestCase):
         self.data = copy.deepcopy(DATA)
         self.data["findings"][3]["tests"] = ["scripts/test_pages.py", "tests/test_reader.cpp",
                                              "tests/skip_probe.cpp", "fuzz/fuzz_kernels.cpp",
-                                             "Reader.CountsEveryFrame", "Built/Kernel.Case"]
+                                             "Reader.CountsEveryFrame", "Built/Kernel.Case",
+                                             "test_pages.py", "ReviewReport.test_a_page_line"]
         code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+
+    def test_a_file_of_another_ending_or_folder_is_not_a_test(self):
+        # r18-5: a name with an ending the rule does not list is a file, not a test's own name;
+        # a file named test_ is a test only in a folder of tests, or given with no folder.
+        for name in (".github/workflows/ci.yml", "ci.yml", "CMakePresets.json", "docs/test_x.md",
+                     "results/test_x.md", "test_x.md", "test_x.json", "scripts/sub/test_x.py",
+                     "../tests/test_reader.cpp", "tests/CMakeLists.txt", "Reader.counts"):
+            with self.subTest(test=name):
+                self.data = copy.deepcopy(DATA)
+                self.data["findings"][3]["tests"] = ["test_a_page_line", name]
+                self.assertIn(f"r12-1: '{name}' is given as a test", self.refused("evidence"))
+
+    def test_a_test_file_named_with_its_folder_must_be_there(self):
+        self.data["findings"][3]["tests"] = ["tests/test_pages.py"]
+        self.assertEqual(self.run_step("write")[0], 0)
+        code, output = self.run_step("check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("review_report: FAIL test r12-1: tests/test_pages.py is in no file", output)
+        self.data["findings"][3]["tests"] = ["scripts/test_pages.py", "test_pages.py"]
+        self.assertEqual(self.run_step("write")[0], 0)
+        code, output = self.run_step("check")
         self.assertEqual(code, 0, output)
 
     def test_the_gate_is_recorded_beside_the_reviewers(self):
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
         text = self.out.read_text(encoding="utf-8")
-        self.assertIn("- Acceptance gate: at abcdef1, 2 checkers, 2 findings (1 BLOCK, 1 FIX, "
-                      "0 NOTE); 1 fixed, 1 known limit\n", text)
+        self.assertIn("- Acceptance gate: at abcdef1, 2 checkers, 2 findings made by its checkers "
+                      "(1 BLOCK, 1 FIX, 0 NOTE), 2 listed (1 BLOCK, 1 FIX, 0 NOTE); of those "
+                      "listed, 1 fixed, 1 known limit\n", text)
         self.assertIn("- Findings: 5\n", text)
-        self.assertIn("| reader | the pages as a stranger would | 0 | 1 | 0 | 1 |\n", text)
-        self.assertIn("| All |  | 1 | 1 | 0 | 2 |\n", text)
+        self.assertIn("| reader | the pages as a stranger would | 0 | 1 | 0 | 1 | 0 | 1 |\n", text)
+        self.assertIn("| All |  | 1 | 1 | 0 | 2 | 0 | 2 |\n", text)
+        self.assertIn("Every finding the checkers made is listed.", text)
         self.assertIn("| pages | B1 | BLOCK | a stale claim | known limit | docs/NOTES.md, ", text)
         self.assertEqual(self.counts_rows(text, "By checker and outcome.")["All"],
                          [1, 1, 0, 0, 0, 0, 2])
@@ -374,6 +401,81 @@ class ReviewReport(unittest.TestCase):
         self.data = copy.deepcopy(DATA)
         self.data["gate"]["findings"][0]["commits"] = []
         self.assertIn("reader 1: fixed with no commit", self.refused("evidence"))
+
+    def test_a_checkers_findings_are_held_to_its_reports_count(self):
+        # r18-3: with the gate's findings dropped, the record is refused, not rendered complete.
+        self.data["complete"] = True
+        self.data["findings"][2]["outcome"] = "no change needed"
+        self.data["gate"]["findings"] = []
+        self.assertIn("reader: its report states {'BLOCK': 0, 'FIX': 1, 'NOTE': 0}, its findings "
+                      "listed and not listed here count {'BLOCK': 0, 'FIX': 0, 'NOTE': 0}",
+                      self.refused("count"))
+        self.data = copy.deepcopy(DATA)
+        self.data["gate"]["findings"][1]["severity"] = "NOTE"
+        self.assertIn("pages: its report states", self.refused("count"))
+        for count in (None, {"BLOCK": 1, "FIX": 0}, {"BLOCK": -1, "FIX": 0, "NOTE": 0},
+                      {"BLOCK": True, "FIX": 0, "NOTE": 0}):
+            with self.subTest(count=count):
+                self.data = copy.deepcopy(DATA)
+                self.data["gate"]["checkers"][1]["count"] = count
+                self.assertIn("pages: its count is not a count", self.refused("data"))
+
+    def test_a_blank_label_or_checker_is_refused(self):
+        for label in ("", " ", " B1", "B1 "):
+            with self.subTest(label=label):
+                self.data = copy.deepcopy(DATA)
+                self.data["gate"]["findings"][1]["label"] = label
+                self.assertIn("a gate finding with no label of its own", self.refused("id"))
+        for cid in ("", " ", "the pages"):
+            with self.subTest(checker=cid):
+                self.data = copy.deepcopy(DATA)
+                self.data["gate"]["checkers"][1]["id"] = cid
+                self.data["gate"]["findings"][1]["checker"] = cid
+                self.assertIn("a checker with no id of its own", self.refused("id"))
+
+    def test_a_finding_not_listed_is_counted_with_its_severity_and_reason(self):
+        # r18-4: the report's count is the findings listed and those not listed, each of which
+        # gives its severity and its reason; a finding left out without one is refused.
+        self.data["gate"]["checkers"][0]["count"] = {"BLOCK": 1, "FIX": 1, "NOTE": 0}
+        self.assertIn("reader: its report states {'BLOCK': 1, 'FIX': 1, 'NOTE': 0}",
+                      self.refused("count"))
+        reason = "it is decided outside this record"
+        self.data["gate"]["checkers"][0]["not_listed"] = [{"severity": "BLOCK", "reason": reason}]
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        text = self.out.read_text(encoding="utf-8")
+        sentence = (f"One finding of the gate's reader, a BLOCK, is not listed here, because "
+                    f"{reason}.")
+        self.assertIn(f"- Result: not complete. {sentence}\n", text)
+        self.assertIn(f"The severities are those of the findings listed. {sentence}\n", text)
+        self.assertIn("2 checkers, 3 findings made by its checkers (2 BLOCK, 1 FIX, 0 NOTE), 2 "
+                      "listed (1 BLOCK, 1 FIX, 0 NOTE)", text)
+        self.assertIn("| reader | the pages as a stranger would | 0 | 1 | 0 | 1 | 1 | 2 |\n", text)
+        self.assertIn("| All |  | 1 | 1 | 0 | 2 | 1 | 3 |\n", text)
+        for item, code_word in (({"severity": "BLOCK", "reason": ""}, "evidence"),
+                                ({"severity": "BLOCK", "reason": "not listed"}, "evidence"),
+                                ({"severity": "BLOCK", "reason": "a | b and c d"}, "evidence"),
+                                ({"severity": "MAJOR", "reason": reason}, "severity"),
+                                ({"severity": "BLOCK"}, "data")):
+            with self.subTest(item=item):
+                self.out.unlink(missing_ok=True)
+                self.data["gate"]["checkers"][0]["not_listed"] = [item]
+                self.refused(code_word)
+        self.out.unlink(missing_ok=True)
+        del self.data["gate"]["checkers"][0]["not_listed"]
+        self.refused("data")
+
+    def test_complete_is_said_with_what_is_not_listed(self):
+        reason = "it is decided outside this record"
+        self.data["complete"] = True
+        self.data["findings"][2]["outcome"] = "no change needed"
+        self.data["gate"]["checkers"][0]["count"] = {"BLOCK": 2, "FIX": 1, "NOTE": 0}
+        self.data["gate"]["checkers"][0]["not_listed"] = [{"severity": "BLOCK", "reason": reason}] * 2
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        self.assertIn("- Result: complete: every finding listed is settled, every reviewer "
+                      "reported. Two findings of the gate's reader, 2 BLOCK, are not listed here, "
+                      f"because {reason}.\n", self.out.read_text(encoding="utf-8"))
 
     def test_an_open_gate_finding_cannot_be_rendered_complete(self):
         self.data["complete"] = True
