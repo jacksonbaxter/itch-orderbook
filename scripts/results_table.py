@@ -1684,7 +1684,7 @@ def missed_full(root):
     return lines
 
 
-SHORT_CELL = 60
+SHORT_CELL = 24
 
 
 def first_clause(cell):
@@ -1698,27 +1698,36 @@ def first_clause(cell):
 
 
 def missed_targets(root):
-    """The lines of WRITEUP.md's table of every target missed or not measured: one short line a
-    target, from its first row, the rest in RESULTS.md, or TableError."""
+    """The lines of WRITEUP.md's list of every target missed or not measured: one short line a
+    target, from its first row, the rest in RESULTS.md, or TableError. A list, not a table, so
+    that the page's word count goes to the figures: the host is named only when it is not the
+    Zen 1 host, and the full rows, hosts and whys are in RESULTS.md."""
     text, _ = benchmark_targets(root)
     groups = {}
     for row in missed_rows(root):
         groups.setdefault(row[0].split(",")[0], []).append(row)
-    lines = markdown_table(("Target", "Bar", "Measured", "Gap", "Host", "Why", "File"), [])
+    lines = ["Every line is on the Zen 1 host unless it names the M4 Max.", ""]
     for target, rows in groups.items():
         _, bar, measured, gap, host, _, short, cited, unmeasured = rows[0]
         more = f"; {in_words(len(rows) - 1)} more in RESULTS.md" if len(rows) > 1 else ""
-        cited = cited.replace(f"[results/", "[file](results/", 1).split("](results/")[0] \
-            if cited == "none" else f"[file]({cited.split('](')[1]}"
+        cited = "" if cited == "none" else f" [file]({cited.split('](')[1]}"
         # Where the bar was set is in RESULTS.md's row: here, the bar alone.
         bar = re.sub(r" \([^()]*\)$", "", bar)
-        line = (f"| {benchmark_title(text, target)} ({target}) | {first_clause(bar)} | "
-                f"{first_clause(measured)} | {first_clause(gap)}{more} | "
-                f"{SHORT_HOSTS.get(host, host)} | {short} | {cited} |")
+        where = "" if host == "debian" else f", {SHORT_HOSTS.get(host, host)}"
+        bar = first_clause(bar)
+        if unmeasured:
+            what = f"not measured{where}, against {bar}"
+        else:
+            measured, gap = first_clause(measured), first_clause(gap)
+            # A gap that only restates the figure and the bar is left out.
+            gap = "" if gap.startswith(measured.rstrip(" …")) else f"; {gap}"
+            what = f"{measured} against {bar}{where}{gap}{more}"
+            if re.match(r"\d{8}\b", measured):  # A list of days: the gap says it.
+                what = f"bar {bar}{where}{gap}{more}"
+        line = f"- **{benchmark_title(text, target)} ({target}):** {what}; {short}.{cited}"
         lines.append(f"{line} {NOT_MEASURED_MARK}" if unmeasured else line)
-    lines += ["", f"One line a target, from its first row. Every row, of each file, host, day and "
-                  f"comparison, with its why in full, is in [RESULTS.md](RESULTS.md#"
-                  f"{MISSED_ANCHOR})."]
+    lines += ["", f"One line a target, from its first row; every row, with its why in full, is in "
+                  f"[RESULTS.md](RESULTS.md#{MISSED_ANCHOR})."]
     return lines
 
 

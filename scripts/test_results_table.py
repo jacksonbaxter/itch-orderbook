@@ -874,7 +874,7 @@ class MissedTargets(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertIn("\n\nT-PARSE-3's bar is set on 10302019: not measured on that day; a run is "
                       "registered", output)
-        self.assertIn("not measured on that day; a run is registered | [file](results/"
+        self.assertIn("not measured on that day; a run is registered. [file](results/"
                       "parse_rate_debian_12302019.md)", self.short())
         self.assertIn("; not measured on 10302019 |", tables_of(output))
         self.assertIn("No parse rate was timed on the Mac: the three bars are set on x86 Linux",
@@ -888,7 +888,7 @@ class MissedTargets(unittest.TestCase):
         self.assertNotIn("; not measured on 10302019 |", tables_of(output))
         self.assertIn("; judged on 10302019, in results/parse_rate_debian_10302019.md |",
                       tables_of(output))
-        self.assertIn("1.00 M msg/s under the bar | Zen 1 | the host's share not established | "
+        self.assertIn("; 1.00 M msg/s under the bar; the host's share not established. "
                       "[file](results/parse_rate_debian_10302019.md)", self.short())
         self.assertRegex(output, r"\| T-PARSE-3 \| [^|]* \| \*\*missed\*\* \| debian: 1 missed, ")
         self.add_bar_day("met")
@@ -904,21 +904,27 @@ class MissedTargets(unittest.TestCase):
 
     def test_the_writeup_table_has_one_short_line_a_target(self):
         table = self.short()
-        rows = [line for line in table.splitlines() if line.startswith("| ")][1:]
-        targets = [re.search(r"\((T-[A-Z0-9]+-\d+)\) \|", row)[1] for row in rows]
+        rows = [line for line in table.splitlines() if line.startswith("- **")]
+        targets = [re.search(r"\((T-[A-Z0-9]+-\d+)\):\*\* ", row)[1] for row in rows]
         self.assertEqual(len(targets), len(set(targets)), targets)
         full = {line.split(" | ")[0][2:].split(",")[0] for line in self.missed().splitlines()
                 if line.startswith("| T-")}
         self.assertEqual(set(targets), full)
-        self.assertIn("| rate budgets (T-LAT-3) | mean service ≤ 393 ns a message, p99.9 ≤ 750 ns "
-                      "| mean 194.35 ns; p99.9 1,472.00 ns | p99.9 by 722.00 ns | Zen 1 |", table)
-        self.assertIn("| round trip against boost, moodycamel and rigtorp (T-SPSC-1) | ≥ 1.16× | "
-                      "1.15× | 1.15× against ≥ 1.16×; two more in RESULTS.md | Zen 1 |", table)
-        self.assertIn("| per-operation latency, FIFO book (T-LAT-1) | add 60, 447, 683 … |", table)
+        self.assertIn("- **rate budgets (T-LAT-3):** mean 194.35 ns … against mean service ≤ 393 "
+                      "ns a message …; p99.9 by 722.00 ns; ", table)
+        # A gap that only restates the figure against its bar is left out.
+        self.assertIn("- **round trip against boost, moodycamel and rigtorp (T-SPSC-1):** 1.15× "
+                      "against ≥ 1.16×; two more in RESULTS.md; no counters read; ", table)
+        self.assertIn("- **per-operation latency, FIFO book (T-LAT-1):** add p50 100.10 ns … "
+                      "against add 60, 447, 683 …;", table)
+        self.assertIn("- **continuous volume against SEC MIDAS (T-TRADE-3):** 6 violations against "
+                      "exact, with no tolerance, M4 Max;", table)
+        self.assertIn("Every line is on the Zen 1 host unless it names the M4 Max.", table)
+        self.assertNotIn("Zen 1;", table)
+        self.assertNotIn("| ", table)
         self.assertIn("(RESULTS.md#every-target-missed-or-not-measured)", table)
         self.assertNotIn("P-0", table)
-        self.edit("WRITEUP.md", "| 1.15× | 1.15× against ≥ 1.16×; two more", 
-                  "| 1.14× | 1.15× against ≥ 1.16×; two more")
+        self.edit("WRITEUP.md", "(T-SPSC-1):** 1.15× against", "(T-SPSC-1):** 1.14× against")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
         self.assertRegex(output, r"results_table: FAIL WRITEUP\.md:\d+: differs from a fresh run")
