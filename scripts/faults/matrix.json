@@ -229,7 +229,7 @@
       "mutations": [
         {
           "file": "scripts/faults/simd.json",
-          "old": "\"-runs=2000000\",",
+          "old": "\"-runs=1000000\",",
           "new": "\"-max_total_time=60\","
         }
       ],

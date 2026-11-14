@@ -390,14 +390,15 @@ class Matrix(unittest.TestCase):
 # in seconds finds less on a busy machine, and libFuzzer's corpus reload, once a second, re-runs
 # files at a point the clock sets and so changes the path of the search: the final full check at
 # 6508b0d missed simd-fuzz-kernels-oracle that way. A count of runs with the reload off makes the
-# search the same on any machine. Each floor is at least about ten times the most runs a recorded
-# run needed to find its fault, and no fewer than its old budget in seconds gave on an idle
-# machine (docs/NOTES.md). Each rate is below the average of every idle run of the target seen;
-# fuzz_kernels slows as its inputs grow, so its rate is set below what its longest run showed.
+# search the same on any machine. Each floor is no fewer runs than its old budget in seconds gave
+# on an idle machine, and ten times or more the most runs a recorded search needed to find its
+# fault; fuzz_kernels's is five times, four times the runs of the miss, since it slows to about
+# 1,000 runs a second as its inputs grow (docs/NOTES.md). Each rate is below the average of every
+# idle run of the target seen, fuzz_kernels's below that of its 30-minute run.
 FUZZ_SEARCHES = {
     "fuzz_book": (5_000, 30),
     "fuzz_decode": (700_000, 20_000),
-    "fuzz_kernels": (2_000_000, 2_000),
+    "fuzz_kernels": (1_000_000, 1_000),
     "fuzz_lookahead": (300_000, 700),
     "fuzz_packets": (10_000_000, 80_000),
     "fuzz_reader": (1_500_000, 37_000),

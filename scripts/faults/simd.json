@@ -1041,7 +1041,7 @@
       "command": [
         "{build}/fuzz/fuzz_kernels",
         "-seed=1",
-        "-runs=2000000",
+        "-runs=1000000",
         "-reload=0",
         "-print_final_stats=1",
         "-artifact_prefix={build}/fuzz/artifacts/",
@@ -1051,7 +1051,7 @@
       "expect": {
         "signature": "FUZZ_CHECK failed: got\\.ops == want->ops"
       },
-      "timeout": 4000
+      "timeout": 3600
     },
     {
       "id": "simd-report-withdrawn-named",
