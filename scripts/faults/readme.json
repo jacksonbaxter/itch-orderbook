@@ -5,6 +5,7 @@
     "README.md",
     "RESULTS.md",
     "WRITEUP.md",
+    "docs/DETAILS.md",
     "results",
     "scripts",
     "tests/CMakeLists.txt",
