@@ -1,6 +1,6 @@
 # What a full-depth order book costs on a small x86 core, measured
 
-On a small x86 core this order book is bound by memory latency: on an embedded Zen 1 the fast designs run about the same instructions per message, and their speed follows how often they wait on DRAM. The default design, flat price levels with an order index looked up by each order's reference number, rebuilds every symbol's book at 5,145,430 messages/s with 1.972 DRAM fills per message, 2.54× a `std::map` book on the same core ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)). Most fills left come from messages naming orders over a second old, whose lines the small shared L3 cache no longer holds; a software look-ahead that hides some is faster there and slower on an Apple M4 Max, so it is off by default.
+On a small x86 core this order book is bound by memory latency: on an embedded Zen 1 the fast designs run about the same instructions per message, and from the fastest design to the slowest, speed falls as DRAM fills rise, except between the two linked-level designs. The default design, flat price levels with an order index looked up by each order's reference number, rebuilds every symbol's book at 5,145,430 messages/s with 1.972 DRAM fills per message, 2.54× a `std::map` book on the same core ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)). Most fills left come from messages naming orders over a second old, whose lines the small shared L3 cache no longer holds; a software look-ahead that hides some is faster there and slower on an Apple M4 Max, so it is off by default.
 
 Most speed targets in [BENCHMARKS.md](BENCHMARKS.md) are the best figures other open-source books and parsers have published, mostly on newer desktop and server x86 parts and a few on Macs, so on this host most fall short; each names its source, or why it has none.
 
@@ -10,7 +10,7 @@ The project parses Nasdaq TotalView-ITCH 5.0 and rebuilds the full-depth order b
 
 Every headline timing is from an AMD Ryzen Embedded V1605B, an embedded Zen 1 part with 4 cores, 8 threads and a 4 MB L3 shared by all, its timed thread pinned, with turbo and SMT on and no core isolated ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)). An Apple M4 Max runs the correctness checks; macOS cannot pin a thread, so a Mac timing is context, with no verdict unless the target's bar was itself published on a Mac.
 
-The Zen 1 host is shared with other projects, and I chose to change none of its root-only kernel settings but the CPU governor: no huge pages are reserved, memory compaction runs as configured, and profiles are user space only (`perf_event_paranoid` 2). So no TLB counter was read and no run used reserved huge pages, though the book's arrays sat on transparent ones.
+The Zen 1 host is shared with other projects, and I chose to change none of its root-only kernel settings but the CPU governor: no huge pages are reserved, memory compaction runs as configured, and profiles are user space only (`perf_event_paranoid` 2). No TLB counter was read, and no run used reserved huge pages, though the book's arrays sat on transparent ones.
 
 ## How a number is published
 
@@ -33,7 +33,7 @@ The records, with sizes from the headers' `static_assert`s ([include/itch/](incl
 | flat side's header | `12` | start, count and capacity of its block, a power of two from one arena |
 | paged-index page | `256 × 4` | an order slot for each of `256` consecutive references, found through a `4`-byte directory entry |
 
-A message that names an order makes a chain of dependent loads (directory entry, page slot, order record, level; for a new order the side's header and the end of its keys), so their misses cannot overlap. Cache lines per operation were not counted. What was counted is DRAM fills, demand fills into the L1 cache from local DRAM; it is a floor, since lines the hardware prefetcher fetched are not counted. The table below counts each `apply()` over every message, in each design's `bench_book` file; the figures by type here, and T-PERF-1's in the list, count a separate pass over book messages only, frame walk included. Per message, a delete makes 2.5544, an execute 2.2520, a replace 3.1322 and an add 1.3051 ([results/counters_by_type_paged-flat_debian_12302019.md](results/counters_by_type_paged-flat_debian_12302019.md)).
+A message that names an order makes a chain of dependent loads (directory entry, page slot, order record, level; for a new order the side's header and the end of its keys), so their misses cannot overlap within a message. Cache lines per operation were not counted. What was counted is DRAM fills, demand fills into the L1 cache from local DRAM; it is a floor, since lines the hardware prefetcher fetched are not counted. Per message, a delete makes 2.5544, an execute 2.2520, a replace 3.1322 and an add 1.3051 ([results/counters_by_type_paged-flat_debian_12302019.md](results/counters_by_type_paged-flat_debian_12302019.md)).
 
 The four designs and the usual baseline (`std::map` levels and an `unordered_map` index, on a fresh or an aged heap), on the Zen 1 host, the day in memory. Both counter columns include reading the counters, which an empty span in a separate pass measures at 308.0001 instructions and 0.0000 DRAM fills per message, more than half of each instruction figure ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)):
 
@@ -46,11 +46,13 @@ The four designs and the usual baseline (`std::map` levels and an `unordered_map
 | `map-fresh` | 2,028,642 | 294.0 | 695.420 | 5.287 | [results/bench_book_map-fresh_ram_debian_12302019.md](results/bench_book_map-fresh_ram_debian_12302019.md) |
 | `map-aged` | 1,832,255 | 393.0 | 683.516 | 5.711 | [results/bench_book_map-aged_ram_debian_12302019.md](results/bench_book_map-aged_ram_debian_12302019.md) |
 
-The fast designs differ in how long they wait, not in how much they do. The counter reads are the same in every row, so the differences are the designs' own but the ratios are wider than the column shows; still, the fast designs lie within a few dozen instructions of each other, while hash-linked makes more than twice paged-flat's fills at about half its speed. T-DESIGN-1 asks for at least 4.0× the map book's throughput, the ratio itch-book, an open-source C++ ITCH book, published between its fastest book and a naive one on one machine; here T-DESIGN-1 is missed ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+The fast designs differ in how long they wait, not in how much they do. Every row includes the same counter reads: taking them off would leave each difference between rows as it is and make each ratio larger. The fast designs lie within a few dozen instructions of each other. T-DESIGN-1 asks for at least 4.0× the map book's throughput, the ratio itch-book, an open-source C++ ITCH book, published between its fastest book and a naive one on one machine; here T-DESIGN-1 is missed ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+
+Speed falls as fills rise in every row but the linked pair: `paged-linked` makes 3.751 fills per message, fewer than `hash-linked`, yet is no faster, at 2,542,188 messages/s; why was not measured ([results/bench_book_paged-linked_ram_debian_12302019.md](results/bench_book_paged-linked_ram_debian_12302019.md)).
 
 Flat levels beat linked ones because a flat side is one array and most adds land near the best: 57.27% of add searches pass one better level or none ([results/window_12302019.md](results/window_12302019.md)).
 
-The paged index beats the hash and pays in memory; in the same runs an identity hash, at 5,077,675 messages/s, and chaining, at 4,946,760, both stayed below the paged index's 5,468,695 ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)).
+The paged index beats the hash and pays in memory; in the layout run an identity hash, at 5,077,675 messages/s, and chaining, at 4,946,760, both stayed below the paged index's 5,468,695 ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)). The table, this run and the prefetch run below are separate runs, the table's with the day in memory and these two with it mapped, so each gives `paged-flat` its own rate; comparisons are made within one run, and why the rates differ was not measured.
 
 The age of the order a message names decides its cost: a message naming an order under 1 ms old makes 0.0490 DRAM fills; a message naming an order 1 s old or more makes 4.3729; 54.5% of the messages that name an order name one 1 s old or more, and they take 90.66% of those messages' fills ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)).
 
@@ -64,11 +66,11 @@ Why the pools fault is not established. One diagnostic run, made while the host 
 
 ## Prefetching and SIMD
 
-Prefetching is the largest gain left on the Zen 1 host: a look-ahead of D messages touches a later message's index slot, order record and level early, and D=16 gained 16.41%, 6,159,978 vs 5,291,518 messages/s; DRAM fills fell from 2.0139 to 0.8212 per message, counted by a harness of its own whose figures are not comparable with the table's ([results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md)).
+Prefetching is the largest gain left on the Zen 1 host: a look-ahead of D messages touches a later message's index slot, order record and level early, and D=16 gained 16.41%, 6,159,978 vs 5,291,518 messages/s; DRAM fills fell from 2.0139 to 0.8212 per message, over whole passes, not comparable with the table's. The counter counts only fills the core waited for, and a line the look-ahead fetched in time is not one, so the fall is in those waits, not in memory traffic, which was not counted, and the gain is far smaller than the fall ([results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md)).
 
 On the M4 Max the look-ahead lost at every distance, -18.01% at its best, D=4; the Mac read no miss counters, so why is not known ([results/prefetch_mac_12302019.md](results/prefetch_mac_12302019.md)).
 
-Before either run I chose to make the look-ahead the default only if both hosts gained, so that the default loses on neither; it is off, and a Zen 1 deployment would turn it on at D=16.
+The rule, fixed before either run, was to make the look-ahead the default only if both hosts gained; so it is off, and a Zen 1 deployment would turn it on at D=16.
 
 SIMD wins a field decode and loses the whole parse, where scalar takes 35.099 cycles per message, SSSE3 46.282 and AVX2 48.105 on the Zen 1 host ([results/simd_parse_debian_12302019.md](results/simd_parse_debian_12302019.md)); with the book behind the parser no kernel beats scalar, the default.
 
@@ -102,7 +104,7 @@ The backtester queues simulated orders among the real ones by order reference, w
 
 T-BT-3, four symbols with 100,000 simulated orders in real queues, is missed on the Zen 1 host at 3,509,307 messages/s; runs of the same build differed, and none read counters ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)). Its bar was published on an Apple M1 Pro, so on the Mac T-BT-3 has a verdict, and is met. With the Zen 1 host's miss, RESULTS.md's summary gives T-BT-3 missed.
 
-The market maker, the Avellaneda-Stoikov quoting model, splits its profit and loss into spread capture, adverse selection and inventory, summing exactly to the ledger's. Trading AMD's stock (the symbol, not the chip maker) on 12302019, its total was -25.96 dollars with the backtester's latency model and +1.23 with every latency set to zero: accounting, not an edge ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
+The market maker, the Avellaneda-Stoikov quoting model, splits its profit and loss into spread capture, adverse selection and inventory, summing exactly to the ledger's. Trading the stock with the ticker AMD on 12302019, which has nothing to do with the host's CPU, its total was -25.96 dollars with the backtester's latency model and +1.23 with every latency set to zero: accounting, not an edge ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
 
 ## Correctness
 
@@ -138,10 +140,10 @@ Every finding of the final review, with its outcome and the commit, test or note
   As an estimate from those inputs and AMD's rated boost of 5.5 GHz for that part, which is not a measured clock of the bar's run: about 698 cycles per message here vs about 335 for the bar, so the clock would explain about 1.5× of the 3.2× gap and the rest is per cycle; the bar's host published no cycle count. <!-- figures: not measured -->
 - **Did you run itch-book on this host?** No, not attempted; it is the run that would split the host's share of each gap from the design's. As BENCHMARKS.md reads itch-book's README, the same code and file ran 3.6× slower on a 2.0 GHz EPYC VM than on the Ryzen 9700X its bar comes from, a division of the README's two rates ([BENCHMARKS.md](BENCHMARKS.md)). <!-- figures: not measured -->
 - **Would the look-ahead work on a live feed?** Not known: it reads D messages ahead in a file, so a live feed would hold D messages before applying the first; that was neither built nor measured ([include/itch/lookahead.hpp](include/itch/lookahead.hpp)).
-- **What is the latency tail?** The slowest message of each repetition took about 4 ms (a median max of 4014071.4 ns vs a p99.99 of 3014.6 ns); what it waits on was not traced ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+- **What is the latency tail?** The slowest message of each repetition took about 4 ms, 4001771.1 to 4018171.8 ns with a CV of 0.21%, so it recurs and is not noise. The median p99.99 is 3014.6 ns, and what the slowest message waits on was not traced ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 - **Latency from the wire to the book?** Not measured: no run follows a message from its datagram into the book.
 - **How often does the paged index fall back to its hash?** Not measured; the index counts it, but no file gives the count.
-- **More answers**, on what the book gives a consumer, a delete and a deep insert, the ring against rigtorp's, the book at capacity, the framing walk and `-march=native`, are in [docs/DETAILS.md](docs/DETAILS.md#what-a-reviewer-would-ask).
+- **More answers**, from what the book gives a consumer to `-march=native`, are in [docs/DETAILS.md](docs/DETAILS.md#what-a-reviewer-would-ask).
 
 ## Every target missed or not measured
 
