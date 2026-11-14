@@ -4,7 +4,7 @@
 
 ## What was built, and on what
 
-The Linux host is an AMD Ryzen Embedded V1605B, a Zen 1 part for embedded boards with 4 cores and 8 threads; its results files are named `debian`. Its timer's quantum is 10.010 ns, and no percentile under its floor of 40.041 ns is published, though a mean over many messages can be lower ([results/bench_book_paged-flat_ram_debian_12302019.md](../results/bench_book_paged-flat_ram_debian_12302019.md)). The performance day, 12302019, is 268,744,780 messages ([results/oracle_12302019.md](../results/oracle_12302019.md)).
+The Linux host is an AMD Ryzen Embedded V1605B, a Zen 1 part for embedded boards with 4 cores and 8 threads; its results files are named `debian`. Timed threads are pinned, with turbo and SMT on and no core isolated. Its timer's quantum is 10.010 ns, and no percentile under its floor of 40.041 ns is published, though a mean over many messages can be lower ([results/bench_book_paged-flat_ram_debian_12302019.md](../results/bench_book_paged-flat_ram_debian_12302019.md)). The performance day, 12302019, is 268,744,780 messages ([results/oracle_12302019.md](../results/oracle_12302019.md)).
 
 The Mac is an Apple M4 Max, and macOS cannot pin a thread: the harness's proof run, a stub book with nothing in it, varied with a CV of 67.35% there ([results/bench_replay_stub_mac_12302019.md](../results/bench_replay_stub_mac_12302019.md)).
 
@@ -15,6 +15,7 @@ On the Zen 1 host the `cache-misses` event counts L2 misses: a pointer chase at 
 - On the Zen 1 host the machine check refuses a run unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is in memory. On the Mac it enforces only the input's residency and the timer's calibration, and records the rest as things it cannot enforce.
 - On the Mac a sampler reads every other process every 2 s, and a process during which another rose above 20% CPU is withdrawn ([results/layout_mac_12302019.md](../results/layout_mac_12302019.md)). That rule is why T-BOOK-4 and T-ARENA-1 have no result on the Mac. Mac runs made before it, the book designs' and the backtester's among them, had no sampler beside them, so nothing is known about other load during them.
 - On the Zen 1 host the same kind of rule came later: a sampler reads /proc every 1 s and withdraws a process whose core, SMT sibling or other cores were busy. Every Zen 1 results file made since carries the rule's line; T-BT-3's rerun and the parse rate are the timings published under it ([results/backtest_shadow_debian_12302019.md](../results/backtest_shadow_debian_12302019.md)).
+- No row of [results/run_log.md](../results/run_log.md) is removed or rewritten; the one change, on 2026-11-13, gave other programs by their kinds.
 - Each driver now writes a record of its run beside the raw output: the commit and tree state, each binary's hash, the dataset's hash and an untouched copy of every tool output the file quotes. Files published before that have no such record, and docs/NOTES.md lists what each lacks.
 
 ## Data layout
