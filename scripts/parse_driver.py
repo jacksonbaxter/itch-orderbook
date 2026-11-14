@@ -4,7 +4,8 @@ T-PARSE-3).
 
     parse_driver.py --bench BENCH_PARSE --probe BENCH_PROBE --input FILE --prediction P-NNNN \\
         --raw-dir DIR --out results/parse_rate_debian_DAY.md [--repetitions N] [--rounds N] \\
-        [--core N] [--sibling N] [--sampler-cpu N] [--wrapped-by TEXT] [--allow-dirty]
+        [--core N] [--sibling N] [--sampler-cpu N] [--wrapped-by TEXT] [--allow-dirty] \\
+        [--input-condition file|copy]
     parse_driver.py --check FILE...
     parse_driver.py --inline-check BENCH_PARSE [--asm-out FILE]
     parse_driver.py render --raw-dir RAW/RUN_ID --published FILE (--out FILE [--rendered-again
@@ -28,6 +29,19 @@ run log, and run again, never for its numbers, at most --most-in-a-row times run
 fold, if a count is not the one scripts/data_manifest.json pins for the day, or if the kernel
 swapped a page out; write the results file with its load lines pending.
 
+The input condition, --input-condition. `file`, the default, is the condition every driver
+runs under: machine_check.sh's input-resident, every page of the file in the page cache when
+the check runs, before the first process; nothing on the page says more, and a run under it is
+what it was before the option existed. `copy` is asked for where the file and the bench's copy
+of it do not fit in memory together: the timed passes read only bench_parse's own copy, which
+the bench reads every page of and asks the kernel about (mincore) before and after each timed
+pass, and that is the condition. The machine check then records the file's pages in the page
+cache (input-cached), their count required and no number of them, and enforces every other
+condition as before; the driver refuses the run unless every process's record holds both
+readings of every timed pass and its last reading, each every page of the copy; and the file
+says so in its input_condition field and its Input condition section, which prints every
+reading.
+
 The figures. Each pass's rate is every framed message over the pass's seconds, and its GB/s is
 the file's bytes, length prefixes included, over the same seconds, in 10^9 bytes: so the
 sources count (itch-book's 709 M msg/s at ~21.8 GB/s is 8,251,407,909 bytes over 268,744,780
@@ -40,7 +54,10 @@ anywhere else is refused before anything is timed.
 summary, the best passes and each verdict, holds every pass's messages and the file's bytes to
 the frame count and to the manifest's day, works the caveats' table again from the manifest,
 holds the Counts table to the manifest's ten-type count, the frames and the passes' folds (each
-decode decoding all it should, rejecting none), and exits 1 on any that differ.
+decode decoding all it should, rejecting none), holds the input condition (a file that claims
+none passes input-resident once, with every page of the file, held and in all, and carries
+nothing of the copy's; one that claims the copy shows every reading, each every page of it),
+and exits 1 on any that differ.
 
 render renders a published file again from its run's raw folder (the repetitions' records,
 the machine check's output, the timed loops' code and the sampler's log, judged again), stamps
@@ -110,6 +127,14 @@ BAR_DAY = {"T-PARSE-1": "12302019", "T-PARSE-2": "12302019", "T-PARSE-3": "10302
 # on the host is no fact of the run's record.
 JUDGED_ELSEWHERE = {"12302019": "judged on 12302019, in results/parse_rate_debian_12302019.md"}
 PARSE_FIELD = "parse_passes"
+# The input condition (--input-condition): `file`, every driver's, or `copy`, the bench's own.
+FILE_CONDITION = "file"
+COPY_CONDITION = "copy"
+CONDITION_FIELD = "input_condition"
+COPY_CLAIM = ("the bench's own copy: every page of the copy bench_parse reads the day into, "
+              "found in memory before and after each timed pass, in every process; the file's "
+              "pages in the page cache recorded, not required")
+CACHED_LINE = re.compile(r"^machine_check: record input-cached: ", re.MULTILINE)
 PASS_ROW = re.compile(r"^\| (\d+) \| (\d+) \| (framing|decode|strict) \| ([\d.]+) \| ([\d,]+) \| "
                       r"[\d,]+ \| [\d.]+ \| ([\d,]+) \|$")
 
@@ -336,6 +361,36 @@ def run_process(args, index, commit, digest):
     return record
 
 
+def copy_pages(record):
+    """The pages of the bench's copy: the whole file, in pages of PAGE bytes, rounded up."""
+    return -(-record["bytes"] // PAGE)
+
+
+def every_page(pages):
+    return f"{pages} of {pages} pages resident"
+
+
+def copy_problems(record):
+    """Under --input-condition copy, each reading of the copy the record lacks, or that is short
+    of every page: both of every timed pass's, and the last, after the last pass."""
+    want = every_page(copy_pages(record))
+    problems = []
+    for p in record["passes"]:
+        for key, when in (("residency_before", "before"), ("residency_after", "after")):
+            reading = p.get(key)
+            if reading is None:
+                problems.append(f"round {p['round']} {p['pass']}: no reading {when} the pass")
+            elif reading != want:
+                problems.append(f"round {p['round']} {p['pass']}: {reading!r} {when} the pass, "
+                                f"not {want!r}")
+    last = record["header"].get("residency")
+    if last is None:
+        problems.append("no reading after the last pass")
+    elif last != want:
+        problems.append(f"{last!r} after the last pass, not {want!r}")
+    return problems
+
+
 def validate_run(record, args, manifest_day):
     """What one record must show for its numbers to mean anything."""
     ref = record["reference"]
@@ -356,6 +411,11 @@ def validate_run(record, args, manifest_day):
     for name, value in pinned.items():
         if found[name] != value:
             raise Refused("record", f"{name} {found[name]:,}, not the manifest's {value:,}")
+    if args.input_condition == COPY_CONDITION:
+        problems = copy_problems(record)
+        if problems:
+            raise Refused("record", f"the copy's pages, {len(problems)} readings missing or short "
+                                    "of every page: " + "; ".join(problems[:3]))
 
 
 def validate_together(records):
@@ -486,6 +546,26 @@ def judged_process(args, index, commit, digest, watch, sampled, manifest_day):
                           "so the host is given back and the run is tried again later")
 
 
+def machine_check(args):
+    """The machine check under the run's input condition: under `file`, every driver's own
+    (bench_driver.machine_check), unchanged; under `copy`, the same with --input-condition copy,
+    whose output must record the file's cached pages."""
+    if args.input_condition == FILE_CONDITION:
+        return bench_driver.machine_check(args)
+    command = ["bash", str(REPO_ROOT / "scripts" / "machine_check.sh"), "--input", str(args.input),
+               "--probe", str(args.probe), "--core", str(args.core), "--sibling", str(args.sibling),
+               "--input-condition", COPY_CONDITION]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    output = result.stdout.strip()
+    if result.returncode != 0:
+        raise Refused("machine_check", output.splitlines()[-1] if output
+                      else f"exited {result.returncode}")
+    if not CACHED_LINE.search(output):
+        raise Refused("machine_check", "under --input-condition copy the check recorded no "
+                                       "input-cached line")
+    return output
+
+
 def manifest_days():
     return json.loads(run_record.MANIFEST.read_text(encoding="utf-8")).get("days", {})
 
@@ -518,7 +598,7 @@ def run(args, run_id, started, commit):
     if code.returncode != 0:
         raise Refused("prediction", code.stdout.strip())
     bench_driver.set_stage("machine_check")
-    machine_output = bench_driver.machine_check(args)
+    machine_output = machine_check(args)
     args.record.output(bench_driver.MACHINE_CHECK, machine_output)
     bench_driver.set_stage("starting the sampler")
     watch, cpu = linux_sampler.Watch.start(args.raw_dir / "sampler.txt", args.core, args.sibling,
@@ -710,8 +790,10 @@ def header_lines(records, args, run_id, started, finished, sampled):
     first = records[0]
     lines = [f"- {name}: {first['header'][name]}" for name in bench_driver.HEADER_ORDER
              if name in first["header"]]
-    lines += [f"- input: {first['input']}",
-              f"- {PARSE_FIELD}: framing (T-PARSE-1), decode (T-PARSE-2), strict (T-PARSE-3)",
+    lines += [f"- input: {first['input']}"]
+    if args.input_condition == COPY_CONDITION:
+        lines += [f"- {CONDITION_FIELD}: {COPY_CLAIM}"]
+    lines += [f"- {PARSE_FIELD}: framing (T-PARSE-1), decode (T-PARSE-2), strict (T-PARSE-3)",
               f"- bytes: {first['bytes']:,}, the whole file, length prefixes included",
               f"- measure_load_start: {check_results.PENDING}",
               f"- measure_load_end: {check_results.PENDING}",
@@ -725,6 +807,35 @@ def header_lines(records, args, run_id, started, finished, sampled):
               f"- timed_messages: {first['reference']['frames']:,}",
               f"- run_started: {started}",
               f"- run_finished: {finished}"]
+    return lines
+
+
+def condition_prose(pages):
+    return ("What was checked to be in memory while the passes were timed: the bench's own "
+            "copy of the day, not the file in the page cache, asked for with "
+            "`--input-condition copy`. Each process read the whole file into its own memory "
+            f"before its warm-up, a copy of {pages:,} pages of {PAGE:,} bytes, and its timed "
+            "passes read that copy and nothing else. Before each timed pass `bench_parse` "
+            "touched every page of the copy and asked the kernel (`mincore`) how many of its "
+            "pages were in memory, and after the pass it asked again; a reading short of every "
+            "page refuses the process, and the driver refuses the run on a reading missing or "
+            "short. Every reading is below, with each process's last, after its last pass. The "
+            "file's own pages in the page cache were not required: the machine check recorded "
+            "how many there were (`input-cached`, under machine_check output). Why this "
+            "condition was asked for is in the prediction the header names.")
+
+
+def condition_section(records):
+    """The Input condition section of a file under --input-condition copy: every reading."""
+    lines = ["## Input condition", "", condition_prose(copy_pages(records[0])), "",
+             "| Repetition | Round | Pass | Before the pass | After the pass |",
+             "|---|---|---|---|---|"]
+    for index, record in enumerate(records, start=1):
+        lines += [f"| {index} | {p['round']} | {p['pass']} | {p['residency_before']} | "
+                  f"{p['residency_after']} |" for p in record["passes"]]
+    lines += ["", "| Repetition | After its last pass |", "|---|---|"]
+    lines += [f"| {index} | {record['header']['residency']} |"
+              for index, record in enumerate(records, start=1)]
     return lines
 
 
@@ -750,6 +861,8 @@ def render(records, args, run_id, started, finished, machine_output, command, sa
              "both sources count.", "",
              "## Header", ""]
     lines += header_lines(records, args, run_id, started, finished, sampled)
+    if args.input_condition == COPY_CONDITION:
+        lines += [""] + condition_section(records)
     lines += ["", "## Summary", "",
               f"Each repetition is a fresh process: the day read into memory, an untimed "
               f"warm-up of each pass, then {args.rounds} rounds of one timed pass of each, in an "
@@ -800,6 +913,8 @@ def relative_command(args):
                         ("--sampler-cpu", args.sampler_cpu)):
         if value is not None:
             words += [flag, str(value)]
+    if args.input_condition != FILE_CONDITION:
+        words += ["--input-condition", args.input_condition]
     for flag, value, default in (("--quiet-before", args.quiet_before, QUIET_BEFORE_S),
                                  ("--quiet-wait", args.quiet_wait, QUIET_WAIT_S),
                                  ("--most-in-a-row", args.most_in_a_row, MOST_IN_A_ROW),
@@ -1040,6 +1155,78 @@ def check_text(text):
     problems.extend(caveat_problems(text, day))
     if pinned is not None and frames is not None:
         problems.extend(count_problems(text, passes, file_bytes, frames, pinned))
+    problems.extend(condition_problems(text, fields, passes, file_bytes))
+    return problems
+
+
+def condition_problems(text, fields, passes, file_bytes):
+    """The input condition the file claims, held to what it shows. A file that claims none was
+    run under `file`: its machine check passes input-resident with every page of the file, and
+    nothing in it is the copy's. One that claims the bench's own copy has the machine check's
+    input-cached record and no input-resident verdict, the driver's prose, and every reading:
+    both of each timed pass, in the order run, and each process's last, every page of the copy."""
+    claimed = fields.get(CONDITION_FIELD)
+    machine = check_results.section(text, "machine_check output") or ""
+    shown = check_results.section(text, "Input condition")
+    pages = -(-file_bytes // PAGE)
+    want = every_page(pages)
+    if claimed is None:
+        problems = []
+        if CACHED_LINE.search(machine) or shown is not None:
+            problems.append(("parse-condition-unclaimed", "the file shows the bench's own copy's "
+                                                          "condition and its header claims no "
+                                                          "input condition"))
+        held = re.findall(r"^machine_check: pass input-resident: (\d+) of (\d+) pages", machine,
+                          re.MULTILINE)
+        if [of for _, of in held] != [str(pages)]:
+            problems.append(("parse-condition-unchecked", "no input condition claimed, and the "
+                                                          "machine check does not pass "
+                                                          "input-resident once, over the file's "
+                                                          f"{pages} pages"))
+        # Every page of them, held here as well as by check_results.check_machine, under a
+        # code of its own, so that each check is seen to hold it.
+        elif any(resident != of for resident, of in held):
+            problems.append(("parse-condition-unchecked", "no input condition claimed, and the "
+                                                          "machine check passes input-resident "
+                                                          f"with {held[0][0]} of the file's "
+                                                          f"{pages} pages"))
+        return problems
+    if claimed != COPY_CLAIM:
+        return [("parse-condition-unknown", f"{CONDITION_FIELD}: {claimed!r}")]
+    problems = []
+    if not CACHED_LINE.search(machine):
+        problems.append(("parse-condition-unchecked", "the bench's own copy claimed, and the "
+                                                      "machine check recorded no input-cached "
+                                                      "line"))
+    if re.search(r"^machine_check: (pass|FAIL) input-resident", machine, re.MULTILINE):
+        problems.append(("parse-condition-differs", "the bench's own copy claimed, and the "
+                                                    "machine check judged the file's pages"))
+    if shown is None:
+        return problems + [("parse-copy-readings-missing", "no Input condition section")]
+    if condition_prose(pages) not in shown.splitlines():
+        problems.append(("parse-condition-differs", "Input condition: the prose is not the "
+                                                    "driver's"))
+    rows = check_results.table_rows(text, "Input condition")
+    readings = [cells for cells in rows if len(cells) == 5 and cells[0].isdigit()]
+    lasts = [cells for cells in rows if len(cells) == 2 and cells[0].isdigit()]
+    order = [(str(p["repetition"]), str(p["round"]), p["pass"]) for p in passes]
+    if [tuple(cells[:3]) for cells in readings] != order:
+        problems.append(("parse-copy-readings-missing", f"{len(readings)} rows of readings, not "
+                                                        f"one for each of the {len(order)} timed "
+                                                        "passes, in the order run"))
+    short = [cells for cells in readings if cells[3] != want or cells[4] != want]
+    if short:
+        problems.append(("parse-copy-reading-short", f"{len(short)} timed passes with a reading "
+                                                     f"not {want!r}, the first "
+                                                     f"{' | '.join(short[0])}"))
+    repetitions = [str(index) for index in sorted({p["repetition"] for p in passes})]
+    if [cells[0] for cells in lasts] != repetitions:
+        problems.append(("parse-copy-readings-missing", f"{len(lasts)} last readings, not one for "
+                                                        f"each of the {len(repetitions)} "
+                                                        "repetitions"))
+    if any(cells[1] != want for cells in lasts) or fields.get("residency") != want:
+        problems.append(("parse-copy-reading-short", f"a last reading, or the residency field, "
+                                                     f"not {want!r}"))
     return problems
 
 
@@ -1088,6 +1275,11 @@ def parse_args(argv):
     parser.add_argument("--sampler-cpu", type=int, help="the CPU the sampler runs on")
     parser.add_argument("--wrapped-by", help="what the run was started under, for the record")
     parser.add_argument("--allow-dirty", action="store_true", help="for tests, not for a report")
+    parser.add_argument("--input-condition", choices=(FILE_CONDITION, COPY_CONDITION),
+                        default=FILE_CONDITION,
+                        help="file: every page of the file in the page cache (every driver's); "
+                             "copy: every page of the bench's own copy, before and after each "
+                             "timed pass")
     parser.add_argument("--quiet-before", type=float, default=QUIET_BEFORE_S, metavar="S")
     parser.add_argument("--quiet-wait", type=float, default=QUIET_WAIT_S, metavar="S")
     parser.add_argument("--most-in-a-row", type=int, default=MOST_IN_A_ROW)

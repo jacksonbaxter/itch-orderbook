@@ -897,6 +897,314 @@
         "signature": "FAIL: test_a_results_pattern_that_matches_nothing_fails_the_bench_stage",
         "exit": 1
       }
+    },
+    {
+      "id": "parse-copy-reading-short-not-refused",
+      "breaks": "under --input-condition copy the driver takes a reading of the copy short of every page",
+      "check": "test_parse_driver.py InputCondition.test_every_reading_of_the_copy_is_required",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "            elif reading != want:\n",
+          "new": "            elif not reading.endswith(\" pages resident\"):\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_every_reading_of_the_copy_is_required"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_reading_of_the_copy_is_required",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-copy-reading-missing-not-refused",
+      "breaks": "under --input-condition copy the driver takes a record with a timed pass's reading missing",
+      "check": "test_parse_driver.py InputCondition.test_every_reading_of_the_copy_is_required",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "            if reading is None:\n                problems.append(f\"round {p['round']} {p['pass']}: no reading {when} the pass\")\n",
+          "new": "            if reading is None:\n                continue\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_every_reading_of_the_copy_is_required"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_reading_of_the_copy_is_required",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-check-copy-reading-short",
+      "breaks": "--check and check_results.py take a copy file whose printed reading is short of every page",
+      "check": "test_parse_driver.py InputCondition.test_a_reading_short_of_every_page_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    short = [cells for cells in readings if cells[3] != want or cells[4] != want]\n",
+          "new": "    short = []\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_a_reading_short_of_every_page_is_refused"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_reading_short_of_every_page_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-check-copy-reading-missing",
+      "breaks": "--check and check_results.py take a copy file with a timed pass's readings dropped",
+      "check": "test_parse_driver.py InputCondition.test_a_reading_missing_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    if [tuple(cells[:3]) for cells in readings] != order:\n",
+          "new": "    if not readings:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_a_reading_missing_is_refused"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_reading_missing_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-condition-line-not-rendered",
+      "breaks": "a file under --input-condition copy is written without its input_condition line",
+      "check": "test_parse_driver.py InputCondition.test_a_copy_file_shows_every_reading_and_passes_both_checks",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "        lines += [f\"- {CONDITION_FIELD}: {COPY_CLAIM}\"]\n",
+          "new": "        pass\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_a_copy_file_shows_every_reading_and_passes_both_checks"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_copy_file_shows_every_reading_and_passes_both_checks",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-condition-line-dropped-let-through",
+      "breaks": "a copy file with its input_condition line dropped passes, read as the file condition",
+      "check": "test_parse_driver.py InputCondition.test_the_condition_line_dropped_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "        if CACHED_LINE.search(machine) or shown is not None:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_the_condition_line_dropped_is_refused"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_condition_line_dropped_is_refused",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-copy-taken-by-default",
+      "breaks": "parse_driver.py takes the bench's own copy as the input condition without being asked for it",
+      "check": "test_parse_driver.py InputCondition.test_the_file_condition_is_the_default",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "                        default=FILE_CONDITION,\n",
+          "new": "                        default=COPY_CONDITION,\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_the_file_condition_is_the_default"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_file_condition_is_the_default",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-copy-machine-check-unasked",
+      "breaks": "parse_driver.py asks the machine check for the copy condition on a run under the file condition",
+      "check": "test_parse_driver.py InputCondition.test_the_file_condition_runs_every_drivers_machine_check",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    if args.input_condition == FILE_CONDITION:\n        return bench_driver.machine_check(args)\n",
+          "new": "    if args.input_condition == \"never\":\n        return bench_driver.machine_check(args)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_the_file_condition_runs_every_drivers_machine_check"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_file_condition_runs_every_drivers_machine_check",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-copy-claimed-unchecked",
+      "breaks": "a copy file whose machine check recorded no input-cached line passes",
+      "check": "test_parse_driver.py InputCondition.test_the_machine_check_must_be_the_conditions",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "    if not CACHED_LINE.search(machine):\n        problems.append((\"parse-condition-unchecked\", \"the bench's own copy claimed, and the \"\n",
+          "new": "    if False:\n        problems.append((\"parse-condition-unchecked\", \"the bench's own copy claimed, and the \"\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_the_machine_check_must_be_the_conditions"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_machine_check_must_be_the_conditions",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-file-page-input-resident-unheld",
+      "breaks": "a parse file under the file condition passes with no input-resident pass over its own file",
+      "check": "test_parse_driver.py InputCondition.test_a_file_page_must_pass_input_resident_over_its_own_file",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "        if [of for _, of in held] != [str(pages)]:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_a_file_page_must_pass_input_resident_over_its_own_file"
+      ],
+      "expect": {
+        "signature": "FAIL: test_a_file_page_must_pass_input_resident_over_its_own_file",
+        "exit": 1
+      }
+    },
+    {
+      "id": "machine-check-copy-by-default",
+      "breaks": "machine_check.sh records the file's cached pages instead of requiring them when no condition is asked for",
+      "check": "test_machine_check.py LinuxConditions.test_input_not_resident",
+      "mutations": [
+        {
+          "file": "scripts/machine_check.sh",
+          "old": "input_condition=file\n",
+          "new": "input_condition=copy\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_machine_check.py",
+        "LinuxConditions.test_input_not_resident"
+      ],
+      "expect": {
+        "signature": "FAIL: test_input_not_resident",
+        "exit": 1
+      }
+    },
+    {
+      "id": "machine-check-copy-skips-the-rest",
+      "breaks": "under --input-condition copy machine_check.sh stops after the file's cached pages, enforcing no timer",
+      "check": "test_machine_check.py CopyCondition.test_every_other_condition_is_still_enforced",
+      "mutations": [
+        {
+          "file": "scripts/machine_check.sh",
+          "old": "which the bench checks\"\n",
+          "new": "which the bench checks\"\n    return\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_machine_check.py",
+        "CopyCondition.test_every_other_condition_is_still_enforced"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_other_condition_is_still_enforced",
+        "exit": 1
+      }
+    },
+    {
+      "id": "machine-check-copy-count-not-required",
+      "breaks": "under --input-condition copy machine_check.sh records input-cached when the probe gives no count of the file's cached pages",
+      "check": "test_machine_check.py CopyCondition.test_the_files_cached_pages_must_be_counted",
+      "mutations": [
+        {
+          "file": "scripts/machine_check.sh",
+          "old": "  if [ \"$input_condition\" = copy ] && { [ -z \"$pages\" ] || [ -z \"$resident\" ]; }; then\n",
+          "new": "  if false; then\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_machine_check.py",
+        "CopyCondition.test_the_files_cached_pages_must_be_counted"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_files_cached_pages_must_be_counted",
+        "exit": 1
+      }
+    },
+    {
+      "id": "parse-check-input-resident-held-short",
+      "breaks": "parse_driver.py --check lets through a file page whose input-resident passed with pages of the file missing",
+      "check": "test_parse_driver.py InputCondition.test_the_drivers_check_holds_the_pages_input_resident_passed_with",
+      "mutations": [
+        {
+          "file": "scripts/parse_driver.py",
+          "old": "        elif any(resident != of for resident, of in held):\n",
+          "new": "        elif False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_parse_driver.py",
+        "InputCondition.test_the_drivers_check_holds_the_pages_input_resident_passed_with"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_drivers_check_holds_the_pages_input_resident_passed_with",
+        "exit": 1
+      }
     }
   ]
 }

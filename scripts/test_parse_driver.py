@@ -5,7 +5,9 @@ The files are rendered by the driver from made-up bench_parse records of 1230201
 stamped as stamp_load.py stamps a debian run, and checked by check_results.py, which hands a
 parse file to the driver's own check. The expected rates are worked out by hand from the
 day's 268,744,780 messages and 8,251,407,909 bytes, not by the driver. The run loop runs with
-a stand-in for the sampler and for bench_parse, so it needs no Linux host.
+a stand-in for the sampler and for bench_parse, so it needs no Linux host. The input
+condition's files, under --input-condition copy, are rendered from the same records with each
+timed pass's two readings of the copy added, as bench_parse writes them.
 """
 
 import argparse
@@ -38,7 +40,15 @@ TEN = (6 + 8_906 + 117_145_568 + 1_485_888 + 5_722_824 + 99_917 + 2_787_676 + 11
 LOOPS = ["frame_walk: 20 instructions, no call and no jump to another function",
          "book_decode: 90 instructions, no call and no jump to another function",
          "strict_decode: 400 instructions, no call and no jump to another function"]
-MACHINE = "machine_check: pass input-resident: 1 of 1 pages\nmachine_check: passed"
+
+
+def machine(pages=2_014_504):
+    """A passing machine check under the file condition, over the file's pages."""
+    return (f"machine_check: pass input-resident: {pages} of {pages} pages resident\n"
+            "machine_check: passed")
+
+
+MACHINE = machine()
 HEADER = dict(test_linux_sampler.DEBIAN, dataset="12302019.NASDAQ_ITCH50",
               counters="unavailable: bench_parse reads no counters",
               rdpmc="unavailable: bench_parse reads no counters",
@@ -75,7 +85,7 @@ def record(repetition, rounds=5):
 
 def args_for(**changes):
     values = {"prediction": "P-0029", "rounds": 5, "repetitions": 3, "wrapped_by": None,
-              "core": 4, "sibling": 5}
+              "core": 4, "sibling": 5, "input_condition": parse_driver.FILE_CONDITION}
     values.update(changes)
     return argparse.Namespace(**values)
 
@@ -88,7 +98,8 @@ def sampled():
 def rendered(records=None):
     records = records or [record(index) for index in (1, 2, 3)]
     text = parse_driver.render(records, args_for(), "P-0029-x", *test_linux_sampler.RULE_DAY,
-                               MACHINE, "python3 -B scripts/parse_driver.py", sampled(), LOOPS)
+                               machine(-(-records[0]["bytes"] // 4096)),
+                               "python3 -B scripts/parse_driver.py", sampled(), LOOPS)
     return stamp_load.stamp(text, test_linux_sampler.stderr_for(*test_linux_sampler.RULE_DAY))
 
 
@@ -284,7 +295,9 @@ class Check(unittest.TestCase):
         self.assertEqual(text.count(line), 1)
         found = check_results.check_text(text.replace(line, line.replace(
             "2014504 of", "2014057 of")))
-        self.assertEqual({code for code, _ in found}, {"machine-check-inconsistent"})
+        # check_results.check_machine's code, and the driver's own check's.
+        self.assertEqual({code for code, _ in found},
+                         {"machine-check-inconsistent", "parse-condition-unchecked"})
 
     def test_rates_over_fewer_messages_than_every_frame(self):
         # The framing passes over no message at all, and the decode over the messages it
@@ -392,6 +405,231 @@ ARM64 = """
 100003200: \tblr\tx8
 100003204: \tret
 """
+
+
+EVERY_PAGE = "2014504 of 2014504 pages resident"
+# A machine check under --input-condition copy, as machine_check.sh words it, the file's cache
+# short of a page.
+COPY_MACHINE = ("machine_check: record input-cached: 2014503 of 2014504 pages resident, the "
+                "file's pages in the page cache; not required: under --input-condition copy the "
+                "timed passes read the bench's own copy, which the bench checks\n"
+                "machine_check: passed")
+
+
+def copy_record(repetition):
+    """A record as bench_parse writes it: each timed pass read before and after it."""
+    made = record(repetition)
+    for p in made["passes"]:
+        p.update(residency_before=EVERY_PAGE, residency_after=EVERY_PAGE)
+    return made
+
+
+def copy_rendered(records=None, command="python3 -B scripts/parse_driver.py"):
+    records = records or [copy_record(index) for index in (1, 2, 3)]
+    text = parse_driver.render(records, args_for(input_condition=parse_driver.COPY_CONDITION),
+                               "P-0029-x", *test_linux_sampler.RULE_DAY, COPY_MACHINE, command,
+                               sampled(), LOOPS)
+    return stamp_load.stamp(text, test_linux_sampler.stderr_for(*test_linux_sampler.RULE_DAY))
+
+
+def all_codes(text):
+    return {code for code, _ in check_results.check_text(text)}
+
+
+class InputCondition(unittest.TestCase):
+    """--input-condition: `file` as before, the default; `copy` only when asked for, with every
+    reading of the bench's copy required by the driver, printed and held by the checks."""
+
+    def setUp(self):
+        self.day = Run.DAY
+
+    def test_the_file_condition_is_the_default(self):
+        args = parse_driver.parse_args(["--bench", "b", "--probe", "p", "--input", "i",
+                                        "--prediction", "P-0029", "--raw-dir", "r", "--out", "o"])
+        self.assertEqual(args.input_condition, parse_driver.FILE_CONDITION)
+        args.wrapped_by = None
+        self.assertNotIn("--input-condition", parse_driver.relative_command(args))
+        text = rendered()
+        self.assertNotIn(parse_driver.CONDITION_FIELD, check_results.parse_header(text))
+        self.assertIsNone(check_results.section(text, "Input condition"))
+        self.assertNotIn("input-cached", text)
+
+    def test_the_file_condition_runs_every_drivers_machine_check(self):
+        args = args_for(input=Path("day"), probe=Path("probe"))
+        done = mock.Mock(returncode=0, stdout=COPY_MACHINE)
+        with mock.patch.object(parse_driver.bench_driver, "machine_check",
+                               return_value="checked") as every, \
+                mock.patch.object(parse_driver.subprocess, "run", return_value=done) as ran:
+            self.assertEqual(parse_driver.machine_check(args), "checked")
+        every.assert_called_once_with(args)
+        ran.assert_not_called()
+
+    def test_the_copy_condition_asks_the_machine_check_for_it(self):
+        args = args_for(input_condition=parse_driver.COPY_CONDITION, input=Path("day"),
+                        probe=Path("probe"))
+        done = mock.Mock(returncode=0, stdout=COPY_MACHINE + "\n")
+        with mock.patch.object(parse_driver.bench_driver, "machine_check") as every, \
+                mock.patch.object(parse_driver.subprocess, "run", return_value=done) as ran:
+            self.assertEqual(parse_driver.machine_check(args), COPY_MACHINE)
+        every.assert_not_called()
+        command = ran.call_args.args[0]
+        self.assertEqual(command[-2:], ["--input-condition", "copy"])
+        self.assertEqual(command[command.index("--core") + 1], "4")
+        self.assertEqual(command[command.index("--sibling") + 1], "5")
+        for output, code, why in (
+                ("machine_check: FAIL governor: core 4 runs schedutil\nmachine_check: refused, "
+                 "1 failed", 1, "machine_check: refused, 1 failed"),
+                ("machine_check: passed", 0, "recorded no input-cached line")):
+            with self.subTest(why=why), \
+                    mock.patch.object(parse_driver.subprocess, "run",
+                                      return_value=mock.Mock(returncode=code, stdout=output)):
+                with self.assertRaisesRegex(parse_driver.Refused, why):
+                    parse_driver.machine_check(args)
+
+    def test_every_reading_of_the_copy_is_required(self):
+        copy = args_for(input_condition=parse_driver.COPY_CONDITION)
+        parse_driver.validate_run(copy_record(1), copy, self.day)
+        short, missing, last = copy_record(1), copy_record(1), copy_record(1)
+        short["passes"][7]["residency_after"] = "2014503 of 2014504 pages resident"
+        del missing["passes"][4]["residency_before"]
+        del last["header"]["residency"]
+        for bad, why in ((short, "2014503 of 2014504 pages resident' after the pass"),
+                         (missing, "no reading before the pass"),
+                         (last, "no reading after the last pass")):
+            with self.subTest(why=why):
+                with self.assertRaisesRegex(parse_driver.Refused, why):
+                    parse_driver.validate_run(bad, copy, self.day)
+                # Under the file condition the readings are the bench's own affair, as before.
+                parse_driver.validate_run(bad, args_for(), self.day)
+
+    def test_a_copy_file_shows_every_reading_and_passes_both_checks(self):
+        text = copy_rendered()
+        self.assertEqual(check_results.check_text(text), [])
+        self.assertEqual(parse_driver.check_text(text), [])
+        self.assertEqual(check_results.parse_header(text)[parse_driver.CONDITION_FIELD],
+                         parse_driver.COPY_CLAIM)
+        shown = rows(text, "Input condition")
+        self.assertIn(parse_driver.condition_prose(2_014_504), shown)
+        self.assertIn("a copy of 2,014,504 pages of 4,096 bytes", text)
+        readings = [line for line in shown if line.endswith(f"| {EVERY_PAGE} | {EVERY_PAGE} |")]
+        self.assertEqual(len(readings), 45)
+        self.assertEqual(readings[0], f"| 1 | 1 | framing | {EVERY_PAGE} | {EVERY_PAGE} |")
+        self.assertEqual(readings[-1], f"| 3 | 5 | framing | {EVERY_PAGE} | {EVERY_PAGE} |")
+        for index in (1, 2, 3):
+            self.assertIn(f"| {index} | {EVERY_PAGE} |", shown)
+        # The figures are those of the same records under the file condition.
+        for title in ("Summary", "Best pass", "Targets", "Counts", "Every timed pass"):
+            self.assertEqual(rows(text, title), rows(rendered(), title), title)
+
+    def test_a_reading_short_of_every_page_is_refused(self):
+        text = copy_rendered()
+        row = f"| 2 | 3 | decode | {EVERY_PAGE} | {EVERY_PAGE} |"
+        self.assertEqual(text.count(row), 1)
+        for new in (f"| 2 | 3 | decode | 2014503 of 2014504 pages resident | {EVERY_PAGE} |",
+                    f"| 2 | 3 | decode | {EVERY_PAGE} | 0 of 2014504 pages resident |"):
+            with self.subTest(new=new):
+                self.assertIn("parse-copy-reading-short", all_codes(text.replace(row, new)))
+        last = f"| 3 | {EVERY_PAGE} |"
+        self.assertIn("parse-copy-reading-short", all_codes(text.replace(
+            last, "| 3 | 2014000 of 2014504 pages resident |")))
+
+    def test_a_reading_missing_is_refused(self):
+        text = copy_rendered()
+        row = f"| 2 | 3 | decode | {EVERY_PAGE} | {EVERY_PAGE} |\n"
+        self.assertIn("parse-copy-readings-missing", all_codes(text.replace(row, "")))
+        self.assertIn("parse-copy-readings-missing", all_codes(text.replace(
+            f"| 2 | {EVERY_PAGE} |\n", "")))
+        section = "## Input condition\n" + check_results.section(text, "Input condition")
+        self.assertIn("parse-copy-readings-missing", all_codes(text.replace(section, "")))
+
+    def test_the_condition_line_dropped_is_refused(self):
+        text = copy_rendered()
+        line = f"- {parse_driver.CONDITION_FIELD}: {parse_driver.COPY_CLAIM}\n"
+        self.assertEqual(text.count(line), 1)
+        found = all_codes(text.replace(line, ""))
+        self.assertIn("parse-condition-unclaimed", found)
+        # Read as the file condition, whose input-resident it never passed.
+        self.assertIn("parse-condition-unchecked", found)
+        section = "## Input condition\n" + check_results.section(text, "Input condition")
+        self.assertIn("parse-condition-unclaimed",
+                      all_codes(text.replace(line, "").replace(section, "")))
+        self.assertIn("parse-condition-unknown", all_codes(text.replace(
+            line, f"- {parse_driver.CONDITION_FIELD}: the file\n")))
+
+    def test_the_machine_check_must_be_the_conditions(self):
+        text = copy_rendered()
+        cached = COPY_MACHINE.splitlines()[0]
+        self.assertIn("parse-condition-unchecked", all_codes(text.replace(cached + "\n", "")))
+        self.assertIn("parse-condition-differs", all_codes(text.replace(
+            cached, f"machine_check: pass input-resident: {EVERY_PAGE}")))
+        prose = parse_driver.condition_prose(2_014_504)
+        self.assertIn("parse-condition-differs", all_codes(text.replace(
+            prose, prose.replace("refuses the process", "is noted"))))
+
+    def test_a_file_page_must_pass_input_resident_over_its_own_file(self):
+        text = rendered()
+        line = f"machine_check: pass input-resident: {EVERY_PAGE}\n"
+        self.assertEqual(text.count(line), 1)
+        self.assertIn("parse-condition-unchecked", all_codes(text.replace(line, "")))
+        self.assertIn("parse-condition-unchecked", all_codes(text.replace(
+            line, line.replace("2014504 of 2014504", "4 of 4"))))
+        self.assertIn("parse-condition-unclaimed", all_codes(text.replace(
+            "machine_check: passed", COPY_MACHINE)))
+
+    def test_the_drivers_check_holds_the_pages_input_resident_passed_with(self):
+        # Its own check, not only check_results.check_machine: a pass with pages missing.
+        def own(text):
+            return {code for code, _ in parse_driver.check_text(text)}
+
+        text = rendered()
+        line = f"machine_check: pass input-resident: {EVERY_PAGE}\n"
+        self.assertNotIn("parse-condition-unchecked", own(text))
+        self.assertIn("parse-condition-unchecked", own(text.replace(
+            line, line.replace("2014504 of 2014504", "2014057 of 2014504"))))
+        records = [record(index) for index in (1, 2, 3)]
+        for day in records:
+            day["header"]["dataset"] = "10302019.NASDAQ_ITCH50"
+            day["bytes"] = 9_035_016_843
+        lunary = rendered(records)
+        line = "machine_check: pass input-resident: 2205815 of 2205815 pages resident"
+        self.assertEqual(lunary.count(line), 1)
+        self.assertNotIn("parse-condition-unchecked", own(lunary))
+        self.assertIn("parse-condition-unchecked", own(lunary.replace(
+            line, "machine_check: pass input-resident: 2151095 of 2205815 pages resident")))
+
+    def test_a_copy_file_is_rendered_again_from_its_records(self):
+        SCRATCH.mkdir(parents=True, exist_ok=True)
+        scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.addCleanup(scratch.cleanup)
+        raw = Path(scratch.name) / "P-0029-x"
+        raw.mkdir()
+        binary = Path(scratch.name) / "bench_parse"
+        binary.write_bytes(b"stand-in")
+        kept = run_record.Record(raw, "parse_driver", "P-0029-x", "abc (clean)")
+        kept.binary(binary)
+        kept.dataset(Path("12302019.NASDAQ_ITCH50"), "0" * 64, manifest=raw / "none.json")
+        kept.output("machine_check.txt", COPY_MACHINE)
+        code = []
+        for (_, mangled), size in zip(parse_driver.PASS_SYMBOLS.items(), (20, 90, 400)):
+            code += [f"<_ZN4itch5bench{mangled}x>:",
+                     *[f"   {1000 + i:x}:\tmov    %rdi,%rax" for i in range(size)], ""]
+        kept.output("passes.asm", "\n".join(code))
+        stderr = test_linux_sampler.stderr_for(*test_linux_sampler.RULE_DAY)
+        kept.output(run_record.MEASURE_STDERR, stderr)
+        (raw / "sampler.txt").write_text(
+            "\n".join(test_linux_sampler.log(*test_linux_sampler.steady(0, 60))) + "\n",
+            encoding="utf-8")
+        kept.kept_file("sampler.txt")
+        for index in (1, 2, 3):
+            (raw / f"parse-repetition-{index}.json").write_text(json.dumps(copy_record(index)),
+                                                               encoding="utf-8")
+        published = copy_rendered(command=RenderAgain.COMMAND + " --input-condition copy")
+        self.assertEqual(parse_driver.render_again(raw, published, stderr), published)
+        short = copy_record(2)
+        short["passes"][0]["residency_before"] = "1 of 2014504 pages resident"
+        (raw / "parse-repetition-2.json").write_text(json.dumps(short), encoding="utf-8")
+        with self.assertRaisesRegex(parse_driver.Refused, "the copy's pages"):
+            parse_driver.render_again(raw, published, stderr)
 
 
 class Inline(unittest.TestCase):
@@ -533,15 +771,16 @@ class RenderAgain(unittest.TestCase):
 
 
 class Run(unittest.TestCase):
+    DAY = {"unpacked_bytes": BYTES, "messages": MESSAGES,
+           "per_type_counts": {"S": 6, "R": 8_906, "A": 117_145_568, "F": 1_485_888,
+                               "E": 5_722_824, "C": 99_917, "X": 2_787_676, "D": 114_360_997,
+                               "U": 21_639_067, "P": 1_218_602, "Q": 17_836}}
+
     def setUp(self):
         SCRATCH.mkdir(parents=True, exist_ok=True)
         self.log = SCRATCH / "run_log.md"
         self.log.unlink(missing_ok=True)
-        self.day = {"unpacked_bytes": BYTES, "messages": MESSAGES,
-                    "per_type_counts": {"S": 6, "R": 8_906, "A": 117_145_568, "F": 1_485_888,
-                                        "E": 5_722_824, "C": 99_917, "X": 2_787_676,
-                                        "D": 114_360_997, "U": 21_639_067, "P": 1_218_602,
-                                        "Q": 17_836}}
+        self.day = self.DAY
 
     def test_a_good_record_is_accepted(self):
         parse_driver.validate_run(record(1), args_for(), self.day)
@@ -736,6 +975,9 @@ class Run(unittest.TestCase):
                          "<raw>/bench_probe --input <raw>/12302019.NASDAQ_ITCH50 --prediction "
                          "P-0029 --repetitions 3 --rounds 5 --raw-dir <raw> --out "
                          "results/parse_rate_debian_12302019.md --core 4 --sibling 5")
+        args.input_condition = parse_driver.COPY_CONDITION
+        self.assertTrue(parse_driver.relative_command(args).endswith(
+            "--core 4 --sibling 5 --input-condition copy"))
 
     def test_two_repetitions_are_not_enough(self):
         with self.assertRaises(SystemExit), mock.patch("sys.stderr"):

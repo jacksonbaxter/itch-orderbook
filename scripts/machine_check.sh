@@ -4,6 +4,7 @@
 #
 #     machine_check.sh --input FILE --probe BENCH_PROBE [--core N] [--sibling N]
 #                      [--os linux|darwin] [--root DIR] [--idle-window SECONDS]
+#                      [--input-condition file|copy]
 #
 # Each line is `machine_check: pass|FAIL|record <condition>: <detail>`. A pass or FAIL is
 # enforced and a record only states what the machine is. The last line is the verdict.
@@ -12,6 +13,14 @@
 # resident and the timer calibrating. debian has no isolated core, and turbo stays on, so
 # those are recorded. macOS can enforce the last two only, and records the rest as what
 # cannot be enforced there. Conditions that cannot be read fail: an unknown is not a pass.
+#
+# --input-condition says what "the input resident" means for the run. `file`, the default,
+# is the condition every driver runs under: input-resident passes only with every page of the
+# file in the page cache. `copy` is asked for only by a bench that reads the whole day into
+# its own memory before timing and checks every page of that copy before and after each timed
+# pass itself (scripts/parse_driver.py --input-condition copy): the file's pages in the page
+# cache are then recorded as input-cached, their count required and no number of them, and
+# every other condition is enforced as under `file`.
 #
 # --root reads /proc and /sys, or fake sysctl values, from a tree instead, so that
 # scripts/test_machine_check.py can break one condition at a time on any host.
@@ -26,12 +35,13 @@ core=4
 sibling=5
 root=""
 idle_window=1
+input_condition=file
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 max_sibling_busy_percent=5
 
 usage() {
   echo "usage: machine_check.sh --input FILE --probe BENCH_PROBE [--core N] [--sibling N]" \
-    "[--os linux|darwin] [--root DIR] [--idle-window SECONDS]" >&2
+    "[--os linux|darwin] [--root DIR] [--idle-window SECONDS] [--input-condition file|copy]" >&2
   exit 2
 }
 
@@ -45,11 +55,16 @@ while [ $# -gt 0 ]; do
     --os) os=$2 ;;
     --root) root=$2 ;;
     --idle-window) idle_window=$2 ;;
+    --input-condition) input_condition=$2 ;;
     *) usage ;;
   esac
   shift 2
 done
 [ -n "$input" ] && [ -n "$probe" ] || usage
+case $input_condition in
+  file | copy) ;;
+  *) usage ;;
+esac
 
 failures=0
 pass() { echo "machine_check: pass $1: $2"; }
@@ -96,7 +111,12 @@ check_probe() {
   line=$(printf '%s\n' "$output" | sed -n 's/^residency: //p')
   resident=$(printf '%s\n' "$line" | sed -n 's/^\([0-9][0-9]*\) of [0-9][0-9]* pages resident$/\1/p')
   pages=$(printf '%s\n' "$line" | sed -n 's/^[0-9][0-9]* of \([0-9][0-9]*\) pages resident$/\1/p')
-  if [ -n "$pages" ] && [ "$pages" != 0 ] && [ "$resident" = "$pages" ]; then
+  if [ "$input_condition" = copy ] && { [ -z "$pages" ] || [ -z "$resident" ]; }; then
+    # The count is required, not its value.
+    fail input-cached "${line:-the probe gave no residency}; under --input-condition copy the file's pages in the page cache must be counted, though no number of them is required"
+  elif [ "$input_condition" = copy ]; then
+    record input-cached "$line, the file's pages in the page cache; not required: under --input-condition copy the timed passes read the bench's own copy, which the bench checks"
+  elif [ -n "$pages" ] && [ "$pages" != 0 ] && [ "$resident" = "$pages" ]; then
     pass input-resident "$line"
   else
     fail input-resident "${line:-the probe gave no residency}"
