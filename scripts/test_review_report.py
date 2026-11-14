@@ -57,6 +57,19 @@ DATA = {
         finding("r12-1", "FIX", "fixed", commits=["1234567"], tests=["test_a_page_line"]),
         finding("r12-2", "NOTE", "fixed", commits=["1234567"]),
     ],
+    "gate": {
+        "at": "abcdef1",
+        "checkers": [{"id": "reader", "read": "the pages as a stranger would"},
+                     {"id": "pages", "read": "every figure of the pages"}],
+        "findings": [
+            {"checker": "reader", "label": "1", "severity": "FIX", "finding": "too long",
+             "outcome": "fixed", "detail": "", "commits": ["1234567"], "tests": [],
+             "faults": ["parser-frame-skipped"], "notes": []},
+            {"checker": "pages", "label": "B1", "severity": "BLOCK", "finding": "a stale claim",
+             "outcome": "known limit", "detail": "", "commits": [], "tests": [], "faults": [],
+             "notes": [NOTE_SECTION]},
+        ],
+    },
 }
 
 
@@ -254,6 +267,27 @@ class ReviewReport(unittest.TestCase):
                 self.assertIn("review_report: FAIL page WRITEUP.md: ", output)
                 self.assertIn(said, output)
 
+    ONE_SENTENCE = ("Reviewers who did not write the code read it area by area, and every finding "
+                    "with what became of it is in [results/final_review.md]"
+                    "(results/final_review.md).")
+
+    def test_a_paragraph_that_gives_no_count_is_taken(self):
+        paragraph = self.PAGE.split("### The final review\n\n", 1)[1].split("\n\n", 1)[0]
+        code, output = self.page_check(paragraph, self.ONE_SENTENCE)
+        self.assertEqual(code, 0, output)
+        for new, said in ((self.ONE_SENTENCE + " There were 16 of them.",
+                           "gives 16, which is not one of the record's counts"),
+                          (self.ONE_SENTENCE.replace("Reviewers", "There were 3 reviewers and 5 "
+                                                     "findings: 1 BLOCK, 2 FIX and 2 NOTE. "
+                                                     "Reviewers"), "There were 3"),
+                          (self.ONE_SENTENCE + " Of the findings, 3 are fixed.",
+                           "does not give (2, 5, 1, 2, 2)")):
+            with self.subTest(new=new):
+                code, output = self.page_check(paragraph, new)
+                self.assertEqual(code, 1, output)
+                self.assertIn("review_report: FAIL page WRITEUP.md: ", output)
+                self.assertIn(said, output)
+
     def test_what_no_reviewer_read_is_said(self):
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
@@ -293,6 +327,93 @@ class ReviewReport(unittest.TestCase):
                 code, output = self.run_step("check")
                 self.assertEqual(code, 1, output)
                 self.assertIn(f"review_report: FAIL {code_word} r1-1: ", output)
+
+    def test_a_file_given_as_a_test_must_be_a_test(self):
+        for name in ("tools/capacity.hpp", "results/window_12302019.md", "docs/demo.js",
+                     "scripts/mac_rule.py", "scripts/mac_sampler.sh", "bench/replay.hpp"):
+            with self.subTest(test=name):
+                self.data = copy.deepcopy(DATA)
+                self.data["findings"][3]["tests"] = ["test_a_page_line", name]
+                self.assertIn(f"r12-1: '{name}' is given as a test", self.refused("evidence"))
+        self.data = copy.deepcopy(DATA)
+        self.data["gate"]["findings"][0]["tests"] = ["scripts/run_record.py"]
+        self.assertIn("reader 1: 'scripts/run_record.py' is given as a test",
+                      self.refused("evidence"))
+        self.data = copy.deepcopy(DATA)
+        self.data["findings"][3]["tests"] = ["scripts/test_pages.py", "tests/test_reader.cpp",
+                                             "tests/skip_probe.cpp", "fuzz/fuzz_kernels.cpp",
+                                             "Reader.CountsEveryFrame", "Built/Kernel.Case"]
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+
+    def test_the_gate_is_recorded_beside_the_reviewers(self):
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        text = self.out.read_text(encoding="utf-8")
+        self.assertIn("- Acceptance gate: at abcdef1, 2 checkers, 2 findings (1 BLOCK, 1 FIX, "
+                      "0 NOTE); 1 fixed, 1 known limit\n", text)
+        self.assertIn("- Findings: 5\n", text)
+        self.assertIn("| reader | the pages as a stranger would | 0 | 1 | 0 | 1 |\n", text)
+        self.assertIn("| All |  | 1 | 1 | 0 | 2 |\n", text)
+        self.assertIn("| pages | B1 | BLOCK | a stale claim | known limit | docs/NOTES.md, ", text)
+        self.assertEqual(self.counts_rows(text, "By checker and outcome.")["All"],
+                         [1, 1, 0, 0, 0, 0, 2])
+
+    def test_a_gate_finding_of_no_checker_or_given_twice_is_refused(self):
+        self.data["gate"]["findings"][1]["checker"] = "code"
+        self.assertIn("code B1: not a finding of a listed checker", self.refused("id"))
+        self.data = copy.deepcopy(DATA)
+        self.data["gate"]["findings"][1].update(checker="reader", label="1")
+        self.assertIn("reader 1: given twice", self.refused("id"))
+        self.data = copy.deepcopy(DATA)
+        self.data["gate"]["findings"][1]["label"] = ""
+        self.refused("id")
+        self.data = copy.deepcopy(DATA)
+        self.data["gate"]["findings"][1]["outcome"] = "waived"
+        self.assertIn("pages B1: 'waived'", self.refused("outcome"))
+        self.data = copy.deepcopy(DATA)
+        self.data["gate"]["findings"][0]["commits"] = []
+        self.assertIn("reader 1: fixed with no commit", self.refused("evidence"))
+
+    def test_an_open_gate_finding_cannot_be_rendered_complete(self):
+        self.data["complete"] = True
+        for outcome in review_report.UNSETTLED:
+            with self.subTest(outcome=outcome):
+                self.data["gate"]["findings"][1]["outcome"] = outcome
+                self.assertIn("the gate's pages B1", self.refused("complete"))
+        self.data["gate"]["findings"][1]["outcome"] = "known limit"
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        self.assertIn("- Result: complete:", self.out.read_text(encoding="utf-8"))
+
+    def test_the_result_counts_the_gates_findings_not_settled(self):
+        self.data["gate"]["findings"][0]["outcome"] = "open"
+        self.data["gate"]["findings"][1]["outcome"] = "open"
+        self.data["findings"][4]["outcome"] = "open"
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        text = self.out.read_text(encoding="utf-8")
+        self.assertIn("- Result: not complete. Waiting on no one: r12-2, open. Of the acceptance "
+                      "gate's findings, 2 open.\n", text)
+        self.assertIn("- The gate's pages B1 (BLOCK, open): a stale claim.\n", text)
+        self.assertIn("| reader | 1 | FIX | too long | open | Commit 1234567. Fault "
+                      "`parser-frame-skipped`. |", text)
+        self.data["gate"]["findings"][0].update(commits=[], faults=[])
+        self.assertEqual(self.run_step("write")[0], 0)
+        self.assertIn("| reader | 1 | FIX | too long | open | None yet. |",
+                      self.out.read_text(encoding="utf-8"))
+
+    def test_the_gates_evidence_not_in_the_tree_is_refused(self):
+        for key, value, code_word in (("faults", ["parser-frame-not-skipped"], "fault"),
+                                      ("tests", ["Reader.CountsNoFrame"], "test"),
+                                      ("notes", ["A section that is not there"], "notes")):
+            with self.subTest(code=code_word):
+                self.data = copy.deepcopy(DATA)
+                self.data["gate"]["findings"][0][key] = value
+                self.assertEqual(self.run_step("write")[0], 0)
+                code, output = self.run_step("check")
+                self.assertEqual(code, 1, output)
+                self.assertIn(f"review_report: FAIL {code_word} reader 1: ", output)
 
     def test_the_evidence_of_a_branch_not_merged_is_not_looked_for(self):
         self.data["reviewers"][0]["branch"] = "a branch at 1234567"
