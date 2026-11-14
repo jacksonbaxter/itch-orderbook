@@ -260,7 +260,7 @@
   },
   {
    "id": "r15",
-   "read": "the parse-rate results, predictions and pages, their checks, and this record, at c1584a0, as the last reviewer; it sampled the record's findings and found none recorded as fixed that was not. Its summary says it sampled 31 findings from 14 reviewers; its list names 34 findings from 13, none of them r8's",
+   "read": "the parse-rate results, predictions and pages, their checks, and this record, at c1584a0; it sampled the record's findings and found none recorded as fixed that was not. Its summary says it sampled 31 findings from 14 reviewers; its list names 34 findings from 13, none of them r8's",
    "commits": [
     "c1584a0"
    ],
@@ -273,9 +273,28 @@
    ],
    "last_words": "Nothing is left that I would block a merge for.",
    "branch": ""
+  },
+  {
+   "id": "r16",
+   "read": "everything changed after r15's commit, at c501f27, as the last reviewer: the fixes of r15's findings, this record and the fuzz-search faults, c1584a0..c501f27, 31 commits in 27 files, no C++. It found every r15 finding recorded as fixed fixed in the tree. It read the fixes of r15's findings, not fixes of its own, so it is not counted as having looked again",
+   "commits": [
+    "c501f27"
+   ],
+   "looks": [
+    {
+     "BLOCK": 0,
+     "FIX": 2,
+     "NOTE": 7
+    }
+   ],
+   "last_words": "Nothing is left that I would block a merge for.",
+   "branch": ""
   }
  ],
  "to_come": [],
+ "unread": [
+  "The fixes of r16's own findings were read by no reviewer, only checked by the record's author: they are held by their tests and faults and by the full check that follows."
+ ],
  "findings": [
   {
    "id": "r1-1",
@@ -3622,6 +3641,128 @@
     "readme-input-resident-pass-unheld"
    ],
    "notes": []
+  },
+  {
+   "id": "r16-1",
+   "severity": "FIX",
+   "finding": "The fuzz-search rule's test let through a search that reads the clock or has no fixed seed",
+   "outcome": "open",
+   "detail": "Being fixed on its own branch.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [],
+   "waits_on": "the fuzz-search fix, on its own branch"
+  },
+  {
+   "id": "r16-2",
+   "severity": "FIX",
+   "finding": "The test's slowest rate for `fuzz_reader` was above every rate measured for its 1,500,000-run search",
+   "outcome": "open",
+   "detail": "Being fixed on its own branch.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [],
+   "waits_on": "the fuzz-search fix, on its own branch"
+  },
+  {
+   "id": "r16-3",
+   "severity": "NOTE",
+   "finding": "docs/NOTES.md claimed the same fuzz-search result on any machine; the records show one repeat on one machine",
+   "outcome": "open",
+   "detail": "Being fixed on its own branch.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [],
+   "waits_on": "the fuzz-search fix, on its own branch"
+  },
+  {
+   "id": "r16-4",
+   "severity": "NOTE",
+   "finding": "\"No fewer runs than any control\" was true of `fuzz_book` only at the current code",
+   "outcome": "open",
+   "detail": "Being fixed on its own branch.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [],
+   "waits_on": "the fuzz-search fix, on its own branch"
+  },
+  {
+   "id": "r16-5",
+   "severity": "NOTE",
+   "finding": "One margin in docs/NOTES.md was truncated, not rounded",
+   "outcome": "open",
+   "detail": "Being fixed on its own branch.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [],
+   "waits_on": "the fuzz-search fix, on its own branch"
+  },
+  {
+   "id": "r16-6",
+   "severity": "NOTE",
+   "finding": "The record's r15-4 row described WRITEUP as it was at e40bc4c, not as it is",
+   "outcome": "fixed",
+   "detail": "The row gives WRITEUP's count without a figure, so it stays true as the count of reviewers changes.",
+   "commits": [
+    "759d501"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r16-7",
+   "severity": "NOTE",
+   "finding": "The Result line could show a finding that waits on no one as waiting on the owner, and `no_commit` took any text",
+   "outcome": "fixed",
+   "detail": "Each group of the Result line starts with whom it waits on, or \"waiting on no one\", and ends with a full stop. A no_commit reason must be at least three words, since a reason names what was done and why it needs no commit, and a mark or a lone word cannot.",
+   "commits": [
+    "c76565d"
+   ],
+   "tests": [
+    "test_the_result_says_what_waits_and_on_whom",
+    "test_a_fixed_finding_with_no_commit_is_refused_unless_it_says_why"
+   ],
+   "faults": [
+    "review-result-groups-run-together",
+    "review-no-commit-any-text"
+   ],
+   "notes": []
+  },
+  {
+   "id": "r16-8",
+   "severity": "NOTE",
+   "finding": "Two of WRITEUP's review counts could be changed without the number gate noticing",
+   "outcome": "fixed",
+   "detail": "`review_report.py check` holds every count of WRITEUP's paragraph on the final review to the record's own totals, and refuses an integer there that is none of them; gate_numbers.py is unchanged.",
+   "commits": [
+    "e5fd480"
+   ],
+   "tests": [
+    "test_a_page_count_that_is_not_the_records_total_is_refused"
+   ],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r16-9",
+   "severity": "NOTE",
+   "finding": "`parse_driver.py render --check` copies the swap line from the published file, so a consistent edit of it passes, and docs/NOTES.md did not say so",
+   "outcome": "fixed",
+   "detail": "NOTES says what render --check takes from the file, the swap line among it, and that the two readings are kept only outside the run's folder. The driver and the results file are unchanged.",
+   "commits": [
+    "c36433b"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The parse rate on `debian`"
+   ]
   }
  ]
 }

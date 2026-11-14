@@ -2456,13 +2456,13 @@
     },
     {
       "id": "readme-writeup-review-figure-not-in-results",
-      "breaks": "WRITEUP.md's final review paragraph gives a count of fixed findings that results/final_review.md does not",
+      "breaks": "WRITEUP.md's final review paragraph gives a count of findings that results/final_review.md does not",
       "check": "gate_numbers.py on WRITEUP.md",
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "Of the findings, 154 are fixed,",
-          "new": "Of the findings, 153 are fixed,"
+          "old": "16 reviewers and 193 findings",
+          "new": "16 reviewers and 192 findings"
         }
       ],
       "command": [
@@ -2474,7 +2474,7 @@
         "WRITEUP.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 153 is not in results/final_review\\.md",
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 192 is not in results/final_review\\.md",
         "exit": 1
       }
     },
@@ -2485,8 +2485,8 @@
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "looked again at the fixes were 2 of 15,",
-          "new": "looked again at the fixes were 13 of 15,"
+          "old": "looked again at the fixes were 2 of 16,",
+          "new": "looked again at the fixes were 13 of 16,"
         }
       ],
       "command": [
@@ -2498,7 +2498,7 @@
         "WRITEUP.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 13 is not in results/final_review\\.md",
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 13 of 16 is not in results/final_review\\.md",
         "exit": 1
       }
     },

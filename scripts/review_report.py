@@ -33,7 +33,7 @@ The Result line names every finding not settled, in one group for each one it wa
 or "waiting on no one", and ending with a full stop, with what waits (its `waits_for`) where
 given.
 
-The file gives the commit the outcomes were checked at, and any checked again later with the
+The file gives what no reviewer read (`unread`), the commit the outcomes were checked at, and any checked again later with the
 commit they were checked at, the reviewers, the counts by reviewer, by
 severity and by outcome with their totals, every finding, what is still open, and what is still to
 come; it says "complete" only when the data does and `write` lets it.
@@ -109,7 +109,8 @@ WHAT_CHECK_CANNOT = (
     "not in the tree. It cannot tell whether the evidence named is the right evidence: that the "
     "commit fixed that finding, that the test or fault holds it, or that the section gives its "
     "reason. The record's author checked that for every finding, against the tree at the commits "
-    "above, and the last reviewer checked a sample of them again.")
+    "above, and two later reviewers checked them again: r15 a sample of them, and r16 every "
+    "outcome of r15's findings.")
 
 
 class Refused(Exception):
@@ -154,6 +155,9 @@ def validate(data):
     findings = need(data, "findings", list, str(DATA))
     need(data, "checked_at", str, str(DATA))
     need(data, "to_come", list, str(DATA))
+    for item in need(data, "unread", list, str(DATA)):
+        if not isinstance(item, str) or not item or "\n" in item:
+            raise Refused("data", "unread", f"{item!r} is not one line saying what no reviewer read")
     for item in need(data, "rechecked", list, str(DATA)):
         what = need(item, "what", str, "rechecked")
         if not what or "|" in what or "\n" in what:
@@ -392,6 +396,9 @@ def render(data):
               "evidence is checked in this tree once they are." for r in reviewers if r["branch"]]
     if not data["to_come"] and not any(r["branch"] for r in reviewers):
         lines.append("Nothing.")
+    lines += ["", "## Read by no reviewer", ""]
+    lines += [f"- {item}" for item in data["unread"]] or ["Nothing: every change was read by a "
+                                                          "reviewer who did not write it."]
     return "\n".join(lines) + "\n"
 
 

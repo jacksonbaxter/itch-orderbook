@@ -7,7 +7,8 @@
     "tests",
     "fuzz",
     "bench",
-    "tools"
+    "tools",
+    "WRITEUP.md"
   ],
   "faults": [
     {
@@ -216,8 +217,8 @@
         {
           "file": "results/final_review.md",
           "op": "replace_text",
-          "old": "- Findings: 184\n",
-          "new": "- Findings: 183\n"
+          "old": "- Findings: 193\n",
+          "new": "- Findings: 192\n"
         }
       ],
       "command": [
@@ -362,6 +363,100 @@
       ],
       "expect": {
         "signature": "^FAIL: test_a_fixed_finding_with_no_commit_is_refused_unless_it_says_why",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-page-reviewers-count-edited",
+      "breaks": "WRITEUP.md's paragraph on the final review gives one reviewer fewer than the record has, which gate_numbers.py lets through (r16-8)",
+      "check": "review_report.py check",
+      "mutations": [
+        {
+          "file": "WRITEUP.md",
+          "old": "There were 16 reviewers",
+          "new": "There were 15 reviewers"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/review_report.py",
+        "check",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "review_report: FAIL page WRITEUP\\.md: gives 'There were 15 reviewers",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-page-owner-count-edited",
+      "breaks": "WRITEUP.md's paragraph on the final review gives one finding fewer left for the owner than the record has, which gate_numbers.py lets through (r16-8)",
+      "check": "review_report.py check",
+      "mutations": [
+        {
+          "file": "WRITEUP.md",
+          "old": "and 3 are left for the owner",
+          "new": "and 2 are left for the owner"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/review_report.py",
+        "check",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "review_report: FAIL page WRITEUP\\.md: gives '2 are left for the owner'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-page-no-change-count-edited",
+      "breaks": "WRITEUP.md's paragraph on the final review gives one finding fewer that needed no change than the record has (r16-8)",
+      "check": "review_report.py check",
+      "mutations": [
+        {
+          "file": "WRITEUP.md",
+          "old": "and 4 needed no change",
+          "new": "and 3 needed no change"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/review_report.py",
+        "check",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "review_report: FAIL page WRITEUP\\.md: gives '3 needed no change'",
+        "exit": 1
+      }
+    },
+    {
+      "id": "review-page-stray-integer-taken",
+      "breaks": "review_report.py check takes an integer in WRITEUP's paragraph on the final review that is none of the record's counts (r16-8)",
+      "check": "test_review_report.py ReviewReport.test_a_page_count_that_is_not_the_records_total_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/review_report.py",
+          "old": "    for number in PAGE_INTEGER.findall(rest):\n",
+          "new": "    for number in []:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "ReviewReport.test_a_page_count_that_is_not_the_records_total_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_page_count_that_is_not_the_records_total_is_refused",
         "exit": 1
       }
     }

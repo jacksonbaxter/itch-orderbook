@@ -38,6 +38,7 @@ def finding(fid, severity, outcome, **evidence):
 DATA = {
     "checked_at": "abcdef1",
     "rechecked": [],
+    "unread": [],
     "complete": False,
     "reviewers": [
         {"id": "r1", "read": "the parser", "commits": ["1234567"],
@@ -251,6 +252,17 @@ class ReviewReport(unittest.TestCase):
                 self.assertEqual(code, 1, output)
                 self.assertIn("review_report: FAIL page WRITEUP.md: ", output)
                 self.assertIn(said, output)
+
+    def test_what_no_reviewer_read_is_said(self):
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        self.assertIn("## Read by no reviewer\n\nNothing: every change was read by a reviewer",
+                      self.out.read_text(encoding="utf-8"))
+        self.data["unread"] = ["the fixes of r12's findings"]
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        self.assertIn("## Read by no reviewer\n\n- the fixes of r12's findings\n",
+                      self.out.read_text(encoding="utf-8"))
 
     def test_check_passes_a_fresh_render(self):
         self.assertEqual(self.run_step("write")[0], 0)
