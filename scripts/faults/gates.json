@@ -181,6 +181,50 @@
       }
     },
     {
+      "id": "gates-unopened-citation-id",
+      "breaks": "A source comment cites a research id from notes kept outside the repository",
+      "check": "gates.py unopened-citation",
+      "mutations": [
+        {
+          "file": "include/itch/book_index.hpp",
+          "old": "// Nothing in the spec bounds a reference but its 8 bytes.",
+          "new": "// Nothing in the spec bounds a reference (DS-72)."
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL unopened-citation include/itch/book_index\\.hpp:\\d+: cites a private id: DS-72",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-unopened-citation-file",
+      "breaks": "A source comment cites a research file that is not in the repository",
+      "check": "gates.py unopened-citation",
+      "mutations": [
+        {
+          "file": "bench/kernel_experiments.hpp",
+          "old": "// The passes of the SIMD experiments (docs/NOTES.md, \"SIMD parsing kernels\")",
+          "new": "// The passes of the SIMD experiments (simd.md, \"Candidate experiments\")"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}"
+      ],
+      "expect": {
+        "signature": "gates: FAIL unopened-citation bench/kernel_experiments\\.hpp:\\d+: cites a file not in the repository: simd\\.md",
+        "exit": 1
+      }
+    },
+    {
       "id": "gates-private-name",
       "breaks": "A results file names the machine it was made on",
       "check": "gates.py private-name",
