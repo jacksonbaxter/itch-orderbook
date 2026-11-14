@@ -564,8 +564,9 @@ def check_sh_problem(command):
 
 
 def libfuzzer_presets(presets_text=None):
-    """The configure presets that link libFuzzer (ITCH_FUZZ on, inherited or not), the test
-    presets that run them, and the build folders they write, from CMakePresets.json."""
+    """The configure presets that link libFuzzer (ITCH_FUZZ on, or fuzzer in the value of one
+    of its cache variables, inherited or not), the test presets that run them, and the build
+    folders they write, from CMakePresets.json."""
     if presets_text is None:
         presets_text = (fm.REPO_ROOT / "CMakePresets.json").read_text(encoding="utf-8")
     presets = json.loads(presets_text)
@@ -582,7 +583,15 @@ def libfuzzer_presets(presets_text=None):
                 return value
         return None
 
-    fuzzing = {name for name in configure if str(setting(name, "ITCH_FUZZ")).upper() == "ON"}
+    def cache_values(name):
+        preset = configure[name]
+        parents = preset.get("inherits", [])
+        return [*preset.get("cacheVariables", {}).values(),
+                *(value for parent in ([parents] if isinstance(parents, str) else parents)
+                  for value in cache_values(parent))]
+
+    fuzzing = {name for name in configure if str(setting(name, "ITCH_FUZZ")).upper() == "ON"
+               or "fuzzer" in str(cache_values(name)).lower()}
     tests = {preset["name"] for preset in presets.get("testPresets", [])
              if preset.get("configurePreset") in fuzzing}
     return fuzzing, tests, {f"build/{name}" for name in fuzzing}
@@ -637,7 +646,10 @@ class CommittedFaults(unittest.TestCase):
         # text an edit takes out or puts in (a replace_text's, a json_set's path and value)
         # spells a clock word, a libFuzzer build word or a libFuzzer build's folder, but in
         # edits of scripts/faults/ and of Markdown pages; and with all of the fault's mutations
-        # of CMakePresets.json made in order, the presets give libFuzzer to no other preset.
+        # of CMakePresets.json made in order, the presets can be read (Python's json, which
+        # refuses a byte-order mark CMake reads past, and every preset they inherit from found)
+        # and give libFuzzer to no other preset: none has ITCH_FUZZ ON or fuzzer in the value of
+        # a cache variable, its own or inherited.
         # The rule fails closed, so it refuses some faults that would be honest, each with a
         # message that names what it refused: any edit of fuzz/CMakeLists.txt, such as one that
         # drops a target's registration to show its replay going missing, and any edit whose
@@ -652,12 +664,14 @@ class CommittedFaults(unittest.TestCase):
         # environment variable); code given inline to a program INLINE_CODE does not list (awk,
         # say) or by a flag it does not list for that program (perl -M, node --import, say); and
         # an edit that turns libFuzzer on or starts the smoke run without spelling any of these
-        # words in the text it takes out or puts in: a mutation of a build file other than
-        # fuzz/CMakeLists.txt and CMakePresets.json (the ITCH_FUZZ option's default turned from
-        # OFF to ON, say), an edit, by mutation or input, of a file that is not a build file (a
-        # script, or a file a build file reads), an input's byte edit (flip_byte, truncate,
-        # delete_bytes, duplicate_bytes), whose bytes it does not read as text, and any edit of
-        # scripts/faults/ or of a Markdown page.
+        # words in the text it takes out or puts in: a mutation of CMakePresets.json that gives a
+        # preset ITCH_FUZZ by a value other than ON (TRUE, 1, a typed value) or fuzzer in its
+        # environment, with the words written in JSON escapes (ITCH\u005fFUZZ, say), a mutation
+        # of another build file than fuzz/CMakeLists.txt and CMakePresets.json (the ITCH_FUZZ
+        # option's default turned from OFF to ON, say), an edit, by mutation or input, of a file
+        # that is not a build file (a script, or a file a build file reads), an input's byte
+        # edit (flip_byte, truncate, delete_bytes, duplicate_bytes), whose bytes it does not read
+        # as text, and any edit of scripts/faults/ or of a Markdown page.
         targets = {path.stem for path in (fm.REPO_ROOT / "fuzz").glob("fuzz_*.cpp")}
         self.assertGreaterEqual(len(targets), 9)
         presets_text = (fm.REPO_ROOT / "CMakePresets.json").read_text(encoding="utf-8")
@@ -734,8 +748,9 @@ class CommittedFaults(unittest.TestCase):
                     mutated = mutated.replace(texts[0], texts[1])
             try:
                 after = libfuzzer_presets(mutated)[:2]
-            except (ValueError, KeyError, TypeError):
-                after = (fuzzing, fuzz_tests)
+            except Exception as error:  # noqa: BLE001  (any presets it cannot follow fail)
+                self.fail(f"{fault.id}: its mutations of CMakePresets.json, made in order, leave "
+                          f"presets this rule cannot read ({type(error).__name__})")
             if after != (fuzzing, fuzz_tests):
                 self.fail(f"{fault.id}: its mutations of CMakePresets.json, made in order, make "
                           f"{sorted(after[0] | after[1])} the libFuzzer presets")
