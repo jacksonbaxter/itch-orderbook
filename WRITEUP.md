@@ -1,6 +1,6 @@
 # What an L3 book costs on a small x86 core, measured
 
-On a small x86 core this order book is bound by memory latency: on an embedded Zen 1 the fast designs run about the same instructions per message, and their speed follows their DRAM fills. The default, flat price levels with an order index paged by reference, makes 1.972 fills per message and rebuilds every symbol's book at 5,145,430 messages/s, 2.54× a `std::map` book on the same core, so T-DESIGN-1, 4.0× over that map book, is missed on the Zen 1 host. Most fills left are first touches of orders over a second old, which the small shared L3 cannot keep; a software look-ahead that hides some is faster there and slower on an Apple M4 Max, so it is off by default ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+On a small x86 core this order book is bound by memory latency: on an embedded Zen 1 the fast designs run about the same instructions per message, and their speed follows their DRAM fills. The default, flat price levels with an order index paged by reference, makes 1.972 fills per message and rebuilds every symbol's book at 5,145,430 messages/s, 2.54× a `std::map` book on the same core, so T-DESIGN-1, at least 4.0× the map book's throughput, is missed on the Zen 1 host. Most fills left are first touches of orders over a second old, which the small shared L3 cannot keep; a software look-ahead that hides some is faster there and slower on an Apple M4 Max, so it is off by default ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 
 Most speed targets in [BENCHMARKS.md](BENCHMARKS.md) are the best figures other open-source books and parsers have published on newer desktop and server x86 parts, so on this host most fall short; each names its source, or why it has none.
 
@@ -58,7 +58,7 @@ The age of the order a message names decides its cost: a message naming an order
 
 The fast book made 0 allocations after warm-up in 268,744,780 messages on all four designs, counted at every `operator new` and checked against a control book that allocates ([results/oracle_12302019.md](results/oracle_12302019.md)).
 
-On a linked-level book that changes only its allocator, the index pool ran at 1.238 times glibc malloc's throughput on a fresh heap and mimalloc, an open-source allocator, at 1.128. T-ARENA-1's one hard check fails: a pool that touched every node first must take no page fault in a timed pass, and the index pool took 136, the pointer pool 200 and the oldest-first pool 146 ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)). A diagnostic run, not published because the host was doing other work, points to memory compaction moving base pages under the running book; stopping it needs root on a shared host.
+T-ARENA-1 asks what the allocator alone is worth: on a linked-level book that changes only its allocator, the index pool ran at 1.238 times glibc malloc's throughput on a fresh heap and mimalloc, an open-source allocator, at 1.128. T-ARENA-1's one hard check fails: a pool that touched every node first must take no page fault in a timed pass, and the index pool took 136, the pointer pool 200 and the oldest-first pool 146 ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)). A diagnostic run, not published because the host was doing other work, points to memory compaction moving base pages under the running book; stopping it needs root on a shared host.
 
 ## Branches and the instruction stream
 
@@ -72,7 +72,7 @@ SIMD wins a field decode and loses the parse: SSSE3 decodes an Add Order faster,
 
 ## The parse rate
 
-Timed alone on the Zen 1 host over 12302019 in memory ([results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md)), the parser's T-PARSE-1, the framing walk, ran a median of 298,983,253 messages/s and is missed by 410.02 M msg/s; T-PARSE-2, the decode of the ten book-affecting types as itch-book (an open-source C++ ITCH book) does it, ran a median of 140,969,135 messages/s and is missed by 58.03 M msg/s. Both bars were set on a Zen 5 with DDR5, and the parse bench reads no counters, so the host's share of either gap was not measured. T-PARSE-3, the strict decode of every field, ran a median of 117,739,800 messages/s, above its bar of 93.9 M msg/s, but the bar is set on another day, so on 12302019 T-PARSE-3 has no verdict.
+Timed alone on the Zen 1 host over 12302019 in memory ([results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md)), the framing walk, T-PARSE-1, ran a median of 298,983,253 messages/s and is missed by 410.02 M msg/s; T-PARSE-2, the decode of the ten book-affecting types as itch-book (an open-source C++ ITCH book) does it, ran a median of 140,969,135 messages/s and is missed by 58.03 M msg/s. Both bars were set on a Zen 5 with DDR5, and the parse bench reads no counters, so the host's share of either gap was not measured. T-PARSE-3, the strict decode of every field, ran a median of 117,739,800 messages/s, above its bar of 93.9 M msg/s, but the bar is set on another day, so on 12302019 T-PARSE-3 has no verdict.
 
 T-PARSE-3 on its bar's own day, 10302019, is not measured; a run is registered. The condition used so far asks for every page of the day's file in the page cache before the first process, and the host's 15,700.85 MiB of memory cannot hold the 8,616.46 MiB file cached and the bench's own copy at once, 17,232.93 MiB. The registered run checks what the timed passes read instead: every page of the bench's own copy, before and after each pass ([results/predictions.md](results/predictions.md), the entry for T-PARSE-3 "with the bench's own copy as the input condition"). <!-- figures: not measured -->
 
@@ -90,7 +90,7 @@ With the parser on one core and the book on another, the median pipelined time o
 
 ### UDP receive: sockets vs io_uring
 
-A paced sender replays the day as MoldUDP64, Nasdaq's UDP framing, over loopback on the Zen 1 host. S4, which spins on `recvmmsg`, the socket call that takes many datagrams at once, carried the most with no loss at 1,400 bytes a datagram, 2,830,848 msg/s; blocking sockets and io_uring, Linux's shared-ring interface, tied one bisection step below, and the provided-buffer modes came last, their rings running dry. T-URING-2 is met: S4 was lossless at 2,547,190 msg/s, Nasdaq's 1 ms peak rate, in 10 of 10 repetitions ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
+A paced sender replays the day as MoldUDP64, Nasdaq's UDP framing, over loopback on the Zen 1 host. S4, which spins on `recvmmsg`, the socket call that takes many datagrams at once, carried the most with no loss at 1,400 bytes a datagram, 2,830,848 msg/s; blocking sockets and most modes of io_uring, Linux's shared-ring interface, tied one bisection step below, and the two that add task running or a kernel polling thread came last, their buffer rings running dry. T-URING-2 is met: S4 was lossless at 2,547,190 msg/s, Nasdaq's 1 ms peak rate, in 10 of 10 repetitions ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
 
 ### The backtester and the market maker
 
@@ -145,7 +145,7 @@ Every finding of the final review, with its outcome and the commit, test or note
 
 ## Every target missed or not measured
 
-[RESULTS.md](RESULTS.md) has every row, with its file and reasons. T-SIMD-1, T-URING-1 and T-ARENA-1's timings have no numeric bar. T-TRADE-4, volume against Cboe's figures, is held: Cboe's terms bar using its data to check other data without consent.
+[RESULTS.md](RESULTS.md) has every row, with its file and reasons. T-SIMD-1 (SIMD vs scalar parsing), T-URING-1 (io_uring vs sockets) and T-ARENA-1's timings have no numeric bar. T-TRADE-4, volume against Cboe's figures, is held: Cboe's terms bar using its data to check other data without consent.
 
 <!-- missed targets: begin, generated by scripts/results_table.py, do not edit -->
 | Target | Bar | Measured | Gap | Host | Why | File |
