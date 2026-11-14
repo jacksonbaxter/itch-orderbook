@@ -91,7 +91,7 @@ python3 scripts/demo.py serve</code></pre>
 
 <section class="panel" id="linux">
   <h2>Native numbers on Linux</h2>
-  <p>The same book, natively, on <code>debian</code>, pinned to one core, from the harness's
+  <p>The same book, natively, on the Linux host, an AMD Ryzen Embedded V1605B (Zen 1), pinned to one core, from the harness's
   results file. These are the project's headline numbers, measured with a cycle counter
   that a browser cannot reach.</p>
   <div id="linux-numbers"></div>
@@ -112,7 +112,8 @@ python3 scripts/demo.py serve</code></pre>
     <li id="clock-here">This browser's clock steps by <span id="clock-step">an amount not yet measured</span>, and this page <span id="isolated">has not checked whether it is</span> cross-origin isolated.</li>
     <li>WebAssembly has no clock, no cycle counter and no way to pin a thread: there is no instruction for any of them. The engine cannot time itself, so the page times whole calls into it from JavaScript, and the JIT, the garbage collector and the rest of the browser run beside it on cores the page cannot choose.</li>
     <li>So messages per second come from batches only: the time of a batch of many messages, divided by their count. Per-message latency cannot be measured here at all, and the page shows none. The percentiles above come from the native build on a pinned core.</li>
-    <li>Memory is bounded. wasm32 addresses at most 4 GB, and Emscripten's default maximum is 2 GB. This engine has a fixed 1 GiB that never grows, and the book at the capacity the project ships holds about 663 MiB of it, so the page replays one symbol's extract and never the 7.7 GiB day.</li> <!-- figures: not measured -->
+    <li>Memory is bounded. wasm32 addresses at most 4 GB, and Emscripten's default maximum is 2 GB. This engine has a fixed 1 GiB that never grows.</li> <!-- figures: not measured -->
+    <li>The book's memory at the capacity the project ships is 662.8 MiB of that memory, measured natively on the Zen 1 host (<a href="../results/bench_book_paged-flat_ram_debian_12302019.md">results/bench_book_paged-flat_ram_debian_12302019.md</a>), so the page replays one symbol's extract and never a whole day.</li>
   </ul>
   <p>GitHub Pages cannot set the headers that isolate a page, so a hosted copy would get Chrome's coarser clock. This page is not deployed anywhere: the extract it replays is Nasdaq's data.</p>
   <p class="sources">Sources, as cited in BENCHMARKS.md: <a href="https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/timing/time_clamper.h">Chrome's time clamper</a>, <a href="https://github.com/mozilla-firefox/firefox/blob/main/modules/libpref/init/StaticPrefList.yaml">Firefox's preferences</a>, <a href="https://github.com/WebKit/WebKit/blob/main/Source/WebCore/page/Performance.cpp">WebKit's Performance.cpp</a>, <a href="https://webassembly.github.io/spec/core/appendix/index-instructions.html">the WebAssembly instruction index</a>, <a href="https://v8.dev/blog/4gb-wasm-memory">V8 on 4 GB of memory</a>, <a href="https://emscripten.org/docs/tools_reference/settings_reference.html">Emscripten's settings</a>, <a href="https://github.com/orgs/community/discussions/13309">GitHub Pages and isolation headers</a>.</p>
