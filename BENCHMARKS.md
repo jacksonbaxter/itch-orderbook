@@ -20,7 +20,7 @@ What top-tier looks like for an ITCH 5.0 feed handler, L3 book and research stac
 
 | Host | Role | Limits |
 |---|---|---|
-| `debian`: Ryzen Embedded V1605B (Zen 1), 2.0 GHz base, 4 MB L3, 15 GB RAM, Linux 6.12 | Headline pinned, `perf` and io_uring numbers | Each 256-bit AVX2 operation runs as two 128-bit ones. TSC reads step by about 10 ns and `rdtscp` costs about 19 ns. About 11 GB free, so the replay input must be confirmed resident before timing. |
+| `debian`: Ryzen Embedded V1605B (Zen 1), 2.0 GHz base, 4 MB L3, 15 GB RAM, Linux 6.12 | Headline pinned, `perf` and io_uring numbers | Each 256-bit AVX2 operation runs as two 128-bit ones. TSC reads step by about 10 ns and `rdtscp` costs about 19 ns. About 11 GB free, so the replay input must be confirmed resident before timing; for the parse rate on 10302019, whose file and the bench's copy of it do not fit together, that is the bench's own copy, checked before and after each timed pass. |
 | Apple M4 Max, 64 GB RAM, macOS | Development, sanitizers, fuzzing, oracle replay. Mac numbers stay labelled macOS. | No pinning. 41.67 ns timer quantum. No branch or cache counters without root or Instruments. |
 
 Published server-class and desktop figures will beat `debian`. Targets stay at the published bar, and any gap is reported with its hardware reason. Reasons we can already cite: base clock and memory topping out at 2400 MT/s ([AMD V1000 brief](https://www.amd.com/content/dam/amd/en/documents/products/embedded/ryzen/v1000-family-product-brief.pdf)), a 128-bit vector datapath, 512 KB L2 and a 1536-entry L2 DTLB, which reaches 6 MB with 4 KB pages ([AMD Family 17h optimization guide](https://web.archive.org/web/2020id_/https://developer.amd.com/wordpress/media/2013/12/55723_SOG_Fam_17h_Processors_3.00.pdf)), plus 4 MB L3 shared by four cores and Retbleed/SRSO mitigations on kernel entry (IU-75, IU-79).
@@ -44,7 +44,7 @@ Decision: the subagent recommended `S061226` as the reference day. Rejected, bec
 
 ## Parse and book throughput
 
-All on one thread, with the whole file in memory before the clock starts, unless stated: in the page cache, or, for a bench that reads the day into its own memory, every page of that copy, checked before and after each timed pass.
+All on one thread, with the whole file in memory before the clock starts, unless stated: in the page cache, or, for the parse rate on 10302019, as the bench's own copy of the day, every page of it checked before and after each timed pass.
 
 ### T-PARSE-1: framing walk
 - **Target:** ≥ 709 M msg/s, ~21.8 GB/s.

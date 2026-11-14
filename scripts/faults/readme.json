@@ -2927,6 +2927,28 @@
         "signature": "(FAIL|ERROR): test_the_fault_matrix_row_says_which_faults_this_host_did_not_run",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-parse-condition-unread",
+      "breaks": "RESULTS.md gives every parse-rate file the page-cache condition, the 10302019 file's own copy of the day included",
+      "check": "test_results_table.py MissedTargets.test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        copy = CONDITION_LINE.search(text)\n",
+          "new": "        copy = None\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+        "exit": 1
+      }
     }
   ]
 }

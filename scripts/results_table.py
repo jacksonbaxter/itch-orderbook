@@ -748,6 +748,7 @@ def generate(root):
     arenas = []
     turing1 = []
     parses = []
+    parse_files = []
     for path in sorted((root / "results").glob("*.md")):
         name = path.name
         if name in NOT_RESULTS:
@@ -818,6 +819,7 @@ def generate(root):
         elif name.startswith("parse_rate_"):
             found = parse_rows(name, text)
             parses += found
+            parse_files.append((name, text))
             taken = [(row[0], verdict_word(row[11].replace("**", ""))) for row in found]
             rows = []
         else:
@@ -873,7 +875,7 @@ def generate(root):
                       "the file's gets no verdict, met or missed: the row says whether the median "
                       "is above or under the bar on the day measured, and where the bar's own day "
                       "is judged, or that it was not measured." + mac_parse_words(parses), "",
-                  parse_day_line(root), ""]
+                  parse_day_line(root), "", input_conditions(parse_files), ""]
         lines += markdown_table(("Target", "Pass", "Day", "Host", "Pinning", "Median messages/s",
                                  "Min", "Max", "CV", "Median GB/s", "Bar", "Verdict", "Commit",
                                  "File"), parses)
@@ -1508,6 +1510,34 @@ def bar_day_judged(root, row):
         return row
     return (*row[:11], row[11][:-len(unrun)] + f"; judged on 10302019, in results/{PARSE_BAR_DAY}",
             *row[12:])
+
+
+# The input condition of a parse-rate file, by its header: with no `input_condition` line, the
+# file in the page cache, which the machine check found before the first process; with one, the
+# bench's own copy of the day.
+CONDITION_LINE = re.compile(r"^- input_condition: (.+)$", re.MULTILINE)
+CACHE_WORDS = ("the machine check found every page of the file in the page cache before the "
+               "first process ran")
+COPY_WORDS = ("the condition is the bench's own copy of the day: every page of it found in "
+              "memory before and after each timed pass, in every process (its Input condition "
+              "section), the file's cached pages recorded, not required")
+
+
+def input_conditions(parse_files):
+    """One plain sentence on the input condition of each parse-rate file, from its header, and,
+    while no file uses the bench's own copy, that this condition is registered, not used."""
+    said, copied = [], False
+    for name, text in sorted(parse_files):
+        copy = CONDITION_LINE.search(text)
+        copied |= bool(copy)
+        said.append(f"On [results/{name}](results/{name}) "
+                    f"{COPY_WORDS if copy else CACHE_WORDS}.")
+    if not copied:
+        said.append("The bench's own copy of the day as the input condition is registered for "
+                    "10302019, and not yet used.")
+    lead = "Two input conditions are used." if copied and len(said) > 1 else \
+        "One input condition is used."
+    return " ".join([lead, *said])
 
 
 def mac_parse_words(parses):

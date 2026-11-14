@@ -829,7 +829,8 @@ class ResultsTable(unittest.TestCase):
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
         results_page = tables_of(output)
-        rows = [line for line in results_page.splitlines() if f"]({PARSE})" in line]
+        rows = [line for line in results_page.splitlines()
+                if f"]({PARSE})" in line and line.startswith("| ")]
         self.assertEqual([row.split(" | ")[0] for row in rows],
                          ["| T-PARSE-1", "| T-PARSE-2", "| T-PARSE-3"], output)
         self.assertEqual(rows[0], "| T-PARSE-1 | the framing walk | 12302019 | debian | pinned to "
@@ -887,6 +888,12 @@ class MissedTargets(unittest.TestCase):
                          f"3.615 GB/s, the median | {verdict} |"}
         lines = [rows.get(line.split(" | ")[0][2:], line) if line.startswith("| T-PARSE-") and
                  line.count(" | ") == 3 else line for line in text.splitlines()]
+        # Its input condition is the bench's own copy, as the driver's header line says.
+        at = next(index for index, line in enumerate(lines) if line.startswith("- "))
+        lines.insert(at, "- input_condition: the bench's own copy: every page of the copy "
+                     "bench_parse reads the day into, found in memory before and after each timed "
+                     "pass, in every process; the file's pages in the page cache recorded, not "
+                     "required")
         (self.root / "results" / results_table.PARSE_BAR_DAY).write_text(
             "\n".join(lines) + "\n", encoding="utf-8")
 
@@ -902,6 +909,11 @@ class MissedTargets(unittest.TestCase):
         self.assertIn("; not measured on 10302019 |", tables_of(output))
         self.assertIn("No parse rate was timed on the Mac: the three bars are set on x86 Linux",
                       tables_of(output))
+        self.assertIn("One input condition is used. On [results/parse_rate_debian_12302019.md]("
+                      "results/parse_rate_debian_12302019.md) the machine check found every page of "
+                      "the file in the page cache before the first process ran. The bench's own copy "
+                      "of the day as the input condition is registered for 10302019, and not yet "
+                      "used.", tables_of(output))
         self.add_bar_day("missed: 1.00 M msg/s under the bar")
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
@@ -909,6 +921,14 @@ class MissedTargets(unittest.TestCase):
         self.assertIn("T-PARSE-3 is judged on its bar's own day, 10302019, in [results/"
                       "parse_rate_debian_10302019.md]", output)
         self.assertNotIn("; not measured on 10302019 |", tables_of(output))
+        self.assertIn("Two input conditions are used. On [results/parse_rate_debian_10302019.md]("
+                      "results/parse_rate_debian_10302019.md) the condition is the bench's own copy "
+                      "of the day: every page of it found in memory before and after each timed "
+                      "pass", tables_of(output))
+        self.assertIn("On [results/parse_rate_debian_12302019.md](results/parse_rate_debian_"
+                      "12302019.md) the machine check found every page of the file in the page "
+                      "cache", tables_of(output))
+        self.assertNotIn("not yet used", output)
         self.assertIn("; judged on 10302019, in results/parse_rate_debian_10302019.md |",
                       tables_of(output))
         self.assertIn(", 1.00 M msg/s under the bar; the host's share not established. "

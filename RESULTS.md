@@ -488,6 +488,8 @@ The parse rate. Each row is one pass of a parse-rate file over the whole day hel
 
 T-PARSE-3's bar is set on 10302019: not measured on that day; a run is registered (docs/NOTES.md, "The parse rate on `debian`").
 
+One input condition is used. On [results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md) the machine check found every page of the file in the page cache before the first process ran. The bench's own copy of the day as the input condition is registered for 10302019, and not yet used.
+
 | Target | Pass | Day | Host | Pinning | Median messages/s | Min | Max | CV | Median GB/s | Bar | Verdict | Commit | File |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | T-PARSE-1 | the framing walk | 12302019 | debian | pinned to core 4 | 298,983,253 | 295,511,473 | 305,215,684 | 0.95% | 9.180 | ≥ 709 M msg/s and 21.8 GB/s | **missed**: 410.02 M msg/s and 12.62 GB/s under the bar | `6d53ed4cf1e2` | [results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md) |
