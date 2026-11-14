@@ -220,6 +220,38 @@ class ReviewReport(unittest.TestCase):
         self.data["findings"][4]["waits_on"] = "the owner"
         self.assertIn("r12-2: its waits_on is given, yet it is fixed", self.refused("data"))
 
+    PAGE = ("# A write-up\n\n### The final review\n\nThere were 2 reviewers and 5 findings: 1 BLOCK, 2 FIX "
+            "and 2 NOTE ([results/final_review.md](results/final_review.md)). The reviewers who "
+            "looked again at the fixes were 1 of 2, r1. Of the findings, 3 are fixed, 1 is a known "
+            "limit and 1 needed no change, and T-PARSE-3 and r12 are named.\n\n## Next\n\n7 more.\n")
+
+    def page_check(self, old=None, new=None):
+        page = self.PAGE if old is None else self.PAGE.replace(old, new, 1)
+        (self.root / "WRITEUP.md").write_text(page, encoding="utf-8")
+        self.assertEqual(self.run_step("write")[0], 0)
+        return self.run_step("check")
+
+    def test_the_pages_review_counts_are_the_records_totals(self):
+        code, output = self.page_check()
+        self.assertEqual(code, 0, output)
+
+    def test_a_page_count_that_is_not_the_records_total_is_refused(self):
+        for old, new, said in (("There were 2 reviewers", "There were 3 reviewers", "There were 3"),
+                               ("1 BLOCK, 2 FIX", "2 BLOCK, 2 FIX", "2 BLOCK"),
+                               ("were 1 of 2", "were 2 of 2", "were 2 of 2"),
+                               ("3 are fixed", "4 are fixed", "4 are fixed"),
+                               ("1 is a known", "2 are a known", "2 are a known"),
+                               ("1 needed no change", "1 needed no change, 1 is open",
+                                "1 is open"),
+                               ("1 needed no change", "1 needed no change, and 9 more",
+                                "gives 9, which is not one of the record's counts"),
+                               (" 3 are fixed,", " most are fixed,", "does not give (3,)")):
+            with self.subTest(new=new):
+                code, output = self.page_check(old, new)
+                self.assertEqual(code, 1, output)
+                self.assertIn("review_report: FAIL page WRITEUP.md: ", output)
+                self.assertIn(said, output)
+
     def test_check_passes_a_fresh_render(self):
         self.assertEqual(self.run_step("write")[0], 0)
         code, output = self.run_step("check")

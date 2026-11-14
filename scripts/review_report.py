@@ -44,6 +44,8 @@ come; it says "complete" only when the data does and `write` lets it.
 - fault: a fault named is not in scripts/faults/*.json;
 - test: a test named is in no file under tests/, scripts/, fuzz/, bench/ or tools/;
 - notes: a docs/NOTES.md section named is not a heading there;
+- page: a count that WRITEUP.md's paragraph on the final review gives is not the record's own
+  total, a total is not given there, or the paragraph gives an integer that is none of them;
 - commit: a commit named, or one an outcome was checked again at, is not in the history, checked only where git has the full history
   (not in a shallow clone, and not in a tree copied without .git, which it says).
 
@@ -461,6 +463,66 @@ def evidence_problems(root, data):
     return problems, whole
 
 
+PAGE = Path("WRITEUP.md")
+PAGE_HEADING = "### The final review"
+# Each count WRITEUP's paragraph on the final review gives, in the words it gives it, with the
+# record's total it must equal. gate_numbers.py holds a figure to any place of the record that
+# shares a word with it, and the record holds the same small numbers in many rows; these are
+# its headline counts, so they are held here to the totals themselves (r16-8).
+PAGE_COUNTS = (
+    (r"There were (\d+) reviewers and (\d+) findings: (\d+) BLOCK, (\d+) FIX and (\d+) NOTE",
+     lambda totals: (totals["reviewers"], totals["findings"], *totals["severities"]), True),
+    (r"looked again at the fixes were (\d+) of (\d+)",
+     lambda totals: (totals["again"], totals["reviewers"]), True),
+    (r"(\d+) (?:is|are) fixed", lambda totals: (totals["fixed"],), False),
+    (r"(\d+) (?:is|are) a known limit", lambda totals: (totals["known limit"],), False),
+    (r"(\d+) needed no change", lambda totals: (totals["no change needed"],), False),
+    (r"(\d+) (?:findings? )?(?:is|are) partly done", lambda totals: (totals["partly"],), False),
+    (r"(\d+) (?:is|are) left for the owner", lambda totals: (totals["left for the owner"],), False),
+    (r"(\d+) (?:findings? )?(?:is|are) open", lambda totals: (totals["open"],), False),
+)
+PAGE_INTEGER = re.compile(r"(?<![\w.,/-])\d[\d,]*(?![\w/-])")
+
+
+def page_problems(root, data):
+    """(code, where, detail) for each count of WRITEUP's paragraph on the final review that is
+    not the record's own total, each total the paragraph does not give, and each integer in it
+    that is none of these counts. Nothing when the tree has no WRITEUP.md."""
+    path = root / PAGE
+    if not path.is_file():
+        return []
+    text = path.read_text(encoding="utf-8")
+    start = text.find(f"\n{PAGE_HEADING}\n")
+    if start < 0:
+        return [("page", PAGE.as_posix(), f"no {PAGE_HEADING!r} section")]
+    body = text[start + len(PAGE_HEADING) + 2:]
+    end = body.find("\n#")
+    paragraph = body if end < 0 else body[:end]
+    reviewers, findings = data["reviewers"], data["findings"]
+    totals = dict(zip(OUTCOMES, tally(findings)))
+    totals.update(reviewers=len(reviewers), findings=len(findings),
+                  severities=[sum(1 for f in findings if f["severity"] == s) for s in SEVERITIES],
+                  again=sum(1 for r in reviewers if len(r["looks"]) > 1))
+    problems, rest = [], paragraph
+    for pattern, wanted, always in PAGE_COUNTS:
+        found = list(re.finditer(pattern, paragraph))
+        want = tuple(wanted(totals))
+        if len(found) > 1:
+            problems.append(("page", PAGE.as_posix(), f"{pattern!r} is said {len(found)} times"))
+        elif not found and (always or any(want)):
+            problems.append(("page", PAGE.as_posix(), f"does not give {want} as {pattern!r}"))
+        for match in found:
+            given = tuple(int(group.replace(",", "")) for group in match.groups())
+            if given != want:
+                problems.append(("page", PAGE.as_posix(), f"gives {match[0]!r}; the record's "
+                                 f"totals are {want}"))
+            rest = rest.replace(match[0], " ")
+    for number in PAGE_INTEGER.findall(rest):
+        problems.append(("page", PAGE.as_posix(), f"gives {number}, which is not one of the "
+                         "record's counts"))
+    return problems
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("step", choices=("write", "check"))
@@ -482,7 +544,7 @@ def main(argv=None):
     if not out.is_file() or out.read_text(encoding="utf-8") != text:
         problems.append(("stale", OUT.as_posix(), "not what write makes of the data file now"))
     found, whole = evidence_problems(root, data)
-    problems += found
+    problems += found + page_problems(root, data)
     for code, where, detail in problems:
         print(f"review_report: FAIL {code} {where}: {detail}")
     if problems:
