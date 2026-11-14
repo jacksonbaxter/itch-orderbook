@@ -1130,7 +1130,7 @@ def short_host(host):
 # Only the words on what each measures are written here; every value comes from the file.
 HEADLINE = (
     ("T-ORACLE-2", "oracle_sessions.md", sessions_headline,
-     "Agreement with an independent reference book after every message"),
+     "Agreement with an independent reference book over whole sessions"),
     ("T-ALLOC-1", "oracle_12302019.md", alloc_headline,
      "Heap allocations on the hot path over a whole day"),
     ("T-BOOK-1", "bench_book_paged-flat_ram_debian_12302019.md", book_headline,
@@ -1760,8 +1760,8 @@ def missed_full(root):
 MISS_OPENING = (
     "Each line is on the Zen 1 host unless it names the M4 Max, and gives the row that decides "
     "the verdict, or the worst. Where a bar is another host's published figure, the host's share "
-    "of the gap was not measured. There, speed and latency follow DRAM fills, mostly from orders "
-    "over a second old.")
+    "of the gap was not measured. There, it was measured that messages naming an order over a "
+    "second old take most DRAM fills.")
 # What each target asks, and whose bar it is, in words a stranger reads alone; and its why in a
 # few plain words, "" for none, or None for a trade check's, which is its row's. Only words are
 # written here: every figure comes from a row.

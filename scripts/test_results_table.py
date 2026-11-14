@@ -667,8 +667,9 @@ class ResultsTable(unittest.TestCase):
                          [target for target, *_ in results_table.HEADLINE])
         oracle, alloc, book, design, backtest = rows
         # Each first cell is what the row measures, then its target.
-        self.assertTrue(oracle.startswith("| Agreement with an independent reference book after "
-                                          "every message (T-ORACLE-2) | "), oracle)
+        # Not "after every message": what is compared after each message is what it can change.
+        self.assertTrue(oracle.startswith("| Agreement with an independent reference book over "
+                                          "whole sessions (T-ORACLE-2) | "), oracle)
         self.assertIn("| 0 divergences over 10 full sessions | 0 divergences in 3,081,392,329 "
                       "messages over 10 sessions | Apple M4 Max | met | "
                       "[results/oracle_sessions.md]", oracle)
@@ -1015,7 +1016,8 @@ class MissedTargets(unittest.TestCase):
                       "3.90×", table)
         self.assertIn(results_table.MISS_OPENING, table)
         self.assertEqual(table.count("host's share"), 1)
-        self.assertIn("DRAM fills, mostly from orders over a second old", table)
+        self.assertIn("it was measured that messages naming an order over a second old take most "
+                      "DRAM fills", table)
         for line in table.splitlines():
             self.assertLessEqual(line.count("not established"), 1, line)
         for word in ("…", "...", "UNCONFIRMED", "raw", "r0843", "rate by", "withdrawn or stopped",

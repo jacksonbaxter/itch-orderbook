@@ -3305,8 +3305,8 @@
       "mutations": [
         {
           "file": "scripts/results_table.py",
-          "old": "\"of the gap was not measured. There, speed and latency follow DRAM fills, mostly from orders \"",
-          "new": "\"of the gap was not measured. There, speed and latency follow fills, mostly from orders \""
+          "old": "\"second old take most DRAM fills.\")",
+          "new": "\"second old take most fills.\")"
         }
       ],
       "command": [
