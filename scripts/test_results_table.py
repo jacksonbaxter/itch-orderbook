@@ -205,6 +205,13 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual([line.rsplit(" | ", 1)[1] for line in shown],
                          [f"no: `run_log.md:{len(lines) + 1}` stands |"] * 2 + ["yes |"])
 
+    def test_the_fault_matrix_row_says_which_faults_this_host_did_not_run(self):
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        row = next(line for line in output.splitlines() if line.startswith("| Fault matrix |"))
+        self.assertIn("; 14 faults for Linux only are not run on this host, and their run on a "
+                      "host of that system is recorded in docs/NOTES.md |", row)
+
     def test_the_fuzz_run_has_a_row_beside_the_fault_matrix_and_in_the_run_table(self):
         row = self.row("Fuzzing", "none")
         self.assertIn("| macOS | 9 of 9 clean | every target 1,800 s, exit 0 and 0 crashes |", row)
@@ -870,6 +877,8 @@ class MissedTargets(unittest.TestCase):
         self.assertIn("not measured on that day; a run is registered | [file](results/"
                       "parse_rate_debian_12302019.md)", self.short())
         self.assertIn("; not measured on 10302019 |", tables_of(output))
+        self.assertIn("No parse rate was timed on the Mac: the three bars are set on x86 Linux",
+                      tables_of(output))
         self.add_bar_day("missed: 1.00 M msg/s under the bar")
         code, output = self.run_table()
         self.assertEqual(code, 0, output)

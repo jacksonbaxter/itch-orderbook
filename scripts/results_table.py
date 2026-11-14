@@ -347,7 +347,12 @@ def fault_row(name, text):
     selection = find(r"^- Selection: (.*)$", text, name)[1]
     host = find(r"^- Host: (.*)$", text, name)[1]
     commit = header_commit(text, name)
-    return ("Fault matrix", "none", host, result, f"{selection}; controls: {controls}",
+    # Faults for another system are not run on this host; the row says so, and where their run
+    # on a host of that system is recorded, so that the count is not read as every fault.
+    elsewhere = re.search(r"^- Not run on this host: (\d+), for (.+?) only\b", text, re.MULTILINE)
+    note = (f"; {elsewhere[1]} faults for {elsewhere[2]} only are not run on this host, and "
+            "their run on a host of that system is recorded in docs/NOTES.md" if elsewhere else "")
+    return ("Fault matrix", "none", host, result, f"{selection}; controls: {controls}{note}",
             f"`{commit}`", source(name))
 
 
@@ -867,7 +872,8 @@ def generate(root):
                       "sources count; the verdict is on the median. A bar set on a day other than "
                       "the file's gets no verdict, met or missed: the row says whether the median "
                       "is above or under the bar on the day measured, and where the bar's own day "
-                      "is judged, or that it was not measured.", "", parse_day_line(root), ""]
+                      "is judged, or that it was not measured." + mac_parse_words(parses), "",
+                  parse_day_line(root), ""]
         lines += markdown_table(("Target", "Pass", "Day", "Host", "Pinning", "Median messages/s",
                                  "Min", "Max", "CV", "Median GB/s", "Bar", "Verdict", "Commit",
                                  "File"), parses)
@@ -1502,6 +1508,14 @@ def bar_day_judged(root, row):
         return row
     return (*row[:11], row[11][:-len(unrun)] + f"; judged on 10302019, in results/{PARSE_BAR_DAY}",
             *row[12:])
+
+
+def mac_parse_words(parses):
+    """Why the parse table has no Mac row, while it has none."""
+    if any(row[3] != "debian" for row in parses):
+        return ""
+    return (" No parse rate was timed on the Mac: the three bars are set on x86 Linux, which "
+            "gives a macOS figure no verdict.")
 
 
 def parse_day_line(root):

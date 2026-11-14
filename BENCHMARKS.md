@@ -360,7 +360,7 @@ The base run uses 25 µs each way plus 5 µs compute. This is an assumption deri
 - **Status:** `VERIFIED`
 
 ### T-SPSC-2: throughput gains from the known techniques
-- **Target:** on one host, cached indices ≥ 3.9× over uncached (derived: 165,138,887 / 41,859,740), and mask ≥ 4.2× over `%` (derived: 690,662,074 / 165,138,887).
+- **Target:** on one host, cached indices ≥ 3.9× over uncached (derived: 165,138,887 / 41,859,740), and mask ≥ 4.2× over `%` (derived: 690,662,074 / 165,138,887). The derived ratios are 3.945 and 4.182; each bar is its ratio to one decimal, as it was set before any run, so the first is 0.045 under its ratio and the second 0.018 over, and `results/spsc_ablation_debian_12302019.md` prints them as 3.90× and 4.20×. No verdict turns on it: each of the four T-SPSC-2 ratios measured there is 1.60× or less.
 - **Source:** [Frasch, CppCon 2023](https://raw.githubusercontent.com/CppCon/CppCon2023/main/Presentations/SPSC_Lock-free_Wait-Free_Fifo_from_the_Ground_Up_CppCon_2023.pdf), pp. 41-42, LC-7.
 - **Measured:** i7-9700, 8-byte elements, capacity 2^17, 100 runs, under WSL2.
 - **Comparability:** a different microarchitecture, so the ablation may differ. Reported either way.
