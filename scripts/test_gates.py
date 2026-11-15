@@ -227,6 +227,19 @@ class Gates(unittest.TestCase):
         self.assert_only_gate_fails("wire-pointer-cast", "tools/tool.cpp",
                                     "auto v = *reinterpret_cast<const int*>(p);\n")
 
+    def test_the_failures_come_after_every_pass(self):
+        # check.sh shows only the last lines of a failed stage: an early gate's failure must
+        # still be among them however many gates pass after it.
+        self.plant({"src/parser.cpp": "if (x) [[likely]] { y(); }\n"})
+        code, output = self.run_gates()
+        self.assertEqual(code, 1, output)
+        lines = output.splitlines()
+        fails = [i for i, line in enumerate(lines) if line.startswith("gates: FAIL")]
+        oks = [i for i, line in enumerate(lines) if line.startswith("gates: ok")]
+        self.assertTrue(fails and oks, output)
+        self.assertLess(max(oks), min(fails), output)
+        self.assertTrue(lines[-1].startswith("gates: ") and "passed" in lines[-1], output)
+
     def test_bare_branch_hint(self):
         planted = [
             "if (x) [[likely]] { y(); }\n",

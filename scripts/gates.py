@@ -3,8 +3,9 @@
 
     gates.py [--root DIR] [--only NAME] [--list]
 
-Each gate prints every violation as path:line. A gate that scanned no files fails,
-because a gate looking at nothing would pass forever. scripts/test_gates.py and the
+Each gate prints every violation as path:line, the passing gates' lines first and the
+failures after them, so the last lines of the output hold every failure. A gate that scanned
+no files fails, because a gate looking at nothing would pass forever. scripts/test_gates.py and the
 gates area of scripts/fault_matrix.py show each one failing on a planted violation.
 
 Adding a gate: write a function taking (root, files) and returning violations, and
@@ -16,7 +17,9 @@ Exit codes: 0 every gate passed, 1 at least one failed, 2 bad usage.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import getpass
+import io
 import os
 import re
 import socket
@@ -978,8 +981,17 @@ def main(argv=None):
             print(f"{gate.name}\t{gate.rule}")
         return 0
     root = args.root.resolve()
-    failed = [gate.name for gate in chosen if not run_gate(gate, root)]
-    print(f"gates: {len(chosen) - len(failed)} of {len(chosen)} passed")
+    # Every passing gate's line first and every failure after, so that the end of the output,
+    # all check.sh shows of a failed stage, holds the failures however many gates pass.
+    passed, failed = [], []
+    for gate in chosen:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            ok = run_gate(gate, root)
+        (passed if ok else failed).append((gate.name, out.getvalue()))
+    for _, said in passed + failed:
+        print(said, end="")
+    print(f"gates: {len(passed)} of {len(chosen)} passed")
     return 1 if failed else 0
 
 

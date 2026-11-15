@@ -1286,6 +1286,28 @@
         "signature": "FAIL: test_every_gate_a_fault_runs_scans_a_file_in_its_areas_copy",
         "exit": 1
       }
+    },
+    {
+      "id": "gates-failures-printed-before-passes",
+      "breaks": "gates.py prints a failing gate's lines before the passing gates' lines, so check.sh, which shows the last 20 lines of a failed stage, can cut an early gate's failure",
+      "check": "test_gates.py test_the_failures_come_after_every_pass",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "    for _, said in passed + failed:\n",
+          "new": "    for _, said in failed + passed:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py",
+        "Gates.test_the_failures_come_after_every_pass"
+      ],
+      "expect": {
+        "signature": "FAIL: test_the_failures_come_after_every_pass",
+        "exit": 1
+      }
     }
   ]
 }
