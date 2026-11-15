@@ -1396,6 +1396,28 @@
         "signature": "FAIL: test_the_failures_come_after_every_pass",
         "exit": 1
       }
+    },
+    {
+      "id": "gates-raising-gate-loses-held-lines",
+      "breaks": "A gate that raises ends gates.py with a traceback, and the lines held from the gates before it are never printed",
+      "check": "test_gates.py test_a_gate_that_raises_fails_and_the_earlier_failures_still_print",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "        except Exception as error:\n",
+          "new": "        except ZeroDivisionError as error:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py",
+        "Gates.test_a_gate_that_raises_fails_and_the_earlier_failures_still_print"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_gate_that_raises_fails_and_the_earlier_failures_still_print",
+        "exit": 1
+      }
     }
   ]
 }

@@ -3385,6 +3385,28 @@
         "signature": "(FAIL|ERROR): test_a_parse_target_whose_bar_names_no_other_day_is_refused",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-other-day-row-bar-unnamed-unread",
+      "breaks": "Before T-PARSE-3's bar's day has its file, results_table.py takes the other day's row into WRITEUP.md's table with a bar that names no day",
+      "check": "test_results_table.py test_an_other_day_row_whose_bar_names_no_day_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if other_day_words(target, name, cells) is None:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_an_other_day_row_whose_bar_names_no_day_is_refused"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_an_other_day_row_whose_bar_names_no_day_is_refused",
+        "exit": 1
+      }
     }
   ]
 }

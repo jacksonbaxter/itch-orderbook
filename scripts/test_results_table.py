@@ -1162,16 +1162,23 @@ class MissedTargets(unittest.TestCase):
                       "was never measured", output)
 
     def test_the_parse_targets_are_measured_rows_from_their_file(self):
-        # With its bar's day's file, T-PARSE-3 is in the table only if that file misses it.
+        # T-PARSE-1 and T-PARSE-2 are judged on 12302019, so their rows read the same whether
+        # T-PARSE-3's bar's day has its file or not; with it, T-PARSE-3 is in the table only if
+        # that file misses it.
+        parse_rows = ("| T-PARSE-1 | ≥ 709 M msg/s and 21.8 GB/s | 298.98 M msg/s, 9.180 GB/s, "
+                      "the median | 410.02 M msg/s and 12.62 GB/s under the bar | debian |",
+                      "| T-PARSE-2 | ≥ 199 M msg/s and 6.1 GB/s | 140.97 M msg/s, 4.328 GB/s, "
+                      "the median | 58.03 M msg/s and 1.77 GB/s under the bar | debian |")
         word = self.bar_day_verdict()
         if word is not None:
-            self.assertEqual("| T-PARSE-3 |" in self.missed(), word != "met", word)
+            table = self.missed()
+            self.assertEqual("| T-PARSE-3 |" in table, word != "met", word)
+            for row in parse_rows:
+                self.assertIn(row, table)
         self.unpublish_bar_day()
         table = self.missed()
-        self.assertIn("| T-PARSE-1 | ≥ 709 M msg/s and 21.8 GB/s | 298.98 M msg/s, 9.180 GB/s, the "
-                      "median | 410.02 M msg/s and 12.62 GB/s under the bar | debian |", table)
-        self.assertIn("| T-PARSE-2 | ≥ 199 M msg/s and 6.1 GB/s | 140.97 M msg/s, 4.328 GB/s, the "
-                      "median | 58.03 M msg/s and 1.77 GB/s under the bar | debian |", table)
+        for row in parse_rows:
+            self.assertIn(row, table)
         self.assertIn("| T-PARSE-3 | ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | 117.74 M msg/s, "
                       "3.615 GB/s, the median, on 12302019 | above the bar on 12302019, a day other "
                       "than the bar's; not measured on 10302019 | debian |", table)
@@ -1215,8 +1222,25 @@ class MissedTargets(unittest.TestCase):
                           "| ≥ 93.9 M msg/s and 2.89 GB/s |")
                 code, output = self.run_table("--check")
                 self.assertEqual(code, 1, output)
-                self.assertIn(f"{PARSE}: T-PARSE-3's bar is '≥ 93.9 M msg/s and 2.89 GB/s', not "
-                              "one set on another day than 12302019", output)
+                self.assertIn(f"results_table: FAIL {PARSE}: T-PARSE-3's bar is '≥ 93.9 M msg/s "
+                              "and 2.89 GB/s', not one set on another day than 12302019, though "
+                              "the file says its figure is on a day other than the bar's\n",
+                              output)
+
+    def test_an_other_day_row_whose_bar_names_no_day_is_refused(self):
+        # r22-1: before its bar's day has a file, T-PARSE-3's row in the table is the other
+        # day's; a bar that names no day, with a verdict that does not say another day's either,
+        # gets past parse_rows and is refused by other_day_row.
+        self.unpublish_bar_day()
+        self.edit(PARSE, "| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | 117.74 M msg/s, 3.615 GB/s, "
+                  "the median | above the bar on 12302019, a day other than the bar's; not "
+                  "measured on 10302019 |", "| ≥ 93.9 M msg/s and 2.89 GB/s | 117.74 M msg/s, "
+                  "3.615 GB/s, the median | above the bar on 12302019 |")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL {PARSE}: T-PARSE-3's bar is '≥ 93.9 M msg/s and 2.89 "
+                      "GB/s', not one set on another day than 12302019, and WRITEUP.md's table "
+                      "shows it so\n", output)
 
     def test_a_parse_miss_whose_file_calls_it_met_is_refused(self):
         self.edit(PARSE, "| missed: 58.03 M msg/s and 1.77 GB/s under the bar |", "| met |")

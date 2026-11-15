@@ -17,6 +17,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -239,6 +240,29 @@ class Gates(unittest.TestCase):
         self.assertTrue(fails and oks, output)
         self.assertLess(max(oks), min(fails), output)
         self.assertTrue(lines[-1].startswith("gates: ") and "passed" in lines[-1], output)
+
+    def test_a_gate_that_raises_fails_and_the_earlier_failures_still_print(self):
+        # r22-2: output is held until every gate has run, so a gate that raises must not take
+        # the earlier gates' lines with it: it fails with a line of its own.
+        self.plant({"a.txt": "a\n"})
+
+        def planted(root, files):
+            return [(files[0], 1, "planted")]
+
+        def raises(root, files):
+            raise RuntimeError("planted error")
+
+        pair = (gates.Gate("first", "fails", planted, lambda root: [root / "a.txt"]),
+                gates.Gate("second", "raises", raises, lambda root: [root / "a.txt"]))
+        errors = io.StringIO()
+        with mock.patch.object(gates, "gates", lambda: pair), contextlib.redirect_stderr(errors):
+            code, output = self.run_gates()
+        self.assertEqual(code, 1, output)
+        lines = output.splitlines()
+        self.assertEqual(lines, ["gates: FAIL first a.txt:1: planted",
+                                 "gates: FAIL second: raised RuntimeError: planted error",
+                                 "gates: 0 of 2 passed"], output)
+        self.assertIn("RuntimeError: planted error", errors.getvalue())
 
     def test_bare_branch_hint(self):
         planted = [
