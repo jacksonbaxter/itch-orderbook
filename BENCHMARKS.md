@@ -64,8 +64,8 @@ All on one thread, with the whole file in memory before the clock starts, unless
 - **Target:** ≥ 93.9 M msg/s and ≥ 2.89 GB/s on 10302019.
 - **Source:** [Lunary benchmarks](https://lunyn.com/benchmarks), OSS-34.
 - **Measured:** Google Cloud c3-standard-8, Xeon Platinum 8481C 2.70 GHz, 32 GB DDR5, Ubuntu 24.04, Rust `-C target-cpu=native`. Full day 10302019, memory-mapped. Single thread. Every field of every supported type decoded and checksummed, median of 10.
-- **Comparability:** a harder job than T-PARSE-2, under a VM, by a vendor on its own site. Ours is measured on 12302019, so the comparison is across days (docs/NOTES.md, "The parse rate on `debian`").
-- **On 10302019:** not measured yet; the prediction for that run is committed (results/predictions.md). On `debian` the file in the page cache and a copy of it do not fit in memory together, so the run reads the day into the bench's own memory and checks every page of that copy before and after each timed pass.
+- **Comparability:** a harder job than T-PARSE-2, under a VM, by a vendor on its own site. Ours is measured on 10302019 too, the bar's day, but from a copy of the day in the bench's own memory, where the source maps the file (docs/NOTES.md, "The parse rate on `debian`").
+- **On 10302019:** T-PARSE-3 is met, 115.76 M msg/s and 3.558 GB/s, the median, on `debian` (results/parse_rate_debian_10302019.md). There the file in the page cache and a copy of it do not fit in memory together, so the run reads the day into the bench's own memory and checks every page of that copy before and after each timed pass; the file's pages in the page cache are recorded, not required. On 12302019, a day other than the bar's, it ran at 117.74 M msg/s (results/parse_rate_debian_12302019.md).
 - **Status:** `VERIFIED`
 
 ### T-BOOK-1: true L3 rebuild, all symbols

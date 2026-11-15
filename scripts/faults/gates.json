@@ -1265,13 +1265,13 @@
     },
     {
       "id": "gates-parse3-bar-day-pages-as-they-stand",
-      "breaks": "The pages as they stand, read as if T-PARSE-3's bar day had its results file, still say that day is not measured, which a publication must change",
+      "breaks": "With T-PARSE-3's bar day's results file published, the README's parser paragraph says again that the day is not measured",
       "check": "gates.py parse3-bar-day",
       "mutations": [
         {
-          "file": "scripts/gates.py",
-          "old": "PARSE_BAR_DAY_FILE = \"results/parse_rate_debian_10302019.md\"",
-          "new": "PARSE_BAR_DAY_FILE = \"results/parse_rate_debian_12302019.md\""
+          "file": "README.md",
+          "old": "The strict decode of every field runs at 117.74 M msg/s that day,",
+          "new": "The strict decode of every field has not been measured on 30 October 2019; it runs at 117.74 M msg/s that day,"
         }
       ],
       "command": [
