@@ -24,6 +24,7 @@ import argparse
 import contextlib
 import getpass
 import io
+import json
 import os
 import re
 import socket
@@ -907,11 +908,14 @@ def readme_built_bullets(root, files):
 
 # The README's build section and its check section name what a reader needs to build and to
 # check (the acceptance gate's message, part 3), each in a form a script reads: the CMake
-# minimum as CMakeLists.txt's cmake_minimum_required gives it, the macOS libc++ setting, and
-# what scripts/check.sh's demo stage needs, ITCH_BROWSER or --without-browser. Each name must
-# also be in the file that reads it, so a renamed setting is caught on both sides. Not held
-# here: the compilers and versions tested, the data and memory sizes and the headline's
-# command, which no script reads reliably from the tree.
+# minimum, which CMakeLists.txt's cmake_minimum_required and CMakePresets.json's
+# cmakeMinimumRequired must agree on (3.28 is 3.28.0), the macOS libc++ setting, and what
+# scripts/check.sh's demo stage needs, ITCH_BROWSER or --without-browser. A section is read as a
+# reader sees it: its heading found only outside code fences, HTML comments outside them taken
+# out, a fence's text kept. Each name is matched whole, and must also be read by a line of its
+# source that is not a comment, so a renamed setting is caught on both sides. Not held here:
+# the compilers and versions tested, the data and memory sizes and the headline's command,
+# which no script reads reliably from the tree, nor what the words around each name say.
 README_BUILD_SECTION = "## Build and test"
 README_CHECK_SECTION = "## Check everything"
 README_BUILD_NAMES = (
@@ -919,43 +923,122 @@ README_BUILD_NAMES = (
     ("ITCH_BROWSER", "scripts/check.sh", README_CHECK_SECTION),
     ("--without-browser", "scripts/check.sh", README_CHECK_SECTION),
 )
-CMAKE_MINIMUM = re.compile(r"^cmake_minimum_required\(VERSION (\d+\.\d+)", re.MULTILINE)
+README_BUILD_READS = ("CMakeLists.txt", "CMakePresets.json", "cmake/ItchOptions.cmake",
+                      "scripts/check.sh")
+CMAKE_MINIMUM = re.compile(r"^cmake_minimum_required\(VERSION (\d+(?:\.\d+)*)", re.MULTILINE)
+README_CMAKE = re.compile(r"(?<![\w-])CMake (\d+(?:\.\d+)*)(?![\w-]|\.\d)")
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 
 
-def readme_section(text, heading):
-    """A README section's text, from its heading line to the next heading of its level."""
-    lines = text.splitlines()
-    if heading not in lines:
-        return None
-    start = lines.index(heading) + 1
-    end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
-    return "\n".join(lines[start:end])
+def whole_name(name):
+    return re.compile(rf"(?<![\w-]){re.escape(name)}(?![\w-])")
+
+
+def version_key(version):
+    """A version as CMake compares it: 3.28 and 3.28.0 are the same."""
+    parts = [int(part) for part in version.split(".")]
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
+
+
+def uncommented(line, inside):
+    """A line with its HTML comments taken out, and whether a comment is still open after it."""
+    shown, at = "", 0
+    while True:
+        if inside:
+            end = line.find("-->", at)
+            if end < 0:
+                return shown, True
+            at, inside = end + 3, False
+        else:
+            start = line.find("<!--", at)
+            if start < 0:
+                return shown + line[at:], False
+            shown, at, inside = shown + line[at:start] + " ", start + 4, True
+
+
+def readme_sections(text):
+    """Each level-1 or level-2 section of a page as a reader sees it, {heading: (line, text)}:
+    a heading is found only outside code fences and HTML comments, and comments outside fences
+    are taken out; a fence's text is kept, since a reader sees it."""
+    sections, current, fence, inside = {}, None, None, False
+    for number, line in enumerate(text.splitlines(), start=1):
+        if fence is not None:
+            closing = FENCE.match(line)
+            if closing and closing[1][0] == fence[0] and len(closing[1]) >= len(fence) \
+                    and not line.strip().strip(fence[0]):
+                fence = None
+            shown = line
+        else:
+            began_inside = inside
+            shown, inside = uncommented(line, inside)
+            opened = None if began_inside else FENCE.match(shown)
+            if opened:
+                fence = opened[1]
+            elif not began_inside and re.match(r"#{1,2} ", shown):
+                current = shown.rstrip()
+                sections.setdefault(current, (number, []))
+                continue
+        if current is not None:
+            sections[current][1].append(shown)
+    return {heading: (number, "\n".join(lines)) for heading, (number, lines) in sections.items()}
+
+
+def source_code(text):
+    """A shell or CMake file's lines with their comments taken out: from a # at a line's start
+    or after a space."""
+    return "\n".join(re.sub(r"(?:^|\s)#.*", "", line) for line in text.splitlines())
+
+
+def cmake_minimum(root):
+    """The CMake minimum CMakeLists.txt and CMakePresets.json agree on, and their violations."""
+    lists, presets = root / "CMakeLists.txt", root / "CMakePresets.json"
+    found = CMAKE_MINIMUM.search(read_text(lists) or "") if lists.is_file() else None
+    if found is None:
+        return None, [(lists, 1, "no cmake_minimum_required(VERSION ...) to hold the README's "
+                                 "CMake minimum to")]
+    try:
+        wanted = json.loads(read_text(presets) or "")["cmakeMinimumRequired"]
+        preset = ".".join(str(int(wanted[part])) for part in ("major", "minor", "patch")
+                          if part in wanted)
+    except (OSError, ValueError, KeyError, TypeError):
+        return None, [(presets, 1, "no cmakeMinimumRequired to hold the README's CMake minimum "
+                                   "to")]
+    if version_key(preset) != version_key(found[1]):
+        return None, [(presets, 1, f"cmakeMinimumRequired is {preset}, and CMakeLists.txt's "
+                                   f"cmake_minimum_required is {found[1]}: the README names one")]
+    return found[1], []
 
 
 def readme_build_names(root, files):
     violations = []
     for path in files:
-        text = read_text(path) or ""
-        cmake = read_text(root / "CMakeLists.txt") if (root / "CMakeLists.txt").is_file() else ""
-        minimum = CMAKE_MINIMUM.search(cmake or "")
-        wanted = list(README_BUILD_NAMES)
-        if minimum is None:
-            violations.append((root / "CMakeLists.txt", 1, "no cmake_minimum_required(VERSION "
-                               "...) to hold the README's CMake minimum to"))
-        else:
-            wanted.append((f"CMake {minimum[1]}", "CMakeLists.txt", README_BUILD_SECTION))
-        for name, source, heading in wanted:
-            section = readme_section(text, heading)
-            if section is None:
-                violations.append((path, 1, f"no {heading!r} section, which must name {name}"))
+        sections = readme_sections(read_text(path) or "")
+        minimum, wrong = cmake_minimum(root)
+        violations += wrong
+        wanted = [(whole_name(name), name, source, heading)
+                  for name, source, heading in README_BUILD_NAMES]
+        for pattern, name, source, heading in wanted:
+            code = source_code(read_text(root / source) or "") if (root / source).is_file() else ""
+            if not pattern.search(code):
+                violations.append((root / source, 1, f"no line here that is not a comment reads "
+                                                     f"{name}, and README.md is held to name it: "
+                                                     "update README_BUILD_NAMES"))
+        if minimum is not None:
+            wanted.append((None, f"CMake {minimum}", "CMakeLists.txt", README_BUILD_SECTION))
+        for pattern, name, source, heading in wanted:
+            if heading not in sections:
+                violations.append((path, 1, f"no {heading!r} section outside a code fence, "
+                                            f"which must name {name}"))
                 continue
-            if name not in section:
-                violations.append((path, 1, f"its {heading!r} section does not name {name}, "
-                                            f"which {source} reads"))
-            source_text = read_text(root / source) if (root / source).is_file() else ""
-            if not name.startswith("CMake ") and name not in (source_text or ""):
-                violations.append((root / source, 1, f"no {name} here, and README.md is held "
-                                                     "to name it: update README_BUILD_NAMES"))
+            line, shown = sections[heading]
+            named = (pattern.search(shown) if pattern else
+                     any(version_key(found) == version_key(minimum)
+                         for found in README_CMAKE.findall(shown)))
+            if not named:
+                violations.append((path, line, f"its {heading!r} section does not name {name} "
+                                               f"where a reader sees it, and {source} reads it"))
     return violations
 
 
@@ -1060,6 +1143,9 @@ class Gate:
     rule: str
     scan: object
     files: object
+    # Files the gate reads besides those it scans, each relative to the root, so that the
+    # fault areas' trees can be held to hold them too.
+    reads: tuple = ()
 
 
 def gates():
@@ -1131,9 +1217,11 @@ def gates():
         Gate("readme-built-bullets", f"each bullet of the README's {README_BUILT!r} list has at "
              f"most {README_BULLET_CHARS} characters as rendered and at most "
              f"{README_BULLET_LINKS} link", readme_built_bullets, one_page(README_PAGE)),
-        Gate("readme-build-names", "the README's build and check sections name the CMake "
-             "minimum CMakeLists.txt sets, the macOS libc++ setting, ITCH_BROWSER and "
-             "--without-browser", readme_build_names, one_page(README_PAGE)),
+        Gate("readme-build-names", "the README's build and check sections name, where a "
+             "reader sees them, the CMake minimum CMakeLists.txt and CMakePresets.json agree "
+             "on, the macOS libc++ setting, ITCH_BROWSER and --without-browser, each read by "
+             "its source", readme_build_names, one_page(README_PAGE),
+             README_BUILD_READS),
     )
 
 

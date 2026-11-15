@@ -1462,7 +1462,32 @@
         "readme-build-names"
       ],
       "expect": {
-        "signature": "gates: FAIL readme-build-names README\\.md:1: its '## Check everything' section does not name ITCH_BROWSER",
+        "signature": "gates: FAIL readme-build-names README\\.md:\\d+: its '## Check everything' section does not name ITCH_BROWSER",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-readme-browser-names-in-a-comment",
+      "breaks": "The README's Check everything section keeps ITCH_BROWSER and --without-browser only in an HTML comment, which a reader of the page does not see",
+      "check": "gates.py readme-build-names",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "The demo stage opens the page in a headless browser: set `ITCH_BROWSER` to a Chrome or Chromium binary, or pass `--without-browser` to run the rest of that stage, and the summary says so.",
+          "new": "The demo stage opens the page in a headless browser. <!-- `ITCH_BROWSER` `--without-browser` -->"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}",
+        "--only",
+        "readme-build-names"
+      ],
+      "expect": {
+        "signature": "gates: FAIL readme-build-names README\\.md:\\d+: its '## Check everything' section does not name ITCH_BROWSER",
         "exit": 1
       }
     }
