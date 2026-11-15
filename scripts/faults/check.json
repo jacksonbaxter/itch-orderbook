@@ -1,7 +1,7 @@
 {
   "area": "check",
   "tree": ["CMakeLists.txt", "CMakePresets.json", ".clang-format", ".clang-tidy", ".github", "cmake", "include", "src", "tests", "tools", "fuzz", "bench", "scripts", "docs", "results",
-           "BENCHMARKS.md", "RESULTS.md", "WRITEUP.md"],
+           "BENCHMARKS.md", "RESULTS.md", "WRITEUP.md", "README.md"],
   "faults": [
     {
       "id": "check-gate-stage",

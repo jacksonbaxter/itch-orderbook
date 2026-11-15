@@ -33,6 +33,17 @@ def scratch():
     return tempfile.TemporaryDirectory(dir=SCRATCH)
 
 
+def table_root(root):
+    """A scratch root results_table.generate() reads as it reads the repository: an empty run
+    log, and the repository's BENCHMARKS.md, which orders the rows by target."""
+    (root / "results").mkdir()
+    (root / "results" / "run_log.md").write_text(
+        "| Run | Prediction | Commit | OS | Outcome |\n|---|---|---|---|---|\n", encoding="utf-8")
+    (root / "BENCHMARKS.md").write_text(
+        (udp_driver.REPO_ROOT / "BENCHMARKS.md").read_text(encoding="utf-8"), encoding="utf-8")
+    return root
+
+
 def header():
     return {"host": "debian", "cpu": "AMD Ryzen Embedded V1605B with Radeon Vega Gfx",
             "kernel": "Linux 6.12.48+deb13-amd64", "compiler": "Clang 21.1.0",
@@ -788,11 +799,7 @@ class UdpReportTest(unittest.TestCase):
 
     def test_results_table_takes_the_verdict_and_the_modes(self):
         with scratch() as folder:
-            root = Path(folder)
-            (root / "results").mkdir()
-            (root / "results" / "run_log.md").write_text(
-                "| Run | Prediction | Commit | OS | Outcome |\n|---|---|---|---|---|\n",
-                encoding="utf-8")
+            root = table_root(Path(folder))
             plain = results_table.generate(root)
             self.assertFalse(any("T-URING" in line for line in plain))
             text = self.bisect_text()
@@ -811,11 +818,7 @@ class UdpReportTest(unittest.TestCase):
 
     def test_results_table_takes_the_modes_from_the_bisect_file_alone(self):
         with scratch() as folder:
-            root = Path(folder)
-            (root / "results").mkdir()
-            (root / "results" / "run_log.md").write_text(
-                "| Run | Prediction | Commit | OS | Outcome |\n|---|---|---|---|---|\n",
-                encoding="utf-8")
+            root = table_root(Path(folder))
             text = self.bisect_text()
             (root / "results" / NAME).write_text(text, encoding="utf-8")
             once = results_table.generate(root)
@@ -833,11 +836,7 @@ class UdpReportTest(unittest.TestCase):
 
     def test_results_table_labels_each_packet_size_and_takes_t_uring_2_at_1400_alone(self):
         with scratch() as folder:
-            root = Path(folder)
-            (root / "results").mkdir()
-            (root / "results" / "run_log.md").write_text(
-                "| Run | Prediction | Commit | OS | Outcome |\n|---|---|---|---|---|\n",
-                encoding="utf-8")
+            root = table_root(Path(folder))
             (root / "results" / NAME).write_text(self.bisect_text(), encoding="utf-8")
             with scratch() as runs:
                 small = self.render(self.small_dirs(Path(runs)), SMALL)[0]
