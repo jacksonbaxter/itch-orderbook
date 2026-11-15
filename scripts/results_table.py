@@ -996,7 +996,7 @@ def ratio_gap(text):
 # what an aged heap is. Each gap is the ratio's shortfall, named as the ratio's.
 MAP_WORDS = (("map-fresh", "a `std::map` book on a fresh heap",
               "the ratio {} short of the bar on a fresh heap"),
-             ("map-aged", "one on an aged heap (fragmented on purpose first)",
+             ("map-aged", "one on an aged heap (fragmented first, then churned before each add)",
               "{} short on an aged one"))
 
 

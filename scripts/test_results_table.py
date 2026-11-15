@@ -685,7 +685,8 @@ class ResultsTable(unittest.TestCase):
         # Each gap is named as the ratio's shortfall, and an aged heap is said in words.
         self.assertIn("| ≥ 4.0× the map book's throughput, same run (a ratio on one host) | 2.54× "
                       "a `std::map` book on a fresh heap; 2.81× one on an aged heap (fragmented "
-                      "on purpose first); `paged-flat`, day in memory | Zen 1 host | **missed**: "
+                      "first, then churned before each add); `paged-flat`, day in memory | Zen 1 "
+                      "host | **missed**: "
                       "the ratio 1.46 short of the bar on a fresh heap, 1.19 short on an aged "
                       "one |", design)
         # An engine event is said, beside the messages/s that is not the bar's unit.
