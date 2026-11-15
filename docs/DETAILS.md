@@ -30,6 +30,8 @@ On 12302019, 10.75% of add searches pass 16 or more better levels, and 8.337% of
 
 Capping the linear search over flat levels at 16 entries before a binary search made no difference, -0.18% with overlapping ranges. A pure binary search ran -4.09% and made more branch misses, 2.808 per message vs 2.027 ([results/layout_debian_12302019.md](../results/layout_debian_12302019.md)).
 
+The write-up's table of designs counts each `apply()` over every message, in each design's `bench_book` file; the write-up's fills by message type, and T-PERF-1's, count a separate pass over book messages only, frame walk included ([results/counters_by_type_paged-flat_debian_12302019.md](../results/counters_by_type_paged-flat_debian_12302019.md)).
+
 In the layout run the hash index's rate is 0.8381 of the paged one's, `hash-flat` against the default ([results/layout_debian_12302019.md](../results/layout_debian_12302019.md)).
 
 The lookup alone does not explain that gap. Timed alone on the Zen 1 host, a lookup on `paged-flat` costs 30.71 ns and on `hash-flat` 32.50 ns, with overlapping ranges, though `paged-flat` makes 0.024 DRAM fills a lookup and `hash-flat` 0.227 ([results/lookup_debian_12302019.md](../results/lookup_debian_12302019.md)). On the Mac the hash lookup is faster, 5.03 ns vs 8.95 ns, yet `paged-flat` is still the faster book there ([results/lookup_mac_12302019.md](../results/lookup_mac_12302019.md)).
