@@ -44,9 +44,13 @@
   {
    "what": "r21's outcomes on WRITEUP",
    "at": "8bfcc8d"
+  },
+  {
+   "what": "r11-3 and every r22 outcome",
+   "at": "35d54fd"
   }
  ],
- "complete": false,
+ "complete": true,
  "reviewers": [
   {
    "id": "r1",
@@ -426,6 +430,34 @@
     }
    ],
    "last_words": "",
+   "branch": ""
+  },
+  {
+   "id": "r22",
+   "read": "the fixes of the first full check's failures, dee389b and b169536, the fault moved in f7ad6a2 and the tests and refusal of 0c7dc4c, at 0c7dc4c, which no reviewer had read; then, at ec81f00 and again at 35d54fd, the fixes of its own findings",
+   "commits": [
+    "0c7dc4c",
+    "ec81f00",
+    "35d54fd"
+   ],
+   "looks": [
+    {
+     "BLOCK": 0,
+     "FIX": 2,
+     "NOTE": 5
+    },
+    {
+     "BLOCK": 0,
+     "FIX": 0,
+     "NOTE": 4
+    },
+    {
+     "BLOCK": 0,
+     "FIX": 0,
+     "NOTE": 0
+    }
+   ],
+   "last_words": "Nothing is left that I would block the merge for.",
    "branch": ""
   }
  ],
@@ -2598,14 +2630,18 @@
    "id": "r11-3",
    "severity": "FIX",
    "finding": "The parse-rate targets T-PARSE-1 to T-PARSE-3 have no measured number and no reason given",
-   "outcome": "partly",
-   "detail": "T-PARSE-1 and T-PARSE-2 now have their measured number, gap and reason (cause not established) in `results/parse_rate_debian_12302019.md` and the pages. T-PARSE-3 has a number on 12302019 only: its median is above a bar that is set on 10302019, which is not a pass, and the pages say so. Still to do: T-PARSE-3 on its own day, which could not be measured on `debian`, since the standalone machine check failed input-resident each time, so P-0030's run was never started. At the acceptance gate it was ruled how this bench meets that condition, and a run under a new prediction is to come.",
+   "outcome": "fixed",
+   "detail": "T-PARSE-1 and T-PARSE-2 have their measured number, gap and reason (cause not established) in `results/parse_rate_debian_12302019.md` and the pages. T-PARSE-3 was measured on its bar's own day, 10302019, under P-0031, with the bench's own copy of the day as the input condition, and is met: 115.76 M msg/s and 3.558 GB/s, the median, against at least 93.9 M msg/s and 2.89 GB/s (`results/parse_rate_debian_10302019.md`); the pages say so.",
    "commits": [
     "4890abb",
     "c3ecf81",
     "df0aaa6",
     "1fe5bb7",
-    "30bb188"
+    "30bb188",
+    "136af66",
+    "f7ad6a2",
+    "0c7dc4c",
+    "eefc42c"
    ],
    "tests": [
     "test_t_parse_3_is_judged_on_its_own_day",
@@ -2618,9 +2654,10 @@
     "parse-other-day-given-a-verdict-word"
    ],
    "notes": [
-    "The parse rate on `debian`"
-   ],
-   "waits_on": "the run of T-PARSE-3 on its bar's own day"
+    "The parse rate on `debian`",
+    "T-PARSE-3 on 10302019 with the bench's own copy as the input condition",
+    "T-PARSE-3 published, and the full check at fbd32a8"
+   ]
   },
   {
    "id": "r11-4",
@@ -6370,6 +6407,179 @@
    "tests": [],
    "faults": [],
    "notes": []
+  },
+  {
+   "id": "r22-1",
+   "severity": "FIX",
+   "finding": "A refusal of results_table.py's other_day_row() was held by no test or fault once other_day_words() refused the same edit first",
+   "outcome": "fixed",
+   "detail": "Each parse-row refusal's whole text is asserted, the one in other_day_words in both states, and a new test reaches other_day_row's refusal and asserts its text.",
+   "commits": [
+    "ec81f00"
+   ],
+   "tests": [
+    "test_a_parse_target_whose_bar_names_no_other_day_is_refused",
+    "test_an_other_day_row_whose_bar_names_no_day_is_refused"
+   ],
+   "faults": [
+    "readme-other-day-row-bar-unnamed-unread"
+   ],
+   "notes": [
+    "T-PARSE-3 published, and the full check at fbd32a8"
+   ]
+  },
+  {
+   "id": "r22-2",
+   "severity": "FIX",
+   "finding": "gates.py held each gate's output until every gate had run, so a gate that raised lost every earlier failure line",
+   "outcome": "fixed",
+   "detail": "A gate that raises fails with its own line and its traceback on stderr, and every held line still prints.",
+   "commits": [
+    "ec81f00"
+   ],
+   "tests": [
+    "test_a_gate_that_raises_fails_and_the_earlier_failures_still_print"
+   ],
+   "faults": [
+    "gates-raising-gate-loses-held-lines"
+   ],
+   "notes": [
+    "T-PARSE-3 published, and the full check at fbd32a8"
+   ]
+  },
+  {
+   "id": "r22-3",
+   "severity": "NOTE",
+   "finding": "gates.py's docstring and comment said the last lines of its output hold every failure, which holds only while they fit in what check.sh shows",
+   "outcome": "fixed",
+   "detail": "The docstring and the comment say the last 20 lines check.sh shows hold as many failures as fit there, and the stage's log all of them.",
+   "commits": [
+    "ec81f00"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "T-PARSE-3 published, and the full check at fbd32a8"
+   ]
+  },
+  {
+   "id": "r22-4",
+   "severity": "NOTE",
+   "finding": "On the real tree the five tests' published-state checks follow the results file rather than pin its verdict",
+   "outcome": "no change needed",
+   "detail": "The published state is held by results_table.py --check and the number gate, which caught both a deleted file and a flipped verdict on copies; no test pins a published verdict on the real tree, which is the pattern that failed at 136af66.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-5",
+   "severity": "NOTE",
+   "finding": "The published branch of test_the_parse_targets_are_measured_rows_from_their_file asserted only that a T-PARSE-3 row is present",
+   "outcome": "fixed",
+   "detail": "T-PARSE-1's and T-PARSE-2's rows of the missed table are the same in both states and are asserted in both.",
+   "commits": [
+    "ec81f00"
+   ],
+   "tests": [
+    "test_the_parse_targets_are_measured_rows_from_their_file"
+   ],
+   "faults": [],
+   "notes": [
+    "T-PARSE-3 published, and the full check at fbd32a8"
+   ]
+  },
+  {
+   "id": "r22-6",
+   "severity": "NOTE",
+   "finding": "The moved fault gates-parse3-bar-day-pages-as-they-stand is as strong as before, but its id no longer describes it",
+   "outcome": "no change needed",
+   "detail": "A moved fault keeps its id, and its breaks text says what it does.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-7",
+   "severity": "NOTE",
+   "finding": "On the 10302019 file, a T-PARSE-3 row whose bar names its day and whose verdict uses another day's words is refused by missed_row() with another rule's reason",
+   "outcome": "known limit",
+   "detail": "The row is refused either way, by missed_row(), with that rule's reason.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-8",
+   "severity": "NOTE",
+   "finding": "The breaks text of the new fault readme-other-day-row-bar-unnamed-unread does not say what its mutant does",
+   "outcome": "fixed",
+   "detail": "The breaks text says the mutant stops in parse3_line with a TypeError.",
+   "commits": [
+    "35d54fd"
+   ],
+   "tests": [],
+   "faults": [
+    "readme-other-day-row-bar-unnamed-unread"
+   ],
+   "notes": [
+    "T-PARSE-3 published, and the full check at fbd32a8"
+   ]
+  },
+  {
+   "id": "r22-9",
+   "severity": "NOTE",
+   "finding": "In the published state results_table.py accepts the 12302019 T-PARSE-3 row with a bar that names no day and the verdict above the bar on 12302019",
+   "outcome": "no change needed",
+   "detail": "check_results.py refuses that file, and check.sh runs it on every parse file.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r22-10",
+   "severity": "NOTE",
+   "finding": "gates.py caught Exception only, so a gate that called sys.exit ended the run and hid an earlier failure",
+   "outcome": "fixed",
+   "detail": "A gate that exits fails with its own line, the held lines print, and later gates run; an interrupt is not caught.",
+   "commits": [
+    "35d54fd"
+   ],
+   "tests": [
+    "test_a_gate_that_exits_fails_and_the_gates_around_it_still_print"
+   ],
+   "faults": [
+    "gates-exiting-gate-ends-the-run",
+    "gates-raising-gate-loses-held-lines"
+   ],
+   "notes": [
+    "T-PARSE-3 published, and the full check at fbd32a8"
+   ]
+  },
+  {
+   "id": "r22-11",
+   "severity": "NOTE",
+   "finding": "The reworded docstring of gates.py was not rewrapped",
+   "outcome": "fixed",
+   "detail": "No docstring line of gates.py is longer than 100 characters.",
+   "commits": [
+    "35d54fd"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "T-PARSE-3 published, and the full check at fbd32a8"
+   ]
   }
  ],
  "gate": {
@@ -6438,7 +6648,7 @@
     "severity": "BLOCK",
     "finding": "The README's first screen is 367 words before the table, with target ids, a kHz reading and file-format dates, and its first speed figure is framed as a miss before the bars are said to be other projects' on newer hosts",
     "outcome": "fixed",
-    "detail": "The README's pitch is 105 words before the table, gives the three figures first and says what the bars are before any gap; the gate readme-pitch-length holds it to 110.",
+    "detail": "The README's pitch is 110 words before the table, as the gate readme-pitch-length counts them, gives the three figures first and says what the bars are before any gap; the gate holds it to 110.",
     "commits": [
      "a08c91c",
      "b44a783",
@@ -6460,7 +6670,7 @@
     "severity": "BLOCK",
     "finding": "WRITEUP.md is 8,694 words, 2,326 of them a table RESULTS.md already holds, with 328 links to results files",
     "outcome": "fixed",
-    "detail": "WRITEUP.md was rewritten to 3,108 words of prose plus the generated list of misses, one short line a target; the gate writeup-length holds it to 2,500 to 4,000 words.",
+    "detail": "WRITEUP.md was rewritten, to 3,939 words by wc -w with the generated list of misses, one short line a target; the gate writeup-length holds it to 2,500 to 4,000 words.",
     "commits": [
      "a8c8484",
      "a4fce12",
