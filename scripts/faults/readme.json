@@ -2499,7 +2499,7 @@
         "WRITEUP.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 6 of 22 is not in results/final_review\\.md",
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 6 is not in results/final_review\\.md in a place its words name",
         "exit": 1
       }
     },
