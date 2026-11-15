@@ -4,11 +4,13 @@
     gates.py [--root DIR] [--only NAME] [--list]
 
 Each gate prints every violation as path:line, the passing gates' lines first and the
-failures after them, so the last lines of the output, all that check.sh shows of a failed stage
-(its last 20), hold as many of the failures as fit there; the stage's full log,
-build/check-logs/gates.log, holds every line. A gate that raises fails, with a line saying
-what it raised, and the gates after it still run. A gate that scanned no files fails, because a gate looking at nothing would pass forever. scripts/test_gates.py and the
-gates area of scripts/fault_matrix.py show each one failing on a planted violation.
+failures after them, so the last lines of the output, all that check.sh shows of a failed
+stage (its last 20), hold as many of the failures as fit there; the stage's full log,
+build/check-logs/gates.log, holds every line. A gate that raises, or that calls sys.exit()
+with any code, fails, with a line saying what it raised, and the gates after it still run; an
+interrupt still stops the run. A gate that scanned no files fails, because a gate looking at
+nothing would pass forever. scripts/test_gates.py and the gates area of
+scripts/fault_matrix.py show each one failing on a planted violation.
 
 Adding a gate: write a function taking (root, files) and returning violations, and
 add it to GATES with the paths it applies to.
@@ -1110,15 +1112,16 @@ def main(argv=None):
     root = args.root.resolve()
     # Every passing gate's line first and every failure after, so that the end of the output,
     # the last 20 lines check.sh shows of a failed stage, holds as many failures as fit there;
-    # the stage's log holds them all. A gate that raises is a failure with a line of its own,
-    # its traceback on stderr, and what the gates before it said is still printed.
+    # the stage's log holds them all. A gate that raises, or exits with any code, is a failure
+    # with a line of its own, its traceback on stderr, and what the gates before it said is
+    # still printed; a KeyboardInterrupt is not caught.
     passed, failed = [], []
     for gate in chosen:
         out = io.StringIO()
         try:
             with contextlib.redirect_stdout(out):
                 ok = run_gate(gate, root)
-        except Exception as error:
+        except (Exception, SystemExit) as error:
             traceback.print_exc()
             out.write(f"gates: FAIL {gate.name}: raised {type(error).__name__}: {error}\n")
             ok = False

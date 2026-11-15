@@ -264,6 +264,33 @@ class Gates(unittest.TestCase):
                                  "gates: 0 of 2 passed"], output)
         self.assertIn("RuntimeError: planted error", errors.getvalue())
 
+    def test_a_gate_that_exits_fails_and_the_gates_around_it_still_print(self):
+        # r22-10: a gate that calls sys.exit(0) must not end the run with exit 0 and hide an
+        # earlier failure: it fails with a line of its own, and the gate after it still runs.
+        self.plant({"a.txt": "a\n"})
+
+        def planted(root, files):
+            return [(files[0], 1, "planted")]
+
+        def exits(root, files):
+            sys.exit(0)
+
+        def passes(root, files):
+            return []
+
+        three = (gates.Gate("first", "fails", planted, lambda root: [root / "a.txt"]),
+                 gates.Gate("second", "exits", exits, lambda root: [root / "a.txt"]),
+                 gates.Gate("third", "passes", passes, lambda root: [root / "a.txt"]))
+        errors = io.StringIO()
+        with mock.patch.object(gates, "gates", lambda: three), contextlib.redirect_stderr(errors):
+            code, output = self.run_gates()
+        self.assertEqual(code, 1, output)
+        self.assertEqual(output.splitlines(), ["gates: ok third: 1 files, rule: passes",
+                                               "gates: FAIL first a.txt:1: planted",
+                                               "gates: FAIL second: raised SystemExit: 0",
+                                               "gates: 1 of 3 passed"], output)
+        self.assertIn("SystemExit: 0", errors.getvalue())
+
     def test_bare_branch_hint(self):
         planted = [
             "if (x) [[likely]] { y(); }\n",

@@ -1404,8 +1404,8 @@
       "mutations": [
         {
           "file": "scripts/gates.py",
-          "old": "        except Exception as error:\n",
-          "new": "        except ZeroDivisionError as error:\n"
+          "old": "        except (Exception, SystemExit) as error:\n",
+          "new": "        except (ZeroDivisionError, SystemExit) as error:\n"
         }
       ],
       "command": [
@@ -1416,6 +1416,28 @@
       ],
       "expect": {
         "signature": "(FAIL|ERROR): test_a_gate_that_raises_fails_and_the_earlier_failures_still_print",
+        "exit": 1
+      }
+    },
+    {
+      "id": "gates-exiting-gate-ends-the-run",
+      "breaks": "A gate that calls sys.exit(0) ends gates.py with exit 0, prints none of the lines held from the gates before it, and runs none after it, so an earlier failing gate is hidden",
+      "check": "test_gates.py test_a_gate_that_exits_fails_and_the_gates_around_it_still_print",
+      "mutations": [
+        {
+          "file": "scripts/gates.py",
+          "old": "        except (Exception, SystemExit) as error:\n",
+          "new": "        except Exception as error:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py",
+        "Gates.test_a_gate_that_exits_fails_and_the_gates_around_it_still_print"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_gate_that_exits_fails_and_the_gates_around_it_still_print",
         "exit": 1
       }
     }

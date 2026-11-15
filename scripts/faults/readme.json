@@ -3388,7 +3388,7 @@
     },
     {
       "id": "readme-other-day-row-bar-unnamed-unread",
-      "breaks": "Before T-PARSE-3's bar's day has its file, results_table.py takes the other day's row into WRITEUP.md's table with a bar that names no day",
+      "breaks": "Before T-PARSE-3's bar's day has its file, results_table.py does not refuse the other day's row whose bar names no day: it goes on, and stops in parse3_line with a TypeError, since the bar has no day to read",
       "check": "test_results_table.py test_an_other_day_row_whose_bar_names_no_day_is_refused",
       "mutations": [
         {
