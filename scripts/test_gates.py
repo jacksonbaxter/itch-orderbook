@@ -11,6 +11,7 @@ import contextlib
 import getpass
 import io
 import os
+import shlex
 import shutil
 import sys
 import tempfile
@@ -20,6 +21,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import fault_matrix  # noqa: E402
 import gates  # noqa: E402
 import lint_workflows  # noqa: E402
 
@@ -749,6 +751,66 @@ class Gates(unittest.TestCase):
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
             self.assertEqual(self.run_gates("--only", "nothing")[0], 2)
+
+
+def gates_run(command):
+    """The gates a fault's command runs, by name: every gate for gates.py with no --only, for
+    check.sh with no --only or with its gates stage, and for test_gates.py whole or its test of
+    the repository itself; none for any other command."""
+    every = {gate.name for gate in gates.gates()}
+    words = [word for part in command for word in shlex.split(part)]
+    names = set()
+    for index, word in enumerate(words):
+        after = words[index + 1:]
+        chosen = [after[i + 1] for i in range(len(after) - 1) if after[i] == "--only"]
+        if word.endswith("scripts/gates.py"):
+            names |= set(chosen) if chosen else every
+        elif word.endswith("scripts/check.sh") and (not chosen or "gates" in chosen):
+            names |= every
+        elif word.endswith("scripts/test_gates.py"):
+            tests = [name for name in after if not name.startswith("-")]
+            if not tests or any("test_the_repository_itself_passes" in name
+                                or name == "Gates" for name in tests):
+                names |= every
+    return names
+
+
+class FaultTrees(unittest.TestCase):
+    """The fault matrix runs each command on a copy of its area's tree under the checkout's
+    ignored build/: every gate such a command runs must find its files there too, or it fails
+    with "scanned no files" on the clean copy and the matrix stops at its control."""
+
+    def test_every_gate_a_fault_runs_scans_a_file_in_its_areas_copy(self):
+        faults = fault_matrix.load_faults(gates.REPO_ROOT / "scripts" / "faults")
+        wanted = {}
+        for fault in faults:
+            wanted.setdefault(fault.tree, set()).update(gates_run(fault.command))
+        # A gate with no file in this tree cannot be judged in a copy of it: so in a copy that
+        # is itself one area's tree, only what that tree holds is judged.
+        here = {gate.name for gate in gates.gates() if gate.files(gates.REPO_ROOT)}
+        by_name = {gate.name: gate for gate in gates.gates()}
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as folder:
+            for index, tree in enumerate(sorted(tree for tree, names in wanted.items() if names)):
+                copy = Path(folder) / str(index)
+                fault_matrix.copy_tree(gates.REPO_ROOT, copy,
+                                       [name for name in tree
+                                        if (gates.REPO_ROOT / name).exists()])
+                for name in sorted(wanted[tree] & here):
+                    with self.subTest(tree=tree, gate=name):
+                        self.assertTrue(by_name[name].files(copy),
+                                        f"{name} scans no file in the copy of {list(tree)}")
+
+    def test_the_commands_are_read_for_the_gates_they_run(self):
+        every = {gate.name for gate in gates.gates()}
+        self.assertEqual(gates_run(["bash", "{tree}/scripts/check.sh", "--only", "gates",
+                                    "--only", "corpus"]), every)
+        self.assertEqual(gates_run(["bash", "{tree}/scripts/check.sh"]), every)
+        self.assertEqual(gates_run(["bash", "{tree}/scripts/check.sh", "--only", "readme"]), set())
+        self.assertEqual(gates_run(["{python}", "{tree}/scripts/gates.py", "--root", "{tree}",
+                                    "--only", "pinned-actions"]), {"pinned-actions"})
+        self.assertEqual(gates_run(["{python}", "-B", "{tree}/scripts/test_gates.py"]), every)
+        self.assertEqual(gates_run(["{python}", "-B", "{tree}/scripts/test_gates.py",
+                                    "Gates.test_pinned_actions"]), set())
 
 
 if __name__ == "__main__":

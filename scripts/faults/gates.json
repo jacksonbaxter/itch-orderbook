@@ -1264,6 +1264,28 @@
       "expect": {
         "signature": "^FAIL: test_writeup_missed_list \\("
       }
+    },
+    {
+      "id": "gates-fault-tree-lacks-a-gates-page",
+      "breaks": "The check area's tree leaves out README.md, so check.sh --only gates in the matrix's copy fails two gates with scanned no files",
+      "check": "test_gates.py FaultTrees, every gate a fault runs scans a file in its area's copy",
+      "mutations": [
+        {
+          "file": "scripts/faults/check.json",
+          "old": "\"BENCHMARKS.md\", \"RESULTS.md\", \"WRITEUP.md\", \"README.md\"],",
+          "new": "\"BENCHMARKS.md\", \"RESULTS.md\", \"WRITEUP.md\"],"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_gates.py",
+        "FaultTrees.test_every_gate_a_fault_runs_scans_a_file_in_its_areas_copy"
+      ],
+      "expect": {
+        "signature": "FAIL: test_every_gate_a_fault_runs_scans_a_file_in_its_areas_copy",
+        "exit": 1
+      }
     }
   ]
 }
