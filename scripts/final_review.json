@@ -20,6 +20,30 @@
   {
    "what": "the acceptance gate's outcomes and every r17, r18 and r19 outcome",
    "at": "bc6ea2c"
+  },
+  {
+   "what": "every outcome whose fix abc2364 merged, and r18's last look",
+   "at": "abc2364"
+  },
+  {
+   "what": "r20's outcomes on WRITEUP's prose",
+   "at": "53ea676"
+  },
+  {
+   "what": "r20's outcomes on the README and the generated list",
+   "at": "0dd35bf"
+  },
+  {
+   "what": "r18-24, r18-29 to r18-36, r20-6 and r20-36",
+   "at": "bb90945"
+  },
+  {
+   "what": "r18-37 to r18-40 and r21's outcomes on the README",
+   "at": "c0d48ab"
+  },
+  {
+   "what": "r21's outcomes on WRITEUP",
+   "at": "8bfcc8d"
   }
  ],
  "complete": false,
@@ -322,11 +346,14 @@
   },
   {
    "id": "r18",
-   "read": "the round after the acceptance gate, in two stages: at e0a7b50 the fuzz-search rule, the source comments and their proof, the skip check, this record's script and data and the parse change, and at 62bedf7 the pages' gates and generated blocks, with planted edits, faults and a scan of the added lines; its second stage read other changes, not the fixes of the first, so the two are counted as one look. Then, at bc6ea2c, the fixes of its own findings",
+   "read": "the round after the acceptance gate, in two stages: at e0a7b50 the fuzz-search rule, the source comments and their proof, the skip check, this record's script and data and the parse change, and at 62bedf7 the pages' gates and generated blocks, with planted edits, faults and a scan of the added lines; its second stage read other changes, not the fixes of the first, so the two are counted as one look. Then, at bc6ea2c and again at abc2364, the fixes of its own findings, and then the fixes of its last look, the fuzz-search rule's at 4c25d0c and the pages' at bb90945, counted as one look",
    "commits": [
     "e0a7b50",
     "62bedf7",
-    "bc6ea2c"
+    "bc6ea2c",
+    "abc2364",
+    "4c25d0c",
+    "bb90945"
    ],
    "looks": [
     {
@@ -338,9 +365,19 @@
      "BLOCK": 0,
      "FIX": 3,
      "NOTE": 4
+    },
+    {
+     "BLOCK": 0,
+     "FIX": 2,
+     "NOTE": 4
+    },
+    {
+     "BLOCK": 0,
+     "FIX": 1,
+     "NOTE": 5
     }
    ],
-   "last_words": "Third look: nothing is left that I would block the merge for.",
+   "last_words": "Second part: nothing is left that I would block the merge for.",
    "branch": ""
   },
   {
@@ -358,11 +395,41 @@
    ],
    "last_words": "",
    "branch": ""
+  },
+  {
+   "id": "r20",
+   "read": "README.md as a recruiter would in 90 seconds, its first 16 lines and its headings, and WRITEUP.md as a senior developer would in 20 minutes, at abc2364, without the project's other records. Each place it stopped, with the severity it gave, is a finding; its other remarks are not",
+   "commits": [
+    "abc2364"
+   ],
+   "looks": [
+    {
+     "BLOCK": 0,
+     "FIX": 17,
+     "NOTE": 20
+    }
+   ],
+   "last_words": "",
+   "branch": ""
+  },
+  {
+   "id": "r21",
+   "read": "README.md as a recruiter would in 90 seconds, its first 16 lines and its headings, and WRITEUP.md as a senior developer would in 20 minutes, at bb90945, without the project's other records. Each place it stopped, with the severity it gave, is a finding; its other remarks are not",
+   "commits": [
+    "bb90945"
+   ],
+   "looks": [
+    {
+     "BLOCK": 0,
+     "FIX": 20,
+     "NOTE": 16
+    }
+   ],
+   "last_words": "",
+   "branch": ""
   }
  ],
- "to_come": [
-  "r20, a second reader new to the project, of README.md and WRITEUP.md"
- ],
+ "to_come": [],
  "unread": [
   "The fixes of r16's own findings were read by no reviewer, only checked by the record's author: they are held by their tests and faults and by the full check that follows."
  ],
@@ -1535,31 +1602,6 @@
    ]
   },
   {
-   "id": "r7-2",
-   "severity": "BLOCK",
-   "finding": "RESULTS.md says every verdict is in it; the book files' verdicts are not",
-   "outcome": "fixed",
-   "detail": "",
-   "commits": [
-    "2097581",
-    "1fbd0ba"
-   ],
-   "tests": [
-    "test_every_book_target_reaches_the_book_targets_table",
-    "test_a_book_miss_and_a_target_not_measured_keep_their_words",
-    "test_a_targets_verdict_no_row_took_up_is_refused"
-   ],
-   "faults": [
-    "readme-book-target-misses-skipped",
-    "readme-targets-guard-off",
-    "readme-book-targets-table-dropped",
-    "readme-backtest-gap-dropped"
-   ],
-   "notes": [
-    "The checks after the seventh review"
-   ]
-  },
-  {
    "id": "r7-1",
    "severity": "FIX",
    "finding": "Book verdicts are never compared with their bars; Summary medians not held inside min and max",
@@ -1579,6 +1621,31 @@
     "bench-book-measured-untied",
     "readme-book-headline-miss-called-met",
     "readme-book-median-outside-its-range"
+   ],
+   "notes": [
+    "The checks after the seventh review"
+   ]
+  },
+  {
+   "id": "r7-2",
+   "severity": "BLOCK",
+   "finding": "RESULTS.md says every verdict is in it; the book files' verdicts are not",
+   "outcome": "fixed",
+   "detail": "",
+   "commits": [
+    "2097581",
+    "1fbd0ba"
+   ],
+   "tests": [
+    "test_every_book_target_reaches_the_book_targets_table",
+    "test_a_book_miss_and_a_target_not_measured_keep_their_words",
+    "test_a_targets_verdict_no_row_took_up_is_refused"
+   ],
+   "faults": [
+    "readme-book-target-misses-skipped",
+    "readme-targets-guard-off",
+    "readme-book-targets-table-dropped",
+    "readme-backtest-gap-dropped"
    ],
    "notes": [
     "The checks after the seventh review"
@@ -4073,9 +4140,10 @@
    "severity": "FIX",
    "finding": "The fuzz-search rule read a fault's command and never its mutations, so a mutation could build libFuzzer in",
    "outcome": "fixed",
-   "detail": "The rule reads every mutation outside scripts/faults/ and the Markdown pages, and refuses one that edits fuzz/CMakeLists.txt, spells a clock word, a libFuzzer build word or folder, or moves libFuzzer in CMakePresets.json; the smaller holes are closed, and what it cannot see is stated. Every case of r18's probe is refused; the ways round the mutation check found later are r18-22.",
+   "detail": "The rule reads every mutation and input outside scripts/faults/ and the Markdown pages, and refuses one that edits fuzz/CMakeLists.txt, spells a clock word, a libFuzzer build word or folder, or moves libFuzzer in CMakePresets.json; the ways round it that r18's third look found are closed with r18-22, and what it cannot see is stated.",
    "commits": [
-    "8a8ef3e"
+    "8a8ef3e",
+    "55d440f"
    ],
    "tests": [
     "test_every_fuzz_search_counts_executions_and_reads_no_clock"
@@ -4265,128 +4333,198 @@
    "id": "r18-11",
    "severity": "FIX",
    "finding": "The README understates what the number gate cannot hold",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "README's Check everything says the gate cannot tell when two figures of one sentence swap places, or when a figure is copied from another place in its file that shares a word, with two examples, and that it reads a negation only between a verdict word and the target it names.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-12",
    "severity": "NOTE",
    "finding": "The billions rule widens the limit on a figure held elsewhere in its file, and its docstring reads as if it does not",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "gate_numbers.py's docstring says a rounding is held by any figure of the file that rounds to it under a shared word, so the bar's 3,037,078,470 holds 3.04 billion.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-13",
    "severity": "FIX",
    "finding": "A generated line of WRITEUP on T-PARSE-3 reads as if 12302019 were not measured",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The day is named, 10302019 or 30 October 2019, wherever \"that day\" could be another day: in the generated lines, on the README and on BENCHMARKS.md.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "faults": [
+    "readme-parse3-day-unnamed"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-14",
    "severity": "FIX",
    "finding": "The number gate reads a verdict word without its negation",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
-   "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "outcome": "fixed",
+   "detail": "The number gate refuses a verdict word with not, never or no before it in its clause, after the last target id there, or none straight after it, and reads verdict words with markup taken out. With limits: a contraction such as isn't or cannot gets round it (r18-32), and a negation before the target id, or a sentence broken across lines, is not read, as the docstring and the README say.",
+   "commits": [
+    "11cd4c1"
+   ],
+   "tests": [
+    "test_a_verdict_turned_round_by_a_negation_is_refused",
+    "test_a_verdict_word_split_by_markup_is_read_whole"
+   ],
+   "faults": [
+    "readme-gate-negation-unread",
+    "readme-prose-verdict-negated",
+    "readme-gate-verdict-markup-blanked",
+    "readme-gate-word-after-target-excused"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-15",
    "severity": "FIX",
    "finding": "The not-measured marker excuses any line, and nothing limits where it may stand",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
-   "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "outcome": "fixed",
+   "detail": "The not-measured marker is refused on a hand-written line that cites a results file; generated lines and code blocks are exempt. With a limit: the rule reads physical lines, so a marker on a continuation line of a cited bullet passes (r18-33).",
+   "commits": [
+    "11cd4c1"
+   ],
+   "tests": [
+    "test_the_figures_marker_is_refused_on_a_line_that_cites_a_file"
+   ],
+   "faults": [
+    "readme-gate-marker-on-cited-line",
+    "readme-prose-marker-on-cited-line"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-16",
    "severity": "FIX",
    "finding": "The T-PARSE-3 lines written by hand do not follow its state",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
-   "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "outcome": "fixed",
+   "detail": "The gate parse3-bar-day, once results/parse_rate_debian_10302019.md exists, refuses a sentence or row naming T-PARSE-3, the strict decode or its day that still says it is not measured there, has a run registered or a prediction committed, no run used it, or no verdict.",
+   "commits": [
+    "11cd4c1"
+   ],
+   "tests": [
+    "test_parse3_bar_day"
+   ],
+   "faults": [
+    "gates-parse3-bar-day-unread",
+    "gates-parse3-bar-day-pages-as-they-stand"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-17",
    "severity": "FIX",
    "finding": "The bullet gate misses what Markdown renders as part of a bullet",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The bullet gate joins a line that Markdown renders as part of a bullet, reads + and numbered items, and counts every kind of link: an a tag in any case, reference links, autolinks and bare addresses; an autolink's address counts in the length. BB11, an HTML comment, passes by design.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "faults": [
+    "gates-readme-bullet-lazy-line",
+    "gates-readme-bullet-plus-items",
+    "gates-readme-bullet-link-kinds",
+    "gates-readme-bullet-bare-url",
+    "gates-readme-bullet-a-tag-case",
+    "gates-readme-bullet-autolink-text-dropped"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-18",
    "severity": "NOTE",
    "finding": "The word gates read one line with single spaces",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The word gates read each page as written with runs of whitespace as one space, with markup, comments and tags taken out, and with tags as a space, and catch the other id families. With stated limits: possessives and compounds of user and session, \"its owner\", \"the users\", a lower-case e with digits, and an id written in words still pass.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "faults": [
+    "gates-owner-words-markup-split",
+    "gates-owner-words-one-space",
+    "gates-owner-words-possessive-refused",
+    "gates-writeup-words-id-before-stop",
+    "gates-writeup-words-families",
+    "gates-writeup-words-e2-refused"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-19",
    "severity": "NOTE",
    "finding": "A count after a verdict is held only after \"on\"",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "A count after a verdict is held after \"in\" and after a comma too.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "faults": [
+    "readme-gate-count-after-in-unread"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-20",
    "severity": "NOTE",
    "finding": "A short why cell changes its meaning: \"fills\" reads as executions",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The list's opening says, as a measurement, that messages naming an order a second old or more make most DRAM fills; that it says so of more targets than the book's runs measured is r18-31.",
+   "commits": [
+    "11cd4c1",
+    "34868db",
+    "85d78e2"
+   ],
    "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "faults": [
+    "readme-writeup-list-fills-unnamed"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r18-21",
    "severity": "NOTE",
    "finding": "Wording about how the work was organised stays on BENCHMARKS.md and docs/TASKS.md, whose words no gate holds",
    "outcome": "known limit",
-   "detail": "Left as it is this round: the acceptance gate's ruling names the pages whose wording changes, and these lines are not on them.",
+   "detail": "Left this round, as the acceptance gate ruled: BENCHMARKS.md's class lines, the ignore lines and docs/TASKS.md stay as they are until a question outside this record is decided.",
    "commits": [],
    "tests": [],
    "faults": [],
@@ -4398,61 +4536,103 @@
    "id": "r18-22",
    "severity": "FIX",
    "finding": "Three ways round the mutation check: a fault's inputs are not read, file names are compared as spelled, and the presets are read again one edit at a time",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
-   "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the fuzz-search rule"
+   "outcome": "fixed",
+   "detail": "The rule reads a fault's inputs as edits and refuses an input that edits a build file, compares file names resolved and case-folded, and makes all of a fault's CMakePresets.json mutations in order before it reads the presets.",
+   "commits": [
+    "55d440f"
+   ],
+   "tests": [
+    "test_every_fuzz_search_counts_executions_and_reads_no_clock"
+   ],
+   "faults": [
+    "matrix-fuzz-search-input-fuzz-cmake",
+    "matrix-fuzz-search-input-only-presets",
+    "matrix-fuzz-search-input-removes-cmake",
+    "matrix-fuzz-search-input-clock-word",
+    "matrix-fuzz-search-input-json-build-word",
+    "matrix-fuzz-search-dot-fuzz-cmake",
+    "matrix-fuzz-search-capital-fuzz-cmake",
+    "matrix-fuzz-search-dot-presets",
+    "matrix-fuzz-search-chained-presets",
+    "matrix-fuzz-search-sanitizer-typed"
+   ],
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
   },
   {
    "id": "r18-23",
    "severity": "NOTE",
    "finding": "The inline-code check knows only some names and flags of the interpreters",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
-   "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the fuzz-search rule"
+   "outcome": "fixed",
+   "detail": "The inline-code check strips a version from an interpreter's name and reads it in any case, knows Perl's -e and -E and Node's -e, -p, --eval and --print, and splits the argument of env -S.",
+   "commits": [
+    "55d440f"
+   ],
+   "tests": [
+    "test_every_fuzz_search_counts_executions_and_reads_no_clock"
+   ],
+   "faults": [
+    "matrix-fuzz-search-inline-env-split",
+    "matrix-fuzz-search-inline-version",
+    "matrix-fuzz-search-inline-capitals",
+    "matrix-fuzz-search-inline-perl-e",
+    "matrix-fuzz-search-inline-node-print",
+    "matrix-fuzz-search-inline-node-eval"
+   ],
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
   },
   {
    "id": "r18-24",
    "severity": "FIX",
    "finding": "docs/NOTES.md still has the fuzz-search rule's old paragraph, which says the rule is closed",
-   "outcome": "open",
-   "detail": "The paragraph is replaced once the rule's last change is made, with that change's limits.",
-   "commits": [],
-   "tests": [],
+   "outcome": "fixed",
+   "detail": "docs/NOTES.md's paragraph on the rule gives the rule as it stands, why the old one was wrong, and what it cannot see, word for word as the test's comment gives it.",
+   "commits": [
+    "c14da63"
+   ],
+   "tests": [
+    "test_every_fuzz_search_counts_executions_and_reads_no_clock"
+   ],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the fuzz-search rule"
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
   },
   {
    "id": "r18-25",
    "severity": "NOTE",
    "finding": "The rule now refuses some reasonable future faults, such as one that drops a fuzz target from its build file",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
-   "tests": [],
+   "outcome": "fixed",
+   "detail": "The rule's comment names the refusals an honest fault would meet: it fails closed, says what it refused, and refuses no committed fault.",
+   "commits": [
+    "e81e407"
+   ],
+   "tests": [
+    "test_every_fuzz_search_counts_executions_and_reads_no_clock"
+   ],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the fuzz-search rule"
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
   },
   {
    "id": "r18-26",
    "severity": "FIX",
    "finding": "Which proof covers which changed C++ files is in no page, and three of the files the Mac does not compile lie under the fuzzed paths",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "docs/DETAILS.md and docs/NOTES.md say which proof covers which of the 67 changed C++ files, and name the three under the fuzzed paths that the Mac's builds do not compile, for which the proof is the comparison with comments stripped alone.",
+   "commits": [
+    "7a37438",
+    "8088e7b"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a sentence in docs/DETAILS.md and docs/NOTES.md"
+   "notes": [
+    "The fuzzers' 30-minute runs, published"
+   ]
   },
   {
    "id": "r18-27",
@@ -4493,12 +4673,205 @@
    ]
   },
   {
+   "id": "r18-29",
+   "severity": "FIX",
+   "finding": "A CMakePresets.json edit that Python's json cannot read is taken by the fuzz-search rule as no change, and a sanitizer list of fuzzer,thread passes it",
+   "outcome": "fixed",
+   "detail": "The rule refuses a fault whose CMakePresets.json mutations, made in order, leave presets it cannot read, a byte-order mark first among them, and counts a preset with fuzzer in any cache variable's value, its own or inherited, as a libFuzzer preset; a preset's ITCH_FUZZ is read as CMake's if() reads it.",
+   "commits": [
+    "36db39d",
+    "4c25d0c",
+    "c7c03bc"
+   ],
+   "tests": [
+    "test_every_fuzz_search_counts_executions_and_reads_no_clock",
+    "test_a_presets_itch_fuzz_is_read_as_cmakes_if_reads_it"
+   ],
+   "faults": [
+    "matrix-fuzz-search-presets-unreadable",
+    "matrix-fuzz-search-presets-sanitizer-list",
+    "matrix-fuzz-search-presets-true-escaped",
+    "matrix-fuzz-search-presets-notfound-escaped"
+   ],
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
+  },
+  {
+   "id": "r18-30",
+   "severity": "FIX",
+   "finding": "WRITEUP's generated line on T-INV-2 says every cross is in a symbol outside normal trading, where 654 came in normal trading inside a reopening window",
+   "outcome": "fixed",
+   "detail": "The list's line for T-INV-2 says every cross is the feed's, outside normal trading or inside a reopening window.",
+   "commits": [
+    "076da28"
+   ],
+   "tests": [],
+   "faults": [
+    "readme-writeup-list-inv2-why-narrowed"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r18-31",
+   "severity": "NOTE",
+   "finding": "The list's opening says of every target whose bar is another host's figure what only the book's runs measured",
+   "outcome": "fixed",
+   "detail": "The list's opening says that in the book's runs messages naming an order a second old or more make most DRAM fills.",
+   "commits": [
+    "076da28",
+    "95bff0d"
+   ],
+   "tests": [],
+   "faults": [
+    "readme-writeup-list-fills-unnamed"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r18-32",
+   "severity": "NOTE",
+   "finding": "Contractions such as isn't, and cannot, get round the number gate's negation rule",
+   "outcome": "fixed",
+   "detail": "The number gate reads cannot and a word ending in n't as a negation too, and the README and the docstring name exactly the words it reads and say that other negations are not read.",
+   "commits": [
+    "076da28"
+   ],
+   "tests": [
+    "test_cannot_and_a_contraction_turn_a_verdict_round"
+   ],
+   "faults": [
+    "readme-gate-negation-contraction-unread"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r18-33",
+   "severity": "NOTE",
+   "finding": "The not-measured marker's rule reads physical lines, so a marker on a continuation line of a cited bullet passes",
+   "outcome": "fixed",
+   "detail": "gate_numbers.py's docstring says the figures marker is read per physical line, so one on a continuation line of a cited bullet is not refused and excuses that line's figures.",
+   "commits": [
+    "076da28"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r18-34",
+   "severity": "NOTE",
+   "finding": "r18's own rows: r18-1 lacks 55d440f, and rows whose fixes were merged still read open",
+   "outcome": "fixed",
+   "detail": "r18-1 gives 55d440f, and every row whose fix abc2364 merged has its outcome.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [],
+   "no_commit": "the rows are changed in the commit that renders this page"
+  },
+  {
+   "id": "r18-35",
+   "severity": "FIX",
+   "finding": "The fuzz-search rule read NOTFOUND and a -NOTFOUND ending as false in any case, where CMake reads them so only in capitals",
+   "outcome": "fixed",
+   "detail": "NOTFOUND and a value ending in -NOTFOUND are false only in capitals, and the test holds notfound and itch-notfound as on.",
+   "commits": [
+    "c7c03bc"
+   ],
+   "tests": [
+    "test_a_presets_itch_fuzz_is_read_as_cmakes_if_reads_it"
+   ],
+   "faults": [
+    "matrix-fuzz-search-presets-notfound-escaped"
+   ],
+   "notes": [
+    "The fuzz-search faults count their runs"
+   ]
+  },
+  {
+   "id": "r18-36",
+   "severity": "NOTE",
+   "finding": "An account of the fix called a zero number such as 0.0 an over-refusal, where CMake reads it as true",
+   "outcome": "no change needed",
+   "detail": "The sentence is in a report that is not committed, and the rule reads 0.0 as true, as CMake does.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r18-37",
+   "severity": "NOTE",
+   "finding": "The wider negation rule refuses honest text it passed before",
+   "outcome": "no change needed",
+   "detail": "The rule is stricter, not weaker, and the docstring's whatever its target covers the honest text it refuses.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r18-38",
+   "severity": "NOTE",
+   "finding": "README's Check everything leaves out none straight after a verdict word, which the gate also reads as a negation",
+   "outcome": "fixed",
+   "detail": "The sentence adds or none straight after that word, and gives no verdict word as its example, which the gate it describes refuses beside a negation.",
+   "commits": [
+    "cbc63d2",
+    "c0d48ab"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r18-39",
+   "severity": "NOTE",
+   "finding": "A spaced or misspelt contraction, such as is n't or isnt, passes the negation rule",
+   "outcome": "known limit",
+   "detail": "README and the docstring say that other ways of negating are not read.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r18-40",
+   "severity": "NOTE",
+   "finding": "The aged heap's gloss, fragmented on purpose first, leaves out that the heap is churned during the run",
+   "outcome": "fixed",
+   "detail": "The cell reads fragmented first, then churned before each add. heap_ager.hpp churns the heap before each message that adds an order (A, F or U) only, so r18's before each add, delete and replace was not exact, and the gloss names adds alone.",
+   "commits": [
+    "cbc63d2"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
    "id": "r19-1",
    "severity": "FIX",
    "finding": "README.md:7, the pitch's third bullet on the bars reads as an excuse given before any result",
    "outcome": "no change needed",
-   "detail": "Kept as it is, as the acceptance gate ruled.",
-   "commits": [],
+   "detail": "Kept as it is, as the acceptance gate ruled; the bullet says what the bars are before it says the host misses most of them.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
    "notes": []
@@ -4508,8 +4881,10 @@
    "severity": "FIX",
    "finding": "README.md:12-16, the headline's target ids mean nothing to a reader",
    "outcome": "no change needed",
-   "detail": "Kept as it is, as the acceptance gate ruled. Each id follows its gloss.",
-   "commits": [],
+   "detail": "Kept as it is, as the acceptance gate ruled. Each id follows its gloss, under a header that says it is the row's id in RESULTS.md.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
    "notes": []
@@ -4518,121 +4893,154 @@
    "id": "r19-3",
    "severity": "FIX",
    "finding": "README.md:15, T-DESIGN-1's gap is written as a factor, and its two map books are not explained",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The headline gives T-DESIGN-1's gap as the ratio's shortfall, 1.46 short of the bar on a fresh heap and 1.19 on an aged one, and names the map books in words.",
+   "commits": [
+    "11cd4c1",
+    "85d78e2"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-4",
    "severity": "FIX",
    "finding": "README.md:13, the control book and the arms are not explained",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The allocation row says the same holds in all four designs, and that the counter sees 324,511,069 in the second, simple book, so it does catch allocations.",
+   "commits": [
+    "11cd4c1",
+    "85d78e2"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-5",
    "severity": "FIX",
    "finding": "README.md:14, the host's row does not say what kind of chip it is",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The host column says Zen 1 host, and the pitch names the part and why it is the headline's host.",
+   "commits": [
+    "11cd4c1",
+    "85d78e2"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-6",
    "severity": "FIX",
    "finding": "README.md:18, the largest figure on the page is in bold and then given no verdict",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The Mac's figure is in two plain sentences below the table, not in bold, the second saying why it has no verdict.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-7",
    "severity": "FIX",
    "finding": "README.md:21, the note on the Mac rows reads against the Mac timing above it, and the rest is about a checking script",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The note under the table says what generates the rows and what the two Mac rows count; the number gate is described under Check everything.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-8",
    "severity": "NOTE",
    "finding": "README.md:23, the date-format paragraph is above the fold",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The date paragraph is folded into that note as one clause naming the day's file.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-9",
    "severity": "FIX",
    "finding": "README.md:25, the three parse targets in one sentence",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The parser paragraph gives one target a sentence, each with its verdict.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-10",
    "severity": "FIX",
    "finding": "README.md:27, \"a run is registered\" is not understood",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The README says the prediction for that run is committed, in place of a run is registered.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-11",
    "severity": "NOTE",
    "finding": "README.md:35-41, the list of what is built reads as a list of defects",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "Each bullet of what is built says first what the part does.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-12",
    "severity": "NOTE",
    "finding": "README.md:123, the commits a bisect should skip have no place on a front page",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "The README's bisect text is one pointer to \"Commits a bisect should skip\" in docs/NOTES.md.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-13",
@@ -4758,17 +5166,18 @@
    "id": "r19-21",
    "severity": "FIX",
    "finding": "WRITEUP.md:38 and 161, DRAM fills are a floor, and the list gives the raw event code",
-   "outcome": "partly",
-   "detail": "Line 38 says what the event counts and that it is a floor; the generated list's line still gives the raw event code.",
+   "outcome": "fixed",
+   "detail": "Line 38 says what the event counts and that it is a floor, and the generated list gives no event code.",
    "commits": [
-    "8137eef"
+    "8137eef",
+    "11cd4c1"
    ],
    "tests": [],
    "faults": [],
    "notes": [
-    "WRITEUP after the acceptance gate"
-   ],
-   "waits_on": "a change to the pages and their gates"
+    "WRITEUP after the acceptance gate",
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-22",
@@ -4926,37 +5335,55 @@
    "id": "r19-32",
    "severity": "BLOCK",
    "finding": "WRITEUP.md:155-159 and 170, the generated list's shortened lines are unreadable",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
-   "tests": [],
-   "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "outcome": "fixed",
+   "detail": "Each line of the generated list gives one figure against its bar with the gap in words, then the deciding or worst row and how many more RESULTS.md has; none is cut short, and the gate writeup-missed-list refuses an ellipsis and holds the list to 800 words.",
+   "commits": [
+    "11cd4c1"
+   ],
+   "tests": [
+    "test_writeup_missed_list"
+   ],
+   "faults": [
+    "gates-writeup-missed-list-ellipsis",
+    "gates-writeup-missed-list-word-cap",
+    "gates-writeup-missed-list-ellipsis-unread",
+    "readme-writeup-list-ellipsis-restored"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-33",
    "severity": "FIX",
    "finding": "WRITEUP.md:156 and 159, T-LAT-2 and T-LAT-5 give the same figure and read as duplicates; whose reference day",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
+   "outcome": "fixed",
+   "detail": "T-LAT-2's line names its bar's source, nasdaq-feed-handler under WSL2, and T-LAT-5's says it is PitchFork's published tail; no reference day is named.",
+   "commits": [
+    "11cd4c1"
+   ],
    "tests": [],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-34",
    "severity": "FIX",
    "finding": "WRITEUP.md:173 and 175, \"UNCONFIRMED\" and \"every try withdrawn or stopped\" are process words",
-   "outcome": "open",
-   "detail": "",
-   "commits": [],
-   "tests": [],
+   "outcome": "fixed",
+   "detail": "The list says neither UNCONFIRMED nor that every try was withdrawn or stopped, and the gate writeup-missed-list refuses UNCONFIRMED.",
+   "commits": [
+    "11cd4c1"
+   ],
+   "tests": [
+    "test_writeup_missed_list"
+   ],
    "faults": [],
-   "notes": [],
-   "waits_on": "a change to the pages and their gates"
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
   },
   {
    "id": "r19-35",
@@ -4972,6 +5399,977 @@
    "notes": [
     "WRITEUP after the acceptance gate"
    ]
+  },
+  {
+   "id": "r20-1",
+   "severity": "FIX",
+   "finding": "README.md:6, why the headline's host is an embedded part is not said",
+   "outcome": "fixed",
+   "detail": "The pitch says the part is a Zen 1 and that no larger-cache x86 host was available.",
+   "commits": [
+    "85d78e2"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-2",
+   "severity": "FIX",
+   "finding": "README.md:7, the pitch's third bullet is a failure, and whether the targets were fair cannot be told",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, as the acceptance gate ruled: the bars are said before any gap, and the misses plainly.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r20-3",
+   "severity": "FIX",
+   "finding": "README.md:10 and 12-16, the target ids in the headline mean nothing to a reader",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, as the acceptance gate ruled: an id may follow its gloss, and each does.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r20-4",
+   "severity": "FIX",
+   "finding": "README.md:13, why the reference book's allocations matter is not said",
+   "outcome": "fixed",
+   "detail": "The row says the counter sees 324,511,069 in the second, simple book, so it does catch allocations.",
+   "commits": [
+    "85d78e2"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-5",
+   "severity": "FIX",
+   "finding": "README.md:5, \"independent\" reads as third-party, where the reference book is the author's own",
+   "outcome": "fixed",
+   "detail": "The pitch and the headline call it a second, simple book sharing no code with the fast one.",
+   "commits": [
+    "85d78e2"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-6",
+   "severity": "NOTE",
+   "finding": "README.md:14, the bar comes from another machine, and the host has two names",
+   "outcome": "no change needed",
+   "detail": "Kept, as the acceptance gate ruled: the pitch introduces the host once by its model, with Zen 1, and the table uses Zen 1 host as that name; the bar's cell names the machine the bar was set on.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r20-7",
+   "severity": "NOTE",
+   "finding": "README.md:15, \"aged heap\" is jargon, and the gap has no unit",
+   "outcome": "fixed",
+   "detail": "The row says the aged heap was fragmented on purpose first, and gives the gap as the ratio's shortfall.",
+   "commits": [
+    "85d78e2"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-8",
+   "severity": "NOTE",
+   "finding": "README.md:16, an engine event and a message are not told apart",
+   "outcome": "fixed",
+   "detail": "The row says an engine event is a message, or a delivery, arrival, report or wake it causes.",
+   "commits": [
+    "85d78e2"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-9",
+   "severity": "NOTE",
+   "finding": "README.md:6, the link texts are raw paths, so the day's file name reads as noise",
+   "outcome": "no change needed",
+   "detail": "Kept: each link's text is its file's path, so a reader finds the file in the tree.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r20-10",
+   "severity": "NOTE",
+   "finding": "README.md, the heading \"The headline's command\" is odd",
+   "outcome": "fixed",
+   "detail": "The section is headed Rerunning the headline's book benchmark.",
+   "commits": [
+    "85d78e2"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-11",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:1 and 3, L3 means the book's depth and the cache within two lines",
+   "outcome": "fixed",
+   "detail": "The title says a full-depth order book, and the opening says L3 cache.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-12",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:3, a first touch of an old order is not explained",
+   "outcome": "fixed",
+   "detail": "The opening says the fills left come from messages naming orders over a second old, whose lines the small shared L3 cache no longer holds.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-13",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:38-47, more than half of each instruction figure is the counter reads, which makes the instruction counts look closer than they are",
+   "outcome": "fixed",
+   "detail": "The table's introduction says the counter reads are more than half of each instruction figure, and the text after it that the ratios are wider than the column shows.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-14",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:161 against 42, T-PERF-1's 2.002 a message beside the table's 1.972 for the same design",
+   "outcome": "fixed",
+   "detail": "The list says T-PERF-1's 2.002 is per book message, and the prose says which pass each fill count is over.",
+   "commits": [
+    "53ea676",
+    "85d78e2"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate",
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-15",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:49, the sentence on itch-book's ratio is read twice",
+   "outcome": "fixed",
+   "detail": "The sentence says only what T-DESIGN-1 asks for; its clause on a slower machine is dropped, and BENCHMARKS.md's entry keeps it.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-16",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:51, the hash and chaining result has no number and no link",
+   "outcome": "fixed",
+   "detail": "The paragraph gives the identity hash's, chaining's and the paged index's rates, with their results file.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-17",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:59, the three pools undefined, 1.128 of nothing named, and an unpublished run's claim",
+   "outcome": "fixed",
+   "detail": "Each pool is defined, mimalloc's 1.128 is times glibc malloc's throughput, and the unpublished run is said to be described in docs/NOTES.md, with the fault cause open.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-18",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:63, a prefetch paragraph under a heading on branches",
+   "outcome": "fixed",
+   "detail": "The heading is Prefetching and SIMD.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-19",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:63-65, a Mac timing decides the default although a Mac timing is context",
+   "outcome": "fixed",
+   "detail": "The page gives the rule, chosen before either run, that the look-ahead is the default only if both hosts gain; it is off, and a Zen 1 deployment would turn it on.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-20",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:38, 53 and 63, four decimals on counts per message",
+   "outcome": "no change needed",
+   "detail": "Kept: the number gate holds each figure as its results file gives it.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r20-21",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:67, the SIMD win and loss have no figure and no link",
+   "outcome": "no change needed",
+   "detail": "Kept: the paragraph holds its one link, and docs/DETAILS.md gives the figures.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r20-22",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:71, the Zen 5 is not tied to the Ryzen 7 9700X, and the miss would read better as a ratio",
+   "outcome": "known limit",
+   "detail": "The page says the Ryzen 7 9700X, a Zen 5. The miss stays in messages per second, since no results file gives it as a ratio.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate",
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-23",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:83, the ratios beside each arm are read twice, and Frasch's talk is named only later",
+   "outcome": "fixed",
+   "detail": "The sentence names Frasch's CppCon talk where its figures are given.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-24",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:85, the due time is not explained",
+   "outcome": "fixed",
+   "detail": "The page says the due time is when the replay's schedule says an item should be sent.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-25",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:87, the count of pushes that found the ring full has no context",
+   "outcome": "fixed",
+   "detail": "The page says each try was counted.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-26",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:91, the UDP result is over loopback, and what that leaves out is not said",
+   "outcome": "fixed",
+   "detail": "The page says no network card or wire is in the path.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-27",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:97, a Mac verdict on T-BT-3 against the rule that a Mac run gets none",
+   "outcome": "fixed",
+   "detail": "The page gives the rule once, where it first calls a Mac timing context: no verdict unless the target's bar was published on a Mac. T-BT-3's was, so on the Mac it is met, and with the Zen 1 host's miss the summary gives it missed.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-28",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:105, \"store\" is undefined, and the proof is a large claim on a link",
+   "outcome": "fixed",
+   "detail": "The page says the oracle checks each level or order slot the fast book wrote; the proof stays in docs/NOTES.md, linked.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-29",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:111, whose count 8,579 is, and this book's count is not put in carteret's unit",
+   "outcome": "fixed",
+   "detail": "The page says that in carteret's unit this book also counts 8,580, and 8,579 if a crossed replace, which carteret counts twice, counts once.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-30",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:136, the 4 ms maximum is left untraced",
+   "outcome": "known limit",
+   "detail": "Not traced, and the page says so; no measurement was made for it this round.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-31",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:141, the paged index's fallback to its hash is first named in a question",
+   "outcome": "fixed",
+   "detail": "The paged index's definition says it has a counted fallback hash for a reference it cannot page.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-32",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:133, a clock in kHz, and whether it was measured during the run",
+   "outcome": "fixed",
+   "detail": "The page says it is the clock the kernel reported just before the run.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-33",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:142, an internal function's name",
+   "outcome": "fixed",
+   "detail": "The name is gone, and the answer is in docs/DETAILS.md.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-34",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:148, \"held\" for T-TRADE-4 is not understood",
+   "outcome": "fixed",
+   "detail": "The page says the target is held back and not run.",
+   "commits": [
+    "53ea676"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-35",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:151, the list's opening sentence is read twice",
+   "outcome": "fixed",
+   "detail": "The list opens: on the Zen 1 host, messages naming an order a second old or more make most DRAM fills.",
+   "commits": [
+    "85d78e2",
+    "0dd35bf"
+   ],
+   "tests": [],
+   "faults": [
+    "readme-writeup-list-fills-unnamed"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r20-36",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:165, a date in words on a page that names days by their file",
+   "outcome": "no change needed",
+   "detail": "Kept, as the acceptance gate ruled: the list writes that date in words, not in the files' format; the eight-digit strings elsewhere are file names.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r20-37",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:123, docs/NOTES.md is named and not linked",
+   "outcome": "no change needed",
+   "detail": "Kept: the fault matrix's paragraph stands alone and already holds its one link.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-1",
+   "severity": "FIX",
+   "finding": "README.md:5, divergences from a second, simple book, and what shares no code with what, read twice",
+   "outcome": "no change needed",
+   "detail": "Kept: it was worded so for the second reader, who took an independent reference book for a third party's (r20-5), and the figure stays first, as the acceptance gate ruled.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-2",
+   "severity": "FIX",
+   "finding": "README.md:6, an embedded part and a parenthesis that reads as an apology in the first bullet",
+   "outcome": "no change needed",
+   "detail": "Kept: the second reader asked why the headline's host is an embedded part (r20-1), and the parenthesis is the answer.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-3",
+   "severity": "FIX",
+   "finding": "README.md:7, the third pitch bullet is a failure",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, as the acceptance gate ruled.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-4",
+   "severity": "FIX",
+   "finding": "README.md:6 against 14, a bullet labelled Fast whose figure the table marks missed",
+   "outcome": "fixed",
+   "detail": "The bullet is labelled Speed.",
+   "commits": [
+    "cd0abfe"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-5",
+   "severity": "NOTE",
+   "finding": "README.md:10-16, the target ids in the table mean nothing to a reader",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, as the acceptance gate ruled: an id may follow its gloss, and each does.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-6",
+   "severity": "NOTE",
+   "finding": "README.md:13, why the second book's allocations matter is too much for a table cell",
+   "outcome": "no change needed",
+   "detail": "Kept: it was added for the second reader (r20-4), and it is the results file's own account.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-7",
+   "severity": "NOTE",
+   "finding": "README.md:15, the gaps between ratios and the aged heap's gloss are dense",
+   "outcome": "no change needed",
+   "detail": "The cell's density is left, as it was written for the second reader (r20-7); its gloss of the aged heap is corrected for r18-40.",
+   "commits": [
+    "cbc63d2"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-8",
+   "severity": "FIX",
+   "finding": "README.md:16, an engine event is not understood, and the cell gives two rates",
+   "outcome": "no change needed",
+   "detail": "Kept: it was added for the second reader (r20-8), and it is the results file's own account.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-9",
+   "severity": "NOTE",
+   "finding": "README.md:14, the bar and the measurement are on different machines",
+   "outcome": "no change needed",
+   "detail": "Kept, as for r20-6: the pitch introduces the host once by its model, and the bar's cell names the machine the bar was set on.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-10",
+   "severity": "FIX",
+   "finding": "README.md:33-36, even the list of what is built reports failures",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, as the acceptance gate ruled: the misses are said plainly.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-11",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:3, fills per message used before they are defined, and most fills left is ambiguous",
+   "outcome": "no change needed",
+   "detail": "Left: this was the last pass over the prose, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-12",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:3 and 49, speed is said to follow DRAM fills, where the linked pair breaks it",
+   "outcome": "fixed",
+   "detail": "The opening says speed falls as fills rise from the fastest design to the slowest except between the two linked-level designs, and a paragraph gives the linked pair, with why not measured.",
+   "commits": [
+    "8bfcc8d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-13",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:38, the instruction column is mostly the counter reads, and net figures are not given",
+   "outcome": "no change needed",
+   "detail": "Kept: the column gives the results files' own figures, and the page says every row includes the same counter reads; net figures would be arithmetic outside any results file.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-14",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:49, the sentence on the counter reads is read three times",
+   "outcome": "fixed",
+   "detail": "The page says once that every row includes the same counter reads, and that taking them off would leave each difference as it is and make each ratio larger.",
+   "commits": [
+    "8bfcc8d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-15",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:36, the sentence on the two counting passes is bookkeeping",
+   "outcome": "fixed",
+   "detail": "The sentence moved to docs/DETAILS.md, which reconciles 1.972 and 2.002.",
+   "commits": [
+    "8bfcc8d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-16",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:13, no TLB counter is said to follow from user-space profiles, which it does not",
+   "outcome": "fixed",
+   "detail": "The page says no TLB counter was read, with no cause given.",
+   "commits": [
+    "8bfcc8d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-17",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:36, the misses cannot overlap is overstated across messages",
+   "outcome": "fixed",
+   "detail": "The page says they cannot overlap within a message.",
+   "commits": [
+    "8bfcc8d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-18",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:49, whether itch-book's naive book is the same baseline is not said",
+   "outcome": "no change needed",
+   "detail": "Left: this was the last pass over the prose, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-19",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:53, three rates for one design and the spread between them, and the identity hash undefined",
+   "outcome": "fixed",
+   "detail": "The page says the table, the layout run and the prefetch run are separate runs, the table's with the day in memory and the other two with it mapped, that comparisons are made within one run, and that why the rates differ was not measured. The name identity hash is left with the other wording notes.",
+   "commits": [
+    "8bfcc8d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-20",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:67, a fall in demand fills under the look-ahead is partly the counter, not the memory",
+   "outcome": "fixed",
+   "detail": "The page says the counter counts only fills the core waited for, so the fall is in those waits, not in memory traffic, which was not counted, and the gain is far smaller than the fall.",
+   "commits": [
+    "8bfcc8d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-21",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:71, a Mac veto is the wrong rule for the default, and the look-ahead's latency cost is not said",
+   "outcome": "fixed",
+   "detail": "The sentence gives the rule with no person as its subject; the rule itself stands, since it was fixed before either run, and the page says so.",
+   "commits": [
+    "8bfcc8d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-22",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:73, the SIMD win gives no number",
+   "outcome": "no change needed",
+   "detail": "Left: this was the last pass over the prose, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-23",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:77, whether T-PARSE-2 runs itch-book's code or this project's on its types",
+   "outcome": "no change needed",
+   "detail": "Left: this was the last pass over the prose, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-24",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:79, the T-PARSE-3 paragraph describes a run that has not happened",
+   "outcome": "no change needed",
+   "detail": "Kept, as the acceptance gate ruled: it says which condition is to be checked until that run is published, and changes then.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-25",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:87 and 89, an odd label, and two ratios for the cached index that read as a contradiction",
+   "outcome": "no change needed",
+   "detail": "Left: this was the last pass over the prose, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-26",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:93, the count of pushes that found the ring full has no context",
+   "outcome": "no change needed",
+   "detail": "Left: this was the last pass over the prose, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-27",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:97, loopback only, io_uring has no figure, and S4 is unexplained in the README",
+   "outcome": "no change needed",
+   "detail": "Left: this was the last pass over the prose, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-28",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:103, the T-BT-3 sentence is ledger reconciliation",
+   "outcome": "no change needed",
+   "detail": "Kept: it answers the second reader's contradiction between a Mac verdict and the rule that a Mac run gets none (r20-27).",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-29",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:105, the symbol, not the chip maker reads as wrong",
+   "outcome": "fixed",
+   "detail": "The page says it trades the stock with the ticker AMD, which has nothing to do with the host's CPU.",
+   "commits": [
+    "8bfcc8d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-30",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:111, the oracle is used without introduction",
+   "outcome": "no change needed",
+   "detail": "Left: this was the last pass over the prose, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-31",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:131-133, the final review: of what, by whom",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, as the acceptance gate ruled: the paragraph is one sentence.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-32",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:141, the maximum of about 4 ms recurs in every repetition, and the page does not notice",
+   "outcome": "fixed",
+   "detail": "The page gives the maximum's range and its CV of 0.21%, says it recurs and is not noise, and that what it waits on was not traced.",
+   "commits": [
+    "8bfcc8d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-33",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:143, the fallback count is cheap to get",
+   "outcome": "known limit",
+   "detail": "Not measured, and the page says so; no measurement was made for it this round.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r21-34",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:160, the map book also runs more instructions",
+   "outcome": "no change needed",
+   "detail": "Kept: one line a target, as the acceptance gate ruled, and each line names its host.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-35",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:161, DRAM fills set beside a bar from a host with eight times the L3",
+   "outcome": "no change needed",
+   "detail": "Kept: one line a target, as the acceptance gate ruled; the bar is another project's published figure, and its line names the host.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r21-36",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:174, Chrome for Testing against Chrome is a technicality",
+   "outcome": "no change needed",
+   "detail": "Kept: one line a target, as the acceptance gate ruled, and the line says why it has no verdict.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
   }
  ],
  "gate": {
@@ -5411,30 +6809,35 @@
     "label": "21",
     "severity": "NOTE",
     "finding": "\"Compared after every message\" is broader than what is compared after each message",
-    "outcome": "open",
-    "detail": "a08c91c said what is compared after each message and that the whole book is hashed every 1,000,000 messages; the one-line list of 5173e5a says again that the oracle checks the book after every message (README.md:34 at bc6ea2c). WRITEUP and docs/DETAILS.md say what is compared.",
+    "outcome": "fixed",
+    "detail": "The README's oracle bullet says the oracle compares what each message can change with the second book, and the whole book by hash every million messages; WRITEUP and docs/DETAILS.md say what is compared.",
     "commits": [
-     "a08c91c"
+     "a08c91c",
+     "34868db",
+     "85d78e2"
     ],
     "tests": [],
     "faults": [],
-    "notes": [],
-    "waits_on": "a change to the pages and their gates"
+    "notes": [
+     "The pages after the acceptance gate"
+    ]
    },
    {
     "checker": "reader",
     "label": "22",
     "severity": "NOTE",
     "finding": "\"No abort reachable from wire content\" claims what a proof would show, from a design and fuzz runs",
-    "outcome": "open",
-    "detail": "a08c91c said the parser is designed so that no wire content can abort it; the one-line list of 5173e5a says again that no wire content can abort it (README.md:31 at bc6ea2c).",
+    "outcome": "fixed",
+    "detail": "The README's parser bullet says again that the parser is designed so that no wire content can abort it, fuzzed under ASan and UBSan, with the fuzz run linked.",
     "commits": [
-     "a08c91c"
+     "a08c91c",
+     "34868db"
     ],
     "tests": [],
     "faults": [],
-    "notes": [],
-    "waits_on": "a change to the pages and their gates"
+    "notes": [
+     "The pages after the acceptance gate"
+    ]
    },
    {
     "checker": "reader",
@@ -5491,12 +6894,18 @@
     "label": "26",
     "severity": "NOTE",
     "finding": "Prose tics: \"against\", \"a message\" for per message, the noun last",
-    "outcome": "open",
-    "detail": "No change was made for it as such; WRITEUP.md was rewritten, and whether the tics are gone has not been checked.",
-    "commits": [],
+    "outcome": "fixed",
+    "detail": "WRITEUP's prose says \"vs\" where a figure is set beside a bar or another figure and \"per\" in rates, and the generated list was written again, one figure against its bar a line with the gap in words.",
+    "commits": [
+     "07b2188",
+     "11cd4c1"
+    ],
     "tests": [],
     "faults": [],
-    "notes": []
+    "notes": [
+     "WRITEUP after the acceptance gate",
+     "The pages after the acceptance gate"
+    ]
    },
    {
     "checker": "reader",
