@@ -59,6 +59,30 @@ class ResultsTable(unittest.TestCase):
         self.assertEqual(text.count(old), 1, old)
         path.write_text(text.replace(old, new), encoding="utf-8")
 
+    def unpublish_bar_day(self):
+        """The copy as it stood before T-PARSE-3's bar's day had its file: that file gone, and
+        the run-log rows of its prediction, which publishing it added. Both states of the pages
+        are held so: the real one, and this one."""
+        path = self.root / "results" / results_table.PARSE_BAR_DAY
+        if not path.is_file():
+            return
+        prediction = results_table.header_field(path.read_text(encoding="utf-8"), "prediction",
+                                                results_table.PARSE_BAR_DAY)
+        path.unlink()
+        log = self.root / "results" / "run_log.md"
+        lines = log.read_text(encoding="utf-8").splitlines(keepends=True)
+        log.write_text("".join(line for line in lines if not line.startswith("| ")
+                               or line.split(" | ")[1] != prediction), encoding="utf-8")
+
+    def bar_day_verdict(self):
+        """T-PARSE-3's verdict word on its bar's day, read from that day's file, or None."""
+        path = self.root / "results" / results_table.PARSE_BAR_DAY
+        if not path.is_file():
+            return None
+        cells = results_table.one_target_row("T-PARSE-3", results_table.PARSE_BAR_DAY,
+                                             path.read_text(encoding="utf-8"))
+        return results_table.verdict_word(cells["Verdict"])
+
     def row(self, check, day):
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
@@ -215,13 +239,23 @@ class ResultsTable(unittest.TestCase):
                       "debian: 1 missed; macOS: 1 met |", summary)
         self.assertIn("| T-INV-2 | the book is never crossed | **missed** | macOS: 9 FAIL, 1 PASS |",
                       summary)
-        self.assertIn("| T-PARSE-3 | strict decode of every field | no verdict | debian: 1 above "
-                      "the bar on another day |", summary)
+        # T-PARSE-3 as its bar's day's file judges it, beside the other day's figure.
+        word = self.bar_day_verdict()
+        if word is not None:
+            shown = "met" if word == "met" else "**missed**"
+            self.assertIn(f"| T-PARSE-3 | strict decode of every field | {shown} | debian: 1 "
+                          f"{word}, 1 above the bar on another day |", summary)
         self.assertIn("| T-BOOK-3 | book memory | met |", summary)
         _, targets = results_table.benchmark_targets(self.root)
         rows = [line.split(" | ")[0][2:] for line in summary.splitlines()
                 if line.startswith("| ") and not line.startswith(("| Target |", "|---"))]
         self.assertEqual(rows, targets)
+        # Before its bar's day had a file: no verdict, the other day's figure alone.
+        self.unpublish_bar_day()
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        self.assertIn("| T-PARSE-3 | strict decode of every field | no verdict | debian: 1 above "
+                      "the bar on another day |", output.split("RESULTS.md:\n")[1])
         self.edit("BENCHMARKS.md", "### T-PARSE-2:", "### T-PARSE-9: a target with no row\n"
                   "- **Target:** none.\n\n### T-PARSE-2:")
         code, output = self.run_table()
@@ -873,7 +907,17 @@ class ResultsTable(unittest.TestCase):
                          "core 4 | 298,983,253 | 295,511,473 | 305,215,684 | 0.95% | 9.180 | ≥ 709 "
                          "M msg/s and 21.8 GB/s | **missed**: 410.02 M msg/s and 12.62 GB/s under "
                          f"the bar | `6d53ed4cf1e2` | [{PARSE}]({PARSE}) |")
-        # T-PARSE-3's bar is another day's: no verdict word, what was seen and what was not.
+        # T-PARSE-3's bar is another day's: no verdict word, what was seen, and where the bar's
+        # day is judged once it has a file, or that it was not measured before.
+        if self.bar_day_verdict() is not None:
+            self.assertIn("| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | above the bar on "
+                          "12302019, a day other than the bar's; judged on 10302019, in "
+                          "results/parse_rate_debian_10302019.md |", rows[2])
+        self.unpublish_bar_day()
+        code, output = self.run_table()
+        self.assertEqual(code, 0, output)
+        rows = [line for line in tables_of(output).splitlines()
+                if f"]({PARSE})" in line and line.startswith("| ")]
         self.assertIn("| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | above the bar on 12302019, "
                       "a day other than the bar's; not measured on 10302019 |", rows[2])
         self.edit(PARSE, "| T-PARSE-2, itch-book's decode of its ten types, GB/s |", "| x |")
@@ -894,6 +938,8 @@ class MissedTargets(unittest.TestCase):
     setUp = ResultsTable.setUp
     run_table = ResultsTable.run_table
     edit = ResultsTable.edit
+    unpublish_bar_day = ResultsTable.unpublish_bar_day
+    bar_day_verdict = ResultsTable.bar_day_verdict
 
     def missed(self):
         """RESULTS.md's table of every target missed or not measured, each row in full."""
@@ -935,7 +981,11 @@ class MissedTargets(unittest.TestCase):
 
     def test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file(self):
         # Rule: until 10302019 has a file, its row and RESULTS.md's line say the day is not
-        # measured and a run is registered; then they follow the file, met or missed.
+        # measured and a run is registered; then they follow the file, met or missed. On the
+        # real tree, whichever state it is in, no generated line says an unmeasured day that has
+        # a file; the rest is held from the state before the file, then with test files.
+        self.assertEqual(self.unrun_words(), [])
+        self.unpublish_bar_day()
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
         # The day is named wherever "that day" could be read as the day measured (r18-13).
@@ -1112,6 +1162,11 @@ class MissedTargets(unittest.TestCase):
                       "was never measured", output)
 
     def test_the_parse_targets_are_measured_rows_from_their_file(self):
+        # With its bar's day's file, T-PARSE-3 is in the table only if that file misses it.
+        word = self.bar_day_verdict()
+        if word is not None:
+            self.assertEqual("| T-PARSE-3 |" in self.missed(), word != "met", word)
+        self.unpublish_bar_day()
         table = self.missed()
         self.assertIn("| T-PARSE-1 | ≥ 709 M msg/s and 21.8 GB/s | 298.98 M msg/s, 9.180 GB/s, the "
                       "median | 410.02 M msg/s and 12.62 GB/s under the bar | debian |", table)
@@ -1150,12 +1205,18 @@ class MissedTargets(unittest.TestCase):
                               "missed", output)
 
     def test_a_parse_target_whose_bar_names_no_other_day_is_refused(self):
-        self.edit(PARSE, "| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 |",
-                  "| ≥ 93.9 M msg/s and 2.89 GB/s |")
-        code, output = self.run_table("--check")
-        self.assertEqual(code, 1, output)
-        self.assertIn(f"{PARSE}: T-PARSE-3's bar is '≥ 93.9 M msg/s and 2.89 GB/s', not one set "
-                      "on another day than 12302019", output)
+        # In both states of the bar's day: with its file, and as before it.
+        for unpublished in (False, True):
+            with self.subTest(unpublished=unpublished):
+                self.setUp()
+                if unpublished:
+                    self.unpublish_bar_day()
+                self.edit(PARSE, "| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 |",
+                          "| ≥ 93.9 M msg/s and 2.89 GB/s |")
+                code, output = self.run_table("--check")
+                self.assertEqual(code, 1, output)
+                self.assertIn(f"{PARSE}: T-PARSE-3's bar is '≥ 93.9 M msg/s and 2.89 GB/s', not "
+                              "one set on another day than 12302019", output)
 
     def test_a_parse_miss_whose_file_calls_it_met_is_refused(self):
         self.edit(PARSE, "| missed: 58.03 M msg/s and 1.77 GB/s under the bar |", "| met |")

@@ -3363,6 +3363,28 @@
         "signature": "(FAIL|ERROR): test_the_writeup_table_has_one_short_line_a_target",
         "exit": 1
       }
+    },
+    {
+      "id": "readme-parse-bar-unnamed-day-read-once-published",
+      "breaks": "Once T-PARSE-3's bar's day has its file, results_table.py takes a parse row whose bar names no day but whose verdict says the figure is on a day other than the bar's",
+      "check": "test_results_table.py test_a_parse_target_whose_bar_names_no_other_day_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if bar_day is None and \"a day other than the bar's\" in cells[\"Verdict\"]:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_a_parse_target_whose_bar_names_no_other_day_is_refused"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_a_parse_target_whose_bar_names_no_other_day_is_refused",
+        "exit": 1
+      }
     }
   ]
 }

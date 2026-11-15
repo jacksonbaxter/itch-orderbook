@@ -1295,6 +1295,10 @@ def other_day_words(target, name, cells):
     refused, with or without words after it."""
     day = day_of(name)
     bar_day = re.search(r", on (\d{8})$", cells["Bar"])
+    if bar_day is None and "a day other than the bar's" in cells["Verdict"]:
+        raise TableError(f"results/{name}: {target}'s bar is {cells['Bar']!r}, not one set on "
+                         f"another day than {day}, though the file says its figure is on a day "
+                         "other than the bar's")
     if bar_day is None or bar_day[1] == day:
         return None
     verdict = cells["Verdict"]
