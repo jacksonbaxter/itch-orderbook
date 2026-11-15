@@ -9,9 +9,9 @@ One row a target of [BENCHMARKS.md](BENCHMARKS.md), in its order. A target's one
 
 | Target | What it asks | Verdict | The rows below |
 |---|---|---|---|
-| T-PARSE-1 | framing walk | **missed** | debian: 1 missed |
-| T-PARSE-2 | decode of the book-affecting types | **missed** | debian: 1 missed |
-| T-PARSE-3 | strict decode of every field | no verdict | debian: 1 above the bar on another day |
+| T-PARSE-1 | framing walk | **missed** | debian: 1 under the bar on 10302019 by 411.72 M msg/s and 12.66 GB/s, a day other than the bar's, 1 missed |
+| T-PARSE-2 | decode of the book-affecting types | **missed** | debian: 1 under the bar on 10302019 by 60.41 M msg/s and 1.84 GB/s, a day other than the bar's, 1 missed |
+| T-PARSE-3 | strict decode of every field | met | debian: 1 met, 1 above the bar on another day |
 | T-BOOK-1 | true L3 rebuild, all symbols | **missed** | debian: 12 not measured in this run, 4 missed; macOS: 6 not measured in this run, 4 host differs |
 | T-BOOK-2 | L3 rebuild with BBO tracking through mmap | **missed** | debian: 8 missed, 8 not measured in this run; macOS: 4 host differs, 6 not measured in this run |
 | T-BOOK-3 | book memory | met | debian: 14 met, 2 not measured in this run; macOS: 8 met, 2 not measured in this run |
@@ -488,15 +488,18 @@ Book targets. Every target of every book design's results file, from the file's 
 
 The parse rate. Each row is one pass of a parse-rate file over the whole day held in memory on one pinned thread: its rate over every framed message, and its GB a second over the file's bytes, length prefixes included, as both sources count; the verdict is on the median. A bar set on a day other than the file's gets no verdict, met or missed: the row says whether the median is above or under the bar on the day measured, and where the bar's own day is judged, or that it was not measured. No parse rate was timed on the Mac: the three bars are set on x86 Linux, which gives a macOS figure no verdict.
 
-T-PARSE-3's bar is set on 10302019. It has not been measured on 10302019 yet; the prediction for that run is committed (docs/NOTES.md, "The parse rate on `debian`").
+T-PARSE-3 is judged on its bar's own day, 10302019, in [results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md), whose input condition is the bench's own copy of the day, every page of it checked before and after each timed pass (its Input condition section); every other file's is the file in the page cache.
 
-One input condition is used. On [results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md) the machine check found every page of the file in the page cache before the first process ran. The bench's own copy of the day is the input condition the prediction for 10302019 commits, and no run has used it yet.
+Two input conditions are used. On [results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md) the condition is the bench's own copy of the day: every page of it found in memory before and after each timed pass, in every process (its Input condition section), the file's cached pages recorded, not required. On [results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md) the machine check found every page of the file in the page cache before the first process ran.
 
 | Target | Pass | Day | Host | Pinning | Median messages/s | Min | Max | CV | Median GB/s | Bar | Verdict | Commit | File |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| T-PARSE-1 | the framing walk | 10302019 | debian | pinned to core 4 | 297,280,462 | 291,420,371 | 300,183,957 | 0.72% | 9.136 | ≥ 709 M msg/s and 21.8 GB/s, on 12302019 | under the bar on 10302019 by 411.72 M msg/s and 12.66 GB/s, a day other than the bar's; judged on 12302019, in results/parse_rate_debian_12302019.md | `6e834b3e76e7` | [results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md) |
+| T-PARSE-2 | itch-book's decode of its ten types | 10302019 | debian | pinned to core 4 | 138,591,069 | 127,381,657 | 140,823,207 | 3.08% | 4.259 | ≥ 199 M msg/s and 6.1 GB/s, on 12302019 | under the bar on 10302019 by 60.41 M msg/s and 1.84 GB/s, a day other than the bar's; judged on 12302019, in results/parse_rate_debian_12302019.md | `6e834b3e76e7` | [results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md) |
+| T-PARSE-3 | the strict decode of every field | 10302019 | debian | pinned to core 4 | 115,759,835 | 100,002,653 | 116,635,267 | 4.95% | 3.558 | ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | met | `6e834b3e76e7` | [results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md) |
 | T-PARSE-1 | the framing walk | 12302019 | debian | pinned to core 4 | 298,983,253 | 295,511,473 | 305,215,684 | 0.95% | 9.180 | ≥ 709 M msg/s and 21.8 GB/s | **missed**: 410.02 M msg/s and 12.62 GB/s under the bar | `6d53ed4cf1e2` | [results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md) |
 | T-PARSE-2 | itch-book's decode of its ten types | 12302019 | debian | pinned to core 4 | 140,969,135 | 138,694,490 | 141,829,341 | 0.68% | 4.328 | ≥ 199 M msg/s and 6.1 GB/s | **missed**: 58.03 M msg/s and 1.77 GB/s under the bar | `6d53ed4cf1e2` | [results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md) |
-| T-PARSE-3 | the strict decode of every field | 12302019 | debian | pinned to core 4 | 117,739,800 | 114,954,376 | 118,025,901 | 0.88% | 3.615 | ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | above the bar on 12302019, a day other than the bar's; not measured on 10302019 | `6d53ed4cf1e2` | [results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md) |
+| T-PARSE-3 | the strict decode of every field | 12302019 | debian | pinned to core 4 | 117,739,800 | 114,954,376 | 118,025,901 | 0.88% | 3.615 | ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | above the bar on 12302019, a day other than the bar's; judged on 10302019, in results/parse_rate_debian_10302019.md | `6d53ed4cf1e2` | [results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md) |
 
 The backtester. Each row is one workload's results file: T-BT-1 replays the whole day with a quoting strategy, T-BT-3 queuetruth's four symbols with its shadow orders. Each file says what one event is and what its rate is over, beside its source's. Each bar is in the unit BENCHMARKS.md gives it, T-BT-1's in events a second and T-BT-3's in ITCH messages a second, and the verdict compares the median in that unit, which the CV is of; the other rate is beside it, labelled.
 
@@ -1003,6 +1006,9 @@ Every benchmark run, failed ones included, from [results/run_log.md](results/run
 | `P-0029-20261113T180428Z` | `P-0029` | `6d53ed4cf1e2` | Linux | `refused at machine_check` | yes |
 | `P-0029-20261113T183529Z` | `P-0029` | `6d53ed4cf1e2` | Linux | `written, pending the load stamp` | no: `run_log.md:358` stands |
 | `P-0029-20261113T183529Z` | `P-0029` | `6d53ed4cf1e2` | Linux | `published` | yes |
+| `P-0031-20261115T043132Z` | `P-0031` | `6e834b3e76e7` | Linux | `withdrawn` | yes |
+| `P-0031-20261115T042938Z` | `P-0031` | `6e834b3e76e7` | Linux | `written, pending the load stamp` | no: `run_log.md:361` stands |
+| `P-0031-20261115T042938Z` | `P-0031` | `6e834b3e76e7` | Linux | `published` | yes |
 <!-- results table: end -->
 
 ## Every target missed or not measured
@@ -1032,7 +1038,6 @@ Each target missed or not measured, a row for each file, host, day or comparison
 | T-TRADE-5, 05302019 | exact, with no tolerance | 1 violation | each `E`'s price against the best, as ITCH prints prices: ELTK at 98700 with the best at 104200 | macOS | measured: one `E` on ELTK, as with RBZ on the day above; not established: why | [results/trades_05302019.md](results/trades_05302019.md) |
 | T-PARSE-1 | ≥ 709 M msg/s and 21.8 GB/s | 298.98 M msg/s, 9.180 GB/s, the median | 410.02 M msg/s and 12.62 GB/s under the bar | debian | measured: the median of the passes, where the bar is the best of three on a Zen 5 with DDR5; not established: how much of the gap is the host's, since bench_parse reads no counters | [results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md) |
 | T-PARSE-2 | ≥ 199 M msg/s and 6.1 GB/s | 140.97 M msg/s, 4.328 GB/s, the median | 58.03 M msg/s and 1.77 GB/s under the bar | debian | as T-PARSE-1 | [results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md) |
-| T-PARSE-3 | ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | 117.74 M msg/s, 3.615 GB/s, the median, on 12302019 | above the bar on 12302019, a day other than the bar's; not measured on 10302019 | debian | measured: the median on 12302019 only. Its bar is set on 10302019. It has not been measured on 10302019 yet; the prediction for that run is committed, with the day read into the bench's own memory, since on this host the file and a copy of it do not fit in memory together | [results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md) |
 | T-BT-3 | ≥ 4.61 M messages/s | 3.51 M messages/s | 1.10 M messages/s under the bar | debian | measured: the queue walk is a small share of a message's time, so it is not the cause; not established: the rest; the bar was set on a Mac, where it is met | [results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md) |
 | T-MM-2 | 1.49 at γ = 0.1, 1.35 at γ = 0.01, 3.02 at γ = 1 | 1.4918, 1.3490, 3.0317 | γ = 1: 3.03 at two decimals against 3.02 | macOS | measured: other time grids move it, and the file traces it to the simulation's time grid | [results/mm_as_tables.md](results/mm_as_tables.md) |
 | T-SPSC-1, boost rtt / project rtt | ≥ 1.16× | 1.15× | 1.15× against ≥ 1.16× | debian | not established: no counters were read on the queue runs | [results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md) |
