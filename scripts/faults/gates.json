@@ -1440,6 +1440,31 @@
         "signature": "(FAIL|ERROR): test_a_gate_that_exits_fails_and_the_gates_around_it_still_print",
         "exit": 1
       }
+    },
+    {
+      "id": "gates-readme-drops-the-browser-it-needs",
+      "breaks": "A rewrite of the README's Check everything section drops what the demo stage needs, so a reader without a headless browser is not told to set ITCH_BROWSER",
+      "check": "gates.py readme-build-names",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "The demo stage opens the page in a headless browser: set `ITCH_BROWSER` to a Chrome or Chromium binary, or pass `--without-browser` to run the rest of that stage, and the summary says so.",
+          "new": "The demo stage opens the page in a headless browser."
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}",
+        "--only",
+        "readme-build-names"
+      ],
+      "expect": {
+        "signature": "gates: FAIL readme-build-names README\\.md:1: its '## Check everything' section does not name ITCH_BROWSER",
+        "exit": 1
+      }
     }
   ]
 }

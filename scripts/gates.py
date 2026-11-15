@@ -905,6 +905,60 @@ def readme_built_bullets(root, files):
     return violations
 
 
+# The README's build section and its check section name what a reader needs to build and to
+# check (the acceptance gate's message, part 3), each in a form a script reads: the CMake
+# minimum as CMakeLists.txt's cmake_minimum_required gives it, the macOS libc++ setting, and
+# what scripts/check.sh's demo stage needs, ITCH_BROWSER or --without-browser. Each name must
+# also be in the file that reads it, so a renamed setting is caught on both sides. Not held
+# here: the compilers and versions tested, the data and memory sizes and the headline's
+# command, which no script reads reliably from the tree.
+README_BUILD_SECTION = "## Build and test"
+README_CHECK_SECTION = "## Check everything"
+README_BUILD_NAMES = (
+    ("ITCH_LIBCXX_DIR", "cmake/ItchOptions.cmake", README_BUILD_SECTION),
+    ("ITCH_BROWSER", "scripts/check.sh", README_CHECK_SECTION),
+    ("--without-browser", "scripts/check.sh", README_CHECK_SECTION),
+)
+CMAKE_MINIMUM = re.compile(r"^cmake_minimum_required\(VERSION (\d+\.\d+)", re.MULTILINE)
+
+
+def readme_section(text, heading):
+    """A README section's text, from its heading line to the next heading of its level."""
+    lines = text.splitlines()
+    if heading not in lines:
+        return None
+    start = lines.index(heading) + 1
+    end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
+    return "\n".join(lines[start:end])
+
+
+def readme_build_names(root, files):
+    violations = []
+    for path in files:
+        text = read_text(path) or ""
+        cmake = read_text(root / "CMakeLists.txt") if (root / "CMakeLists.txt").is_file() else ""
+        minimum = CMAKE_MINIMUM.search(cmake or "")
+        wanted = list(README_BUILD_NAMES)
+        if minimum is None:
+            violations.append((root / "CMakeLists.txt", 1, "no cmake_minimum_required(VERSION "
+                               "...) to hold the README's CMake minimum to"))
+        else:
+            wanted.append((f"CMake {minimum[1]}", "CMakeLists.txt", README_BUILD_SECTION))
+        for name, source, heading in wanted:
+            section = readme_section(text, heading)
+            if section is None:
+                violations.append((path, 1, f"no {heading!r} section, which must name {name}"))
+                continue
+            if name not in section:
+                violations.append((path, 1, f"its {heading!r} section does not name {name}, "
+                                            f"which {source} reads"))
+            source_text = read_text(root / source) if (root / source).is_file() else ""
+            if not name.startswith("CMake ") and name not in (source_text or ""):
+                violations.append((root / source, 1, f"no {name} here, and README.md is held "
+                                                     "to name it: update README_BUILD_NAMES"))
+    return violations
+
+
 # T-PARSE-3 on its bar's own day (r18-16): once results/parse_rate_debian_10302019.md exists,
 # no public page says, in a sentence or table row that names T-PARSE-3, the strict decode or
 # that day, that the day is not measured yet, that its run is registered or its prediction
@@ -1077,6 +1131,9 @@ def gates():
         Gate("readme-built-bullets", f"each bullet of the README's {README_BUILT!r} list has at "
              f"most {README_BULLET_CHARS} characters as rendered and at most "
              f"{README_BULLET_LINKS} link", readme_built_bullets, one_page(README_PAGE)),
+        Gate("readme-build-names", "the README's build and check sections name the CMake "
+             "minimum CMakeLists.txt sets, the macOS libc++ setting, ITCH_BROWSER and "
+             "--without-browser", readme_build_names, one_page(README_PAGE)),
     )
 
 
