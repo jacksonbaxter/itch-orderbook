@@ -106,7 +106,7 @@ Each pass ran on one pinned thread over 12302019 held in memory, and each rate i
 
 T-PARSE-1 is missed by 410.02 M msg/s and 12.62 GB/s, and T-PARSE-2 is missed by 58.03 M msg/s and 1.77 GB/s. Both bars are each the best of three passes; the best passes here of T-PARSE-1 and T-PARSE-2 are 305,215,684 and 141,829,341 messages/s, still far under ([results/parse_rate_debian_12302019.md](../results/parse_rate_debian_12302019.md)).
 
-T-PARSE-3's bar of 93.9 M msg/s and 2.89 GB/s was set by Lunary, a vendor of an ITCH parser written in Rust, on a cloud VM (a Google Cloud c3-standard-8 with a Xeon Platinum 8481C), over the day memory-mapped, as a median of 10 runs; here the day is read into memory before the clock starts. The two days differ little in bytes per message, 30.732 on 10302019 and 30.704 on 12302019, the day measured, and the results file gives each type's share on both ([results/parse_rate_debian_12302019.md](../results/parse_rate_debian_12302019.md)).
+T-PARSE-3's bar of 93.9 M msg/s and 2.89 GB/s was set by Lunary, a vendor of an ITCH parser written in Rust, on a cloud VM (a Google Cloud c3-standard-8 with a Xeon Platinum 8481C), over the day memory-mapped, as a median of 10 runs; here the day is read into memory before the clock starts. The two days differ little in bytes per message, 30.732 on 10302019 and 30.704 on 12302019, and the results file gives each type's share on both ([results/parse_rate_debian_12302019.md](../results/parse_rate_debian_12302019.md)).
 
 ## Beyond the book
 

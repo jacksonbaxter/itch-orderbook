@@ -76,9 +76,9 @@ SIMD wins a field decode and loses the whole parse, where scalar takes 35.099 cy
 
 ## The parse rate
 
-Timed alone on the Zen 1 host over 12302019 in memory ([results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md)), the framing walk, T-PARSE-1, ran a median of 298,983,253 messages/s and is missed by 410.02 M msg/s; T-PARSE-2, itch-book's decode of the ten book-affecting types, ran a median of 140,969,135 messages/s and is missed by 58.03 M msg/s. Both bars were set on the Ryzen 7 9700X, a Zen 5. T-PARSE-3, the strict decode of every field, ran a median of 117,739,800 messages/s, above its bar of 93.9 M msg/s, which is set on another day, so on 12302019 T-PARSE-3 has no verdict.
+Timed alone on the Zen 1 host over 12302019 in memory ([results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md)), the framing walk, T-PARSE-1, ran a median of 298,983,253 messages/s and is missed by 410.02 M msg/s; T-PARSE-2, itch-book's decode of the ten book-affecting types, ran a median of 140,969,135 messages/s and is missed by 58.03 M msg/s. Both bars were set on the Ryzen 7 9700X, a Zen 5. T-PARSE-3, the strict decode of every field, ran a median of 117,739,800 messages/s that day, above its bar of 93.9 M msg/s, which is set on another day and judged there.
 
-T-PARSE-3's own day is 10302019, and it has not been measured on that day yet; the prediction for that run is committed: on the Zen 1 host the file in the page cache and the bench's copy of it do not fit in memory together, so the run reads the day into the bench's own memory and checks every page of that copy before and after each timed pass ([results/predictions.md](results/predictions.md)).
+On its bar's day, 10302019, T-PARSE-3 is met, at 115.76 M msg/s and 3.558 GB/s, the median, vs bars of 93.9 M msg/s and 2.89 GB/s. The input checked was the bench's own copy of the day, every page found in memory before and after each timed pass, not the file's pages in the page cache, which were recorded, not required ([results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md)).
 
 No parse rate was timed on the Mac: the three bars are set on x86 Linux, which gives a macOS figure no verdict.
 
