@@ -1295,8 +1295,8 @@
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "against itch-book:** 5.09 M msg/s against 12.5 M msg/s,",
-          "new": "against itch-book:** 5.09 M msg/s … against 12.5 M msg/s,"
+          "old": "vs itch-book:** 5.09 M msg/s vs 12.5 M msg/s,",
+          "new": "vs itch-book:** 5.09 M msg/s … vs 12.5 M msg/s,"
         }
       ],
       "command": [

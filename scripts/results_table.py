@@ -1777,42 +1777,42 @@ MISS_OPENING = (
 # few plain words, "" for none, or None for a trade check's, which is its row's. Only words are
 # written here: every figure comes from a row.
 PLAIN = {
-    "T-BOOK-1": ("every symbol's book from a whole day, against itch-book, an open-source book",
+    "T-BOOK-1": ("every symbol's book from a whole day, vs itch-book, an open-source book",
                  ""),
-    "T-BOOK-2": ("the same, tracking the best bid and offer, against itch-book",
+    "T-BOOK-2": ("the same, tracking the best bid and offer, vs itch-book",
                  ""),
-    "T-LAT-1": ("each operation's latency, against itch-book", ""),
-    "T-LAT-2": ("every message's latency, against nasdaq-feed-handler, an open-source book, "
+    "T-LAT-1": ("each operation's latency, vs itch-book", ""),
+    "T-LAT-2": ("every message's latency, vs nasdaq-feed-handler, an open-source book, "
                 "under WSL2", ""),
     "T-LAT-3": ("the budget Nasdaq's peak rate sets, on any host", ""),
-    "T-LAT-4": ("every message's latency, against carteret, an open-source FIFO book, same day, "
+    "T-LAT-4": ("every message's latency, vs carteret, an open-source FIFO book, same day, "
                 "timer cost subtracted", ""),
     "T-LAT-5": ("the tightest tail published, PitchFork's, an open-source book, nothing "
                 "subtracted", ""),
     "T-DESIGN-1": ("speed over a `std::map` book in the same run",
                    "the map book's extra time is DRAM misses"),
     "T-PERF-1": ("last-level misses, a floor on DRAM fills, per book message (one that can change "
-                 "a book), against carteret on a Zen 3", ""),
-    "T-PERF-2": ("branch misses per message, against Market-Core, an open-source project", ""),
+                 "a book), vs carteret on a Zen 3", ""),
+    "T-PERF-2": ("branch misses per message, vs Market-Core, an open-source project", ""),
     "T-INV-2": ("the never-crossed rule",
                 "every cross is the feed's, outside normal trading or inside a reopening window"),
-    "T-TRADE-3": ("each symbol's continuous volume against SEC MIDAS", None),
+    "T-TRADE-3": ("each symbol's continuous volume vs SEC MIDAS", None),
     "T-TRADE-5": ("every continuous execution at the best price", None),
-    "T-PARSE-1": ("the parser's framing walk, against itch-book", ""),
-    "T-PARSE-2": ("decoding the types that change the book, against itch-book", ""),
-    "T-PARSE-3": ("the strict decode of every field, against Lunary's benchmark", ""),
-    "T-BT-3": ("the backtester's shadow-order replay, against queuetruth, an open-source project, "
+    "T-PARSE-1": ("the parser's framing walk, vs itch-book", ""),
+    "T-PARSE-2": ("decoding the types that change the book, vs itch-book", ""),
+    "T-PARSE-3": ("the strict decode of every field, vs Lunary's benchmark", ""),
+    "T-BT-3": ("the backtester's shadow-order replay, vs queuetruth, an open-source project, "
                "on a Mac", "not the queue walk, a small share of the time"),
     "T-MM-2": ("Avellaneda and Stoikov's own average spreads",
                "the simulation's time grid moves it"),
-    "T-SPSC-1": ("the ring's round trip against boost, moodycamel and rigtorp",
+    "T-SPSC-1": ("the ring's round trip vs boost, moodycamel and rigtorp",
                  ""),
-    "T-SPSC-2": ("the known ring techniques' gains, against Frasch's talk",
+    "T-SPSC-2": ("the known ring techniques' gains, vs Frasch's talk",
                  ""),
     "T-ARENA-1": ("the pool allocator, with no published bar", ""),
-    "T-WASM-1": ("the browser replay against native", ""),
+    "T-WASM-1": ("the browser replay vs native", ""),
     "T-BOOK-4": ("the rebuild on Apple silicon on a busier day", ""),
-    "T-TRADE-2": ("each symbol's cross volume against Nasdaq's CrossStats", ""),
+    "T-TRADE-2": ("each symbol's cross volume vs Nasdaq's CrossStats", ""),
 }
 # A trade-print row's few words, by its short why, in plain words.
 PLAIN_TRADE_WHY = {
@@ -1865,10 +1865,10 @@ def gap_figure(gap):
 
 
 def rate_line(rows):
-    """A rate against a bar it is under."""
+    """A rate vs a bar it is under."""
     _, bar, measured, gap, *_ = rows[0]
     measured = measured.removeprefix("rate ").split(", ")[0]
-    return (f"{measured} against {bar_words(bar)}, {gap_figure(gap)} short", 0, rows[0])
+    return (f"{measured} vs {bar_words(bar)}, {gap_figure(gap)} short", 0, rows[0])
 
 
 def latency_bar(bar, item):
@@ -1896,7 +1896,7 @@ def latency_line(rows):
     operation, _, quantile = item.rpartition(" ")
     who = "a message" if not operation else f"an {operation}" if operation[0] in "aeiou" \
         else f"a {operation}"
-    return (f"at {quantile} {who} takes {value} against {latency_bar(bar, item)}, {over} over",
+    return (f"at {quantile} {who} takes {value} vs {latency_bar(bar, item)}, {over} over",
             len(gaps) - 1, rows[0])
 
 
@@ -1908,16 +1908,16 @@ def ratio_line(rows):
     book = dict((key, words) for key, words, _ in MAP_WORDS)[name]
     more = sum(len(row[3].split(", ")) for row in rows) - 1
     limit = re.match(r"[≥≤] ([\d.]+×)", bar)[1]
-    return (f"measured at {ratio} the speed of {book} against {limit}: missed, {below} below it",
+    return (f"measured at {ratio} the speed of {book} vs {limit}: missed, {below} below it",
             more, rows[0])
 
 
 def perf_line(rows):
-    """T-PERF-1 or T-PERF-2: the figure a message, or a book message, as its bar counts it."""
+    """T-PERF-1 or T-PERF-2: the figure per message, or per book message, as its bar counts it."""
     _, bar, measured, gap, *_ = rows[0]
     figure = measured.split(" ")[0]
     over, limit = re.search(r"\bper (book message|message) ≤ ([\d.]+)$", bar).groups()
-    return (f"{figure} a {over} against at most {limit}, {gap.removeprefix('by ')} over", 0,
+    return (f"{figure} per {over} vs at most {limit}, {gap.removeprefix('by ')} over", 0,
             rows[0])
 
 
@@ -1950,7 +1950,7 @@ def spread_line(rows):
     misses = gap.split("; ")
     gamma, rest = re.match(r"γ = ([\d.]+): (.*)$", misses[0]).groups()
     value = measured.split(", ")[gammas.index(gamma)]
-    rest = rest.replace(" against ", " against the paper's ")
+    rest = rest.replace(" against ", " vs the paper's ")
     if not 0 < len(misses) < len(gammas):
         raise TableError(f"T-MM-2: {len(misses)} of {len(gammas)} spreads do not match")
     return (f"on the M4 Max the spread at γ = {gamma} is {value}, {rest}", len(misses) - 1,
@@ -1964,8 +1964,8 @@ def ring_line(rows):
         return figure / limit if "≤" in row[1] else limit / figure
     worst = max(rows, key=distance)
     words = RING_WORDS[worst[0].split(", ", 1)[1]]
-    verb = "is" if "round trip" in words else "gives"
-    return (f"{words} {verb} {worst[2]}, against {bounded(worst[1])} {bar_words(worst[1])}",
+    return (f"{words} is measured at {worst[2]} vs a bar of {bounded(worst[1])} "
+            f"{bar_words(worst[1])}",
             len(rows) - 1, worst)
 
 
@@ -1984,7 +1984,7 @@ def wasm_line(rows):
     _, bar, measured, gap, *_ = rows[0]
     used, wanted = re.search(r"browser differs: (.+?) [\d.]+, not (.+?);", gap).groups()
     limit = re.match(r"≤ ([\d.]+×)", bar)[1]
-    return (f"on the M4 Max, {measured} native against at most {limit}, but in {used}, not "
+    return (f"on the M4 Max, {measured} native vs at most {limit}, but in {used}, not "
             f"{wanted}: no verdict", 0, rows[0])
 
 
@@ -2013,7 +2013,7 @@ PLAIN_LINES = {"T-BOOK-1": rate_line, "T-BOOK-2": rate_line, "T-LAT-1": latency_
 def missed_targets(root):
     """The lines of WRITEUP.md's list of every target missed or not measured: one plain sentence
     a target, which a reader can take alone, from the row that decides its verdict or the
-    worst, with how many more rows RESULTS.md has, or TableError. One figure against its bar,
+    worst, with how many more rows RESULTS.md has, or TableError. One figure vs its bar,
     the gap in words; whose bar it is in the target's words; no cut cell, ellipsis or code word.
     That the host's share of a gap is not established is said once, above the lines."""
     groups = {}

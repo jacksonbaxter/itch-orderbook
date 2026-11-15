@@ -14,6 +14,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import gate_numbers  # noqa: E402
 import gates  # noqa: E402
 import results_table  # noqa: E402
 
@@ -1021,7 +1022,7 @@ class MissedTargets(unittest.TestCase):
         self.assertNotIn("no run has used it yet", output)
         self.assertIn("; judged on 10302019, in results/parse_rate_debian_10302019.md |",
                       tables_of(output))
-        self.assertIn("against 93.9 M msg/s, 1.00 M msg/s short. "
+        self.assertIn("vs 93.9 M msg/s, 1.00 M msg/s short. "
                       "[file](results/parse_rate_debian_10302019.md)", self.short())
         # Once the day has a file, no generated line says it is not measured (r18-16).
         self.assertEqual(self.unrun_words(), [])
@@ -1059,22 +1060,22 @@ class MissedTargets(unittest.TestCase):
         # One figure against its bar, the gap in words, from the row that decides the verdict or
         # the worst, and how many more rows RESULTS.md has.
         self.assertIn("- **T-LAT-3, the budget Nasdaq's peak rate sets, on any host:** At p99.9 a "
-                      "message takes 1,472.00 ns against 750 ns, 722.00 ns over. [file](", table)
-        self.assertIn("- **T-SPSC-1, the ring's round trip against boost, moodycamel and "
-                      "rigtorp:** This ring's round trip over moodycamel's is 1.35×, against at "
-                      "most 1.00×; two more in RESULTS.md.", table)
-        self.assertIn("- **T-LAT-1, each operation's latency, against itch-book:** At p50 an add "
-                      "takes 100.10 ns against 60 ns, 40.10 ns over; eleven more in RESULTS.md.",
+                      "message takes 1,472.00 ns vs 750 ns, 722.00 ns over. [file](", table)
+        self.assertIn("- **T-SPSC-1, the ring's round trip vs boost, moodycamel and "
+                      "rigtorp:** This ring's round trip over moodycamel's is measured at "
+                      "1.35× vs a bar of at most 1.00×; two more in RESULTS.md.", table)
+        self.assertIn("- **T-LAT-1, each operation's latency, vs itch-book:** At p50 an add "
+                      "takes 100.10 ns vs 60 ns, 40.10 ns over; eleven more in RESULTS.md.",
                       table)
-        self.assertIn("- **T-TRADE-3, each symbol's continuous volume against SEC MIDAS:** On the "
+        self.assertIn("- **T-TRADE-3, each symbol's continuous volume vs SEC MIDAS:** On the "
                       "M4 Max, 38 violations on 30 May 2019, none allowed; three more in "
                       "RESULTS.md;", table)
         self.assertIn("- **T-DESIGN-1, speed over a `std::map` book in the same run:** Measured at "
-                      "2.54× the speed of a `std::map` book on a fresh heap against 4.0×: missed, "
+                      "2.54× the speed of a `std::map` book on a fresh heap vs 4.0×: missed, "
                       "1.46 below it;", table)
         # T-SPSC-2 names its row's technique; old orders take most DRAM fills, said once.
-        self.assertIn("Caching the indices, with `%` wrapping, gives 0.89×, against at least "
-                      "3.90×", table)
+        self.assertIn("Caching the indices, with `%` wrapping, is measured at 0.89× vs a "
+                      "bar of at least 3.90×", table)
         self.assertIn(results_table.MISS_OPENING, table)
         self.assertEqual(table.count("host's share"), 1)
         self.assertIn("In the book's runs, messages naming an order a second old or more make "
@@ -1084,23 +1085,46 @@ class MissedTargets(unittest.TestCase):
         self.assertIn("every cross is the feed's, outside normal trading or inside a reopening "
                       "window.", table)
         # T-PERF-1 says what its figure is over: book messages, not every message.
-        self.assertIn("per book message (one that can change a book), against carteret on a Zen "
-                      "3:** 2.002 a book message against at most 0.623, 1.379 over.", table)
-        self.assertIn("branch misses per message, against Market-Core, an open-source project:** "
-                      "2.102 a message against at most 2.04, 0.062 over.", table)
+        self.assertIn("per book message (one that can change a book), vs carteret on a Zen "
+                      "3:** 2.002 per book message vs at most 0.623, 1.379 over.", table)
+        self.assertIn("branch misses per message, vs Market-Core, an open-source project:** "
+                      "2.102 per message vs at most 2.04, 0.062 over.", table)
         for line in table.splitlines():
             self.assertLessEqual(line.count("not established"), 1, line)
         for word in ("…", "...", "UNCONFIRMED", "raw", "r0843", "rate by", "withdrawn or stopped",
                      "Zen 1;", "| ", "P-0", "that day"):
             self.assertNotIn(word, table)
+        # The reader's tics (checker-reader, reader 26): a figure beside its bar or a source
+        # compared with takes "vs", and a rate by its unit "per"; "a message takes" stays.
+        self.assertNotRegex(table, r"\bagainst\b")
+        self.assertNotRegex(table, r"(?<![\w.])\d[\d.,]* a (?:book )?message\b")
         block = table.split("WRITEUP.md:", 1)[0].rsplit("<!--", 1)[0]
         self.assertLessEqual(len(block.split()), gates.MISSED_LIST_WORDS)
         self.assertIn("(RESULTS.md#every-target-missed-or-not-measured)", table)
-        self.edit("WRITEUP.md", "over moodycamel's is 1.35×, against", "over moodycamel's is 1.34×, "
-                  "against")
+        self.edit("WRITEUP.md", "over moodycamel's is measured at 1.35×", "over moodycamel's is "
+                  "measured at 1.34×")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
         self.assertRegex(output, r"results_table: FAIL WRITEUP\.md:\d+: differs from a fresh run")
+
+    def test_each_ring_line_is_held_by_the_number_gate_in_its_words(self):
+        # A ring line's figures stood in the gate's reading by the word "against", which the
+        # results file's verdict cell shares; "vs" is in none, so each is held by "measured"
+        # and "bar" instead, whichever comparison of T-SPSC-1 or T-SPSC-2 is the worst.
+        rows = [row for row in results_table.missed_rows(self.root)
+                if row[0].startswith(("T-SPSC-1,", "T-SPSC-2,"))]
+        self.assertEqual(len(rows), 7, rows)
+        for row in rows:
+            sentence = results_table.ring_line([row])[0]
+            bare = sentence.replace(" is measured at ", " is ").replace(" vs a bar of ", " vs ")
+            for said, code in ((sentence, 0), (bare, 1)):
+                with self.subTest(row=row[0], said=said):
+                    page = f"- {said[0].upper()}{said[1:]}. [file]({row[7].split('](')[1]}\n"
+                    (self.root / "WRITEUP.md").write_text(page, encoding="utf-8")
+                    out = io.StringIO()
+                    with contextlib.redirect_stdout(out):
+                        got = gate_numbers.main(["--root", str(self.root), "--page", "WRITEUP.md"])
+                    self.assertEqual(got, code, out.getvalue())
 
     def test_the_writeup_table_has_every_miss_each_from_its_file(self):
         table = self.missed()

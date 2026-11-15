@@ -2161,8 +2161,8 @@
       "mutations": [
         {
           "file": "WRITEUP.md",
-          "old": "over moodycamel's is 1.35×, against at most 1.00×",
-          "new": "over moodycamel's is 1.34×, against at most 1.00×"
+          "old": "over moodycamel's is measured at 1.35× vs a bar of at most 1.00×",
+          "new": "over moodycamel's is measured at 1.34× vs a bar of at most 1.00×"
         }
       ],
       "command": [
