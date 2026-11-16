@@ -1062,7 +1062,7 @@
         "readme"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 5\\.25 is not in any file it cites",
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 5\\.25 is not in results/bench_book_paged-flat_ram_debian_12302019\\.md",
         "exit": 1
       }
     },
@@ -1073,8 +1073,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "and 21.87 M msg/s on an Apple M4 Max",
-          "new": "and 21.97 M msg/s on an Apple M4 Max"
+          "old": "; 21.87 M msg/s on an Apple M4 Max",
+          "new": "; 21.97 M msg/s on an Apple M4 Max"
         }
       ],
       "command": [
@@ -1084,7 +1084,7 @@
         "readme"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL README\\.md:\\d+: 21\\.97 is not in any file it cites",
+        "signature": "gate_numbers: FAIL README\\.md:\\d+: 21\\.97 is not in results/bench_book_paged-flat_ram_mac_12302019\\.md",
         "exit": 1
       }
     },
@@ -3236,8 +3236,8 @@
       "mutations": [
         {
           "file": "README.md",
-          "old": "sharing no code with it ([results/oracle_sessions.md](results/oracle_sessions.md)).",
-          "new": "sharing no code with it ([results/oracle_sessions.md](results/oracle_sessions.md)). <!-- figures: not measured -->"
+          "old": "sharing no code ([results/oracle_sessions.md](results/oracle_sessions.md)).",
+          "new": "sharing no code ([results/oracle_sessions.md](results/oracle_sessions.md)). <!-- figures: not measured -->"
         }
       ],
       "command": [

@@ -1490,6 +1490,31 @@
         "signature": "gates: FAIL readme-build-names README\\.md:\\d+: its '## Check everything' section does not name ITCH_BROWSER",
         "exit": 1
       }
+    },
+    {
+      "id": "gates-readme-first-screen-drops-the-writeup-link",
+      "breaks": "The README's first screen names WRITEUP.md without linking it, so a reader of the pitch is not sent to the write-up",
+      "check": "gates.py readme-pitch-length",
+      "mutations": [
+        {
+          "file": "README.md",
+          "old": "the Zen 1 host misses most. [WRITEUP.md](WRITEUP.md) says why;",
+          "new": "the Zen 1 host misses most. WRITEUP.md says why;"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/gates.py",
+        "--root",
+        "{tree}",
+        "--only",
+        "readme-pitch-length"
+      ],
+      "expect": {
+        "signature": "gates: FAIL readme-pitch-length README\\.md:1: no link to WRITEUP\\.md before the headline table",
+        "exit": 1
+      }
     }
   ]
 }
