@@ -727,7 +727,8 @@ def spsc_due_time_unmeasured(root, files):
 # WRITEUP.md runs 2,500 to 4,000 words, and the README's pitch above its headline table at
 # most README_PITCH_WORDS, both counted as `wc -w` counts them, the pitch without its HTML
 # comments; and that pitch, the README's first screen, links each of README_PITCH_LINKS by a
-# Markdown link with text, an anchor after the page allowed. Each bullet of the README's "What is built" list is one line: at most
+# Markdown link with text, an anchor after the page allowed, outside code spans and HTML tags
+# and comments. Each bullet of the README's "What is built" list is one line: at most
 # README_BULLET_CHARS characters as rendered (its markup, HTML comments and link targets not
 # counted, a link's text and an autolink's address counted) and at most one link, so it says
 # what the part is and at most one fact about it; the list's misses stand counted in the
@@ -840,8 +841,11 @@ def readme_pitch_length(root, files):
         if words > README_PITCH_WORDS:
             violations.append((path, 1, f"{words} words before the headline table, more than "
                                         f"{README_PITCH_WORDS}"))
+        # A link is read by its target, which says where it points, and needs text to show; one
+        # inside a code span or a tag's attribute is not a link a reader can follow.
+        linked = re.sub(r"</?[A-Za-z][^<>]*>", " ", CODE_SPAN.sub(" ", pitch))
         for page in README_PITCH_LINKS:
-            if not re.search(rf"\[[^\]\s][^\]]*\]\({re.escape(page)}(?:#[^)\s]*)?\)", pitch):
+            if not re.search(rf"\[[^\]\s][^\]]*\]\({re.escape(page)}(?:#[^)\s]*)?\)", linked):
                 violations.append((path, 1, f"no link to {page} before the headline table"))
     return violations
 
@@ -916,9 +920,10 @@ def readme_built_bullets(root, files):
 # minimum, which CMakeLists.txt's cmake_minimum_required and CMakePresets.json's
 # cmakeMinimumRequired must agree on (3.28 is 3.28.0), the macOS libc++ setting, and what
 # scripts/check.sh's demo stage needs, ITCH_BROWSER or --without-browser. A section is read as a
-# reader sees it: its heading found only outside code fences, HTML comments outside them taken
-# out, a fence's text kept. Each name is matched whole, and must also be read by a line of its
-# source that is not a comment, so a renamed setting is caught on both sides. Not held here:
+# reader sees it: its heading found only outside code fences, closing hashes dropped and spaces
+# squeezed, and outside fences the HTML comments, link targets and tags taken out, a link's
+# text and a fence's text kept. Each name is matched whole, and must also be read by a line of
+# its source that is not a comment, so a renamed setting is caught on both sides. Not held here:
 # the compilers and versions tested, the data and memory sizes and the headline's command,
 # which no script reads reliably from the tree, nor what the words around each name say.
 README_BUILD_SECTION = "## Build and test"
@@ -963,10 +968,40 @@ def uncommented(line, inside):
             shown, at, inside = shown + line[at:start] + " ", start + 4, True
 
 
+ATX_HEADING = re.compile(r"^ {0,3}(#{1,2})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$")
+CODE_SPAN = re.compile(r"(``.*?``|`[^`]*`)")
+UNSEEN = (
+    (re.compile(r"^ {0,3}\[[^\]]+\]:\s*\S.*$"), ""),             # a reference definition
+    (re.compile(r"<((?:https?|mailto):[^<>\s]+)>"), r"\1"),         # an autolink: its address
+    (re.compile(r"!?\[([^\]]*)\]\([^)]*\)"), r"\1"),                # a link or image: its text
+    (re.compile(r"!?\[([^\]]*)\]\[[^\]]*\]"), r"\1"),              # by reference: its text
+    (re.compile(r"</?[A-Za-z][^<>]*>"), " "),                       # a tag and its attributes
+)
+
+
+def visible(line):
+    """A line outside code fences as a reader sees it: a link's or image's target, a reference
+    definition and an HTML tag with its attributes taken out, a link's text kept; code spans
+    are shown as written."""
+    parts = CODE_SPAN.split(line)
+    for index in range(0, len(parts), 2):
+        for pattern, shown in UNSEEN:
+            parts[index] = pattern.sub(shown, parts[index])
+    return "".join(parts)
+
+
+def heading_key(line):
+    """A level-1 or level-2 heading as it shows, its closing hashes dropped and its spaces
+    squeezed ("##  Check everything ##" is "## Check everything"), else None."""
+    found = ATX_HEADING.match(line)
+    return None if found is None else f"{found[1]} {' '.join((found[2] or '').split())}"
+
+
 def readme_sections(text):
     """Each level-1 or level-2 section of a page as a reader sees it, {heading: (line, text)}:
-    a heading is found only outside code fences and HTML comments, and comments outside fences
-    are taken out; a fence's text is kept, since a reader sees it."""
+    a heading is found only outside code fences and HTML comments, and outside fences the
+    comments, link targets and HTML tags are taken out (visible()); a fence's text is kept,
+    since a reader sees it."""
     sections, current, fence, inside = {}, None, None, False
     for number, line in enumerate(text.splitlines(), start=1):
         if fence is not None:
@@ -979,10 +1014,11 @@ def readme_sections(text):
             began_inside = inside
             shown, inside = uncommented(line, inside)
             opened = None if began_inside else FENCE.match(shown)
+            shown = shown if opened else visible(shown)
             if opened:
                 fence = opened[1]
-            elif not began_inside and re.match(r"#{1,2} ", shown):
-                current = shown.rstrip()
+            elif not began_inside and heading_key(shown):
+                current = heading_key(shown)
                 sections.setdefault(current, (number, []))
                 continue
         if current is not None:

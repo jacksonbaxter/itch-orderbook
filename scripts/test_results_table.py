@@ -1094,7 +1094,7 @@ class MissedTargets(unittest.TestCase):
         for word in ("…", "...", "UNCONFIRMED", "raw", "r0843", "rate by", "withdrawn or stopped",
                      "Zen 1;", "| ", "P-0", "that day"):
             self.assertNotIn(word, table)
-        # The reader's tics (checker-reader, reader 26): a figure beside its bar or a source
+        # The wording a reader of the page asked for: a figure beside its bar or a source
         # compared with takes "vs", and a rate by its unit "per"; "a message takes" stays.
         self.assertNotRegex(table, r"\bagainst\b")
         self.assertNotRegex(table, r"(?<![\w.])\d[\d.,]* a (?:book )?message\b")
