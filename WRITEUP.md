@@ -2,7 +2,7 @@
 
 On a small x86 core this order book is bound by memory latency: on an embedded Zen 1 the fast designs run about the same instructions per message, and from the fastest design to the slowest, speed falls as DRAM fills rise, except between the two linked-level designs. The default design, flat price levels with an order index looked up by each order's reference number, rebuilds every symbol's book at 5,145,430 messages/s with 1.972 DRAM fills per message, 2.54× a `std::map` book on the same core ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)). Most fills left come from messages naming orders over a second old, whose lines the small shared L3 cache no longer holds; a software look-ahead that hides some is faster there and slower on an Apple M4 Max, so it is off by default.
 
-Most speed targets in [BENCHMARKS.md](BENCHMARKS.md) are the best figures other open-source projects have published, mostly on newer desktop and server x86 parts and a few on Macs, so on this host most fall short; each names its source, or why it has none.
+Most speed targets in [BENCHMARKS.md](BENCHMARKS.md) are the best figures other open-source projects have published, mostly on x86 desktops and laptops and two on Macs, so on this host most fall short; each names its source, or why it has none.
 
 ## What was built, and on what
 
@@ -76,9 +76,9 @@ SIMD wins a field decode and loses the whole parse, where scalar takes 35.099 cy
 
 ## The parse rate
 
-Timed alone on the Zen 1 host over 12302019 in memory ([results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md)), the framing walk, T-PARSE-1, ran a median of 298,983,253 messages/s and is missed by 410.02 M msg/s; T-PARSE-2, itch-book's decode of the ten book-affecting types, ran a median of 140,969,135 messages/s and is missed by 58.03 M msg/s. Both bars were set on the Ryzen 7 9700X, a Zen 5. T-PARSE-3, the strict decode of every field, ran a median of 117,739,800 messages/s that day, above its bar of 93.9 M msg/s, which is set on another day and judged there.
+Timed alone on the Zen 1 host over 12302019 in memory ([results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md)), the framing walk, T-PARSE-1, ran a median of 298,983,253 messages/s and is missed by 410.02 M msg/s; T-PARSE-2, itch-book's decode of the ten book-affecting types, ran a median of 140,969,135 messages/s and is missed by 58.03 M msg/s. Both bars were set on the Ryzen 7 9700X, a Zen 5. T-PARSE-3, the strict decode of every field, ran a median of 117,739,800 messages/s that day.
 
-On its bar's day, 10302019, T-PARSE-3 is met, at 115.76 M msg/s and 3.558 GB/s, the median, vs bars of 93.9 M msg/s and 2.89 GB/s. The input checked was the bench's own copy of the day, every page found in memory before and after each timed pass, not the file's pages in the page cache, which were recorded, not required ([results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md)).
+T-PARSE-3's bar, 93.9 M msg/s and 2.89 GB/s, is set on 10302019, and there T-PARSE-3 is met at a median of 115.76 M msg/s and 3.558 GB/s. Its passes varied more than on 12302019, a CV of 4.95%, and the slowest, at 100,002,653 messages/s, is still above the bar; the input checked was the bench's own copy of the day in memory ([results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md)).
 
 No parse rate was timed on the Mac: the three bars are set on x86 Linux, which gives a macOS figure no verdict.
 
@@ -88,7 +88,7 @@ No parse rate was timed on the Mac: the three bars are set on x86 Linux, which g
 
 Against open-source C++ queues on the Zen 1 host this ring's median round trip ranks sixth, ahead of only boost and a mutex: project 229.3 ns (this ring) vs atomic_queue 133.5, the fastest, and rigtorp 198.5; so T-SPSC-1, this ring vs three published ones, is missed ([results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md)).
 
-T-SPSC-2, what each technique is worth, is missed by far: the mask over a modulo gave 1.60× vs a bar of 4.20×, and caching the other side's index 1.20× vs 3.90×, bars from Frasch's CppCon talk on SPSC queues, measured under WSL2 on an i7-9700 ([results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md)).
+T-SPSC-2, what each technique is worth, is missed by far: the mask over a modulo gave 1.60× vs a bar of 4.20×, and caching the other side's index 1.20× with the mask and 0.89× with a modulo, vs 3.90×, bars from Frasch's CppCon talk on SPSC queues, measured under WSL2 on an i7-9700 ([results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md)).
 
 Queue latencies start at the push, not at the due time, when the replay's schedule says an item should be sent, so a wait behind a slow push is in no figure. No latency from the due time was measured: it needs the due time carried in each item, a change to the benchmark's measured code, which was not made before the runs (BENCHMARKS.md, "What the paced and burst latencies measure").
 
@@ -136,8 +136,8 @@ Every finding of the final review, with its outcome and the commit, test or note
 
 ## What a reviewer would ask
 
-- **Is the gap to T-BOOK-1, book throughput, the clock?** Partly. A message's mean service time here is 194.35 ns. The file records the core's clock four times, none during the run: 2,723,232 kHz as the run's wrapper starts, 3,593,023 and 3,593,024 kHz in the checks just before the run, and 3,223,605 kHz as the wrapper ends. T-BOOK-1's bar is at least 16.4 M msg/s, set on a Ryzen 7 9700X ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
-  As an estimate from those inputs and AMD's rated boost of 5.5 GHz for that part, which is not a measured clock of the bar's run: about 529 to 698 cycles per message here vs about 335 for the bar, so the clock would explain from about 1.5× of the 3.2× gap at the highest reading to about 2.0× at the lowest, and the rest is per cycle; the bar's host published no cycle count. <!-- figures: not measured -->
+- **Is the gap to T-BOOK-1, book throughput, the clock?** Partly. A message takes 194.35 ns in the timing pass and 1141.088 cycles in the counter pass, where an empty span, the counter reads alone, takes 444.0739; the file's four readings of the core's clock, none during the run, run from 2,723,232 kHz at the start to 3,593,024 kHz, and T-BOOK-1's bar is at least 16.4 M msg/s, set on a Ryzen 7 9700X ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+  By a subtraction of two measured figures from separate passes, about 697 cycles per message are the book's, which over 194.35 ns is a clock just under the highest reading; at the part's rated boost of 5.5 GHz the bar is about 335 cycles per message. So the clock would explain about 1.5× of the 3.2× gap and the rest is per cycle, if the bar's run held that rated clock, which its host did not publish. <!-- figures: not measured -->
 - **Did you run itch-book on this host?** No, not attempted; it is the run that would split the host's share of each gap from the design's. As BENCHMARKS.md reads itch-book's README, the same code and file ran 3.6× slower on a 2.0 GHz EPYC VM than on the Ryzen 9700X its bar comes from, a division of the README's two rates ([BENCHMARKS.md](BENCHMARKS.md)). <!-- figures: not measured -->
 - **Would the look-ahead work on a live feed?** Not known: it reads D messages ahead in a file, so a live feed would hold D messages before applying the first; that was neither built nor measured ([include/itch/lookahead.hpp](include/itch/lookahead.hpp)).
 - **What is the latency tail?** The slowest message of each repetition took about 4 ms, 4001771.1 to 4018171.8 ns with a CV of 0.21%, so it recurs and is not noise. The median p99.99 is 3014.6 ns, and what the slowest message waits on was not traced ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
