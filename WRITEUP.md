@@ -96,7 +96,7 @@ With the parser on one core and the book on another, the median pipelined time o
 
 ### UDP receive: sockets vs io_uring
 
-A paced sender replays the day as MoldUDP64, Nasdaq's UDP framing, over loopback on the Zen 1 host, so no network card is in the path. S4, spinning on `recvmmsg` (many datagrams per call), carried the most with no loss at 1,400 bytes per datagram, 2,830,848 msg/s, 1.035 times blocking `recvmmsg` (S3) and one bisection step above most other modes, socket and io_uring (Linux's shared-ring interface). T-URING-2 is met: S4 was lossless at 2,547,190 msg/s, Nasdaq's 1 ms peak rate, in 10 of 10 repetitions ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
+A paced sender replays the day as MoldUDP64, Nasdaq's UDP framing, over loopback on the Zen 1 host, so no network card is in the path. S4, spinning on `recvmmsg` (many datagrams per call), carried the most with no loss at 1,400 bytes per datagram, 2,830,848 msg/s, 1.035 times blocking `recvmmsg` (S3) and two bisection steps above most other modes, socket and io_uring (Linux's shared-ring interface). T-URING-2 is met: S4 was lossless at 2,547,190 msg/s, Nasdaq's 1 ms peak rate, in 10 of 10 repetitions ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
 
 ### The backtester and the market maker
 
