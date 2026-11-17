@@ -1261,6 +1261,21 @@ class MissedTargets(unittest.TestCase):
         self.assertIn(f"{PARSE}: T-PARSE-3's bar is set on 10302019, and the file, of 12302019, "
                       "gives it 'met': another day's bar is not met or missed", output)
 
+    def test_a_parse_row_judged_on_a_day_not_its_bar_days_is_refused(self):
+        # The day the row says its bar is judged on must be its bar's day and the named file's,
+        # refused when the tables are made, not only by --check's comparison with the pages.
+        for day, name in (("11302019", "parse_rate_debian_10302019.md"),
+                          ("10302019", "parse_rate_debian_12302019.md"),
+                          ("12302019", "parse_rate_debian_12302019.md")):
+            with self.subTest(day=day, name=name):
+                self.setUp()
+                self.edit(PARSE, f"; {PARSE3_JUDGED} |", f"; judged on {day}, in results/{name} |")
+                code, output = self.run_table()
+                self.assertEqual(code, 1, output)
+                self.assertIn(f"results_table: FAIL results/{name}: T-PARSE-3's row of 12302019 "
+                              f"says it is judged on {day} there, and its bar is '≥ 93.9 M msg/s "
+                              "and 2.89 GB/s, on 10302019'\n", output)
+
     def test_a_verdict_word_for_another_days_bar_is_refused(self):
         words = f"above the bar on 12302019, a day other than the bar's; {PARSE3_JUDGED}"
         for given in ("met", "met; measured on 12302019, not the bar's 10302019, which is not on "
