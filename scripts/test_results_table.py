@@ -1107,6 +1107,19 @@ class MissedTargets(unittest.TestCase):
         self.assertIn("At p99.9 a message takes 1,472.00 ns vs 874 ns, 598.00 ns over; two more",
                       table)
         self.assertNotRegex(table, r"At p50 ")
+        # T-DESIGN-1's why: each book's counters, cited to its own file, and the cause inferred.
+        self.assertIn("the map book: 2272.754 cycles and 5.287 DRAM fills a message ([file]("
+                      "results/bench_book_map-fresh_ram_debian_12302019.md)); the fast book: "
+                      "1141.088 cycles and 1.972 fills ([file](results/bench_book_paged-flat_ram_"
+                      "debian_12302019.md)); the gap as DRAM waits is inferred.", table)
+        self.assertNotIn("is DRAM misses", table)
+        missed = self.missed()
+        self.assertIn("the fast book 1141.088, 581.789 and 1.972; inferred, not measured: most of "
+                      "the map book's extra cycles are waits on DRAM;", missed)
+        # T-BOOK-1's why gives the linked pair's exception; T-BOOK-2's run with counters has none.
+        self.assertIn("except between the two linked-level arms: `paged-linked` makes fewer fills "
+                      "than `hash-linked` and is no faster;", missed)
+        self.assertNotIn("its speed follows its DRAM fills", missed)
         self.assertIn("gives the deciding row, or the worst: for latency, the largest gap in ns.",
                       table)
         self.assertIn("- **T-TRADE-3, each symbol's continuous volume vs SEC MIDAS:** On the "

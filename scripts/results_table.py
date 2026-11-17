@@ -1249,11 +1249,21 @@ PARSE_DEBIAN = "parse_rate_debian_12302019.md"
 # Each why is (the full words, for RESULTS.md, and a few words, for WRITEUP.md's table). A
 # full why gives what was measured, then what is not established; neither leads with a cause
 # that is not established.
-BOOK_WHY = ("measured: every fast arm runs about the same instructions a message, and its speed "
-            "follows its DRAM fills; not established: how much of the gap is the host's, since no "
-            "x86 host with a larger cache was available; the bar was set on the x86 host named "
-            "beside it",
-            "speed follows DRAM fills; the host's share not established")
+BOOK_WHY = ("measured: every fast arm runs about the same instructions a message, and from the "
+            "fastest arm to the slowest, speed falls as DRAM fills rise, except between the two "
+            "linked-level arms: `paged-linked` makes fewer fills than `hash-linked` and is no "
+            "faster; not established: how much of the gap is the host's, since no x86 host with a "
+            "larger cache was available; the bar was set on the x86 host named beside it",
+            "speed falls as DRAM fills rise, but for the linked pair; the host's share not "
+            "established")
+# T-BOOK-2's arms, the file mapped and the top of book tracked, have their counters from a run
+# of their own, in which speed falls as fills rise across all four, the linked pair included.
+BOOK2_WHY = ("measured: in the run of the same four arms with counters, every fast arm runs about "
+             "the same instructions a message, and from the fastest arm to the slowest, speed "
+             "falls as DRAM fills rise; not established: how much of the gap is the host's, since "
+             "no x86 host with a larger cache was available; the bar was set on the x86 host named "
+             "beside it",
+             "speed falls as DRAM fills rise; the host's share not established")
 TAIL_WHY = ("measured: messages that name an order older than a second take most of the DRAM "
             "fills; not established: what sets the tail, which no run traced",
             "old orders take most fills; the tail's cause not established")
@@ -1464,16 +1474,13 @@ SPSC_WHY = ("not established: no counters were read on the queue runs",
 TRADE_WHY = "the feed above MIDAS; cause not established"
 MISSED = (
     ("T-BOOK-1", BOOK_DEBIAN, missed_row, BOOK_WHY),
-    ("T-BOOK-2", "bench_book_paged-flat_mapped_top_debian_12302019.md", missed_row, BOOK_WHY),
+    ("T-BOOK-2", "bench_book_paged-flat_mapped_top_debian_12302019.md", missed_row, BOOK2_WHY),
     ("T-LAT-1", BOOK_DEBIAN, missed_row, TAIL_WHY),
     ("T-LAT-2", BOOK_DEBIAN, missed_row, TAIL_WHY),
     ("T-LAT-3", BOOK_DEBIAN, missed_row, TAIL_WHY),
     ("T-LAT-4", BOOK_DEBIAN, missed_row, TAIL_WHY),
     ("T-LAT-5", BOOK_DEBIAN, missed_row, TAIL_WHY),
-    ("T-DESIGN-1", BOOK_DEBIAN, missed_row,
-     ("measured: the map book's extra time here is DRAM misses, not instructions; not "
-      "established: why the fast book gains less over it on Zen 1 than on the Mac",
-      "the map's extra time is DRAM misses")),
+    ("T-DESIGN-1", BOOK_DEBIAN, missed_row, None),
     ("T-DESIGN-1", "bench_book_paged-flat_ram_mac_12302019.md", missed_row,
      ("measured: the Mac's counters give no misses; not established: why the ratio is under "
       "the bar", "cause not established")),
@@ -1653,9 +1660,41 @@ def parse3_entry(root):
     return ("T-PARSE-3", PARSE_BAR_DAY, missed_row, PARSE3_MISSED)
 
 
+# T-DESIGN-1's why on the Zen 1 host: the two books' counters, each from its own file's
+# per-message means, then what they suggest, which is inferred, not measured.
+MAP_DEBIAN = "bench_book_map-fresh_ram_debian_12302019.md"
+
+
+def per_message(root, name, event):
+    """An event's median per message, as the file's table of per-message means gives it."""
+    text = (root / "results" / name).read_text(encoding="utf-8")
+    means = text.split("Per-message means", 1)
+    if len(means) != 2:
+        raise TableError(f"results/{name}: no per-message means")
+    return find(rf"^\| {re.escape(event)} \| ([\d.]+) \|", means[1], name)[1]
+
+
+def design_why(root):
+    """T-DESIGN-1's why on the Zen 1 host: cycles, instructions and DRAM fills a message in the
+    untimed counter pass, the map book's (on a fresh heap) beside the fast book's."""
+    fills = "r0843:u (a floor on DRAM demand fills)"
+    slow, fast = ([per_message(root, name, event) for event in ("cycles", "instructions", fills)]
+                  for name in (MAP_DEBIAN, BOOK_DEBIAN))
+    return (f"measured, per message in the untimed counter pass: the map book on a fresh heap "
+            f"takes {slow[0]} cycles, {slow[1]} instructions and {slow[2]} DRAM fills "
+            f"({source(MAP_DEBIAN)}), the fast book {fast[0]}, {fast[1]} and {fast[2]}; inferred, "
+            "not measured: most of the map book's extra cycles are waits on DRAM; not established: "
+            "why the fast book gains less over it on Zen 1 than on the Mac",
+            f"the map book: {slow[0]} cycles and {slow[2]} DRAM fills a message ([file](results/"
+            f"{MAP_DEBIAN})); the fast book: {fast[0]} cycles and {fast[2]} fills ([file](results/"
+            f"{BOOK_DEBIAN})); the gap as DRAM waits is inferred")
+
+
 def missed_entries(root):
-    """MISSED with T-PARSE-3's entry in its place, after T-PARSE-2's."""
-    entries = list(MISSED)
+    """MISSED with T-PARSE-3's entry in its place, after T-PARSE-2's, and T-DESIGN-1's why on
+    the Zen 1 host read from its files."""
+    entries = [entry if entry[3] is not None else (*entry[:3], design_why(root))
+               for entry in MISSED]
     found = parse3_entry(root)
     if found is not None:
         at = next(index for index, entry in enumerate(entries) if entry[0] == "T-PARSE-2")
@@ -1822,8 +1861,8 @@ PLAIN = {
                 "timer cost subtracted", ""),
     "T-LAT-5": ("the tightest tail published, PitchFork's, an open-source book, nothing "
                 "subtracted", ""),
-    "T-DESIGN-1": ("speed over a `std::map` book in the same run",
-                   "the map book's extra time is DRAM misses"),
+    # Its why is design_why's, read from its files.
+    "T-DESIGN-1": ("speed over a `std::map` book in the same run", ""),
     "T-PERF-1": ("last-level misses, a floor on DRAM fills, per book message (one that can change "
                  "a book), vs carteret on a Zen 3", ""),
     "T-PERF-2": ("branch misses per message, vs Market-Core, an open-source project", ""),
@@ -2065,6 +2104,8 @@ def missed_targets(root):
         sentence, more, row = reader(rows)
         if why is None:
             why = PLAIN_TRADE_WHY[row[6]]
+        if target == "T-DESIGN-1":
+            why = design_why(root)[1]
         more = f"; {in_words(more)} more in RESULTS.md" if more else ""
         cited = "" if row[7] == "none" else f" [file]({row[7].split('](')[1]}"
         tail = f"; {why}" if why else ""
