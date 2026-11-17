@@ -678,6 +678,11 @@ class Committed(unittest.TestCase):
         self.addCleanup(scratch.cleanup)
         trees, logs = Path(scratch.name) / "trees", Path(scratch.name) / "logs"
         logs.mkdir()
+        # As the matrix does, each command first passes on its clean tree, so that a signature
+        # printed there is not taken for a plant caught (r24 NOTE 1).
+        with contextlib.redirect_stdout(io.StringIO()):
+            _, failures = fault_matrix.run_controls(REPO_ROOT, trees, plants, logs)
+        self.assertEqual(failures, [], "a plant's check fails on the clean tree")
         with ThreadPoolExecutor(max_workers=fault_matrix.MAX_JOBS) as pool:
             list(pool.map(lambda f: fault_matrix.run_fault(f, REPO_ROOT, trees, logs, False),
                           plants))
