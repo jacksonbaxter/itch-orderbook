@@ -35,7 +35,7 @@ The records, with sizes from the headers' `static_assert`s ([include/itch/](incl
 
 A message that names an order makes a chain of dependent loads (directory entry, page slot, order record, level; for a new order the side's header and the end of its keys), so their misses cannot overlap within a message. What was counted is DRAM fills, demand fills into the L1 cache from local DRAM; it is a floor, since lines the hardware prefetcher fetched are not counted. Per message, a delete makes 2.5544, an execute 2.2520, a replace 3.1322 and an add 1.3051 ([results/counters_by_type_paged-flat_debian_12302019.md](results/counters_by_type_paged-flat_debian_12302019.md)).
 
-The four designs and the usual baseline (`std::map` levels and an `unordered_map` index, on a fresh or an aged heap), on the Zen 1 host, the day in memory. Both counter columns include reading the counters, which an empty span in a separate pass measures at 308.0001 instructions and 0.0000 DRAM fills per message, more than half of each instruction figure ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)):
+The four designs and the usual baseline (`std::map` levels and an `unordered_map` index, on a fresh or an aged heap), on the Zen 1 host, the day in memory. Both counter columns include reading the counters, which an empty span in a separate pass measures at 308.0001 instructions and 0.0000 DRAM fills per message, more than half of each fast design's instruction figure ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)):
 
 | Arm | Messages/s | Book memory, MiB | Instructions per message | DRAM fills per message | File |
 |---|---|---|---|---|---|
@@ -46,7 +46,7 @@ The four designs and the usual baseline (`std::map` levels and an `unordered_map
 | `map-fresh` | 2,028,642 | 294.0 | 695.420 | 5.287 | [results/bench_book_map-fresh_ram_debian_12302019.md](results/bench_book_map-fresh_ram_debian_12302019.md) |
 | `map-aged` | 1,832,255 | 393.0 | 683.516 | 5.711 | [results/bench_book_map-aged_ram_debian_12302019.md](results/bench_book_map-aged_ram_debian_12302019.md) |
 
-The fast designs differ in how long they wait, not in how much they do. Every row includes the same counter reads: taking them off would leave each difference between rows as it is and make each ratio larger. The fast designs lie within a few dozen instructions of each other. T-DESIGN-1 asks for at least 4.0× the map book's throughput, the ratio itch-book, an open-source C++ ITCH book, published between its fastest book and a naive one on one machine; here T-DESIGN-1 is missed ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+The fast designs differ in how often they wait on DRAM, not in how much they do. Every row includes the same counter reads, so taking them off would keep each difference between rows and make each ratio larger. T-DESIGN-1 asks for at least 4.0× the map book's throughput, the ratio itch-book, an open-source C++ ITCH book, published between its fastest book and a naive one on one machine; here T-DESIGN-1 is missed ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 
 Speed falls as fills rise in every row but the linked pair: `paged-linked` makes 3.751 fills per message, fewer than `hash-linked`, yet is no faster, at 2,542,188 messages/s; why was not measured ([results/bench_book_paged-linked_ram_debian_12302019.md](results/bench_book_paged-linked_ram_debian_12302019.md)).
 
@@ -66,7 +66,7 @@ Why the pools fault is not established. One diagnostic run, made while the host 
 
 ## Prefetching and SIMD
 
-Prefetching is the largest gain left on the Zen 1 host: a look-ahead of D messages touches a later message's index slot, order record and level early, and D=16 gained 16.41%, 6,159,978 vs 5,291,518 messages/s; DRAM fills fell from 2.0139 to 0.8212 per message, over whole passes, not comparable with the table's. The counter counts only fills the core waited for, and a line the look-ahead fetched in time is not one, so the fall is in those waits, not in memory traffic, which was not counted, and the gain is far smaller than the fall ([results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md)).
+Of the changes tried, prefetching gained the most on the Zen 1 host: a look-ahead of D messages touches a later message's index slot, order record and level early, and D=16 gained 16.41%, 6,159,978 vs 5,291,518 messages/s; DRAM fills fell from 2.0139 to 0.8212 per message, over whole passes, not comparable with the table's. The counter counts only fills the core waited for, and a line the look-ahead fetched in time is not one, so the fall is in those waits, not in memory traffic, which was not counted, and the gain is far smaller than the fall ([results/prefetch_debian_12302019.md](results/prefetch_debian_12302019.md)).
 
 On the M4 Max the look-ahead lost at every distance, -18.01% at its best, D=4; the Mac read no miss counters, so why is not known ([results/prefetch_mac_12302019.md](results/prefetch_mac_12302019.md)).
 
@@ -78,7 +78,7 @@ SIMD wins a field decode and loses the whole parse, where scalar takes 35.099 cy
 
 Timed alone on the Zen 1 host over 12302019 in memory ([results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md)), the framing walk, T-PARSE-1, ran a median of 298,983,253 messages/s and is missed by 410.02 M msg/s; T-PARSE-2, itch-book's decode of the ten book-affecting types, ran a median of 140,969,135 messages/s and is missed by 58.03 M msg/s. Both bars were set on the Ryzen 7 9700X, a Zen 5. T-PARSE-3, the strict decode of every field, ran a median of 117,739,800 messages/s that day.
 
-T-PARSE-3's bar, 93.9 M msg/s and 2.89 GB/s, is set on 10302019, and there T-PARSE-3 is met at a median of 115.76 M msg/s and 3.558 GB/s. Its passes varied more than on 12302019, a CV of 4.95%, and the slowest, at 100,002,653 messages/s, is still above the bar; the input checked was the bench's own copy of the day in memory ([results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md)).
+T-PARSE-3's bar, 93.9 M msg/s and 2.89 GB/s, is set on 10302019, and there T-PARSE-3 is met at a median of 115.76 M msg/s and 3.558 GB/s. Its passes varied more than on 12302019, a CV of 4.95%, and the slowest, at 100,002,653 messages/s, is still above the bar; the input checked was the bench's own copy of the day, since file and copy do not fit in memory together ([results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md)).
 
 No parse rate was timed on the Mac: the three bars are set on x86 Linux, which gives a macOS figure no verdict.
 
@@ -88,7 +88,7 @@ No parse rate was timed on the Mac: the three bars are set on x86 Linux, which g
 
 Against open-source C++ queues on the Zen 1 host this ring's median round trip ranks sixth, ahead of only boost and a mutex: project 229.3 ns (this ring) vs atomic_queue 133.5, the fastest, and rigtorp 198.5; so T-SPSC-1, this ring vs three published ones, is missed ([results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md)).
 
-T-SPSC-2, what each technique is worth, is missed by far: the mask over a modulo gave 1.60× vs a bar of 4.20×, and caching the other side's index 1.20× with the mask and 0.89× with a modulo, vs 3.90×, bars from Frasch's CppCon talk on SPSC queues, measured under WSL2 on an i7-9700 ([results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md)).
+T-SPSC-2, what each technique is worth in saturated throughput, is missed by far: the mask over a modulo gave 1.60× vs a bar of 4.20×, and caching the other side's index 1.20× with the mask and 0.89× with a modulo, vs 3.90×, bars from Frasch's CppCon talk, measured under WSL2 on an i7-9700. The cached ratios lie within the spread of the uncached runs, CVs of 34.72% with the mask and 17.90% with a modulo ([results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md)).
 
 Queue latencies start at the push, not at the due time, when the replay's schedule says an item should be sent, so a wait behind a slow push is in no figure. No latency from the due time was measured: it needs the due time carried in each item, a change to the benchmark's measured code, which was not made before the runs (BENCHMARKS.md, "What the paced and burst latencies measure").
 
@@ -96,11 +96,11 @@ With the parser on one core and the book on another, the median pipelined time o
 
 ### UDP receive: sockets vs io_uring
 
-A paced sender replays the day as MoldUDP64, Nasdaq's UDP framing, over loopback on the Zen 1 host, so no network card or wire is in the path. S4, spinning on `recvmmsg` (many datagrams per call), carried the most with no loss at 1,400 bytes per datagram, 2,830,848 msg/s, just above blocking sockets and most modes of io_uring, Linux's shared-ring interface. T-URING-2 is met: S4 was lossless at 2,547,190 msg/s, Nasdaq's 1 ms peak rate, in 10 of 10 repetitions ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
+A paced sender replays the day as MoldUDP64, Nasdaq's UDP framing, over loopback on the Zen 1 host, so no network card is in the path. S4, spinning on `recvmmsg` (many datagrams per call), carried the most with no loss at 1,400 bytes per datagram, 2,830,848 msg/s, one bisection step above most other modes, socket and io_uring (Linux's shared-ring interface). T-URING-2 is met: S4 was lossless at 2,547,190 msg/s, Nasdaq's 1 ms peak rate, in 10 of 10 repetitions ([results/udp_bisect_debian_12302019.md](results/udp_bisect_debian_12302019.md)).
 
 ### The backtester and the market maker
 
-The backtester queues simulated orders among the real ones by order reference, with latency, Nasdaq's fees and partial fills. T-BT-1, the whole day with a quoting strategy, is met on the Zen 1 host at 4.68 M engine events/s vs a bar of 2.00 M; its median replay rate is 4,570,542 messages/s ([results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md)).
+The backtester queues simulated orders among the real ones by order reference, with latency, Nasdaq's fees and partial fills. T-BT-1, the whole day with a quoting strategy, is met on the Zen 1 host at 4.68 M engine events/s vs a bar of 2.00 M, a small project's figure on a synthetic feed; its median replay rate is 4,570,542 messages/s ([results/backtest_quoting_debian_12302019.md](results/backtest_quoting_debian_12302019.md)).
 
 T-BT-3, four symbols with 100,000 simulated orders in real queues, is missed on the Zen 1 host at 3,509,307 messages/s; runs of the same build differed, and none read counters ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)). Its bar was published on an Apple M1 Pro, so on the Mac T-BT-3 has a verdict, and is met. With the Zen 1 host's miss, RESULTS.md's summary gives T-BT-3 missed.
 
