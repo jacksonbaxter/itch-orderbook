@@ -29,7 +29,8 @@ STATE = ("uptime: 180000.00 700000.00 | up 2 days | perf_event_paranoid=2 | pswp
 
 
 def quiet_sampler(gap_at=None, foreign_at=None):
-    """A sampler's log from 08:59:58 to 09:09:58, a line every 2 s, as bookx1's sampler.sh."""
+    """A sampler's log from 08:59:58 to 09:09:58, a line every 2 s, as scripts/mac_sampler.sh
+    writes it."""
     lines = []
     for second in range(-2, 600, 2):
         at = f"2026-11-05T09:{second // 60:02d}:{second % 60:02d}Z" if second >= 0 else \

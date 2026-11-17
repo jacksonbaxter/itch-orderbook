@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Runs one step of the UDP replay's comparison on debian (T-URING-1, T-URING-2; the
-comparison plan of build-research/evidence/io-uring-flamegraph.md): every timed process a
+"""Runs one step of the UDP replay's comparison on debian (T-URING-1, T-URING-2; the steps
+docs/NOTES.md gives under "T-URING-1 and T-URING-2 on `debian`"): every timed process a
 fresh bench_udp under measure.sh, pinned by taskset.
 
     udp_driver.py --step STEP --prediction P-NNNN --raw-dir DIR --input DAY --dataset NAME \\
