@@ -76,7 +76,7 @@ SIMD wins a field decode and loses the whole parse, where scalar takes 35.099 cy
 
 ## The parse rate
 
-Timed alone on the Zen 1 host over 12302019 in memory ([results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md)), the framing walk, T-PARSE-1, ran a median of 298,983,253 messages/s and is missed by 410.02 M msg/s; T-PARSE-2, itch-book's decode of its ten types, copied into this project's bench, ran a median of 140,969,135 messages/s and is missed by 58.03 M msg/s. Both bars are itch-book's, set on the Ryzen 7 9700X, a Zen 5. T-PARSE-3, the strict decode of every field, ran a median of 117,739,800 messages/s that day.
+Timed alone on the Zen 1 host over 12302019 in memory ([results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md)), the framing walk, T-PARSE-1, ran a median of 298,983,253 messages/s and is missed by 410.02 M msg/s; T-PARSE-2, itch-book's decode of its ten types, transcribed into this project's bench, ran a median of 140,969,135 messages/s and is missed by 58.03 M msg/s. Both bars are itch-book's, set on the Ryzen 7 9700X, a Zen 5. T-PARSE-3, the strict decode of every field, ran a median of 117,739,800 messages/s that day.
 
 T-PARSE-3's bar, 93.9 M msg/s and 2.89 GB/s, is set on 10302019, and there T-PARSE-3 is met at a median of 115.76 M msg/s and 3.558 GB/s. Its passes varied more than on 12302019, a CV of 4.95%, and the slowest, at 100,002,653 messages/s, is still above the bar; the input checked was the bench's own copy of the day, since file and copy do not fit in memory together ([results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md)).
 
