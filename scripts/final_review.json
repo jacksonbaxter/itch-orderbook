@@ -56,9 +56,13 @@
   {
    "what": "the second gate's outcomes and r24's",
    "at": "f2ec1d1"
+  },
+  {
+   "what": "r25's outcomes, the second gate's cold NOTE-3 and the acceptance gate's reader 18",
+   "at": "8d3656d"
   }
  ],
- "complete": false,
+ "complete": true,
  "reviewers": [
   {
    "id": "r1",
@@ -523,15 +527,80 @@
    ],
    "last_words": "Nothing is left that I would block the landing for.",
    "branch": ""
+  },
+  {
+   "id": "r25",
+   "read": "README.md as a recruiter would in 90 seconds, and WRITEUP.md as a senior developer would in 20 minutes, at 7e7f904, without the project's other records. Each place it stopped, with the severity it gave, is a finding; its other remarks are not",
+   "commits": [
+    "7e7f904"
+   ],
+   "looks": [
+    {
+     "BLOCK": 1,
+     "FIX": 20,
+     "NOTE": 17
+    }
+   ],
+   "last_words": "",
+   "branch": ""
+  },
+  {
+   "id": "r26",
+   "read": "README.md as a recruiter would in 90 seconds, and WRITEUP.md as a senior developer would in 20 minutes, at 93feb74, after the edits made for r25, first listing anything plainly wrong as written, without the project's other records. Each place it stopped, with the severity it gave, is a finding; its other remarks are not",
+   "commits": [
+    "93feb74"
+   ],
+   "looks": [
+    {
+     "BLOCK": 0,
+     "FIX": 21,
+     "NOTE": 16
+    }
+   ],
+   "last_words": "",
+   "branch": ""
+  },
+  {
+   "id": "r27",
+   "read": "README.md as a recruiter would in 90 seconds, and WRITEUP.md as a senior developer would in 20 minutes, at af6a939, after the edits made for r26, first listing anything plainly wrong as written, without the project's other records. Each place it stopped, with the severity it gave, is a finding; its other remarks are not",
+   "commits": [
+    "af6a939"
+   ],
+   "looks": [
+    {
+     "BLOCK": 0,
+     "FIX": 16,
+     "NOTE": 25
+    }
+   ],
+   "last_words": "",
+   "branch": ""
+  },
+  {
+   "id": "r28",
+   "read": "README.md as a recruiter would in 90 seconds, and WRITEUP.md as a senior developer would in 20 minutes, at 8d3656d, the pages of the round's final commit, after the edits made for r27, first listing anything plainly wrong as written, without the project's other records. Each place it stopped, with the severity it gave, is a finding; its other remarks are not",
+   "commits": [
+    "8d3656d"
+   ],
+   "looks": [
+    {
+     "BLOCK": 0,
+     "FIX": 16,
+     "NOTE": 18
+    }
+   ],
+   "last_words": "",
+   "branch": ""
   }
  ],
- "to_come": [
-  "a reader new to the project, of README.md and WRITEUP.md at 7e7f904"
- ],
+ "to_come": [],
  "unread": [
   "The fixes of r16's own findings were read by no reviewer, only checked by the record's author: they are held by their tests and faults and by the full check that follows.",
   "The WRITEUP passages of bec8d6d, the fixes of r23's findings on WRITEUP, were read by no reviewer, only checked by the record's author; the second gate's record checker read them at b961709, and its code checker the record's last two fault entries, 7161114 and bee48dd, which no reviewer had read either.",
-  "The fixes of r24's findings were read by no reviewer, only checked by the record's author, since the second gate asked for one look: they are held by their tests and faults and by the round's check on its last commit."
+  "The fixes of r24's findings were read by no reviewer, only checked by the record's author, since the second gate asked for one look: they are held by their tests and faults and by the round's check on its last commit.",
+  "The three commits made for r25's findings, 9a36718, 6ec7038 and 905f7e0, which changed WRITEUP.md and README line 6, were read by r26 as part of the pages it read, at 93feb74.",
+  "The two commits made for r26's findings, 1e9ae65 and 436ab2b, which changed WRITEUP.md and README line 7, were read by r27 as part of the pages it read, at af6a939.",
+  "The commit made for r27's findings, 970aaf0, which changed WRITEUP.md, was read by r28 as part of the pages it read, at 8d3656d. Nothing was changed for r28's findings: only the record's own last commit, with this file, docs/NOTES.md and docs/TASKS.md, follows r28."
  ],
  "findings": [
   {
@@ -7541,6 +7610,1770 @@
     "readme-headline-bar-kind-dropped"
    ],
    "notes": []
+  },
+  {
+   "id": "r25-1",
+   "severity": "FIX",
+   "finding": "README.md:6, the host is not said to be a small, old embedded chip with a 4 MB L3",
+   "outcome": "known limit",
+   "detail": "In part: the first screen says a small Zen 1 AMD Ryzen Embedded V1605B, one word, the first screen being at its gate's word limit; the L3 and the part's age are not added there, and WRITEUP gives the L3",
+   "commits": [
+    "905f7e0"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r25-2",
+   "severity": "FIX",
+   "finding": "README.md:7, bars and the host's share mean nothing yet, and the sentence reads as an excuse",
+   "outcome": "known limit",
+   "detail": "In part: after r26 stopped at the same words, not the host's share became and what was not; bars stays, the sentence being the second gate's item 8",
+   "commits": [
+    "436ab2b"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r25-3",
+   "severity": "NOTE",
+   "finding": "README.md:10, the row ids are internal",
+   "outcome": "no change needed",
+   "detail": "Kept, as the second gate ruled on the headline's cells and ids (its cold NOTE-8)",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-4",
+   "severity": "NOTE",
+   "finding": "README.md:12, the floor of messages compared looks generated, not chosen",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 9 put the floor back in the cell",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-5",
+   "severity": "NOTE",
+   "finding": "README.md:13, the counter's own check is buried in a cell",
+   "outcome": "no change needed",
+   "detail": "Kept: the cell is generated, and a change to the generator is outside this round's ruling",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-6",
+   "severity": "BLOCK",
+   "finding": "README.md:14 against 18, the Mac beats the bar and gets no verdict, so whether the project is fast cannot be told",
+   "outcome": "known limit",
+   "detail": "The project's rule gives a Mac timing no verdict against a bar set on x86 Linux, the page says so, and the second gate's ruling keeps the Mac's caveat",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r25-7",
+   "severity": "NOTE",
+   "finding": "README.md:15, too much detail in T-DESIGN-1's cells",
+   "outcome": "no change needed",
+   "detail": "Kept: the cells are generated, and a change to the generator is outside this round's ruling",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-8",
+   "severity": "FIX",
+   "finding": "README.md:16, the one met speed result has its bar called weak in its row",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 9 asked for the bar's kind in its cell",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-9",
+   "severity": "FIX",
+   "finding": "README.md:45 and 118, the count of misses catches the eye, and a paragraph is on the number gate",
+   "outcome": "no change needed",
+   "detail": "Kept: the count is the result, and line 118 states the number gate's limits, which the second gate's item 20 asked for",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-10",
+   "severity": "FIX",
+   "finding": "README.md's first screen has no latency figure",
+   "outcome": "known limit",
+   "detail": "The headline's rows come from the generator, outside this round's ruling, and the first screen is at its word limit; the latency targets are in RESULTS.md and in WRITEUP's list of misses",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r25-11",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:3, DRAM fills used before they are defined",
+   "outcome": "fixed",
+   "detail": "WRITEUP.md:3 says DRAM fills (cache lines from DRAM)",
+   "commits": [
+    "9a36718"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-12",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:3, the exception names designs not yet introduced",
+   "outcome": "no change needed",
+   "detail": "Kept: the thesis must carry its exception",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-13",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:13 and 17, the headline timing ran on a shared host with no check that nothing ran beside it",
+   "outcome": "no change needed",
+   "detail": "Kept: line 17 is the second gate's item 1, set this round; it says which timings ran under the sampler and that every other one rests on the machine check's refusals alone",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-14",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:11, turbo on and the headline's clock not known",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 3; the clock answer says the clock is not known and gives the four readings",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-15",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:38, the counter columns want a subtracted column, and four decimals are false precision",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 2 set the sentence; the empty span is from a separate pass, so nothing is subtracted, and figures are printed as their file prints them, which the number gate requires",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-16",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:49, which columns taking the counter reads off applies to",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, by the round's decision on this reader's findings, which gave no further reason",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-17",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:49, whether itch-book's naive book is like this baseline is not said",
+   "outcome": "known limit",
+   "detail": "Not established here; BENCHMARKS.md gives the bar's source in its own words",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r25-18",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:55, paged-flat's rate differs between runs by as much as the designs do",
+   "outcome": "no change needed",
+   "detail": "Kept: the page says each run gives its own rate, to be compared within one run, and that why they differ was not measured",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-19",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:61, what the warm-up pass allocates",
+   "outcome": "no change needed",
+   "detail": "Kept: the linked file gives the warm-up, and no new measurement was made",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-20",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:63, a book and three pools in one sentence",
+   "outcome": "known limit",
+   "detail": "The page is at its word limit; docs/DETAILS.md describes the pools",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r25-21",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:69, the fall in fills and the rise in speed are not reconciled",
+   "outcome": "known limit",
+   "detail": "Stated now: time spent waiting was not measured, since no file counts memory-stall cycles",
+   "commits": [
+    "9a36718"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r25-22",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:73, read twice",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 5 set the sentence",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-23",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:79, ten book-affecting types or nine",
+   "outcome": "no change needed",
+   "detail": "Ten is right, as the parse rate file lists them; the reader counted the book bench's list",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-24",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:89, sixth of how many, the label project, where the threads ran and why the ring is slower",
+   "outcome": "known limit",
+   "detail": "In part: it ranks sixth of eight, and the label is gone, this project's ring 229.3 ns, which the number gate takes; where the threads ran and why are not added, the page being at its word limit and no run having diagnosed it",
+   "commits": [
+    "9a36718",
+    "6ec7038",
+    "1e9ae65"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r25-25",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:91, missed by far beside a CV of 34.72%",
+   "outcome": "fixed",
+   "detail": "By far is gone; the verdict is RESULTS.md's",
+   "commits": [
+    "9a36718"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-26",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:95, a pipelining bar that allows a slower pipeline",
+   "outcome": "no change needed",
+   "detail": "Kept: the bar is BENCHMARKS.md's",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-27",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:99, one bisection step is unclear, and the traffic is loopback only",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, by the round's decision on this reader's findings, which gave no further reason",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-28",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:105, bookkeeping",
+   "outcome": "no change needed",
+   "detail": "Kept: the sentence says why a target met on the Mac counts as missed",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-29",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:107, unrelated to the host's CPU is not needed, and the P&L has no scale",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, by the round's decision on this reader's findings, which gave no further reason",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-30",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:113, the proof's gist is not given",
+   "outcome": "no change needed",
+   "detail": "Kept: the page is at its word limit, and the link goes to the proof's heading",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-31",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:119, a stray comma, and observations not defined",
+   "outcome": "known limit",
+   "detail": "In part: the comma is gone; observations is kept",
+   "commits": [
+    "9a36718"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r25-32",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:125, held for every execution and then fails on two sessions, read twice",
+   "outcome": "fixed",
+   "detail": "WRITEUP.md:125 says T-TRADE-5 fails on two sessions, both other days",
+   "commits": [
+    "1e9ae65"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-33",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:141, the subtraction is left to the reader",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 3; the empty span is from a separate run and the file takes nothing off by it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-34",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:144, another task on the core reads as an alibi",
+   "outcome": "fixed",
+   "detail": "WRITEUP.md says what it waits on was not traced",
+   "commits": [
+    "9a36718"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-35",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:146, the fallback count is cheap to report",
+   "outcome": "no change needed",
+   "detail": "Kept: no new measurement was made this round",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-36",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:164, the bar cannot be met on a 4 MB L3, and the terms shift",
+   "outcome": "no change needed",
+   "detail": "Kept: the line is in the generated block",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-37",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:171, a fragment",
+   "outcome": "no change needed",
+   "detail": "Kept: the line is in the generated block",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r25-38",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:172 and 176, over-scrupulous",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, by the round's decision on this reader's findings, which gave no further reason",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-1",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:164, T-PERF-1 called last-level misses where its file's counter is a floor on DRAM demand fills",
+   "outcome": "known limit",
+   "detail": "The line is generated: its name for the target is BENCHMARKS.md's and its words for the counter are the file's, and a change to the generator is outside this round's ruling",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r26-2",
+   "severity": "FIX",
+   "finding": "README.md:7, not the host's share: share of what",
+   "outcome": "fixed",
+   "detail": "README.md:7 says WRITEUP.md gives what was measured, and what was not",
+   "commits": [
+    "436ab2b"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-3",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:89, the label project leaks into the prose",
+   "outcome": "fixed",
+   "detail": "The label is now this project's ring, which the number gate takes",
+   "commits": [
+    "1e9ae65"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-4",
+   "severity": "FIX",
+   "finding": "Two pairs read as contradictions: WRITEUP.md:79 against 142, and README.md:18 against WRITEUP.md:177",
+   "outcome": "known limit",
+   "detail": "In part: WRITEUP.md:79 now says the decode is this parser's and the bar itch-book's. WRITEUP.md:177 is the generated line for T-BOOK-4 and speaks of that target's runs, a change to the generator outside this round's ruling",
+   "commits": [
+    "1e9ae65"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r26-5",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:125, the two sessions are other days, which the sentence does not say",
+   "outcome": "fixed",
+   "detail": "WRITEUP.md:125 says it fails on two sessions, both other days",
+   "commits": [
+    "1e9ae65"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-6",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:141 and 144 drop the thousands separators",
+   "outcome": "no change needed",
+   "detail": "Kept: each figure is printed as its file prints it, which the number gate holds",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-7",
+   "severity": "FIX",
+   "finding": "README.md:6, Zen 1 means nothing to a recruiter, and small reads as an excuse",
+   "outcome": "no change needed",
+   "detail": "Kept: r25 asked that the part be called small and the word was added for it; the two readers disagree, and WRITEUP's title uses the same word",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-8",
+   "severity": "FIX",
+   "finding": "README.md:6, the link text is a file name",
+   "outcome": "no change needed",
+   "detail": "Kept: every figure links the file it comes from by its path, and the gates read that",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-9",
+   "severity": "FIX",
+   "finding": "README.md:7, the Zen 1 host misses most, and the host's share",
+   "outcome": "known limit",
+   "detail": "In part: the host's share is gone; the Zen 1 host misses most stays, the sentence being the second gate's item 8",
+   "commits": [
+    "436ab2b"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r26-10",
+   "severity": "NOTE",
+   "finding": "README.md:10, the row ids",
+   "outcome": "no change needed",
+   "detail": "Kept, as the second gate ruled on the cells and ids",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-11",
+   "severity": "NOTE",
+   "finding": "README.md:12, the floor of messages compared is oddly exact",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 9 put the floor back in the cell",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-12",
+   "severity": "NOTE",
+   "finding": "README.md:14, whose figure the bar's machine is",
+   "outcome": "no change needed",
+   "detail": "Kept: the cell is generated, and BENCHMARKS.md gives the source",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-13",
+   "severity": "FIX",
+   "finding": "README.md:16, the engine-event gloss, and the met bar called weak",
+   "outcome": "no change needed",
+   "detail": "Kept: the cells are generated, and the second gate's item 9 asked for the bar's kind",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-14",
+   "severity": "FIX",
+   "finding": "README.md:18, the Mac beats the bar and has no verdict",
+   "outcome": "known limit",
+   "detail": "The project's rule gives a Mac timing no verdict against a bar set on x86 Linux, as for r25-6",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r26-15",
+   "severity": "FIX",
+   "finding": "README.md:45, more misses than hits",
+   "outcome": "no change needed",
+   "detail": "Kept: the count is the result",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-16",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:3, the index is not named paged until line 23",
+   "outcome": "no change needed",
+   "detail": "Kept: the page is at its word limit, and line 23 names it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-17",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:3 against 51 and 69, no stall-cycle measure behind the thesis",
+   "outcome": "known limit",
+   "detail": "Stated: lines 51 and 69 each say what was not measured; no file counts memory-stall cycles",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r26-18",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:17, T-BT-3 named before it is explained",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, by the round's decision on this reader's findings, which gave no further reason",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-19",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:17 with 13, most timings rest on the machine check's refusals alone",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 1 set the sentence",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-20",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:19, the number gate's description is about the process",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 20 asked for its limits there",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-21",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:36, the counter's event is not named",
+   "outcome": "no change needed",
+   "detail": "Kept: the linked file names it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-22",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:38, the counter reads' share of the instruction figure",
+   "outcome": "no change needed",
+   "detail": "Kept: the sentence says it, as the second gate's item 2 set it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-23",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:55, three rates for one design",
+   "outcome": "no change needed",
+   "detail": "Kept: the page says each run gives its own rate and that why they differ was not measured",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-24",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:63, a third book not explained",
+   "outcome": "known limit",
+   "detail": "The page is at its word limit; docs/DETAILS.md describes it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r26-25",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:73, reads as if the look-ahead were on",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 5 set the sentence",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-26",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:75, no figure for the field decode",
+   "outcome": "no change needed",
+   "detail": "Kept: docs/DETAILS.md and the linked file give it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-27",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:79, whether itch-book's code was run",
+   "outcome": "fixed",
+   "detail": "WRITEUP.md:79 says the decode is this parser's and the bar itch-book's",
+   "commits": [
+    "1e9ae65"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-28",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:89, why the ring loses",
+   "outcome": "known limit",
+   "detail": "No run diagnosed it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r26-29",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:97 to 99, no io_uring figure, and the step's size",
+   "outcome": "known limit",
+   "detail": "The page is at its word limit; docs/DETAILS.md and the linked file give each mode's rate",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r26-30",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:105, the Mac's figure, and how far the runs differed",
+   "outcome": "known limit",
+   "detail": "The page is at its word limit; RESULTS.md has the Mac's row",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r26-31",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:113, the proof cannot be checked in the time",
+   "outcome": "no change needed",
+   "detail": "Kept: the link goes to the proof's heading",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-32",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:141, the bound says little, and the readings' swing",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 3 set the answer",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-33",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:144, 4 ms is a scheduler tick, which the page does not raise",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 4 said what it waits on was not traced, and naming a cause would be a guess; r25 objected to the cause the page did name",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-34",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:146, the fallback count is not reported",
+   "outcome": "no change needed",
+   "detail": "Kept: no new measurement was made this round",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-35",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:163, the map book's extra time given as DRAM misses",
+   "outcome": "known limit",
+   "detail": "A generated line, as the second gate's reader NOTE-2",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r26-36",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:164, the bar's cache not mentioned",
+   "outcome": "no change needed",
+   "detail": "Kept: the line is generated, and a change to the generator is outside this round's ruling",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r26-37",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:177 against 178, one day called busier and a BX day",
+   "outcome": "no change needed",
+   "detail": "Kept: the lines are generated, and Nasdaq's sample has a file from each exchange for that day",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-1",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:9, one day carries all performance work, against T-PARSE-3 on 10302019",
+   "outcome": "fixed",
+   "detail": "The sentence now leaves out the one parse rate timed on 10302019; it had been on the page since T-PARSE-3 was published, and no earlier reader or checker caught it",
+   "commits": [
+    "970aaf0"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-2",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:17, the link beside the run log is the predictions file, and every run against the predictions that ran without a driver",
+   "outcome": "fixed",
+   "detail": "Each file is linked beside its own noun, and the sentence speaks of the drivers' runs",
+   "commits": [
+    "970aaf0"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-3",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:163, the map book's extra time given as DRAM misses",
+   "outcome": "known limit",
+   "detail": "A generated line, as the second gate's reader NOTE-2",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r27-4",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:141, the file takes nothing off by it is not a sentence, and the bound says little",
+   "outcome": "known limit",
+   "detail": "In part: the clause is reworded; the bound stays, the second gate's item 3 having set the answer",
+   "commits": [
+    "970aaf0"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r27-5",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:149, the heading lists T-WASM-1, which was measured",
+   "outcome": "no change needed",
+   "detail": "Kept: the heading is the name of RESULTS.md's section, which links hold, and T-WASM-1's line says it has no verdict",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-6",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:3, over a second old against 1 s old or more",
+   "outcome": "fixed",
+   "detail": "WRITEUP.md:3 says a second old or more",
+   "commits": [
+    "970aaf0"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-7",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:142, Ryzen 9700X",
+   "outcome": "fixed",
+   "detail": "WRITEUP.md:142 says Ryzen 7 9700X",
+   "commits": [
+    "970aaf0"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-8",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:36 against 164, one counter under two names",
+   "outcome": "known limit",
+   "detail": "Line 164 is generated, as for r26-1",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r27-9",
+   "severity": "NOTE",
+   "finding": "README.md:21, on 30 December 2019 reads as the run's date",
+   "outcome": "no change needed",
+   "detail": "Kept: the sentence says it is the day in Nasdaq's file, and each results file gives its run's date",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-10",
+   "severity": "FIX",
+   "finding": "README.md:6, why an embedded chip",
+   "outcome": "no change needed",
+   "detail": "Kept: the page gives the host, and why this host is not a result",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-11",
+   "severity": "FIX",
+   "finding": "README.md:7, the third bullet announces the misses",
+   "outcome": "no change needed",
+   "detail": "Kept: it is the result, and the second gate's item 8 set the sentence",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-12",
+   "severity": "NOTE",
+   "finding": "README.md:12, the bar's floor",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 9 set the cell",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-13",
+   "severity": "NOTE",
+   "finding": "README.md:13, the cell's detail",
+   "outcome": "no change needed",
+   "detail": "Kept: the cell is generated, and a change to the generator is outside this round's ruling",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-14",
+   "severity": "NOTE",
+   "finding": "README.md:15, the cell's detail",
+   "outcome": "no change needed",
+   "detail": "Kept: the cell is generated, and a change to the generator is outside this round's ruling",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-15",
+   "severity": "NOTE",
+   "finding": "README.md:16, the bar's kind",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 9 set the cell",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-16",
+   "severity": "FIX",
+   "finding": "README.md:18, the Mac's figure has no verdict",
+   "outcome": "known limit",
+   "detail": "The project's rule gives a Mac timing no verdict against a bar set on x86 Linux, as for r25-6",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r27-17",
+   "severity": "NOTE",
+   "finding": "README.md, the row ids",
+   "outcome": "no change needed",
+   "detail": "Kept, as the second gate ruled on the ids",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-18",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:3, the definition comes later and the event is not named",
+   "outcome": "no change needed",
+   "detail": "Kept: the gloss was added for r25, and the linked file names the event",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-19",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:3 and 38, the counts should be published net of the counter reads",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 2 set the sentence, and the empty span is from a separate pass",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-20",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:11, the host's facts cited to a counters file",
+   "outcome": "no change needed",
+   "detail": "Kept: that file holds them, as for the second gate's cold NOTE-2",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-21",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:17, how the idle sibling was checked, and no sampler",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 1 set the sentence, and docs/DETAILS.md gives the machine check",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-22",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:49, itch-book's naive book",
+   "outcome": "known limit",
+   "detail": "Not established here, as for r25-17; BENCHMARKS.md gives the bar's source",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r27-23",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:55, three rates for one design",
+   "outcome": "no change needed",
+   "detail": "Kept: the page says it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-24",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:73",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 5 set the sentence",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-25",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:75, the field decode's figure",
+   "outcome": "no change needed",
+   "detail": "Kept: docs/DETAILS.md and the linked file give the figure",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-26",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:89, the units, and moodycamel",
+   "outcome": "no change needed",
+   "detail": "Kept: the ring's figure carries the unit, and the generated list gives the ratio to moodycamel",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-27",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:91, the talk has no link",
+   "outcome": "no change needed",
+   "detail": "Kept: BENCHMARKS.md gives the source",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-28",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:95, the bar of 1.31",
+   "outcome": "no change needed",
+   "detail": "Kept: BENCHMARKS.md gives the bar and its source, and the page says the saving is within the spread",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-29",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:99",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, by the round's decision on this reader's findings, which gave no further reason",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-30",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:103, engine events not defined on this page",
+   "outcome": "known limit",
+   "detail": "The page is at its word limit; the README and RESULTS.md define it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r27-31",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:105 and 171",
+   "outcome": "no change needed",
+   "detail": "Kept: the page is at its word limit, and line 171 is generated",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-32",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:141, the arithmetic",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 3 set the answer",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-33",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:144, the 4 ms wait not traced",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 4, and no run traced it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-34",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:146",
+   "outcome": "no change needed",
+   "detail": "Kept: no new measurement was made this round",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-35",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:164",
+   "outcome": "no change needed",
+   "detail": "Kept: the line is generated",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-36",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:172 and 176",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, by the round's decision on this reader's findings, which gave no further reason",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-37",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:129 to 131, commits and faults by id",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's third ruling asked that a public page say which run the matrix page is and how many faults were added since",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-38",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:135 to 137, the final review",
+   "outcome": "no change needed",
+   "detail": "Kept: one sentence that points to the record",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-39",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:19, how the work was organised",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 20 asked for it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-40",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:17, how the work was organised",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, by the round's decision on this reader's findings, which gave no further reason",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r27-41",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:13, how the work was organised",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, by the round's decision on this reader's findings, which gave no further reason",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-1",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:99, one bisection step above most other modes reads garbled, and io_uring is glossed after the heading uses it",
+   "outcome": "known limit",
+   "detail": "Left after the last read, by the rule fixed before it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r28-2",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:81, varied more than on 12302019 with no CV given for 12302019",
+   "outcome": "known limit",
+   "detail": "Left after the last read, by the rule fixed before it; the 12302019 page gives its CV",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r28-3",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:3, left in most fills left reads as a stray word",
+   "outcome": "known limit",
+   "detail": "Left after the last read, by the rule fixed before it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r28-4",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:51, yet is no faster where the table shows it slower",
+   "outcome": "no change needed",
+   "detail": "Kept: it is slower by 0.7%, inside what two runs differ by, so no faster is true",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-5",
+   "severity": "NOTE",
+   "finding": "README.md:21, on 30 December 2019 reads as the run's date",
+   "outcome": "no change needed",
+   "detail": "Kept, as for r27-9: the sentence says it is the day in Nasdaq's file",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-6",
+   "severity": "FIX",
+   "finding": "README.md:6, what the part is and why it matters",
+   "outcome": "no change needed",
+   "detail": "Kept, as for r26-7 and r27-10: the page gives the host",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-7",
+   "severity": "FIX",
+   "finding": "README.md:12 to 16, row ids in the first table",
+   "outcome": "no change needed",
+   "detail": "Kept, as the second gate ruled on the ids",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-8",
+   "severity": "NOTE",
+   "finding": "README.md:12, the bar's floor",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 9 set the cell",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-9",
+   "severity": "NOTE",
+   "finding": "README.md:13, the cell's detail",
+   "outcome": "no change needed",
+   "detail": "Kept: the cell is generated, and a change to the generator is outside this round's ruling",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-10",
+   "severity": "NOTE",
+   "finding": "README.md:15, the cell's detail",
+   "outcome": "no change needed",
+   "detail": "Kept: the cell is generated, and a change to the generator is outside this round's ruling",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-11",
+   "severity": "FIX",
+   "finding": "README.md:16, the bar's kind",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 9 set the cell",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-12",
+   "severity": "FIX",
+   "finding": "README.md:18, the Mac's figure has no verdict",
+   "outcome": "known limit",
+   "detail": "The project's rule gives a Mac timing no verdict against a bar set on x86 Linux, as for r25-6",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r28-13",
+   "severity": "NOTE",
+   "finding": "README.md:21, cleared by the machine check and predate the Linux sampler rule",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's ruling on README line 18 asked for that sentence",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-14",
+   "severity": "NOTE",
+   "finding": "README.md, the headings below the first screen",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, by the round's decision on this reader's findings, which gave no further reason",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-15",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:3",
+   "outcome": "no change needed",
+   "detail": "Kept, as for r25-12 and r26-16",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-16",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:11, the host's facts",
+   "outcome": "no change needed",
+   "detail": "Kept: the linked file holds the host's facts",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-17",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:13, no TLB counter, and huge pages asserted",
+   "outcome": "known limit",
+   "detail": "No TLB counter was read, and the page says so; no new measurement was made",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r28-18",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:15 to 19, written for the author",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's items 1 and 20 set those sentences",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-19",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:38",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 2 set the sentence",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-20",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:40 to 47, no spread or repetition count in the table",
+   "outcome": "known limit",
+   "detail": "The page is at its word limit; each row's file gives its repetitions and spread",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r28-21",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:55",
+   "outcome": "no change needed",
+   "detail": "Kept: the page says each run gives its own rate",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-22",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:63",
+   "outcome": "known limit",
+   "detail": "The page is at its word limit, as for r25-20",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r28-23",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:73",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 5 set the sentence",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-24",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:75, no figure for the win, and 35.099 cycles against the strict decode's rate",
+   "outcome": "known limit",
+   "detail": "The two figures are from different benches, the SIMD run's whole parse and the parse rate bench's strict decode, and the page does not say so; left after the last read, by the rule fixed before it",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r28-25",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:89",
+   "outcome": "known limit",
+   "detail": "The page is at its word limit; the file gives the placement",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r28-26",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:95",
+   "outcome": "no change needed",
+   "detail": "Kept: BENCHMARKS.md gives the bar and its source",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-27",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:99, S4 undefined and no io_uring figure",
+   "outcome": "known limit",
+   "detail": "As for r26-29",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r28-28",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:129 to 131, commits in the text, and whether the 14 are among the 1771",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's third ruling asked for that sentence; the 14 are not among the 1771, and RESULTS.md and the matrix page give both counts",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-29",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:135 to 137",
+   "outcome": "no change needed",
+   "detail": "Kept: one sentence that points to the record",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-30",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:141, kHz, and the bar host's rated clock as a bound",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 3; a rated clock is not a published measurement of the bar's run",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-31",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:144, a scheduler tick suspected, and no separators",
+   "outcome": "no change needed",
+   "detail": "Kept: the second gate's item 4; no run traced it, and figures are printed as their file prints them",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-32",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:154",
+   "outcome": "no change needed",
+   "detail": "Kept: the line is generated",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r28-33",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:164",
+   "outcome": "known limit",
+   "detail": "A generated line, as for r26-1",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the second gate"
+   ]
+  },
+  {
+   "id": "r28-34",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:172 and 176",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, by the round's decision on this reader's findings, which gave no further reason",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
   }
  ],
  "gates": [
@@ -7934,8 +9767,8 @@
      "label": "18",
      "severity": "FIX",
      "finding": "RESULTS.md is 944 lines with no summary, in the order the rows were made, and opens on four FAILs",
-     "outcome": "fixed",
-     "detail": "RESULTS.md opens with a generated summary, one row a target with its one verdict, and its main table is sorted by target.",
+     "outcome": "known limit",
+     "detail": "Held in part: RESULTS.md opens with a generated summary, one row a target with its one verdict, but its main table is still in the order its rows are made, and sorting it is a change to the generator outside this round's ruling. It was recorded as fixed until the second gate, whose reader NOTE-1 showed the table is not sorted, so it is a known limit.",
      "commits": [
       "ea6b539"
      ],
@@ -7944,7 +9777,7 @@
      ],
      "faults": [],
      "notes": [
-      "The pages after the acceptance gate"
+      "Left as it is after the second gate"
      ]
     },
     {
@@ -8890,12 +10723,14 @@
      "label": "NOTE-3",
      "severity": "NOTE",
      "finding": "WRITEUP.md:170 links the queue walk's share to the shadow backtest file, where the 3.51% is in the walks ladder file",
-     "outcome": "open",
-     "detail": "",
+     "outcome": "known limit",
+     "detail": "The T-BT-3 line's words and link are generated by results_table.py, and changing either is a change to the generator outside this round's ruling; the share it names was measured in the walks ladder file's run, not the published one",
      "commits": [],
      "tests": [],
      "faults": [],
-     "notes": []
+     "notes": [
+      "Left as it is after the second gate"
+     ]
     },
     {
      "checker": "cold",
