@@ -812,7 +812,7 @@ def header_lines(records, args, run_id, started, finished, sampled):
 
 
 def condition_prose(pages):
-    return ("What was checked to be in memory while the passes were timed: the bench's own "
+    return ("What was checked to be in memory, before and after each timed pass: the bench's own "
             "copy of the day, not the file in the page cache, asked for with "
             "`--input-condition copy`. Each process read the whole file into its own memory "
             f"before its warm-up, a copy of {pages:,} pages of {PAGE:,} bytes, and its timed "
