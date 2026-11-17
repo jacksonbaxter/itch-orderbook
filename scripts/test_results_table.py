@@ -1108,10 +1108,11 @@ class MissedTargets(unittest.TestCase):
                       table)
         self.assertNotRegex(table, r"At p50 ")
         # T-DESIGN-1's why: each book's counters, cited to its own file, and the cause inferred.
-        self.assertIn("the map book: 2272.754 cycles and 5.287 DRAM fills a message ([file]("
-                      "results/bench_book_map-fresh_ram_debian_12302019.md)); the fast book: "
-                      "1141.088 cycles and 1.972 fills ([file](results/bench_book_paged-flat_ram_"
-                      "debian_12302019.md)); the gap as DRAM waits is inferred.", table)
+        self.assertIn("the map book's counter pass: 2272.754 cycles and 5.287 DRAM fills a "
+                      "message ([file](results/bench_book_map-fresh_ram_debian_12302019.md)); the "
+                      "fast book's: 1141.088 cycles and 1.972 fills ([file](results/bench_book_"
+                      "paged-flat_ram_debian_12302019.md)); the gap as DRAM waits is inferred.",
+                      table)
         self.assertNotIn("is DRAM misses", table)
         missed = self.missed()
         self.assertIn("the fast book 1141.088, 581.789 and 1.972; inferred, not measured: most of "
@@ -1120,6 +1121,16 @@ class MissedTargets(unittest.TestCase):
         self.assertIn("except between the two linked-level arms: `paged-linked` makes fewer fills "
                       "than `hash-linked` and is no faster;", missed)
         self.assertNotIn("its speed follows its DRAM fills", missed)
+        # T-BOOK-2's why links each of the four arms' files of the run with counters.
+        self.assertIn("in the run of the same four arms with counters ([results/bench_book_"
+                      "paged-flat_mapped_top_counters_debian_12302019.md](results/bench_book_"
+                      "paged-flat_mapped_top_counters_debian_12302019.md), ", missed)
+        for arm in ("hash-flat", "paged-linked", "hash-linked"):
+            self.assertIn(f"(results/bench_book_{arm}_mapped_top_counters_debian_12302019.md)",
+                          missed)
+        self.assertIn("), every fast arm runs about the same instructions a message, and from the "
+                      "fastest arm to the slowest, speed falls as DRAM fills rise; not "
+                      "established:", missed)
         self.assertIn("gives the deciding row, or the worst: for latency, the largest gap in ns.",
                       table)
         self.assertIn("- **T-TRADE-3, each symbol's continuous volume vs SEC MIDAS:** On the "

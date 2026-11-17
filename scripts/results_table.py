@@ -1258,11 +1258,13 @@ BOOK_WHY = ("measured: every fast arm runs about the same instructions a message
             "established")
 # T-BOOK-2's arms, the file mapped and the top of book tracked, have their counters from a run
 # of their own, in which speed falls as fills rise across all four, the linked pair included.
-BOOK2_WHY = ("measured: in the run of the same four arms with counters, every fast arm runs about "
-             "the same instructions a message, and from the fastest arm to the slowest, speed "
-             "falls as DRAM fills rise; not established: how much of the gap is the host's, since "
-             "no x86 host with a larger cache was available; the bar was set on the x86 host named "
-             "beside it",
+BOOK2_WHY = ("measured: in the run of the same four arms with counters ("
+             + ", ".join(source(f"bench_book_{arm}_mapped_top_counters_debian_12302019.md")
+                         for arm in ("paged-flat", "hash-flat", "paged-linked", "hash-linked"))
+             + "), every fast arm runs about the same instructions a message, and from the fastest "
+               "arm to the slowest, speed falls as DRAM fills rise; not established: how much of "
+               "the gap is the host's, since no x86 host with a larger cache was available; the "
+               "bar was set on the x86 host named beside it",
              "speed falls as DRAM fills rise; the host's share not established")
 TAIL_WHY = ("measured: messages that name an order older than a second take most of the DRAM "
             "fills; not established: what sets the tail, which no run traced",
@@ -1685,8 +1687,9 @@ def design_why(root):
             f"({source(MAP_DEBIAN)}), the fast book {fast[0]}, {fast[1]} and {fast[2]}; inferred, "
             "not measured: most of the map book's extra cycles are waits on DRAM; not established: "
             "why the fast book gains less over it on Zen 1 than on the Mac",
-            f"the map book: {slow[0]} cycles and {slow[2]} DRAM fills a message ([file](results/"
-            f"{MAP_DEBIAN})); the fast book: {fast[0]} cycles and {fast[2]} fills ([file](results/"
+            f"the map book's counter pass: {slow[0]} cycles and {slow[2]} DRAM fills a message "
+            f"([file](results/{MAP_DEBIAN})); the fast book's: {fast[0]} cycles and {fast[2]} "
+            f"fills ([file](results/"
             f"{BOOK_DEBIAN})); the gap as DRAM waits is inferred")
 
 
