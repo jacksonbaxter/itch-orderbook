@@ -467,7 +467,7 @@
       "mutations": [
         {
           "file": "scripts/review_report.py",
-          "old": "        unsettled_at_gate = [gate_id(f) for f in at_gate if f[\"outcome\"] in UNSETTLED]\n        if unsettled_at_gate:\n",
+          "old": "        unsettled_at_gate = [f\"the {called(data, gate)}'s {gate_id(f)}\" for gate in gates\n                             for f in gate[\"findings\"] if f[\"outcome\"] in UNSETTLED]\n        if unsettled_at_gate:\n",
           "new": "        unsettled_at_gate = []\n        if unsettled_at_gate:\n"
         }
       ],
@@ -489,8 +489,8 @@
       "mutations": [
         {
           "file": "scripts/review_report.py",
-          "old": "    if any(at_gate):\n        said.append(",
-          "new": "    if False:\n        said.append("
+          "old": "        if any(at_gate):\n            said.append(",
+          "new": "        if False:\n            said.append("
         }
       ],
       "command": [
@@ -511,7 +511,7 @@
       "mutations": [
         {
           "file": "scripts/review_report.py",
-          "old": "    every += [(f, gate_id(f), False) for f in data[\"gate\"][\"findings\"]]\n",
+          "old": "    every += [(f, gate_id(f), False) for gate in data[\"gates\"] for f in gate[\"findings\"]]\n",
           "new": "    every += []\n"
         }
       ],
@@ -533,7 +533,7 @@
       "mutations": [
         {
           "file": "scripts/review_report.py",
-          "old": "        if of_gate and finding[\"checker\"] not in checkers:\n",
+          "old": "        if of_gate and finding[\"checker\"] not in checkers[number]:\n",
           "new": "        if of_gate and not finding[\"checker\"]:\n"
         }
       ],
@@ -643,8 +643,8 @@
       "mutations": [
         {
           "file": "scripts/review_report.py",
-          "old": "        if by_checker[cid] != stated:\n",
-          "new": "        if False:\n"
+          "old": "            if counted_at_gate[cid] != stated:\n",
+          "new": "            if False:\n"
         }
       ],
       "command": [
@@ -841,8 +841,8 @@
       "mutations": [
         {
           "file": "scripts/final_review.json",
-          "old": "    \"count\": {\n     \"BLOCK\": 4,\n     \"FIX\": 17,\n     \"NOTE\": 9\n    },\n    \"not_listed\": [\n     {\n      \"severity\": \"BLOCK\",\n      \"reason\": \"it is a question of presentation that is decided outside this record, after it closes\"\n     }\n    ]",
-          "new": "    \"count\": {\n     \"BLOCK\": 3,\n     \"FIX\": 17,\n     \"NOTE\": 9\n    },\n    \"not_listed\": []"
+          "old": "     \"count\": {\n      \"BLOCK\": 4,\n      \"FIX\": 17,\n      \"NOTE\": 9\n     },\n     \"not_listed\": [\n      {\n       \"severity\": \"BLOCK\",\n       \"reason\": \"it is a question of presentation that is decided outside this record, after it closes\"\n      }\n     ]",
+          "new": "     \"count\": {\n      \"BLOCK\": 3,\n      \"FIX\": 17,\n      \"NOTE\": 9\n     },\n     \"not_listed\": []"
         }
       ],
       "command": [
