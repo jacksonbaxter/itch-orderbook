@@ -693,6 +693,36 @@
       }
     },
     {
+      "id": "harness-skip-reader-misses-elifdef",
+      "breaks": "the reader of the sources does not see #elifdef or #elifndef, so a test in such a branch is read as compiled where it is not, and one compiled here is missed",
+      "check": "test_skips_cli.py, the reader's own case of #ifdef, #elifdef, #elifndef and #else branches",
+      "mutations": [
+        {
+          "file": "tests/test_skips_cli.py",
+          "old": "(ifdef|ifndef|if|elifdef|elifndef|elif|else|endif)",
+          "new": "(ifdef|ifndef|if|elif|else|endif)"
+        }
+      ],
+      "build": {
+        "preset": "release",
+        "targets": [
+          "skip_probe",
+          "test_udp"
+        ]
+      },
+      "command": [
+        "ctest",
+        "--preset",
+        "release",
+        "-R",
+        "^test_skips_cli$",
+        "--output-on-failure"
+      ],
+      "expect": {
+        "signature": "skips cli: FAIL reader: reads \\[[^\\]]*\\] as compiled here"
+      }
+    },
+    {
       "id": "harness-skip-reader-finds-none",
       "breaks": "the reader of the sources sees no TEST line, so it finds no test that can skip and the check has nothing to hold",
       "check": "test_skips_cli.py",

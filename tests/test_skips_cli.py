@@ -13,7 +13,8 @@ which would take a failing binary that printed a skip as Skipped; every GoogleTe
 SKIP_RETURN_CODE 77 and ITCH_CTEST_SKIPS; each test that can skip has an entry of its own
 that its binary's main entry leaves out. Which tests can skip is read from the sources, not
 kept by hand: every GTEST_SKIP in tests/test_*.cpp, in the TEST it sits in or in each test
-that uses the macro it sits in, on this platform's side of any #ifdef __APPLE__ or __linux__.
+that uses the macro it sits in, on this platform's side of any #ifdef __APPLE__ or __linux__
+(and its #elif, #elifdef, #elifndef and #else branches, as the reader's own case checks).
 A GTEST_SKIP anywhere else fails, since no test could be named for it. Last, the receive mode
 entries skip exactly when CMake built none of the modes they check. The harness-skip faults in
 scripts/faults/harness.json and two in udp.json break each.
@@ -57,7 +58,7 @@ TESTS_DIR = Path(__file__).resolve().parent
 TEST_MACRO = re.compile(r"^(TEST|TEST_F|TEST_P|TYPED_TEST|TYPED_TEST_P)\(\s*(\w+)\s*,\s*(\w+)\s*\)")
 INSTANTIATION = re.compile(r"INSTANTIATE_TEST_SUITE_P\(\s*(\w+)\s*,\s*(\w+)\s*,")
 DEFINE = re.compile(r"^\s*#\s*define\s+(\w+)")
-CONDITION = re.compile(r"^\s*#\s*(ifdef|ifndef|if|elif|else|endif)\b(.*)$")
+CONDITION = re.compile(r"^\s*#\s*(ifdef|ifndef|if|elifdef|elifndef|elif|else|endif)\b(.*)$")
 PLATFORM = {"__APPLE__": sys.platform == "darwin", "__linux__": sys.platform.startswith("linux")}
 
 
@@ -79,55 +80,129 @@ def skipping_tests(failures):
     A TEST_P's name is <instantiation>/<suite>.<test>/*, a TYPED_TEST's <suite>/*.<test>."""
     found = set()
     for path in sorted(TESTS_DIR.glob("test_*.cpp")):
-        lines = path.read_text(encoding="utf-8").split("\n")
-        instances = {suite: name for name, suite in INSTANTIATION.findall("\n".join(lines))}
-        stack, current, macro, uses = [], None, None, {}
-        skipping_macros = set()
-        for number, line in enumerate(lines, start=1):
-            condition = CONDITION.match(line)
-            if condition:
-                kind, rest = condition.groups()
-                if kind in ("ifdef", "ifndef", "if"):
-                    stack.append(compiled_here(kind, rest))
-                elif kind == "elif":
-                    stack[-1] = not stack[-1] and compiled_here("if", rest)
-                elif kind == "else":
-                    stack[-1] = not stack[-1]
-                else:
-                    stack.pop()
-                continue
-            live = all(stack)
-            defined = DEFINE.match(line)
-            macro = defined[1] if defined else (macro if macro and lines[number - 2].endswith("\\")
-                                                else None)
-            test = TEST_MACRO.match(line)
-            if test:
-                kind, suite, name = test.groups()
-                if kind == "TEST_P":
-                    full = f"{instances.get(suite, '*')}/{suite}.{name}/*"
-                elif kind.startswith("TYPED_TEST"):
-                    full = f"{suite}/*.{name}"
-                else:
-                    full = f"{suite}.{name}"
-                current = full if live else None
-                uses[full] = set()
-            elif line.startswith("}"):
-                current = None
-            if "GTEST_SKIP" not in line or line.lstrip().startswith("//"):
-                if current:
-                    uses[current].update(re.findall(r"\b([A-Z][A-Z0-9_]+)\(", line))
-                continue
-            if macro:
-                skipping_macros.add(macro)
-            elif current:
-                found.add((path.stem, current))
-            elif live:
-                failures.append((f"{path.name}:{number}", "a GTEST_SKIP outside any test and any "
-                                 "macro, so no test can be named for it"))
-        for full, called in uses.items():
-            if called & skipping_macros:
-                found.add((path.stem, full))
+        found |= skips_in(path.stem, path.name, path.read_text(encoding="utf-8"), failures)
     return found
+
+
+def skips_in(stem, file_name, text, failures):
+    """skipping_tests' reading of one source. Each #if, #ifdef or #ifndef opens a group whose
+    branches (#elif, #elifdef, #elifndef, #else) are each live only if no branch before it was."""
+    found = set()
+    lines = text.split("\n")
+    instances = {suite: name for name, suite in INSTANTIATION.findall(text)}
+    stack, current, macro, uses = [], None, None, {}
+    skipping_macros = set()
+    for number, line in enumerate(lines, start=1):
+        condition = CONDITION.match(line)
+        if condition:
+            kind, rest = condition.groups()
+            if kind in ("ifdef", "ifndef", "if"):
+                holds = compiled_here(kind, rest)
+                stack.append([holds, holds])  # [a branch was taken, this branch is live]
+            elif kind in ("elif", "elifdef", "elifndef"):
+                holds = not stack[-1][0] and compiled_here(kind.removeprefix("el"), rest)
+                stack[-1] = [stack[-1][0] or holds, holds]
+            elif kind == "else":
+                stack[-1] = [True, not stack[-1][0]]
+            else:
+                stack.pop()
+            continue
+        live = all(branch[1] for branch in stack)
+        defined = DEFINE.match(line)
+        macro = defined[1] if defined else (macro if macro and lines[number - 2].endswith("\\")
+                                            else None)
+        test = TEST_MACRO.match(line)
+        if test:
+            kind, suite, name = test.groups()
+            if kind == "TEST_P":
+                full = f"{instances.get(suite, '*')}/{suite}.{name}/*"
+            elif kind.startswith("TYPED_TEST"):
+                full = f"{suite}/*.{name}"
+            else:
+                full = f"{suite}.{name}"
+            current = full if live else None
+            uses[full] = set()
+        elif line.startswith("}"):
+            current = None
+        if "GTEST_SKIP" not in line or line.lstrip().startswith("//"):
+            if current:
+                uses[current].update(re.findall(r"\b([A-Z][A-Z0-9_]+)\(", line))
+            continue
+        if macro:
+            skipping_macros.add(macro)
+        elif current:
+            found.add((stem, current))
+        elif live:
+            failures.append((f"{file_name}:{number}", "a GTEST_SKIP outside any test and any "
+                             "macro, so no test can be named for it"))
+    for full, called in uses.items():
+        if called & skipping_macros:
+            found.add((stem, full))
+    return found
+
+
+# A source the reader must read as the compiler would on this platform: each test skips, and
+# only those in the branches compiled here can.
+READER_CASE = """#ifdef __linux__
+TEST(Reader, OnLinux) {
+  GTEST_SKIP() << "x";
+}
+#elifdef __APPLE__
+TEST(Reader, OnTheMac) {
+  GTEST_SKIP() << "x";
+}
+#else
+TEST(Reader, Elsewhere) {
+  GTEST_SKIP() << "x";
+}
+#endif
+#ifndef __APPLE__
+TEST(Reader, NotOnTheMac) {
+  GTEST_SKIP() << "x";
+}
+#elifndef __linux__
+TEST(Reader, OnTheMacByElifndef) {
+  GTEST_SKIP() << "x";
+}
+#else
+TEST(Reader, OnNeither) {
+  GTEST_SKIP() << "x";
+}
+#endif
+#ifdef __APPLE__
+TEST(Reader, MacFirst) {
+  GTEST_SKIP() << "x";
+}
+#elifdef __linux__
+TEST(Reader, LinuxSecond) {
+  GTEST_SKIP() << "x";
+}
+#else
+TEST(Reader, NeitherThird) {
+  GTEST_SKIP() << "x";
+}
+#endif
+#ifdef __APPLE__
+TEST(Reader, MacOnce) {
+  GTEST_SKIP() << "x";
+}
+#elif defined(__APPLE__) || defined(__linux__)
+TEST(Reader, NotAfterTheMac) {
+  GTEST_SKIP() << "x";
+}
+#endif
+"""
+
+
+def reader_case_expected():
+    apple, linux = PLATFORM["__APPLE__"], PLATFORM["__linux__"]
+    branches = {"OnLinux": linux, "OnTheMac": apple and not linux,
+                "Elsewhere": not apple and not linux, "NotOnTheMac": not apple,
+                "OnTheMacByElifndef": apple and not linux, "OnNeither": apple and linux,
+                "MacFirst": apple, "LinuxSecond": linux and not apple,
+                "NeitherThird": not apple and not linux, "MacOnce": apple,
+                "NotAfterTheMac": linux and not apple}
+    return {("test_reader", f"Reader.{name}") for name, live in branches.items() if live}
 
 
 def filter_runs(test_filter, name):
@@ -232,6 +307,12 @@ def main():
     if gtest_entries < 20:
         failures.append(("entries", f"only {gtest_entries} GoogleTest entries found"))
 
+    read = skips_in("test_reader", "the reader's case", READER_CASE, failures)
+    if read != reader_case_expected():
+        wanted = sorted(name for _, name in reader_case_expected())
+        failures.append(("reader", f"reads {sorted(name for _, name in read)} as compiled here "
+                                   "from a source of #ifdef, #elifdef, #elifndef and #else "
+                                   f"branches, not {wanted}"))
     skipping = skipping_tests(failures)
     for binary, name in sorted(KNOWN_SKIPS - skipping):
         failures.append((f"{binary} {name}", "no longer read as a test that can skip: the "
