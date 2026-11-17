@@ -122,7 +122,7 @@ No counters were read on the queue runs, so why the techniques are worth so much
 
 The nine modes are S1 (`recvfrom`), S2 (`recvmsg`), S3 (`recvmmsg`, blocking) and S4 (`recvmmsg`, spinning) on sockets, and U1 (single-shot receive), U2 (multishot receive into a ring of provided buffers), U3 (multishot `recvmsg`), U4 (U2 with cooperative task running) and U5 (U2 with a kernel polling thread) on io_uring. Each mode's largest lossless rate was bisected at 1,400 bytes a datagram ([results/udp_bisect_debian_12302019.md](../results/udp_bisect_debian_12302019.md)):
 
-- S1, S3, U1, U2 and U3 all reached 2,735,896 msg/s, one bisection step under S4, and S2 reached 2,689,622 msg/s, one step lower again, so blocking sockets and io_uring are not told apart here ([results/udp_bisect_debian_12302019.md](../results/udp_bisect_debian_12302019.md)).
+- S1, S3, U1, U2 and U3 all reached 2,735,896 msg/s, two bisection steps under S4, and S2 reached 2,689,622 msg/s, one step lower again, so blocking sockets and io_uring are not told apart here ([results/udp_bisect_debian_12302019.md](../results/udp_bisect_debian_12302019.md)).
 - U4 reached 1,945,047 msg/s and U5 1,912,149 msg/s ([results/udp_bisect_debian_12302019.md](../results/udp_bisect_debian_12302019.md)). Above that they lost no datagram, but their provided-buffer ring ran dry, which the rule fixed beforehand counts as a loss. A larger ring is untested.
 - Each run's machine check covered core 4 with its sibling 5 only; not checked, so not known to have been idle: the receiver's core 6, and for U5 the SQ thread's core 2 ([results/udp_bisect_debian_12302019.md](../results/udp_bisect_debian_12302019.md)).
 
