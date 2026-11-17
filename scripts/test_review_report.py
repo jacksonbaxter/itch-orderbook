@@ -446,6 +446,18 @@ class ReviewReport(unittest.TestCase):
         second["checkers"][1]["count"] = {"BLOCK": 1, "FIX": 0, "NOTE": 0}
         second["checkers"][1]["id"] = "raw"
         self.assertIn("not a finding of a listed checker of the gate", self.refused("id"))
+        second["checkers"][1]["id"] = "pages"
+        # The second gate's open finding keeps the record from being complete (r24 FIX 2).
+        self.data["complete"] = True
+        self.assertIn("the second gate's reader FIX-1", self.refused("complete"))
+        self.data["complete"] = False
+        # The second gate's evidence is looked for in the tree, as the first gate's is.
+        second["findings"][1]["faults"] = ["parser-frame-not-skipped"]
+        self.assertEqual(self.run_step("write")[0], 0)
+        code, output = self.run_step("check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("review_report: FAIL fault pages BLOCK-1: parser-frame-not-skipped is not "
+                      "in scripts/faults", output)
 
     def test_a_gate_finding_of_no_checker_or_given_twice_is_refused(self):
         self.data["gates"][0]["findings"][1]["checker"] = "code"
@@ -659,13 +671,19 @@ class Committed(unittest.TestCase):
         self.assertIn("readme-writeup-review-figure-not-in-results", [f.id for f in plants])
         for fault in plants:
             self.assertIsNone(fault.build, f"{fault.id} builds, which this test does not")
-            # A name the tree does not hold is left out of the copy, as when this test runs in
-            # the copy of one fault area, which holds less than the repository.
-            fault.tree = tuple(name for name in fault.tree if (REPO_ROOT / name).exists())
+        # A plant whose tree names what this tree does not hold is not run here, as when this
+        # test runs in the copy of one fault area, which holds less than the repository: its
+        # check would fail there for the want of a file, not for the plant.
+        plants = [f for f in plants if all((REPO_ROOT / name).exists() for name in f.tree)]
         scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
         self.addCleanup(scratch.cleanup)
         trees, logs = Path(scratch.name) / "trees", Path(scratch.name) / "logs"
         logs.mkdir()
+        # As the matrix does, each command first passes on its clean tree, so that a signature
+        # printed there is not taken for a plant caught (r24 NOTE 1).
+        with contextlib.redirect_stdout(io.StringIO()):
+            _, failures = fault_matrix.run_controls(REPO_ROOT, trees, plants, logs)
+        self.assertEqual(failures, [], "a plant's check fails on the clean tree")
         with ThreadPoolExecutor(max_workers=fault_matrix.MAX_JOBS) as pool:
             list(pool.map(lambda f: fault_matrix.run_fault(f, REPO_ROOT, trees, logs, False),
                           plants))
