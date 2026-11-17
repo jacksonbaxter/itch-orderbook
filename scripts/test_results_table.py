@@ -30,6 +30,8 @@ HEADLINE_BOOK = "results/bench_book_paged-flat_ram_debian_12302019.md"
 UNJUDGED_BOOK = "results/bench_book_paged-flat_ram_mac_12302019.md"
 HEADLINE_BACKTEST = "results/backtest_quoting_debian_12302019.md"
 PARSE = "results/parse_rate_debian_12302019.md"
+# Where PARSE's T-PARSE-3 row says its bar's day is judged.
+PARSE3_JUDGED = "judged on 10302019, in results/parse_rate_debian_10302019.md"
 
 
 def tables_of(output):
@@ -61,9 +63,13 @@ class ResultsTable(unittest.TestCase):
         path.write_text(text.replace(old, new), encoding="utf-8")
 
     def unpublish_bar_day(self):
-        """The copy as it stood before T-PARSE-3's bar's day had its file: that file gone, and
-        the run-log rows of its prediction, which publishing it added. Both states of the pages
-        are held so: the real one, and this one."""
+        """The copy as it stood before T-PARSE-3's bar's day had its file: that file gone, the
+        run-log rows of its prediction, which publishing it added, and the other day's T-PARSE-3
+        row in the words its driver gave it then, that the bar's day was not measured. Both
+        states of the pages are held so: the real one, and this one."""
+        other = self.root / PARSE
+        other.write_text(other.read_text(encoding="utf-8").replace(
+            f"; {PARSE3_JUDGED} |", "; not measured on 10302019 |"), encoding="utf-8")
         path = self.root / "results" / results_table.PARSE_BAR_DAY
         if not path.is_file():
             return
@@ -707,7 +713,9 @@ class ResultsTable(unittest.TestCase):
         self.assertTrue(oracle.startswith("| Agreement with a second, simple book that shares no "
                                           "code with the fast one, over whole sessions "
                                           "(T-ORACLE-2) | "), oracle)
-        self.assertIn("| 0 divergences over 10 full sessions | 0 divergences in 3,081,392,329 "
+        # The bar whole: its sessions and its floor of messages, as BENCHMARKS.md gives it.
+        self.assertIn("| 0 divergences over 10 full sessions and at least 3,037,078,470 messages "
+                      "compared | 0 divergences in 3,081,392,329 "
                       "messages over 10 sessions | Apple M4 Max | met | "
                       "[results/oracle_sessions.md]", oracle)
         # The control's count says why it is there: the counter does see allocations.
@@ -729,8 +737,18 @@ class ResultsTable(unittest.TestCase):
             "| The backtester replaying a whole day, quoting, with its queue model; an engine "
             "event is a message, or a delivery, arrival, report or wake it causes (T-BT-1) | "),
             backtest)
-        self.assertIn("| ≥ 2.00 M engine events/s | 4.68 M engine events/s (4.57 M messages/s) | "
-                      "Zen 1 host | met |", backtest)
+        # Its bar says what it is, as BENCHMARKS.md does: not a top-tier figure.
+        self.assertIn("| ≥ 2.00 M engine events/s (a small unreviewed repo on a synthetic feed) | "
+                      "4.68 M engine events/s (4.57 M messages/s) | Zen 1 host | met |", backtest)
+        self.edit("BENCHMARKS.md", "- **Comparability:** a small unreviewed repo on a synthetic "
+                  "feed,", "- **Comparability:** a repo on a synthetic feed,")
+        self.assertIn("| ≥ 2.00 M engine events/s (a repo on a synthetic feed) |",
+                      self.headline()[4])
+        self.edit("BENCHMARKS.md", "- **Comparability:** a repo on a synthetic feed,",
+                  "- **Comparablity:** a repo on a synthetic feed,")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("no comparability line for T-BT-1", output)
         for row in rows:
             self.assertNotIn("map-fresh", row)
             self.assertNotIn("core 4", row)
@@ -986,6 +1004,24 @@ class MissedTargets(unittest.TestCase):
         # real tree, whichever state it is in, no generated line says an unmeasured day that has
         # a file; the rest is held from the state before the file, then with test files.
         self.assertEqual(self.unrun_words(), [])
+        # The other day's row says where the bar's day is judged: with that file gone, or there
+        # with no verdict for T-PARSE-3, the row is refused, not shown naming a file that does
+        # not judge it.
+        bar_day = self.root / "results" / results_table.PARSE_BAR_DAY
+        text = bar_day.read_text(encoding="utf-8")
+        bar_day.unlink()
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL results/{results_table.PARSE_BAR_DAY}: T-PARSE-3's row "
+                      "of 12302019 says it is judged there, and the file is not there\n", output)
+        bar_day.write_text(text.replace("the median | met |", "the median | above the bar |"),
+                           encoding="utf-8")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL results/{results_table.PARSE_BAR_DAY}: T-PARSE-3's row "
+                      "of 12302019 says it is judged there, and the file gives it 'above the "
+                      "bar'\n", output)
+        self.setUp()
         self.unpublish_bar_day()
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
@@ -1064,8 +1100,14 @@ class MissedTargets(unittest.TestCase):
         self.assertIn("- **T-SPSC-1, the ring's round trip vs boost, moodycamel and "
                       "rigtorp:** This ring's round trip over moodycamel's is measured at "
                       "1.35× vs a bar of at most 1.00×; two more in RESULTS.md.", table)
-        self.assertIn("- **T-LAT-1, each operation's latency, vs itch-book:** At p50 an add "
-                      "takes 100.10 ns vs 60 ns, 40.10 ns over; eleven more in RESULTS.md.",
+        # A latency line gives the quantile missed by the most nanoseconds, not the first.
+        self.assertIn("- **T-LAT-1, each operation's latency, vs itch-book:** At p99.9 a replace "
+                      "takes 2,734.28 ns vs 945 ns, 1,789.28 ns over; eleven more in RESULTS.md.",
+                      table)
+        self.assertIn("At p99.9 a message takes 1,472.00 ns vs 874 ns, 598.00 ns over; two more",
+                      table)
+        self.assertNotRegex(table, r"At p50 ")
+        self.assertIn("gives the deciding row, or the worst: for latency, the largest gap in ns.",
                       table)
         self.assertIn("- **T-TRADE-3, each symbol's continuous volume vs SEC MIDAS:** On the "
                       "M4 Max, 38 violations on 30 May 2019, none allowed; three more in "
@@ -1212,16 +1254,15 @@ class MissedTargets(unittest.TestCase):
                 self.assertIn(f"]({PARSE}) |", line)
 
     def test_a_parse_target_on_another_day_with_a_bare_met_is_refused(self):
-        self.edit(PARSE, "| above the bar on 12302019, a day other than the bar's; not measured on "
-                  "10302019 |", "| met |")
+        self.edit(PARSE, "| above the bar on 12302019, a day other than the bar's; "
+                  f"{PARSE3_JUDGED} |", "| met |")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
         self.assertIn(f"{PARSE}: T-PARSE-3's bar is set on 10302019, and the file, of 12302019, "
                       "gives it 'met': another day's bar is not met or missed", output)
 
     def test_a_verdict_word_for_another_days_bar_is_refused(self):
-        words = ("above the bar on 12302019, a day other than the bar's; not measured on "
-                 "10302019")
+        words = f"above the bar on 12302019, a day other than the bar's; {PARSE3_JUDGED}"
         for given in ("met", "met; measured on 12302019, not the bar's 10302019, which is not on "
                       "this host: the two days are compared under Caveats",
                       "missed: 21.67 M msg/s and 0.67 GB/s under the bar; measured on 12302019, "

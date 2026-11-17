@@ -2932,6 +2932,28 @@
       }
     },
     {
+      "id": "readme-parse-judged-file-unread",
+      "breaks": "A parse row that says its bar's day is judged in a file is shown when that file is not there or gives no verdict",
+      "check": "test_results_table.py MissedTargets.test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    if judged:\n",
+          "new": "    if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file"
+      ],
+      "expect": {
+        "signature": "(FAIL|ERROR): test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+        "exit": 1
+      }
+    },
+    {
       "id": "readme-fault-row-elsewhere-dropped",
       "breaks": "RESULTS.md's fault-matrix row leaves out the faults not run on its host, so its count reads as every fault",
       "check": "test_results_table.py test_the_fault_matrix_row_says_which_faults_this_host_did_not_run",

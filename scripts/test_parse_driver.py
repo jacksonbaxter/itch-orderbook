@@ -145,15 +145,22 @@ class Figures(unittest.TestCase):
                       targets)
         strict = next(row for row in targets if row.startswith("| T-PARSE-3 |"))
         # A bar set on another day gets no verdict word: what was seen on the day measured,
-        # and that the bar's own day was not measured.
+        # and where the bar's own day is judged, or, for a day with no file, that it was not
+        # measured.
         self.assertTrue(strict.endswith("| ≥ 93.9 M msg/s and 2.89 GB/s, on 10302019 | 66.03 M "
                                         "msg/s, 2.027 GB/s, the median | under the bar on "
                                         "12302019 by 27.87 M msg/s and 0.86 GB/s, a day other "
-                                        "than the bar's; not measured on 10302019 |"), strict)
+                                        "than the bar's; judged on 10302019, in "
+                                        "results/parse_rate_debian_10302019.md |"), strict)
         self.assertEqual(parse_driver.verdict("T-PARSE-3", 117.7e6, 3.615, 93.9, 2.89,
                                               "12302019"),
-                         "above the bar on 12302019, a day other than the bar's; not measured on "
-                         "10302019")
+                         "above the bar on 12302019, a day other than the bar's; judged on "
+                         "10302019, in results/parse_rate_debian_10302019.md")
+        with mock.patch.dict(parse_driver.JUDGED_ELSEWHERE, clear=True):
+            self.assertEqual(parse_driver.verdict("T-PARSE-3", 117.7e6, 3.615, 93.9, 2.89,
+                                                  "12302019"),
+                             "above the bar on 12302019, a day other than the bar's; not "
+                             "measured on 10302019")
         for median in (117.7e6, 90e6):
             words = parse_driver.verdict("T-PARSE-3", median, 3.615, 93.9, 2.89, "12302019")
             self.assertFalse(words.startswith(("met", "missed")), words)
@@ -263,7 +270,7 @@ class Check(unittest.TestCase):
     def test_a_verdict_word_for_another_days_bar_is_refused(self):
         text = rendered()
         under = ("under the bar on 12302019 by 27.87 M msg/s and 0.86 GB/s, a day other than the "
-                 "bar's; not measured on 10302019")
+                 "bar's; judged on 10302019, in results/parse_rate_debian_10302019.md")
         self.assertIn(f"| {under} |", text)
         self.assertNotIn("parse-verdict-other-day", {c for c, _ in check_results.check_text(text)})
         for words in ("missed: 27.87 M msg/s and 0.86 GB/s under the bar",

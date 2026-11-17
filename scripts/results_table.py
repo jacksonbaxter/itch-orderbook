@@ -578,11 +578,25 @@ def backtest_row(root, name, text):
 
 def backtest_headline(target, name, text, root):
     """T-BT-1's headline row, the file's own targets row, once its bar is held to
-    BENCHMARKS.md's bar and unit."""
+    BENCHMARKS.md's bar and unit; the bar with what it is in brackets after it, as
+    BENCHMARKS.md's comparability line first says it, as another row's bar names its host."""
     found = backtest_judged(root, name, text)[0]
     if found != target:
         raise TableError(f"results/{name}: its targets table is {found}'s, not {target}'s")
-    return targets_headline(target, name, text)
+    bar, *rest = targets_headline(target, name, text)
+    return (f"{bar} ({bar_kind(root, target)})", *rest)
+
+
+def bar_kind(root, target):
+    """What a target's bar is, the first clause of its comparability line in BENCHMARKS.md:
+    for T-BT-1, "a small unreviewed repo on a synthetic feed"."""
+    text = (root / BENCHMARKS_PAGE).read_text(encoding="utf-8")
+    entry = re.search(rf"^### {re.escape(target)}: .*\n((?:- .*\n)+)", text, re.MULTILINE)
+    said = entry and re.search(r"^- \*\*Comparability:\*\* ([^,.;]+)", entry[1], re.MULTILINE)
+    if not said:
+        raise TableError(f"{BENCHMARKS_PAGE}: no comparability line for {target}, which says "
+                         "what its bar is")
+    return said[1]
 
 
 def spsc_rows(name, text):
@@ -1118,8 +1132,9 @@ def book_headline(target, name, text):
 
 def short_bar(bar):
     """A headline bar as its file gives it, with where it was set in brackets after it, the
-    host's name only, and T-ORACLE-2's bar to its count of sessions."""
-    bar = re.sub(r" and at least [\d,]+ messages compared, on the Mac$", "", bar)
+    host's name only; T-ORACLE-2's bar whole, its sessions and its floor of messages, without
+    the host it ran on, which the row's host cell gives."""
+    bar = re.sub(r", on the Mac$", "", bar)
     return re.sub(r", set on ([^,]*)(?:,.*)?$", r" (\1)", bar)
 
 
@@ -1557,7 +1572,18 @@ PARSE_DAY_LINES = (
 
 def bar_day_judged(root, row):
     """A parse row of another day, whose file was written before its bar's day had one, says
-    that day was not measured; once it has one, the row says where it is judged instead."""
+    that day was not measured; once it has one, the row says where it is judged instead. A row
+    that says where it is judged is refused unless that file is there and judges its target."""
+    judged = re.search(r"; judged on \d{8}, in results/(\S+)$", row[11])
+    if judged:
+        path = root / "results" / judged[1]
+        if not path.is_file():
+            raise TableError(f"results/{judged[1]}: {row[0]}'s row of {row[2]} says it is "
+                             "judged there, and the file is not there")
+        verdict = one_target_row(row[0], judged[1], path.read_text(encoding="utf-8"))["Verdict"]
+        if verdict_word(verdict) not in ("met", "missed"):
+            raise TableError(f"results/{judged[1]}: {row[0]}'s row of {row[2]} says it is "
+                             f"judged there, and the file gives it {verdict!r}")
     unrun = "; not measured on 10302019"
     if not (root / "results" / PARSE_BAR_DAY).is_file() or not row[11].endswith(unrun):
         return row
@@ -1770,8 +1796,9 @@ def missed_full(root):
 
 MISS_OPENING = (
     "Each line is on the Zen 1 host unless it names the M4 Max, and gives the deciding row, or the "
-    "worst. Where a bar is another host's published figure, the host's share of the gap was not "
-    "measured. In the book's runs, messages naming an order a second old or "
+    "worst: for latency, the largest gap in ns. Where a bar is another host's published figure, "
+    "the host's share of the gap was not measured. In the book's runs, messages naming an order "
+    "a second old or "
     "more make most DRAM fills.")
 # What each target asks, and whose bar it is, in words a stranger reads alone; and its why in a
 # few plain words, "" for none, or None for a trade check's, which is its row's. Only words are
@@ -1887,10 +1914,11 @@ def latency_bar(bar, item):
 
 
 def latency_line(rows):
-    """The first quantile a latency target misses."""
+    """The quantile a latency target misses by the most nanoseconds: its worst, not its first."""
     _, bar, measured, gap, *_ = rows[0]
     gaps = gap.split(", ")
-    item, _, over = gaps[0].partition(" by ")
+    item, _, over = max((part.partition(" by ") for part in gaps),
+                        key=lambda found: float(found[2].removesuffix(" ns").replace(",", "")))
     value = next(part.removeprefix(item + " ") for part in measured.split("; ")
                  if part.startswith(item + " "))
     operation, _, quantile = item.rpartition(" ")
