@@ -11240,7 +11240,7 @@
      "severity": "NOTE",
      "finding": "the fault fixed in bee48dd plants a figure next to the record's live count",
      "outcome": "fixed",
-     "detail": "A test in the script_tests stage runs every fault that plants a figure in the record's sentences against the record as it stands, and the plant moved to a count the record cannot come back to",
+     "detail": "A test in the script_tests stage runs every fault that plants a figure in the record's sentences against the record as it stands, so a commit whose counts make a plant true fails it, and the plant moved to a total the record cannot come back to; a count by severity or outcome can still come to it, and the test then fails on that commit",
      "commits": [
       "3f6ed74"
      ],
