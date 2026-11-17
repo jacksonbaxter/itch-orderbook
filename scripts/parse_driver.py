@@ -125,7 +125,8 @@ BAR_DAY = {"T-PARSE-1": "12302019", "T-PARSE-2": "12302019", "T-PARSE-3": "10302
 # Where a bar's own day is judged, when a file of another day gives its pass beside it. A day
 # not named here is one this run did not measure, and the file says only that: what is or is not
 # on the host is no fact of the run's record.
-JUDGED_ELSEWHERE = {"12302019": "judged on 12302019, in results/parse_rate_debian_12302019.md"}
+JUDGED_ELSEWHERE = {"12302019": "judged on 12302019, in results/parse_rate_debian_12302019.md",
+                    "10302019": "judged on 10302019, in results/parse_rate_debian_10302019.md"}
 PARSE_FIELD = "parse_passes"
 # The input condition (--input-condition): `file`, every driver's, or `copy`, the bench's own.
 FILE_CONDITION = "file"
