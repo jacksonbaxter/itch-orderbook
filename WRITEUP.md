@@ -62,7 +62,7 @@ The fast book made 0 allocations after warm-up in 268,744,780 messages on all fo
 
 T-ARENA-1 asks what the allocator alone is worth, on a linked-level book of nodes: the index pool, which names nodes by index and reuses the last one freed, ran at 1.238 times the throughput of glibc malloc on a fresh heap, and mimalloc, an open-source allocator, at 1.128 times it. T-ARENA-1's one hard check fails: a pool that touched every node first must take no page fault in a timed pass, and the index pool took 136, the pointer pool 200 and the oldest-first pool 146 ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)).
 
-Why the pools fault is not established. One diagnostic run, made while the host did other work and so not published, is described in [docs/NOTES.md](docs/NOTES.md); it points to the kernel's memory compaction moving pages under the running book. I chose not to turn compaction off on a shared host, so whether that removes the faults is open.
+Why the pools fault is not established. One diagnostic run, made while the host did other work and so not published, is in the working record ([docs/NOTES.md](docs/NOTES.md#t-arena-1s-timed-arms-on-debian-crossed-with-the-pools-pages-2026-11-11)); it points to the kernel's memory compaction moving pages under the running book. I chose not to turn compaction off on a shared host, so whether that removes the faults is open.
 
 ## Prefetching and SIMD
 
@@ -110,7 +110,7 @@ The market maker, the Avellaneda-Stoikov quoting model, splits its profit and lo
 
 ### The reference book
 
-A deliberately simple reference book replays each session beside the fast book, reading the wire at its own offsets. After every message the oracle compares what that message could change and checks each level or order slot the fast book wrote; it hashes the whole book every million messages, and a proof in [docs/NOTES.md](docs/NOTES.md) shows the rest cannot diverge.
+A simple reference book replays each session beside the fast book, reading the wire at its own offsets. After every message the oracle compares what that message could change and checks each level or order slot the fast book wrote; it hashes the whole book every million messages, and a proof in the working record ([docs/NOTES.md](docs/NOTES.md#the-oracles-proof)) shows the rest cannot diverge.
 
 Over all ten sessions there were 0 divergences in 3,081,392,329 messages ([results/oracle_sessions.md](results/oracle_sessions.md)).
 
@@ -126,7 +126,9 @@ Each print check is exact. T-TRADE-5, every execution in normal trading at the b
 
 ### The fault matrix and fuzzing
 
-The fault matrix plants a bug in a scratch copy and requires the named check to catch it. Before planting anything it runs each check once on the clean tree, and those 371 control commands succeeded; the last full run on the Mac then detected 1771 of 1771 faults, and the 14 faults for Linux only were all detected on the Zen 1 host (docs/NOTES.md) ([results/fault_matrix.md](results/fault_matrix.md)).
+The fault matrix plants a bug in a scratch copy and requires the named check to catch it. Before planting anything it runs each check once on the clean tree, and those 371 control commands succeeded; the last full run on the Mac then detected 1771 of 1771 faults ([results/fault_matrix.md](results/fault_matrix.md)).
+
+The 14 faults for Linux only were all detected on the Zen 1 host at an earlier commit, fbd32a8, as the working record shows ([docs/NOTES.md](docs/NOTES.md#the-rounds-full-checks-and-the-linux-only-faults-2026-11-17)).
 
 Each of the nine fuzz targets ran for 1,800 s on the Mac under ASan and UBSan, the compiler's memory and undefined-behaviour checks, and every one was clean: 0 crashes and no input saved ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)).
 
