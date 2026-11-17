@@ -10,7 +10,7 @@ The project parses Nasdaq TotalView-ITCH 5.0 and rebuilds the full-depth order b
 
 Every headline timing is from an AMD Ryzen Embedded V1605B, an embedded Zen 1 part with 4 cores, 8 threads and a 4 MB L3 shared by all, its timed thread pinned, with turbo and SMT on and no core isolated ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)). An Apple M4 Max runs the correctness checks; macOS cannot pin a thread, so a Mac timing is context, with no verdict unless the target's bar was itself published on a Mac.
 
-The Zen 1 host is shared with other projects, and I chose to change none of its root-only kernel settings but the CPU governor: no huge pages are reserved, memory compaction runs as configured, and profiles are user space only (`perf_event_paranoid` 2). No TLB counter was read, and no run used reserved huge pages, though the book's arrays sat on transparent ones.
+The Zen 1 host is shared with other projects, and I chose to change none of its root-only kernel settings but the CPU governor: no huge pages are reserved, memory compaction runs as configured, and profiles are user space only (`perf_event_paranoid` 2). No TLB counter was read; the book's arrays sat on transparent huge pages.
 
 ## How a number is published
 
@@ -33,7 +33,7 @@ The records, with sizes from the headers' `static_assert`s ([include/itch/](incl
 | flat side's header | `12` | start, count and capacity of its block, a power of two from one arena |
 | paged-index page | `256 × 4` | an order slot for each of `256` consecutive references, found through a `4`-byte directory entry |
 
-A message that names an order makes a chain of dependent loads (directory entry, page slot, order record, level; for a new order the side's header and the end of its keys), so their misses cannot overlap within a message. Cache lines per operation were not counted. What was counted is DRAM fills, demand fills into the L1 cache from local DRAM; it is a floor, since lines the hardware prefetcher fetched are not counted. Per message, a delete makes 2.5544, an execute 2.2520, a replace 3.1322 and an add 1.3051 ([results/counters_by_type_paged-flat_debian_12302019.md](results/counters_by_type_paged-flat_debian_12302019.md)).
+A message that names an order makes a chain of dependent loads (directory entry, page slot, order record, level; for a new order the side's header and the end of its keys), so their misses cannot overlap within a message. What was counted is DRAM fills, demand fills into the L1 cache from local DRAM; it is a floor, since lines the hardware prefetcher fetched are not counted. Per message, a delete makes 2.5544, an execute 2.2520, a replace 3.1322 and an add 1.3051 ([results/counters_by_type_paged-flat_debian_12302019.md](results/counters_by_type_paged-flat_debian_12302019.md)).
 
 The four designs and the usual baseline (`std::map` levels and an `unordered_map` index, on a fresh or an aged heap), on the Zen 1 host, the day in memory. Both counter columns include reading the counters, which an empty span in a separate pass measures at 308.0001 instructions and 0.0000 DRAM fills per message, more than half of each instruction figure ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)):
 
@@ -52,7 +52,7 @@ Speed falls as fills rise in every row but the linked pair: `paged-linked` makes
 
 Flat levels beat linked ones because a flat side is one array and most adds land near the best: 57.27% of add searches pass one better level or none ([results/window_12302019.md](results/window_12302019.md)).
 
-The paged index beats the hash and pays in memory; in the layout run an identity hash, at 5,077,675 messages/s, and chaining, at 4,946,760, both stayed below the paged index's 5,468,695 ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)). The table, this run and the prefetch run below are separate runs, the table's with the day in memory and these two with it mapped, so each gives `paged-flat` its own rate; comparisons are made within one run, and why the rates differ was not measured.
+The paged index beats the hash and pays in memory; in the layout run an identity hash, at 5,077,675 messages/s, and chaining, at 4,946,760, both stayed below the paged index's 5,468,695 ([results/layout_debian_12302019.md](results/layout_debian_12302019.md)). This run and the prefetch run below map the day, unlike the table's, and each gives `paged-flat` its own rate, so compare within one run; why the rates differ was not measured.
 
 The age of the order a message names decides its cost: a message naming an order under 1 ms old makes 0.0490 DRAM fills; a message naming an order 1 s old or more makes 4.3729; 54.5% of the messages that name an order name one 1 s old or more, and they take 90.66% of those messages' fills ([results/counters_by_age_paged-flat_debian_12302019.md](results/counters_by_age_paged-flat_debian_12302019.md)).
 
@@ -60,7 +60,7 @@ The age of the order a message names decides its cost: a message naming an order
 
 The fast book made 0 allocations after warm-up in 268,744,780 messages on all four designs, counted at every `operator new` ([results/oracle_12302019.md](results/oracle_12302019.md)).
 
-T-ARENA-1 asks what the allocator alone is worth, on a linked-level book of nodes: the index pool, which names nodes by index and reuses the last one freed, ran at 1.238 times the throughput of glibc malloc on a fresh heap, and mimalloc, an open-source allocator, at 1.128 times it. T-ARENA-1's one hard check fails: a pool that touched every node first must take no page fault in a timed pass, and the index pool took 136, the pointer pool (by address) 200 and the oldest-first pool (reusing its oldest free node) 146 ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)).
+T-ARENA-1 asks what the allocator alone is worth, on a linked-level book of nodes: the index pool, which names nodes by index and reuses the last one freed, ran at 1.238 times the throughput of glibc malloc on a fresh heap, and mimalloc, an open-source allocator, at 1.128 times it. T-ARENA-1's one hard check fails: a pool that touched every node first must take no page fault in a timed pass, and the index pool took 136, the pointer pool 200 and the oldest-first pool 146 ([results/alloc_arms_base_debian_12302019.md](results/alloc_arms_base_debian_12302019.md)).
 
 Why the pools fault is not established. One diagnostic run, made while the host did other work and so not published, is described in [docs/NOTES.md](docs/NOTES.md); it points to the kernel's memory compaction moving pages under the running book. I chose not to turn compaction off on a shared host, so whether that removes the faults is open.
 
@@ -92,7 +92,7 @@ T-SPSC-2, what each technique is worth, is missed by far: the mask over a modulo
 
 Queue latencies start at the push, not at the due time, when the replay's schedule says an item should be sent, so a wait behind a slow push is in no figure. No latency from the due time was measured: it needs the due time carried in each item, a change to the benchmark's measured code, which was not made before the runs (BENCHMARKS.md, "What the paced and burst latencies measure").
 
-With the parser on one core and the book on another, the median pipelined time over single-threaded time is 0.954 vs a bar of at most 1.31, so T-SPSC-3 is met; but the single-threaded runs varied with a CV of 6.25%, so the saving is within their spread, and in the first repetition the parser's pushes found the ring full 22,248,425,075 times and the book's pops found it empty 843,507 times, each try counted, not each message ([results/spsc_pipeline_debian_12302019.md](results/spsc_pipeline_debian_12302019.md)).
+With the parser on one core and the book on another, the median pipelined time over single-threaded time is 0.954 vs a bar of at most 1.31, so T-SPSC-3 is met; but the single-threaded runs varied with a CV of 6.25%, so the saving is within their spread ([results/spsc_pipeline_debian_12302019.md](results/spsc_pipeline_debian_12302019.md)).
 
 ### UDP receive: sockets vs io_uring
 
@@ -104,7 +104,7 @@ The backtester queues simulated orders among the real ones by order reference, w
 
 T-BT-3, four symbols with 100,000 simulated orders in real queues, is missed on the Zen 1 host at 3,509,307 messages/s; runs of the same build differed, and none read counters ([results/backtest_shadow_debian_12302019.md](results/backtest_shadow_debian_12302019.md)). Its bar was published on an Apple M1 Pro, so on the Mac T-BT-3 has a verdict, and is met. With the Zen 1 host's miss, RESULTS.md's summary gives T-BT-3 missed.
 
-The market maker, the Avellaneda-Stoikov quoting model, splits its profit and loss into spread capture, adverse selection and inventory, summing exactly to the ledger's. Trading the stock with the ticker AMD on 12302019, which has nothing to do with the host's CPU, its total was -25.96 dollars with the backtester's latency model and +1.23 with every latency set to zero: accounting, not an edge ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
+The market maker, the Avellaneda-Stoikov quoting model, splits its profit and loss into spread capture, adverse selection and inventory, summing exactly to the ledger's. Trading the stock with the ticker AMD on 12302019, which is unrelated to the host's CPU, its total was -25.96 dollars with the backtester's latency model and +1.23 with every latency set to zero: accounting, not an edge ([results/mm_pnl_12302019.md](results/mm_pnl_12302019.md)).
 
 ## Correctness
 
@@ -116,7 +116,7 @@ Over all ten sessions there were 0 divergences in 3,081,392,329 messages ([resul
 
 ### The book is sometimes crossed, and that is the feed
 
-T-INV-2, a book that stays uncrossed, fails strictly: on 12302019 there were 18,958 crossed observations, none in normal trading outside a reopening window. An open-source ITCH book, carteret, publishes 8,580 crossed book messages for this day, counting book messages after which the book is crossed rather than observations after every message. In that unit this book also counts 8,580, and 8,579 if a crossed replace, which carteret counts twice, counts once ([results/oracle_12302019.md](results/oracle_12302019.md)).
+T-INV-2, a book that stays uncrossed, fails strictly: on 12302019 there were 18,958 crossed observations, none in normal trading outside a reopening window. An open-source ITCH book, carteret, publishes 8,580 crossed book messages for this day, counting book messages after which the book is crossed rather than observations after every message. In that unit this book also counts 8,580, ([results/oracle_12302019.md](results/oracle_12302019.md)).
 
 I chose a scoped rule as a separate check, T-INV-3: in normal trading a book may be crossed only by a cross left from a halt that has not yet cleared. T-INV-3 passes, and T-INV-2 strict stays beside it.
 
