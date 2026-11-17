@@ -1572,7 +1572,18 @@ PARSE_DAY_LINES = (
 
 def bar_day_judged(root, row):
     """A parse row of another day, whose file was written before its bar's day had one, says
-    that day was not measured; once it has one, the row says where it is judged instead."""
+    that day was not measured; once it has one, the row says where it is judged instead. A row
+    that says where it is judged is refused unless that file is there and judges its target."""
+    judged = re.search(r"; judged on \d{8}, in results/(\S+)$", row[11])
+    if judged:
+        path = root / "results" / judged[1]
+        if not path.is_file():
+            raise TableError(f"results/{judged[1]}: {row[0]}'s row of {row[2]} says it is "
+                             "judged there, and the file is not there")
+        verdict = one_target_row(row[0], judged[1], path.read_text(encoding="utf-8"))["Verdict"]
+        if verdict_word(verdict) not in ("met", "missed"):
+            raise TableError(f"results/{judged[1]}: {row[0]}'s row of {row[2]} says it is "
+                             f"judged there, and the file gives it {verdict!r}")
     unrun = "; not measured on 10302019"
     if not (root / "results" / PARSE_BAR_DAY).is_file() or not row[11].endswith(unrun):
         return row

@@ -30,6 +30,8 @@ HEADLINE_BOOK = "results/bench_book_paged-flat_ram_debian_12302019.md"
 UNJUDGED_BOOK = "results/bench_book_paged-flat_ram_mac_12302019.md"
 HEADLINE_BACKTEST = "results/backtest_quoting_debian_12302019.md"
 PARSE = "results/parse_rate_debian_12302019.md"
+# Where PARSE's T-PARSE-3 row says its bar's day is judged.
+PARSE3_JUDGED = "judged on 10302019, in results/parse_rate_debian_10302019.md"
 
 
 def tables_of(output):
@@ -61,9 +63,13 @@ class ResultsTable(unittest.TestCase):
         path.write_text(text.replace(old, new), encoding="utf-8")
 
     def unpublish_bar_day(self):
-        """The copy as it stood before T-PARSE-3's bar's day had its file: that file gone, and
-        the run-log rows of its prediction, which publishing it added. Both states of the pages
-        are held so: the real one, and this one."""
+        """The copy as it stood before T-PARSE-3's bar's day had its file: that file gone, the
+        run-log rows of its prediction, which publishing it added, and the other day's T-PARSE-3
+        row in the words its driver gave it then, that the bar's day was not measured. Both
+        states of the pages are held so: the real one, and this one."""
+        other = self.root / PARSE
+        other.write_text(other.read_text(encoding="utf-8").replace(
+            f"; {PARSE3_JUDGED} |", "; not measured on 10302019 |"), encoding="utf-8")
         path = self.root / "results" / results_table.PARSE_BAR_DAY
         if not path.is_file():
             return
@@ -998,6 +1004,24 @@ class MissedTargets(unittest.TestCase):
         # real tree, whichever state it is in, no generated line says an unmeasured day that has
         # a file; the rest is held from the state before the file, then with test files.
         self.assertEqual(self.unrun_words(), [])
+        # The other day's row says where the bar's day is judged: with that file gone, or there
+        # with no verdict for T-PARSE-3, the row is refused, not shown naming a file that does
+        # not judge it.
+        bar_day = self.root / "results" / results_table.PARSE_BAR_DAY
+        text = bar_day.read_text(encoding="utf-8")
+        bar_day.unlink()
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL results/{results_table.PARSE_BAR_DAY}: T-PARSE-3's row "
+                      "of 12302019 says it is judged there, and the file is not there\n", output)
+        bar_day.write_text(text.replace("the median | met |", "the median | above the bar |"),
+                           encoding="utf-8")
+        code, output = self.run_table("--check")
+        self.assertEqual(code, 1, output)
+        self.assertIn(f"results_table: FAIL results/{results_table.PARSE_BAR_DAY}: T-PARSE-3's row "
+                      "of 12302019 says it is judged there, and the file gives it 'above the "
+                      "bar'\n", output)
+        self.setUp()
         self.unpublish_bar_day()
         code, output = self.run_table()
         self.assertEqual(code, 0, output)
@@ -1230,16 +1254,15 @@ class MissedTargets(unittest.TestCase):
                 self.assertIn(f"]({PARSE}) |", line)
 
     def test_a_parse_target_on_another_day_with_a_bare_met_is_refused(self):
-        self.edit(PARSE, "| above the bar on 12302019, a day other than the bar's; not measured on "
-                  "10302019 |", "| met |")
+        self.edit(PARSE, "| above the bar on 12302019, a day other than the bar's; "
+                  f"{PARSE3_JUDGED} |", "| met |")
         code, output = self.run_table("--check")
         self.assertEqual(code, 1, output)
         self.assertIn(f"{PARSE}: T-PARSE-3's bar is set on 10302019, and the file, of 12302019, "
                       "gives it 'met': another day's bar is not met or missed", output)
 
     def test_a_verdict_word_for_another_days_bar_is_refused(self):
-        words = ("above the bar on 12302019, a day other than the bar's; not measured on "
-                 "10302019")
+        words = f"above the bar on 12302019, a day other than the bar's; {PARSE3_JUDGED}"
         for given in ("met", "met; measured on 12302019, not the bar's 10302019, which is not on "
                       "this host: the two days are compared under Caveats",
                       "missed: 21.67 M msg/s and 0.67 GB/s under the bar; measured on 12302019, "
