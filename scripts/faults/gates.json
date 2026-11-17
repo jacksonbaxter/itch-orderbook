@@ -875,7 +875,7 @@
     },
     {
       "id": "gates-writeup-length-upper-bound",
-      "breaks": "WRITEUP.md may run one word past 4,000",
+      "breaks": "WRITEUP.md may run one word past 4,060",
       "check": "test_gates.py, the writeup-length gate",
       "mutations": [
         {
