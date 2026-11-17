@@ -52,9 +52,13 @@
   {
    "what": "every outcome from r22-12 and r23's outcomes",
    "at": "7161114"
+  },
+  {
+   "what": "the second gate's outcomes and r24's",
+   "at": "f2ec1d1"
   }
  ],
- "complete": true,
+ "complete": false,
  "reviewers": [
   {
    "id": "r1",
@@ -503,12 +507,31 @@
    ],
    "last_words": "",
    "branch": ""
+  },
+  {
+   "id": "r24",
+   "read": "every change of the round after the second gate that is not a document, at 704963c, in one look, as the second gate asked",
+   "commits": [
+    "704963c"
+   ],
+   "looks": [
+    {
+     "BLOCK": 0,
+     "FIX": 3,
+     "NOTE": 4
+    }
+   ],
+   "last_words": "Nothing is left that I would block the landing for.",
+   "branch": ""
   }
  ],
- "to_come": [],
+ "to_come": [
+  "a reader new to the project, of README.md and WRITEUP.md at 7e7f904"
+ ],
  "unread": [
   "The fixes of r16's own findings were read by no reviewer, only checked by the record's author: they are held by their tests and faults and by the full check that follows.",
-  "The WRITEUP passages of bec8d6d, the fixes of r23's findings on WRITEUP, were read by no reviewer, only checked by the record's author: the number gate holds their figures, each refused when changed by one, and the readme stage of the full check runs it."
+  "The WRITEUP passages of bec8d6d, the fixes of r23's findings on WRITEUP, were read by no reviewer, only checked by the record's author; the second gate's record checker read them at b961709, and its code checker the record's last two fault entries, 7161114 and bee48dd, which no reviewer had read either.",
+  "The fixes of r24's findings were read by no reviewer, only checked by the record's author, since the second gate asked for one look: they are held by their tests and faults and by the round's check on its last commit."
  ],
  "findings": [
   {
@@ -7410,6 +7433,114 @@
    "tests": [],
    "faults": [],
    "notes": []
+  },
+  {
+   "id": "r24-1",
+   "severity": "FIX",
+   "finding": "tests/test_skips_cli.py read a condition such as defined(__APPLE__) && defined(__aarch64__) as compiled and taken, so a later #elifdef branch the compiler takes read as not compiled",
+   "outcome": "fixed",
+   "detail": "A condition that names anything but __APPLE__, __linux__ and defined is read as unknown, its branch compiled and not taken, so no later branch is hidden; the reader's own case gains two such groups",
+   "commits": [
+    "a1c2147"
+   ],
+   "tests": [
+    "tests/test_skips_cli.py"
+   ],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r24-2",
+   "severity": "FIX",
+   "finding": "Nothing tested a second gate's completeness or evidence: with either check limited to the first gate, every test passed",
+   "outcome": "fixed",
+   "detail": "The test renders the record complete with a second gate's finding open, and gives one a fault that is not in the tree; with either check limited to the first gate it fails",
+   "commits": [
+    "9de3cbf"
+   ],
+   "tests": [
+    "test_a_second_gate_is_recorded_after_the_first_under_its_own_name"
+   ],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r24-3",
+   "severity": "FIX",
+   "finding": "docs/NOTES.md gave the tree's count of faults as it stood before the round's last faults were added",
+   "outcome": "fixed",
+   "detail": "docs/NOTES.md gives the count at the round's last commit and names each fault added after da5650a",
+   "commits": [
+    "f2ec1d1"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r24-4",
+   "severity": "NOTE",
+   "finding": "The plant test ran no control, so a signature its check printed on the clean tree would count as a plant caught",
+   "outcome": "fixed",
+   "detail": "The test runs the matrix's controls first and fails on any failure, and leaves out a plant whose tree the copy it runs in does not hold, where its check had failed for the want of a file",
+   "commits": [
+    "c355aa4",
+    "49c042f"
+   ],
+   "tests": [
+    "test_every_figure_planted_in_the_records_sentences_is_still_caught"
+   ],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r24-5",
+   "severity": "NOTE",
+   "finding": "readme-parse-judged-file-unread's signature matched any failure of its long test",
+   "outcome": "fixed",
+   "detail": "Its signature names the test and the refusal's own words",
+   "commits": [
+    "31d99e2"
+   ],
+   "tests": [],
+   "faults": [
+    "readme-parse-judged-file-unread"
+   ],
+   "notes": []
+  },
+  {
+   "id": "r24-6",
+   "severity": "NOTE",
+   "finding": "results_table.py's check of a parse row judged on another day did not tie the day in its words to the file's day",
+   "outcome": "fixed",
+   "detail": "results_table.py refuses, when it writes, a row whose judged day is not the named file's day and the row's bar day",
+   "commits": [
+    "31d99e2",
+    "e5b11c9"
+   ],
+   "tests": [
+    "test_a_parse_row_judged_on_a_day_not_its_bar_days_is_refused"
+   ],
+   "faults": [
+    "readme-parse-judged-day-unheld"
+   ],
+   "notes": []
+  },
+  {
+   "id": "r24-7",
+   "severity": "NOTE",
+   "finding": "No fault entry held the code of the round's items 7 and 9",
+   "outcome": "fixed",
+   "detail": "Two faults hold it, one for each item",
+   "commits": [
+    "31d99e2"
+   ],
+   "tests": [],
+   "faults": [
+    "readme-writeup-latency-least-gap",
+    "readme-headline-bar-kind-dropped"
+   ],
+   "notes": []
   }
  ],
  "gates": [
@@ -8494,8 +8625,8 @@
      "label": "NOTE-3",
      "severity": "NOTE",
      "finding": "Runs made by scripts kept outside the repository would still record no commit, dataset hash or machine check if made again; docs/NOTES.md says so",
-     "outcome": "fixed",
-     "detail": "docs/NOTES.md says what a rerun of each kind made by a script outside scripts/ would need, and that it would record none of the three.",
+     "outcome": "known limit",
+     "detail": "docs/NOTES.md says what a rerun of each kind made by a script outside scripts/ would need, and that it would record none of the three. No tool was made to record them, so it is a known limit, as the second gate's record checker said.",
      "commits": [
       "986311e"
      ],
@@ -8504,6 +8635,1078 @@
      "notes": [
       "Gaps in the record, file by file"
      ]
+    }
+   ]
+  },
+  {
+   "name": "second gate",
+   "at": "b961709",
+   "note": "It read what no reviewer had: its code checker the record's last two fault entries, 7161114 and bee48dd, and its record checker the WRITEUP passages of bec8d6d.",
+   "checkers": [
+    {
+     "id": "cold",
+     "read": "README.md and WRITEUP.md cold, as a recruiter in 90 seconds and a senior low-latency C++ developer in 20 minutes, with the results files a doubted claim links to",
+     "count": {
+      "BLOCK": 2,
+      "FIX": 8,
+      "NOTE": 10
+     },
+     "not_listed": []
+    },
+    {
+     "id": "reader",
+     "read": "the first gate's reader findings and their fixes on the pages, at b961709",
+     "count": {
+      "BLOCK": 0,
+      "FIX": 2,
+      "NOTE": 11
+     },
+     "not_listed": []
+    },
+    {
+     "id": "pages",
+     "read": "every figure, verdict and link of the public pages, with the number gate's faults planted on a copy",
+     "count": {
+      "BLOCK": 2,
+      "FIX": 2,
+      "NOTE": 5
+     },
+     "not_listed": []
+    },
+    {
+     "id": "code",
+     "read": "the scripts and the C++, build and CI changes since 51f568d, and the fuzz-search rule, with probes on a copy",
+     "count": {
+      "BLOCK": 0,
+      "FIX": 2,
+      "NOTE": 7
+     },
+     "not_listed": []
+    },
+    {
+     "id": "record",
+     "read": "the record: the bisect list, the gaps, the review's counts and a sample of its outcomes, the four full checks and the slips",
+     "count": {
+      "BLOCK": 1,
+      "FIX": 4,
+      "NOTE": 4
+     },
+     "not_listed": []
+    },
+    {
+     "id": "runs",
+     "read": "the T-PARSE-3 run on 10302019 and the Linux-only faults at fbd32a8, from their raw records",
+     "count": {
+      "BLOCK": 0,
+      "FIX": 1,
+      "NOTE": 9
+     },
+     "not_listed": []
+    }
+   ],
+   "findings": [
+    {
+     "checker": "cold",
+     "label": "BLOCK-1",
+     "severity": "BLOCK",
+     "finding": "WRITEUP.md:17 states the sampler rule as the rule for every number, while the headline timings ran without it",
+     "outcome": "fixed",
+     "detail": "WRITEUP.md:17 says the sampler came later, that on the Zen 1 host only the parse rates and the T-BT-3 backtest were timed under it, and that every other timing there rests on the machine check's refusals alone; the README's sentence under the headline says the Zen 1 host's rows ran with no load sampler either",
+     "commits": [
+      "f0ff10a",
+      "8942db5"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "BLOCK-2",
+     "severity": "BLOCK",
+     "finding": "WRITEUP.md:139-140, the clock answer: the 1.5x share contradicts the memory-bound account, the clock is derived across separate passes, 5.5 GHz is unsourced, and the readings are given as if the highest were the last",
+     "outcome": "fixed",
+     "detail": "The clock answer is not known: a faster clock does not shorten a wait on DRAM, so the clock explains at most the ratio of the two clocks. It keeps the measured figures, says the empty span is from a separate run that the file takes nothing off by, gives the lowest and highest readings as such and drops 5.5 GHz",
+     "commits": [
+      "f4f4d32"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "FIX-1",
+     "severity": "FIX",
+     "finding": "README.md:7 says WRITEUP.md says why the host misses, where the write-up says the host's share was not measured",
+     "outcome": "fixed",
+     "detail": "README.md:7 says WRITEUP.md gives what was measured, not the host's share",
+     "commits": [
+      "cb1f09c"
+     ],
+     "tests": [],
+     "faults": [
+      "gates-readme-first-screen-drops-the-writeup-link"
+     ],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "FIX-2",
+     "severity": "FIX",
+     "finding": "WRITEUP.md:143 says the 4 ms tail recurs and is not noise; it may be a scheduler tick, and is not explained",
+     "outcome": "fixed",
+     "detail": "WRITEUP says the 4 ms maximum recurs, and that what it waits on, the book or another task on the core, was not traced",
+     "commits": [
+      "f4f4d32"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "FIX-3",
+     "severity": "FIX",
+     "finding": "WRITEUP.md:73's Zen 1 deployment would turn the look-ahead on, against line 142's live feed not built or measured",
+     "outcome": "fixed",
+     "detail": "WRITEUP says a replay from a file on the Zen 1 host would turn the look-ahead on, and the live-feed answer still says what was not built",
+     "commits": [
+      "f4f4d32",
+      "83e4e75"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "FIX-4",
+     "severity": "FIX",
+     "finding": "WRITEUP.md:91, the ring: the uncached mask figure dropped, the metric not named and the spreads, which put 1.20x and 0.89x inside the noise, not given",
+     "outcome": "fixed",
+     "detail": "WRITEUP's ring line says the ratios are of saturated throughput and that the cached ratios lie within the spread of the uncached runs, whose CVs it gives; docs/DETAILS.md gives the uncached figures",
+     "commits": [
+      "9586a3b"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "FIX-5",
+     "severity": "FIX",
+     "finding": "WRITEUP.md's missed-targets block says each line gives the deciding row or the worst, and every latency line gives p50, the smallest miss",
+     "outcome": "fixed",
+     "detail": "Each latency line of the missed-targets list gives the quantile missed by the most ns, and the list's opening says so",
+     "commits": [
+      "b629454",
+      "31d99e2"
+     ],
+     "tests": [
+      "test_the_writeup_table_has_one_short_line_a_target"
+     ],
+     "faults": [
+      "readme-writeup-latency-least-gap"
+     ],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "FIX-6",
+     "severity": "FIX",
+     "finding": "the public pages send the reader to docs/NOTES.md for the evidence behind claims",
+     "outcome": "fixed",
+     "detail": "Where WRITEUP and docs/DETAILS.md rest a claim on docs/NOTES.md, they call it the working record and link its exact heading",
+     "commits": [
+      "b7bdbb2",
+      "364ecd3"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "FIX-7",
+     "severity": "FIX",
+     "finding": "README.md:16 and WRITEUP.md:103 give T-BT-1 as met without saying its bar is a small unreviewed repo's figure on a synthetic feed",
+     "outcome": "fixed",
+     "detail": "The README headline's T-BT-1 bar says it is a small unreviewed repo's figure on a synthetic feed, and WRITEUP's line says the same of it",
+     "commits": [
+      "4ee06a2",
+      "9586a3b",
+      "31d99e2"
+     ],
+     "tests": [
+      "test_the_headline_has_its_targets_in_order_each_from_its_file"
+     ],
+     "faults": [
+      "readme-headline-bar-kind-dropped"
+     ],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "FIX-8",
+     "severity": "FIX",
+     "finding": "README.md:25's \"as the bar's source maps the file\" can be read as \"in the same way as\"",
+     "outcome": "fixed",
+     "detail": "README.md:25 says the day's file and a copy of it do not fit in the host's memory together, so the input checked is the bench's own copy, and that the bar's source maps the file instead",
+     "commits": [
+      "f5822ed"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "NOTE-1",
+     "severity": "NOTE",
+     "finding": "README.md:118's list of the number gate's blind spots is internal process for the README",
+     "outcome": "no change needed",
+     "detail": "Kept as it is: the acceptance gate asked that the README state what the number gate cannot see, and the second gate asked for more of it",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "NOTE-2",
+     "severity": "NOTE",
+     "finding": "WRITEUP.md:11 links the host configuration to a counters file, not to the headline file it describes",
+     "outcome": "no change needed",
+     "detail": "The linked counters file holds the L3 and core facts the sentence gives, and the same turbo and isolation lines; the headline file does not hold the L3",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "NOTE-3",
+     "severity": "NOTE",
+     "finding": "WRITEUP.md:170 links the queue walk's share to the shadow backtest file, where the 3.51% is in the walks ladder file",
+     "outcome": "open",
+     "detail": "",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "NOTE-4",
+     "severity": "NOTE",
+     "finding": "WRITEUP.md:81 could say the bar is a vendor's parser on a cloud VM mapping the file, and that the strict passes are bimodal",
+     "outcome": "known limit",
+     "detail": "WRITEUP.md:81 gives the input condition's reason, that file and copy do not fit in memory together. The bar's parser and host and the two clusters of passes are not added, the page being at its length limit; the CV and the slowest pass give the spread",
+     "commits": [
+      "9586a3b"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": [
+      "Left as it is after the second gate"
+     ]
+    },
+    {
+     "checker": "cold",
+     "label": "NOTE-5",
+     "severity": "NOTE",
+     "finding": "WRITEUP.md:99's just above blocking sockets and most io_uring modes is one bisection step, which DETAILS says are not told apart",
+     "outcome": "fixed",
+     "detail": "WRITEUP says S4 is one bisection step above most other modes, socket and io_uring",
+     "commits": [
+      "9586a3b"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "NOTE-6",
+     "severity": "NOTE",
+     "finding": "BENCHMARKS.md:30's evidence ids point to notes not in the repository; the source URLs are public",
+     "outcome": "known limit",
+     "detail": "BENCHMARKS.md's evidence ids stay: the page already says the notes they point to are not in the repository, and each source's address is public",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": [
+      "Left as it is after the second gate"
+     ]
+    },
+    {
+     "checker": "cold",
+     "label": "NOTE-7",
+     "severity": "NOTE",
+     "finding": "README.md:84: measure.sh is not in the repository, so a rerun cannot reproduce the load records",
+     "outcome": "known limit",
+     "detail": "The script that made the load records is kept outside the repository, as README.md already says; a rerun remakes the timings, not those records",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": [
+      "Left as it is after the second gate"
+     ]
+    },
+    {
+     "checker": "cold",
+     "label": "NOTE-8",
+     "severity": "NOTE",
+     "finding": "README.md:10-16's table has jargon a non-engineer cannot follow",
+     "outcome": "no change needed",
+     "detail": "Kept as it is, as the acceptance gate ruled on the headline's cells and target ids: each id follows its gloss",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "NOTE-9",
+     "severity": "NOTE",
+     "finding": "WRITEUP.md:49's differ in how long they wait is inferred, not measured",
+     "outcome": "fixed",
+     "detail": "WRITEUP says the fast designs differ in how often they wait on DRAM, which is what the fills measure",
+     "commits": [
+      "9586a3b"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "cold",
+     "label": "NOTE-10",
+     "severity": "NOTE",
+     "finding": "WRITEUP.md:69's largest gain left means the largest of those tried",
+     "outcome": "fixed",
+     "detail": "WRITEUP says that of the changes tried, prefetching gained the most",
+     "commits": [
+      "9586a3b"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "reader",
+     "label": "FIX-1",
+     "severity": "FIX",
+     "finding": "WRITEUP.md:17 says a sampler guards every timing, which is not true of the headline run",
+     "outcome": "fixed",
+     "detail": "WRITEUP.md:17 says the sampler came later, that on the Zen 1 host only the parse rates and the T-BT-3 backtest were timed under it, and that every other timing there rests on the machine check's refusals alone",
+     "commits": [
+      "f0ff10a"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "reader",
+     "label": "FIX-2",
+     "severity": "FIX",
+     "finding": "WRITEUP.md:38's more than half of each instruction figure is false for two of the six rows",
+     "outcome": "fixed",
+     "detail": "WRITEUP.md:38 says the counter reads are more than half of each fast design's instruction figure, not of every row's",
+     "commits": [
+      "9586a3b"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "reader",
+     "label": "NOTE-1",
+     "severity": "NOTE",
+     "finding": "RESULTS.md: the first gate's reader finding 18 is done only in part, the main table not sorted by target",
+     "outcome": "known limit",
+     "detail": "RESULTS.md's main table keeps the order its rows are made in: sorting it is a change to results_table.py outside this round's ruling. The summary at the top gives one row a target in BENCHMARKS.md's order",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": [
+      "Left as it is after the second gate"
+     ]
+    },
+    {
+     "checker": "reader",
+     "label": "NOTE-2",
+     "severity": "NOTE",
+     "finding": "the T-DESIGN-1 why states as measured that the map book's extra time is DRAM misses",
+     "outcome": "known limit",
+     "detail": "T-DESIGN-1's why is a string of results_table.py, a change outside this round's ruling, so it stays",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": [
+      "Left as it is after the second gate"
+     ]
+    },
+    {
+     "checker": "reader",
+     "label": "NOTE-3",
+     "severity": "NOTE",
+     "finding": "passages of the first gate's reader section 3 were moved to docs/DETAILS.md, not rewritten",
+     "outcome": "fixed",
+     "detail": "docs/DETAILS.md says the run-log exception and P-0106's two ranges plainly, and cuts the provenance paragraphs to three sentences that link their heading",
+     "commits": [
+      "364ecd3"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "reader",
+     "label": "NOTE-4",
+     "severity": "NOTE",
+     "finding": "docs/DETAILS.md:90's instruction rise does not explain why the look-ahead is off for one target",
+     "outcome": "fixed",
+     "detail": "docs/DETAILS.md no longer gives the instruction rise as the reason: it says why the look-ahead loses on the Mac is not established, and that it is off by the rule fixed before the runs",
+     "commits": [
+      "364ecd3"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "reader",
+     "label": "NOTE-5",
+     "severity": "NOTE",
+     "finding": "README terms with no gloss",
+     "outcome": "known limit",
+     "detail": "CrossStats is now said as Nasdaq's crosses file. S4 keeps no gloss: two faults hold that bullet, and a gloss takes it past the README's line length gate",
+     "commits": [
+      "f5822ed"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": [
+      "Left as it is after the second gate"
+     ]
+    },
+    {
+     "checker": "reader",
+     "label": "NOTE-6",
+     "severity": "NOTE",
+     "finding": "README.md:84 points to the headline file's passes field for the reason, which holds none",
+     "outcome": "fixed",
+     "detail": "README.md:84 points to that file's Commands section for the reason",
+     "commits": [
+      "f5822ed"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "reader",
+     "label": "NOTE-7",
+     "severity": "NOTE",
+     "finding": "README.md:54 does not say ITCH_LIBCXX_DIR is read only from the environment",
+     "outcome": "fixed",
+     "detail": "README.md:54 says ITCH_LIBCXX_DIR is an environment variable, which CMake's -D does not set",
+     "commits": [
+      "f5822ed"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "reader",
+     "label": "NOTE-8",
+     "severity": "NOTE",
+     "finding": "T-PARSE-3's input condition is given without its reason on WRITEUP.md:81 and README.md:25",
+     "outcome": "fixed",
+     "detail": "README.md:25 and WRITEUP.md:81 give the reason: the day's file and a copy of it do not fit in memory together",
+     "commits": [
+      "f5822ed",
+      "9586a3b"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "reader",
+     "label": "NOTE-9",
+     "severity": "NOTE",
+     "finding": "BENCHMARKS.md still says the session outside the protected row",
+     "outcome": "no change needed",
+     "detail": "Kept as it is, as the second gate ruled: BENCHMARKS.md's wording waits on a question decided outside this record",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "reader",
+     "label": "NOTE-10",
+     "severity": "NOTE",
+     "finding": "the headline results file still opens with two rendered-again paragraphs citing a script not in the repository",
+     "outcome": "known limit",
+     "detail": "The paragraphs on rendering again stay, as for the acceptance gate reader's 19: results files are written only by their drivers, and each render adds its reason line beside the earlier ones",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": [
+      "Left as it is after the second gate"
+     ]
+    },
+    {
+     "checker": "reader",
+     "label": "NOTE-11",
+     "severity": "NOTE",
+     "finding": "WRITEUP.md is 3,976 words, 24 under the cap, so any addition needs a cut",
+     "outcome": "fixed",
+     "detail": "WRITEUP was cut to make room for this round's sentences, and stays within its word limit",
+     "commits": [
+      "f436fc1"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "pages",
+     "label": "BLOCK-1",
+     "severity": "BLOCK",
+     "finding": "the Flamegraphs target gets two different verdicts on the public pages",
+     "outcome": "fixed",
+     "detail": "docs/DETAILS.md says BENCHMARKS.md sets the flamegraph target no figure to reach, so it is among the met targets, as RESULTS.md and the README count it",
+     "commits": [
+      "364ecd3"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "pages",
+     "label": "BLOCK-2",
+     "severity": "BLOCK",
+     "finding": "WRITEUP.md:38 makes a claim that the table below it contradicts",
+     "outcome": "fixed",
+     "detail": "WRITEUP.md:38 says the counter reads are more than half of each fast design's instruction figure, not of every row's",
+     "commits": [
+      "9586a3b"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "pages",
+     "label": "FIX-1",
+     "severity": "FIX",
+     "finding": "results/parse_rate_debian_12302019.md still says T-PARSE-3's day is not measured",
+     "outcome": "fixed",
+     "detail": "The 12302019 page, rendered again from its raw records with the reason, says T-PARSE-3 is judged on 10302019, in that day's file; results_table.py refuses a row that names a file which is not there or gives no verdict",
+     "commits": [
+      "8753342",
+      "84bbf3a"
+     ],
+     "tests": [
+      "test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file"
+     ],
+     "faults": [
+      "readme-parse-judged-file-unread"
+     ],
+     "notes": []
+    },
+    {
+     "checker": "pages",
+     "label": "FIX-2",
+     "severity": "FIX",
+     "finding": "the README headline's bar for T-ORACLE-2 is half the bar",
+     "outcome": "fixed",
+     "detail": "The README headline's T-ORACLE-2 bar keeps its floor of messages compared",
+     "commits": [
+      "4ee06a2"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "pages",
+     "label": "NOTE-1",
+     "severity": "NOTE",
+     "finding": "a count written as a word is still not read on a line that cites no results file",
+     "outcome": "fixed",
+     "detail": "README.md and WRITEUP.md say the number gate reads no count written as a word on a line that cites no results file, and does not check a claim derived from figures, such as a rank",
+     "commits": [
+      "f5822ed",
+      "f0ff10a"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "pages",
+     "label": "NOTE-2",
+     "severity": "NOTE",
+     "finding": "README.md:118 lists the number gate's limits but not that it cannot check a derived claim",
+     "outcome": "fixed",
+     "detail": "README.md and WRITEUP.md say the number gate reads no count written as a word on a line that cites no results file, and does not check a claim derived from figures, such as a rank",
+     "commits": [
+      "f5822ed",
+      "f0ff10a"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "pages",
+     "label": "NOTE-3",
+     "severity": "NOTE",
+     "finding": "docs/DETAILS.md:123-126 names nine modes but leaves out S2",
+     "outcome": "fixed",
+     "detail": "docs/DETAILS.md gives S2 among the modes, one step lower again",
+     "commits": [
+      "364ecd3"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "pages",
+     "label": "NOTE-4",
+     "severity": "NOTE",
+     "finding": "README.md:14's T-BOOK-1 bar leaves out with per-level FIFO queues kept",
+     "outcome": "known limit",
+     "detail": "T-BOOK-1's bar comes from its results file without the FIFO clause; adding it is a change to results_table.py outside this round's ruling",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": [
+      "Left as it is after the second gate"
+     ]
+    },
+    {
+     "checker": "pages",
+     "label": "NOTE-5",
+     "severity": "NOTE",
+     "finding": "the bars T-SPSC-2 prints as 3.90x and 4.20x, the first gate's N8, are explained now",
+     "outcome": "no change needed",
+     "detail": "The checker found the bars T-SPSC-2 prints explained now, so nothing is left to change",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "code",
+     "label": "FIX-1",
+     "severity": "FIX",
+     "finding": "scripts still cite research files kept outside the repository, and one names a private path",
+     "outcome": "fixed",
+     "detail": "Scripts' comments cite only what the repository holds: each file kept outside it gives way to the fact it was cited for, and the private run's name is dropped",
+     "commits": [
+      "a181b60",
+      "da5f273",
+      "6f97b73"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "code",
+     "label": "FIX-2",
+     "severity": "FIX",
+     "finding": "the README does not say that ITCH_LIBCXX_DIR is an environment variable",
+     "outcome": "fixed",
+     "detail": "README.md:54 says ITCH_LIBCXX_DIR is an environment variable, which CMake's -D does not set",
+     "commits": [
+      "f5822ed"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "code",
+     "label": "NOTE-1",
+     "severity": "NOTE",
+     "finding": "the fuzz rule's list of limits misses a route",
+     "outcome": "known limit",
+     "detail": "The route is among the fuzz-search rule's stated limits, in scripts/test_fault_matrix.py and docs/NOTES.md: an edit of a fuzz target's source, or of the code it builds from, that changes libFuzzer's flags or reads the clock when the binary runs. The rule does not refuse it",
+     "commits": [
+      "2d9cc69",
+      "f2ec1d1"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": [
+      "The fuzz-search faults count their runs"
+     ]
+    },
+    {
+     "checker": "code",
+     "label": "NOTE-2",
+     "severity": "NOTE",
+     "finding": "generated results pages, a test and two scripts still name a person where the public pages name none",
+     "outcome": "no change needed",
+     "detail": "Kept as it is, as the second gate ruled: the word in the generated results pages waits on a question decided outside this record",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "code",
+     "label": "NOTE-3",
+     "severity": "NOTE",
+     "finding": "review ids are cited in more scripts than the three the report gave",
+     "outcome": "no change needed",
+     "detail": "The committed text is right: docs/NOTES.md names the three scripts that gained review ids and says such comments were there before. The undercount, of 17 scripts that cite them, was in a report that is not committed, and every id cited is defined in the record",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "code",
+     "label": "NOTE-4",
+     "severity": "NOTE",
+     "finding": "tests/test_skips_cli.py does not read #elifdef or #elifndef",
+     "outcome": "fixed",
+     "detail": "tests/test_skips_cli.py reads #elifdef and #elifndef, and an #elif or #else after a taken branch, as the compiler does, and a condition it cannot decide as compiled and not taken",
+     "commits": [
+      "6a72174",
+      "a1c2147"
+     ],
+     "tests": [
+      "tests/test_skips_cli.py"
+     ],
+     "faults": [
+      "harness-skip-reader-misses-elifdef"
+     ],
+     "notes": []
+    },
+    {
+     "checker": "code",
+     "label": "NOTE-5",
+     "severity": "NOTE",
+     "finding": "the fault fixed in bee48dd plants a figure next to the record's live count",
+     "outcome": "fixed",
+     "detail": "A test in the script_tests stage runs every fault that plants a figure in the record's sentences against the record as it stands, and the plant moved to a count the record cannot come back to",
+     "commits": [
+      "3f6ed74"
+     ],
+     "tests": [
+      "test_every_figure_planted_in_the_records_sentences_is_still_caught"
+     ],
+     "faults": [
+      "readme-record-plant-goes-blind"
+     ],
+     "notes": []
+    },
+    {
+     "checker": "code",
+     "label": "NOTE-6",
+     "severity": "NOTE",
+     "finding": "the README points to the wrong field for the reason text",
+     "outcome": "fixed",
+     "detail": "README.md:84 points to that file's Commands section for the reason",
+     "commits": [
+      "f5822ed"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "code",
+     "label": "NOTE-7",
+     "severity": "NOTE",
+     "finding": "handoff text left in docs/NOTES.md, and the rule's limits given twice",
+     "outcome": "fixed",
+     "detail": "docs/NOTES.md's paragraph on the fuzz-search rule says why the rule has its form, and gives its limits once",
+     "commits": [
+      "8d22c93"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "record",
+     "label": "BLOCK-1",
+     "severity": "BLOCK",
+     "finding": "WRITEUP.md:38 says the counter reads are more than half of each instruction figure, false for two of the six rows",
+     "outcome": "fixed",
+     "detail": "WRITEUP.md:38 says the counter reads are more than half of each fast design's instruction figure, not of every row's",
+     "commits": [
+      "9586a3b"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "record",
+     "label": "FIX-1",
+     "severity": "FIX",
+     "finding": "the bisect list leaves out dee389b and the check area's missing README.md, and its opening says every commit is in main's history",
+     "outcome": "fixed",
+     "detail": "The bisect list gains dee389b and the check area's missing README.md from b44a783 to fbd32a8, each run on exports, and its opening says 713147a is in no branch",
+     "commits": [
+      "8d22c93"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "record",
+     "label": "FIX-2",
+     "severity": "FIX",
+     "finding": "the record does not say that 7161114 and bee48dd were read by no reviewer",
+     "outcome": "fixed",
+     "detail": "The record says what no reviewer read and what the second gate read: its code checker 7161114 and bee48dd, its record checker the WRITEUP passages of bec8d6d",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": [],
+     "no_commit": "the record itself says it, in this gate's entry and in what no reviewer read"
+    },
+    {
+     "checker": "record",
+     "label": "FIX-3",
+     "severity": "FIX",
+     "finding": "docs/TASKS.md:239 still says T-PARSE-3 has no figure on its bar's day and is blocked",
+     "outcome": "fixed",
+     "detail": "docs/TASKS.md's line says T-PARSE-3 is met on its bar's day under P-0031",
+     "commits": [
+      "8d22c93"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "record",
+     "label": "FIX-4",
+     "severity": "FIX",
+     "finding": "WRITEUP.md:139-140 takes off an empty span that the cited file says is not to be taken off",
+     "outcome": "fixed",
+     "detail": "WRITEUP says the empty span is from a separate run and that the file takes nothing off by it",
+     "commits": [
+      "f4f4d32"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "record",
+     "label": "NOTE-1",
+     "severity": "NOTE",
+     "finding": "WRITEUP.md:139 gives the clock readings as running from the start's to the highest, as if it were the last",
+     "outcome": "fixed",
+     "detail": "WRITEUP gives the lowest and the highest of the clock readings as such",
+     "commits": [
+      "f4f4d32"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "record",
+     "label": "NOTE-2",
+     "severity": "NOTE",
+     "finding": "the first gate's findings NOTE-3 is recorded as fixed, where known limit is the truer outcome",
+     "outcome": "fixed",
+     "detail": "The acceptance gate's findings NOTE-3 is a known limit in this record",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": [],
+     "no_commit": "the record itself changes that outcome, in the first gate's entry"
+    },
+    {
+     "checker": "record",
+     "label": "NOTE-3",
+     "severity": "NOTE",
+     "finding": "docs/NOTES.md:2858 names 713147a without saying there that it is in no branch",
+     "outcome": "fixed",
+     "detail": "docs/NOTES.md says where it names 713147a that it is in no branch",
+     "commits": [
+      "8d22c93"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "record",
+     "label": "NOTE-4",
+     "severity": "NOTE",
+     "finding": "the prediction check runs in the bench stage, not in gates or script_tests",
+     "outcome": "fixed",
+     "detail": "docs/NOTES.md says the prediction check was run on its own, the bench stage running it; no page said it ran in gates or script_tests",
+     "commits": [
+      "8d22c93"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "runs",
+     "label": "FIX-1",
+     "severity": "FIX",
+     "finding": "the 10302019 parse page's commit line names the wrong export script, and a reader cannot find the correction",
+     "outcome": "fixed",
+     "detail": "The 10302019 page, rendered again from its raw records, has a reason line saying the export's label is the driver's fixed label, and that the run's own script exported the tree and checked every file against a manifest",
+     "commits": [
+      "649395c"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "runs",
+     "label": "NOTE-1",
+     "severity": "NOTE",
+     "finding": "the 10302019 parse page says the copy was checked while the passes were timed, where it was checked before and after each",
+     "outcome": "fixed",
+     "detail": "The 10302019 page says what was checked to be in memory before and after each timed pass",
+     "commits": [
+      "649395c"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "runs",
+     "label": "NOTE-2",
+     "severity": "NOTE",
+     "finding": "what was and was not checked of the file's pages in the page cache",
+     "outcome": "no change needed",
+     "detail": "The page points to the one count made, every page of the file in the page cache once before the first process; docs/NOTES.md says it was not checked again before the later processes or after any pass",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "runs",
+     "label": "NOTE-3",
+     "severity": "NOTE",
+     "finding": "the 10302019 parse page's Commands block is not the literal command",
+     "outcome": "known limit",
+     "detail": "The Commands block is the drivers' equivalent form, the same on every driver page; changing it means rendering pages other than these two again",
+     "commits": [],
+     "tests": [],
+     "faults": [],
+     "notes": [
+      "Left as it is after the second gate"
+     ]
+    },
+    {
+     "checker": "runs",
+     "label": "NOTE-4",
+     "severity": "NOTE",
+     "finding": "counts of other load depend on how a span's samples are counted",
+     "outcome": "fixed",
+     "detail": "docs/NOTES.md gives the counts of other load both ways, inside each span and with the two samples that bound it",
+     "commits": [
+      "f2ec1d1"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "runs",
+     "label": "NOTE-5",
+     "severity": "NOTE",
+     "finding": "another project's process ran inside this project's window",
+     "outcome": "fixed",
+     "detail": "docs/NOTES.md says what the other project's one sample was, a wrapper waiting for the window, and the two processes seen once each",
+     "commits": [
+      "f2ec1d1"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "runs",
+     "label": "NOTE-6",
+     "severity": "NOTE",
+     "finding": "the Linux-only faults' path list leaves out three fault files the matrix reads",
+     "outcome": "fixed",
+     "detail": "docs/NOTES.md's paragraph on why the run at fbd32a8 stands gives the narrower list of what the 14 faults mutate, build and run, and why the changed files cannot reach them",
+     "commits": [
+      "7500562",
+      "f2ec1d1"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "runs",
+     "label": "NOTE-7",
+     "severity": "NOTE",
+     "finding": "the Linux-only faults' fetched logs have no hash list made on the host",
+     "outcome": "fixed",
+     "detail": "docs/NOTES.md says ctest prints no reason for the VBMI skip and why the test skips, and that the logs came back by a plain copy with no hash list",
+     "commits": [
+      "8d22c93"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "runs",
+     "label": "NOTE-8",
+     "severity": "NOTE",
+     "finding": "the window's six and a half minutes were a stale file, not a held window",
+     "outcome": "fixed",
+     "detail": "docs/NOTES.md says the window was free once the run ended, and that what stood longer was the file left on disk",
+     "commits": [
+      "8d22c93"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
+    },
+    {
+     "checker": "runs",
+     "label": "NOTE-9",
+     "severity": "NOTE",
+     "finding": "WRITEUP does not name the commit of the Linux-only faults' run",
+     "outcome": "fixed",
+     "detail": "WRITEUP says the 14 faults for Linux only were detected at an earlier commit, fbd32a8, and links the working record's heading",
+     "commits": [
+      "b7bdbb2"
+     ],
+     "tests": [],
+     "faults": [],
+     "notes": []
     }
    ]
   }

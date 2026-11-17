@@ -603,9 +603,13 @@ class ReviewReport(unittest.TestCase):
 # them by the script; they are pinned here instead (r18-27): a count edited to match a finding
 # dropped, or a finding moved out of the list, fails this test.
 GATE_COUNTS = {"acceptance gate": {"reader": (4, 17, 9), "pages": (2, 2, 11), "code": (0, 2, 4),
-                                   "raw": (0, 0, 3), "findings": (0, 2, 3)}}
+                                   "raw": (0, 0, 3), "findings": (0, 2, 3)},
+               "second gate": {"cold": (2, 8, 10), "reader": (0, 2, 11), "pages": (2, 2, 5),
+                               "code": (0, 2, 7), "record": (1, 4, 4), "runs": (0, 1, 9)}}
 GATE_NOT_LISTED = {"acceptance gate": {"reader": ["BLOCK"], "pages": [], "code": [], "raw": [],
-                                       "findings": []}}
+                                       "findings": []},
+                   "second gate": {"cold": [], "reader": [], "pages": [], "code": [], "record": [],
+                                   "runs": []}}
 
 # A fault that plants a figure in a sentence of the record and asks gate_numbers.py or
 # review_report.py to refuse it goes blind when the record's own counts come to make the figure
