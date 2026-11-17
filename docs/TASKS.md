@@ -383,7 +383,7 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [ ] 14. Where WRITEUP or docs/DETAILS.md rests a claim on docs/NOTES.md alone, it links the heading and calls it the working record.
 - [x] 15. The bisect list: dee389b, and the check area's missing README.md from b44a783 to fbd32a8, added, each run on exports; its opening true of 713147a, which is in no branch, as is the amend paragraph (docs/NOTES.md, "Commits a bisect should skip").
 - [ ] 16. The record: 7161114, bee48dd and bec8d6d's passages read at this gate, recorded with this gate's findings. This file's line on every target in BENCHMARKS.md says T-PARSE-3 is met on its bar's day.
-- [ ] 17. No fault that plants a count of the record can go blind by coincidence: a test runs each such fault against the record as it stands, with a fault of its own, and the findings plant is a count the record cannot come back to (docs/NOTES.md, "The final review's record").
+- [x] 17. No fault that plants a count of the record can go blind by coincidence: a test runs each such fault against the record as it stands, with a fault of its own, and the findings plant is a count the record cannot come back to (docs/NOTES.md, "The final review's record").
 - [ ] 18. The comments that cite files outside the repository give the fact instead.
 - [ ] 19. `tests/test_skips_cli.py` reads `#elifdef`, or says it does not.
 - [ ] 20. The stated limits: the fuzz-search route the code checker found, and, where the pages describe the number gate, that a count in words on a line citing no file and a derived claim such as a rank are not checked.

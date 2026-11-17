@@ -2463,7 +2463,7 @@
         {
           "file": "WRITEUP.md",
           "old": "Every finding of the final review, with its outcome",
-          "new": "Every one of the final review's 427 findings, with its outcome"
+          "new": "Every one of the final review's 425 findings, with its outcome"
         }
       ],
       "command": [
@@ -2475,7 +2475,29 @@
         "WRITEUP.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 427 is not in results/final_review\\.md",
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 425 is not in results/final_review\\.md",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-record-plant-goes-blind",
+      "breaks": "A fault that plants a count of the record on WRITEUP.md stops planting one the number gate refuses, as readme-writeup-review-figure-not-in-results did when its 192 findings became the record's count of FIX findings, which only a full matrix would show",
+      "check": "test_review_report.py Committed.test_every_figure_planted_in_the_records_sentences_is_still_caught",
+      "mutations": [
+        {
+          "file": "scripts/faults/readme.json",
+          "old": "\"new\": \"Every one of the final review's 425 findings, with its outcome\"",
+          "new": "\"new\": \"Every one of the final review's findings, with its outcome\""
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_review_report.py",
+        "Committed.test_every_figure_planted_in_the_records_sentences_is_still_caught"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_every_figure_planted_in_the_records_sentences_is_still_caught[\\s\\S]*readme-writeup-review-figure-not-in-results: undetected",
         "exit": 1
       }
     },

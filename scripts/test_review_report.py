@@ -2,7 +2,8 @@
 """review_report.py on a made-up record of two reviewers, r1 and r12 (one id the start of the
 other): the counts are the rows, an unknown outcome or severity is refused, an open finding
 cannot be rendered as complete, evidence not in the tree is refused, and the committed file is a
-fresh render whose evidence is in the tree. Scratch goes under build/.
+fresh render whose evidence is in the tree; and every fault that plants a figure in the record's
+sentences is still caught as the record stands. Scratch goes under build/.
 
     python3 -B scripts/test_review_report.py
 """
@@ -15,11 +16,13 @@ import re
 import sys
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import fault_matrix  # noqa: E402
 import review_report  # noqa: E402
 
 REPO_ROOT = review_report.REPO_ROOT
@@ -553,6 +556,49 @@ GATE_COUNTS = {"reader": (4, 17, 9), "pages": (2, 2, 11), "code": (0, 2, 4), "ra
                "findings": (0, 2, 3)}
 GATE_NOT_LISTED = {"reader": ["BLOCK"], "pages": [], "code": [], "raw": [], "findings": []}
 
+# A fault that plants a figure in a sentence of the record and asks gate_numbers.py or
+# review_report.py to refuse it goes blind when the record's own counts come to make the figure
+# true: "192 findings" became the record's count of FIX findings at e2a304e, and the matrix,
+# which runs only in a full check, was the first to see it (bee48dd). Each such fault is run
+# here as the matrix runs it, against the record as it stands, so the commit that makes a plant
+# true fails its own script tests. A plant is a fault whose command runs one of these scripts
+# and which edits results/final_review.md, or a page's text that lies in WRITEUP's section on
+# the final review or on a line citing results/final_review.md.
+RECORD_CHECKS = ("gate_numbers.py", "review_report.py")
+RECORD_FILE = review_report.OUT.as_posix()
+PLANT_PAGES = ("README.md", "RESULTS.md", "WRITEUP.md", "docs/DETAILS.md")
+
+
+def record_places(root):
+    """(page, text) for each place of a page that speaks of the record."""
+    places = []
+    for page in PLANT_PAGES:
+        path = root / page
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        places += [(page, line) for line in text.splitlines() if RECORD_FILE in line]
+        start = text.find(f"\n{review_report.PAGE_HEADING}\n")
+        if page == review_report.PAGE.as_posix() and start >= 0:
+            body = text[start + 1:]
+            end = body.find("\n#", len(review_report.PAGE_HEADING))
+            places.append((page, body if end < 0 else body[:end]))
+    return places
+
+
+def record_plants(root):
+    places = record_places(root)
+    plants = []
+    for fault in fault_matrix.load_faults(root / "scripts" / "faults"):
+        if not any(word.endswith(f"/{name}") for word in fault.command for name in RECORD_CHECKS):
+            continue
+        edits_the_file = any(edit["file"] == RECORD_FILE for edit in fault.mutations + fault.inputs)
+        edits_a_sentence = any(mutation["old"] in text for mutation in fault.mutations
+                               for page, text in places if mutation["file"] == page)
+        if edits_the_file or edits_a_sentence:
+            plants.append(fault)
+    return plants
+
 
 class Committed(unittest.TestCase):
     def test_the_gates_checkers_keep_the_counts_of_their_reports(self):
@@ -568,6 +614,26 @@ class Committed(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             code = review_report.main(["check"])
         self.assertEqual(code, 0, out.getvalue())
+
+    def test_every_figure_planted_in_the_records_sentences_is_still_caught(self):
+        plants = record_plants(REPO_ROOT)
+        self.assertIn("readme-writeup-review-figure-not-in-results", [f.id for f in plants])
+        for fault in plants:
+            self.assertIsNone(fault.build, f"{fault.id} builds, which this test does not")
+            # A name the tree does not hold is left out of the copy, as when this test runs in
+            # the copy of one fault area, which holds less than the repository.
+            fault.tree = tuple(name for name in fault.tree if (REPO_ROOT / name).exists())
+        scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.addCleanup(scratch.cleanup)
+        trees, logs = Path(scratch.name) / "trees", Path(scratch.name) / "logs"
+        logs.mkdir()
+        with ThreadPoolExecutor(max_workers=fault_matrix.MAX_JOBS) as pool:
+            list(pool.map(lambda f: fault_matrix.run_fault(f, REPO_ROOT, trees, logs, False),
+                          plants))
+        missed = [f"{f.id}: {f.status}, {f.detail}" for f in plants
+                  if f.status != fault_matrix.DETECTED]
+        self.assertEqual(missed, [], "a planted figure is caught no longer; if the record's "
+                         "own counts have made it true, plant one they cannot")
 
 
 if __name__ == "__main__":
