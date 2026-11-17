@@ -1785,8 +1785,9 @@ def missed_full(root):
 
 MISS_OPENING = (
     "Each line is on the Zen 1 host unless it names the M4 Max, and gives the deciding row, or the "
-    "worst. Where a bar is another host's published figure, the host's share of the gap was not "
-    "measured. In the book's runs, messages naming an order a second old or "
+    "worst: for latency, the largest gap in ns. Where a bar is another host's published figure, "
+    "the host's share of the gap was not measured. In the book's runs, messages naming an order "
+    "a second old or "
     "more make most DRAM fills.")
 # What each target asks, and whose bar it is, in words a stranger reads alone; and its why in a
 # few plain words, "" for none, or None for a trade check's, which is its row's. Only words are
@@ -1902,10 +1903,11 @@ def latency_bar(bar, item):
 
 
 def latency_line(rows):
-    """The first quantile a latency target misses."""
+    """The quantile a latency target misses by the most nanoseconds: its worst, not its first."""
     _, bar, measured, gap, *_ = rows[0]
     gaps = gap.split(", ")
-    item, _, over = gaps[0].partition(" by ")
+    item, _, over = max((part.partition(" by ") for part in gaps),
+                        key=lambda found: float(found[2].removesuffix(" ns").replace(",", "")))
     value = next(part.removeprefix(item + " ") for part in measured.split("; ")
                  if part.startswith(item + " "))
     operation, _, quantile = item.rpartition(" ")

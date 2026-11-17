@@ -1076,8 +1076,14 @@ class MissedTargets(unittest.TestCase):
         self.assertIn("- **T-SPSC-1, the ring's round trip vs boost, moodycamel and "
                       "rigtorp:** This ring's round trip over moodycamel's is measured at "
                       "1.35× vs a bar of at most 1.00×; two more in RESULTS.md.", table)
-        self.assertIn("- **T-LAT-1, each operation's latency, vs itch-book:** At p50 an add "
-                      "takes 100.10 ns vs 60 ns, 40.10 ns over; eleven more in RESULTS.md.",
+        # A latency line gives the quantile missed by the most nanoseconds, not the first.
+        self.assertIn("- **T-LAT-1, each operation's latency, vs itch-book:** At p99.9 a replace "
+                      "takes 2,734.28 ns vs 945 ns, 1,789.28 ns over; eleven more in RESULTS.md.",
+                      table)
+        self.assertIn("At p99.9 a message takes 1,472.00 ns vs 874 ns, 598.00 ns over; two more",
+                      table)
+        self.assertNotRegex(table, r"At p50 ")
+        self.assertIn("gives the deciding row, or the worst: for latency, the largest gap in ns.",
                       table)
         self.assertIn("- **T-TRADE-3, each symbol's continuous volume vs SEC MIDAS:** On the "
                       "M4 Max, 38 violations on 30 May 2019, none allowed; three more in "
