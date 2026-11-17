@@ -14,9 +14,9 @@ The Zen 1 host is shared with other projects, and I chose to change none of its 
 
 ## How a number is published
 
-Each timing's prediction is committed first, and every run, refused and withdrawn ones included, has a row in the run log ([results/predictions.md](results/predictions.md)). A run is refused unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is in memory (the file in the page cache, or, for the parse rate on 10302019, every page of the bench's copy around each timed pass), and a sampler withdraws a timed process if other work ran beside it.
+Each timing's prediction is committed first, and every run, refused and withdrawn ones included, has a row in the run log ([results/predictions.md](results/predictions.md)). A run is refused unless the pin reads back, the governor is `performance`, the SMT sibling is idle and the input is in memory (the file in the page cache, or, for the parse rate on 10302019, every page of the bench's copy around each timed pass). A sampler that withdraws a timed process if other work ran beside it came later: on the Zen 1 host only the parse rates and the T-BT-3 backtest were timed under it, and every other timing there rests on these refusals alone.
 
-Every figure here links to the results file it comes from, and a script checks that each is in that file beside a word its sentence shares and that each verdict agrees with its target's result; it cannot catch a figure copied from elsewhere in its file. What this page leaves out is in [docs/DETAILS.md](docs/DETAILS.md).
+Every figure here links to the results file it comes from, and a script checks that each is in that file beside a word its sentence shares and that each verdict agrees with its target's result. It cannot catch a figure copied from elsewhere in its file, a count in words on a line that cites no file, or a derived claim such as a rank. What this page leaves out is in [docs/DETAILS.md](docs/DETAILS.md).
 
 ## Data layout
 
