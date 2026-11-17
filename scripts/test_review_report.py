@@ -671,9 +671,10 @@ class Committed(unittest.TestCase):
         self.assertIn("readme-writeup-review-figure-not-in-results", [f.id for f in plants])
         for fault in plants:
             self.assertIsNone(fault.build, f"{fault.id} builds, which this test does not")
-            # A name the tree does not hold is left out of the copy, as when this test runs in
-            # the copy of one fault area, which holds less than the repository.
-            fault.tree = tuple(name for name in fault.tree if (REPO_ROOT / name).exists())
+        # A plant whose tree names what this tree does not hold is not run here, as when this
+        # test runs in the copy of one fault area, which holds less than the repository: its
+        # check would fail there for the want of a file, not for the plant.
+        plants = [f for f in plants if all((REPO_ROOT / name).exists() for name in f.tree)]
         scratch = tempfile.TemporaryDirectory(dir=SCRATCH)
         self.addCleanup(scratch.cleanup)
         trees, logs = Path(scratch.name) / "trees", Path(scratch.name) / "logs"
