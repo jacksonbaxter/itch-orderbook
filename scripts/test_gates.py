@@ -745,12 +745,12 @@ class Gates(unittest.TestCase):
 
     def test_writeup_length(self):
         head = DUE_TIME + MISSED_LIST
-        for words in (2499, 4001):
+        for words in (2499, 4061):
             with self.subTest(words=words):
                 self.reset()
                 self.assert_only_gate_fails("writeup-length", "WRITEUP.md",
                                             head + "word " * (words - len(head.split())))
-        for words in (2500, 4000):
+        for words in (2500, 4060):
             self.reset()
             self.assert_passes("WRITEUP.md", head + "word " * (words - len(head.split())))
         self.reset()
