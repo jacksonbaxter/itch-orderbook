@@ -211,8 +211,9 @@ def pass_functions(disassembly):
     """Each pass's own code in objdump -d's text: {pass: [(symbol, [instruction lines])]}, the
     function and any clone the compiler made of it (.isra, .constprop, .part), each checked as
     the pass itself. A .cold part is not taken in: a branch into it is a branch to another
-    function, refused. GCC 14.2 and Clang 23.1.4 on debian, and Clang on the Mac, made neither
-    (P4 parse asm/)."""
+    function, refused. GCC 14.2 and Clang 23.1.4 on debian, and Clang on the Mac, made neither:
+    objdump -d of each one's bench_parse, read when this was written, gave each pass as one
+    function, with no clone and no .cold part."""
     found, current = {}, None
     for line in disassembly.splitlines():
         header = FUNCTION_LINE.match(line)
