@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""E12 (docs/NOTES.md, "SIMD parsing kernels"): the kernels' decode as each compiler emits it,
-counted.
+"""E12: the kernels' decode as each compiler emits it, counted.
+E12 is one of the experiments docs/NOTES.md gives under "SIMD parsing kernels".
 
     simd_asm_audit.py collect --out RECORD.json [--commit TEXT]
     simd_asm_audit.py report --run-dir DIR --out results/simd_asm_HOST.md [--run-log FILE]

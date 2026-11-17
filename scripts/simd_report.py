@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Writes the results of one SIMD experiment (docs/NOTES.md, "SIMD parsing kernels") from a
-run of scripts/simd_driver.py.
+"""Writes the results of one SIMD experiment from a run of scripts/simd_driver.py.
+The experiments are the ones docs/NOTES.md gives under "SIMD parsing kernels".
 
     simd_report.py --run-dir DIR --out results/simd_EXPERIMENT_HOST_DAY.md [--run-log FILE]
                    [--rendered-again REASON]
