@@ -578,11 +578,25 @@ def backtest_row(root, name, text):
 
 def backtest_headline(target, name, text, root):
     """T-BT-1's headline row, the file's own targets row, once its bar is held to
-    BENCHMARKS.md's bar and unit."""
+    BENCHMARKS.md's bar and unit; the bar with what it is in brackets after it, as
+    BENCHMARKS.md's comparability line first says it, as another row's bar names its host."""
     found = backtest_judged(root, name, text)[0]
     if found != target:
         raise TableError(f"results/{name}: its targets table is {found}'s, not {target}'s")
-    return targets_headline(target, name, text)
+    bar, *rest = targets_headline(target, name, text)
+    return (f"{bar} ({bar_kind(root, target)})", *rest)
+
+
+def bar_kind(root, target):
+    """What a target's bar is, the first clause of its comparability line in BENCHMARKS.md:
+    for T-BT-1, "a small unreviewed repo on a synthetic feed"."""
+    text = (root / BENCHMARKS_PAGE).read_text(encoding="utf-8")
+    entry = re.search(rf"^### {re.escape(target)}: .*\n((?:- .*\n)+)", text, re.MULTILINE)
+    said = entry and re.search(r"^- \*\*Comparability:\*\* ([^,.;]+)", entry[1], re.MULTILINE)
+    if not said:
+        raise TableError(f"{BENCHMARKS_PAGE}: no comparability line for {target}, which says "
+                         "what its bar is")
+    return said[1]
 
 
 def spsc_rows(name, text):
@@ -1118,8 +1132,9 @@ def book_headline(target, name, text):
 
 def short_bar(bar):
     """A headline bar as its file gives it, with where it was set in brackets after it, the
-    host's name only, and T-ORACLE-2's bar to its count of sessions."""
-    bar = re.sub(r" and at least [\d,]+ messages compared, on the Mac$", "", bar)
+    host's name only; T-ORACLE-2's bar whole, its sessions and its floor of messages, without
+    the host it ran on, which the row's host cell gives."""
+    bar = re.sub(r", on the Mac$", "", bar)
     return re.sub(r", set on ([^,]*)(?:,.*)?$", r" (\1)", bar)
 
 

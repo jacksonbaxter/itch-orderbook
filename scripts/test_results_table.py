@@ -707,7 +707,9 @@ class ResultsTable(unittest.TestCase):
         self.assertTrue(oracle.startswith("| Agreement with a second, simple book that shares no "
                                           "code with the fast one, over whole sessions "
                                           "(T-ORACLE-2) | "), oracle)
-        self.assertIn("| 0 divergences over 10 full sessions | 0 divergences in 3,081,392,329 "
+        # The bar whole: its sessions and its floor of messages, as BENCHMARKS.md gives it.
+        self.assertIn("| 0 divergences over 10 full sessions and at least 3,037,078,470 messages "
+                      "compared | 0 divergences in 3,081,392,329 "
                       "messages over 10 sessions | Apple M4 Max | met | "
                       "[results/oracle_sessions.md]", oracle)
         # The control's count says why it is there: the counter does see allocations.
@@ -729,8 +731,18 @@ class ResultsTable(unittest.TestCase):
             "| The backtester replaying a whole day, quoting, with its queue model; an engine "
             "event is a message, or a delivery, arrival, report or wake it causes (T-BT-1) | "),
             backtest)
-        self.assertIn("| ≥ 2.00 M engine events/s | 4.68 M engine events/s (4.57 M messages/s) | "
-                      "Zen 1 host | met |", backtest)
+        # Its bar says what it is, as BENCHMARKS.md does: not a top-tier figure.
+        self.assertIn("| ≥ 2.00 M engine events/s (a small unreviewed repo on a synthetic feed) | "
+                      "4.68 M engine events/s (4.57 M messages/s) | Zen 1 host | met |", backtest)
+        self.edit("BENCHMARKS.md", "- **Comparability:** a small unreviewed repo on a synthetic "
+                  "feed,", "- **Comparability:** a repo on a synthetic feed,")
+        self.assertIn("| ≥ 2.00 M engine events/s (a repo on a synthetic feed) |",
+                      self.headline()[4])
+        self.edit("BENCHMARKS.md", "- **Comparability:** a repo on a synthetic feed,",
+                  "- **Comparablity:** a repo on a synthetic feed,")
+        code, output = self.run_table()
+        self.assertEqual(code, 1, output)
+        self.assertIn("no comparability line for T-BT-1", output)
         for row in rows:
             self.assertNotIn("map-fresh", row)
             self.assertNotIn("core 4", row)
