@@ -9,7 +9,8 @@ findings by severity as its own findings said them, one look at a time, and its 
 it ended on one; every finding, with its severity, the finding in one line, its outcome and the
 evidence for it: the commits that settled it, the tests and faults that hold it, and the
 docs/NOTES.md sections that give it; the outcomes checked again at a later commit, and where;
-what is still to come; the acceptance gate (`gate`): the commit it checked, its checkers, what
+what is still to come; the gates (`gates`), the acceptance gate first, each with its name, the
+commit it checked, what it read that no reviewer had (`note`, where given), its checkers, what
 each read and the counts of its findings by severity as its own report states them (`count`),
 each checker's findings by the checker's own label, held to the same rules as a reviewer's, and
 any finding of a checker that is not listed (`not_listed`), each with its severity and the reason
@@ -25,7 +26,7 @@ be fixed) or NOTE. Its outcome is one of OUTCOMES. `write` refuses, and writes n
 - severity: a severity not in SEVERITIES;
 - outcome: an outcome not in OUTCOMES;
 - id: a finding id that is not `<reviewer>-<number>` of a listed reviewer, a gate finding of no
-  listed checker or with a blank label, a blank checker, or any of them given twice;
+  listed checker of its gate or with a blank label, a blank checker, or any of them given twice;
 - count: a reviewer whose findings, counted by severity, are not the counts its looks state, or a
   checker whose findings listed and not listed, counted by severity, are not its report's;
 - evidence: a finding fixed with no commit, unless its `no_commit` says in words why there is
@@ -35,13 +36,13 @@ be fixed) or NOTE. Its outcome is one of OUTCOMES. `write` refuses, and writes n
   it ends in one of TEST_ENDINGS and lies under one of TEST_DIRS, or its name starts `test_` and
   it lies in one of TEST_PLACES or is named with no folder), or a finding not listed with no
   reason in words;
-- complete: a record said to be complete while a finding, the gate's included, is open, partly
+- complete: a record said to be complete while a finding, the gates' included, is open, partly
   done or left for the owner, while a reviewer is still to come, or while a reviewer's fixes are
   on a branch not merged yet;
 - data: anything else the file should have and does not, or a `waits_on` or `waits_for` on a
   finding that is settled.
 
-The Result line says how many of the gate's findings are not settled, by outcome, each of them
+The Result line says how many of each gate's findings are not settled, by outcome, each of them
 named under "Not settled", and how many reviews are still to come; then it names every
 reviewer's finding not settled, in one group for each one it waits on (its `waits_on`, or the
 owner for one left for the owner), each group starting "waiting on" and whom, or "waiting on no
@@ -54,7 +55,7 @@ it says complete.
 
 The file gives the commit the outcomes were checked at, and any checked again later with the
 commit they were checked at, the reviewers, the counts by reviewer, by severity and by outcome
-with their totals, every finding, the acceptance gate's checkers and findings with their counts,
+with their totals, every finding, each gate's checkers and findings with their counts,
 what is still open, what is still to come, and what no reviewer read (`unread`); it says
 "complete" only when the data does and `write` lets it.
 
@@ -146,7 +147,7 @@ WHAT_CHECK_CANNOT = (
     "above, and two later reviewers checked them again: r15 a sample of them, and r16 every "
     "outcome of r15's findings.")
 GATE_WORDS = (
-    "The acceptance gate checked the public tree at {at} in {parts} parts, each with its own "
+    "The {name} checked the public tree at {at} in {parts} parts, each with its own "
     "report, which states how many findings of each severity it made. Those findings are "
     "recorded here beside the reviewers', each checker's held to its report's counts, and a "
     "finding not listed is counted below the table, with its severity and the reason. Each "
@@ -154,6 +155,9 @@ GATE_WORDS = (
     "that checker's summary. The severity is the checker's own, BLOCK, FIX or NOTE, and the "
     "outcomes are the six above, held to the same rules as a reviewer's finding: the record is "
     "not complete while one of these is open, partly done or left for the owner.")
+GATE_AGAIN = (
+    "The {name} checked the public tree at {at} in {parts} parts, each with its own report. Its "
+    "findings are recorded as the {first}'s are, under the same rules.")
 NUMBER_WORDS = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
 
 
@@ -211,21 +215,34 @@ def severity_count(record, where):
     return dict(record)
 
 
-def gate_checkers(data):
-    """The gate's header held to its rules: for each checker's id, the counts its report states
+def called(data, gate):
+    """What the page calls a gate: "gate" while the record has one, as it always has, its name
+    once it has more."""
+    return "gate" if len(data["gates"]) == 1 else gate["name"]
+
+
+def gate_checkers(gate):
+    """A gate's header held to its rules: for each checker's id, the counts its report states
     and the counts of its findings not listed, by severity."""
-    gate = need(data, "gate", dict, str(DATA))
-    if not COMMIT.match(need(gate, "at", str, "gate")):
-        raise Refused("data", "gate", f"{gate['at']!r} is not a commit")
-    need(gate, "findings", list, "gate")
+    if not isinstance(gate, dict):
+        raise Refused("data", "gates", "a gate is not an object")
+    name = need(gate, "name", str, "a gate")
+    if not name or "|" in name or "\n" in name:
+        raise Refused("data", "gates", f"{name!r} is not a gate's name")
+    if not COMMIT.match(need(gate, "at", str, name)):
+        raise Refused("data", name, f"{gate['at']!r} is not a commit")
+    note = gate.get("note", "")
+    if not isinstance(note, str) or "|" in note or "\n" in note:
+        raise Refused("data", name, "its note is not one line of words")
+    need(gate, "findings", list, name)
     checkers = {}
-    for checker in need(gate, "checkers", list, "gate"):
+    for checker in need(gate, "checkers", list, name):
         cid = need(checker, "id", str, "a checker of the gate")
         read = need(checker, "read", str, cid)
         if not cid.strip() or cid != cid.strip() or " " in cid:
             raise Refused("id", repr(cid), "a checker with no id of its own")
         if not read or "|" in cid + read or "\n" in cid + read:
-            raise Refused("data", "gate", f"checker {cid!r} does not say in one line what it read")
+            raise Refused("data", name, f"checker {cid!r} does not say in one line what it read")
         if cid in checkers:
             raise Refused("id", cid, "a checker given twice")
         stated = severity_count(checker.get("count"), cid)
@@ -242,7 +259,7 @@ def gate_checkers(data):
             unlisted[severity] += 1
         checkers[cid] = (stated, unlisted)
     if not checkers:
-        raise Refused("data", "gate", "no checker")
+        raise Refused("data", name, "no checker")
     return checkers
 
 
@@ -272,8 +289,14 @@ def validate(data):
     """The data, held to every rule `write` has; Refused on the first broken."""
     reviewers = need(data, "reviewers", list, str(DATA))
     findings = need(data, "findings", list, str(DATA))
-    checkers = gate_checkers(data)
-    at_gate = data["gate"]["findings"]
+    gates = need(data, "gates", list, str(DATA))
+    if not gates:
+        raise Refused("data", "gates", "no gate")
+    checkers = [gate_checkers(gate) for gate in gates]
+    names = [gate["name"] for gate in gates]
+    if len(set(names)) != len(names):
+        raise Refused("id", "gates", "a gate's name given twice")
+    at_gate = [(f, number) for number, gate in enumerate(gates) for f in gate["findings"]]
     need(data, "checked_at", str, str(DATA))
     need(data, "to_come", list, str(DATA))
     for item in need(data, "unread", list, str(DATA)):
@@ -298,11 +321,12 @@ def validate(data):
         known[rid] = reviewer_stated(reviewer)
     seen = set()
     counted = {rid: dict.fromkeys(SEVERITIES, 0) for rid in known}
-    by_checker = {cid: dict(unlisted) for cid, (_, unlisted) in checkers.items()}
-    for finding, of_gate in [(f, False) for f in findings] + [(f, True) for f in at_gate]:
+    by_checker = [{cid: dict(unlisted) for cid, (_, unlisted) in held.items()} for held in checkers]
+    for finding, number in [(f, None) for f in findings] + at_gate:
+        of_gate = number is not None
         fid = gate_id(finding) if of_gate else need(finding, "id", str, "a finding")
         match = None if of_gate else FINDING_ID.match(fid)
-        if of_gate and finding["checker"] not in checkers:
+        if of_gate and finding["checker"] not in checkers[number]:
             raise Refused("id", fid, "not a finding of a listed checker of the gate")
         if not of_gate and (match is None or match[1] not in known):
             raise Refused("id", fid, "not <reviewer>-<number> of a listed reviewer")
@@ -349,24 +373,26 @@ def validate(data):
                           f"why, in at least {REASON_WORDS} words (r18-28)")
         if match:
             counted[match[1]][finding["severity"]] += 1
-        if of_gate and finding["checker"] in by_checker:
-            by_checker[finding["checker"]][finding["severity"]] += 1
+        if of_gate and finding["checker"] in by_checker[number]:
+            by_checker[number][finding["checker"]][finding["severity"]] += 1
     for rid, stated in known.items():
         if counted[rid] != stated:
             raise Refused("count", rid, f"its looks state {stated}, its findings here count "
                           f"{counted[rid]}")
-    for cid, (stated, _) in checkers.items():
-        if by_checker[cid] != stated:
-            raise Refused("count", cid, f"its report states {stated}, its findings listed and not "
-                          f"listed here count {by_checker[cid]}")
+    for held, counted_at_gate in zip(checkers, by_checker):
+        for cid, (stated, _) in held.items():
+            if counted_at_gate[cid] != stated:
+                raise Refused("count", cid, f"its report states {stated}, its findings listed and "
+                              f"not listed here count {counted_at_gate[cid]}")
     if complete:
         unsettled = [f["id"] for f in findings if f["outcome"] in UNSETTLED]
         if unsettled:
             raise Refused("complete", str(DATA), f"said complete while {', '.join(unsettled)} "
                           "is open, partly done or left for the owner")
-        unsettled_at_gate = [gate_id(f) for f in at_gate if f["outcome"] in UNSETTLED]
+        unsettled_at_gate = [f"the {called(data, gate)}'s {gate_id(f)}" for gate in gates
+                             for f in gate["findings"] if f["outcome"] in UNSETTLED]
         if unsettled_at_gate:
-            raise Refused("complete", str(DATA), f"said complete while the gate's "
+            raise Refused("complete", str(DATA), f"said complete while "
                           f"{', '.join(unsettled_at_gate)} is open, partly done or left for the "
                           "owner")
         if data["to_come"]:
@@ -431,10 +457,10 @@ def and_list(items):
     return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
 
 
-def not_listed_words(data):
+def not_listed_words(data, gates=None):
     """For each checker with findings not listed, one sentence: how many, of what severity, why."""
     said = []
-    for checker in data["gate"]["checkers"]:
+    for gate, checker in [(g, c) for g in (gates or data["gates"]) for c in g["checkers"]]:
         reasons = {}
         for item in checker["not_listed"]:
             reasons.setdefault(item["reason"], []).append(item["severity"])
@@ -444,7 +470,8 @@ def not_listed_words(data):
             kinds = and_list([f"{severities.count(s)} {s}" if count > 1 else f"a {s}"
                               for s in SEVERITIES if s in severities])
             said.append(f"{many[0].upper()}{many[1:]} finding{'s' if count > 1 else ''} of the "
-                        f"gate's {checker['id']}, {kinds}, {'are' if count > 1 else 'is'} not "
+                        f"{called(data, gate)}'s {checker['id']}, {kinds}, "
+                        f"{'are' if count > 1 else 'is'} not "
                         f"listed here, because {reason}.")
     return said
 
@@ -463,11 +490,12 @@ def status(data):
     # The counts come first, so that on RESULTS.md's row, where the number gate reads the line as
     # one clause, no finding's id stands before a count as if it were the count's row label.
     said = []
-    at_gate = [sum(1 for f in data["gate"]["findings"] if f["outcome"] == outcome)
-               for outcome in UNSETTLED]
-    if any(at_gate):
-        said.append("of the acceptance gate's findings, " + ", ".join(
-            f"{count} {outcome}" for outcome, count in zip(UNSETTLED, at_gate) if count))
+    for gate in data["gates"]:
+        at_gate = [sum(1 for f in gate["findings"] if f["outcome"] == outcome)
+                   for outcome in UNSETTLED]
+        if any(at_gate):
+            said.append(f"of the {gate['name']}'s findings, " + ", ".join(
+                f"{count} {outcome}" for outcome, count in zip(UNSETTLED, at_gate) if count))
     if data["to_come"]:
         count = len(data["to_come"])
         said.append(f"{count} {'review' if count == 1 else 'reviews'} still to come")
@@ -496,9 +524,7 @@ def status(data):
 def render(data):
     validate(data)
     reviewers, findings = data["reviewers"], data["findings"]
-    gate = data["gate"]
-    at_gate = gate["findings"]
-    made = {s: sum(c["count"][s] for c in gate["checkers"]) for s in SEVERITIES}
+    gates = data["gates"]
     total = tally(findings)
     again = [r["id"] for r in reviewers if len(r["looks"]) > 1]
     lines = [
@@ -521,13 +547,15 @@ def render(data):
                                      for s in SEVERITIES),
         "- Outcomes: " + ", ".join(f"{count} {outcome}" for outcome, count
                                      in zip(OUTCOMES, total) if count),
-        f"- Acceptance gate: at {gate['at']}, {len(gate['checkers'])} checkers, "
-        f"{sum(made.values())} findings made by its checkers ("
-        + ", ".join(f"{made[s]} {s}" for s in SEVERITIES)
-        + f"), {len(at_gate)} listed ("
-        + ", ".join(f"{sum(1 for f in at_gate if f['severity'] == s)} {s}" for s in SEVERITIES)
-        + "); of those listed, " + ", ".join(f"{count} {outcome}" for outcome, count
-                                              in zip(OUTCOMES, tally(at_gate)) if count),
+        *(f"- {gate['name'][0].upper()}{gate['name'][1:]}: at {gate['at']}, "
+          f"{len(gate['checkers'])} checkers, {sum(made_by(gate).values())} findings made by its "
+          "checkers (" + ", ".join(f"{made_by(gate)[s]} {s}" for s in SEVERITIES)
+          + f"), {len(gate['findings'])} listed ("
+          + ", ".join(f"{sum(1 for f in gate['findings'] if f['severity'] == s)} {s}"
+                      for s in SEVERITIES)
+          + "); of those listed, " + ", ".join(f"{count} {outcome}" for outcome, count
+                                                in zip(OUTCOMES, tally(gate["findings"])) if count)
+          for gate in gates),
         f"- Result: {status(data)}",
         "",
         "## What a reviewer is",
@@ -572,37 +600,16 @@ def render(data):
     lines += table(("Finding", "Severity", "The finding", "Outcome", "Evidence"),
                    [(f["id"], f["severity"], f["finding"], f["outcome"], evidence(f))
                     for f in findings])
-    lines += ["", "## The acceptance gate", "",
-              GATE_WORDS.format(at=gate["at"], parts=len(gate["checkers"])), ""]
-    rows = []
-    for checker in gate["checkers"]:
-        found = [f for f in at_gate if f["checker"] == checker["id"]]
-        rows.append((checker["id"], checker["read"],
-                     *(sum(1 for f in found if f["severity"] == s) for s in SEVERITIES),
-                     len(found), len(checker["not_listed"]), sum(checker["count"].values())))
-    rows.append(("All", "", *(sum(1 for f in at_gate if f["severity"] == s) for s in SEVERITIES),
-                 len(at_gate), sum(len(c["not_listed"]) for c in gate["checkers"]),
-                 sum(made.values())))
-    lines += table(("Checker", "What it read", *SEVERITIES, "Listed", "Not listed",
-                    "Made, by its report"), rows)
-    lines += ["", "The severities are those of the findings listed. "
-              + (" ".join(not_listed_words(data)) or "Every finding the checkers made is listed.")]
-    lines += ["", "By checker and outcome.", ""]
-    rows = [(checker["id"], *tally([f for f in at_gate if f["checker"] == checker["id"]]))
-            for checker in gate["checkers"]]
-    rows.append(("All", *tally(at_gate)))
-    lines += table(("Checker", *OUTCOMES, "Findings"), rows)
-    lines += ["", "Every finding of the gate.", ""]
-    lines += table(("Checker", "Label", "Severity", "The finding", "Outcome", "Evidence"),
-                   [(f["checker"], f["label"], f["severity"], f["finding"], f["outcome"],
-                     evidence(f)) for f in at_gate])
+    for number, gate in enumerate(gates):
+        lines += gate_section(data, gate, GATE_WORDS if number == 0 else GATE_AGAIN)
     lines += ["", "## Not settled", ""]
     unsettled = [f for f in findings if f["outcome"] in UNSETTLED]
     lines += [f"- {f['id']} ({f['severity']}, {f['outcome']}): {f['finding']}. {f['detail']}".rstrip()
               for f in unsettled]
-    unsettled_at_gate = [f for f in at_gate if f["outcome"] in UNSETTLED]
-    lines += [f"- The gate's {gate_id(f)} ({f['severity']}, {f['outcome']}): {f['finding']}. "
-              f"{f['detail']}".rstrip() for f in unsettled_at_gate]
+    unsettled_at_gate = [(gate, f) for gate in gates for f in gate["findings"]
+                         if f["outcome"] in UNSETTLED]
+    lines += [f"- The {called(data, gate)}'s {gate_id(f)} ({f['severity']}, {f['outcome']}): "
+              f"{f['finding']}. {f['detail']}".rstrip() for gate, f in unsettled_at_gate]
     if not unsettled and not unsettled_at_gate:
         lines.append("Every finding is settled.")
     lines += ["", "## Still to come", ""]
@@ -615,6 +622,45 @@ def render(data):
     lines += [f"- {item}" for item in data["unread"]] or ["Nothing: every change was read by a "
                                                           "reviewer who did not write it."]
     return "\n".join(lines) + "\n"
+
+
+def made_by(gate):
+    """The findings a gate's checkers made, by severity, as their reports state them."""
+    return {s: sum(c["count"][s] for c in gate["checkers"]) for s in SEVERITIES}
+
+
+def gate_section(data, gate, words):
+    """A gate's section of the page: what it checked, its checkers and every finding."""
+    at_gate, made = gate["findings"], made_by(gate)
+    lines = ["", f"## The {gate['name']}", "",
+             words.format(name=gate["name"], at=gate["at"], parts=len(gate["checkers"]),
+                          first=data["gates"][0]["name"]), ""]
+    if gate.get("note"):
+        lines += [gate["note"], ""]
+    rows = []
+    for checker in gate["checkers"]:
+        found = [f for f in at_gate if f["checker"] == checker["id"]]
+        rows.append((checker["id"], checker["read"],
+                     *(sum(1 for f in found if f["severity"] == s) for s in SEVERITIES),
+                     len(found), len(checker["not_listed"]), sum(checker["count"].values())))
+    rows.append(("All", "", *(sum(1 for f in at_gate if f["severity"] == s) for s in SEVERITIES),
+                 len(at_gate), sum(len(c["not_listed"]) for c in gate["checkers"]),
+                 sum(made.values())))
+    lines += table(("Checker", "What it read", *SEVERITIES, "Listed", "Not listed",
+                    "Made, by its report"), rows)
+    lines += ["", "The severities are those of the findings listed. "
+              + (" ".join(not_listed_words(data, [gate]))
+                 or "Every finding the checkers made is listed.")]
+    lines += ["", "By checker and outcome.", ""]
+    rows = [(checker["id"], *tally([f for f in at_gate if f["checker"] == checker["id"]]))
+            for checker in gate["checkers"]]
+    rows.append(("All", *tally(at_gate)))
+    lines += table(("Checker", *OUTCOMES, "Findings"), rows)
+    lines += ["", "Every finding of the gate.", ""]
+    lines += table(("Checker", "Label", "Severity", "The finding", "Outcome", "Evidence"),
+                   [(f["checker"], f["label"], f["severity"], f["finding"], f["outcome"],
+                     evidence(f)) for f in at_gate])
+    return lines
 
 
 def tree_text(root):
@@ -658,7 +704,7 @@ def evidence_problems(root, data):
         if whole and not in_history(root, item["at"]):
             problems.append(("commit", "rechecked", f"{item['at']} is not in the history"))
     every = [(f, f["id"], reviewer_of(f) in unmerged) for f in data["findings"]]
-    every += [(f, gate_id(f), False) for f in data["gate"]["findings"]]
+    every += [(f, gate_id(f), False) for gate in data["gates"] for f in gate["findings"]]
     for finding, fid, on_a_branch in every:
         if on_a_branch:
             continue

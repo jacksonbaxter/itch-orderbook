@@ -60,7 +60,8 @@ DATA = {
         finding("r12-1", "FIX", "fixed", commits=["1234567"], tests=["test_a_page_line"]),
         finding("r12-2", "NOTE", "fixed", commits=["1234567"]),
     ],
-    "gate": {
+    "gates": [{
+        "name": "acceptance gate",
         "at": "abcdef1",
         "checkers": [{"id": "reader", "read": "the pages as a stranger would",
                       "count": {"BLOCK": 0, "FIX": 1, "NOTE": 0}, "not_listed": []},
@@ -74,7 +75,7 @@ DATA = {
              "outcome": "known limit", "detail": "", "commits": [], "tests": [], "faults": [],
              "notes": [NOTE_SECTION]},
         ],
-    },
+    }],
 }
 
 
@@ -229,9 +230,9 @@ class ReviewReport(unittest.TestCase):
                 self.data["findings"][2]["detail"] = detail
                 self.assertIn("r1-3: no change needed with no reason", self.refused("evidence"))
         self.data = copy.deepcopy(DATA)
-        self.data["gate"]["findings"][0].update(outcome="no change needed", commits=[], faults=[])
+        self.data["gates"][0]["findings"][0].update(outcome="no change needed", commits=[], faults=[])
         self.assertIn("reader 1: no change needed with no reason", self.refused("evidence"))
-        self.data["gate"]["findings"][0]["detail"] = "the page was right as it was"
+        self.data["gates"][0]["findings"][0]["detail"] = "the page was right as it was"
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
 
@@ -361,7 +362,7 @@ class ReviewReport(unittest.TestCase):
                 self.data["findings"][3]["tests"] = ["test_a_page_line", name]
                 self.assertIn(f"r12-1: '{name}' is given as a test", self.refused("evidence"))
         self.data = copy.deepcopy(DATA)
-        self.data["gate"]["findings"][0]["tests"] = ["scripts/run_record.py"]
+        self.data["gates"][0]["findings"][0]["tests"] = ["scripts/run_record.py"]
         self.assertIn("reader 1: 'scripts/run_record.py' is given as a test",
                       self.refused("evidence"))
         self.data = copy.deepcopy(DATA)
@@ -409,61 +410,98 @@ class ReviewReport(unittest.TestCase):
         self.assertEqual(self.counts_rows(text, "By checker and outcome.")["All"],
                          [1, 1, 0, 0, 0, 0, 2])
 
+    def test_a_second_gate_is_recorded_after_the_first_under_its_own_name(self):
+        second = copy.deepcopy(self.data["gates"][0])
+        second.update(name="second gate", at="1234567", note="It read what no reviewer had.")
+        second["findings"][0].update(label="FIX-1", outcome="open")
+        second["findings"][1]["label"] = "BLOCK-1"
+        self.data["gates"].append(second)
+        self.data["gates"][0]["checkers"][0]["count"] = {"BLOCK": 1, "FIX": 1, "NOTE": 0}
+        self.data["gates"][0]["checkers"][0]["not_listed"] = [
+            {"severity": "BLOCK", "reason": "it is decided outside this record"}]
+        code, output = self.run_step("write")
+        self.assertEqual(code, 0, output)
+        text = self.out.read_text(encoding="utf-8")
+        self.assertIn("- Acceptance gate: at abcdef1, 2 checkers, 3 findings made", text)
+        self.assertIn("- Second gate: at 1234567, 2 checkers, 2 findings made", text)
+        self.assertIn("Of the second gate's findings, 1 open.", text)
+        self.assertIn("One finding of the acceptance gate's reader, a BLOCK, is not listed", text)
+        self.assertIn("\n## The second gate\n\nThe second gate checked the public tree at 1234567 "
+                      "in 2 parts, each with its own report. Its findings are recorded as the "
+                      "acceptance gate's are, under the same rules.\n\nIt read what no reviewer "
+                      "had.\n", text)
+        self.assertIn("- The second gate's reader FIX-1 (FIX, open): too long.\n", text)
+        self.assertLess(text.index("## The acceptance gate"), text.index("## The second gate"))
+        # A finding's checker and label given in both gates is given twice; a gate's name, too.
+        self.out.unlink()
+        second["findings"][1]["label"] = "B1"
+        self.assertIn("pages B1: given twice", self.refused("id"))
+        second["findings"][1]["label"] = "BLOCK-1"
+        second["name"] = "acceptance gate"
+        self.assertIn("a gate's name given twice", self.refused("id"))
+        second["name"] = "second gate"
+        # A checker is held to its own gate's count, and a finding to its own gate's checkers.
+        second["checkers"][1]["count"] = {"BLOCK": 2, "FIX": 0, "NOTE": 0}
+        self.refused("count")
+        second["checkers"][1]["count"] = {"BLOCK": 1, "FIX": 0, "NOTE": 0}
+        second["checkers"][1]["id"] = "raw"
+        self.assertIn("not a finding of a listed checker of the gate", self.refused("id"))
+
     def test_a_gate_finding_of_no_checker_or_given_twice_is_refused(self):
-        self.data["gate"]["findings"][1]["checker"] = "code"
+        self.data["gates"][0]["findings"][1]["checker"] = "code"
         self.assertIn("code B1: not a finding of a listed checker", self.refused("id"))
         self.data = copy.deepcopy(DATA)
-        self.data["gate"]["findings"][1].update(checker="reader", label="1")
+        self.data["gates"][0]["findings"][1].update(checker="reader", label="1")
         self.assertIn("reader 1: given twice", self.refused("id"))
         self.data = copy.deepcopy(DATA)
-        self.data["gate"]["findings"][1]["label"] = ""
+        self.data["gates"][0]["findings"][1]["label"] = ""
         self.refused("id")
         self.data = copy.deepcopy(DATA)
-        self.data["gate"]["findings"][1]["outcome"] = "waived"
+        self.data["gates"][0]["findings"][1]["outcome"] = "waived"
         self.assertIn("pages B1: 'waived'", self.refused("outcome"))
         self.data = copy.deepcopy(DATA)
-        self.data["gate"]["findings"][0]["commits"] = []
+        self.data["gates"][0]["findings"][0]["commits"] = []
         self.assertIn("reader 1: fixed with no commit", self.refused("evidence"))
 
     def test_a_checkers_findings_are_held_to_its_reports_count(self):
         # r18-3: with the gate's findings dropped, the record is refused, not rendered complete.
         self.data["complete"] = True
         self.data["findings"][2]["outcome"] = "no change needed"
-        self.data["gate"]["findings"] = []
+        self.data["gates"][0]["findings"] = []
         self.assertIn("reader: its report states {'BLOCK': 0, 'FIX': 1, 'NOTE': 0}, its findings "
                       "listed and not listed here count {'BLOCK': 0, 'FIX': 0, 'NOTE': 0}",
                       self.refused("count"))
         self.data = copy.deepcopy(DATA)
-        self.data["gate"]["findings"][1]["severity"] = "NOTE"
+        self.data["gates"][0]["findings"][1]["severity"] = "NOTE"
         self.assertIn("pages: its report states", self.refused("count"))
         for count in (None, {"BLOCK": 1, "FIX": 0}, {"BLOCK": -1, "FIX": 0, "NOTE": 0},
                       {"BLOCK": True, "FIX": 0, "NOTE": 0}):
             with self.subTest(count=count):
                 self.data = copy.deepcopy(DATA)
-                self.data["gate"]["checkers"][1]["count"] = count
+                self.data["gates"][0]["checkers"][1]["count"] = count
                 self.assertIn("pages: its count is not a count", self.refused("data"))
 
     def test_a_blank_label_or_checker_is_refused(self):
         for label in ("", " ", " B1", "B1 "):
             with self.subTest(label=label):
                 self.data = copy.deepcopy(DATA)
-                self.data["gate"]["findings"][1]["label"] = label
+                self.data["gates"][0]["findings"][1]["label"] = label
                 self.assertIn("a gate finding with no label of its own", self.refused("id"))
         for cid in ("", " ", "the pages"):
             with self.subTest(checker=cid):
                 self.data = copy.deepcopy(DATA)
-                self.data["gate"]["checkers"][1]["id"] = cid
-                self.data["gate"]["findings"][1]["checker"] = cid
+                self.data["gates"][0]["checkers"][1]["id"] = cid
+                self.data["gates"][0]["findings"][1]["checker"] = cid
                 self.assertIn("a checker with no id of its own", self.refused("id"))
 
     def test_a_finding_not_listed_is_counted_with_its_severity_and_reason(self):
         # r18-4: the report's count is the findings listed and those not listed, each of which
         # gives its severity and its reason; a finding left out without one is refused.
-        self.data["gate"]["checkers"][0]["count"] = {"BLOCK": 1, "FIX": 1, "NOTE": 0}
+        self.data["gates"][0]["checkers"][0]["count"] = {"BLOCK": 1, "FIX": 1, "NOTE": 0}
         self.assertIn("reader: its report states {'BLOCK': 1, 'FIX': 1, 'NOTE': 0}",
                       self.refused("count"))
         reason = "it is decided outside this record"
-        self.data["gate"]["checkers"][0]["not_listed"] = [{"severity": "BLOCK", "reason": reason}]
+        self.data["gates"][0]["checkers"][0]["not_listed"] = [{"severity": "BLOCK", "reason": reason}]
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
         text = self.out.read_text(encoding="utf-8")
@@ -482,18 +520,18 @@ class ReviewReport(unittest.TestCase):
                                 ({"severity": "BLOCK"}, "data")):
             with self.subTest(item=item):
                 self.out.unlink(missing_ok=True)
-                self.data["gate"]["checkers"][0]["not_listed"] = [item]
+                self.data["gates"][0]["checkers"][0]["not_listed"] = [item]
                 self.refused(code_word)
         self.out.unlink(missing_ok=True)
-        del self.data["gate"]["checkers"][0]["not_listed"]
+        del self.data["gates"][0]["checkers"][0]["not_listed"]
         self.refused("data")
 
     def test_complete_is_said_with_what_is_not_listed(self):
         reason = "it is decided outside this record"
         self.data["complete"] = True
         self.data["findings"][2]["outcome"] = "no change needed"
-        self.data["gate"]["checkers"][0]["count"] = {"BLOCK": 2, "FIX": 1, "NOTE": 0}
-        self.data["gate"]["checkers"][0]["not_listed"] = [{"severity": "BLOCK", "reason": reason}] * 2
+        self.data["gates"][0]["checkers"][0]["count"] = {"BLOCK": 2, "FIX": 1, "NOTE": 0}
+        self.data["gates"][0]["checkers"][0]["not_listed"] = [{"severity": "BLOCK", "reason": reason}] * 2
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
         self.assertIn("- Result: complete: every finding listed is settled, every reviewer "
@@ -504,16 +542,16 @@ class ReviewReport(unittest.TestCase):
         self.data["complete"] = True
         for outcome in review_report.UNSETTLED:
             with self.subTest(outcome=outcome):
-                self.data["gate"]["findings"][1]["outcome"] = outcome
+                self.data["gates"][0]["findings"][1]["outcome"] = outcome
                 self.assertIn("the gate's pages B1", self.refused("complete"))
-        self.data["gate"]["findings"][1]["outcome"] = "known limit"
+        self.data["gates"][0]["findings"][1]["outcome"] = "known limit"
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
         self.assertIn("- Result: complete:", self.out.read_text(encoding="utf-8"))
 
     def test_the_result_counts_the_gates_findings_not_settled(self):
-        self.data["gate"]["findings"][0]["outcome"] = "open"
-        self.data["gate"]["findings"][1]["outcome"] = "open"
+        self.data["gates"][0]["findings"][0]["outcome"] = "open"
+        self.data["gates"][0]["findings"][1]["outcome"] = "open"
         self.data["findings"][4]["outcome"] = "open"
         code, output = self.run_step("write")
         self.assertEqual(code, 0, output)
@@ -523,7 +561,7 @@ class ReviewReport(unittest.TestCase):
         self.assertIn("- The gate's pages B1 (BLOCK, open): a stale claim.\n", text)
         self.assertIn("| reader | 1 | FIX | too long | open | Commit 1234567. Fault "
                       "`parser-frame-skipped`. |", text)
-        self.data["gate"]["findings"][0].update(commits=[], faults=[])
+        self.data["gates"][0]["findings"][0].update(commits=[], faults=[])
         self.assertEqual(self.run_step("write")[0], 0)
         self.assertIn("| reader | 1 | FIX | too long | open | None yet. |",
                       self.out.read_text(encoding="utf-8"))
@@ -534,7 +572,7 @@ class ReviewReport(unittest.TestCase):
                                       ("notes", ["A section that is not there"], "notes")):
             with self.subTest(code=code_word):
                 self.data = copy.deepcopy(DATA)
-                self.data["gate"]["findings"][0][key] = value
+                self.data["gates"][0]["findings"][0][key] = value
                 self.assertEqual(self.run_step("write")[0], 0)
                 code, output = self.run_step("check")
                 self.assertEqual(code, 1, output)
@@ -548,13 +586,14 @@ class ReviewReport(unittest.TestCase):
         self.assertIn("r1's fixes not merged yet", self.out.read_text(encoding="utf-8"))
 
 
-# The acceptance gate's checkers' counts and their findings not listed, as each checker's report
+# Each gate's checkers' counts and their findings not listed, as each checker's report
 # states them. The reports are kept outside the repository, so the data file cannot be held to
 # them by the script; they are pinned here instead (r18-27): a count edited to match a finding
 # dropped, or a finding moved out of the list, fails this test.
-GATE_COUNTS = {"reader": (4, 17, 9), "pages": (2, 2, 11), "code": (0, 2, 4), "raw": (0, 0, 3),
-               "findings": (0, 2, 3)}
-GATE_NOT_LISTED = {"reader": ["BLOCK"], "pages": [], "code": [], "raw": [], "findings": []}
+GATE_COUNTS = {"acceptance gate": {"reader": (4, 17, 9), "pages": (2, 2, 11), "code": (0, 2, 4),
+                                   "raw": (0, 0, 3), "findings": (0, 2, 3)}}
+GATE_NOT_LISTED = {"acceptance gate": {"reader": ["BLOCK"], "pages": [], "code": [], "raw": [],
+                                       "findings": []}}
 
 # A fault that plants a figure in a sentence of the record and asks gate_numbers.py or
 # review_report.py to refuse it goes blind when the record's own counts come to make the figure
@@ -603,10 +642,10 @@ def record_plants(root):
 class Committed(unittest.TestCase):
     def test_the_gates_checkers_keep_the_counts_of_their_reports(self):
         data = json.loads((REPO_ROOT / review_report.DATA).read_text(encoding="utf-8"))
-        checkers = data["gate"]["checkers"]
-        self.assertEqual({c["id"]: tuple(c["count"][s] for s in review_report.SEVERITIES)
-                          for c in checkers}, GATE_COUNTS)
-        self.assertEqual({c["id"]: [n["severity"] for n in c["not_listed"]] for c in checkers},
+        self.assertEqual({g["name"]: {c["id"]: tuple(c["count"][s] for s in review_report.SEVERITIES)
+                                      for c in g["checkers"]} for g in data["gates"]}, GATE_COUNTS)
+        self.assertEqual({g["name"]: {c["id"]: [n["severity"] for n in c["not_listed"]]
+                                      for c in g["checkers"]} for g in data["gates"]},
                          GATE_NOT_LISTED)
 
     def test_the_committed_file_is_a_fresh_render_with_its_evidence_in_the_tree(self):
