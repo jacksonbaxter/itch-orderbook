@@ -1,5 +1,6 @@
-// E11 (simd.md): every Add Order of the day decoded on the scalar kernel or on the SIMD128
-// kernel of the Emscripten build's itch_e11 module, in node, wall clock only.
+// E11 (docs/NOTES.md, "SIMD parsing kernels"): every Add Order of the day decoded on the
+// scalar kernel or on the SIMD128 kernel of the Emscripten build's itch_e11 module, in node,
+// wall clock only.
 //
 //     node scripts/simd_wasm_e11.mjs --module BUILD/bench/wasm/itch_e11.mjs --input DAY
 //         --out RUN.json --kernel scalar|wasm [--commit TEXT] [--dataset NAME]

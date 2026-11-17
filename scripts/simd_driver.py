@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Runs one SIMD experiment (simd.md): every variant, in fresh processes, under measure.sh.
+"""Runs one SIMD experiment: every variant, in fresh processes, under measure.sh.
+The experiments are the ones docs/NOTES.md gives under "SIMD parsing kernels".
 
     simd_driver.py --experiment NAME --prediction P-NNNN --raw-dir DIR --input DAY \\
         --dataset NAME --dataset-sha256 HEX --bench BENCH_KERNELS --probe BENCH_PROBE \\

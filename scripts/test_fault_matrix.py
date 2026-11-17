@@ -699,7 +699,10 @@ class CommittedFaults(unittest.TestCase):
         # binary or starts the smoke run; a libFuzzer binary, build or preset reached by a
         # spelling these patterns do not list (a name put together at run time, a link, an
         # environment variable); code given inline to a program INLINE_CODE does not list (awk,
-        # say) or by a flag it does not list for that program (perl -M, node --import, say); and
+        # say) or by a flag it does not list for that program (perl -M, node --import, say); an
+        # edit of a fuzz target's source, or of the code it builds from, that changes libFuzzer's
+        # flags or reads the clock when the binary runs (an LLVMFuzzerInitialize that adds
+        # -max_total_time to argv, its name split across two string literals, say); and
         # an edit that turns libFuzzer on or starts the smoke run without spelling any of these
         # words in the text it takes out or puts in: a mutation of CMakePresets.json that puts
         # fuzzer in a preset's environment in a spelling these patterns do not list (a JSON

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""E12 (simd.md): the kernels' decode as each compiler emits it, counted.
+"""E12: the kernels' decode as each compiler emits it, counted.
+E12 is one of the experiments docs/NOTES.md gives under "SIMD parsing kernels".
 
     simd_asm_audit.py collect --out RECORD.json [--commit TEXT]
     simd_asm_audit.py report --run-dir DIR --out results/simd_asm_HOST.md [--run-log FILE]
@@ -25,10 +26,10 @@ listing in the file, rebuilds the table and the finding from them, and fails on 
 difference, on a load line that is not measure.sh's, on a macOS file that does not say the
 sampler rule was applied, and on anything private.
 
-The kill criterion (simd.md, E12): refuted if no compiler merges or vectorises the scalar
-decode. Merged means fewer loads than the eight reads the Add Order's fields take one at a
-time (reference, the timestamp's 4 and 2 bytes, shares, price, locate, tracking number,
-side); vectorised means any instruction on a SIMD register.
+E12's kill criterion, as each results/simd_asm_*.md states it: refuted if no compiler merges or
+vectorises the scalar decode. Merged means fewer loads than the eight reads the Add Order's
+fields take one at a time (reference, the timestamp's 4 and 2 bytes, shares, price, locate,
+tracking number, side); vectorised means any instruction on a SIMD register.
 
 Each violation prints as `simd_asm_audit: FAIL <code>: <detail>`.
 

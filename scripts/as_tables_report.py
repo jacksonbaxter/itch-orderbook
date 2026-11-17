@@ -47,7 +47,7 @@ DEFAULT_OUT = "results/mm_as_tables.md"
 RUN_LOG = "results/run_log.md"
 BODY_START = "## What matches means"
 
-# Avellaneda and Stoikov 2008, Tables 1 to 3, pp. 222-223 (market-maker.md, MK-8 to MK-10), as
+# Avellaneda and Stoikov 2008, Tables 1 to 3, pp. 222-223 (BENCHMARKS.md, T-MM-2), as
 # printed: average spread, then for each strategy profit, std (profit), final q, std (final q).
 PAPER = (
     ("0.1", "Table 1", "1.49", {"inventory": ("65.0", "6.6", "0.08", "2.9"),
