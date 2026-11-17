@@ -86,7 +86,7 @@ No parse rate was timed on the Mac: the three bars are set on x86 Linux, which g
 
 ### The SPSC ring
 
-Against open-source C++ queues on the Zen 1 host this ring's median round trip ranks sixth, ahead of only boost and a mutex: project 229.3 ns (this ring) vs atomic_queue 133.5, the fastest, and rigtorp 198.5; so T-SPSC-1, this ring vs three published ones, is missed ([results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md)).
+Against open-source C++ queues on the Zen 1 host this ring's median round trip ranks sixth, ahead of only boost and a mutex: project 229.3 ns (this ring) vs atomic_queue 133.5 and rigtorp 198.5; so T-SPSC-1, this ring vs three published ones, is missed ([results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md)).
 
 T-SPSC-2, what each technique is worth in saturated throughput, is missed by far: the mask over a modulo gave 1.60× vs a bar of 4.20×, and caching the other side's index 1.20× with the mask and 0.89× with a modulo, vs 3.90×, bars from Frasch's CppCon talk, measured under WSL2 on an i7-9700. The cached ratios lie within the spread of the uncached runs, CVs of 34.72% with the mask and 17.90% with a modulo ([results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md)).
 
@@ -128,7 +128,7 @@ Each print check is exact. T-TRADE-5, every execution in normal trading at the b
 
 The fault matrix plants a bug in a scratch copy and requires the named check to catch it. Before planting anything it runs each check once on the clean tree, and those 371 control commands succeeded; the last full run on the Mac then detected 1771 of 1771 faults ([results/fault_matrix.md](results/fault_matrix.md)).
 
-The 14 faults for Linux only were all detected on the Zen 1 host at an earlier commit, fbd32a8, as the working record shows ([docs/NOTES.md](docs/NOTES.md#the-rounds-full-checks-and-the-linux-only-faults-2026-11-17)).
+The matrix page is that run, at da5650a; six faults added since were each run by id and detected. The 14 for Linux only were all detected on the Zen 1 host at an earlier commit, fbd32a8, as the working record shows ([docs/NOTES.md](docs/NOTES.md#the-rounds-full-checks-and-the-linux-only-faults-2026-11-17)).
 
 Each of the nine fuzz targets ran for 1,800 s on the Mac under ASan and UBSan, the compiler's memory and undefined-behaviour checks, and every one was clean: 0 crashes and no input saved ([results/fuzz_30min_mac.md](results/fuzz_30min_mac.md)).
 
@@ -138,7 +138,7 @@ Every finding of the final review, with its outcome and the commit, test or note
 
 ## What a reviewer would ask
 
-- **Is the gap to T-BOOK-1, book throughput, the clock?** Not known. Its bar, at least 16.4 M msg/s, was set on a Ryzen 7 9700X whose clock was not published, and a faster clock does not shorten a wait on DRAM, so the clock explains at most the ratio of the bar's clock to this one's. Here a message takes 194.35 ns in the timing pass and 1141.088 cycles in the counter pass, which reads counters around each message; an empty span from a separate run takes 444.0739 cycles, and the file takes nothing off by it. Of four readings of the core's clock, none during a timed pass, the lowest is 2,723,232 kHz, at the start, and the highest 3,593,024 kHz ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
+- **Is the gap to T-BOOK-1, book throughput, the clock?** Not known. Its bar, at least 16.4 M msg/s, was set on a Ryzen 7 9700X whose clock was not published, and a faster clock does not shorten a wait on DRAM, so the clock explains at most the ratio of the bar's clock to this one's. A message takes 194.35 ns in the timing pass and 1141.088 cycles in the counter pass, which reads counters around each message; an empty span from a separate run takes 444.0739 cycles, and the file takes nothing off by it. Of four readings of the core's clock, none during a timed pass, the lowest is 2,723,232 kHz, at the start, and the highest 3,593,024 kHz ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
 - **Did you run itch-book on this host?** No; it is the run that would split the host's share of each gap from the design's. As BENCHMARKS.md reads itch-book's README, the same code and file ran 3.6× slower on a 2.0 GHz EPYC VM than on the Ryzen 9700X its bar comes from, a division of the README's two rates ([BENCHMARKS.md](BENCHMARKS.md)). <!-- figures: not measured -->
 - **Would the look-ahead work on a live feed?** Not known: it reads D messages ahead in a file, so a live feed would hold D messages before applying the first; that was neither built nor measured ([include/itch/lookahead.hpp](include/itch/lookahead.hpp)).
 - **What is the latency tail?** The slowest message of each repetition took about 4 ms, 4001771.1 to 4018171.8 ns with a CV of 0.21%, so it recurs. What it waits on, the book or another task on the core, was not traced. The median p99.99 is 3014.6 ns ([results/bench_book_paged-flat_ram_debian_12302019.md](results/bench_book_paged-flat_ram_debian_12302019.md)).
