@@ -2971,7 +2971,7 @@
         "MissedTargets.test_a_parse_row_judged_on_a_day_not_its_bar_days_is_refused"
       ],
       "expect": {
-        "signature": "^FAIL: test_a_parse_row_judged_on_a_day_not_its_bar_days_is_refused[\\s\\S]*says it is judged on 11302019 there",
+        "signature": "^FAIL: test_a_parse_row_judged_on_a_day_not_its_bar_days_is_refused[\\s\\S]*says it is judged on 10302019 there, and its bar is",
         "exit": 1
       }
     },
