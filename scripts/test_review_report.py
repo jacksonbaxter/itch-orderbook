@@ -446,6 +446,18 @@ class ReviewReport(unittest.TestCase):
         second["checkers"][1]["count"] = {"BLOCK": 1, "FIX": 0, "NOTE": 0}
         second["checkers"][1]["id"] = "raw"
         self.assertIn("not a finding of a listed checker of the gate", self.refused("id"))
+        second["checkers"][1]["id"] = "pages"
+        # The second gate's open finding keeps the record from being complete (r24 FIX 2).
+        self.data["complete"] = True
+        self.assertIn("the second gate's reader FIX-1", self.refused("complete"))
+        self.data["complete"] = False
+        # The second gate's evidence is looked for in the tree, as the first gate's is.
+        second["findings"][1]["faults"] = ["parser-frame-not-skipped"]
+        self.assertEqual(self.run_step("write")[0], 0)
+        code, output = self.run_step("check")
+        self.assertEqual(code, 1, output)
+        self.assertIn("review_report: FAIL fault pages BLOCK-1: parser-frame-not-skipped is not "
+                      "in scripts/faults", output)
 
     def test_a_gate_finding_of_no_checker_or_given_twice_is_refused(self):
         self.data["gates"][0]["findings"][1]["checker"] = "code"
