@@ -125,7 +125,8 @@ BAR_DAY = {"T-PARSE-1": "12302019", "T-PARSE-2": "12302019", "T-PARSE-3": "10302
 # Where a bar's own day is judged, when a file of another day gives its pass beside it. A day
 # not named here is one this run did not measure, and the file says only that: what is or is not
 # on the host is no fact of the run's record.
-JUDGED_ELSEWHERE = {"12302019": "judged on 12302019, in results/parse_rate_debian_12302019.md"}
+JUDGED_ELSEWHERE = {"12302019": "judged on 12302019, in results/parse_rate_debian_12302019.md",
+                    "10302019": "judged on 10302019, in results/parse_rate_debian_10302019.md"}
 PARSE_FIELD = "parse_passes"
 # The input condition (--input-condition): `file`, every driver's, or `copy`, the bench's own.
 FILE_CONDITION = "file"
@@ -211,8 +212,9 @@ def pass_functions(disassembly):
     """Each pass's own code in objdump -d's text: {pass: [(symbol, [instruction lines])]}, the
     function and any clone the compiler made of it (.isra, .constprop, .part), each checked as
     the pass itself. A .cold part is not taken in: a branch into it is a branch to another
-    function, refused. GCC 14.2 and Clang 23.1.4 on debian, and Clang on the Mac, made neither
-    (P4 parse asm/)."""
+    function, refused. GCC 14.2 and Clang 23.1.4 on debian, and Clang on the Mac, made neither:
+    objdump -d of each one's bench_parse, read when this was written, gave each pass as one
+    function, with no clone and no .cold part."""
     found, current = {}, None
     for line in disassembly.splitlines():
         header = FUNCTION_LINE.match(line)
@@ -811,7 +813,7 @@ def header_lines(records, args, run_id, started, finished, sampled):
 
 
 def condition_prose(pages):
-    return ("What was checked to be in memory while the passes were timed: the bench's own "
+    return ("What was checked to be in memory, before and after each timed pass: the bench's own "
             "copy of the day, not the file in the page cache, asked for with "
             "`--input-condition copy`. Each process read the whole file into its own memory "
             f"before its warm-up, a copy of {pages:,} pages of {PAGE:,} bytes, and its timed "
