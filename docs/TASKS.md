@@ -367,23 +367,26 @@ Each benchmarked alone, then measured inside the book or backtester.
 - [x] The commits a bisect should skip from this round's late failures: ea6b539 to fbd32a8 in the bench stage, 136af66 to 0c7dc4c in the readme and gates stages, and 8a40aa5 and 684da03, and e2a304e and 47863fe, in the fault matrix, each run at the commit but 8a40aa5 and e2a304e, which are by inference (docs/NOTES.md, "Commits a bisect should skip").
 
 ### The round after the gate at b961709 (2026-11-17)
-- [ ] 1. WRITEUP's sampler sentence says which timings ran under a sampler and which rest on the machine check alone, and the README does not make the Zen 1 run look sampler-checked by contrast.
-- [ ] 2. WRITEUP's share of the counter reads is true of the two map rows.
-- [ ] 3. WRITEUP's clock answer: the measured figures kept, the conclusion dropped or made an upper bound, the empty span's separate run and the clock readings' range said as they are, 5.5 GHz given its source or dropped.
-- [ ] 4. WRITEUP's latency tail says only that it recurs.
-- [ ] 5. WRITEUP's Zen 1 deployment sentence said of replay.
-- [ ] 6. WRITEUP's ring: what the ratio is of, with its spread.
-- [ ] 7. The missed-targets block gives the worst row, or says what each line gives.
-- [ ] 8. README line 7 says what WRITEUP.md gives on the host's share.
-- [ ] 9. The headline's T-BT-1 and T-ORACLE-2 cells say what each bar is.
-- [ ] 10. The README says `ITCH_LIBCXX_DIR` is an environment variable, and its two wrong pointers are fixed.
-- [ ] 11. The flamegraph target has one verdict on docs/DETAILS.md, RESULTS.md and the README.
-- [ ] 12. `results/parse_rate_debian_12302019.md` rendered again.
-- [ ] 13. `results/parse_rate_debian_10302019.md` rendered again, saying which script made the export and when the copy was checked.
-- [ ] 14. Where WRITEUP or docs/DETAILS.md rests a claim on docs/NOTES.md alone, it links the heading and calls it the working record.
+- [x] 1. WRITEUP's sampler sentence says which timings ran under a sampler and which rest on the machine check alone, and the README does not make the Zen 1 run look sampler-checked by contrast. The README's sentence under the headline says the Zen 1 rows ran pinned, under the machine check and with no load sampler either (f0ff10a, 8942db5).
+- [x] 2. WRITEUP's share of the counter reads is true of the two map rows. It is said of each fast design's figure (9586a3b).
+- [x] 3. WRITEUP's clock answer: the measured figures kept, the conclusion dropped or made an upper bound, the empty span's separate run and the clock readings' range said as they are, 5.5 GHz given its source or dropped. (f4f4d32).
+- [x] 4. WRITEUP's latency tail says only that it recurs. (f4f4d32).
+- [x] 5. WRITEUP's Zen 1 deployment sentence said of replay. (f4f4d32, 83e4e75).
+- [x] 6. WRITEUP's ring: what the ratio is of, with its spread. (9586a3b).
+- [x] 7. The missed-targets block gives the worst row, or says what each line gives. Each latency line gives the quantile missed by the most ns (b629454; fault `readme-writeup-latency-least-gap`, 31d99e2).
+- [x] 8. README line 7 says what WRITEUP.md gives on the host's share. (cb1f09c).
+- [x] 9. The headline's T-BT-1 and T-ORACLE-2 cells say what each bar is. (4ee06a2; fault `readme-headline-bar-kind-dropped`, 31d99e2).
+- [x] 10. The README says `ITCH_LIBCXX_DIR` is an environment variable, and its two wrong pointers are fixed. Line 25's input condition said with its reason, too (f5822ed).
+- [x] 11. The flamegraph target has one verdict on docs/DETAILS.md, RESULTS.md and the README. Met, as RESULTS.md has it (364ecd3).
+- [x] 12. `results/parse_rate_debian_12302019.md` rendered again. T-PARSE-3 is judged on 10302019, in that day's file, and `results_table.py` refuses a row judged in a file that is not there, gives no verdict or is of another day (8753342, 84bbf3a, 31d99e2, e5b11c9).
+- [x] 13. `results/parse_rate_debian_10302019.md` rendered again, saying which script made the export and when the copy was checked. The script is described, not named, being outside the repository (649395c).
+- [x] 14. Where WRITEUP or docs/DETAILS.md rests a claim on docs/NOTES.md alone, it links the heading and calls it the working record. (b7bdbb2, 364ecd3).
 - [x] 15. The bisect list: dee389b, and the check area's missing README.md from b44a783 to fbd32a8, added, each run on exports; its opening true of 713147a, which is in no branch, as is the amend paragraph (docs/NOTES.md, "Commits a bisect should skip").
-- [ ] 16. The record: 7161114, bee48dd and bec8d6d's passages read at this gate, recorded with this gate's findings. This file's line on every target in BENCHMARKS.md says T-PARSE-3 is met on its bar's day.
+- [x] 16. The record: 7161114, bee48dd and bec8d6d's passages read at this gate, recorded with this gate's findings. This file's line on every target in BENCHMARKS.md says T-PARSE-3 is met on its bar's day. The second gate is in the record with its 70 findings and what became of each, and review r24 with its 7 (docs/NOTES.md, "The round after the second gate").
 - [x] 17. No fault that plants a count of the record can go blind by coincidence: a test runs each such fault against the record as it stands, with a fault of its own, and the findings plant is a count the record cannot come back to (docs/NOTES.md, "The final review's record").
-- [ ] 18. The comments that cite files outside the repository give the fact instead.
-- [ ] 19. `tests/test_skips_cli.py` reads `#elifdef`, or says it does not.
-- [ ] 20. The stated limits: the fuzz-search route the code checker found, and, where the pages describe the number gate, that a count in words on a line citing no file and a derived claim such as a rank are not checked.
+- [x] 18. The comments that cite files outside the repository give the fact instead. (a181b60, da5f273, 6f97b73).
+- [x] 19. `tests/test_skips_cli.py` reads `#elifdef`, or says it does not. It reads it, and a condition it cannot decide as compiled and not taken (6a72174, a1c2147; fault `harness-skip-reader-misses-elifdef`).
+- [x] 20. The stated limits: the fuzz-search route the code checker found, and, where the pages describe the number gate, that a count in words on a line citing no file and a derived claim such as a rank are not checked. (2d9cc69, f0ff10a, f5822ed).
+- [ ] A reader new to the project reads the README and WRITEUP.md after the last edit, and what stops them is settled. Open here: it reads the tree at 7e7f904, after which its findings are settled and recorded.
+- [ ] The round's check on its last commit: every stage, the script tests, and by id every fault whose command or control reads a file the round changed. Open here: its result cannot be recorded in the commit it checks; the phase's report gives it.
+- [ ] The privacy scan before the push, CI green, `main` fast-forwarded and the remote branch deleted. Open here, as at b961709: each comes after the commit that is scanned and pushed, so none can be recorded in it.
