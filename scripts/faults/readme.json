@@ -2949,7 +2949,73 @@
         "MissedTargets.test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file"
       ],
       "expect": {
-        "signature": "(FAIL|ERROR): test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file",
+        "signature": "^FAIL: test_t_parse_3_says_its_bar_day_is_not_measured_until_it_has_a_file[\\s\\S]*and the file is not there",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-parse-judged-day-unheld",
+      "breaks": "A parse row that says its bar's day is judged on a day other than its bar's or the named file's is shown",
+      "check": "test_results_table.py MissedTargets.test_a_parse_row_judged_on_a_day_not_its_bar_days_is_refused",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "        if day != day_of(name) or not bar_day or day != bar_day[1]:\n",
+          "new": "        if False:\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_a_parse_row_judged_on_a_day_not_its_bar_days_is_refused"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_a_parse_row_judged_on_a_day_not_its_bar_days_is_refused[\\s\\S]*says it is judged on 11302019 there",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-writeup-latency-least-gap",
+      "breaks": "WRITEUP.md's latency lines give the quantile missed by the fewest nanoseconds, not the most",
+      "check": "test_results_table.py MissedTargets.test_the_writeup_table_has_one_short_line_a_target",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    item, _, over = max(",
+          "new": "    item, _, over = min("
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "MissedTargets.test_the_writeup_table_has_one_short_line_a_target"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_writeup_table_has_one_short_line_a_target[\\s\\S]*At p99\\.9 a replace takes 2,734\\.28 ns",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-headline-bar-kind-dropped",
+      "breaks": "The README headline gives T-BT-1's bar without what it is, a small unreviewed repo on a synthetic feed",
+      "check": "test_results_table.py ResultsTable.test_the_headline_has_its_targets_in_order_each_from_its_file",
+      "mutations": [
+        {
+          "file": "scripts/results_table.py",
+          "old": "    return (f\"{bar} ({bar_kind(root, target)})\", *rest)\n",
+          "new": "    return (bar, *rest)\n"
+        }
+      ],
+      "command": [
+        "{python}",
+        "-B",
+        "{tree}/scripts/test_results_table.py",
+        "ResultsTable.test_the_headline_has_its_targets_in_order_each_from_its_file"
+      ],
+      "expect": {
+        "signature": "^FAIL: test_the_headline_has_its_targets_in_order_each_from_its_file[\\s\\S]*engine events/s \\(a small unreviewed repo on a synthetic feed\\) \\| 4\\.68",
         "exit": 1
       }
     },
