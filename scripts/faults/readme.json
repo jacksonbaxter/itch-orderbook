@@ -2487,7 +2487,7 @@
         {
           "file": "WRITEUP.md",
           "old": "Every finding of the final review, with its outcome",
-          "new": "Looked again at the fixes of their own findings: 6 of 22 reviewers. Every finding of the final review, with its outcome"
+          "new": "Looked again at the fixes of their own findings: 6 of 23 reviewers. Every finding of the final review, with its outcome"
         }
       ],
       "command": [
@@ -2500,6 +2500,30 @@
       ],
       "expect": {
         "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 6 is not in results/final_review\\.md in a place its words name",
+        "exit": 1
+      }
+    },
+    {
+      "id": "readme-writeup-review-looked-again-apart",
+      "breaks": "WRITEUP.md's sentence on the final review gives the count of reviewers who looked again over a total of reviewers that results/final_review.md does not give with it, each figure found in the file apart (r22-12)",
+      "check": "gate_numbers.py on WRITEUP.md",
+      "mutations": [
+        {
+          "file": "WRITEUP.md",
+          "old": "Every finding of the final review, with its outcome",
+          "new": "Looked again at the fixes of their own findings: 5 of 21 reviewers. Every finding of the final review, with its outcome"
+        }
+      ],
+      "command": [
+        "{python}",
+        "{tree}/scripts/gate_numbers.py",
+        "--root",
+        "{tree}",
+        "--page",
+        "WRITEUP.md"
+      ],
+      "expect": {
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 5 of 21 is not in results/final_review\\.md together, in one table or one line",
         "exit": 1
       }
     },
