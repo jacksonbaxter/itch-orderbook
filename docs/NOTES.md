@@ -3065,7 +3065,7 @@ The commit that records this differs from da5650a only in the two generated page
 
 **The last runs by id before the final merge.** The code piece's 25 faults that run `tests/test_skips_cli.py`, at a1c2147: 25 of 25 detected, 5 control commands, no failure, 2026-11-17T14:01:14Z to 14:08:24Z. The pages piece's second sweep, at 84bbf3a: 373 of 373 detected, 85 control commands, no failure, finished at 14:09Z. Its third sweep was cancelled before it started, so 31d99e2, e5b11c9 and 905f7e0 had their added and moved entries run by id and no sweep; the round's check on its last commit covers them.
 
-**The wider privacy scan's one hit.** The scan run over the round's commits reports one hit, in 364ecd3: the anchor `#simd-on-debian-zen-1-2026-11-10` in a docs/DETAILS.md link to a heading of this file, where its pattern reads "zen-1", the CPU's name, as a program's; the scan run before a push counts none there, and the link stays.
+**The wider privacy scan's one hit.** The scan run over the round's commits reports one hit, in 364ecd3: the anchor of a docs/DETAILS.md link to this file's heading "SIMD on `debian` (Zen 1), 2026-11-10", where its pattern reads the CPU's name, as the anchor spells it, as a program's; the scan run before a push counts none there, and the link stays.
 
 **Fault entries.** The tree holds 1,791 faults. `results/fault_matrix.md` is the record of the full run at da5650a, when it held 1,785. Six were added since, and each was run by id, detected with its control passing:
 - `readme-record-plant-goes-blind` (`readme.json`): takes the planted count out of `readme-writeup-review-figure-not-in-results`, which `Committed.test_every_figure_planted_in_the_records_sentences_is_still_caught` must then name as undetected.
