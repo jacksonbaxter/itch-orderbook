@@ -86,7 +86,7 @@ No parse rate was timed on the Mac: the three bars are set on x86 Linux, which g
 
 ### The SPSC ring
 
-Against open-source C++ queues on the Zen 1 host this ring's median round trip ranks sixth of eight, ahead of only boost and a mutex: project 229.3 ns vs atomic_queue 133.5 and rigtorp 198.5; so T-SPSC-1, this ring vs three published ones, is missed ([results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md)).
+Against open-source C++ queues on the Zen 1 host this ring's median round trip ranks sixth of eight, ahead of only boost and a mutex: project 229.3 ns (this ring) vs atomic_queue 133.5 and rigtorp 198.5; so T-SPSC-1, this ring vs three published ones, is missed ([results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md)).
 
 T-SPSC-2, what each technique is worth in saturated throughput, is missed: the mask over a modulo gave 1.60× vs a bar of 4.20×, and caching the other side's index 1.20× with the mask and 0.89× with a modulo, vs 3.90×, bars from Frasch's CppCon talk, measured under WSL2 on an i7-9700. The cached ratios lie within the spread of the uncached runs, CVs of 34.72% with the mask and 17.90% with a modulo ([results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md)).
 
