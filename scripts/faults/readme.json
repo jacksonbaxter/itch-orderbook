@@ -2463,7 +2463,7 @@
         {
           "file": "WRITEUP.md",
           "old": "Every finding of the final review, with its outcome",
-          "new": "Every one of the final review's 192 findings, with its outcome"
+          "new": "Every one of the final review's 427 findings, with its outcome"
         }
       ],
       "command": [
@@ -2475,7 +2475,7 @@
         "WRITEUP.md"
       ],
       "expect": {
-        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 192 is not in results/final_review\\.md",
+        "signature": "gate_numbers: FAIL WRITEUP\\.md:\\d+: 427 is not in results/final_review\\.md",
         "exit": 1
       }
     },
