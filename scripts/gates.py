@@ -726,9 +726,13 @@ def spsc_due_time_unmeasured(root, files):
 #
 # WRITEUP.md runs 2,500 to 4,000 words, and the README's pitch above its headline table at
 # most README_PITCH_WORDS, both counted as `wc -w` counts them, the pitch without its HTML
-# comments; and that pitch, the README's first screen, links each of README_PITCH_LINKS by a
-# Markdown link with text, an anchor after the page allowed, outside code spans and HTML tags
-# and comments. Each bullet of the README's "What is built" list is one line: at most
+# comments; and that pitch, the README's first screen, links each of README_PITCH_LINKS in the
+# one form the gate reads, [text](PAGE) or [text](PAGE#anchor), with text, not an image, not
+# escaped, and outside code spans, HTML tags and comments: another form of link (./PAGE, a
+# title, by reference, an <a> tag) is refused, and the refusal says which form to write. The
+# link hold, like readme-build-names below, reads Markdown by patterns, not with a parser: it
+# holds against a rewrite that drops a link, not against text arranged to get round it. Each
+# bullet of the README's "What is built" list is one line: at most
 # README_BULLET_CHARS characters as rendered (its markup, HTML comments and link targets not
 # counted, a link's text and an autolink's address counted) and at most one link, so it says
 # what the part is and at most one fact about it; the list's misses stand counted in the
@@ -842,11 +846,15 @@ def readme_pitch_length(root, files):
             violations.append((path, 1, f"{words} words before the headline table, more than "
                                         f"{README_PITCH_WORDS}"))
         # A link is read by its target, which says where it points, and needs text to show; one
-        # inside a code span or a tag's attribute is not a link a reader can follow.
+        # inside a code span or a tag's attribute is not a link a reader can follow, and an
+        # image or escaped brackets are not a link.
         linked = re.sub(r"</?[A-Za-z][^<>]*>", " ", CODE_SPAN.sub(" ", pitch))
         for page in README_PITCH_LINKS:
-            if not re.search(rf"\[[^\]\s][^\]]*\]\({re.escape(page)}(?:#[^)\s]*)?\)", linked):
-                violations.append((path, 1, f"no link to {page} before the headline table"))
+            form = rf"(?<![!\\])\[[^\]\s][^\]]*\]\({re.escape(page)}(?:#[^)\s]*)?\)"
+            if not re.search(form, linked):
+                violations.append((path, 1, f"no link to {page} before the headline table: write "
+                                            f"it as [text]({page}) or [text]({page}#anchor), "
+                                            "the one form this gate reads"))
     return violations
 
 
@@ -925,7 +933,9 @@ def readme_built_bullets(root, files):
 # text and a fence's text kept. Each name is matched whole, and must also be read by a line of
 # its source that is not a comment, so a renamed setting is caught on both sides. Not held here:
 # the compilers and versions tested, the data and memory sizes and the headline's command,
-# which no script reads reliably from the tree, nor what the words around each name say.
+# which no script reads reliably from the tree, nor what the words around each name say. It
+# reads Markdown by patterns, not with a parser: it holds against a rewrite that drops a name,
+# not against text arranged to get round it.
 README_BUILD_SECTION = "## Build and test"
 README_CHECK_SECTION = "## Check everything"
 README_BUILD_NAMES = (
@@ -971,19 +981,21 @@ def uncommented(line, inside):
 ATX_HEADING = re.compile(r"^ {0,3}(#{1,2})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$")
 CODE_SPAN = re.compile(r"(``.*?``|`[^`]*`)")
 UNSEEN = (
-    (re.compile(r"^ {0,3}\[[^\]]+\]:\s*\S.*$"), ""),             # a reference definition
+    (re.compile(r"^ {0,3}\[[^\]]+\]:\s*\S.*$", re.MULTILINE), ""),  # a reference definition
     (re.compile(r"<((?:https?|mailto):[^<>\s]+)>"), r"\1"),         # an autolink: its address
-    (re.compile(r"!?\[([^\]]*)\]\([^)]*\)"), r"\1"),                # a link or image: its text
-    (re.compile(r"!?\[([^\]]*)\]\[[^\]]*\]"), r"\1"),              # by reference: its text
+    (re.compile(r"!\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])"), " "),       # an image: alt and target
+    (re.compile(r"\[([^\]]*)\]\([^)]*\)"), r"\1"),                  # a link: its text
+    (re.compile(r"\[([^\]]*)\]\[[^\]]*\]"), r"\1"),                # by reference: its text
     (re.compile(r"</?[A-Za-z][^<>]*>"), " "),                       # a tag and its attributes
 )
 
 
-def visible(line):
-    """A line outside code fences as a reader sees it: a link's or image's target, a reference
-    definition and an HTML tag with its attributes taken out, a link's text kept; code spans
-    are shown as written."""
-    parts = CODE_SPAN.split(line)
+def visible(text):
+    """Text outside code fences as a reader sees it: a link's target, an image with its alt
+    text, a reference definition and an HTML tag with its attributes taken out, a link's text
+    kept; code spans are shown as written. Given a whole paragraph, it reads a target or a tag
+    that wraps over lines."""
+    parts = CODE_SPAN.split(text)
     for index in range(0, len(parts), 2):
         for pattern, shown in UNSEEN:
             parts[index] = pattern.sub(shown, parts[index])
@@ -997,11 +1009,26 @@ def heading_key(line):
     return None if found is None else f"{found[1]} {' '.join((found[2] or '').split())}"
 
 
+def shown_lines(lines):
+    """A section's lines, (text, in a fence), as a reader sees them: each paragraph outside
+    fences joined and read by visible(), a fence's lines as written."""
+    blocks, prose = [], []
+    for line, fenced in lines + [("", True)]:
+        if fenced or not line.strip():
+            if prose:
+                blocks.append(visible("\n".join(prose)))
+                prose = []
+            blocks.append(line)
+        else:
+            prose.append(line)
+    return "\n".join(blocks[:-1])
+
+
 def readme_sections(text):
     """Each level-1 or level-2 section of a page as a reader sees it, {heading: (line, text)}:
     a heading is found only outside code fences and HTML comments, and outside fences the
-    comments, link targets and HTML tags are taken out (visible()); a fence's text is kept,
-    since a reader sees it."""
+    comments, link targets, images and HTML tags are taken out, a paragraph at a time
+    (shown_lines()); a fence's text is kept, since a reader sees it."""
     sections, current, fence, inside = {}, None, None, False
     for number, line in enumerate(text.splitlines(), start=1):
         if fence is not None:
@@ -1009,21 +1036,22 @@ def readme_sections(text):
             if closing and closing[1][0] == fence[0] and len(closing[1]) >= len(fence) \
                     and not line.strip().strip(fence[0]):
                 fence = None
-            shown = line
+            shown, fenced = line, True
         else:
             began_inside = inside
             shown, inside = uncommented(line, inside)
             opened = None if began_inside else FENCE.match(shown)
-            shown = shown if opened else visible(shown)
+            fenced = opened is not None
             if opened:
                 fence = opened[1]
-            elif not began_inside and heading_key(shown):
-                current = heading_key(shown)
+            elif not began_inside and heading_key(visible(shown)):
+                current = heading_key(visible(shown))
                 sections.setdefault(current, (number, []))
                 continue
         if current is not None:
-            sections[current][1].append(shown)
-    return {heading: (number, "\n".join(lines)) for heading, (number, lines) in sections.items()}
+            sections[current][1].append((shown, fenced))
+    return {heading: (number, shown_lines(lines))
+            for heading, (number, lines) in sections.items()}
 
 
 def source_code(text):

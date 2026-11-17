@@ -783,11 +783,26 @@ class Gates(unittest.TestCase):
                         "<!-- [WRITEUP.md](WRITEUP.md) --> and [RESULTS.md](RESULTS.md).",
                         "`[WRITEUP.md](WRITEUP.md)` and [RESULTS.md](RESULTS.md).",
                         '<span title="[WRITEUP.md](WRITEUP.md)">it</span> and '
-                        "[RESULTS.md](RESULTS.md)."):
+                        "[RESULTS.md](RESULTS.md).",
+                        # An image, or escaped brackets, is not a link.
+                        "![the write-up](WRITEUP.md) and [RESULTS.md](RESULTS.md).",
+                        "\\[WRITEUP.md\\](WRITEUP.md) and [RESULTS.md](RESULTS.md)."):
             with self.subTest(planted=planted):
                 self.reset()
                 self.assert_only_gate_fails("readme-pitch-length", "README.md",
                                             page.replace(PITCH_LINKS, planted, 1))
+        # Other forms of link are refused, and the refusal names the one form the gate reads.
+        for other in ("[WRITEUP.md](./WRITEUP.md)", '[WRITEUP.md](WRITEUP.md "the write-up")',
+                      "[WRITEUP.md][w]\n\n[w]: WRITEUP.md\n",
+                      '<a href="WRITEUP.md">WRITEUP.md</a>'):
+            with self.subTest(other=other):
+                self.reset()
+                self.plant({"README.md": page.replace("[WRITEUP.md](WRITEUP.md)", other, 1)})
+                code, output = self.run_gates()
+                self.assertEqual(code, 1, output)
+                self.assertIn("FAIL readme-pitch-length README.md:1: no link to WRITEUP.md before "
+                              "the headline table: write it as [text](WRITEUP.md) or "
+                              "[text](WRITEUP.md#anchor), the one form this gate reads", output)
         # A link after the table is not on the first screen.
         self.reset()
         self.assert_only_gate_fails("readme-pitch-length", "README.md",
@@ -921,7 +936,12 @@ class Gates(unittest.TestCase):
                        "see ![a browser](ITCH_BROWSER--without-browser.png).",
                        "see the [browser][b].\n\n[b]: ITCH_BROWSER --without-browser",
                        '<span title="ITCH_BROWSER --without-browser">see the browser</span>.',
-                       "<ITCH_BROWSER --without-browser>"):
+                       "<ITCH_BROWSER --without-browser>",
+                       # An image's alt text goes with its target; a target or a tag's
+                       # attribute that wraps over two lines of its paragraph is still unseen.
+                       "see ![ITCH_BROWSER --without-browser](docs/b.png).",
+                       "see the [headless browser](docs/ITCH_BROWSER/\n--without-browser).",
+                       '<span title="ITCH_BROWSER\n--without-browser">see the browser</span>.'):
             with self.subTest(unseen=unseen):
                 self.reset()
                 self.assert_only_gate_fails("readme-build-names", "README.md",
@@ -929,7 +949,8 @@ class Gates(unittest.TestCase):
         for seen in ("set [`ITCH_BROWSER`](scripts/check.sh) or pass [--without-browser](#a).",
                      "set `<ITCH_BROWSER>` or pass `--without-browser`.",
                      "set <b>ITCH_BROWSER</b> or pass <code>--without-browser</code>.",
-                     "see <https://example.com/ITCH_BROWSER/--without-browser>."):
+                     "see <https://example.com/ITCH_BROWSER/--without-browser>.",
+                     "set [`ITCH_BROWSER`, or pass\n`--without-browser`](scripts/check.sh)."):
             with self.subTest(seen=seen):
                 self.reset()
                 self.assert_passes("README.md", page.replace(sentence, seen))
