@@ -14,7 +14,8 @@ SKIP_RETURN_CODE 77 and ITCH_CTEST_SKIPS; each test that can skip has an entry o
 that its binary's main entry leaves out. Which tests can skip is read from the sources, not
 kept by hand: every GTEST_SKIP in tests/test_*.cpp, in the TEST it sits in or in each test
 that uses the macro it sits in, on this platform's side of any #ifdef __APPLE__ or __linux__
-(and its #elif, #elifdef, #elifndef and #else branches, as the reader's own case checks).
+(and its #elif, #elifdef, #elifndef and #else branches, as the reader's own case checks; a
+condition naming anything else is read as compiled, and hides no branch after it).
 A GTEST_SKIP anywhere else fails, since no test could be named for it. Last, the receive mode
 entries skip exactly when CMake built none of the modes they check. The harness-skip faults in
 scripts/faults/harness.json and two in udp.json break each.
@@ -63,10 +64,11 @@ PLATFORM = {"__APPLE__": sys.platform == "darwin", "__linux__": sys.platform.sta
 
 
 def compiled_here(kind, rest):
-    """Whether a condition holds on this platform; one that names no platform is taken to."""
+    """Whether a condition holds on this platform: True or False, or None when it names anything
+    but __APPLE__, __linux__ and defined, which the reader cannot know and so never hides."""
     names = re.findall(r"\b(__APPLE__|__linux__)\b", rest)
     if not names or not set(re.findall(r"\b\w+\b", rest)) <= set(names) | {"defined"}:
-        return True
+        return None
     if kind == "ifdef":
         return PLATFORM[names[0]]
     if kind == "ifndef":
@@ -86,7 +88,9 @@ def skipping_tests(failures):
 
 def skips_in(stem, file_name, text, failures):
     """skipping_tests' reading of one source. Each #if, #ifdef or #ifndef opens a group whose
-    branches (#elif, #elifdef, #elifndef, #else) are each live only if no branch before it was."""
+    branches (#elif, #elifdef, #elifndef, #else) are each live only if no branch before it was.
+    A branch whose condition the reader cannot know is read as live and as not taken, so that
+    neither it nor a branch after it is hidden."""
     found = set()
     lines = text.split("\n")
     instances = {suite: name for name, suite in INSTANTIATION.findall(text)}
@@ -98,10 +102,11 @@ def skips_in(stem, file_name, text, failures):
             kind, rest = condition.groups()
             if kind in ("ifdef", "ifndef", "if"):
                 holds = compiled_here(kind, rest)
-                stack.append([holds, holds])  # [a branch was taken, this branch is live]
+                # [a branch was surely taken, this branch may be live]
+                stack.append([holds is True, holds is not False])
             elif kind in ("elif", "elifdef", "elifndef"):
-                holds = not stack[-1][0] and compiled_here(kind.removeprefix("el"), rest)
-                stack[-1] = [stack[-1][0] or holds, holds]
+                holds = False if stack[-1][0] else compiled_here(kind.removeprefix("el"), rest)
+                stack[-1] = [stack[-1][0] or holds is True, holds is not False]
             elif kind == "else":
                 stack[-1] = [True, not stack[-1][0]]
             else:
@@ -191,6 +196,32 @@ TEST(Reader, NotAfterTheMac) {
   GTEST_SKIP() << "x";
 }
 #endif
+#if defined(__APPLE__) && defined(__aarch64__)
+TEST(Reader, UnknownFirst) {
+  GTEST_SKIP() << "x";
+}
+#elifdef __x86_64__
+TEST(Reader, AfterTheUnknown) {
+  GTEST_SKIP() << "x";
+}
+#else
+TEST(Reader, ElseAfterTheUnknown) {
+  GTEST_SKIP() << "x";
+}
+#endif
+#ifdef __SANITIZE_THREAD__
+TEST(Reader, UnknownThenLinux) {
+  GTEST_SKIP() << "x";
+}
+#elifdef __linux__
+TEST(Reader, LinuxAfterTheUnknown) {
+  GTEST_SKIP() << "x";
+}
+#else
+TEST(Reader, NotLinuxAfterTheUnknown) {
+  GTEST_SKIP() << "x";
+}
+#endif
 """
 
 
@@ -201,7 +232,11 @@ def reader_case_expected():
                 "OnTheMacByElifndef": apple and not linux, "OnNeither": apple and linux,
                 "MacFirst": apple, "LinuxSecond": linux and not apple,
                 "NeitherThird": not apple and not linux, "MacOnce": apple,
-                "NotAfterTheMac": linux and not apple}
+                "NotAfterTheMac": linux and not apple,
+                # A condition the reader cannot know reads as live and leaves the rest live.
+                "UnknownFirst": True, "AfterTheUnknown": True, "ElseAfterTheUnknown": True,
+                "UnknownThenLinux": True, "LinuxAfterTheUnknown": linux,
+                "NotLinuxAfterTheUnknown": not linux}
     return {("test_reader", f"Reader.{name}") for name, live in branches.items() if live}
 
 
@@ -311,8 +346,8 @@ def main():
     if read != reader_case_expected():
         wanted = sorted(name for _, name in reader_case_expected())
         failures.append(("reader", f"reads {sorted(name for _, name in read)} as compiled here "
-                                   "from a source of #ifdef, #elifdef, #elifndef and #else "
-                                   f"branches, not {wanted}"))
+                                   "from a source of #if, #ifdef, #elifdef, #elifndef and "
+                                   f"#else branches, not {wanted}"))
     skipping = skipping_tests(failures)
     for binary, name in sorted(KNOWN_SKIPS - skipping):
         failures.append((f"{binary} {name}", "no longer read as a test that can skip: the "
