@@ -76,7 +76,7 @@ SIMD wins a field decode and loses the whole parse, where scalar takes 35.099 cy
 
 ## The parse rate
 
-Timed alone on the Zen 1 host over 12302019 in memory ([results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md)), the framing walk, T-PARSE-1, ran a median of 298,983,253 messages/s and is missed by 410.02 M msg/s; T-PARSE-2, itch-book's decode of the ten book-affecting types, ran a median of 140,969,135 messages/s and is missed by 58.03 M msg/s. Both bars were set on the Ryzen 7 9700X, a Zen 5. T-PARSE-3, the strict decode of every field, ran a median of 117,739,800 messages/s that day.
+Timed alone on the Zen 1 host over 12302019 in memory ([results/parse_rate_debian_12302019.md](results/parse_rate_debian_12302019.md)), the framing walk, T-PARSE-1, ran a median of 298,983,253 messages/s and is missed by 410.02 M msg/s; T-PARSE-2, this parser's decode of the ten book-affecting types, ran a median of 140,969,135 messages/s and is missed by 58.03 M msg/s. Both bars are itch-book's, set on the Ryzen 7 9700X, a Zen 5. T-PARSE-3, the strict decode of every field, ran a median of 117,739,800 messages/s that day.
 
 T-PARSE-3's bar, 93.9 M msg/s and 2.89 GB/s, is set on 10302019, and there T-PARSE-3 is met at a median of 115.76 M msg/s and 3.558 GB/s. Its passes varied more than on 12302019, a CV of 4.95%, and the slowest, at 100,002,653 messages/s, is still above the bar; the input checked was the bench's own copy of the day, since file and copy do not fit in memory together ([results/parse_rate_debian_10302019.md](results/parse_rate_debian_10302019.md)).
 
@@ -86,7 +86,7 @@ No parse rate was timed on the Mac: the three bars are set on x86 Linux, which g
 
 ### The SPSC ring
 
-Against open-source C++ queues on the Zen 1 host this ring's median round trip ranks sixth of eight, ahead of only boost and a mutex: project 229.3 ns (this ring) vs atomic_queue 133.5 and rigtorp 198.5; so T-SPSC-1, this ring vs three published ones, is missed ([results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md)).
+Against open-source C++ queues on the Zen 1 host this ring's median round trip ranks sixth of eight, ahead of only boost and a mutex: this project's ring 229.3 ns vs atomic_queue 133.5 and rigtorp 198.5; so T-SPSC-1, this ring vs three published ones, is missed ([results/spsc_queues_debian_12302019.md](results/spsc_queues_debian_12302019.md)).
 
 T-SPSC-2, what each technique is worth in saturated throughput, is missed: the mask over a modulo gave 1.60× vs a bar of 4.20×, and caching the other side's index 1.20× with the mask and 0.89× with a modulo, vs 3.90×, bars from Frasch's CppCon talk, measured under WSL2 on an i7-9700. The cached ratios lie within the spread of the uncached runs, CVs of 34.72% with the mask and 17.90% with a modulo ([results/spsc_ablation_debian_12302019.md](results/spsc_ablation_debian_12302019.md)).
 
@@ -122,7 +122,7 @@ I chose a scoped rule as a separate check, T-INV-3: in normal trading a book may
 
 ### The trade prints
 
-Each print check is exact. T-TRADE-5, every execution in normal trading at the best level, held for all 5,683,178 executions on 12302019 ([results/trades_12302019.md](results/trades_12302019.md)). T-TRADE-5 fails on two sessions, each just after a resumption with that book crossed.
+Each print check is exact. T-TRADE-5, every execution in normal trading at the best level, held for all 5,683,178 executions on 12302019 ([results/trades_12302019.md](results/trades_12302019.md)). T-TRADE-5 fails on two sessions, both other days, each just after a resumption with that book crossed.
 
 ### The fault matrix and fuzzing
 
