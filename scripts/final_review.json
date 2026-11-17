@@ -48,6 +48,10 @@
   {
    "what": "r11-3 and every r22 outcome",
    "at": "35d54fd"
+  },
+  {
+   "what": "every outcome from r22-12 and r23's outcomes",
+   "at": "7161114"
   }
  ],
  "complete": true,
@@ -434,11 +438,15 @@
   },
   {
    "id": "r22",
-   "read": "the fixes of the first full check's failures, dee389b and b169536, the fault moved in f7ad6a2 and the tests and refusal of 0c7dc4c, at 0c7dc4c, which no reviewer had read; then, at ec81f00 and again at 35d54fd, the fixes of its own findings",
+   "read": "the fixes of the first full check's failures, dee389b and b169536, the fault moved in f7ad6a2 and the tests and refusal of 0c7dc4c, at 0c7dc4c, which no reviewer had read; then, at ec81f00 and again at 35d54fd, the fixes of its own findings; then the record's fault edit of 6d2f2f2 and the gate readme-build-names at beb3689, the generated list's wording of 6c89dc0 and the gate's fixes at 341f132, the first screen's link hold of f3df942 and the gate's fixes at cfed46d, and the last fixes at 72552d8",
    "commits": [
     "0c7dc4c",
     "ec81f00",
-    "35d54fd"
+    "35d54fd",
+    "beb3689",
+    "341f132",
+    "cfed46d",
+    "72552d8"
    ],
    "looks": [
     {
@@ -455,15 +463,52 @@
      "BLOCK": 0,
      "FIX": 0,
      "NOTE": 0
+    },
+    {
+     "BLOCK": 0,
+     "FIX": 1,
+     "NOTE": 5
+    },
+    {
+     "BLOCK": 0,
+     "FIX": 2,
+     "NOTE": 5
+    },
+    {
+     "BLOCK": 0,
+     "FIX": 3,
+     "NOTE": 1
+    },
+    {
+     "BLOCK": 0,
+     "FIX": 0,
+     "NOTE": 0
     }
    ],
    "last_words": "Nothing is left that I would block the merge for.",
+   "branch": ""
+  },
+  {
+   "id": "r23",
+   "read": "README.md as a recruiter would in 90 seconds, its first 19 lines and its headings, and WRITEUP.md as a senior developer would in 20 minutes, at be4b45c, without the project's other records. Each place it stopped, with the severity it gave, is a finding; its other remarks are not",
+   "commits": [
+    "be4b45c"
+   ],
+   "looks": [
+    {
+     "BLOCK": 1,
+     "FIX": 21,
+     "NOTE": 20
+    }
+   ],
+   "last_words": "",
    "branch": ""
   }
  ],
  "to_come": [],
  "unread": [
-  "The fixes of r16's own findings were read by no reviewer, only checked by the record's author: they are held by their tests and faults and by the full check that follows."
+  "The fixes of r16's own findings were read by no reviewer, only checked by the record's author: they are held by their tests and faults and by the full check that follows.",
+  "The WRITEUP passages of bec8d6d, the fixes of r23's findings on WRITEUP, were read by no reviewer, only checked by the record's author: the number gate holds their figures, each refused when changed by one, and the readme stage of the full check runs it."
  ],
  "findings": [
   {
@@ -6580,6 +6625,791 @@
    "notes": [
     "T-PARSE-3 published, and the full check at fbd32a8"
    ]
+  },
+  {
+   "id": "r22-12",
+   "severity": "NOTE",
+   "finding": "The moved fault readme-writeup-review-looked-again-overstated no longer exercises the number gate's rule that the two figures of N of M stand together on the real record",
+   "outcome": "fixed",
+   "detail": "A second fault, readme-writeup-review-looked-again-apart, plants 5 of 21, which the gate refuses on the real record by that rule, with its message as the signature; the first keeps its plant and signature, at the new counts.",
+   "commits": [
+    "7161114"
+   ],
+   "tests": [],
+   "faults": [
+    "readme-writeup-review-looked-again-apart",
+    "readme-writeup-review-looked-again-overstated"
+   ],
+   "notes": [
+    "The final review's record"
+   ]
+  },
+  {
+   "id": "r22-13",
+   "severity": "FIX",
+   "finding": "The gate readme-build-names passes when the names are only in an HTML comment, or when the section's heading is first met inside an earlier section's code fence",
+   "outcome": "fixed",
+   "detail": "Each section is read as a reader sees it: headings only outside code fences and HTML comments, comments taken out.",
+   "commits": [
+    "341f132"
+   ],
+   "tests": [
+    "test_readme_build_names_reads_the_page_as_a_reader_sees_it"
+   ],
+   "faults": [
+    "gates-readme-browser-names-in-a-comment"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-14",
+   "severity": "NOTE",
+   "finding": "readme-build-names matches by substring on both sides, and a comment is enough on the source side",
+   "outcome": "fixed",
+   "detail": "Names are matched whole, and each must be read by a source line that is not a comment.",
+   "commits": [
+    "341f132"
+   ],
+   "tests": [
+    "test_readme_build_names_match_whole_names"
+   ],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-15",
+   "severity": "NOTE",
+   "finding": "A line starting with two hashes inside a code block ends the section early, so the gate can refuse a true README",
+   "outcome": "fixed",
+   "detail": "A heading inside a code fence no longer ends the section, and a violation is reported at its section's heading.",
+   "commits": [
+    "341f132"
+   ],
+   "tests": [
+    "test_readme_build_names_reads_the_page_as_a_reader_sees_it",
+    "test_readme_build_names"
+   ],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-16",
+   "severity": "NOTE",
+   "finding": "The README names CMakePresets.json for the CMake minimum while the gate reads CMakeLists.txt",
+   "outcome": "fixed",
+   "detail": "The gate reads both files and requires them to agree.",
+   "commits": [
+    "341f132"
+   ],
+   "tests": [
+    "test_readme_build_names_hold_both_cmake_files"
+   ],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-17",
+   "severity": "NOTE",
+   "finding": "The test of each fault area's tree checks only a gate's scanned files, and readme-build-names reads four more",
+   "outcome": "fixed",
+   "detail": "Gate.reads lists the files a gate reads, and each fault area's tree that runs the gate is held to them.",
+   "commits": [
+    "341f132"
+   ],
+   "tests": [
+    "test_a_gate_reads_what_it_declares",
+    "test_every_gate_a_fault_runs_scans_a_file_in_its_areas_copy"
+   ],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-18",
+   "severity": "FIX",
+   "finding": "readme-build-names takes a heading's text exactly as written, so closing hashes or two spaces refuse a true README",
+   "outcome": "fixed",
+   "detail": "A heading is found as it shows: closing hashes dropped, spaces squeezed, up to three leading spaces.",
+   "commits": [
+    "cfed46d"
+   ],
+   "tests": [
+    "test_readme_build_names_read_headings_as_they_show"
+   ],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-19",
+   "severity": "FIX",
+   "finding": "readme-build-names takes out comments but still reads link targets and tag attributes a reader never sees",
+   "outcome": "fixed",
+   "detail": "Link and image targets, reference definitions and tags are taken out of what the gate reads (cfed46d); what was left of it, r22-25, is fixed in 72552d8.",
+   "commits": [
+    "cfed46d",
+    "72552d8"
+   ],
+   "tests": [
+    "test_readme_build_names_read_only_what_shows"
+   ],
+   "faults": [
+    "gates-readme-browser-names-in-a-link-target"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-20",
+   "severity": "NOTE",
+   "finding": "readme-build-names joins two sections that share a heading",
+   "outcome": "no change needed",
+   "detail": "The names are still where a reader sees them, under that heading.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r22-21",
+   "severity": "NOTE",
+   "finding": "On the source side readme-build-names counts a line inside a CMake bracket comment, or a name inside an echo string, as a read",
+   "outcome": "known limit",
+   "detail": "Single-line and trailing comments are refused; a bracket comment and a string are not told apart from code, and the README is not affected.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-22",
+   "severity": "NOTE",
+   "finding": "Gate.reads is declared only for readme-build-names, and parse3-bar-day reads a results file it does not declare",
+   "outcome": "no change needed",
+   "detail": "Every fault area that runs parse3-bar-day holds results/, and the file's absence is the unpublished state the gate reads.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r22-23",
+   "severity": "NOTE",
+   "finding": "The number gate passes a ring figure in WRITEUP's list moved to another row's value in the same results file, as before the wording change",
+   "outcome": "no change needed",
+   "detail": "results_table.py --check refuses every such edit, and the change made no line weaker.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r22-24",
+   "severity": "NOTE",
+   "finding": "A comment in scripts/test_results_table.py names roles of how the review was organised",
+   "outcome": "fixed",
+   "detail": "The comment says a reader of the page asked for the wording, and no such name is left in the tree.",
+   "commits": [
+    "cfed46d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-25",
+   "severity": "FIX",
+   "finding": "readme-build-names keeps an image's alt text, and misses a link target or tag attribute that wraps over two lines",
+   "outcome": "fixed",
+   "detail": "An image is dropped with its alt text, and each paragraph outside a fence is read whole.",
+   "commits": [
+    "72552d8"
+   ],
+   "tests": [
+    "test_readme_build_names_read_only_what_shows"
+   ],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-26",
+   "severity": "FIX",
+   "finding": "The first-screen link hold counts an image or escaped brackets as a link to WRITEUP.md",
+   "outcome": "fixed",
+   "detail": "A match with an exclamation mark or a backslash before its bracket is not a link.",
+   "commits": [
+    "72552d8"
+   ],
+   "tests": [
+    "test_readme_first_screen_links"
+   ],
+   "faults": [
+    "gates-readme-first-screen-drops-the-writeup-link"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-27",
+   "severity": "FIX",
+   "finding": "The first-screen link hold refuses real links to WRITEUP.md in other forms",
+   "outcome": "fixed",
+   "detail": "A stated rule: the hold reads one link form, [text](WRITEUP.md) or with an anchor, and its refusal says which form to write; it is not widened.",
+   "commits": [
+    "72552d8"
+   ],
+   "tests": [
+    "test_readme_first_screen_links"
+   ],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r22-28",
+   "severity": "NOTE",
+   "finding": "Three review ids are still in test comments",
+   "outcome": "no change needed",
+   "detail": "Review ids in the scripts' comments are the scripts' habit, and each is defined in results/final_review.md.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-1",
+   "severity": "BLOCK",
+   "finding": "README.md:7, most speed targets are other projects' best figures and the host misses most, with no way to judge whether the bars were fair",
+   "outcome": "fixed",
+   "detail": "The bullet says the bars are open-source projects' best figures, mostly on x86 desktops and laptops, as BENCHMARKS.md's Measured lines give them, and links WRITEUP.md for why the host misses most.",
+   "commits": [
+    "f3df942"
+   ],
+   "tests": [
+    "test_readme_first_screen_links"
+   ],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-2",
+   "severity": "FIX",
+   "finding": "README.md:6, a parenthesis on the host reads as an excuse",
+   "outcome": "fixed",
+   "detail": "The bullet names the host as a Zen 1 AMD Ryzen Embedded V1605B, with no parenthesis.",
+   "commits": [
+    "f3df942"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-3",
+   "severity": "FIX",
+   "finding": "README.md:5, divergences from a second, simple book, read twice",
+   "outcome": "fixed",
+   "detail": "The bullet says the sessions were checked against a simple book sharing no code.",
+   "commits": [
+    "f3df942"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-4",
+   "severity": "FIX",
+   "finding": "README.md:14, the bar and the measurement are on different machines",
+   "outcome": "no change needed",
+   "detail": "Kept, as for r20-6 and r21-9: the pitch introduces the host once by its model, and the bar's cell names the machine the bar was set on.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-5",
+   "severity": "FIX",
+   "finding": "README.md:18, whether the Mac's figure passes is not said, and the best speed figure has no verdict",
+   "outcome": "no change needed",
+   "detail": "Kept, as the acceptance gate ruled: the Mac's lack of a verdict is said once, with its reason.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-6",
+   "severity": "FIX",
+   "finding": "README.md, the headings: nothing on the front page links WRITEUP.md, and there is no demo link",
+   "outcome": "fixed",
+   "detail": "The first screen links WRITEUP.md again, held by the gate readme-pitch-length; the link had been dropped in a08c91c. The demo has no link because the page is not deployed anywhere, as the README says.",
+   "commits": [
+    "f3df942"
+   ],
+   "tests": [
+    "test_readme_first_screen_links"
+   ],
+   "faults": [
+    "gates-readme-first-screen-drops-the-writeup-link"
+   ],
+   "notes": [
+    "The pages after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-7",
+   "severity": "NOTE",
+   "finding": "README.md:10, row ids and design names are internal vocabulary",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, as the acceptance gate ruled: an id may follow its gloss, and each does.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-8",
+   "severity": "NOTE",
+   "finding": "README.md:13, the allocation counter in the second book, read twice",
+   "outcome": "no change needed",
+   "detail": "Kept: it was added for the second reader (r20-4), and it is the results file's own account.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-9",
+   "severity": "NOTE",
+   "finding": "README.md:15, the heaps' gloss and the ratio's gap are too dense",
+   "outcome": "no change needed",
+   "detail": "Kept: the cell was written for the second reader (r20-7), and its gloss of the aged heap is the one r18-40 corrected.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-10",
+   "severity": "NOTE",
+   "finding": "README.md:16, an engine event is jargon",
+   "outcome": "no change needed",
+   "detail": "Kept: it was added for the second reader (r20-8), and it is the results file's own account.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-11",
+   "severity": "NOTE",
+   "finding": "README.md, the command section's heading, and the paragraphs at lines 25 and 118",
+   "outcome": "no change needed",
+   "detail": "Kept: the heading says what the section is for, and the paragraph under Check everything says what the number gate cannot see, as the acceptance gate asked.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-12",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:141, itch-book was not run on this host, and no reason is given",
+   "outcome": "known limit",
+   "detail": "Not attempted, and the page says so, with what that run would split; no measurement was made for it this round.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-13",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:163, T-PERF-1 sets misses on a 4 MB L3 against a bar from a Zen 3",
+   "outcome": "no change needed",
+   "detail": "Kept: one line a target, as the acceptance gate ruled; the bar is another project's published figure, and its line names the host.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-14",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:38, the instruction column is mostly the counter reads, and net figures are not shown",
+   "outcome": "no change needed",
+   "detail": "Kept, as for r21-13: the column gives the results files' own figures, and the page says every one includes the same counter reads.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-15",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:49, no IPC or stall breakdown backs the sentence on waiting, and the measured cycles are not used",
+   "outcome": "fixed",
+   "detail": "The clock answer gives the counter pass's measured cycles a message and the empty span's, and the cycles net of the counter reads; no stall breakdown was measured this round.",
+   "commits": [
+    "bec8d6d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-16",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:139 and 140, cycles a message estimated from clock readings though the counter pass measured them, and the clock sentence read twice",
+   "outcome": "fixed",
+   "detail": "The answer starts from the measured cycles, net of the empty span, with the clock readings as support and one estimate, marked not measured.",
+   "commits": [
+    "bec8d6d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-17",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:13, the TLB and huge pages are left out by choice",
+   "outcome": "known limit",
+   "detail": "No TLB counter was read and no run used reserved huge pages, and the page says so; the host's root-only settings are left as they are.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-18",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:143, the recurring 4 ms maximum is not explained",
+   "outcome": "known limit",
+   "detail": "What the slowest message waits on was not traced, and the page says so; no measurement was made for it this round.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-19",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:145, the index's fallback count is admitted instead of given",
+   "outcome": "known limit",
+   "detail": "Not measured, and the page says so; no measurement was made for it this round.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-20",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:73 against 142, the look-ahead is recommended for a deployment while a live feed was neither built nor measured",
+   "outcome": "known limit",
+   "detail": "The page says a live feed was neither built nor measured; no measurement was made for it this round.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-21",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:55, three rates for one design, faster mapped than in memory, unexplained",
+   "outcome": "known limit",
+   "detail": "The page says the runs are separate and why the rates differ was not measured; no measurement was made for it this round.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-22",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:91 against 173, two figures for caching the other side's index",
+   "outcome": "fixed",
+   "detail": "The paragraph says 1.20 times with the mask and 0.89 times with a modulo, the ablation file's two rows.",
+   "commits": [
+    "bec8d6d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-23",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:89, what the faster queues do that this ring does not is not said",
+   "outcome": "known limit",
+   "detail": "Why the ring trails the queues of its family is not established, as RESULTS.md and docs/DETAILS.md say: no counters were read on the queue runs.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "Left as it is after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-24",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:95, a bar that lets pipelining be slower, with no source given",
+   "outcome": "no change needed",
+   "detail": "Kept: the bar's source is in BENCHMARKS.md, which the page links.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-25",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:105, the T-BT-3 sentence is bookkeeping, and runs that differed is vague",
+   "outcome": "no change needed",
+   "detail": "Kept, as for r21-28: it gives the summary's stated rule for a Mac verdict.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-26",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:125, T-TRADE-5 held and failing read twice, and T-TRADE-3 missing from the section",
+   "outcome": "no change needed",
+   "detail": "Kept: a verdict is by session, as the summary's rules state, and T-TRADE-3 has its line in the list of misses.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-27",
+   "severity": "FIX",
+   "finding": "WRITEUP.md:79 to 81, the day T-PARSE-3 is judged on reads as rules-lawyering",
+   "outcome": "fixed",
+   "detail": "The paragraph says plainly that T-PARSE-3 is met on its bar's day, with its spread, the slowest pass and the input checked in one clause.",
+   "commits": [
+    "bec8d6d"
+   ],
+   "tests": [],
+   "faults": [],
+   "notes": [
+    "WRITEUP after the acceptance gate"
+   ]
+  },
+  {
+   "id": "r23-28",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:3, the order index is described as a hash",
+   "outcome": "no change needed",
+   "detail": "Left: a note on wording, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-29",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:3, DRAM fills used before they are defined",
+   "outcome": "no change needed",
+   "detail": "Left: a note on wording, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-30",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:36, four decimals of fills a message are false precision",
+   "outcome": "no change needed",
+   "detail": "Kept, as for r20-20: counts a message keep the decimals their results files give.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-31",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:17, what each timing's prediction predicts is never said",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, as the acceptance gate ruled on the sentences about how the work is checked.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-32",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:49, whether itch-book's naive book is a std::map one",
+   "outcome": "no change needed",
+   "detail": "Left: a note on wording, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-33",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:61, after warm-up is undefined",
+   "outcome": "no change needed",
+   "detail": "Left: a note on wording, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-34",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:75, the SIMD win gives no number",
+   "outcome": "no change needed",
+   "detail": "Kept, as for r21-22: docs/DETAILS.md has the figures, and the paragraph keeps its one link.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-35",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:99, the io_uring comparison is ambiguous and over loopback",
+   "outcome": "no change needed",
+   "detail": "Left: a note on wording, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-36",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:103, engine events defined only in the README, and the 2.00 M bar has no source",
+   "outcome": "no change needed",
+   "detail": "Kept: the bar's source is in BENCHMARKS.md, and the rest is a note on wording, left at the page's length limit.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-37",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:107, an aside on the ticker",
+   "outcome": "no change needed",
+   "detail": "Left: a note on wording, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-38",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:113, reading the wire at its own offsets, read twice",
+   "outcome": "no change needed",
+   "detail": "Left: a note on wording, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-39",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:129, the control commands are undefined and the line cites twice",
+   "outcome": "no change needed",
+   "detail": "Kept as it is, as the acceptance gate ruled on the sentences about how the work is checked.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-40",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:153, the deciding row, or the worst, read twice",
+   "outcome": "no change needed",
+   "detail": "Left: a note on wording, the page is at its length limit, and the wording does not mislead.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-41",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:164 and 171, small misses listed beside real ones, and nothing ranks them",
+   "outcome": "no change needed",
+   "detail": "Kept: one line a target, as the acceptance gate ruled, in BENCHMARKS.md's order.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
+  },
+  {
+   "id": "r23-42",
+   "severity": "NOTE",
+   "finding": "WRITEUP.md:175, Chrome for Testing against Chrome is too pedantic",
+   "outcome": "no change needed",
+   "detail": "Kept, as for r21-36: the line says why it has no verdict, the summary's stated rule.",
+   "commits": [],
+   "tests": [],
+   "faults": [],
+   "notes": []
   }
  ],
  "gate": {
@@ -6648,11 +7478,12 @@
     "severity": "BLOCK",
     "finding": "The README's first screen is 367 words before the table, with target ids, a kHz reading and file-format dates, and its first speed figure is framed as a miss before the bars are said to be other projects' on newer hosts",
     "outcome": "fixed",
-    "detail": "The README's pitch is 110 words before the table, as the gate readme-pitch-length counts them, gives the three figures first and says what the bars are before any gap; the gate holds it to 110.",
+    "detail": "The README's pitch is 105 words before the table, as the gate readme-pitch-length counts them, gives the three figures first and says what the bars are before any gap; the gate holds it to 110.",
     "commits": [
      "a08c91c",
      "b44a783",
-     "5173e5a"
+     "5173e5a",
+     "f3df942"
     ],
     "tests": [
      "test_readme_pitch_length"
@@ -6670,7 +7501,7 @@
     "severity": "BLOCK",
     "finding": "WRITEUP.md is 8,694 words, 2,326 of them a table RESULTS.md already holds, with 328 links to results files",
     "outcome": "fixed",
-    "detail": "WRITEUP.md was rewritten, to 3,939 words by wc -w with the generated list of misses, one short line a target; the gate writeup-length holds it to 2,500 to 4,000 words.",
+    "detail": "WRITEUP.md was rewritten, to 3,976 words by wc -w with the generated list of misses, one short line a target; the gate writeup-length holds it to 2,500 to 4,000 words.",
     "commits": [
      "a8c8484",
      "a4fce12",
@@ -6840,10 +7671,11 @@
     "severity": "FIX",
     "finding": "Why cells of the missed-targets table lead with a cause the text calls not established",
     "outcome": "fixed",
-    "detail": "Each why gives what was measured before what is not established, in RESULTS.md and in WRITEUP's list.",
+    "detail": "Each why in RESULTS.md gives what was measured before what is not established; WRITEUP's list gives one figure against its bar a line and links those whys.",
     "commits": [
      "ea6b539",
-     "a4fce12"
+     "a4fce12",
+     "11cd4c1"
     ],
     "tests": [
      "test_the_writeup_table_has_one_short_line_a_target"
@@ -7184,9 +8016,11 @@
     "severity": "BLOCK",
     "finding": "README.md:3 says every target has a published source; BENCHMARKS.md's own source classes say otherwise",
     "outcome": "fixed",
-    "detail": "The README says most speed bars are other open-source books' best published figures; the line that said every target has a published source is gone.",
+    "detail": "The README says most speed bars are open-source projects' best figures, mostly on x86 desktops and laptops, as BENCHMARKS.md's Measured lines give them; the line that said every target has a published source is gone.",
     "commits": [
-     "a08c91c"
+     "a08c91c",
+     "6c89dc0",
+     "f3df942"
     ],
     "tests": [
      "test_readme_pitch_length"
